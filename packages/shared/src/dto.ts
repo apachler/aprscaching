@@ -48,6 +48,7 @@ export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
 /** Owner edit. Every field optional; `status` lets an owner disable/archive a cache. */
 export const UpdateCacheRequest = z.object({
+  ownerCall: Callsign.optional(),       // advisory actor identity until passkey sessions land
   title: z.string().trim().min(1).max(120).optional(),
   type: CacheType.optional(),
   status: CacheStatus.optional(),
