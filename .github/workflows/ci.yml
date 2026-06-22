@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: unit tests + builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r test
+      - run: pnpm -r build
+
+  conformance-node:
+    name: conformance (Node + SQLite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: start node-gateway + smoke
+        run: |
+          DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 pnpm --filter @aprsweb/node-gateway start &
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+
+  conformance-worker:
+    name: conformance (Cloudflare Worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: migrate local D1
+        working-directory: workers/gateway
+        run: CI=1 npx wrangler d1 migrations apply aprscaching --local
+      - name: start wrangler dev + smoke
+        run: |
+          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
