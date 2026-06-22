@@ -65,7 +65,7 @@ export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
 /** A log entry against a cache (found/DNF/note/…). Verification only runs for `found`. */
 export const LogRequest = z.object({
-  cacheId: z.number().int().positive(),
+  cacheId: z.number().int().positive().optional(),  // omitted when posted to /api/caches/:id/logs
   loggerCall: Callsign,
   logType: LogType.default("found"),
   comment: z.string().max(2000).optional(),

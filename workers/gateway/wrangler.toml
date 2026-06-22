@@ -18,6 +18,7 @@ new_sqlite_classes = ["RegionRoom"]   # SQLite-backed DO => works on Workers Fre
 binding = "DB"
 database_name = "aprscaching"
 database_id = "REPLACE_AFTER_create"
+migrations_dir = "../../db/migrations"   # shared schema lives at repo root
 
 [[r2_buckets]]
 binding = "TILES"

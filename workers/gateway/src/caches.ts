@@ -55,10 +55,10 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   if ([minLon, minLat, maxLon, maxLat].some(Number.isNaN))
     return json({ error: "bad bbox" }, { status: 400 });
   const rows = await env.DB.prepare(
-    `SELECT c.* FROM caches c JOIN cache_rtree r ON r.id = c.id
-     WHERE r.min_lat <= ? AND r.max_lat >= ? AND r.min_lon <= ? AND r.max_lon >= ?
-       AND c.status != 'archived' LIMIT 1000`,
-  ).bind(maxLat, minLat, maxLon, minLon).all<CacheDbRow>();
+    `SELECT * FROM caches
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+       AND status != 'archived' LIMIT 1000`,
+  ).bind(minLat, maxLat, minLon, maxLon).all<CacheDbRow>();
   return json({ caches: rows.results.map(toSummary) });
 }
 
@@ -105,12 +105,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
     ).run();
     const id = Number(ins.meta.last_row_id);
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
-    await env.DB.batch([
-      env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?").bind(code, id),
-      env.DB.prepare(
-        "INSERT INTO cache_rtree (id, min_lat, max_lat, min_lon, max_lon) VALUES (?,?,?,?,?)",
-      ).bind(id, b.lat, b.lat, b.lon, b.lon),
-    ]);
+    await env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?").bind(code, id).run();
     const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
     return json({ cache: toSummary(row!) }, { status: 201 });
   } catch (e) {
@@ -148,20 +143,11 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     min_trust: b.minTrust ?? existing.min_trust,
   };
   const now = Math.floor(Date.now() / 1000);
-  const stmts: D1PreparedStatement[] = [
-    env.DB.prepare(
-      `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
-         station_call=?, hint=?, description=?, min_trust=?, updated_at=? WHERE id=?`,
-    ).bind(m.title, m.type, m.status, m.difficulty, m.terrain, m.lat, m.lon,
-           m.station_call, m.hint, m.description, m.min_trust, now, id),
-  ];
-  // keep the spatial index in sync when coordinates move
-  if ((b.lat != null || b.lon != null) && m.lat != null && m.lon != null) {
-    stmts.push(env.DB.prepare(
-      "UPDATE cache_rtree SET min_lat=?, max_lat=?, min_lon=?, max_lon=? WHERE id=?",
-    ).bind(m.lat, m.lat, m.lon, m.lon, id));
-  }
-  await env.DB.batch(stmts);
+  await env.DB.prepare(
+    `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
+       station_call=?, hint=?, description=?, min_trust=?, updated_at=? WHERE id=?`,
+  ).bind(m.title, m.type, m.status, m.difficulty, m.terrain, m.lat, m.lon,
+         m.station_call, m.hint, m.description, m.min_trust, now, id).run();
   const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   return json({ cache: toSummary(row!) });
 }
@@ -172,6 +158,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error?.issues }, { status: 400 });
   const { comment, appGeo, logType } = parsed.data;
   const cacheId = cacheIdFromPath ?? parsed.data.cacheId;
+  if (cacheId == null) return json({ error: "cacheId required" }, { status: 400 });
 
   // logging stays easy: prefer the signed-in callsign; fall back to the claimed one.
   const sessionCall = await sessionCallsign(req, env);

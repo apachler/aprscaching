@@ -35,8 +35,11 @@ CREATE TABLE caches (
   updated_at  INTEGER NOT NULL
 );
 
--- spatial index for "caches near a position" / geofence loading
-CREATE VIRTUAL TABLE cache_rtree USING rtree(id, min_lat, max_lat, min_lon, max_lon);
+-- spatial lookup for "caches in a bbox" / geofence loading.
+-- NB: Cloudflare D1 does not allow CREATE VIRTUAL TABLE (rtree/fts), so we use a plain
+-- lat/lon index. A range scan on lat + lon filter is plenty for M1/M2 cache volumes.
+CREATE INDEX idx_caches_geo ON caches(lat, lon);
+CREATE INDEX idx_caches_status ON caches(status);
 
 CREATE TABLE cache_stages (
   cache_id  INTEGER NOT NULL,
@@ -91,7 +94,7 @@ CREATE TABLE stations (
   course INTEGER, speed_kn INTEGER, altitude_m INTEGER,
   status_color TEXT, comment TEXT, source_call TEXT
 );
-CREATE VIRTUAL TABLE station_rtree USING rtree(id, min_lat, max_lat, min_lon, max_lon);
+CREATE INDEX idx_stations_geo ON stations(lat, lon);
 
 CREATE TABLE sensor_readings (
   station TEXT, ts INTEGER, temp_c REAL, humidity REAL, pressure_hpa REAL,
