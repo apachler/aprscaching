@@ -292,7 +292,7 @@ filter feed server-side; persist selectively; batch ingest POSTs; DO Hibernation
 ---
 
 ## 10. Optional later integration — APRS Caching (researched)
-APRS Caching (aprscaching.com / socialhams, by OE8APR) is a geocaching variant where a find is
+APRS Caching (aprscaching.com, by OE8APR) is a geocaching variant where a find is
 logged via APRS, so the logger's beaconed position *verifies presence* at the cache. Because
 APRSWeb already ingests and stores positions, a presence-verified "check-in / cache log" feature
 would be a natural **M6** add-on (match a user's APRS position to a target coordinate within a

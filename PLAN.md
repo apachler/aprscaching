@@ -1,9 +1,9 @@
 # aprscaching.com — Reborn: Product & Implementation Plan
 
-A modern, **APRS-Caching-first** web workbench — the rebirth of the original socialhams APRS
-Caching (OE8APR, 2016). APRS Caching is the **product**; a full APRS workbench (live map,
-multi-transport, messaging, RF tooling) is the **platform** it runs on. Hosted on
-**aprscaching.com**.
+A modern, **APRS-Caching-first** web workbench — the rebirth of the original APRS Caching
+(OE8APR, 2016). APRS Caching is the **product**; a full APRS workbench (live map,
+multi-transport, messaging, RF tooling — APRStac-class capabilities) is the **platform** it
+runs on. Hosted on **aprscaching.com**.
 
 **Stack (committed, Tier B ~$9–13/mo):** Cloudflare Pages (SPA, custom domain `aprscaching.com`,
 free SSL) · Workers + Durable Objects (real-time) · D1 + R2 · one tiny always-on **ingest** box
@@ -32,7 +32,7 @@ The original made the find verifiable by logging it over APRS. The reborn versio
 5. **Field-native** — because the workbench speaks RF, you can log a find over the air, off-grid,
    not just from a desk.
 6. **Heritage continuity** — OpenCaching/SOTA/POTA sync, GPX import/export, callsign identity, and
-   the socialhams social layer, reborn.
+   community features (find stats, leaderboards, badges), reborn.
 
 ---
 
@@ -90,7 +90,7 @@ CREATE TABLE accounts (
   display_name TEXT, home_grid TEXT, created_at INTEGER
 );
 
--- GAMIFICATION / SOCIAL
+-- GAMIFICATION / COMMUNITY
 CREATE TABLE achievements (callsign TEXT, badge TEXT, earned_at INTEGER, PRIMARY KEY(callsign,badge));
 CREATE TABLE favorites    (callsign TEXT, cache_id INTEGER, PRIMARY KEY(callsign,cache_id));
 CREATE TABLE watches      (callsign TEXT, cache_id INTEGER, PRIMARY KEY(callsign,cache_id));
@@ -193,7 +193,7 @@ Registration requires a valid callsign (as the original did). Verify control of 
 - **SOTA** summits via the SOTA API (`type=sota`) — the current site already surfaces these.
 - **POTA** parks (`type=pota`) — natural extension.
 - **GPX export/import** — load caches into handhelds; import external lists.
-- **Legacy migration** — an importer for the original socialhams APRS Caching dataset (caches,
+- **Legacy migration** — an importer for the original APRS Caching dataset (caches,
   logs, accounts) to preserve cache codes and find history. *Needs the legacy DB — see questions.*
 
 ---
@@ -222,7 +222,7 @@ verified find from an RF-heard position.
 OkAPI OpenCaching sync · SOTA import · (POTA optional) · GPX import/export · legacy data importer.
 **Done when:** OC + SOTA caches appear and sync; a user exports a GPX of nearby caches.
 
-### M4 — Social & gamification (socialhams reborn)
+### M4 — Community & gamification
 Profiles + find stats · leaderboards (finds / points / SOTA-style) · badges/achievements ·
 favorites/watchlists · activity feed · cache health (DNF streaks → needs-maintenance).
 **Done when:** profiles show verified find counts and a regional leaderboard ranks loggers.
@@ -265,7 +265,7 @@ follows local rules (e.g. FCC Part 97). Keep TX off by default and gated.
 
 ## 10. Decisions that shape the build (please steer)
 
-1. **Legacy data** — do you still have the original socialhams/aprscaching database to migrate
+1. **Legacy data** — do you still have the original APRS Caching database to migrate
    (caches, logs, accounts)? This decides whether M3 preserves continuity (codes + find history).
 2. **Verification strictness** — default policy: do *only* high-trust (RF-corroborated) finds count
    for leaderboards, or do IS-only finds count as "unverified"?

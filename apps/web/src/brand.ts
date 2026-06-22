@@ -1,4 +1,4 @@
-/** socialhams APRS Caching brand palette (from the original 2016 identity, colors.txt). */
+/** APRS Caching brand palette (from the original 2016 identity, colors.txt). */
 export const BRAND = {
   blue: "#2D8BAB",   // primary / chrome
   green: "#7BB912",  // accent / "found"

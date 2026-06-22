@@ -82,7 +82,7 @@ CREATE TABLE positions (
 );
 CREATE INDEX idx_pos_call_ts ON positions(callsign, ts DESC);
 
------------------------------------------------------------- SOCIAL / GAMIFY
+--------------------------------------------------------- COMMUNITY / GAMIFY
 CREATE TABLE achievements (callsign TEXT, badge TEXT, earned_at INTEGER, PRIMARY KEY (callsign, badge));
 CREATE TABLE favorites    (callsign TEXT, cache_id INTEGER, PRIMARY KEY (callsign, cache_id));
 CREATE TABLE watches      (callsign TEXT, cache_id INTEGER, PRIMARY KEY (callsign, cache_id));

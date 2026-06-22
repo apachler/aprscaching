@@ -38,4 +38,4 @@ pnpm --filter @aprsweb/web dev
 
 ## Build order
 M0 spine (this scaffold) → M1 caching core → M2 verification+geofencing → M3 import/heritage
-→ M4 social/gamify → M5 workbench depth → M6 headroom.
+→ M4 community/gamify → M5 workbench depth → M6 headroom.

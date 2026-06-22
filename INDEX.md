@@ -28,4 +28,4 @@ Two orthogonal signals, neither blocks logging a find:
 
 ## Build order
 M0 spine (here) → M1 caching core → M2 verification + geofencing → M3 import/heritage →
-M4 social/gamify → M5 workbench depth → M6 headroom.
+M4 community/gamify → M5 workbench depth → M6 headroom.
