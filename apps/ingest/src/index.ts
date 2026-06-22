@@ -27,7 +27,7 @@ aprs.on("line", (line: string) => {
   const pkt: Packet = {
     src: f.src, dst: f.dst, path: f.path, payload: f.payload,
     kind: pos ? "position" : "other",
-    parsed: pos ?? undefined,
+    parsed: pos ? (pos as unknown as Record<string, unknown>) : undefined,
     heardVia: q.heardVia, igateCall: q.igateCall,
     port: "aprs-is", ts: Math.floor(Date.now() / 1000), raw: f.raw,
   };
