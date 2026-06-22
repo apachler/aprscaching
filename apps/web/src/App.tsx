@@ -7,6 +7,7 @@ import {
   type CacheSummary, type CacheDetail, type BBox, type AppGeo, type LogResult,
 } from "./api.js";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
+import { ASSET } from "./brand.js";
 import type { CacheType, LogType } from "@aprsweb/shared";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
@@ -39,6 +40,7 @@ export function App() {
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CacheDetail | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -46,7 +48,9 @@ export function App() {
     const m = map.current; if (!m) return;
     const b = m.getBounds();
     const bbox: BBox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-    try { setCaches((await listCaches(bbox)).caches); } catch (e) { console.error(e); }
+    try { setCaches((await listCaches(bbox)).caches); }
+    catch (e) { console.error(e); }
+    finally { setReady(true); }
   }, []);
 
   // ---- init map once ----
@@ -87,13 +91,23 @@ export function App() {
       if (c.lat == null || c.lon == null) continue;
       seen.add(c.id);
       if (markers.current.has(c.id)) continue;
-      const el = document.createElement("button");
-      el.className = "cache-pin";
-      el.style.background = typeMeta(c.type).color;
+      const meta = typeMeta(c.type);
+      let el: HTMLElement;
+      let anchor: maplibregl.PositionAnchor = "bottom";
+      if (c.type === "aprs_living") {
+        // living caches ARE a beaconing station — use the brand beacon icon
+        const img = document.createElement("img");
+        img.className = "beacon-pin"; img.src = ASSET.beaconBlue; anchor = "center";
+        el = img;
+      } else {
+        const btn = document.createElement("button");
+        btn.className = "cache-pin"; btn.style.background = meta.color;
+        btn.innerHTML = `<span>${meta.glyph}</span>`;
+        el = btn;
+      }
       el.title = `${c.code} — ${c.title}`;
-      el.textContent = typeMeta(c.type).glyph;
       el.onclick = (ev) => { ev.stopPropagation(); setSelectedId(c.id); };
-      const mk = new maplibregl.Marker({ element: el, anchor: "bottom" })
+      const mk = new maplibregl.Marker({ element: el, anchor })
         .setLngLat([c.lon, c.lat]).addTo(m);
       markers.current.set(c.id, mk);
     }
@@ -137,6 +151,7 @@ export function App() {
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={caches.length} />
       <div ref={mapEl} className="map" />
+      {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
 
       {mode === "hide" && (
         <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
@@ -157,7 +172,7 @@ function TopBar(props: {
 }) {
   return (
     <header className="topbar">
-      <strong>aprscaching.com</strong>
+      <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
       <span className="muted">· {props.count} caches in view</span>
       <span className="spacer" />
       <label className="call">

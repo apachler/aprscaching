@@ -1,17 +1,18 @@
 import type { CacheType } from "@aprsweb/shared";
+import { BRAND } from "./brand.js";
 
 export interface TypeMeta { label: string; color: string; glyph: string }
 
-/** Marker colour + short glyph per cache type (used on the map and in the UI). */
+/** Marker colour (brand palette) + short glyph per cache type. */
 export const TYPE_META: Record<CacheType, TypeMeta> = {
-  single:      { label: "Single",        color: "#1f9d55", glyph: "●" },
-  two_stage:   { label: "Two-stage",     color: "#2b6cb0", glyph: "②" },
-  multi:       { label: "Multi",         color: "#2b6cb0", glyph: "Ⓜ" },
-  aprs_living: { label: "Living (APRS)",  color: "#dd6b20", glyph: "✦" },
-  audio:       { label: "Audio",         color: "#805ad5", glyph: "♪" },
-  traditional: { label: "Traditional",   color: "#1f9d55", glyph: "◆" },
-  sota:        { label: "SOTA summit",   color: "#718096", glyph: "▲" },
-  pota:        { label: "POTA park",     color: "#38a169", glyph: "❂" },
+  single:      { label: "Single",       color: BRAND.green,  glyph: "●" },
+  traditional: { label: "Traditional",  color: BRAND.green,  glyph: "◆" },
+  two_stage:   { label: "Two-stage",    color: BRAND.blue,   glyph: "②" },
+  multi:       { label: "Multi",        color: BRAND.blue,   glyph: "Ⓜ" },
+  aprs_living: { label: "Living (APRS)", color: BRAND.blue,   glyph: "✦" },
+  audio:       { label: "Audio",        color: BRAND.beige2, glyph: "♪" },
+  sota:        { label: "SOTA summit",  color: BRAND.grey,   glyph: "▲" },
+  pota:        { label: "POTA park",    color: BRAND.beige,  glyph: "❂" },
 };
 
 export const TYPE_ORDER: CacheType[] = [
@@ -19,5 +20,5 @@ export const TYPE_ORDER: CacheType[] = [
 ];
 
 export function typeMeta(t: string): TypeMeta {
-  return TYPE_META[t as CacheType] ?? { label: t, color: "#999", glyph: "●" };
+  return TYPE_META[t as CacheType] ?? { label: t, color: BRAND.grey, glyph: "●" };
 }
