@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { json } from "./index.js";
+import { json } from "./app.js";
 
 /** ingest box pulls queued APRS-IS messages to publish. Auth via x-ingest-secret. */
 export async function outboxPending(req: Request, env: Env): Promise<Response> {

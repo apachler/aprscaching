@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { json } from "./index.js";
+import { json } from "./app.js";
 
 /** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {

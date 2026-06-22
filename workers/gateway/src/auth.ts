@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { json } from "./index.js";
+import { json } from "./app.js";
 
 /**
  * Auth scaffold. Identity = callsign + passkey (WebAuthn). Logging is never blocked by this;

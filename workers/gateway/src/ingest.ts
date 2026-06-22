@@ -1,16 +1,17 @@
 import type { Env } from "./env.js";
-import { json } from "./index.js";
+import type { ExecCtx, SqlStatement } from "./runtime.js";
+import { json } from "./app.js";
 import { IngestBatch } from "@aprsweb/shared";
 
 /** Receive batched packets from the ingest box, persist positions, dispatch geofences. */
-export async function handleIngest(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
   if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET)
     return new Response("unauthorized", { status: 401 });
 
   const body = IngestBatch.safeParse(await req.json());
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
 
-  const stmts: D1PreparedStatement[] = [];
+  const stmts: SqlStatement[] = [];
   for (const p of body.data.packets) {
     const pos = (p.parsed as any)?.lat != null ? (p.parsed as any) : null;
     if (!pos) continue;

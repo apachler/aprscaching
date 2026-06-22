@@ -2,6 +2,13 @@
   "name": "@aprsweb/gateway",
   "version": "0.0.0",
   "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./app": "./src/app.ts",
+    "./env": "./src/env.ts",
+    "./runtime": "./src/runtime.ts"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
