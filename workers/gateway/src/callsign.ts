@@ -3,7 +3,7 @@ import { json } from "./app.js";
 
 /** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
-  const { callsign } = await req.json<{ callsign: string }>();
+  const { callsign } = (await req.json()) as { callsign: string };
   const cs = callsign.toUpperCase();
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await env.DB.prepare(
@@ -20,7 +20,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
 }
 
 export async function confirmAprsChallenge(req: Request, env: Env): Promise<Response> {
-  const { callsign, code } = await req.json<{ callsign: string; code: string }>();
+  const { callsign, code } = (await req.json()) as { callsign: string; code: string };
   const cs = callsign.toUpperCase();
   const row = await env.DB.prepare("SELECT challenge FROM callsign_verifications WHERE callsign = ?").bind(cs).first<{ challenge: string }>();
   if (!row || row.challenge !== code) return json({ verified: false }, { status: 400 });

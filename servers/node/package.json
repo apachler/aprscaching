@@ -1,0 +1,26 @@
+{
+  "name": "@aprsweb/node-gateway",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Portable self-host runtime: the aprscaching gateway on Node + SQLite (no Cloudflare).",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprsweb/gateway": "workspace:*",
+    "@aprsweb/shared": "workspace:*",
+    "better-sqlite3": "^11.8.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^1.6.0"
+  }
+}

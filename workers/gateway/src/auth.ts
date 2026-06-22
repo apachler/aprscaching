@@ -13,7 +13,7 @@ import { json } from "./app.js";
 const SESSION_COOKIE = "acs";
 
 export async function handleClaim(req: Request, env: Env): Promise<Response> {
-  const { callsign } = await req.json<{ callsign: string }>();
+  const { callsign } = (await req.json()) as { callsign: string };
   const cs = callsign.toUpperCase().trim();
   const existing = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign = ?").bind(cs).first();
   if (existing) {
@@ -30,7 +30,7 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
 }
 
 export async function handlePasskeyVerify(req: Request, env: Env): Promise<Response> {
-  const body = await req.json<{ callsign: string; assertion: unknown }>();
+  const body = (await req.json()) as { callsign: string; assertion: unknown };
   // TODO: verifyRegistrationResponse / verifyAuthenticationResponse, persist/lookup credential.
   // On success, issue a session bound to the callsign.
   const token = await signSession(body.callsign.toUpperCase(), env);
