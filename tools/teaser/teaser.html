@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>
+  @font-face { font-family:"Oksana"; src:url("Oksana.ttf"); font-weight:400; }
+  @font-face { font-family:"Oksana"; src:url("Oksana-Bold.ttf"); font-weight:700; }
+  :root{ --blue:#2D8BAB; --green:#7BB912; --ink:#4B4F51; }
+  *{ box-sizing:border-box; margin:0; }
+  body{ width:1680px; font-family:system-ui,sans-serif; color:#fff;
+    background:linear-gradient(160deg,#2D8BAB 0%,#246f88 60%,#1d5d72 100%); }
+  .bg{ position:absolute; inset:0; background:url("bg.jpg") center/cover; opacity:.10; }
+  .wrap{ position:relative; padding:54px 60px 40px; }
+  h1,h2,h3,.brand{ font-family:"Oksana",sans-serif; }
+
+  .hero{ display:flex; gap:48px; align-items:center; }
+  .left{ width:600px; flex:none; }
+  .left img.mark{ height:62px; margin-bottom:18px; }
+  .tag{ font-size:30px; line-height:1.32; font-weight:700; font-family:"Oksana"; }
+  .sub{ font-size:18px; line-height:1.5; color:#eaf5fa; margin-top:14px; }
+  .feat{ margin-top:26px; display:grid; gap:13px; }
+  .feat div{ font-size:17px; display:flex; gap:11px; align-items:flex-start; color:#f2fafd; }
+  .chk{ color:var(--green); font-weight:700; font-size:19px; line-height:1.3; }
+  .feat b{ color:#fff; }
+
+  .frame{ background:#fff; border-radius:12px; overflow:hidden;
+    box-shadow:0 26px 60px rgba(0,0,0,.42); }
+  .frame .bar{ height:34px; background:#e9eef0; display:flex; align-items:center; gap:7px; padding:0 13px; }
+  .frame .bar i{ width:11px; height:11px; border-radius:50%; background:#c7ced1; display:block; }
+  .frame .bar .u{ margin-left:12px; font-size:13px; color:#7c878b; font-family:system-ui; }
+  .frame img{ display:block; width:100%; }
+  .hero .frame{ flex:1; }
+
+  .row2{ display:flex; gap:40px; margin-top:44px; align-items:flex-end; }
+  .row2 .map{ flex:1; }
+  .cap{ font-size:14px; color:#dceef5; margin-top:10px; text-align:center; font-family:system-ui; }
+  .phone{ width:300px; flex:none; border:9px solid #14333f; border-radius:34px; overflow:hidden;
+    box-shadow:0 22px 50px rgba(0,0,0,.45); background:#14333f; }
+  .phone img{ display:block; width:100%; }
+
+  .foot{ margin-top:34px; display:flex; align-items:center; gap:16px; font-size:15px; color:#dcedf4;
+    font-family:system-ui; border-top:1px solid rgba(255,255,255,.22); padding-top:18px; }
+  .pill{ background:rgba(255,255,255,.16); border-radius:20px; padding:5px 13px; }
+  .foot .green{ color:#cde9a2; font-weight:700; }
+</style></head>
+<body>
+  <div class="bg"></div>
+  <div class="wrap">
+    <div class="hero">
+      <div class="left">
+        <img class="mark" src="wordmark.png" />
+        <div class="tag">APRS geocaching, reborn.</div>
+        <div class="sub">Hide a cache, find it over the air, and let your beaconed APRS
+          position <b style="color:#cde9a2">prove</b> you were there.</div>
+        <div class="feat">
+          <div><span class="chk">✓</span><span><b>Presence-verified finds</b> — Tier&nbsp;A
+            RF-corroborated · Tier&nbsp;B in-app GPS · Tier&nbsp;C IS-only.</span></div>
+          <div><span class="chk">✓</span><span><b>Live cache map</b> — hide, browse and log
+            found / DNF / note in one tap.</span></div>
+          <div><span class="chk">✓</span><span><b>Living APRS caches</b> — find a station
+            while it beacons its position.</span></div>
+          <div><span class="chk">✓</span><span><b>Field-native</b> — an APRS workbench
+            (APRStac-class) on the Cloudflare edge.</span></div>
+        </div>
+      </div>
+      <div class="frame">
+        <div class="bar"><i></i><i></i><i></i><span class="u">aprscaching.com · cache detail</span></div>
+        <img src="02-detail.png" />
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="map">
+        <div class="frame">
+          <div class="bar"><i></i><i></i><i></i><span class="u">aprscaching.com · live cache map</span></div>
+          <img src="01-map.png" />
+        </div>
+        <div class="cap">Type-coded caches on a self-contained APRS grid map · click to inspect &amp; log</div>
+      </div>
+      <div>
+        <div class="phone"><img src="04-mobile.png" /></div>
+        <div class="cap">Field-ready on mobile</div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span class="pill brand">APRScaching</span>
+      <span><span class="green">M0 + M1 shipped</span> — caching core: hide · map · verified logging</span>
+      <span style="margin-left:auto">Cloudflare Workers · Durable Objects · D1 · MapLibre</span>
+    </div>
+  </div>
+</body></html>

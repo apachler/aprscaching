@@ -3,3 +3,6 @@ dist
 .dev.vars
 .wrangler
 *.log
+
+# teaser output
+tools/teaser/out

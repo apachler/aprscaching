@@ -1,0 +1,14 @@
+{
+  "name": "aprscaching-teaser",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Reproducible website teaser: seed demo data, crawl the live app, compose a poster.",
+  "scripts": {
+    "seed": "node seed.mjs",
+    "shoot": "node shoot.mjs",
+    "teaser": "node teaser.mjs",
+    "all": "./run.sh"
+  },
+  "devDependencies": { "playwright": "^1.55.0" }
+}
