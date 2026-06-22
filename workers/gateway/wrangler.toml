@@ -1,0 +1,30 @@
+name = "aprscaching-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-04-07"
+compatibility_flags = ["nodejs_compat"]
+
+# routes (set after domain is on Cloudflare):
+# routes = [{ pattern = "api.aprscaching.com", custom_domain = true }]
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RegionRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RegionRoom"]   # SQLite-backed DO => works on Workers Free too
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aprscaching"
+database_id = "REPLACE_AFTER_create"
+
+[[r2_buckets]]
+binding = "TILES"
+bucket_name = "aprscaching-assets"
+
+[triggers]
+crons = ["0 4 * * *"]   # nightly TTL / rollup
+
+[vars]
+INGEST_SECRET = "change-me"   # prefer: wrangler secret put INGEST_SECRET

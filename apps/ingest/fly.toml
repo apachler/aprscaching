@@ -1,0 +1,13 @@
+app = "aprscaching-ingest"
+primary_region = "vie"   # Vienna — close to OE
+
+[build]
+
+[env]
+APRSIS_HOST = "rotate.aprs2.net"
+APRSIS_PORT = "14580"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
+# secrets: APRSIS_CALLSIGN, APRSIS_PASSCODE, APRSIS_FILTER, INGEST_URL, INGEST_SECRET

@@ -1,0 +1,14 @@
+{
+  "name": "aprscaching",
+  "private": true,
+  "version": "0.0.0",
+  "description": "aprscaching.com reborn — an APRS-Caching-first web workbench",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev:web": "pnpm --filter @aprsweb/web dev",
+    "dev:gateway": "pnpm --filter @aprsweb/gateway dev",
+    "dev:ingest": "pnpm --filter @aprsweb/ingest dev"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
