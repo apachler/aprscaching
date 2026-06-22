@@ -8,10 +8,16 @@ import {
 } from "./api.js";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
+import { buildGraticuleStyle } from "./offlineBasemap.js";
 import type { CacheType, LogType } from "@aprsweb/shared";
+import type { StyleSpecification } from "maplibre-gl";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
-const STYLE = "https://demotiles.maplibre.org/style.json"; // keyless basemap
+// keyless online basemap by default; `VITE_BASEMAP=offline` uses the self-contained grid.
+const STYLE: string | StyleSpecification =
+  import.meta.env.VITE_BASEMAP === "offline"
+    ? buildGraticuleStyle()
+    : "https://demotiles.maplibre.org/style.json";
 
 // ---------- callsign identity (localStorage until passkey sessions land) ----------
 function useCallsign(): [string, (v: string) => void] {
@@ -57,7 +63,7 @@ export function App() {
   useEffect(() => {
     if (!mapEl.current || map.current) return;
     const m = new maplibregl.Map({
-      container: mapEl.current, style: STYLE, center: DEFAULT_CENTER, zoom: 9,
+      container: mapEl.current, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
