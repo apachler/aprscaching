@@ -19,7 +19,10 @@ Everything for the APRS-Caching-first web workbench, by OE8APR. Greenfield.
 
 ## docs/ — planning evolution (context/history)
 - `01` web-app v1 → `02` cost-optimized → `03` feature-complete vs APRStac →
-  `04` aprscaching reborn → `05` auth + announce
+  `04` aprscaching reborn → `05` auth + announce → `06` federation + open network
+
+## tools/
+- `tools/teaser/` — reproducible website teaser (seed → Playwright crawl → brand poster)
 
 ## Trust model (the core idea)
 Two orthogonal signals, neither blocks logging a find:
