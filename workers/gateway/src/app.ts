@@ -12,9 +12,10 @@ import {
 import { handleClaim, handlePasskeyVerify } from "./auth.js";
 import { startAprsChallenge, confirmAprsChallenge } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
-import { handleWellKnown, handleFederationCaches, handleFederationFinds } from "./federation.js";
+import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
 import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
 import { handleCorroborate } from "./corroborate.js";
+import { handleRegisterKey, handleGetKeys } from "./keys.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -44,6 +45,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
+  if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
+
+  // per-callsign device keys (F0)
+  if (p === "/keys/register" && m === "POST") return handleRegisterKey(req, env);
+  const keyMatch = /^\/keys\/([A-Za-z0-9-]+)$/.exec(p);
+  if (keyMatch && m === "GET" && keyMatch[1] !== "register") return handleGetKeys(req, env, keyMatch[1]!);
 
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);

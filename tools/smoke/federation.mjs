@@ -112,5 +112,60 @@ ok("corroboration is attributed to the publisher instance", peerLog.data?.corrob
 const ghost = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "GHOST9", logType: "found" });
 ok("an un-heard logger does NOT reach Tier A", ghost.data?.tier !== "A", JSON.stringify(ghost.data));
 
+// ---- F0: per-callsign signing ----
+function stableStringify(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(",")}}`;
+}
+const authMsg = (a) => stableStringify({ v: 1, cache: a.cache, instance: a.instance, logger: a.logger, logType: a.logType, at: a.at });
+const b64u = (buf) => { let s = ""; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const ub64 = (s) => { const bin = atob(String(s).replace(/-/g, "+").replace(/_/g, "/")); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; };
+const signWith = async (priv, msg) => b64u(await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(msg)));
+
+const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
+
+const reg = await call(PUB, "POST", "/keys/register", { callsign: "OE8APR", publicKey: pubRaw, label: "device" });
+ok("key registration accepted", reg.data?.ok === true && reg.data?.publicKey === pubRaw, JSON.stringify(reg.data));
+
+const sc = await call(PUB, "POST", "/api/caches", { title: "Signed Find " + now(), type: "single", lat: 47.08, lon: 15.41, ownerCall: "OE8APR" });
+const scCode = sc.data?.cache?.code, scId = sc.data?.cache?.id;
+const at = now();
+const sig = await signWith(kp.privateKey, authMsg({ cache: scCode, instance: pubInstance, logger: "OE8APR", logType: "found", at }));
+const signedLog = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
+ok("signed find accepted; signerKey echoed", signedLog.data?.logged === true && signedLog.data?.signerKey === pubRaw, JSON.stringify(signedLog.data));
+
+const bad = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pubRaw, authorSig: sig.slice(0, -2) + "AA", signedAt: at } });
+ok("tampered author signature -> 400", bad.status === 400, `status=${bad.status}`);
+
+const kp2 = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const pub2 = b64u(await crypto.subtle.exportKey("raw", kp2.publicKey));
+const at2 = now();
+const sig2 = await signWith(kp2.privateKey, authMsg({ cache: scCode, instance: pubInstance, logger: "OE8APR", logType: "found", at: at2 }));
+const unreg = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pub2, authorSig: sig2, signedAt: at2 } });
+ok("unregistered key -> 400", unreg.status === 400, `status=${unreg.status}`);
+
+// verify the author signature straight from the federation feed, as any consumer would
+const finds = await call(PUB, "GET", "/federation/finds?since=0&limit=1000");
+const frec = (finds.data?.items ?? []).find((r) => r.data?.loggerCall === "OE8APR" && r.data?.authorKey === pubRaw && r.data?.cacheCode === scCode);
+ok("finds feed carries the author signature", !!frec);
+let authorOk = false;
+if (frec) {
+  const key = await crypto.subtle.importKey("raw", ub64(frec.data.authorKey), { name: "Ed25519" }, false, ["verify"]);
+  const msg = new TextEncoder().encode(authMsg({ cache: frec.data.cacheCode, instance: pubInstance, logger: frec.data.loggerCall, logType: frec.data.logType, at: frec.data.signedAt }));
+  authorOk = await crypto.subtle.verify("Ed25519", key, ub64(frec.data.authorSig), msg);
+}
+ok("author signature verifies from the feed (per-callsign provenance)", authorOk);
+
+const keysFeed = await call(PUB, "GET", "/federation/keys?since=0&limit=500");
+ok("keys feed publishes the callsign->key binding",
+  (keysFeed.data?.items ?? []).some((r) => r.data?.callsign === "OE8APR" && r.data?.publicKey === pubRaw));
+
+const syncK = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+ok("subscriber mirrors keys", (syncK.data?.keys ?? 0) >= 1, JSON.stringify(syncK.data));
+const peers2 = await call(SUB, "GET", "/federation/peers");
+ok("subscriber keys_cursor advanced", (peers2.data?.peers ?? []).some((p) => p.instance === pubInstance && p.keys_cursor > 0), JSON.stringify(peers2.data));
+
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

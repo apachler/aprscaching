@@ -8,6 +8,7 @@ import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./v
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
+import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 
 // ---- D1 row shapes (snake_case) ----
 interface CacheDbRow {
@@ -21,6 +22,7 @@ interface LogDbRow {
   id: number; cache_id: number; logger_call: string; ts: number; log_type: string;
   verified: number; tier: string | null; verify_method: string | null;
   distance_m: number | null; comment: string | null; corroborated_by: string | null;
+  signer_key: string | null;
 }
 
 function toSummary(r: CacheDbRow): CacheSummary {
@@ -38,6 +40,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
     logType: r.log_type as CacheLogEntry["logType"], verified: r.verified === 1,
     tier: (r.tier as CacheLogEntry["tier"]) ?? null, verifyMethod: r.verify_method,
     distanceM: r.distance_m, comment: r.comment, corroboratedBy: r.corroborated_by,
+    signerKey: r.signer_key,
   };
 }
 
@@ -206,13 +209,29 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   const now = Math.floor(Date.now() / 1000);
 
+  // Per-callsign authorship (F0): if the logger signed the log with their device key, verify it
+  // (signature valid AND key registered to the callsign) and persist it as portable provenance.
+  let signerKey: string | null = null, authorSig: string | null = null, signedAt: number | null = null;
+  if (parsed.data.author) {
+    const a = parsed.data.author;
+    const instance = env.INSTANCE ?? new URL(req.url).host;
+    const okSig = await verifyAuthorship({
+      cache: cache.code, instance, logger: loggerCall, logType, at: a.signedAt,
+      authorKey: a.authorKey, authorSig: a.authorSig,
+    });
+    if (!okSig) return json({ error: "invalid author signature" }, { status: 400 });
+    if (!(await isKeyRegistered(env, loggerCall, a.authorKey)))
+      return json({ error: "author key not registered to callsign" }, { status: 400 });
+    signerKey = a.authorKey; authorSig = a.authorSig; signedAt = a.signedAt;
+  }
+
   // Only `found` logs are presence-verified; DNF/note/maintenance are plain records.
   if (logType !== "found") {
     await env.DB.prepare(
-      `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment)
-       VALUES (?,?,?,?, 0, NULL, 'manual', ?)`,
-    ).bind(cacheId, loggerCall, now, logType, comment ?? null).run();
-    return json({ logged: true, logType, accountVerified, verified: false });
+      `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment, signer_key, author_sig, signed_at)
+       VALUES (?,?,?,?, 0, NULL, 'manual', ?,?,?,?)`,
+    ).bind(cacheId, loggerCall, now, logType, comment ?? null, signerKey, authorSig, signedAt).run();
+    return json({ logged: true, logType, accountVerified, verified: false, signerKey });
   }
 
   const since = now - DEFAULT_POLICY.windowSec;
@@ -252,15 +271,16 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   }
 
   await env.DB.prepare(
-    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by)
-     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?)`,
+    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, signer_key, author_sig, signed_at)
+     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?)`,
   ).bind(cacheId, loggerCall, now, result.verified ? 1 : 0, result.tier, result.method,
-         result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null, corroboratedBy).run();
+         result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null, corroboratedBy,
+         signerKey, authorSig, signedAt).run();
 
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
 
-  return json({ logged: true, logType, accountVerified, announced, corroboratedBy, ...result });
+  return json({ logged: true, logType, accountVerified, announced, corroboratedBy, signerKey, ...result });
 }
 
 /** Back-compat alias for the original /api/logs/find route. */

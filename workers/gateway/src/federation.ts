@@ -30,7 +30,9 @@ interface FindRow {
   id: number; cache_id: number; cache_code: string | null; logger_call: string; ts: number;
   log_type: string; verified: number; tier: string | null; verify_method: string | null;
   distance_m: number | null; comment: string | null;
+  signer_key: string | null; author_sig: string | null; signed_at: number | null;
 }
+interface KeyRow { id: number; callsign: string; public_key: string; verified: number; created_at: number }
 
 function cacheData(r: CacheRow) {
   return {
@@ -47,7 +49,12 @@ function findData(r: FindRow, instance: string) {
     loggerCall: r.logger_call, ts: r.ts, logType: r.log_type,
     verified: r.verified === 1, tier: r.tier, verifyMethod: r.verify_method,
     distanceM: r.distance_m, comment: r.comment,
+    // per-callsign authorship signature (F0): self-contained, verifiable by anyone
+    authorKey: r.signer_key, authorSig: r.author_sig, signedAt: r.signed_at,
   };
+}
+function keyData(r: KeyRow) {
+  return { callsign: r.callsign, publicKey: r.public_key, verified: r.verified === 1, createdAt: r.created_at };
 }
 
 // ---- canonical JSON + Ed25519 (WebCrypto) ----
@@ -61,7 +68,7 @@ function b64url(buf: ArrayBuffer): string {
   let s = ""; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-function fromB64(b64: string): ArrayBuffer {
+export function fromB64(b64: string): ArrayBuffer {
   const bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/"));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -175,4 +182,28 @@ export async function handleFederationFinds(req: Request, env: Env): Promise<Res
     if (r.id > nextCursor) nextCursor = r.id;
   }
   return json({ instance, type: "find", since, nextCursor, count: items.length, complete: items.length < limit, items });
+}
+
+export async function handleFederationKeys(req: Request, env: Env): Promise<Response> {
+  const u = new URL(req.url);
+  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
+  const instance = instanceOf(req, env);
+  const fk = await loadKey(env);
+
+  const rows = (await env.DB.prepare(
+    "SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
+  ).bind(since, limit).all<KeyRow>()).results;
+
+  let nextCursor = since;
+  const items = [];
+  for (const r of rows) {
+    const id = `${instance}:key:${r.id}`;
+    const data = keyData(r);
+    const rec: Record<string, unknown> = { type: "key", id, cursor: r.id, data };
+    if (fk) { rec.sig = await sign(fk, "key", id, data); rec.signer = instance; }
+    items.push(rec);
+    if (r.id > nextCursor) nextCursor = r.id;
+  }
+  return json({ instance, type: "key", since, nextCursor, count: items.length, complete: items.length < limit, items });
 }

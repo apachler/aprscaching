@@ -3,9 +3,10 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, createCache, logFind,
+  listCaches, getCache, createCache, logFind, registerKey, getInstance,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
 } from "./api.js";
+import { signAuthorship } from "./crypto.js";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
@@ -324,7 +325,7 @@ function DetailPanel(props: {
       {c.description && <p>{c.description}</p>}
       {c.hint && <details><summary>Hint</summary><p>{c.hint}</p></details>}
 
-      <LogForm cacheId={c.id} callsign={props.callsign} onLogged={props.onLogged} />
+      <LogForm cacheId={c.id} cacheCode={c.code} callsign={props.callsign} onLogged={props.onLogged} />
 
       <h4>Logbook</h4>
       {c.logs.length === 0 && <p className="muted">No logs yet — be the first to find it.</p>}
@@ -349,7 +350,7 @@ function DetailPanel(props: {
 }
 
 // ----------------------------------------------------------------- log form
-function LogForm(props: { cacheId: number; callsign: string; onLogged: () => void }) {
+function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; onLogged: () => void }) {
   const [logType, setLogType] = useState<LogType>("found");
   const [comment, setComment] = useState("");
   const [useGeo, setUseGeo] = useState(true);
@@ -376,8 +377,18 @@ function LogForm(props: { cacheId: number; callsign: string; onLogged: () => voi
     setBusy(true); setErr(null); setResult(null);
     try {
       const appGeo = await getGeo();
+      // sign the find with the device key (best-effort) and ensure the key is registered
+      let author;
+      try {
+        const instance = await getInstance();
+        if (instance) {
+          const at = Math.floor(Date.now() / 1000);
+          author = await signAuthorship({ cache: props.cacheCode, instance, logger: props.callsign, logType, at });
+          if (author) await registerKey({ callsign: props.callsign, publicKey: author.authorKey }).catch(() => {});
+        }
+      } catch { /* unsupported browser -> log unsigned */ }
       const r = await logFind(props.cacheId, {
-        loggerCall: props.callsign, logType, comment: comment.trim() || undefined, appGeo,
+        loggerCall: props.callsign, logType, comment: comment.trim() || undefined, appGeo, author,
       });
       setResult(r); setComment(""); props.onLogged();
     } catch (e) { setErr((e as Error).message); }
@@ -415,6 +426,7 @@ function LogForm(props: { cacheId: number; callsign: string; onLogged: () => voi
                 : `Logged, unverified${result.reason ? ` — ${result.reason}` : ""}`)
             : "Logged."}
           {result.announced && " · announced to APRS-IS"}
+          {result.signerKey && " · signed ✍"}
         </p>
       )}
     </div>

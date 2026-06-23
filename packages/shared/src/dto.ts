@@ -63,6 +63,15 @@ export const UpdateCacheRequest = z.object({
 });
 export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
+const B64 = z.string().trim().min(16).max(512);
+
+/** Per-callsign signature attesting the logger authored this find (F0). */
+export const AuthorSig = z.object({
+  authorKey: B64,                 // Ed25519 public key (raw, base64url)
+  authorSig: B64,                 // signature over authorshipMessage(...)
+  signedAt: z.number().int(),     // client authorship time the signature covers
+});
+
 /** A log entry against a cache (found/DNF/note/…). Verification only runs for `found`. */
 export const LogRequest = z.object({
   cacheId: z.number().int().positive().optional(),  // omitted when posted to /api/caches/:id/logs
@@ -70,8 +79,17 @@ export const LogRequest = z.object({
   logType: LogType.default("found"),
   comment: z.string().max(2000).optional(),
   appGeo: AppGeo.optional(),
+  author: AuthorSig.optional(),
 });
 export type LogRequest = z.infer<typeof LogRequest>;
+
+/** Bind a device public key to a callsign (F0). */
+export const RegisterKeyRequest = z.object({
+  callsign: Callsign,
+  publicKey: B64,
+  label: z.string().max(64).optional(),
+});
+export type RegisterKeyRequest = z.infer<typeof RegisterKeyRequest>;
 
 /** Back-compat: the original find request (a `found` LogRequest without an explicit logType). */
 export const LogFindRequest = LogRequest;
@@ -124,6 +142,7 @@ export interface CacheLogEntry {
   distanceM: number | null;
   comment: string | null;
   corroboratedBy?: string | null;   // peer instance that corroborated a Tier-A find (F3)
+  signerKey?: string | null;        // logger's device key that signed this find (F0)
 }
 
 export interface CacheDetail extends CacheSummary {

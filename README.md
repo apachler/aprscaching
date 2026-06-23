@@ -52,6 +52,8 @@ peers can mirror it into a shared catalog (see `docs/06-federation-and-open-netw
 | `GET /federation/peers` | configured peers + per-feed cursors and sync status |
 | `POST /federation/sync` | trigger a pull from all peers (auth: `x-ingest-secret`) |
 | `POST /federation/corroborate` | answer a peer: was a callsign heard on RF near here, independently? (F3) |
+| `GET /federation/keys?since=<id>` | signed feed of callsign→device-key bindings (F0) |
+| `POST /keys/register` · `GET /keys/:callsign` | register / list a callsign's device public keys (F0) |
 
 Enable signing by generating a key and setting it as a secret (else feeds serve unsigned):
 
@@ -65,6 +67,12 @@ node tools/fedkey/genkey.mjs            # prints FED_PRIVATE_KEY (+ the public k
 It pulls their feeds on a schedule (cron / 5-min interval), **verifies each record's signature**
 against the peer's published key, and mirrors them locally — peer caches then appear on your map
 (dashed pin, read-only) alongside your own.
+
+**Per-callsign signing (F0).** Each user holds an Ed25519 keypair in their browser and registers
+the public key to their callsign. Find logs are **signed on-device**, so authorship is
+cryptographically attributable to a callsign and verifiable by anyone — the feeds carry the
+signature, and the callsign→key bindings are published as their own signed feed (mirrored by peers).
+The web signs transparently; a browser without Ed25519 just logs unsigned.
 
 **Cross-instance verification (F3) — the network effect.** RF-heard positions are public, so when a
 find can't reach Tier A locally, the instance asks its peers *"did you independently hear this

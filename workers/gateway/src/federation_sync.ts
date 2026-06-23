@@ -15,7 +15,7 @@ const MAX_PAGES = 50;
 
 interface PeerRow {
   url: string; instance: string | null; public_key: string | null;
-  caches_cursor: number; finds_cursor: number; enabled: number;
+  caches_cursor: number; finds_cursor: number; keys_cursor: number; enabled: number;
 }
 
 interface FeedRecord { type: string; id: string; cursor: number; data: Record<string, unknown>; sig?: string; signer?: string }
@@ -43,37 +43,38 @@ export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1").all<PeerRow>()).results;
 }
 
-export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; errors: string[] }> {
+export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; errors: string[] }> {
   const peers = await listEnabledPeers(env);
-  let caches = 0, finds = 0;
+  let caches = 0, finds = 0, keys = 0;
   const errors: string[] = [];
   for (const p of peers) {
     try {
       const r = await syncPeer(env, p);
-      caches += r.caches; finds += r.finds;
+      caches += r.caches; finds += r.finds; keys += r.keys;
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
       await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=? WHERE url=?").bind(msg, now(), p.url).run();
     }
   }
-  return { peers: peers.length, caches, finds, errors };
+  return { peers: peers.length, caches, finds, keys, errors };
 }
 
-async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number }> {
+async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number }> {
   const base = p.url.replace(/\/+$/, "");
   const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
 
   // never mirror ourselves
-  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0 };
+  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0 };
 
   const verifyKey = pub ? await importVerifyKey(pub) : null;
   const caches = await syncCaches(env, base, p, wk.instance, verifyKey);
   const finds = await syncFinds(env, base, p, wk.instance, verifyKey);
+  const keys = await syncKeys(env, base, p, wk.instance, verifyKey);
   await env.DB.prepare("UPDATE fed_peers SET last_sync=?, last_error=NULL WHERE url=?").bind(now(), p.url).run();
-  return { caches, finds };
+  return { caches, finds, keys };
 }
 
 async function accept(env: Env, rec: FeedRecord, verifyKey: CryptoKey | null): Promise<boolean> {
@@ -116,6 +117,31 @@ async function syncFinds(env: Env, base: string, p: PeerRow, instance: string, v
   return mirrored;
 }
 
+async function syncKeys(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
+  let cursor = p.keys_cursor, mirrored = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const feed = await fetchJson<Feed>(`${base}/federation/keys?since=${cursor}&limit=500`);
+    for (const rec of feed.items ?? []) {
+      if (!(await accept(env, rec, verifyKey))) continue;
+      await upsertRemoteKey(env, rec, rec.signer ?? feed.instance ?? instance);
+      mirrored++;
+    }
+    const next = feed.nextCursor ?? cursor;
+    await env.DB.prepare("UPDATE fed_peers SET keys_cursor=? WHERE url=?").bind(next, p.url).run();
+    if (feed.complete || next === cursor) break;
+    cursor = next;
+  }
+  return mirrored;
+}
+
+async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {
+  const d = rec.data;
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO remote_keys (global_id, origin, callsign, public_key, verified, created_at, mirrored_at)
+     VALUES (?,?,?,?,?,?,?)`,
+  ).bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, now()).run();
+}
+
 async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
   await env.DB.prepare(
@@ -154,7 +180,7 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
   await seedPeers(env);
   const peers = (await env.DB.prepare(
-    "SELECT url, instance, public_key IS NOT NULL AS signed, caches_cursor, finds_cursor, enabled, last_sync, last_error FROM fed_peers ORDER BY url",
+    "SELECT url, instance, public_key IS NOT NULL AS signed, caches_cursor, finds_cursor, keys_cursor, enabled, last_sync, last_error FROM fed_peers ORDER BY url",
   ).all()).results;
   return json({ peers });
 }

@@ -49,11 +49,25 @@ export interface LogResult {
   reason?: string;
   announced?: boolean;
   corroboratedBy?: string | null;   // peer instance that granted Tier A (F3)
+  signerKey?: string | null;        // device key that signed the find (F0)
 }
+
+export interface AuthorSig { authorKey: string; authorSig: string; signedAt: number }
 
 export function logFind(
   cacheId: number,
-  body: { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo },
+  body: { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig },
 ): Promise<LogResult> {
   return call(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function registerKey(body: { callsign: string; publicKey: string; label?: string }): Promise<{ ok: boolean }> {
+  return call(`/keys/register`, { method: "POST", body: JSON.stringify(body) });
+}
+
+let instanceCache: Promise<string> | null = null;
+/** This instance's federation id (cached), used to build the canonical authorship message. */
+export function getInstance(): Promise<string> {
+  if (!instanceCache) instanceCache = call<{ instance: string }>(`/.well-known/aprscaching`).then((d) => d.instance).catch(() => "");
+  return instanceCache;
 }
