@@ -95,6 +95,23 @@ export interface CacheSummary {
   minTrust: "A" | "B" | null;
 }
 
+/** A cache as it appears on the map — native or mirrored from a federation peer (F2). */
+export interface MapCache {
+  globalId: string;          // network-unique id, e.g. "oe.aprscaching.org:cache:42"
+  id: number | null;         // local numeric id (native only; null when mirrored)
+  code: string;
+  ownerCall: string;
+  title: string;
+  type: CacheType;
+  status: CacheStatus;
+  difficulty: number;
+  terrain: number;
+  lat: number | null;
+  lon: number | null;
+  origin: string;            // originating instance id
+  mirrored: boolean;
+}
+
 export interface CacheLogEntry {
   id: number;
   cacheId: number;

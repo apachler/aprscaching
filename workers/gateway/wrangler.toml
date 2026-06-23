@@ -25,7 +25,7 @@ binding = "TILES"
 bucket_name = "aprscaching-assets"
 
 [triggers]
-crons = ["0 4 * * *"]   # nightly TTL / rollup
+crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-sync every 15 min
 
 [vars]
 INGEST_SECRET = "change-me"   # prefer: wrangler secret put INGEST_SECRET

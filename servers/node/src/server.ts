@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { WebSocketServer } from "ws";
-import { handle, runScheduled } from "@aprsweb/gateway/app";
+import { handle, runScheduled, syncAllPeers } from "@aprsweb/gateway/app";
 import type { Env } from "@aprsweb/gateway/env";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
@@ -87,6 +87,12 @@ server.listen(PORT, () => console.log(`aprscaching node-gateway listening on :${
 
 // nightly TTL of firehose positions (logger positions kept longer for verification)
 setInterval(() => void runScheduled(env).catch((e) => console.error("scheduled:", e)), 24 * 3600 * 1000);
+
+// pull from federation peers on an interval (default 5 min; only if peers are configured)
+const FED_SYNC_MS = Number(process.env.FED_SYNC_INTERVAL_MS ?? 5 * 60 * 1000);
+if (env.FED_PEERS && FED_SYNC_MS > 0) {
+  setInterval(() => void syncAllPeers(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
+}
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

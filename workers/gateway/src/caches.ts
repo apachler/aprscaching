@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import {
   CreateCacheRequest, UpdateCacheRequest, LogRequest,
-  type CacheSummary, type CacheDetail, type CacheLogEntry,
+  type CacheSummary, type CacheDetail, type CacheLogEntry, type MapCache,
 } from "@aprsweb/shared";
 import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
 import { sessionCallsign } from "./auth.js";
@@ -47,19 +47,53 @@ async function actor(req: Request, env: Env, fallback?: string): Promise<string 
   return fallback ? fallback.toUpperCase() : null;
 }
 
+interface RemoteCacheRow {
+  global_id: string; origin: string; code: string; owner_call: string; title: string; type: string;
+  status: string; difficulty: number; terrain: number; lat: number | null; lon: number | null;
+  station_call: string | null; source: string; external_id: string | null; min_trust: string | null;
+}
+
+function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
+  return {
+    globalId: `${instance}:cache:${r.id}`, id: r.id, code: r.code, ownerCall: r.owner_call,
+    title: r.title, type: r.type as MapCache["type"], status: r.status as MapCache["status"],
+    difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
+    origin: instance, mirrored: false,
+  };
+}
+function remoteMapCache(r: RemoteCacheRow): MapCache {
+  return {
+    globalId: r.global_id, id: null, code: r.code, ownerCall: r.owner_call, title: r.title,
+    type: r.type as MapCache["type"], status: r.status as MapCache["status"],
+    difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
+    origin: r.origin, mirrored: true,
+  };
+}
+
 // ---------------------------------------------------------------- list (map layer)
+// Aggregates native caches + caches mirrored from federation peers (F2).
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const [minLon, minLat, maxLon, maxLat] = (u.searchParams.get("bbox") ?? "-180,-90,180,90")
     .split(",").map(Number);
   if ([minLon, minLat, maxLon, maxLat].some(Number.isNaN))
     return json({ error: "bad bbox" }, { status: 400 });
-  const rows = await env.DB.prepare(
+  const instance = env.INSTANCE ?? u.host;
+
+  const native = await env.DB.prepare(
     `SELECT * FROM caches
-     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
-       AND status != 'archived' LIMIT 1000`,
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' LIMIT 1000`,
   ).bind(minLat, maxLat, minLon, maxLon).all<CacheDbRow>();
-  return json({ caches: rows.results.map(toSummary) });
+  const remote = await env.DB.prepare(
+    `SELECT * FROM remote_caches
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' LIMIT 1000`,
+  ).bind(minLat, maxLat, minLon, maxLon).all<RemoteCacheRow>();
+
+  const caches: MapCache[] = [
+    ...native.results.map((r) => nativeMapCache(r, instance)),
+    ...remote.results.map(remoteMapCache),
+  ];
+  return json({ caches });
 }
 
 // ---------------------------------------------------------------- detail + logbook

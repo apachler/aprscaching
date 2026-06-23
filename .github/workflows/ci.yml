@@ -51,6 +51,25 @@ jobs:
       - name: start wrangler dev + smoke
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
-          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 \
-            --var INSTANCE:ci.worker --var FED_PRIVATE_KEY:"$KEY" &)
+          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\n' "$KEY" > workers/gateway/.dev.vars
+          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+
+  conformance-federation:
+    name: conformance (federation — 2 instances)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: publisher + subscriber + federation smoke
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" \
+            pnpm --filter @aprsweb/node-gateway start &
+          DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
+            pnpm --filter @aprsweb/node-gateway start &
+          PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs

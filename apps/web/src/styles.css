@@ -85,6 +85,9 @@ label input, label select, label textarea { margin-top: 3px; }
 }
 .cache-pin > span { transform: rotate(45deg); }
 .beacon-pin { width: 30px; height: 30px; cursor: pointer; filter: drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
+/* mirrored (peer) caches: dashed white ring to distinguish from native */
+.cache-pin.mirrored { border-style: dashed; opacity: .9; box-shadow: 0 0 0 2px rgba(45,139,171,.35), 0 1px 5px rgba(0,0,0,.45); }
+.federated { color: var(--brand); font-weight: 700; }
 
 /* log form + logbook */
 .logform { border: 1px solid var(--line); border-radius: 9px; padding: 11px; margin: 12px 0;

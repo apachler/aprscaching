@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
   listCaches, getCache, createCache, logFind,
-  type CacheSummary, type CacheDetail, type BBox, type AppGeo, type LogResult,
+  type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
 } from "./api.js";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
@@ -35,17 +35,18 @@ type Mode = "view" | "hide";
 export function App() {
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const markers = useRef<Map<number, maplibregl.Marker>>(new Map());
+  const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
   const draftMarker = useRef<maplibregl.Marker | null>(null);
   const modeRef = useRef<Mode>("view");
   const debounce = useRef<ReturnType<typeof setTimeout>>();
 
   const [callsign, setCallsign] = useCallsign();
-  const [caches, setCaches] = useState<CacheSummary[]>([]);
+  const [caches, setCaches] = useState<MapCache[]>([]);
   const [mode, setMode] = useState<Mode>("view");
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CacheDetail | null>(null);
+  const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -92,11 +93,11 @@ export function App() {
   // ---- render cache markers (diffed against the live map) ----
   useEffect(() => {
     const m = map.current; if (!m) return;
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     for (const c of caches) {
       if (c.lat == null || c.lon == null) continue;
-      seen.add(c.id);
-      if (markers.current.has(c.id)) continue;
+      seen.add(c.globalId);
+      if (markers.current.has(c.globalId)) continue;
       const meta = typeMeta(c.type);
       let el: HTMLElement;
       let anchor: maplibregl.PositionAnchor = "bottom";
@@ -107,18 +108,22 @@ export function App() {
         el = img;
       } else {
         const btn = document.createElement("button");
-        btn.className = "cache-pin"; btn.style.background = meta.color;
+        btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`; btn.style.background = meta.color;
         btn.innerHTML = `<span>${meta.glyph}</span>`;
         el = btn;
       }
-      el.title = `${c.code} — ${c.title}`;
-      el.onclick = (ev) => { ev.stopPropagation(); setSelectedId(c.id); };
+      el.title = `${c.code} — ${c.title}${c.mirrored ? ` · via ${c.origin}` : ""}`;
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        if (c.mirrored) { setSelectedId(null); setRemote(c); }
+        else if (c.id != null) { setRemote(null); setSelectedId(c.id); }
+      };
       const mk = new maplibregl.Marker({ element: el, anchor })
         .setLngLat([c.lon, c.lat]).addTo(m);
-      markers.current.set(c.id, mk);
+      markers.current.set(c.globalId, mk);
     }
-    for (const [id, mk] of markers.current) {
-      if (!seen.has(id)) { mk.remove(); markers.current.delete(id); }
+    for (const [gid, mk] of markers.current) {
+      if (!seen.has(gid)) { mk.remove(); markers.current.delete(gid); }
     }
   }, [caches]);
 
@@ -137,6 +142,7 @@ export function App() {
 
   function startHide() {
     setSelectedId(null);
+    setRemote(null);
     setMode("hide");
   }
   function cancelHide() {
@@ -163,11 +169,38 @@ export function App() {
         <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
       )}
 
-      {detail && mode === "view" && (
+      {detail && mode === "view" && !remote && (
         <DetailPanel detail={detail} callsign={callsign}
                      onClose={() => setSelectedId(null)} onLogged={reloadDetail} />
       )}
+
+      {remote && mode === "view" && (
+        <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
+      )}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------- mirrored (peer) cache — read-only
+function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }) {
+  const c = props.cache;
+  const meta = typeMeta(c.type);
+  return (
+    <aside className="panel right">
+      <div className="row between">
+        <h2><span className="dot" style={{ background: meta.color }} /> {c.code}</h2>
+        <button className="icon" onClick={props.onClose}>✕</button>
+      </div>
+      <h3>{c.title}</h3>
+      <p className="muted">
+        {meta.label} · D {c.difficulty.toFixed(1)} / T {c.terrain.toFixed(1)} · by {c.ownerCall}
+      </p>
+      <p className="federated">⇄ mirrored from <strong>{c.origin}</strong></p>
+      <p className="muted">
+        This cache lives on another instance in the network. Log your find on its home instance;
+        it will appear here once that instance publishes it.
+      </p>
+    </aside>
   );
 }
 

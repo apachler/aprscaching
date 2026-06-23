@@ -1,9 +1,9 @@
 import type {
   CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
-  LogType, AppGeo, TrustTier,
+  MapCache, LogType, AppGeo, TrustTier,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, LogType, AppGeo, TrustTier };
+export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -22,7 +22,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
-export function listCaches(bbox: BBox): Promise<{ caches: CacheSummary[] }> {
+export function listCaches(bbox: BBox): Promise<{ caches: MapCache[] }> {
   return call(`/api/caches?bbox=${bbox.join(",")}`);
 }
 

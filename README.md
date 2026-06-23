@@ -49,6 +49,8 @@ peers can mirror it into a shared catalog (see `docs/06-federation-and-open-netw
 | `GET /.well-known/aprscaching` | instance descriptor: protocol, public key, peers, capabilities |
 | `GET /federation/caches?since=<updated_at>` | signed cache records (idempotent by namespaced id) |
 | `GET /federation/finds?since=<id>` | signed find records (append-only cursor) |
+| `GET /federation/peers` | configured peers + per-feed cursors and sync status |
+| `POST /federation/sync` | trigger a pull from all peers (auth: `x-ingest-secret`) |
 
 Enable signing by generating a key and setting it as a secret (else feeds serve unsigned):
 
@@ -57,6 +59,12 @@ node tools/fedkey/genkey.mjs            # prints FED_PRIVATE_KEY (+ the public k
 # Cloudflare:  wrangler secret put FED_PRIVATE_KEY      (and set INSTANCE in wrangler.toml)
 # Node:        export FED_PRIVATE_KEY=... INSTANCE=oe.aprscaching.org
 ```
+
+**Mirroring (F2).** Point an instance at peers with `FED_PEERS=https://a.example,https://b.example`.
+It pulls their feeds on a schedule (cron / 5-min interval), **verifies each record's signature**
+against the peer's published key, and mirrors them locally — peer caches then appear on your map
+(dashed pin, read-only) alongside your own. `tools/smoke/federation.mjs` proves the full
+publisher→subscriber loop and runs in CI across two instances.
 
 ## Verification at a glance
 | Tier | Means | How |

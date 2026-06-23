@@ -13,6 +13,8 @@ import { handleClaim, handlePasskeyVerify } from "./auth.js";
 import { startAprsChallenge, confirmAprsChallenge } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds } from "./federation.js";
+import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
+export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
@@ -21,10 +23,11 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
   return withCors(res, req);
 }
 
-/** Nightly TTL of firehose positions (logger positions are kept longer for verification). */
+/** Scheduled work: TTL firehose positions (loggers kept longer) + pull from federation peers. */
 export async function runScheduled(env: Env): Promise<void> {
   const cutoff = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(cutoff).run();
+  try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
 }
 
 export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
@@ -37,6 +40,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/.well-known/aprscaching" && m === "GET") return handleWellKnown(req, env);
   if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
   if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
+  if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
+  if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
 
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);

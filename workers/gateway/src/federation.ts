@@ -90,6 +90,21 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
   return b64url(await crypto.subtle.sign("Ed25519", fk.key, msg));
 }
 
+/** Import a peer's raw Ed25519 public key (base64url) for verifying its feed (F2). */
+export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey("raw", fromB64(rawB64url), { name: "Ed25519" }, false, ["verify"]);
+}
+
+/** Verify a feed record's signature against the canonical {type,id,data}. */
+export async function verifyRecordSig(
+  key: CryptoKey,
+  rec: { type: string; id: string; data: unknown; sig?: string },
+): Promise<boolean> {
+  if (!rec.sig) return false;
+  const msg = new TextEncoder().encode(stableStringify({ type: rec.type, id: rec.id, data: rec.data }));
+  return crypto.subtle.verify("Ed25519", key, fromB64(rec.sig), msg);
+}
+
 function instanceOf(req: Request, env: Env): string {
   return env.INSTANCE ?? new URL(req.url).host;
 }
