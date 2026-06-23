@@ -52,7 +52,7 @@ export interface AppGeo { lat: number; lon: number; accuracyM: number; ts: numbe
 export interface VerifyResult {
   verified: boolean;
   tier: TrustTier;
-  method: "aprs_rf" | "app_geo" | "aprs_is" | "none";
+  method: "aprs_rf" | "aprs_rf_peer" | "app_geo" | "aprs_is" | "none";
   matchedPositionId?: number;
   distanceM?: number;
   reason?: string;

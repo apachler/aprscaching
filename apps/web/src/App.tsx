@@ -338,6 +338,7 @@ function DetailPanel(props: {
                 ? <span className="ok">✓ tier {l.tier}</span>
                 : <span className="muted">unverified{l.tier ? ` (tier ${l.tier})` : ""}</span>
             )}
+            {l.corroboratedBy && <span className="muted"> · ⇄ via {l.corroboratedBy}</span>}
             <span className="muted"> · {new Date(l.ts * 1000).toLocaleDateString()}</span>
             {l.comment && <div className="comment">{l.comment}</div>}
           </li>
@@ -408,7 +409,9 @@ function LogForm(props: { cacheId: number; callsign: string; onLogged: () => voi
         <p className={result.verified ? "ok" : "muted"}>
           {result.logType === "found"
             ? (result.verified
-                ? `Verified — tier ${result.tier} (${result.method}${result.distanceM != null ? `, ${Math.round(result.distanceM)} m` : ""})`
+                ? (result.method === "aprs_rf_peer" && result.corroboratedBy
+                    ? `Verified — Tier ${result.tier} · corroborated by ${result.corroboratedBy}`
+                    : `Verified — tier ${result.tier} (${result.method}${result.distanceM != null ? `, ${Math.round(result.distanceM)} m` : ""})`)
                 : `Logged, unverified${result.reason ? ` — ${result.reason}` : ""}`)
             : "Logged."}
           {result.announced && " · announced to APRS-IS"}

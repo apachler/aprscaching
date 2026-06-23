@@ -81,5 +81,36 @@ ok("no duplicate mirror after re-sync",
 const noauth = await call(SUB, "POST", "/federation/sync");
 ok("sync without secret -> 401", noauth.status === 401, `status=${noauth.status}`);
 
+// ---- F3: cross-instance verification (the network effect) ----
+// The logger's RF position is heard only by the PUBLISHER's IGate (independent of the logger).
+// The cache + the find live on the SUBSCRIBER, which has NO local RF fix — it must reach Tier A
+// by querying the publisher's corroboration pool.
+const LAT = 47.2, LON = 15.05, t = now();
+await call(PUB, "POST", "/ingest", {
+  packets: [{
+    src: "LO3RF", path: ["WIDE1-1", "qAR", "OE8XXX"], payload: "=4712.00N/01503.00E>",
+    kind: "position", parsed: { lat: LAT + 0.0005, lon: LON, symbol: ">" },
+    heardVia: "rf", igateCall: "OE8XXX", port: "aprs-is", ts: t,
+  }],
+}, { "x-ingest-secret": SECRET });
+
+const sCache = await call(SUB, "POST", "/api/caches", {
+  title: "Peer-Verified Summit " + t, type: "single", lat: LAT, lon: LON, ownerCall: "OE8SUB",
+});
+const sid = sCache.data?.cache?.id;
+ok("subscriber created its own cache", sCache.status === 201, JSON.stringify(sCache.data));
+
+// no appGeo, no local RF on the subscriber -> only peer corroboration can grant Tier A
+const peerLog = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "LO3RF", logType: "found" });
+ok("subscriber reaches Tier A via peer corroboration",
+  peerLog.data?.verified === true && peerLog.data?.tier === "A" && peerLog.data?.method === "aprs_rf_peer",
+  JSON.stringify(peerLog.data));
+ok("corroboration is attributed to the publisher instance", peerLog.data?.corroboratedBy === pubInstance,
+  JSON.stringify(peerLog.data?.corroboratedBy));
+
+// a logger nobody heard stays unverified (no false corroboration)
+const ghost = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "GHOST9", logType: "found" });
+ok("an un-heard logger does NOT reach Tier A", ghost.data?.tier !== "A", JSON.stringify(ghost.data));
+
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

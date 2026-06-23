@@ -7,6 +7,7 @@ import {
 import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
+import { queryPeerCorroboration } from "./corroborate.js";
 
 // ---- D1 row shapes (snake_case) ----
 interface CacheDbRow {
@@ -19,7 +20,7 @@ interface CacheDbRow {
 interface LogDbRow {
   id: number; cache_id: number; logger_call: string; ts: number; log_type: string;
   verified: number; tier: string | null; verify_method: string | null;
-  distance_m: number | null; comment: string | null;
+  distance_m: number | null; comment: string | null; corroborated_by: string | null;
 }
 
 function toSummary(r: CacheDbRow): CacheSummary {
@@ -36,7 +37,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
     id: r.id, cacheId: r.cache_id, loggerCall: r.logger_call, ts: r.ts,
     logType: r.log_type as CacheLogEntry["logType"], verified: r.verified === 1,
     tier: (r.tier as CacheLogEntry["tier"]) ?? null, verifyMethod: r.verify_method,
-    distanceM: r.distance_m, comment: r.comment,
+    distanceM: r.distance_m, comment: r.comment, corroboratedBy: r.corroborated_by,
   };
 }
 
@@ -231,16 +232,35 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     loggerPositions: lp.results, cacheStationPositions, loggerOwnIgates: new Set(),
   });
 
+  // F3: if we couldn't reach Tier A locally, ask peers whether the logger was independently
+  // heard on RF near the cache (cross-instance corroboration). A hit upgrades the find to Tier A.
+  let corroboratedBy: string | null = null;
+  if (result.tier !== "A" && cache.lat != null && cache.lon != null) {
+    const ev = await queryPeerCorroboration(env, {
+      callsign: loggerCall, lat: cache.lat, lon: cache.lon,
+      radiusM: DEFAULT_POLICY.radiusM, since, until: now,
+    });
+    if (ev) {
+      corroboratedBy = ev.instance;
+      result.tier = "A";
+      result.method = "aprs_rf_peer";
+      result.verified = true;            // A satisfies any cache min_trust
+      result.distanceM = ev.distanceM;
+      result.matchedPositionId = undefined;
+      result.reason = undefined;
+    }
+  }
+
   await env.DB.prepare(
-    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment)
-     VALUES (?,?,?, 'found', ?,?,?,?,?,?)`,
+    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by)
+     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?)`,
   ).bind(cacheId, loggerCall, now, result.verified ? 1 : 0, result.tier, result.method,
-         result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null).run();
+         result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null, corroboratedBy).run();
 
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
 
-  return json({ logged: true, logType, accountVerified, announced, ...result });
+  return json({ logged: true, logType, accountVerified, announced, corroboratedBy, ...result });
 }
 
 /** Back-compat alias for the original /api/logs/find route. */

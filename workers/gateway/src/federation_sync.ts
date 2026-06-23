@@ -37,9 +37,14 @@ async function seedPeers(env: Env): Promise<void> {
   }
 }
 
-export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; errors: string[] }> {
+/** Seed from FED_PEERS then return the enabled peers (shared by sync + corroboration). */
+export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   await seedPeers(env);
-  const peers = (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1").all<PeerRow>()).results;
+  return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1").all<PeerRow>()).results;
+}
+
+export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; errors: string[] }> {
+  const peers = await listEnabledPeers(env);
   let caches = 0, finds = 0;
   const errors: string[] = [];
   for (const p of peers) {

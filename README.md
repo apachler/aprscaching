@@ -51,6 +51,7 @@ peers can mirror it into a shared catalog (see `docs/06-federation-and-open-netw
 | `GET /federation/finds?since=<id>` | signed find records (append-only cursor) |
 | `GET /federation/peers` | configured peers + per-feed cursors and sync status |
 | `POST /federation/sync` | trigger a pull from all peers (auth: `x-ingest-secret`) |
+| `POST /federation/corroborate` | answer a peer: was a callsign heard on RF near here, independently? (F3) |
 
 Enable signing by generating a key and setting it as a secret (else feeds serve unsigned):
 
@@ -63,8 +64,15 @@ node tools/fedkey/genkey.mjs            # prints FED_PRIVATE_KEY (+ the public k
 **Mirroring (F2).** Point an instance at peers with `FED_PEERS=https://a.example,https://b.example`.
 It pulls their feeds on a schedule (cron / 5-min interval), **verifies each record's signature**
 against the peer's published key, and mirrors them locally — peer caches then appear on your map
-(dashed pin, read-only) alongside your own. `tools/smoke/federation.mjs` proves the full
-publisher→subscriber loop and runs in CI across two instances.
+(dashed pin, read-only) alongside your own.
+
+**Cross-instance verification (F3) — the network effect.** RF-heard positions are public, so when a
+find can't reach Tier A locally, the instance asks its peers *"did you independently hear this
+callsign on RF near the cache, gated by an IGate that isn't theirs?"* A hit upgrades the find to
+**Tier A** (`method: aprs_rf_peer`, attributed to the corroborating instance). The more instances
+and IGates participate, the more finds verify — like iNaturalist's "more observers ⇒ better data".
+`tools/smoke/federation.mjs` proves the whole publisher→subscriber loop (mirror + corroboration)
+and runs in CI across two instances.
 
 ## Verification at a glance
 | Tier | Means | How |

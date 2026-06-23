@@ -123,6 +123,7 @@ export interface CacheLogEntry {
   verifyMethod: string | null;
   distanceM: number | null;
   comment: string | null;
+  corroboratedBy?: string | null;   // peer instance that corroborated a Tier-A find (F3)
 }
 
 export interface CacheDetail extends CacheSummary {

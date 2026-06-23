@@ -48,6 +48,7 @@ export interface LogResult {
   distanceM?: number;
   reason?: string;
   announced?: boolean;
+  corroboratedBy?: string | null;   // peer instance that granted Tier A (F3)
 }
 
 export function logFind(
