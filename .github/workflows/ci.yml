@@ -30,7 +30,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: start node-gateway + smoke
         run: |
-          DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 pnpm --filter @aprsweb/node-gateway start &
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
+            pnpm --filter @aprsweb/node-gateway start &
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
 
   conformance-worker:
@@ -48,5 +50,7 @@ jobs:
         run: CI=1 npx wrangler d1 migrations apply aprscaching --local
       - name: start wrangler dev + smoke
         run: |
-          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 \
+            --var INSTANCE:ci.worker --var FED_PRIVATE_KEY:"$KEY" &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs

@@ -12,6 +12,7 @@ import {
 import { handleClaim, handlePasskeyVerify } from "./auth.js";
 import { startAprsChallenge, confirmAprsChallenge } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
+import { handleWellKnown, handleFederationCaches, handleFederationFinds } from "./federation.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
@@ -31,6 +32,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const p = url.pathname, m = req.method;
 
   if (p === "/health") return json({ ok: true });
+
+  // federation (F1): discovery + read-only signed feeds for mirroring
+  if (p === "/.well-known/aprscaching" && m === "GET") return handleWellKnown(req, env);
+  if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
+  if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
 
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);

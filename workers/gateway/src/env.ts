@@ -6,4 +6,9 @@ export interface Env {
   TILES: ObjectStore;
   ROOMS: RoomNamespace;
   INGEST_SECRET: string;
+
+  // ---- federation (F1) — all optional; absent => feeds served unsigned ----
+  INSTANCE?: string;        // canonical instance id/domain, e.g. "oe.aprscaching.org"
+  FED_PRIVATE_KEY?: string; // base64(JWK) Ed25519 signing key; if set, records are signed
+  FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
 }

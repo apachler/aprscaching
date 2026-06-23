@@ -39,6 +39,25 @@ cp .env.example .env                       # set APRSIS_FILTER + INGEST_SECRET
 pnpm --filter @aprsweb/ingest dev          # streams APRS-IS -> POST /ingest
 ```
 
+## Federation (F1) — open, mirrorable, signed
+
+Any instance (Cloudflare *or* the Node self-host) publishes read-only, Ed25519-signed feeds so
+peers can mirror it into a shared catalog (see `docs/06-federation-and-open-network.md`):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /.well-known/aprscaching` | instance descriptor: protocol, public key, peers, capabilities |
+| `GET /federation/caches?since=<updated_at>` | signed cache records (idempotent by namespaced id) |
+| `GET /federation/finds?since=<id>` | signed find records (append-only cursor) |
+
+Enable signing by generating a key and setting it as a secret (else feeds serve unsigned):
+
+```bash
+node tools/fedkey/genkey.mjs            # prints FED_PRIVATE_KEY (+ the public key it will publish)
+# Cloudflare:  wrangler secret put FED_PRIVATE_KEY      (and set INSTANCE in wrangler.toml)
+# Node:        export FED_PRIVATE_KEY=... INSTANCE=oe.aprscaching.org
+```
+
 ## Verification at a glance
 | Tier | Means | How |
 |------|-------|-----|

@@ -44,6 +44,9 @@ const env: Env = {
     get: () => ({ fetch: async () => new Response("expected websocket upgrade", { status: 426 }) }),
   },
   INGEST_SECRET,
+  INSTANCE: process.env.INSTANCE,
+  FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
+  FED_PEERS: process.env.FED_PEERS,
 };
 
 // ---- node:http <-> Web Request/Response ----

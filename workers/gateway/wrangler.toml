@@ -29,3 +29,7 @@ crons = ["0 4 * * *"]   # nightly TTL / rollup
 
 [vars]
 INGEST_SECRET = "change-me"   # prefer: wrangler secret put INGEST_SECRET
+INSTANCE = "aprscaching.local"   # canonical federation instance id (use your domain in prod)
+# FED_PEERS = "https://peer.example/"          # advertised peer instances
+# Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
+#   wrangler secret put FED_PRIVATE_KEY

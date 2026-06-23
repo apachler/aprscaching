@@ -87,5 +87,43 @@ ok("detail: 2 verified finds", detail.data?.cache?.finds === 2, JSON.stringify(d
 ok("detail: logbook has 3 entries", (detail.data?.cache?.logs ?? []).length === 3,
   `len=${(detail.data?.cache?.logs ?? []).length}`);
 
+// ---- federation (F1): discovery + signed, mirrorable feeds ----
+const wk = await call("GET", "/.well-known/aprscaching");
+ok("well-known descriptor", (wk.data?.protocol ?? "").startsWith("aprscaching-federation"), JSON.stringify(wk.data));
+const fc = await call("GET", "/federation/caches?since=0&limit=500");
+ok("caches feed has records",
+  Array.isArray(fc.data?.items) && fc.data.items.some((r) => typeof r.id === "string" && r.id.includes(":cache:")),
+  `count=${fc.data?.count}`);
+const ff = await call("GET", "/federation/finds?since=0&limit=500");
+ok("finds feed has >= 2 records", (ff.data?.items?.length ?? 0) >= 2, `count=${ff.data?.count}`);
+const ff2 = await call("GET", `/federation/finds?since=${ff.data?.nextCursor ?? 0}`);
+ok("finds cursor advances (empty past nextCursor)", (ff2.data?.items?.length ?? 0) === 0);
+
+if (wk.data?.signed) {
+  const rec = (fc.data?.items ?? [])[0];
+  ok("signed cache record verifies against published key", rec ? await verifyRecord(wk.data.publicKeyJwk, rec) : false);
+} else {
+  console.log("• federation unsigned (no FED_PRIVATE_KEY) — signature check skipped");
+}
+
+function stableStringify(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(",")}}`;
+}
+function b64urlToBytes(s) {
+  const bin = atob(String(s).replace(/-/g, "+").replace(/_/g, "/"));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function verifyRecord(pubJwk, rec) {
+  try {
+    const key = await crypto.subtle.importKey("jwk", pubJwk, { name: "Ed25519" }, false, ["verify"]);
+    const msg = new TextEncoder().encode(stableStringify({ type: rec.type, id: rec.id, data: rec.data }));
+    return await crypto.subtle.verify("Ed25519", key, b64urlToBytes(rec.sig), msg);
+  } catch { return false; }
+}
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
