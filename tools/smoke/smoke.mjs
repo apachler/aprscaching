@@ -125,5 +125,20 @@ async function verifyRecord(pubJwk, rec) {
   } catch { return false; }
 }
 
+// ---- F0: per-callsign signing (single instance, exercised on both runtimes) ----
+const b64u = (buf) => { let s = ""; for (const x of new Uint8Array(buf)) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
+const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw });
+ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data));
+
+const at = now();
+const amsg = stableStringify({ v: 1, cache: created.data?.cache?.code, instance: wk.data?.instance, logger: "DL1ABC", logType: "found", at });
+const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(amsg)));
+const signed = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
+ok("signed find accepted; signerKey echoed", signed.data?.logged === true && signed.data?.signerKey === pubRaw, JSON.stringify(signed.data));
+const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig.slice(0, -2) + "AA", signedAt: at } });
+ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
