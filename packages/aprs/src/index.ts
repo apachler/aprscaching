@@ -10,3 +10,5 @@ export * from "./decode.js";
 export * from "./ax25.js";
 export * from "./cotin.js";
 export * from "./meshtastic.js";
+export * from "./digipeat.js";
+export * from "./igate.js";

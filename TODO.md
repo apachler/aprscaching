@@ -3,13 +3,15 @@
 Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
 
 ## RF / protocol roadmap (proposed — building blocks already exist)
-- [ ] **APRS IGate** (bidirectional RF↔APRS-IS, on the ingest box). RX-IGate: relay KISS-heard RF
-  frames up to APRS-IS with our gate callsign + `qAR`/`,I` (today we only forward them to `/ingest`).
-  TX-IGate: gate IS messages down to RF for stations heard locally (last-N-min), with the standard
-  courtesy/local-only rules. Pieces present: AX.25 codec, KISS RX, `AprsUplink` (IS TX),
-  `stations` last-heard. Gated/opt-in (TX off by default + real callsign+passcode).
-- [ ] **APRS digipeater** (KISS TX). Process RF UI-frame paths: decrement `WIDEn-N`, insert our
-  call with the H-bit, viscous dedup, retransmit. Pure logic over the existing AX.25 + KISS codec.
+- [x] **APRS IGate** (bidirectional RF↔APRS-IS, on the ingest box). RX-IGate relays KISS-heard RF
+  frames to APRS-IS with a `qAR` construct; TX-IGate gates IS messages to RF for stations heard
+  locally (TTL), honouring NOGATE/RFONLY/TCPIP + third-party + bare-ack rules. Pure gating in
+  `@aprsweb/aprs` (`igate.ts`), connector in `apps/ingest/igate.ts`, opt-in via `IGATE_CALL/PASS`.
+  Follow-up: stricter "heard *direct*" (no digi between) detection; rate limiting; message-ack relay.
+- [x] **APRS digipeater** (KISS TX). New n-N paradigm: insert our call with the H-bit, decrement
+  `WIDEn-N`, loop-guard + duplicate suppression. Pure `digipeat()` in `@aprsweb/aprs`, connector in
+  `apps/ingest/digipeater.ts`, opt-in via `DIGI_CALL`. Follow-up: viscous-delay digipeating,
+  preemptive/trace handling, per-alias TX policy.
 - [ ] **BBS store-and-forward** (APRS messaging). We have the *store* (`messages`, `aprs_outbox`);
   add the *forward*: per-addressee outbound queue, deliver when the addressee is next heard, ack
   matching (`:ADDR :ackNNN`) + retransmit, bulletin distribution. Builds on messaging-TX.

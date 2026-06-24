@@ -2,7 +2,10 @@ import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
 import { CotListener } from "./cotlisten.js";
 import { MeshtasticReader } from "./mesh.js";
+import { Digipeater } from "./digipeater.js";
+import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprsweb/aprs";
+import type { ParsedFrame } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
 
 const env = process.env;
@@ -23,8 +26,32 @@ const enqueue = (p: Packet) => batch.push(p);
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
-  new KissTnc({ host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) }, enqueue).start();
+  const frameSubs: ((f: ParsedFrame) => void)[] = [];
+  const kiss = new KissTnc(
+    { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
+    { onPacket: enqueue, onFrame: (f) => { for (const s of frameSubs) s(f); } },
+  );
+  kiss.start();
   console.log("[kiss] enabled");
+
+  // RF digipeater (KISS TX) — repeat n-N traffic
+  if (env.DIGI_CALL) {
+    const aliases = new Set((env.DIGI_ALIASES ?? "WIDE1,WIDE2").split(",").map((a) => a.trim().toUpperCase()).filter(Boolean));
+    const digi = new Digipeater(kiss, { mycall: env.DIGI_CALL, aliases });
+    frameSubs.push((f) => digi.onFrame(f));
+    console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
+  }
+  // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
+  if (env.IGATE_CALL && env.IGATE_PASS) {
+    const igate = new Igate(kiss, {
+      host: env.APRSIS_HOST ?? "rotate.aprs2.net", port: Number(env.APRSIS_PORT ?? 14580),
+      call: env.IGATE_CALL, pass: env.IGATE_PASS, filter: env.IGATE_FILTER,
+      localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
+    });
+    frameSubs.push((f) => igate.onRf(f));
+    igate.start();
+    console.log(`[igate] enabled as ${env.IGATE_CALL}`);
+  }
 }
 if (env.TAK_COT_PORT) {
   new CotListener({ port: Number(env.TAK_COT_PORT), bind: env.TAK_COT_BIND }, enqueue).start();

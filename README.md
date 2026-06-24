@@ -189,6 +189,14 @@ TCP). Enable them in `.env` (`KISS_TNC_HOST`, `TAK_COT_PORT`, `MESH_HOST`). The 
 Meshtastic codecs live in `@aprsweb/aprs` (tested). Message **TX** and native MQTT/BLE/serial remain
 follow-ups (`TODO.md`).
 
+With a KISS TNC the box can also be a real RF citizen (opt-in, TX off by default):
+- **Digipeater** (`DIGI_CALL`): new n-N paradigm — insert our call (H-bit), decrement `WIDEn-N`,
+  loop-guard + duplicate suppression.
+- **APRS IGate** (`IGATE_CALL` + `IGATE_PASS`): RX-IGate relays RF → APRS-IS with a `qAR` construct;
+  TX-IGate gates IS messages → RF for locally-heard stations, honouring NOGATE/RFONLY/TCPIP +
+  third-party rules.
+The gating/path logic is pure + unit-tested in `@aprsweb/aprs` (`digipeat.ts`, `igate.ts`).
+
 An operator's standing is also exportable as an **embeddable SVG badge** for QRZ.com / signatures:
 `<img src="https://api.aprscaching.com/badge/OE8APR.svg">` (network rank · finds · points · hides).
 
