@@ -1,5 +1,9 @@
 # CLAUDE.md — aprscaching.com (reborn)
 
+## Design rules (read before building/changing any UI)
+@.claude/rules/ui-ux.md
+@.claude/rules/css.md
+
 ## What this is
 APRS-Caching-first web workbench. APRS Caching is the product; a full APRS workbench is the
 platform. Greenfield (no legacy migration). Author/owner: OE8APR.

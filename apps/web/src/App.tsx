@@ -12,6 +12,7 @@ import {
   type PortStat, type MessageItem, type CacheStage, type BbsMessage, type ActivityItem,
 } from "./api.js";
 import { signAuthorship, signAccountAction } from "./crypto.js";
+import { Group, Row, Switch, Advanced } from "./ui.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
@@ -414,7 +415,6 @@ export function App() {
 function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; onClose: () => void }) {
   const s = props.settings;
   const fmt = useFmt();
-  const now = Math.floor(Date.now() / 1000);
   const [gdpr, setGdpr] = useState<string | null>(null);
 
   async function exportData() {
@@ -440,53 +440,53 @@ function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSet
       setGdpr("Your account and personal data were erased.");
     } catch (e) { setGdpr((e as Error).message); }
   }
+  const [q, setQ] = useState("");
+  const match = (title: string, ...kw: string[]) => !q || (title + " " + kw.join(" ")).toLowerCase().includes(q.toLowerCase());
   return (
     <aside className="panel right">
       <div className="row between"><h2>⚙ Settings</h2><button className="icon" onClick={props.onClose}>✕</button></div>
-
-      <h4>Appearance</h4>
-      <div className="row">
-        {(["dark", "light", "auto"] as const).map((t) => (
-          <button key={t} className={s.theme === t ? "primary" : ""} onClick={() => props.onApply({ ...s, theme: t })} style={{ textTransform: "capitalize" }}>{t}</button>
-        ))}
-      </div>
-
-      <h4>Units</h4>
-      <div className="row">
-        <button className={s.units === "metric" ? "primary" : ""} onClick={() => props.onApply({ ...s, units: "metric" })}>Metric</button>
-        <button className={s.units === "imperial" ? "primary" : ""} onClick={() => props.onApply({ ...s, units: "imperial" })}>Imperial</button>
-      </div>
-
-      <label>Locale
-        <input value={s.locale} placeholder={`browser (${browserLocale()})`}
-               onChange={(e) => props.onApply({ ...s, locale: e.target.value.trim() })} />
+      <label className="srch"><span className="srch-ic">⌕</span>
+        <input value={q} placeholder="Search settings…" onChange={(e) => setQ(e.target.value)} aria-label="Search settings" />
       </label>
-      <label>Time zone
-        <input value={s.timeZone} placeholder={`browser (${browserTimeZone()})`}
-               onChange={(e) => props.onApply({ ...s, timeZone: e.target.value.trim() })} />
-      </label>
-      <p className="muted" style={{ marginTop: 4 }}>Blank = follow the browser. Resolved: <strong>{fmt.resolvedLocale}</strong> · {fmt.resolvedTimeZone}</p>
 
-      <h4>Preview</h4>
-      <ul className="board">
-        <li><span className="rank" style={{ width: 80 }}>now</span> {fmt.dateTime(now)}</li>
-        <li><span className="rank" style={{ width: 80 }}>distance</span> {fmt.distance(1234)} · {fmt.distance(85)}</li>
-        <li><span className="rank" style={{ width: 80 }}>speed</span> {fmt.speed(36)}</li>
-        <li><span className="rank" style={{ width: 80 }}>altitude</span> {fmt.altitude(376)}</li>
-        <li><span className="rank" style={{ width: 80 }}>temp</span> {fmt.temp(18)}</li>
-      </ul>
+      {match("Display appearance theme units measurement") && (
+        <Group title="Display">
+          <Row label="Theme">
+            <div className="seg">{(["dark", "light", "auto"] as const).map((t) => (
+              <button key={t} className={s.theme === t ? "on" : ""} onClick={() => props.onApply({ ...s, theme: t })}>{t}</button>
+            ))}</div>
+          </Row>
+          <Row label="Units" help="distances, speed, temperature">
+            <div className="seg">{(["metric", "imperial"] as const).map((u) => (
+              <button key={u} className={s.units === u ? "on" : ""} onClick={() => props.onApply({ ...s, units: u })}>{u}</button>
+            ))}</div>
+          </Row>
+        </Group>
+      )}
 
-      <h4>Your data</h4>
-      {props.callsign.length < 3 ? (
-        <p className="muted">Set your callsign (top bar) to export or erase your data.</p>
-      ) : (<>
-        <p className="muted">Signed with your device key for <strong>{props.callsign}</strong>. Export gives you a full copy; erase anonymises your finds and removes your account, keys and personal data (GDPR / DSGVO).</p>
-        <div className="row">
-          <button onClick={exportData}>Export my data</button>
-          <button onClick={deleteData} style={{ color: "#c0392b", borderColor: "#e8b5ad" }}>Erase my account</button>
-        </div>
-        {gdpr && <p className="muted" style={{ marginTop: 6 }}>{gdpr}</p>}
-      </>)}
+      {match("Locale region time zone language date number format") && (
+        <Group title="Locale & time" status={`${fmt.resolvedLocale} · ${fmt.resolvedTimeZone}`} defaultOpen={false}>
+          <p className="muted">Blank follows the browser.</p>
+          <Advanced label="Override locale & time zone">
+            <label>Locale<input value={s.locale} placeholder={`browser (${browserLocale()})`} onChange={(e) => props.onApply({ ...s, locale: e.target.value.trim() })} /></label>
+            <label>Time zone<input value={s.timeZone} placeholder={`browser (${browserTimeZone()})`} onChange={(e) => props.onApply({ ...s, timeZone: e.target.value.trim() })} /></label>
+          </Advanced>
+          <Row label="Preview"><span className="mono">{fmt.distance(1234)} · {fmt.speed(36)} · {fmt.temp(18)}</span></Row>
+        </Group>
+      )}
+
+      {match("Your data export erase delete GDPR DSGVO privacy account") && (
+        <Group title="Your data" status="GDPR" defaultOpen={false}>
+          {props.callsign.length < 3 ? <p className="muted">Set your callsign (top bar) to export or erase your data.</p> : (<>
+            <p className="muted">Signed with your device key for <span className="mono">{props.callsign}</span>. Export gives you a full copy; erase anonymises your finds and removes your account, keys and personal data.</p>
+            <div className="row">
+              <button onClick={exportData}>Export my data</button>
+              <button className="danger" onClick={deleteData}>Erase my account</button>
+            </div>
+            {gdpr && <p className="muted" style={{ marginTop: 6 }}>{gdpr}</p>}
+          </>)}
+        </Group>
+      )}
     </aside>
   );
 }
@@ -616,93 +616,84 @@ function WorkbenchPanel(props: {
   return (
     <aside className="panel right">
       <div className="row between"><h2>📡 Workbench</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <p className="muted">The full APRS toolset, grouped — switch on only what you need.</p>
 
-      <h4>Live stations</h4>
-      <div className="row between">
-        <label className="geo" style={{ margin: 0 }}>
-          <input type="checkbox" checked={props.stationsOn} onChange={(e) => props.setStationsOn(e.target.checked)} style={{ width: "auto" }} />
-          &nbsp;show APRS stations on the map
-        </label>
-        {props.stationsOn && <span className="muted">{props.stationCount}</span>}
-      </div>
+      <Group title="Live stations" status={props.stationsOn ? `${props.stationCount} on map` : "off"}
+             master={{ on: props.stationsOn, set: props.setStationsOn }}
+             reason="Switch on to plot live APRS stations on the map.">
+        {station ? (
+          <div className="logform">
+            <div className="row between">
+              <h3 className="mono" style={{ margin: 0 }}>{station.callsign}</h3>
+              <button className="link" onClick={() => props.onPick(null)}>clear</button>
+            </div>
+            <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
+            {station.comment && <div className="comment">{station.comment}</div>}
+            <div className="muted" style={{ marginTop: 4 }}>
+              {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
+              {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
+              {station.packets} pkts · {station.track.length} track pts
+            </div>
+            {station.wx && (
+              <div className="wx">
+                {station.wx.tempC != null && <>🌡 {fmt.temp(station.wx.tempC)} · </>}
+                💧 {station.wx.humidity ?? "—"}% ·{" "}
+                {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
+                {station.wx.pressureHpa ?? "—"} hPa</div>
+            )}
+            <div className="row end" style={{ marginTop: 8 }}><button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button></div>
+          </div>
+        ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
+      </Group>
 
-      {station && (
-        <div className="logform" style={{ marginTop: 10 }}>
-          <div className="row between">
-            <h3 className="mono" style={{ margin: 0 }}>{station.callsign}</h3>
-            <button className="link" onClick={() => props.onPick(null)}>clear</button>
-          </div>
-          <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
-          {station.comment && <div className="comment">{station.comment}</div>}
-          <div className="muted" style={{ marginTop: 4 }}>
-            {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
-            {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
-            {station.packets} pkts · {station.track.length} track pts
-          </div>
-          {station.wx && (
-            <div className="wx">
-              {station.wx.tempC != null && <>🌡 {fmt.temp(station.wx.tempC)} · </>}
-              💧 {station.wx.humidity ?? "—"}% ·{" "}
-              {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
-              {station.wx.pressureHpa ?? "—"} hPa</div>
-          )}
-          <div className="row end" style={{ marginTop: 8 }}>
-            <button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button>
-          </div>
+      <Group title="Transports" status={`${ports.length} port${ports.length === 1 ? "" : "s"} · 24h RX`} defaultOpen={false}>
+        {ports.length === 0 ? <p className="muted">No traffic yet.</p> : ports.map((p) => (
+          <Row key={p.port} label={<span className="mono">{p.port}</span>}><span className="muted">{fmt.num(p.rx, 0)} rx</span></Row>
+        ))}
+      </Group>
+
+      <Group title="Packet decoder" defaultOpen={false}>
+        <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
+        <div className="row between" style={{ marginTop: 6 }}>
+          <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
+          <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
         </div>
-      )}
-
-      <h4>Packet decoder</h4>
-      <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
-      <div className="row between" style={{ marginTop: 6 }}>
-        <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
-        <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
-      </div>
-      {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
-      {decoded?.ok && decoded.frame && (
-        <div className="decoded">
-          <div className="row between">
-            <strong>{decoded.frame.src}</strong>
-            <span className={`badge ${decoded.frame.heardVia === "rf" ? "found" : ""}`}>{decoded.frame.heardVia}</span>
+        {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
+        {decoded?.ok && decoded.frame && (
+          <div className="decoded">
+            <div className="row between">
+              <strong className="mono">{decoded.frame.src}</strong>
+              <span className={`badge ${decoded.frame.heardVia === "rf" ? "tierA" : ""}`}>{decoded.frame.heardVia}</span>
+            </div>
+            <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
+            <div className="kind">{String(decoded.data?.kind)}</div>
+            <dl className="fields">
+              {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
+            </dl>
           </div>
-          <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
-          <div className="kind">{String(decoded.data?.kind)}</div>
-          <dl className="fields">
-            {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (
-              <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+        )}
+      </Group>
+
+      <Group title="TAK / CoT feed" defaultOpen={false}>
+        <p className="muted">Add this as a data feed in ATAK/WinTAK to see APRS stations as CoT:</p>
+        <div className="row">
+          <input className="mono" readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
+          <button onClick={() => { navigator.clipboard?.writeText(feedUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "✓" : "copy"}</button>
+        </div>
+      </Group>
+
+      <Group title="Messages" status={messages.length ? `${messages.length} recent` : "none"} defaultOpen={false}>
+        {messages.length === 0 ? <p className="muted">No inbound messages.</p> : (
+          <ul className="logs">
+            {messages.map((mm) => (
+              <li key={mm.id}>
+                <span className="badge"><span className="mono">{mm.fromCall}</span></span>→ <span className="mono">{mm.toCall}</span> <span className="muted">· {fmt.ago(mm.ts)}</span>
+                <div className="comment">{mm.body}</div>
+              </li>
             ))}
-          </dl>
-        </div>
-      )}
-
-      <h4>Transports <span className="muted" style={{ fontWeight: 400 }}>· 24h RX</span></h4>
-      {ports.length === 0 ? <p className="muted">no traffic yet</p> : (
-        <ul className="board">
-          {ports.map((p) => (
-            <li key={p.port}><span className="federated" style={{ flex: 1 }}>{p.port}</span>
-              <span>{fmt.num(p.rx, 0)} rx</span></li>
-          ))}
-        </ul>
-      )}
-
-      <h4>TAK / CoT feed</h4>
-      <p className="muted">Add this as a data feed in ATAK/WinTAK to see APRS stations as CoT:</p>
-      <div className="row">
-        <input readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
-        <button onClick={() => { navigator.clipboard?.writeText(feedUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "✓" : "copy"}</button>
-      </div>
-
-      {messages.length > 0 && (<>
-        <h4>Recent messages</h4>
-        <ul className="logs">
-          {messages.map((mm) => (
-            <li key={mm.id}>
-              <span className="badge">{mm.fromCall}</span>→ {mm.toCall} <span className="muted">· {fmt.ago(mm.ts)}</span>
-              <div className="comment">{mm.body}</div>
-            </li>
-          ))}
-        </ul>
-      </>)}
+          </ul>
+        )}
+      </Group>
     </aside>
   );
 }
@@ -950,19 +941,19 @@ function ProfilePanel(props: {
         {profile && profile.badges.length > 0 && (
           <div className="badges">{profile.badges.map((b) => <span key={b.badge} className="award">{b.badge}</span>)}</div>
         )}
-        <label className="geo" style={{ marginTop: 10, opacity: .6 }}>
-          <input type="checkbox" disabled style={{ width: "auto" }} /> &nbsp;Announce finds to APRS-IS
-          <span className="muted">&nbsp;— verify your callsign first</span>
-        </label>
+        <Group title="Announce to APRS-IS" status="needs verification"
+               master={{ on: false, set: () => {}, disabled: true }}
+               reason="Verify your callsign to announce finds on APRS-IS." />
       </>)}
 
-      <h4>Advanced</h4>
-      <p className="muted">The full APRS workbench — live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
-      <div className="row" style={{ flexWrap: "wrap" }}>
-        <button onClick={props.onWorkbench}>📡 Workbench</button>
-        <button onClick={props.onMail}>✉ BBS</button>
-        <button onClick={props.onSettings}>⚙ Settings</button>
-      </div>
+      <Group title="Advanced — APRS workbench" defaultOpen={false}>
+        <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <button onClick={props.onWorkbench}>📡 Workbench</button>
+          <button onClick={props.onMail}>✉ BBS</button>
+          <button onClick={props.onSettings}>⚙ Settings</button>
+        </div>
+      </Group>
     </aside>
   );
 }
