@@ -47,7 +47,7 @@ echo "==> crawl screenshots"
 
 echo "==> stage brand assets + compose poster"
 cp "$ROOT/apps/web/public/brand/wordmark.png" "$ROOT/apps/web/public/brand/bg.jpg" "$OUT/"
-cp "$ROOT/apps/web/public/fonts/Oksana.ttf" "$ROOT/apps/web/public/fonts/Oksana-Bold.ttf" "$OUT/"
+cp "$ROOT/apps/web/public/fonts/Fredoka-500.woff2" "$ROOT/apps/web/public/fonts/Fredoka-700.woff2" "$OUT/"
 cp "$HERE/teaser.html" "$OUT/"
 ( cd "$HERE" && OUT="$OUT" node teaser.mjs )
 

@@ -1,12 +1,10 @@
-/* ---- brand font: LT Oksana (APRS Caching identity) ---- */
-@font-face { font-family: "Oksana"; src: url("/fonts/Oksana.ttf") format("truetype");
-  font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Oksana"; src: url("/fonts/Oksana-Italic.ttf") format("truetype");
-  font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: "Oksana"; src: url("/fonts/Oksana-Bold.ttf") format("truetype");
+/* ---- brand font: Fredoka — the rounded sans of the APRScaching wordmark ---- */
+@font-face { font-family: "Fredoka"; src: url("/fonts/Fredoka-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fredoka"; src: url("/fonts/Fredoka-600.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fredoka"; src: url("/fonts/Fredoka-700.woff2") format("woff2");
   font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: "Oksana"; src: url("/fonts/Oksana-BoldItalic.ttf") format("truetype");
-  font-weight: 700; font-style: italic; font-display: swap; }
 
 :root {
   --brand: #2D8BAB;        /* blau  */
@@ -15,12 +13,13 @@
   --beige: #B57D5D;
   --bg: #fff; --line: #e3e8ea; --muted: #7c878b;
   --brand-dark: #246f88;
-  --font-brand: "Oksana", system-ui, sans-serif;
+  --font-brand: "Fredoka", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body, #root, .app { height: 100%; margin: 0; }
 body { font: 14px/1.5 system-ui, sans-serif; color: var(--ink); }
-h1, h2, h3, h4, .brand { font-family: var(--font-brand); }
+h1, h2, h3, h4, .brand { font-family: var(--font-brand); font-weight: 600; letter-spacing: .01em; }
+h1, h2 { font-weight: 700; }
 
 .app { position: relative; }
 .map { position: absolute; inset: 50px 0 0 0; }
