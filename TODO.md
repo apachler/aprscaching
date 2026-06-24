@@ -35,6 +35,18 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   switchable overlay distinct from caches. Decide: persist-as-imported vs. ephemeral live layer;
   respect ODbL attribution (OSM) and rate limits. Let users pick which feature classes to show.
 
+## M5 workbench — follow-ups
+- [ ] **APRS messaging (RX is done; add TX).** Inbound text messages + bulletins are decoded and
+  stored (`messages`); surface a message/bulletin view and, gated behind TX policy + callsign badge,
+  let a station send a message via the announce uplink.
+- [ ] **Telemetry parameters + charts.** Telemetry analog channels are decoded but unlabeled —
+  capture the `PARM/UNIT/EQNS/BITS` definition messages and render labelled gauges/series.
+- [ ] **MIC-E external test vectors.** Current MIC-E tests are spec-anchored (destination→lat,
+  info-byte→lon) plus derived course/speed; add a few captured real-world frames as regression
+  vectors once an offline corpus is available (egress to live APRS-IS is blocked in CI).
+- [ ] **Station track polyline.** `/api/stations/:call` returns the recent track; draw it on the map
+  when a station is selected (currently shown as a count).
+
 ## M2 remainder
 - [ ] **Audio-cache staged unlock.** Store audio/media in R2; stage gating (`cache_stages.unlock =
   audio`) reveals the next stage's coordinates after the audio clue. (Geofencing core is done.)
