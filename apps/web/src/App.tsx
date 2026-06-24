@@ -17,7 +17,7 @@ import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
 import {
-  FormatContext, useFmt, makeFormatters, loadSettings, saveSettings,
+  FormatContext, useFmt, makeFormatters, loadSettings, saveSettings, resolveTheme,
   browserLocale, browserTimeZone, type LocaleSettings,
 } from "./format.js";
 import type { CacheType, LogType } from "@aprsweb/shared";
@@ -70,6 +70,17 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
+
+  // apply the field-console theme to the document root (dark default; honours OS for "auto")
+  useEffect(() => {
+    const apply = () => { document.documentElement.dataset.theme = resolveTheme(locSettings.theme); };
+    apply();
+    if (locSettings.theme === "auto" && window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: light)");
+      mq.addEventListener?.("change", apply);
+      return () => mq.removeEventListener?.("change", apply);
+    }
+  }, [locSettings.theme]);
 
   const ws = useRef<WebSocket | null>(null);
   const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -359,6 +370,13 @@ function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSet
     <aside className="panel right">
       <div className="row between"><h2>⚙ Settings</h2><button className="icon" onClick={props.onClose}>✕</button></div>
 
+      <h4>Appearance</h4>
+      <div className="row">
+        {(["dark", "light", "auto"] as const).map((t) => (
+          <button key={t} className={s.theme === t ? "primary" : ""} onClick={() => props.onApply({ ...s, theme: t })} style={{ textTransform: "capitalize" }}>{t}</button>
+        ))}
+      </div>
+
       <h4>Units</h4>
       <div className="row">
         <button className={s.units === "metric" ? "primary" : ""} onClick={() => props.onApply({ ...s, units: "metric" })}>Metric</button>
@@ -467,7 +485,7 @@ function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }) {
   return (
     <aside className="panel right">
       <div className="row between">
-        <h2><span className="dot" style={{ background: meta.color }} /> {c.code}</h2>
+        <h2><span className="dot" style={{ background: meta.color }} /> <span className="code">{c.code}</span></h2>
         <button className="icon" onClick={props.onClose}>✕</button>
       </div>
       <h3>{c.title}</h3>
@@ -537,7 +555,7 @@ function WorkbenchPanel(props: {
       {station && (
         <div className="logform" style={{ marginTop: 10 }}>
           <div className="row between">
-            <h3 style={{ margin: 0 }}>{station.callsign}</h3>
+            <h3 className="mono" style={{ margin: 0 }}>{station.callsign}</h3>
             <button className="link" onClick={() => props.onPick(null)}>clear</button>
           </div>
           <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
@@ -816,7 +834,7 @@ function DetailPanel(props: {
   return (
     <aside className="panel right">
       <div className="row between">
-        <h2><span className="dot" style={{ background: meta.color }} /> {c.code}</h2>
+        <h2><span className="dot" style={{ background: meta.color }} /> <span className="code">{c.code}</span></h2>
         <span className="spacer" />
         <button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>{fav.on ? "♥" : "♡"} {fav.count}</button>
         <button className="icon" onClick={props.onClose}>✕</button>
@@ -914,7 +932,7 @@ function StagesSection(props: { cacheId: number; callsign: string }) {
             {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} style={{ width: "100%", marginTop: 6 }} />}
             {s.unlocked && s.lat != null && s.lon != null && (
               <div className="muted" style={{ marginTop: 4 }}>
-                📍 {fmt.coord(s.lat, s.lon)} · <a href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`} target="_blank" rel="noreferrer noopener">map ↗</a>
+                📍 <span className="mono">{fmt.coord(s.lat, s.lon)}</span> · <a href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`} target="_blank" rel="noreferrer noopener">map ↗</a>
               </div>
             )}
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && (

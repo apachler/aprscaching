@@ -11,6 +11,15 @@ export interface LocaleSettings {
   locale: string;    // BCP-47 (e.g. "de-AT"); "" => browser default
   timeZone: string;  // IANA (e.g. "Europe/Vienna"); "" => browser default
   units: "metric" | "imperial";
+  theme: "dark" | "light" | "auto";   // field-console dark by default (M7)
+}
+
+/** Resolve the active theme to "dark" | "light" (honouring the OS for "auto"). */
+export function resolveTheme(theme: LocaleSettings["theme"]): "dark" | "light" {
+  if (theme === "auto") {
+    try { return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; } catch { return "dark"; }
+  }
+  return theme;
 }
 
 const KEY = "acs.locale";
@@ -31,7 +40,7 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
 
 export function defaultSettings(): LocaleSettings {
   const locale = browserLocale();
-  return { locale: "", timeZone: "", units: unitsForLocale(locale) };
+  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "dark" };
 }
 export function loadSettings(): LocaleSettings {
   try {
