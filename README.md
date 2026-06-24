@@ -82,6 +82,34 @@ and IGates participate, the more finds verify — like iNaturalist's "more obser
 `tools/smoke/federation.mjs` proves the whole publisher→subscriber loop (mirror + corroboration)
 and runs in CI across two instances.
 
+## Imports (M3) — heritage sources, kept fresh
+
+Pull third-party location programs into your map. Each imported cache shows a **source disclaimer
++ deep link**, re-importing **updates in place** (dedup on `source`+`external_id`), and imports are
+**de-duplicated across sources** with ham-radio priority (a SOTA summit suppresses a coincident OSM
+peak). Imported caches stay **local** (never published to `/federation`).
+
+```bash
+# admin-only (x-ingest-secret). Body = scope JSON.
+curl -XPOST $API/api/import/sota   -H x-ingest-secret:$S -d '{"region":"GM/SI"}'     # SOTA summits by region
+curl -XPOST $API/api/import/pota   -H x-ingest-secret:$S -d '{"region":"US-NY"}'     # POTA parks by location
+curl -XPOST $API/api/import/wwff   -H x-ingest-secret:$S -d '{"region":"DLFF"}'      # WWFF by program prefix
+curl -XPOST $API/api/import/bunker -H x-ingest-secret:$S -d '{"bbox":[13,46,17,49]}' # WWBOTA/UKBOTA by bbox
+curl -XPOST $API/api/import/gcau   -H x-ingest-secret:$S -d '{"region":"vic"}'       # Geocaching Australia
+curl -XPOST $API/api/import/osm    -H x-ingest-secret:$S -d '{"region":"natural=peak","bbox":[13,46,17,49],"type":"traditional"}'
+curl -XPOST $API/api/import/wikidata -H x-ingest-secret:$S -d '{"region":"Q23413","type":"castle"}'  # castles (CC0)
+curl -XPOST $API/api/import/iota   -H x-ingest-secret:$S -d '{"region":"EU"}'        # IOTA (non-commercial use)
+# OpenCaching needs a free per-node consumer key (set OKAPI_BASE + OKAPI_KEY):
+curl -XPOST $API/api/import/opencaching -H x-ingest-secret:$S -d '{"bbox":[13,46,17,49]}'
+# WCA / any GeoJSON via the generic adapter:
+curl -XPOST $API/api/import/geojson -H x-ingest-secret:$S \
+  -d '{"url":"https://…/wca.geojson","source":"castle","type":"castle","sourceName":"WCA","deepLink":"https://www.cqgma.org/zinfo.php?ref={ref}"}'
+```
+
+**Tip:** import the highest-priority (ham) sources first so lower-priority POI imports de-dupe against
+them. Licensing varies by source — OSM is ODbL share-alike, Wikidata is CC0, IOTA is non-commercial;
+attribute appropriately. (See `docs/` and the source disclaimers shown in-app.)
+
 ## Verification at a glance
 | Tier | Means | How |
 |------|-------|-----|

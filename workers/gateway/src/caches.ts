@@ -16,6 +16,7 @@ interface CacheDbRow {
   status: string; difficulty: number; terrain: number; lat: number | null; lon: number | null;
   station_call: string | null; source: string; external_id: string | null;
   hint: string | null; description: string | null; min_trust: string | null;
+  source_url: string | null; source_name: string | null;
   created_at: number; updated_at: number;
 }
 interface LogDbRow {
@@ -31,6 +32,7 @@ function toSummary(r: CacheDbRow): CacheSummary {
     type: r.type as CacheSummary["type"], status: r.status as CacheSummary["status"],
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
     stationCall: r.station_call, source: r.source,
+    sourceName: r.source_name, sourceUrl: r.source_url,
     minTrust: (r.min_trust as "A" | "B" | null) ?? null,
   };
 }
@@ -63,6 +65,7 @@ function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     title: r.title, type: r.type as MapCache["type"], status: r.status as MapCache["status"],
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
     origin: instance, mirrored: false,
+    source: r.source, sourceName: r.source_name, sourceUrl: r.source_url,
   };
 }
 function remoteMapCache(r: RemoteCacheRow): MapCache {
@@ -71,6 +74,7 @@ function remoteMapCache(r: RemoteCacheRow): MapCache {
     type: r.type as MapCache["type"], status: r.status as MapCache["status"],
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
     origin: r.origin, mirrored: true,
+    source: r.source, sourceName: null, sourceUrl: null,
   };
 }
 

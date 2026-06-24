@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const CacheType = z.enum([
   "single", "two_stage", "multi", "aprs_living", "audio", "traditional", "sota", "pota",
+  "wwff", "bunker", "castle",
 ]);
 export type CacheType = z.infer<typeof CacheType>;
 
@@ -110,6 +111,8 @@ export interface CacheSummary {
   lon: number | null;
   stationCall: string | null;
   source: string;
+  sourceName: string | null;   // attribution label when imported
+  sourceUrl: string | null;    // deep link to the source page
   minTrust: "A" | "B" | null;
 }
 
@@ -128,6 +131,9 @@ export interface MapCache {
   lon: number | null;
   origin: string;            // originating instance id
   mirrored: boolean;
+  source: string;            // "native" or an import source ("sota","pota",…)
+  sourceName: string | null; // attribution label for imported caches
+  sourceUrl: string | null;  // deep link to the source page
 }
 
 export interface CacheLogEntry {

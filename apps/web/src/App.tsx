@@ -366,6 +366,12 @@ function DetailPanel(props: {
         {meta.label} · D {c.difficulty.toFixed(1)} / T {c.terrain.toFixed(1)} · by {c.ownerCall}
         {c.minTrust && <> · requires tier {c.minTrust}</>}
       </p>
+      {c.source !== "native" && (
+        <p className="imported">
+          ⤓ Imported from <strong>{c.sourceName ?? c.source}</strong>
+          {c.sourceUrl && <> · <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">view source ↗</a></>}
+        </p>
+      )}
       <p><strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}
         {c.status !== "active" && <> · <em>{c.status}</em></>}</p>
       {c.description && <p>{c.description}</p>}

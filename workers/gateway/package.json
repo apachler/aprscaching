@@ -8,7 +8,8 @@
     "./app": "./src/app.ts",
     "./env": "./src/env.ts",
     "./runtime": "./src/runtime.ts",
-    "./live": "./src/live.ts"
+    "./live": "./src/live.ts",
+    "./import": "./src/import/engine.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

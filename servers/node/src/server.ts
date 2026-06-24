@@ -56,6 +56,8 @@ const env: Env = {
   INSTANCE: process.env.INSTANCE,
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_PEERS: process.env.FED_PEERS,
+  OKAPI_BASE: process.env.OKAPI_BASE,
+  OKAPI_KEY: process.env.OKAPI_KEY,
 };
 
 // ---- node:http <-> Web Request/Response ----

@@ -13,6 +13,9 @@ export const TYPE_META: Record<CacheType, TypeMeta> = {
   audio:       { label: "Audio",        color: BRAND.beige2, glyph: "♪" },
   sota:        { label: "SOTA summit",  color: BRAND.grey,   glyph: "▲" },
   pota:        { label: "POTA park",    color: BRAND.beige,  glyph: "❂" },
+  wwff:        { label: "WWFF reserve", color: "#5a8a0e",    glyph: "❀" },
+  bunker:      { label: "Bunker",       color: BRAND.grey,   glyph: "▣" },
+  castle:      { label: "Castle",       color: BRAND.beige,  glyph: "♜" },
 };
 
 export const TYPE_ORDER: CacheType[] = [

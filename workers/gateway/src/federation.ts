@@ -141,8 +141,9 @@ export async function handleFederationCaches(req: Request, env: Env): Promise<Re
   const instance = instanceOf(req, env);
   const fk = await loadKey(env);
 
+  // only NATIVE caches are federated; imported third-party data stays local (M3 decision)
   const rows = (await env.DB.prepare(
-    "SELECT * FROM caches WHERE updated_at >= ? ORDER BY updated_at, id LIMIT ?",
+    "SELECT * FROM caches WHERE source = 'native' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
   ).bind(since, limit).all<CacheRow>()).results;
 
   let nextCursor = since;

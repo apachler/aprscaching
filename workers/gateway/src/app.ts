@@ -16,6 +16,7 @@ import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleF
 import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
+import { handleImport } from "./import/engine.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -88,6 +89,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // generalized + back-compat logging (cacheId in body)
   if ((p === "/api/logs" || p === "/api/logs/find") && m === "POST") return handleLog(req, env);
+
+  // M3 import: POST /api/import/:source (admin)
+  const importMatch = /^\/api\/import\/([a-z]+)$/.exec(p);
+  if (importMatch && m === "POST") return handleImport(req, env, importMatch[1]!);
 
   return new Response("not found", { status: 404 });
 }
