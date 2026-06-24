@@ -65,14 +65,17 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
 - [ ] **Callsign-control gating**: the APRS-message challenge (`callsign.ts`) already proves control;
   require a verified+badged callsign to register/replace a device key and to earn leaderboard credit
   (also in the federation-hardening section).
-- [ ] **GDPR endpoints**: `GET /api/account/export` (machine-readable copy of everything tied to a
-  callsign — account, logs, positions, keys, favorites) and `POST /api/account/delete` (erase /
-  anonymise: drop PII, tombstone logs as `withdrawn`, revoke keys, propagate a federation tombstone
-  so mirrors purge too). Document a retention policy + a privacy notice; positions TTL already helps.
-- [ ] **Account portability across peers** (federation): export a *signed account bundle* (device
-  pubkeys + a migration assertion signed by the account key) and import it on the target instance,
-  which verifies the signature, claims the callsign, and the old instance issues a `moved` tombstone
-  + redirect. Because finds are per-callsign device-signed, history stays attributable post-move.
+- [x] **GDPR endpoints**: `POST /api/account/:callsign/export` (full machine-readable copy) and
+  `/delete` (anonymise finds to `WITHDRAWN`, erase PII/keys/account, write an `account_events`
+  tombstone). Signed by a registered device key (or a matching session). Surfaced in ⚙ Settings →
+  *Your data*. Still to do: **propagate the deletion tombstone over federation** so mirrors purge,
+  plus a published retention policy + privacy notice.
+- [x] **Account portability across peers**: `POST /api/account/:callsign/bundle` exports a portable
+  bundle (device keys + verified state), `/move` marks the source `moved`, and `POST
+  /api/account/import` claims the callsign on the target after verifying a migration assertion signed
+  by a key in the bundle. History stays attributable because finds are device-signed. Still to do:
+  **sign the bundle with the source instance key** (so the target can trust its origin) and a
+  `moved` redirect on the source's responses; add a migration UI.
 
 ## M2 remainder
 - [ ] **Audio-cache staged unlock.** Store audio/media in R2; stage gating (`cache_stages.unlock =

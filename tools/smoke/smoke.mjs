@@ -245,5 +245,40 @@ ok("open final stage unlocks after reaching stage 1", unlock2.data?.unlocked ===
 const mdetail = await call("GET", `/api/caches/${mid}`);
 ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
 
+// ---- account data lifecycle: GDPR export/erasure + portability (signed by a registered key) ----
+const accMsg = (action, cs, at) => stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: wk.data?.instance, at });
+const signAct = async (action, cs, at) => b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(accMsg(action, cs, at))));
+
+const noAuth = await call("POST", "/api/account/DL1ABC/export", {});
+ok("account export without a signed action -> 401", noAuth.status === 401, `status=${noAuth.status}`);
+
+let aAt = now();
+const exp = await call("POST", "/api/account/DL1ABC/export", { key: pubRaw, sig: await signAct("export", "DL1ABC", aAt), at: aAt });
+ok("GDPR export returns the caller's data", exp.data?.callsign === "DL1ABC" && Array.isArray(exp.data?.keys) && exp.data.keys.length >= 1 && Array.isArray(exp.data?.logs), JSON.stringify({ keys: exp.data?.keys?.length, logs: exp.data?.logs?.length }));
+
+// migration: import a fresh callsign from a (foreign) bundle, proven by a device-key assertion
+const kp2 = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const pub2 = b64u(await crypto.subtle.exportKey("raw", kp2.publicKey));
+const mAt = now();
+const mSig = b64u(await crypto.subtle.sign("Ed25519", kp2.privateKey, new TextEncoder().encode(accMsg("migrate", "OE9NEW", mAt))));
+const imp = await call("POST", "/api/account/import", {
+  bundle: { v: 1, instance: "oe.source.example", callsign: "OE9NEW", verified: true, keys: [{ publicKey: pub2, label: "phone", verified: 1 }], at: mAt },
+  assertion: { key: pub2, sig: mSig, at: mAt },
+});
+ok("account import claims the callsign + keys", imp.data?.ok === true && imp.data?.importedKeys === 1, JSON.stringify(imp.data));
+const movedKeys = await call("GET", "/keys/OE9NEW");
+ok("imported device key is present on the target", (movedKeys.data?.keys ?? []).some((k) => k.publicKey === pub2), JSON.stringify(movedKeys.data?.keys?.length));
+const impDup = await call("POST", "/api/account/import", { bundle: { callsign: "OE9NEW", keys: [{ publicKey: pub2 }] }, assertion: { key: pub2, sig: mSig, at: mAt } });
+ok("re-importing an existing callsign -> 409", impDup.status === 409, `status=${impDup.status}`);
+
+// erasure: anonymise + remove DL1ABC, then confirm it's gone
+aAt = now();
+const del = await call("POST", "/api/account/DL1ABC/delete", { key: pubRaw, sig: await signAct("delete", "DL1ABC", aAt), at: aAt });
+ok("GDPR erasure succeeds", del.data?.ok === true && del.data?.erased === "DL1ABC", JSON.stringify(del.data));
+const goneKeys = await call("GET", "/keys/DL1ABC");
+ok("erased account keys are removed", (goneKeys.data?.keys ?? []).length === 0, JSON.stringify(goneKeys.data?.keys?.length));
+const goneProf = await call("GET", "/api/profile/DL1ABC");
+ok("erased account finds are anonymised away", (goneProf.data?.finds ?? 0) === 0, JSON.stringify(goneProf.data?.finds));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

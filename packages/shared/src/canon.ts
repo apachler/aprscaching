@@ -21,3 +21,12 @@ export interface Authorship {
 export function authorshipMessage(a: Authorship): string {
   return stableStringify({ v: 1, cache: a.cache, instance: a.instance, logger: a.logger, logType: a.logType, at: a.at });
 }
+
+/**
+ * The exact bytes signed to authorize a sensitive account action (data export, erasure, or a
+ * migration to another instance). Signed by a device key already registered to the callsign;
+ * `instance` binds it to where the action runs (the *target* instance for a migration).
+ */
+export function accountActionMessage(a: { action: string; callsign: string; instance: string; at: number }): string {
+  return stableStringify({ v: 1, action: a.action, callsign: a.callsign.toUpperCase(), instance: a.instance, at: a.at });
+}

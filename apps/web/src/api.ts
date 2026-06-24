@@ -77,6 +77,15 @@ export function setStages(cacheId: number, ownerCall: string, stages: Array<Part
 /** Absolute URL for a media clue path returned by the API. */
 export const mediaUrl = (path: string): string => API_BASE + path;
 
+// ---- account data lifecycle (GDPR) ----
+type SignedAction = { key: string; sig: string; at: number };
+export function exportAccount(callsign: string, auth: SignedAction): Promise<Record<string, unknown>> {
+  return call(`/api/account/${encodeURIComponent(callsign)}/export`, { method: "POST", body: JSON.stringify(auth) });
+}
+export function deleteAccount(callsign: string, auth: SignedAction): Promise<{ ok: boolean; erased: string }> {
+  return call(`/api/account/${encodeURIComponent(callsign)}/delete`, { method: "POST", body: JSON.stringify(auth) });
+}
+
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {
   return call(`/api/caches`, { method: "POST", body: JSON.stringify(body) });
 }

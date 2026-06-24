@@ -5,12 +5,12 @@ import "./styles.css";
 import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
-  getPorts, getMessages, cotUrl, getStages, unlockStage, mediaUrl,
+  getPorts, getMessages, cotUrl, getStages, unlockStage, mediaUrl, exportAccount, deleteAccount,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
   type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
   type PortStat, type MessageItem, type CacheStage,
 } from "./api.js";
-import { signAuthorship } from "./crypto.js";
+import { signAuthorship, signAccountAction } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
@@ -311,7 +311,7 @@ export function App() {
       )}
 
       {showSettings && (
-        <SettingsPanel settings={locSettings} onApply={applySettings} onClose={() => setShowSettings(false)} />
+        <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} onClose={() => setShowSettings(false)} />
       )}
     </div>
     </FormatContext.Provider>
@@ -319,10 +319,35 @@ export function App() {
 }
 
 // ----------------------------------------------------------------- locale & units settings
-function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; onClose: () => void }) {
+function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; onClose: () => void }) {
   const s = props.settings;
   const fmt = useFmt();
   const now = Math.floor(Date.now() / 1000);
+  const [gdpr, setGdpr] = useState<string | null>(null);
+
+  async function exportData() {
+    setGdpr("Preparing your export…");
+    try {
+      const inst = await getInstance();
+      const auth = await signAccountAction("export", props.callsign, inst);
+      if (!auth) { setGdpr("This browser can't sign (needs Ed25519). Try a recent Chrome/Firefox/Safari."); return; }
+      const data = await exportAccount(props.callsign, auth);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = document.createElement("a"); a.href = url; a.download = `aprscaching-${props.callsign}.json`; a.click();
+      URL.revokeObjectURL(url); setGdpr("Export downloaded.");
+    } catch (e) { setGdpr((e as Error).message); }
+  }
+  async function deleteData() {
+    if (!confirm(`Permanently erase ${props.callsign}? Your finds are anonymised and your account, keys and personal data are deleted. This cannot be undone.`)) return;
+    setGdpr("Erasing…");
+    try {
+      const inst = await getInstance();
+      const auth = await signAccountAction("delete", props.callsign, inst);
+      if (!auth) { setGdpr("This browser can't sign (needs Ed25519)."); return; }
+      await deleteAccount(props.callsign, auth);
+      setGdpr("Your account and personal data were erased.");
+    } catch (e) { setGdpr((e as Error).message); }
+  }
   return (
     <aside className="panel right">
       <div className="row between"><h2>⚙ Settings</h2><button className="icon" onClick={props.onClose}>✕</button></div>
@@ -351,6 +376,18 @@ function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSet
         <li><span className="rank" style={{ width: 80 }}>altitude</span> {fmt.altitude(376)}</li>
         <li><span className="rank" style={{ width: 80 }}>temp</span> {fmt.temp(18)}</li>
       </ul>
+
+      <h4>Your data</h4>
+      {props.callsign.length < 3 ? (
+        <p className="muted">Set your callsign (top bar) to export or erase your data.</p>
+      ) : (<>
+        <p className="muted">Signed with your device key for <strong>{props.callsign}</strong>. Export gives you a full copy; erase anonymises your finds and removes your account, keys and personal data (GDPR / DSGVO).</p>
+        <div className="row">
+          <button onClick={exportData}>Export my data</button>
+          <button onClick={deleteData} style={{ color: "#c0392b", borderColor: "#e8b5ad" }}>Erase my account</button>
+        </div>
+        {gdpr && <p className="muted" style={{ marginTop: 6 }}>{gdpr}</p>}
+      </>)}
     </aside>
   );
 }

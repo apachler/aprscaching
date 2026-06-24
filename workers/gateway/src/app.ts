@@ -22,6 +22,7 @@ import { handleDecode, handleStations, handleStation, handlePorts, handleMessage
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
+import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport } from "./account.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -56,6 +57,17 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
+
+  // account data lifecycle (GDPR export/erasure + portability across peers)
+  if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);
+  const acctMatch = /^\/api\/account\/([A-Za-z0-9-]+)\/(export|delete|bundle|move)$/.exec(p);
+  if (acctMatch && m === "POST") {
+    const [cs, op] = [acctMatch[1]!, acctMatch[2]!];
+    if (op === "export") return handleAccountExport(req, env, cs);
+    if (op === "delete") return handleAccountDelete(req, env, cs);
+    if (op === "bundle") return handleAccountBundle(req, env, cs);
+    if (op === "move") return handleAccountMove(req, env, cs);
+  }
 
   // per-callsign device keys (F0)
   if (p === "/keys/register" && m === "POST") return handleRegisterKey(req, env);

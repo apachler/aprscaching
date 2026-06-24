@@ -199,6 +199,26 @@ curl "$API/api/messages?bulletins=1"   # recent bulletins
 curl "$API/badge/OE8APR.svg"           # embeddable network badge
 ```
 
+## Accounts & data lifecycle (GDPR / DSGVO)
+
+Sensitive account actions are authorised by a signature from a device key already registered to the
+callsign (or a matching passkey session) — no central password to leak.
+
+```bash
+# all signed POSTs carry { key, sig, at } over accountActionMessage(action, callsign, instance, at)
+POST /api/account/:callsign/export   # full machine-readable copy of your data (right of access)
+POST /api/account/:callsign/delete   # erase: anonymise finds, drop PII/keys/account (right to erasure)
+POST /api/account/:callsign/bundle   # portable bundle (device keys + verified state) for migration
+POST /api/account/:callsign/move     # mark this callsign moved to another instance
+POST /api/account/import             # claim the callsign on a new instance (verifies the bundle)
+```
+
+Export + erase are in the web app under **⚙ Settings → Your data**. Because finds are per-callsign
+**device-signed**, your history stays attributable even after you move instances. Positions are
+TTL'd; the schema stores public ham identifiers (callsigns) and APRS positions that are public by
+design on RF/APRS-IS. (Federation tombstone propagation + an instance-signed bundle are tracked
+follow-ups.)
+
 ## Verification at a glance
 | Tier | Means | How |
 |------|-------|-----|

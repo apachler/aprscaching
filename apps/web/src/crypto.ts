@@ -2,7 +2,7 @@
 // registered to the callsign; finds are signed with the private key so authorship is portable and
 // verifiable network-wide. Best-effort: on a browser without Ed25519 WebCrypto, signing is skipped
 // and the find is simply logged unsigned.
-import { authorshipMessage, type Authorship } from "@aprsweb/shared";
+import { authorshipMessage, accountActionMessage, type Authorship } from "@aprsweb/shared";
 
 const PRIV = "acs.key.priv", PUB = "acs.key.pub";
 
@@ -41,4 +41,14 @@ export async function signAuthorship(a: Authorship): Promise<AuthorSig | undefin
 /** The device public key (creating one if needed), or null if unsupported. */
 export async function devicePublicKey(): Promise<string | null> {
   try { return (await deviceKey()).publicKey; } catch { return null; }
+}
+
+/** Sign a sensitive account action (export/delete/migrate) with the device key. */
+export async function signAccountAction(action: string, callsign: string, instance: string): Promise<{ key: string; sig: string; at: number } | undefined> {
+  try {
+    const { publicKey, priv } = await deviceKey();
+    const at = Math.floor(Date.now() / 1000);
+    const sig = await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(accountActionMessage({ action, callsign, instance, at })));
+    return { key: publicKey, sig: b64u(sig), at };
+  } catch { return undefined; }
 }
