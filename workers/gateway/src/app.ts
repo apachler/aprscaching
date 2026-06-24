@@ -20,6 +20,7 @@ import { handleImport } from "./import/engine.js";
 import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
 import { handleDecode, handleStations, handleStation, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
+import { handleBadge } from "./badge.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -41,6 +42,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const p = url.pathname, m = req.method;
 
   if (p === "/health") return json({ ok: true });
+
+  // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
+  const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);
+  if (badgeMatch && m === "GET") return handleBadge(req, env, badgeMatch[1]!);
 
   // federation (F1): discovery + read-only signed feeds for mirroring
   if (p === "/.well-known/aprscaching" && m === "GET") return handleWellKnown(req, env);

@@ -202,5 +202,10 @@ ok("transports registry counts RX per port", portList.some((p) => p.port === "ap
 const msgs = await call("GET", "/api/messages?to=OE8APR");
 ok("messages feed returns the RX message", (msgs.data?.messages ?? []).some((mm) => mm.fromCall === "OE1MOB-9" && /Hello from the field/.test(mm.body)), JSON.stringify(msgs.data?.messages?.[0]));
 
+// embeddable network badge (SVG, for QRZ.com etc.)
+const badgeRes = await fetch(BASE + "/badge/OE8APR.svg");
+const badgeSvg = await badgeRes.text();
+ok("badge renders SVG with the callsign + finds", badgeRes.headers.get("content-type")?.includes("image/svg+xml") && /<svg/.test(badgeSvg) && badgeSvg.includes("OE8APR") && /finds/.test(badgeSvg), badgeSvg.slice(0, 80));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
