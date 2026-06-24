@@ -165,6 +165,20 @@ export interface CacheDetail extends CacheSummary {
   needsMaintenance: boolean;
   dnfStreak: number;
   lastFound: number | null;
+  // M2 audio-cache
+  stageCount: number;
+}
+
+// ---- M2 audio-cache: staged multi-cache ----
+export interface CacheStage {
+  stageNo: number;
+  unlock: "geo" | "audio" | "open";
+  clue: string | null;
+  mediaUrl: string | null;
+  radiusM: number;
+  unlocked: boolean;
+  lat: number | null;   // revealed only when unlocked
+  lon: number | null;
 }
 
 // ---- M4 community response shapes ----

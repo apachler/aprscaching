@@ -33,6 +33,12 @@ export interface ObjectStore {
   put?(key: string, value: unknown): Promise<unknown>;
 }
 
+/** Media blob store (audio clues etc.) — implemented by R2 on CF and the filesystem on Node. */
+export interface MediaStore {
+  put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  get(key: string): Promise<{ bytes: Uint8Array; contentType: string } | null>;
+}
+
 /** Region-room namespace (Durable Object on CF; an in-memory room registry on Node). */
 export interface RoomNamespace {
   idFromName(name: string): unknown;

@@ -10,6 +10,7 @@ import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo } from "./community.js";
+import { stageCount } from "./stages.js";
 
 // ---- D1 row shapes (snake_case) ----
 interface CacheDbRow {
@@ -48,7 +49,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
 }
 
 /** The acting callsign: a signed-in session wins; otherwise the (advisory) body callsign. */
-async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
+export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
   const s = await sessionCallsign(req, env);
   if (s) return s.toUpperCase();
   return fallback ? fallback.toUpperCase() : null;
@@ -118,6 +119,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const who = new URL(req.url).searchParams.get("callsign");
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
+  const stages = await stageCount(env, id);
   const detail: CacheDetail = {
     ...toSummary(row),
     hint: row.hint, description: row.description, externalId: row.external_id,
@@ -126,6 +128,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     logs: logs.results.map(toLogEntry),
     favorites: fav.favorites, favorited: fav.favorited,
     needsMaintenance: health.needsMaintenance, dnfStreak: health.dnfStreak, lastFound: health.lastFound,
+    stageCount: stages,
   };
   return json({ cache: detail });
 }

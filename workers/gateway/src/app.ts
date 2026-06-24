@@ -21,6 +21,7 @@ import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handl
 import { handleDecode, handleStations, handleStation, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
+import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -100,6 +101,21 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
+
+  // audio-cache: stages + media (M2)
+  if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));
+  const stagesMatch = /^\/api\/caches\/(\d+)\/stages$/.exec(p);
+  if (stagesMatch) {
+    const id = Number(stagesMatch[1]);
+    if (m === "GET") return handleGetStages(req, env, id);
+    if (m === "POST") return handleSetStages(req, env, id);
+  }
+  const stageOpMatch = /^\/api\/caches\/(\d+)\/stages\/(\d+)\/(unlock|media)$/.exec(p);
+  if (stageOpMatch) {
+    const id = Number(stageOpMatch[1]), n = Number(stageOpMatch[2]);
+    if (stageOpMatch[3] === "unlock" && m === "POST") return handleUnlockStage(req, env, id, n);
+    if (stageOpMatch[3] === "media" && m === "PUT") return handleStageMedia(req, env, id, n);
+  }
 
   // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch}
   const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch)?$/.exec(p);

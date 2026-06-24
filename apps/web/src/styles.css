@@ -96,6 +96,14 @@ label input, label select, label textarea { margin-top: 3px; }
 button.heart { border: none; background: none; color: var(--muted); font-size: 15px; padding: 2px 6px; }
 button.heart.on { color: #e53e3e; }
 
+/* audio-cache stages */
+.stages { margin: 12px 0; }
+ol.stagelist { list-style: none; padding: 0; margin: 8px 0 0; }
+ol.stagelist li { border: 1px solid var(--line); border-radius: 9px; padding: 10px; margin-bottom: 8px; }
+ol.stagelist li.open { border-left: 3px solid var(--accent); }
+ol.stagelist li.locked { background: #f7fafb; }
+ol.stagelist audio { display: block; }
+
 /* live station pins (workbench layer) */
 button.station-pin {
   width: 18px; height: 18px; border-radius: 50%; padding: 0; border: 2px solid #fff;

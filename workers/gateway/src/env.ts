@@ -1,9 +1,10 @@
-import type { SqlDatabase, ObjectStore, RoomNamespace } from "./runtime.js";
+import type { SqlDatabase, ObjectStore, MediaStore, RoomNamespace } from "./runtime.js";
 
 /** Bindings the gateway needs, in runtime-neutral terms (see runtime.ts). */
 export interface Env {
   DB: SqlDatabase;
   TILES: ObjectStore;
+  MEDIA?: MediaStore;       // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
   INGEST_SECRET: string;
 

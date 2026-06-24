@@ -1,12 +1,25 @@
 import type { Env } from "./env.js";
-import type { ExecCtx } from "./runtime.js";
+import type { ExecCtx, MediaStore } from "./runtime.js";
 import { handle, runScheduled } from "./app.js";
 export { RegionRoom } from "./room.js";
 export { handle, runScheduled, json } from "./app.js";
 
+/** Adapt a Cloudflare R2 bucket binding to the runtime-neutral MediaStore interface. */
+function adaptR2(bucket: any): MediaStore | undefined {
+  if (!bucket) return undefined;
+  return {
+    put: (key, bytes, contentType) => bucket.put(key, bytes, { httpMetadata: { contentType } }).then(() => undefined),
+    get: async (key) => {
+      const o = await bucket.get(key);
+      if (!o) return null;
+      return { bytes: new Uint8Array(await o.arrayBuffer()), contentType: o.httpMetadata?.contentType ?? "application/octet-stream" };
+    },
+  };
+}
+
 export default {
   fetch(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
-    return handle(req, env, ctx);
+    return handle(req, { ...env, MEDIA: adaptR2((env as any).MEDIA) }, ctx);
   },
   scheduled(_event: unknown, env: Env): Promise<void> {
     return runScheduled(env);

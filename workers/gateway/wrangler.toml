@@ -24,6 +24,10 @@ migrations_dir = "../../db/migrations"   # shared schema lives at repo root
 binding = "TILES"
 bucket_name = "aprscaching-assets"
 
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "aprscaching-media"   # audio-cache clue storage
+
 [triggers]
 crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-sync every 15 min
 

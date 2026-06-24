@@ -207,5 +207,43 @@ const badgeRes = await fetch(BASE + "/badge/OE8APR.svg");
 const badgeSvg = await badgeRes.text();
 ok("badge renders SVG with the callsign + finds", badgeRes.headers.get("content-type")?.includes("image/svg+xml") && /<svg/.test(badgeSvg) && badgeSvg.includes("OE8APR") && /finds/.test(badgeSvg), badgeSvg.slice(0, 80));
 
+// ---- M2 audio-cache: staged multi-cache + media ----
+const multi = await call("POST", "/api/caches", { title: "Staged Hunt", type: "multi", lat: 47.10, lon: 15.50, difficulty: 3, terrain: 3, ownerCall: "OE8APR" });
+const mid = multi.data?.cache?.id;
+const setStages = await call("POST", `/api/caches/${mid}/stages`, {
+  ownerCall: "OE8APR",
+  stages: [
+    { stageNo: 0, lat: 47.10, lon: 15.50, radiusM: 60 },
+    { stageNo: 1, unlock: "geo", clue: "listen to the clue, then walk north", lat: 47.11, lon: 15.51, radiusM: 60 },
+    { stageNo: 2, unlock: "open", clue: "the final cache", lat: 47.12, lon: 15.52 },
+  ],
+});
+ok("owner sets stages", setStages.data?.ok === true && setStages.data?.stages === 3, JSON.stringify(setStages.data));
+const notOwner = await call("POST", `/api/caches/${mid}/stages`, { ownerCall: "DL9NO", stages: [] });
+ok("non-owner cannot set stages -> 403", notOwner.status === 403, `status=${notOwner.status}`);
+
+// upload an audio clue to stage 1 (raw audio body)
+const upRes = await fetch(`${BASE}/api/caches/${mid}/stages/1/media`, { method: "PUT", headers: { "content-type": "audio/mpeg", "x-owner-call": "OE8APR" }, body: new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]) });
+const upJson = await upRes.json().catch(() => ({}));
+ok("owner uploads an audio clue", upRes.status === 200 && typeof upJson.mediaKey === "string", JSON.stringify(upJson));
+const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}`);
+ok("media clue served back as audio", mediaRes.status === 200 && (mediaRes.headers.get("content-type") || "").includes("audio/"), `status=${mediaRes.status}`);
+
+// a finder sees stage 0 coords + the clue, but stage 1/2 coords are hidden
+const stagesView = await call("GET", `/api/caches/${mid}/stages?callsign=DL1ABC`);
+const sv = stagesView.data?.stages ?? [];
+ok("stage 0 visible, later stages hidden until unlocked", sv[0]?.lat === 47.10 && sv[1]?.lat === null && sv[1]?.mediaUrl && sv[2]?.lat === null, JSON.stringify(sv.map((s) => ({ n: s.stageNo, lat: s.lat }))));
+
+// unlock stage 1: too far -> 403, then within the stage-0 radius -> revealed
+const tooFar = await call("POST", `/api/caches/${mid}/stages/1/unlock`, { callsign: "DL1ABC", appGeo: { lat: 47.30, lon: 15.50 } });
+ok("unlock rejected when too far", tooFar.status === 403 && tooFar.data?.reason === "too_far", JSON.stringify(tooFar.data));
+const unlock1 = await call("POST", `/api/caches/${mid}/stages/1/unlock`, { callsign: "DL1ABC", appGeo: { lat: 47.1001, lon: 15.5001 } });
+ok("unlock at the previous stage reveals coords", unlock1.data?.unlocked === true && Math.abs((unlock1.data?.lat ?? 0) - 47.11) < 0.001, JSON.stringify(unlock1.data));
+const unlock2 = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" });
+ok("open final stage unlocks after reaching stage 1", unlock2.data?.unlocked === true && Math.abs((unlock2.data?.lat ?? 0) - 47.12) < 0.001, JSON.stringify(unlock2.data));
+
+const mdetail = await call("GET", `/api/caches/${mid}`);
+ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

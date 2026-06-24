@@ -18,11 +18,13 @@ import type { Env } from "@aprsweb/gateway/env";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
 import { Rooms } from "./rooms.js";
+import { makeFsMedia } from "./media.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
+const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "change-me";
 
 // ---- storage ----
@@ -38,6 +40,7 @@ const rooms = new Rooms();
 const env: Env = {
   DB: makeD1(sqlite),
   TILES: {}, // R2 unused in M1
+  MEDIA: makeFsMedia(MEDIA_DIR),
   ROOMS: {
     idFromName: (n) => n,
     get: (id) => ({
