@@ -49,6 +49,31 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
   return json({ stations: rows });
 }
 
+// ------------------------------------------------------------- transports (ports)
+export async function handlePorts(_req: Request, env: Env): Promise<Response> {
+  const since = now() - 24 * 3600;
+  const rows = (await env.DB.prepare(
+    `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket
+       FROM port_stats WHERE ts >= ? GROUP BY port ORDER BY rx DESC`,
+  ).bind(since).all<{ port: string; rx: number; tx: number; lastBucket: number }>()).results;
+  return json({ window: "24h", ports: rows });
+}
+
+// ------------------------------------------------------------- messages (RX)
+export async function handleMessages(req: Request, env: Env): Promise<Response> {
+  const u = new URL(req.url);
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 50) || 50, 1), 200);
+  const to = u.searchParams.get("to");
+  const bulletins = u.searchParams.get("bulletins") === "1";
+  let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages";
+  const binds: (string | number)[] = [];
+  if (to) { sql += " WHERE to_call = ?"; binds.push(to.toUpperCase()); }
+  else if (bulletins) { sql += " WHERE to_call LIKE 'BLN%' OR to_call LIKE 'NWS%' OR to_call LIKE 'SKY%'"; }
+  sql += " ORDER BY ts DESC LIMIT ?"; binds.push(limit);
+  const rows = (await env.DB.prepare(sql).bind(...binds).all()).results;
+  return json({ messages: rows });
+}
+
 export async function handleStation(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(

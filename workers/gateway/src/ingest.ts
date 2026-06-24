@@ -29,7 +29,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
   const stmts: SqlStatement[] = [];
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
+  const portRx = new Map<string, number>(); // RX packets per transport port, this batch
+  let maxTs = 0;
   for (const p of body.data.packets) {
+    portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
+    if (p.ts > maxTs) maxTs = p.ts;
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
 
     // weather -> sensor_readings (latest reading per station+ts)
@@ -69,6 +73,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
            altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)`,
       ).bind(p.src, fix.lat, fix.lon, p.ts, fix.symbol ?? null, fix.course ?? null,
         fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, p.igateCall ?? null),
+    );
+  }
+  // M6: per-transport RX counters, bucketed by hour (port_stats)
+  const bucket = Math.floor((maxTs || Math.floor(Date.now() / 1000)) / 3600) * 3600;
+  for (const [port, rx] of portRx) {
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO port_stats (port, ts, rx, tx) VALUES (?,?,?,0)
+         ON CONFLICT(port, ts) DO UPDATE SET rx = rx + excluded.rx`,
+      ).bind(port, bucket, rx),
     );
   }
   if (stmts.length) await env.DB.batch(stmts);

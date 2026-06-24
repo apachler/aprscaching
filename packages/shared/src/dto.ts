@@ -203,3 +203,7 @@ export interface DecodedPacket {
   data?: Record<string, unknown> & { kind: string };
   error?: string;
 }
+
+// ---- M6 interop: transports + messaging ----
+export interface PortStat { port: string; rx: number; tx: number; lastBucket: number }
+export interface MessageItem { id: number; ts: number; fromCall: string; toCall: string | null; body: string; direction: string }

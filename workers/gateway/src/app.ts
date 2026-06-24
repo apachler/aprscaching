@@ -18,7 +18,8 @@ import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
 import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
-import { handleDecode, handleStations, handleStation } from "./workbench.js";
+import { handleDecode, handleStations, handleStation, handlePorts, handleMessages } from "./workbench.js";
+import { handleCot } from "./cot.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -89,6 +90,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   const stationMatch = /^\/api\/stations\/([A-Za-z0-9-]+)$/.exec(p);
   if (stationMatch && m === "GET") return handleStation(req, env, stationMatch[1]!);
+
+  // workbench interop + transports (M6)
+  if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
+  if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
+  if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
 
   // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch}
   const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch)?$/.exec(p);

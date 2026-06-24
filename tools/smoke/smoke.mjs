@@ -181,5 +181,26 @@ ok("station detail carries a track", (stDetail.data?.station?.track ?? []).lengt
 const wxDetail = await call("GET", "/api/stations/OE1WX");
 ok("weather station detail carries a wx reading", wxDetail.data?.station?.wx && Math.abs((wxDetail.data?.station?.wx?.tempC ?? 0) - 25) < 1, JSON.stringify(wxDetail.data?.station?.wx));
 
+// ---- M6: interop (CoT/TAK bridge) + transports + messaging ----
+const msgIngest = await call("POST", "/ingest", {
+  packets: [
+    { src: "OE1MOB-9", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: ":OE8APR   :Hello from the field{007", kind: "message", heardVia: "aprs_is", port: "aprs-is", ts: now() },
+    { src: "OE5KISS", dst: "APRS", path: ["WIDE1-1"], payload: "!4704.50N/01526.50E-KISS TNC node", kind: "position", heardVia: "rf", port: "kiss-tnc", ts: now() },
+  ],
+}, { "x-ingest-secret": SECRET });
+ok("ingest accepts a 2nd-transport batch", msgIngest.data?.ok === true, JSON.stringify(msgIngest.data));
+
+const cot = await call("GET", "/api/cot?bbox=15,46,16,48");
+const cotXml = typeof cot.data === "string" ? cot.data : "";
+const cotRaw = cotXml || (await (await fetch(BASE + "/api/cot?bbox=15,46,16,48")).text());
+ok("CoT export is XML with a station event", /<events>/.test(cotRaw) && cotRaw.includes('uid="APRS.OE1MOB-9"') && /type="a-f-/.test(cotRaw), cotRaw.slice(0, 160));
+
+const ports = await call("GET", "/api/ports");
+const portList = ports.data?.ports ?? [];
+ok("transports registry counts RX per port", portList.some((p) => p.port === "aprs-is" && p.rx >= 1) && portList.some((p) => p.port === "kiss-tnc"), JSON.stringify(portList));
+
+const msgs = await call("GET", "/api/messages?to=OE8APR");
+ok("messages feed returns the RX message", (msgs.data?.messages ?? []).some((mm) => mm.fromCall === "OE1MOB-9" && /Hello from the field/.test(mm.body)), JSON.stringify(msgs.data?.messages?.[0]));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
