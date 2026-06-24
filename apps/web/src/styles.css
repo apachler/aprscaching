@@ -90,6 +90,20 @@ label input, label select, label textarea { margin-top: 3px; }
 .federated { color: var(--brand); font-weight: 700; }
 .imported { background: #f3f6f7; border-left: 3px solid var(--beige); padding: 6px 10px; border-radius: 0 6px 6px 0; font-size: 13px; }
 .imported a { color: var(--brand-dark); }
+.warn { color: #b7791f; font-weight: 700; }
+
+/* favorite heart */
+button.heart { border: none; background: none; color: var(--muted); font-size: 15px; padding: 2px 6px; }
+button.heart.on { color: #e53e3e; }
+
+/* leaderboard + profile */
+.board { list-style: none; padding: 0; margin: 10px 0 0; }
+.board li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
+.board .rank { width: 24px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+button.link { border: none; background: none; color: var(--brand-dark); font-weight: 700; padding: 0; cursor: pointer; }
+button.link:hover { text-decoration: underline; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.award { background: #fff5d6; color: #7a5b00; border: 1px solid #f0e0a8; border-radius: 12px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
 
 /* log form + logbook */
 .logform { border: 1px solid var(--line); border-radius: 9px; padding: 11px; margin: 12px 0;

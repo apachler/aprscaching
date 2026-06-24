@@ -9,6 +9,7 @@ import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
+import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo } from "./community.js";
 
 // ---- D1 row shapes (snake_case) ----
 interface CacheDbRow {
@@ -114,12 +115,17 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const finds = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ? AND log_type = 'found' AND verified = 1",
   ).bind(id).first<{ n: number }>();
+  const who = new URL(req.url).searchParams.get("callsign");
+  const health = await cacheHealth(env, id);
+  const fav = await favoritesInfo(env, id, who);
   const detail: CacheDetail = {
     ...toSummary(row),
     hint: row.hint, description: row.description, externalId: row.external_id,
     createdAt: row.created_at, updatedAt: row.updated_at,
     finds: finds?.n ?? 0,
     logs: logs.results.map(toLogEntry),
+    favorites: fav.favorites, favorited: fav.favorited,
+    needsMaintenance: health.needsMaintenance, dnfStreak: health.dnfStreak, lastFound: health.lastFound,
   };
   return json({ cache: detail });
 }
@@ -149,6 +155,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
     await env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?").bind(code, id).run();
     const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
+    await awardHideBadge(env, owner); // M4: hider badges
     return json({ cache: toSummary(row!) }, { status: 201 });
   } catch (e) {
     const msg = (e as Error).message ?? "";
@@ -280,6 +287,9 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   ).bind(cacheId, loggerCall, now, result.verified ? 1 : 0, result.tier, result.method,
          result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null, corroboratedBy,
          signerKey, authorSig, signedAt).run();
+
+  // M4: award find badges (idempotent; counts verified finds inside)
+  if (result.verified) await awardFindBadges(env, loggerCall);
 
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);

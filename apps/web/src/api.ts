@@ -1,9 +1,9 @@
 import type {
   CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
-  MapCache, LogType, AppGeo, TrustTier,
+  MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier };
+export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -26,8 +26,18 @@ export function listCaches(bbox: BBox): Promise<{ caches: MapCache[] }> {
   return call(`/api/caches?bbox=${bbox.join(",")}`);
 }
 
-export function getCache(id: number): Promise<{ cache: CacheDetail }> {
-  return call(`/api/caches/${id}`);
+export function getCache(id: number, callsign?: string): Promise<{ cache: CacheDetail }> {
+  return call(`/api/caches/${id}${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
+}
+
+export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<{ leaderboard: LeaderboardEntry[] }> {
+  return call(`/api/leaderboard?metric=${metric}&bbox=${bbox.join(",")}`);
+}
+export function getProfile(callsign: string): Promise<Profile> {
+  return call(`/api/profile/${encodeURIComponent(callsign)}`);
+}
+export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
+  return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
 }
 
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {

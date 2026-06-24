@@ -4,7 +4,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
+  getLeaderboard, getProfile, toggleFavorite,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
+  type LeaderboardEntry, type Profile,
 } from "./api.js";
 import { signAuthorship } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -51,6 +53,7 @@ export function App() {
   const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
+  const [showBoard, setShowBoard] = useState(false);
 
   const ws = useRef<WebSocket | null>(null);
   const callsignRef = useRef(callsign);
@@ -165,13 +168,13 @@ export function App() {
   useEffect(() => {
     if (selectedId == null) { setDetail(null); return; }
     let live = true;
-    getCache(selectedId).then((r) => { if (live) setDetail(r.cache); }).catch(console.error);
+    getCache(selectedId, callsignRef.current).then((r) => { if (live) setDetail(r.cache); }).catch(console.error);
     return () => { live = false; };
   }, [selectedId]);
 
   const reloadDetail = useCallback(async () => {
     if (selectedId == null) return;
-    try { setDetail((await getCache(selectedId)).cache); } catch (e) { console.error(e); }
+    try { setDetail((await getCache(selectedId, callsignRef.current)).cache); } catch (e) { console.error(e); }
   }, [selectedId]);
 
   function startHide() {
@@ -195,7 +198,8 @@ export function App() {
   return (
     <div className="app">
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
-              onHide={startHide} onCancel={cancelHide} count={caches.length} />
+              onHide={startHide} onCancel={cancelHide} count={caches.length}
+              onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
 
@@ -216,15 +220,79 @@ export function App() {
         <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
       )}
 
-      {detail && mode === "view" && !remote && (
+      {showBoard && mode === "view" && (
+        <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
+      )}
+
+      {detail && mode === "view" && !remote && !showBoard && (
         <DetailPanel detail={detail} callsign={callsign}
                      onClose={() => setSelectedId(null)} onLogged={reloadDetail} />
       )}
 
-      {remote && mode === "view" && (
+      {remote && mode === "view" && !showBoard && (
         <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
       )}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------- community: leaderboard + profile
+function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void }) {
+  const [metric, setMetric] = useState<"points" | "finds">("points");
+  const [rows, setRows] = useState<LeaderboardEntry[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    const m = props.map; if (!m) return;
+    const b = m.getBounds();
+    setLoading(true);
+    try { setRows((await getLeaderboard([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], metric)).leaderboard); }
+    catch (e) { console.error(e); } finally { setLoading(false); }
+  }, [props.map, metric]);
+  useEffect(() => { if (!profile) void load(); }, [load, profile]);
+
+  if (profile) {
+    return (
+      <aside className="panel right">
+        <div className="row between">
+          <h2>{profile.callsign}{profile.accountVerified && <span className="ok"> ✓</span>}</h2>
+          <button className="icon" onClick={props.onClose}>✕</button>
+        </div>
+        <button onClick={() => setProfile(null)}>← leaderboard</button>
+        <p style={{ marginTop: 12 }}><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden</p>
+        {profile.lastFind && <p className="muted">last find {new Date(profile.lastFind * 1000).toLocaleDateString()}</p>}
+        <h4>Badges</h4>
+        {profile.badges.length
+          ? <div className="badges">{profile.badges.map((b) => <span key={b.badge} className="award">{b.badge}</span>)}</div>
+          : <p className="muted">No badges yet.</p>}
+        <h4>Finds by type</h4>
+        <div className="badges">{Object.entries(profile.byType).map(([t, n]) => <span key={t} className="badge">{t}: {n}</span>)}</div>
+      </aside>
+    );
+  }
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>🏆 Leaderboard</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <div className="row">
+        <button className={metric === "points" ? "primary" : ""} onClick={() => setMetric("points")}>Points</button>
+        <button className={metric === "finds" ? "primary" : ""} onClick={() => setMetric("finds")}>Finds</button>
+        <span className="spacer" /><button onClick={load}>↻ this area</button>
+      </div>
+      {loading && <p className="muted">Loading…</p>}
+      {!loading && !rows.length && <p className="muted">No verified finds in this area yet.</p>}
+      <ol className="board">
+        {rows.map((r) => (
+          <li key={r.loggerCall}>
+            <span className="rank">{r.rank}</span>
+            <button className="link" onClick={() => getProfile(r.loggerCall).then(setProfile).catch(console.error)}>{r.loggerCall}</button>
+            <span className="spacer" />
+            <strong>{metric === "points" ? r.points : r.finds}</strong>
+            <span className="muted">&nbsp;{metric === "points" ? "pts" : "finds"}</span>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 
@@ -254,7 +322,7 @@ function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }) {
 // ----------------------------------------------------------------- top bar
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
-  onHide: () => void; onCancel: () => void; count: number;
+  onHide: () => void; onCancel: () => void; count: number; onBoard: () => void;
 }) {
   return (
     <header className="topbar">
@@ -266,6 +334,7 @@ function TopBar(props: {
         <input value={props.callsign} placeholder="OE8APR"
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
+      {props.mode === "view" && <button onClick={props.onBoard} title="Leaderboard">🏆</button>}
       {props.mode === "view"
         ? <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
         : <button onClick={props.onCancel}>Cancel</button>}
@@ -355,10 +424,20 @@ function DetailPanel(props: {
 }) {
   const c = props.detail;
   const meta = typeMeta(c.type);
+  const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
+  useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
+  async function toggleFav() {
+    if (props.callsign.length < 3) return;
+    const want = !fav.on;
+    setFav((f) => ({ on: want, count: f.count + (want ? 1 : -1) })); // optimistic
+    try { const r = await toggleFavorite(c.id, props.callsign, want); setFav(r); } catch { setFav({ on: c.favorited, count: c.favorites }); }
+  }
   return (
     <aside className="panel right">
       <div className="row between">
         <h2><span className="dot" style={{ background: meta.color }} /> {c.code}</h2>
+        <span className="spacer" />
+        <button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>{fav.on ? "♥" : "♡"} {fav.count}</button>
         <button className="icon" onClick={props.onClose}>✕</button>
       </div>
       <h3>{c.title}</h3>
@@ -373,7 +452,8 @@ function DetailPanel(props: {
         </p>
       )}
       <p><strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}
-        {c.status !== "active" && <> · <em>{c.status}</em></>}</p>
+        {c.status !== "active" && <> · <em>{c.status}</em></>}
+        {c.needsMaintenance && <span className="warn"> · ⚠ needs maintenance</span>}</p>
       {c.description && <p>{c.description}</p>}
       {c.hint && <details><summary>Hint</summary><p>{c.hint}</p></details>}
 

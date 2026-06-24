@@ -17,6 +17,7 @@ import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./fed
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
+import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -76,14 +77,22 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
   if (p === "/api/caches" && m === "POST") return handleCreateCache(req, env);
 
-  // /api/caches/:id  and  /api/caches/:id/logs
-  const cacheMatch = /^\/api\/caches\/(\d+)(\/logs)?$/.exec(p);
+  // community / gamification (M4)
+  if (p === "/api/leaderboard" && m === "GET") return handleLeaderboard(req, env);
+  if (p === "/api/activity" && m === "GET") return handleActivity(req, env);
+  const profileMatch = /^\/api\/profile\/([A-Za-z0-9-]+)$/.exec(p);
+  if (profileMatch && m === "GET") return handleProfile(req, env, profileMatch[1]!);
+
+  // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch}
+  const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch)?$/.exec(p);
   if (cacheMatch) {
     const id = Number(cacheMatch[1]);
-    const isLogs = cacheMatch[2] === "/logs";
-    if (isLogs && m === "POST") return handleLog(req, env, id);
-    if (!isLogs && m === "GET") return handleCacheDetail(req, env, id);
-    if (!isLogs && (m === "PATCH" || m === "PUT")) return handleUpdateCache(req, env, id);
+    const sub = cacheMatch[2];
+    if (sub === "/logs" && m === "POST") return handleLog(req, env, id);
+    if (sub === "/favorite" && m === "POST") return handleFavorite(req, env, id);
+    if (sub === "/watch" && m === "POST") return handleWatch(req, env, id);
+    if (!sub && m === "GET") return handleCacheDetail(req, env, id);
+    if (!sub && (m === "PATCH" || m === "PUT")) return handleUpdateCache(req, env, id);
     return new Response("method not allowed", { status: 405 });
   }
 

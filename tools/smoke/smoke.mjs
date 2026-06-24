@@ -140,5 +140,18 @@ ok("signed find accepted; signerKey echoed", signed.data?.logged === true && sig
 const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig.slice(0, -2) + "AA", signedAt: at } });
 ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
 
+// ---- M4: community / gamification ----
+const lb = await call("GET", "/api/leaderboard?metric=finds");
+ok("leaderboard ranks loggers", (lb.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC" && e.finds >= 1), JSON.stringify(lb.data));
+const prof = await call("GET", "/api/profile/DL1ABC");
+ok("profile shows verified finds + points", (prof.data?.finds ?? 0) >= 1 && (prof.data?.points ?? 0) > 0, JSON.stringify(prof.data));
+ok("profile awards a find badge", (prof.data?.badges ?? []).some((b) => b.badge === "first-find"), JSON.stringify(prof.data?.badges));
+const favOn = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: true });
+ok("favorite toggled on", favOn.data?.on === true && (favOn.data?.count ?? 0) >= 1, JSON.stringify(favOn.data));
+const det = await call("GET", `/api/caches/${id}?callsign=DL1ABC`);
+ok("detail carries favorite + health fields", det.data?.cache?.favorited === true && typeof det.data?.cache?.needsMaintenance === "boolean", JSON.stringify({ favorited: det.data?.cache?.favorited, nm: det.data?.cache?.needsMaintenance }));
+const act = await call("GET", "/api/activity?limit=10");
+ok("activity feed returns recent logs", Array.isArray(act.data?.activity) && act.data.activity.length >= 1, JSON.stringify(act.data?.activity?.length));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

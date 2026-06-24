@@ -159,4 +159,23 @@ export interface CacheDetail extends CacheSummary {
   updatedAt: number;
   finds: number;       // count of verified found logs
   logs: CacheLogEntry[];
+  // M4 community
+  favorites: number;
+  favorited: boolean;
+  needsMaintenance: boolean;
+  dnfStreak: number;
+  lastFound: number | null;
+}
+
+// ---- M4 community response shapes ----
+export interface LeaderboardEntry { rank: number; loggerCall: string; finds: number; points: number }
+export interface Badge { badge: string; earnedAt: number }
+export interface Profile {
+  callsign: string; accountVerified: boolean;
+  finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
+  byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];
+}
+export interface ActivityItem {
+  id: number; loggerCall: string; ts: number; logType: string; verified: boolean; tier: string | null;
+  cacheId: number; cacheCode: string; cacheTitle: string;
 }

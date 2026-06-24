@@ -27,6 +27,14 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   control it. Until then, mark unverified-callsign keys as low-trust in the keys feed and exclude
   them from leaderboard credit.
 
+## Imports / UX
+- [ ] **One-click "POI layer" toggle for OSM + Wikidata.** The `osm` and `wikidata` importers exist
+  but require an admin POST with a tag/Q-id + bbox. Add a map-side toggle that, for the current
+  viewport, imports (or live-queries) a curated set — peaks (`natural=peak` / Q8502), castles
+  (`historic=castle` / Q23413), lighthouses (`man_made=lighthouse` / Q39715) — and renders them as a
+  switchable overlay distinct from caches. Decide: persist-as-imported vs. ephemeral live layer;
+  respect ODbL attribution (OSM) and rate limits. Let users pick which feature classes to show.
+
 ## M2 remainder
 - [ ] **Audio-cache staged unlock.** Store audio/media in R2; stage gating (`cache_stages.unlock =
   audio`) reveals the next stage's coordinates after the audio clue. (Geofencing core is done.)
