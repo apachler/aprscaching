@@ -48,14 +48,31 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   when a station is selected (currently shown as a count).
 
 ## M6 interop — follow-ups
-- [ ] **Live transport connectors** in the ingest box: KISS/TNC over TCP/serial, Meshtastic (BLE/
-  serial/MQTT), and a TAK/CoT *inbound* listener — each forwarding to `/ingest` with its `port` set
-  (the gateway already counts per-port RX and bridges CoT *out*). Egress to these is blocked in CI,
-  so they live in `apps/ingest` and are exercised on the always-on box, not conformance.
+- [x] **Live transport connectors** in the ingest box: KISS/TNC over TCP, TAK/CoT *inbound* (UDP),
+  and Meshtastic (JSON over TCP) — each forwarding to `/ingest` with its `port`. (Codecs in
+  `@aprsweb/aprs`, connectors in `apps/ingest`, opt-in via env.)
+- [ ] **Deeper transport paths**: native MQTT + BLE + serial + protobuf for Meshtastic; serial KISS;
+  and **APRS-IS / RF TX** (message send + beaconing) gated behind TX policy + the callsign badge.
 - [ ] **CoT streaming feed** (SSE/long-poll) in addition to the bbox snapshot, so TAK clients get
   push updates; consider per-client auth + a stable feed UID namespace.
 - [ ] **Region sharding** for live rooms (`LIVE_REGION` is a single global room today): shard the
   Durable Object by geohash so fan-out scales, with subscription routing across shards.
+
+## Identity, accounts & data lifecycle (GDPR / DSGVO)
+- [ ] **Finish WebAuthn/passkey auth** (`auth.ts` is a scaffold): real register/login ceremonies,
+  credential storage, session binding. Registration = claim callsign → passkey; logging stays
+  open (unverified accounts still log, flagged).
+- [ ] **Callsign-control gating**: the APRS-message challenge (`callsign.ts`) already proves control;
+  require a verified+badged callsign to register/replace a device key and to earn leaderboard credit
+  (also in the federation-hardening section).
+- [ ] **GDPR endpoints**: `GET /api/account/export` (machine-readable copy of everything tied to a
+  callsign — account, logs, positions, keys, favorites) and `POST /api/account/delete` (erase /
+  anonymise: drop PII, tombstone logs as `withdrawn`, revoke keys, propagate a federation tombstone
+  so mirrors purge too). Document a retention policy + a privacy notice; positions TTL already helps.
+- [ ] **Account portability across peers** (federation): export a *signed account bundle* (device
+  pubkeys + a migration assertion signed by the account key) and import it on the target instance,
+  which verifies the signature, claims the callsign, and the old instance issues a `moved` tombstone
+  + redirect. Because finds are per-callsign device-signed, history stays attributable post-move.
 
 ## M2 remainder
 - [ ] **Audio-cache staged unlock.** Store audio/media in R2; stage gating (`cache_stages.unlock =

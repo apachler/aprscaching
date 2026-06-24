@@ -1,13 +1,17 @@
 # aprscaching.com — reborn
 
-An APRS-Caching-first web workbench. **M0 scaffold + M1 caching core are implemented:**
-monorepo, Cloudflare bindings, D1 schema, pure APRS parser, the **verification engine**
-(tested), the ingest client, and a real cache-first web app.
+An APRS-Caching-first web workbench. **M0→M6 are implemented:** the caching core +
+verification engine, real-time geofencing, heritage imports, community/gamification, the APRS
+workbench (full decoder, live station registry, packet inspector), and interop (CoT/TAK bridge,
+multi-transport ingest, messaging), plus an open **federation** layer and a portable Node/SQLite
+runtime.
 
-**M1 — what works now:** hide a cache on the map, see it rendered by type/D/T, open its
-detail + logbook, and log a find (found/DNF/note) that the engine verifies across trust
-tiers A (RF-corroborated), B (in-app geolocation) and C (IS-only). Next up is M2
-(real-time geofence prompts) — see `PLAN.md`.
+**What works now:** hide a cache and log a find verified across trust tiers A (RF-corroborated),
+B (in-app geolocation) and C (IS-only); live "you're near a cache" geofence prompts; import from
+heritage programs (SOTA/POTA/WWFF/…); leaderboards, profiles and badges; decode any APRS frame
+(MIC-E, compressed, objects/items/messages/weather/telemetry); a live stations map fed by APRS-IS,
+KISS/TNC, TAK/CoT and Meshtastic; and a TAK feed + embeddable QRZ badge out. See `TODO.md` for the
+tracked follow-ups.
 
 ## Layout
 - `packages/aprs` — pure parser: TNC2, q-construct (RF vs injected), position, geo. **Tested.**
@@ -38,6 +42,43 @@ pnpm --filter @aprsweb/web dev             # map UI: hide a cache, log a find
 cp .env.example .env                       # set APRSIS_FILTER + INGEST_SECRET
 pnpm --filter @aprsweb/ingest dev          # streams APRS-IS -> POST /ingest
 ```
+
+## Compatibility
+
+The platform runs in **three deployment shapes** and degrades gracefully across browsers. Nothing
+here blocks the core (browse map, hide, log a find) — only the listed capabilities vary.
+
+### Server deployment modes
+| Capability | Cloudflare (edge) | Node + SQLite (self-host) | Ingest box |
+|---|:--:|:--:|:--:|
+| REST API + web app | ✅ Workers + Pages | ✅ `servers/node` (better-sqlite3) | — |
+| Live WebSocket (stations/geofence) | ✅ Durable Object (hibernation) | ✅ in-memory rooms | — |
+| Verification engine (tiers A/B/C) | ✅ | ✅ | — |
+| Federation (signed feeds, mirror, corroborate) | ✅ | ✅ | — |
+| Heritage imports (SOTA/POTA/…) | ✅ | ✅ (needs egress) | — |
+| CoT/TAK bridge out · ports · messaging | ✅ | ✅ | — |
+| Media / audio-cache (R2) | ✅ R2 binding | ⏳ S3/FS adapter (planned) | — |
+| APRS-IS firehose ingest | via box | via box | ✅ |
+| KISS/TNC · TAK/CoT in · Meshtastic | — | — | ✅ Node only (`apps/ingest`) |
+| APRS-IS TX / announce uplink | via box | via box | ✅ (gated, opt-in) |
+
+Conformance is proven identical on **Cloudflare Worker** and **Node/SQLite** by the same smoke
+suite running against both in CI.
+
+### Browser support (web app)
+| Feature | Chrome/Edge | Firefox | Safari | Notes |
+|---|:--:|:--:|:--:|---|
+| Map + markers (MapLibre/WebGL) | ✅ | ✅ | ✅ | WebGL1 fallback on old GPUs |
+| Live updates (WebSocket) | ✅ | ✅ | ✅ | — |
+| In-app geolocation (Tier B) | ✅ | ✅ | ✅ | needs HTTPS + user permission |
+| Locale & units (Intl) | ✅ | ✅ | ✅ | derives from browser, overridable |
+| Copy TAK/CoT URL (Clipboard) | ✅ | ✅ | ✅ | secure context only |
+| Passkey sign-in (WebAuthn) | ✅ | ✅ | ✅ | platform authenticator |
+| **Per-callsign signing (WebCrypto Ed25519)** | ✅ 137+ | ✅ 129+ | ✅ 17+ | older browsers log finds **unsigned** (still tier A/B); no breakage |
+| Embeddable badge `<img>` SVG | ✅ | ✅ | ✅ | renders anywhere, incl. QRZ.com |
+
+Mobile Chrome/Safari track their desktop engines. The one capability gated on a *recent* browser is
+the Ed25519 device-key signature (F0); everywhere else the app falls back cleanly to unsigned logging.
 
 ## Federation (F1) — open, mirrorable, signed
 
@@ -140,13 +181,22 @@ transports**. `GET /api/cot?bbox=` renders the live station registry as a Cursor
 (symbol → CoT type, knots → m/s, altitude → HAE). Ingest tallies **RX per transport** (`aprs-is`,
 `kiss-tnc`, `meshtastic`, …) surfaced at `GET /api/ports`, and decoded inbound **messages/bulletins**
 are at `GET /api/messages`. The 📡 Workbench panel shows connected transports, the TAK feed URL, and
-recent messages. (Message **TX** and live KISS/Meshtastic connectors are gated/ingest-box work — see
-`TODO.md`.)
+recent messages.
+
+The ingest box now speaks **multiple transports** (each forwards to `/ingest` on its own `port`):
+APRS-IS, **KISS/TNC** over TCP (Direwolf), **TAK/CoT** inbound (UDP), and **Meshtastic** (JSON over
+TCP). Enable them in `.env` (`KISS_TNC_HOST`, `TAK_COT_PORT`, `MESH_HOST`). The AX.25/KISS, CoT and
+Meshtastic codecs live in `@aprsweb/aprs` (tested). Message **TX** and native MQTT/BLE/serial remain
+follow-ups (`TODO.md`).
+
+An operator's standing is also exportable as an **embeddable SVG badge** for QRZ.com / signatures:
+`<img src="https://api.aprscaching.com/badge/OE8APR.svg">` (network rank · finds · points · hides).
 
 ```bash
 curl "$API/api/cot?bbox=15,46,16,48"   # CoT/TAK snapshot for ATAK
 curl "$API/api/ports"                  # 24h RX/TX per transport
 curl "$API/api/messages?bulletins=1"   # recent bulletins
+curl "$API/badge/OE8APR.svg"           # embeddable network badge
 ```
 
 ## Verification at a glance
