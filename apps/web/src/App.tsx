@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
@@ -13,6 +13,10 @@ import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
+import {
+  FormatContext, useFmt, makeFormatters, loadSettings, saveSettings,
+  browserLocale, browserTimeZone, type LocaleSettings,
+} from "./format.js";
 import type { CacheType, LogType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 
@@ -58,6 +62,10 @@ export function App() {
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
+  const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
+  const [showSettings, setShowSettings] = useState(false);
+  const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
+  const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
 
   const ws = useRef<WebSocket | null>(null);
   const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -252,18 +260,20 @@ export function App() {
   }
 
   return (
+    <FormatContext.Provider value={fmt}>
     <div className="app">
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={caches.length}
               onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }}
-              onWorkbench={() => { setShowWB(true); setShowBoard(false); setSelectedId(null); setRemote(null); }} />
+              onWorkbench={() => { setShowWB(true); setShowBoard(false); setSelectedId(null); setRemote(null); }}
+              onSettings={() => setShowSettings(true)} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
 
       {nearPrompt && mode === "view" && (
         <div className="geo-banner">
           <span>📍 You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
-            <span className="muted"> · {Math.round(nearPrompt.distanceM)} m</span></span>
+            <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span></span>
           <span className="spacer" />
           <button className="primary" onClick={() => {
             setRemote(null); setSelectedId(nearPrompt.cacheId); setNearPrompt(null);
@@ -297,12 +307,55 @@ export function App() {
       {remote && mode === "view" && !showBoard && (
         <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
       )}
+
+      {showSettings && (
+        <SettingsPanel settings={locSettings} onApply={applySettings} onClose={() => setShowSettings(false)} />
+      )}
     </div>
+    </FormatContext.Provider>
+  );
+}
+
+// ----------------------------------------------------------------- locale & units settings
+function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; onClose: () => void }) {
+  const s = props.settings;
+  const fmt = useFmt();
+  const now = Math.floor(Date.now() / 1000);
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>⚙ Settings</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+
+      <h4>Units</h4>
+      <div className="row">
+        <button className={s.units === "metric" ? "primary" : ""} onClick={() => props.onApply({ ...s, units: "metric" })}>Metric</button>
+        <button className={s.units === "imperial" ? "primary" : ""} onClick={() => props.onApply({ ...s, units: "imperial" })}>Imperial</button>
+      </div>
+
+      <label>Locale
+        <input value={s.locale} placeholder={`browser (${browserLocale()})`}
+               onChange={(e) => props.onApply({ ...s, locale: e.target.value.trim() })} />
+      </label>
+      <label>Time zone
+        <input value={s.timeZone} placeholder={`browser (${browserTimeZone()})`}
+               onChange={(e) => props.onApply({ ...s, timeZone: e.target.value.trim() })} />
+      </label>
+      <p className="muted" style={{ marginTop: 4 }}>Blank = follow the browser. Resolved: <strong>{fmt.resolvedLocale}</strong> · {fmt.resolvedTimeZone}</p>
+
+      <h4>Preview</h4>
+      <ul className="board">
+        <li><span className="rank" style={{ width: 80 }}>now</span> {fmt.dateTime(now)}</li>
+        <li><span className="rank" style={{ width: 80 }}>distance</span> {fmt.distance(1234)} · {fmt.distance(85)}</li>
+        <li><span className="rank" style={{ width: 80 }}>speed</span> {fmt.speed(36)}</li>
+        <li><span className="rank" style={{ width: 80 }}>altitude</span> {fmt.altitude(376)}</li>
+        <li><span className="rank" style={{ width: 80 }}>temp</span> {fmt.temp(18)}</li>
+      </ul>
+    </aside>
   );
 }
 
 // ----------------------------------------------------------------- community: leaderboard + profile
 function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void }) {
+  const fmt = useFmt();
   const [metric, setMetric] = useState<"points" | "finds">("points");
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -326,7 +379,7 @@ function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void
         </div>
         <button onClick={() => setProfile(null)}>← leaderboard</button>
         <p style={{ marginTop: 12 }}><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden</p>
-        {profile.lastFind && <p className="muted">last find {new Date(profile.lastFind * 1000).toLocaleDateString()}</p>}
+        {profile.lastFind && <p className="muted">last find {fmt.date(profile.lastFind)}</p>}
         <h4>Badges</h4>
         {profile.badges.length
           ? <div className="badges">{profile.badges.map((b) => <span key={b.badge} className="award">{b.badge}</span>)}</div>
@@ -392,6 +445,7 @@ function WorkbenchPanel(props: {
   const [raw, setRaw] = useState("");
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
   const [station, setStation] = useState<StationDetail | null>(null);
+  const fmt = useFmt();
 
   useEffect(() => {
     if (!props.picked) { setStation(null); return; }
@@ -426,15 +480,19 @@ function WorkbenchPanel(props: {
             <h3 style={{ margin: 0 }}>{station.callsign}</h3>
             <button className="link" onClick={() => props.onPick(null)}>clear</button>
           </div>
-          <div className="muted">{station.symbol ?? "—"} · last heard {fmtAgo(station.lastSeen)}</div>
+          <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
           {station.comment && <div className="comment">{station.comment}</div>}
           <div className="muted" style={{ marginTop: 4 }}>
-            {station.speedKn != null && station.speedKn > 0 ? `${station.speedKn} kn @ ${station.course ?? 0}° · ` : ""}
-            {station.altitudeM != null ? `${station.altitudeM} m · ` : ""}
+            {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
+            {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
             {station.packets} pkts · {station.track.length} track pts
           </div>
           {station.wx && (
-            <div className="wx">🌡 {fmtNum(station.wx.tempC, "°C")} · 💧 {fmtNum(station.wx.humidity, "%")} · 🌬 {fmtNum(station.wx.windKn, " kn")} · {fmtNum(station.wx.pressureHpa, " hPa")}</div>
+            <div className="wx">
+              {station.wx.tempC != null && <>🌡 {fmt.temp(station.wx.tempC)} · </>}
+              💧 {station.wx.humidity ?? "—"}% ·{" "}
+              {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
+              {station.wx.pressureHpa ?? "—"} hPa</div>
           )}
           <div className="row end" style={{ marginTop: 8 }}>
             <button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button>
@@ -468,14 +526,6 @@ function WorkbenchPanel(props: {
   );
 }
 
-function fmtAgo(ts: number): string {
-  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts);
-  if (s < 90) return `${s}s ago`;
-  if (s < 5400) return `${Math.round(s / 60)}m ago`;
-  if (s < 172800) return `${Math.round(s / 3600)}h ago`;
-  return `${Math.round(s / 86400)}d ago`;
-}
-function fmtNum(n: number | null | undefined, unit: string): string { return n == null ? "—" : `${n}${unit}`; }
 function flatten(data: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(data)) {
@@ -493,6 +543,7 @@ function flatten(data: Record<string, unknown>): Record<string, string> {
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
   onHide: () => void; onCancel: () => void; count: number; onBoard: () => void; onWorkbench: () => void;
+  onSettings: () => void;
 }) {
   return (
     <header className="topbar">
@@ -506,6 +557,7 @@ function TopBar(props: {
       </label>
       {props.mode === "view" && <button onClick={props.onWorkbench} title="Workbench — live stations + packet decoder">📡</button>}
       {props.mode === "view" && <button onClick={props.onBoard} title="Leaderboard">🏆</button>}
+      <button onClick={props.onSettings} title="Settings — locale & units">⚙</button>
       {props.mode === "view"
         ? <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
         : <button onClick={props.onCancel}>Cancel</button>}
@@ -595,6 +647,7 @@ function DetailPanel(props: {
 }) {
   const c = props.detail;
   const meta = typeMeta(c.type);
+  const fmt = useFmt();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
   async function toggleFav() {
@@ -643,7 +696,7 @@ function DetailPanel(props: {
                 : <span className="muted">unverified{l.tier ? ` (tier ${l.tier})` : ""}</span>
             )}
             {l.corroboratedBy && <span className="muted"> · ⇄ via {l.corroboratedBy}</span>}
-            <span className="muted"> · {new Date(l.ts * 1000).toLocaleDateString()}</span>
+            <span className="muted"> · {fmt.date(l.ts)}</span>
             {l.comment && <div className="comment">{l.comment}</div>}
           </li>
         ))}
@@ -654,6 +707,7 @@ function DetailPanel(props: {
 
 // ----------------------------------------------------------------- log form
 function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; onLogged: () => void }) {
+  const fmt = useFmt();
   const [logType, setLogType] = useState<LogType>("found");
   const [comment, setComment] = useState("");
   const [useGeo, setUseGeo] = useState(true);
@@ -725,7 +779,7 @@ function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; 
             ? (result.verified
                 ? (result.method === "aprs_rf_peer" && result.corroboratedBy
                     ? `Verified — Tier ${result.tier} · corroborated by ${result.corroboratedBy}`
-                    : `Verified — tier ${result.tier} (${result.method}${result.distanceM != null ? `, ${Math.round(result.distanceM)} m` : ""})`)
+                    : `Verified — tier ${result.tier} (${result.method}${result.distanceM != null ? `, ${fmt.distance(result.distanceM)}` : ""})`)
                 : `Logged, unverified${result.reason ? ` — ${result.reason}` : ""}`)
             : "Logged."}
           {result.announced && " · announced to APRS-IS"}
