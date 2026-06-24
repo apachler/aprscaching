@@ -366,6 +366,20 @@ export function App() {
       {showSettings && (
         <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} onClose={() => setShowSettings(false)} />
       )}
+
+      {mode === "view" && (
+        <TabBar
+          active={showNearby ? "nearby" : showActivity ? "activity" : showProfile ? "profile" : "map"}
+          onMap={closeAll}
+          onNearby={() => openOnly(() => setShowNearby(true))}
+          onActivity={() => openOnly(() => setShowActivity(true))}
+          onProfile={() => openOnly(() => setShowProfile(true))}
+          fabLabel={selectedId != null || nearPrompt ? "Log" : "Hide"}
+          onFab={() => {
+            if (nearPrompt) openOnly(() => setSelectedId(nearPrompt.cacheId));
+            else if (selectedId == null) startHide();
+          }} />
+      )}
     </div>
     </FormatContext.Provider>
   );
@@ -764,13 +778,38 @@ function TopBar(props: {
         <input value={props.callsign} placeholder="OE8APR"
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
-      {props.mode === "view" && <button onClick={props.onNearby}>Nearby</button>}
-      {props.mode === "view" && <button onClick={props.onActivity}>Activity</button>}
-      {props.mode === "view" && <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>}
       {props.mode === "view"
-        ? <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
+        ? <span className="nav-desktop">
+            <button onClick={props.onNearby}>Nearby</button>
+            <button onClick={props.onActivity}>Activity</button>
+            <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
+            <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
+          </span>
         : <button onClick={props.onCancel}>Cancel</button>}
     </header>
+  );
+}
+
+// ----------------------------------------------------------------- mobile bottom tab bar
+function TabBar(props: {
+  onMap: () => void; onNearby: () => void; onActivity: () => void; onProfile: () => void;
+  onFab: () => void; fabLabel: string; active: string;
+}) {
+  const tab = (key: string, ic: string, label: string, onClick: () => void) => (
+    <button className={props.active === key ? "on" : ""} onClick={onClick}>
+      <span className="ic">{ic}</span><span>{label}</span>
+    </button>
+  );
+  return (
+    <nav className="tabbar">
+      {tab("map", "🗺", "Map", props.onMap)}
+      {tab("nearby", "📍", "Nearby", props.onNearby)}
+      <button className="fab" onClick={props.onFab}>
+        <span className="ic">{props.fabLabel === "Log" ? "✓" : "＋"}</span><span>{props.fabLabel}</span>
+      </button>
+      {tab("activity", "⚡", "Activity", props.onActivity)}
+      {tab("profile", "👤", "You", props.onProfile)}
+    </nav>
   );
 }
 

@@ -195,6 +195,46 @@ button.link:hover { text-decoration: underline; }
 .geo-banner button.primary { background: #0e1518; color: var(--accent); border-color: #0e1518; }
 .geo-banner button.icon { color: var(--accent-ink); }
 
+/* bottom tab bar — mobile-first primary navigation (hidden on desktop) */
+.tabbar { display: none; }
+.topbar .nav-desktop { display: contents; }
+@media (max-width: 680px) {
+  .topbar .nav-desktop { display: none; }
+  .topbar > .muted { display: none; }
+  .topbar { gap: 8px; padding: 0 10px; }
+  .topbar .call input { width: 80px; }
+  .tabbar {
+    display: flex; position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
+    height: 60px; background: var(--topbar-bg); border-top: 1px solid var(--line);
+    box-shadow: 0 -3px 14px rgba(0,0,0,.4); padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar button {
+    flex: 1; border: none; background: none; color: #b9cdd4; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-size: 11px; border-radius: 0; padding: 0;
+  }
+  .tabbar button .ic { font-size: 19px; line-height: 1; }
+  .tabbar button.on { color: #fff; }
+  .tabbar button.fab {
+    color: var(--accent-ink); margin-top: -16px;
+  }
+  .tabbar button.fab .ic {
+    background: var(--accent); width: 50px; height: 50px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.45); border: 3px solid var(--topbar-bg);
+  }
+  .tabbar button.fab span:last-child { color: var(--accent); font-weight: 700; margin-top: 2px; }
+
+  /* panels become bottom sheets */
+  .panel, .panel.left, .panel.right {
+    top: auto; bottom: 60px; left: 6px; right: 6px; width: auto; max-width: none;
+    max-height: 74vh; border-radius: 16px 16px 0 0; padding: 14px 14px 18px;
+  }
+  .panel::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 3px;
+    background: var(--line); margin: -4px auto 10px; }
+  .geo-banner { top: auto; bottom: 72px; }
+}
+
 /* first-run splash overlay */
 .splash {
   position: absolute; inset: 50px 0 0 0; z-index: 4;
