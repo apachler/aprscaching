@@ -3,10 +3,11 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, createCache, logFind, registerKey, getInstance,
+  listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
 } from "./api.js";
 import { signAuthorship } from "./crypto.js";
+import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta, TYPE_ORDER, TYPE_META } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
@@ -49,17 +50,49 @@ export function App() {
   const [detail, setDetail] = useState<CacheDetail | null>(null);
   const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
+  const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
 
+  const ws = useRef<WebSocket | null>(null);
+  const callsignRef = useRef(callsign);
+  useEffect(() => { callsignRef.current = callsign; }, [callsign]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  // (re)subscribe the live socket to the current viewport + callsign
+  const subscribeLive = useCallback((bbox: BBox) => {
+    const s = ws.current;
+    if (s && s.readyState === WebSocket.OPEN) {
+      s.send(JSON.stringify({ type: "subscribe", bbox, maxAgeSec: 3600, callsign: callsignRef.current || undefined }));
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const m = map.current; if (!m) return;
     const b = m.getBounds();
     const bbox: BBox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    subscribeLive(bbox);
     try { setCaches((await listCaches(bbox)).caches); }
     catch (e) { console.error(e); }
     finally { setReady(true); }
-  }, []);
+  }, [subscribeLive]);
+
+  // live WebSocket: geofence prompts ("you're near a cache")
+  useEffect(() => {
+    const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
+    ws.current = s;
+    s.addEventListener("open", () => { const m = map.current; if (m) { const b = m.getBounds(); subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]); } });
+    s.addEventListener("message", (e) => {
+      try { const msg = JSON.parse(e.data); if (msg.type === "near_cache") setNearPrompt(msg); }
+      catch { /* ignore */ }
+    });
+    return () => { try { s.close(); } catch { /* */ } ws.current = null; };
+  }, [subscribeLive]);
+
+  // re-subscribe when the callsign changes so prompts are addressed to you
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    const b = m.getBounds();
+    subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  }, [callsign, subscribeLive]);
 
   // ---- init map once ----
   useEffect(() => {
@@ -165,6 +198,19 @@ export function App() {
               onHide={startHide} onCancel={cancelHide} count={caches.length} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
+
+      {nearPrompt && mode === "view" && (
+        <div className="geo-banner">
+          <span>📍 You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
+            <span className="muted"> · {Math.round(nearPrompt.distanceM)} m</span></span>
+          <span className="spacer" />
+          <button className="primary" onClick={() => {
+            setRemote(null); setSelectedId(nearPrompt.cacheId); setNearPrompt(null);
+            map.current?.flyTo({ center: map.current.getCenter(), zoom: Math.max(map.current.getZoom(), 14) });
+          }}>Log it</button>
+          <button className="icon" onClick={() => setNearPrompt(null)}>✕</button>
+        </div>
+      )}
 
       {mode === "hide" && (
         <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
