@@ -2,6 +2,19 @@
 
 Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
 
+## M7 web re-architecture (UI spec)
+- [x] **Phase A** — dark field-console theme (green primary accent, mono callsigns/coords); one-tap
+  log state machine (Verified · RF/App / unverified badge); cacher IA (Nearby · Activity · Profile),
+  Workbench/BBS demoted behind Profile → Advanced.
+- [x] **Phase B** — mobile-first shell: bottom tab bar with a context-aware FAB (Log/Hide), panels
+  as bottom sheets on phones; desktop keeps the right-drawer.
+- [x] **Phase C** — search & type filters; offline-tolerant logging (queue + auto-sync on reconnect).
+- [ ] **Deferred from C**: passkey/WebAuthn sign-in (finish the `auth.ts` ceremonies; not CI-testable)
+  and a **PMTiles basemap + service worker** for true offline tiles (needs a basemap asset).
+- [ ] **Deferred internal**: refactor the monolithic `apps/web/src/App.tsx` into the spec's feature
+  folders (`map/ caches/ log/ live/ identity/ activity/ profile/ workbench/ ui/`) + a formal `ui/`
+  design-system extraction. Pure hygiene; do as an isolated pass to avoid a risky big-bang move.
+
 ## RF / protocol roadmap (proposed — building blocks already exist)
 - [x] **APRS IGate** (bidirectional RF↔APRS-IS, on the ingest box). RX-IGate relays KISS-heard RF
   frames to APRS-IS with a `qAR` construct; TX-IGate gates IS messages to RF for stations heard
