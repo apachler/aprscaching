@@ -18,9 +18,18 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   0009.) Follow-ups: **federation bulletin forwarding** (store-and-forward over the IP network,
   deduped by BID), an **APRS message-command interface** (L/R/SP/SB to the BBS callsign over RF),
   and message expiry/lifetime UX.
-- [ ] **Connected-mode AX.25** (NET/ROM node / true RF BBS sessions). Bigger lift than the above —
-  needs the AX.25 v2.2 connected-mode state machine (SABM/UA/DISC, I-frames, seq numbers, T1/T2,
-  REJ). Our codec is UI-only today. Treat as its own milestone.
+- [ ] **Connected-mode AX.25 + true-class BBS (Stage 2).** Bigger lift — needs the AX.25 v2.2
+  connected-mode state machine (SABM/UA/DISC, I-frames, seq numbers, T1/T2, REJ) before any
+  connect-and-read BBS. Our codec is UI-only today. Treat as its own milestone.
+  Interop target — what F6FBB, BPQ32, **OpenBCM (BayCom Mailbox)**, JNOS and DXNet all share:
+    • **FBB forwarding protocol** (B/B1/B2, binary + LZHUF-compressed) over connected-mode AX.25,
+    • **MBL/RLI message format** + **hierarchical H-addresses** (`TO@BBS.#REGION.STATE.CC.CONT`),
+    • **BID/MID** dedup + white-pages (WP) — our Stage-1 BID/type design is already compatible.
+  Recommendation: build the connected-mode stack, then implement FBB forwarding using **OpenBCM as
+  the primary reference** — it's GPL + well-documented, popular in OE/DL, and (key for us) also
+  forwards over **TCP/IP**, which bridges cleanly to our federation feeds. So the path is:
+  connected-mode AX.25 → FBB forwarding (RF) → reuse the same forwarding over federation/IP, making
+  aprscaching a peer of the existing mailbox network rather than an island.
 - [ ] **Retro read-only access** (Finger / Gopher / Gemini). Small Node daemons (not Workers — they
   need raw TCP/TLS) exposing caches-near, station info, leaderboard, callsign profile/badge.
   Finger (79) + Gopher (70) are trivial text; Gemini (1965) needs TLS + gemtext. Reuses the data
