@@ -42,7 +42,8 @@ h1, h2 { font-weight: 700; }
 button { font: inherit; padding: 6px 11px; border: 1px solid var(--line); border-radius: 7px;
   background: #f3f6f7; color: var(--ink); cursor: pointer; }
 button:hover { background: #e8eef0; }
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent);
+  font-family: var(--font-brand); font-weight: 600; letter-spacing: .01em; }
 button.primary:hover { filter: brightness(1.06); }
 button.primary:disabled { opacity: .5; cursor: default; }
 .topbar button { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); color: #fff; }
