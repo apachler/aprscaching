@@ -4,9 +4,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
-  getLeaderboard, getProfile, toggleFavorite,
+  getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
-  type LeaderboardEntry, type Profile,
+  type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
 } from "./api.js";
 import { signAuthorship } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -54,8 +54,15 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
   const [showBoard, setShowBoard] = useState(false);
+  const [showWB, setShowWB] = useState(false);
+  const [stationsOn, setStationsOn] = useState(false);
+  const [stations, setStations] = useState<StationSummary[]>([]);
+  const [pickedStation, setPickedStation] = useState<string | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
+  const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const stationsOnRef = useRef(stationsOn);
+  useEffect(() => { stationsOnRef.current = stationsOn; }, [stationsOn]);
   const callsignRef = useRef(callsign);
   useEffect(() => { callsignRef.current = callsign; }, [callsign]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -76,6 +83,9 @@ export function App() {
     try { setCaches((await listCaches(bbox)).caches); }
     catch (e) { console.error(e); }
     finally { setReady(true); }
+    if (stationsOnRef.current) {
+      try { setStations((await getStations(bbox)).stations); } catch (e) { console.error(e); }
+    }
   }, [subscribeLive]);
 
   // live WebSocket: geofence prompts ("you're near a cache")
@@ -84,8 +94,18 @@ export function App() {
     ws.current = s;
     s.addEventListener("open", () => { const m = map.current; if (m) { const b = m.getBounds(); subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]); } });
     s.addEventListener("message", (e) => {
-      try { const msg = JSON.parse(e.data); if (msg.type === "near_cache") setNearPrompt(msg); }
-      catch { /* ignore */ }
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "near_cache") setNearPrompt(msg);
+        else if (msg.type === "station" && stationsOnRef.current) {
+          setStations((prev) => {
+            const next = prev.filter((p) => p.callsign !== msg.callsign);
+            next.unshift({ callsign: msg.callsign, lat: msg.lat, lon: msg.lon, symbol: msg.symbol ?? null,
+              course: msg.course ?? null, speedKn: null, altitudeM: null, comment: null, lastSeen: msg.lastSeen });
+            return next.slice(0, 500);
+          });
+        }
+      } catch { /* ignore */ }
     });
     return () => { try { s.close(); } catch { /* */ } ws.current = null; };
   }, [subscribeLive]);
@@ -164,6 +184,42 @@ export function App() {
     }
   }, [caches]);
 
+  // ---- live APRS stations layer (toggled from the workbench) ----
+  useEffect(() => {
+    if (stationsOn) { refresh(); }
+    else { for (const [, mk] of stationMarkers.current) mk.remove(); stationMarkers.current.clear(); setStations([]); setPickedStation(null); }
+  }, [stationsOn, refresh]);
+
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    if (!stationsOn) return;
+    const seen = new Set<string>();
+    for (const s of stations) {
+      if (s.lat == null || s.lon == null) continue;
+      seen.add(s.callsign);
+      let mk = stationMarkers.current.get(s.callsign);
+      if (!mk) {
+        const btn = document.createElement("button");
+        btn.className = "station-pin";
+        btn.innerHTML = "<span></span>";
+        btn.onclick = (ev) => { ev.stopPropagation(); setPickedStation(s.callsign); setShowWB(true); };
+        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
+        stationMarkers.current.set(s.callsign, mk);
+      } else {
+        mk.setLngLat([s.lon, s.lat]);
+      }
+      const el = mk.getElement();
+      el.title = `${s.callsign}${s.comment ? ` — ${s.comment}` : ""}`;
+      const moving = s.course != null && !!s.speedKn;
+      const span = el.querySelector("span") as HTMLElement;
+      span.textContent = moving ? "➤" : "•";
+      span.style.transform = moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
+    }
+    for (const [cs, mk] of stationMarkers.current) {
+      if (!seen.has(cs)) { mk.remove(); stationMarkers.current.delete(cs); }
+    }
+  }, [stations, stationsOn]);
+
   // ---- load detail when a cache is selected ----
   useEffect(() => {
     if (selectedId == null) { setDetail(null); return; }
@@ -199,7 +255,8 @@ export function App() {
     <div className="app">
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={caches.length}
-              onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }} />
+              onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }}
+              onWorkbench={() => { setShowWB(true); setShowBoard(false); setSelectedId(null); setRemote(null); }} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
 
@@ -222,6 +279,14 @@ export function App() {
 
       {showBoard && mode === "view" && (
         <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
+      )}
+
+      {showWB && mode === "view" && (
+        <WorkbenchPanel onClose={() => setShowWB(false)}
+                        stationsOn={stationsOn} setStationsOn={setStationsOn}
+                        stationCount={stations.length}
+                        picked={pickedStation} onPick={setPickedStation}
+                        onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
       )}
 
       {detail && mode === "view" && !remote && !showBoard && (
@@ -319,10 +384,115 @@ function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }) {
   );
 }
 
+// ----------------------------------------------------------------- workbench: stations + packet inspector
+function WorkbenchPanel(props: {
+  onClose: () => void; stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
+  picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
+}) {
+  const [raw, setRaw] = useState("");
+  const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
+  const [station, setStation] = useState<StationDetail | null>(null);
+
+  useEffect(() => {
+    if (!props.picked) { setStation(null); return; }
+    let live = true;
+    getStation(props.picked).then((r) => { if (live) setStation(r.station); }).catch(console.error);
+    return () => { live = false; };
+  }, [props.picked]);
+
+  async function decode() {
+    try { setDecoded(await decodePacket(raw.trim())); }
+    catch (e) { setDecoded({ ok: false, error: (e as Error).message }); }
+  }
+
+  const SAMPLE = "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.41N/01526.27E>088/036/A=001234Mobile";
+
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>📡 Workbench</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+
+      <h4>Live stations</h4>
+      <div className="row between">
+        <label className="geo" style={{ margin: 0 }}>
+          <input type="checkbox" checked={props.stationsOn} onChange={(e) => props.setStationsOn(e.target.checked)} style={{ width: "auto" }} />
+          &nbsp;show APRS stations on the map
+        </label>
+        {props.stationsOn && <span className="muted">{props.stationCount}</span>}
+      </div>
+
+      {station && (
+        <div className="logform" style={{ marginTop: 10 }}>
+          <div className="row between">
+            <h3 style={{ margin: 0 }}>{station.callsign}</h3>
+            <button className="link" onClick={() => props.onPick(null)}>clear</button>
+          </div>
+          <div className="muted">{station.symbol ?? "—"} · last heard {fmtAgo(station.lastSeen)}</div>
+          {station.comment && <div className="comment">{station.comment}</div>}
+          <div className="muted" style={{ marginTop: 4 }}>
+            {station.speedKn != null && station.speedKn > 0 ? `${station.speedKn} kn @ ${station.course ?? 0}° · ` : ""}
+            {station.altitudeM != null ? `${station.altitudeM} m · ` : ""}
+            {station.packets} pkts · {station.track.length} track pts
+          </div>
+          {station.wx && (
+            <div className="wx">🌡 {fmtNum(station.wx.tempC, "°C")} · 💧 {fmtNum(station.wx.humidity, "%")} · 🌬 {fmtNum(station.wx.windKn, " kn")} · {fmtNum(station.wx.pressureHpa, " hPa")}</div>
+          )}
+          <div className="row end" style={{ marginTop: 8 }}>
+            <button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button>
+          </div>
+        </div>
+      )}
+
+      <h4>Packet decoder</h4>
+      <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
+      <div className="row between" style={{ marginTop: 6 }}>
+        <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
+        <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
+      </div>
+      {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
+      {decoded?.ok && decoded.frame && (
+        <div className="decoded">
+          <div className="row between">
+            <strong>{decoded.frame.src}</strong>
+            <span className={`badge ${decoded.frame.heardVia === "rf" ? "found" : ""}`}>{decoded.frame.heardVia}</span>
+          </div>
+          <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
+          <div className="kind">{String(decoded.data?.kind)}</div>
+          <dl className="fields">
+            {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (
+              <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function fmtAgo(ts: number): string {
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (s < 90) return `${s}s ago`;
+  if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  if (s < 172800) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+function fmtNum(n: number | null | undefined, unit: string): string { return n == null ? "—" : `${n}${unit}`; }
+function flatten(data: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k === "kind") continue;
+    if (v == null) continue;
+    if (typeof v === "object") {
+      if (k === "symbol" && (v as any).label) { out.symbol = `${(v as any).label} (${(v as any).table}${(v as any).code})`; continue; }
+      out[k] = JSON.stringify(v);
+    } else out[k] = String(v);
+  }
+  return out;
+}
+
 // ----------------------------------------------------------------- top bar
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
-  onHide: () => void; onCancel: () => void; count: number; onBoard: () => void;
+  onHide: () => void; onCancel: () => void; count: number; onBoard: () => void; onWorkbench: () => void;
 }) {
   return (
     <header className="topbar">
@@ -334,6 +504,7 @@ function TopBar(props: {
         <input value={props.callsign} placeholder="OE8APR"
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
+      {props.mode === "view" && <button onClick={props.onWorkbench} title="Workbench — live stations + packet decoder">📡</button>}
       {props.mode === "view" && <button onClick={props.onBoard} title="Leaderboard">🏆</button>}
       {props.mode === "view"
         ? <button className="primary" onClick={props.onHide}>+ Hide a cache</button>

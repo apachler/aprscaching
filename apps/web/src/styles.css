@@ -96,6 +96,24 @@ label input, label select, label textarea { margin-top: 3px; }
 button.heart { border: none; background: none; color: var(--muted); font-size: 15px; padding: 2px 6px; }
 button.heart.on { color: #e53e3e; }
 
+/* live station pins (workbench layer) */
+button.station-pin {
+  width: 18px; height: 18px; border-radius: 50%; padding: 0; border: 2px solid #fff;
+  background: var(--ink); color: #fff; font-size: 11px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.45);
+}
+button.station-pin > span { display: block; }
+
+/* workbench packet decoder */
+.decoded { border: 1px solid var(--line); border-radius: 9px; padding: 11px; margin-top: 10px; background: #f7fafb; }
+.decoded .kind { display: inline-block; margin: 6px 0; font-weight: 700; color: var(--brand-dark);
+  text-transform: capitalize; background: #e6eff2; border-radius: 10px; padding: 1px 9px; font-size: 12px; }
+.decoded dl.fields { margin: 0; }
+.decoded dl.fields > div { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.decoded dt { color: var(--muted); min-width: 92px; }
+.decoded dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-word; }
+.wx { margin-top: 6px; font-size: 13px; }
+
 /* leaderboard + profile */
 .board { list-style: none; padding: 0; margin: 10px 0 0; }
 .board li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }

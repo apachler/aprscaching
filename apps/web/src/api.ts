@@ -1,9 +1,10 @@
 import type {
   CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
   MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile,
+  StationSummary, StationDetail, DecodedPacket,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile };
+export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -38,6 +39,17 @@ export function getProfile(callsign: string): Promise<Profile> {
 }
 export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
+}
+
+// ---- M5 workbench: live stations + packet inspector ----
+export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }> {
+  return call(`/api/stations?bbox=${bbox.join(",")}`);
+}
+export function getStation(callsign: string): Promise<{ station: StationDetail }> {
+  return call(`/api/stations/${encodeURIComponent(callsign)}`);
+}
+export function decodePacket(raw: string): Promise<DecodedPacket> {
+  return call(`/api/decode`, { method: "POST", body: JSON.stringify({ raw }) });
 }
 
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {

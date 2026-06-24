@@ -113,6 +113,25 @@ curl -XPOST $API/api/import/geojson -H x-ingest-secret:$S \
 them. Licensing varies by source — OSM is ODbL share-alike, Wikidata is CC0, IOTA is non-commercial;
 attribute appropriately. (See `docs/` and the source disclaimers shown in-app.)
 
+## Workbench (M5) — APRS depth
+
+APRS Caching rides on a real APRS workbench. The `@aprsweb/aprs` decoder turns raw frames into
+typed data — uncompressed / **base-91 compressed** / **MIC-E** positions (course, speed, altitude,
+ambiguity), **objects/items**, **messages** (incl. acks & bulletins), **status**, **weather**, and
+**telemetry**, each resolved to a symbol label + category. Ingested packets enrich a live **station
+registry** (`stations`), weather lands in `sensor_readings`, and text in `messages`.
+
+```bash
+# decode any raw TNC2 / APRS-IS line (the in-app inspector uses this)
+curl -XPOST $API/api/decode -d '{"raw":"OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.41N/01526.27E>088/036/A=001234Mobile"}'
+curl "$API/api/stations?bbox=15,46,16,48"   # live stations in a viewport
+curl "$API/api/stations/OE8APR-9"           # one station: track + latest wx + packet count
+```
+
+In the web app the **📡 Workbench** panel toggles a live stations layer (moving stations show a
+heading arrow), decodes pasted packets field-by-field, and inspects any station (symbol, speed/course,
+altitude, weather, recent track).
+
 ## Verification at a glance
 | Tier | Means | How |
 |------|-------|-----|
