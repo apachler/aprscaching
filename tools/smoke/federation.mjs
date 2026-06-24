@@ -136,7 +136,9 @@ const sig = await signWith(kp.privateKey, authMsg({ cache: scCode, instance: pub
 const signedLog = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
 ok("signed find accepted; signerKey echoed", signedLog.data?.logged === true && signedLog.data?.signerKey === pubRaw, JSON.stringify(signedLog.data));
 
-const bad = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pubRaw, authorSig: sig.slice(0, -2) + "AA", signedAt: at } });
+// flip the first (fully-significant) base64url char so the signature is guaranteed to differ
+const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
+const bad = await call(PUB, "POST", `/api/caches/${scId}/logs`, { loggerCall: "OE8APR", logType: "found", author: { authorKey: pubRaw, authorSig: badSig, signedAt: at } });
 ok("tampered author signature -> 400", bad.status === 400, `status=${bad.status}`);
 
 const kp2 = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
