@@ -6,7 +6,7 @@ import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
   getPorts, getMessages, cotUrl, getStages, unlockStage, mediaUrl, exportAccount, deleteAccount,
-  getBbsInbox, getBulletins, postBbsMessage, getActivity,
+  getBbsInbox, getBulletins, postBbsMessage, getActivity, flushLogQueue, queuedLogCount,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
   type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
   type PortStat, type MessageItem, type CacheStage, type BbsMessage, type ActivityItem,
@@ -74,6 +74,8 @@ export function App() {
   const [showNearby, setShowNearby] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
@@ -100,6 +102,12 @@ export function App() {
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
+
+  // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
+  const shown = useMemo(() => caches.filter((c) =>
+    (filters.types.length === 0 || filters.types.includes(c.type)) &&
+    (!filters.q || `${c.code} ${c.title ?? ""}`.toLowerCase().includes(filters.q.toLowerCase())),
+  ), [caches, filters]);
 
   const ws = useRef<WebSocket | null>(null);
   const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -129,6 +137,17 @@ export function App() {
       try { setStations((await getStations(bbox)).stations); } catch (e) { console.error(e); }
     }
   }, [subscribeLive]);
+
+  // flush any finds queued while offline — on load and whenever connectivity returns
+  const [queued, setQueued] = useState(queuedLogCount());
+  useEffect(() => {
+    const sync = async () => { if (await flushLogQueue()) { setQueued(queuedLogCount()); refresh(); } };
+    sync();
+    const onq = () => setQueued(queuedLogCount());
+    window.addEventListener("online", sync);
+    window.addEventListener("acs-queued", onq);
+    return () => { window.removeEventListener("online", sync); window.removeEventListener("acs-queued", onq); };
+  }, [refresh]);
 
   // live WebSocket: geofence prompts ("you're near a cache")
   useEffect(() => {
@@ -193,7 +212,7 @@ export function App() {
   useEffect(() => {
     const m = map.current; if (!m) return;
     const seen = new Set<string>();
-    for (const c of caches) {
+    for (const c of shown) {
       if (c.lat == null || c.lon == null) continue;
       seen.add(c.globalId);
       if (markers.current.has(c.globalId)) continue;
@@ -224,7 +243,7 @@ export function App() {
     for (const [gid, mk] of markers.current) {
       if (!seen.has(gid)) { mk.remove(); markers.current.delete(gid); }
     }
-  }, [caches]);
+  }, [shown]);
 
   // ---- live APRS stations layer (toggled from the workbench) ----
   useEffect(() => {
@@ -297,7 +316,9 @@ export function App() {
     <FormatContext.Provider value={fmt}>
     <div className="app">
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
-              onHide={startHide} onCancel={cancelHide} count={caches.length}
+              onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
+              onFilters={() => openOnly(() => setShowFilter(true))}
+              filtered={filters.types.length > 0 || filters.q.length > 0}
               onNearby={() => openOnly(() => setShowNearby(true))}
               onActivity={() => openOnly(() => setShowActivity(true))}
               onProfile={() => openOnly(() => setShowProfile(true))} />
@@ -322,12 +343,16 @@ export function App() {
       )}
 
       {showNearby && mode === "view" && (
-        <NearbyPanel caches={caches} map={map.current}
+        <NearbyPanel caches={shown} map={map.current}
                      onPick={(id) => openOnly(() => setSelectedId(id))} onClose={() => setShowNearby(false)} />
       )}
 
       {showActivity && mode === "view" && (
         <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
+      )}
+
+      {showFilter && mode === "view" && (
+        <FilterPanel filters={filters} setFilters={setFilters} count={shown.length} onClose={() => setShowFilter(false)} />
       )}
 
       {showProfile && mode === "view" && (
@@ -765,13 +790,16 @@ function MailPanel(props: { callsign: string; onClose: () => void }) {
 // ----------------------------------------------------------------- top bar (cacher destinations)
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
-  onHide: () => void; onCancel: () => void; count: number;
+  onHide: () => void; onCancel: () => void; count: number; queued: number;
+  onFilters: () => void; filtered: boolean;
   onNearby: () => void; onActivity: () => void; onProfile: () => void;
 }) {
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      <span className="muted">· {props.count} caches in view</span>
+      {props.mode === "view" && <button className={`icon${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Search & filter">⌕</button>}
+      <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
+      {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
       <span className="spacer" />
       <label className="call">
         callsign&nbsp;
@@ -836,6 +864,31 @@ function NearbyPanel(props: { caches: MapCache[]; map: maplibregl.Map | null; on
           );
         })}
       </ul>
+    </aside>
+  );
+}
+
+// ----------------------------------------------------------------- Search & filter
+function FilterPanel(props: { filters: { types: CacheType[]; q: string }; setFilters: (f: { types: CacheType[]; q: string }) => void; count: number; onClose: () => void }) {
+  const { filters, setFilters } = props;
+  const toggle = (t: CacheType) => setFilters({ ...filters, types: filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t] });
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>⌕ Search &amp; filter</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <label>Search
+        <input autoFocus value={filters.q} placeholder="code or title…" onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
+      </label>
+      <h4>Cache type</h4>
+      <div className="badges">
+        {TYPE_ORDER.map((t) => {
+          const m = TYPE_META[t]; const on = filters.types.includes(t);
+          return <button key={t} className={on ? "primary" : ""} style={{ borderRadius: 14, fontSize: 13 }} onClick={() => toggle(t)}>{m.glyph} {m.label}</button>;
+        })}
+      </div>
+      <div className="row between" style={{ marginTop: 14 }}>
+        <button className="link" onClick={() => setFilters({ types: [], q: "" })}>clear all</button>
+        <span className="muted">{props.count} match{props.count === 1 ? "" : "es"}</span>
+      </div>
     </aside>
   );
 }
@@ -1176,8 +1229,10 @@ function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; 
     const verb = result.logType === "found" ? "Logged" : result.logType === "dnf" ? "Marked DNF" : "Note posted";
     return (
       <div className="logresult">
-        <div className="big">{verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
-        <div className="tier">{tierBadge(result)}</div>
+        <div className="big">{result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
+        {result.queued
+          ? <div className="muted" style={{ marginTop: 4 }}>📴 offline — will sync when you're back online</div>
+          : <div className="tier">{tierBadge(result)}</div>}
         {result.announced && <div className="muted" style={{ marginTop: 4 }}>announced to APRS-IS</div>}
         {result.signerKey && <div className="muted">signed with your device key ✍</div>}
         {result.logType === "found" && (noteOpen ? (

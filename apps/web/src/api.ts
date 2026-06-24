@@ -124,15 +124,40 @@ export interface LogResult {
   announced?: boolean;
   corroboratedBy?: string | null;   // peer instance that granted Tier A (F3)
   signerKey?: string | null;        // device key that signed the find (F0)
+  queued?: boolean;                 // saved offline, will sync when connectivity returns
 }
 
 export interface AuthorSig { authorKey: string; authorSig: string; signedAt: number }
+type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
 
-export function logFind(
-  cacheId: number,
-  body: { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig },
-): Promise<LogResult> {
-  return call(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) });
+// ---- offline-tolerant logging: queue a find if the network is down, sync when back ----
+const QKEY = "acs.logqueue";
+interface Queued { cacheId: number; body: LogBody }
+const loadQueue = (): Queued[] => { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch { return []; } };
+const saveQueue = (q: Queued[]) => { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch { /* ignore */ } };
+const isOffline = (e: unknown) => !navigator.onLine || e instanceof TypeError; // fetch network errors throw TypeError
+
+export function logFind(cacheId: number, body: LogBody): Promise<LogResult> {
+  return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) })
+    .catch((e) => {
+      if (!isOffline(e)) throw e;
+      const q = loadQueue(); q.push({ cacheId, body }); saveQueue(q);
+      try { window.dispatchEvent(new Event("acs-queued")); } catch { /* ssr */ }
+      return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
+    });
+}
+
+export const queuedLogCount = (): number => loadQueue().length;
+/** Retry queued finds (the original timestamp/signature is preserved). Returns how many synced. */
+export async function flushLogQueue(): Promise<number> {
+  const q = loadQueue(); if (!q.length) return 0;
+  const keep: Queued[] = [];
+  for (const it of q) {
+    try { await call(`/api/caches/${it.cacheId}/logs`, { method: "POST", body: JSON.stringify(it.body) }); }
+    catch (e) { if (isOffline(e)) keep.push(it); /* else drop a rejected log */ }
+  }
+  saveQueue(keep);
+  return q.length - keep.length;
 }
 
 export function registerKey(body: { callsign: string; publicKey: string; label?: string }): Promise<{ ok: boolean }> {
