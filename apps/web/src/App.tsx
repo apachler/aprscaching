@@ -5,8 +5,10 @@ import "./styles.css";
 import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
+  getPorts, getMessages, cotUrl,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
   type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
+  type PortStat, type MessageItem,
 } from "./api.js";
 import { signAuthorship } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -292,7 +294,7 @@ export function App() {
       )}
 
       {showWB && mode === "view" && (
-        <WorkbenchPanel onClose={() => setShowWB(false)}
+        <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current}
                         stationsOn={stationsOn} setStationsOn={setStationsOn}
                         stationCount={stations.length}
                         picked={pickedStation} onPick={setPickedStation}
@@ -439,13 +441,27 @@ function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }) {
 
 // ----------------------------------------------------------------- workbench: stations + packet inspector
 function WorkbenchPanel(props: {
-  onClose: () => void; stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
+  onClose: () => void; map: maplibregl.Map | null;
+  stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
   picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
 }) {
   const [raw, setRaw] = useState("");
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
   const [station, setStation] = useState<StationDetail | null>(null);
+  const [ports, setPorts] = useState<PortStat[]>([]);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [copied, setCopied] = useState(false);
   const fmt = useFmt();
+
+  useEffect(() => {
+    getPorts().then((r) => setPorts(r.ports)).catch(console.error);
+    getMessages().then((r) => setMessages(r.messages)).catch(console.error);
+  }, []);
+
+  const feedUrl = (() => {
+    const b = props.map?.getBounds();
+    return b ? cotUrl([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]) : "";
+  })();
 
   useEffect(() => {
     if (!props.picked) { setStation(null); return; }
@@ -522,6 +538,35 @@ function WorkbenchPanel(props: {
           </dl>
         </div>
       )}
+
+      <h4>Transports <span className="muted" style={{ fontWeight: 400 }}>· 24h RX</span></h4>
+      {ports.length === 0 ? <p className="muted">no traffic yet</p> : (
+        <ul className="board">
+          {ports.map((p) => (
+            <li key={p.port}><span className="federated" style={{ flex: 1 }}>{p.port}</span>
+              <span>{fmt.num(p.rx, 0)} rx</span></li>
+          ))}
+        </ul>
+      )}
+
+      <h4>TAK / CoT feed</h4>
+      <p className="muted">Add this as a data feed in ATAK/WinTAK to see APRS stations as CoT:</p>
+      <div className="row">
+        <input readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
+        <button onClick={() => { navigator.clipboard?.writeText(feedUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "✓" : "copy"}</button>
+      </div>
+
+      {messages.length > 0 && (<>
+        <h4>Recent messages</h4>
+        <ul className="logs">
+          {messages.map((mm) => (
+            <li key={mm.id}>
+              <span className="badge">{mm.fromCall}</span>→ {mm.toCall} <span className="muted">· {fmt.ago(mm.ts)}</span>
+              <div className="comment">{mm.body}</div>
+            </li>
+          ))}
+        </ul>
+      </>)}
     </aside>
   );
 }

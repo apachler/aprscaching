@@ -47,6 +47,16 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
 - [ ] **Station track polyline.** `/api/stations/:call` returns the recent track; draw it on the map
   when a station is selected (currently shown as a count).
 
+## M6 interop — follow-ups
+- [ ] **Live transport connectors** in the ingest box: KISS/TNC over TCP/serial, Meshtastic (BLE/
+  serial/MQTT), and a TAK/CoT *inbound* listener — each forwarding to `/ingest` with its `port` set
+  (the gateway already counts per-port RX and bridges CoT *out*). Egress to these is blocked in CI,
+  so they live in `apps/ingest` and are exercised on the always-on box, not conformance.
+- [ ] **CoT streaming feed** (SSE/long-poll) in addition to the bbox snapshot, so TAK clients get
+  push updates; consider per-client auth + a stable feed UID namespace.
+- [ ] **Region sharding** for live rooms (`LIVE_REGION` is a single global room today): shard the
+  Durable Object by geohash so fan-out scales, with subscription routing across shards.
+
 ## M2 remainder
 - [ ] **Audio-cache staged unlock.** Store audio/media in R2; stage gating (`cache_stages.unlock =
   audio`) reveals the next stage's coordinates after the audio clue. (Geofencing core is done.)

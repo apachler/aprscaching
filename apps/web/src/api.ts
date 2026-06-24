@@ -1,10 +1,10 @@
 import type {
   CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
   MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile,
-  StationSummary, StationDetail, DecodedPacket,
+  StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket };
+export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -50,6 +50,16 @@ export function getStation(callsign: string): Promise<{ station: StationDetail }
 }
 export function decodePacket(raw: string): Promise<DecodedPacket> {
   return call(`/api/decode`, { method: "POST", body: JSON.stringify({ raw }) });
+}
+export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
+  return call(`/api/ports`);
+}
+export function getMessages(bulletins = false): Promise<{ messages: MessageItem[] }> {
+  return call(`/api/messages?limit=30${bulletins ? "&bulletins=1" : ""}`);
+}
+/** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
+export function cotUrl(bbox: BBox): string {
+  return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
 }
 
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {

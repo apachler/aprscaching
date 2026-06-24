@@ -132,6 +132,23 @@ In the web app the **📡 Workbench** panel toggles a live stations layer (movin
 heading arrow), decodes pasted packets field-by-field, and inspects any station (symbol, speed/course,
 altitude, weather, recent track).
 
+## Interop (M6) — TAK bridge, transports, messaging
+
+Headroom toward the wider workbench: bridge APRS out to **TAK** and account for **multiple
+transports**. `GET /api/cot?bbox=` renders the live station registry as a Cursor-on-Target
+`<events>` snapshot — paste the URL into ATAK/WinTAK as a data feed and APRS stations show up as CoT
+(symbol → CoT type, knots → m/s, altitude → HAE). Ingest tallies **RX per transport** (`aprs-is`,
+`kiss-tnc`, `meshtastic`, …) surfaced at `GET /api/ports`, and decoded inbound **messages/bulletins**
+are at `GET /api/messages`. The 📡 Workbench panel shows connected transports, the TAK feed URL, and
+recent messages. (Message **TX** and live KISS/Meshtastic connectors are gated/ingest-box work — see
+`TODO.md`.)
+
+```bash
+curl "$API/api/cot?bbox=15,46,16,48"   # CoT/TAK snapshot for ATAK
+curl "$API/api/ports"                  # 24h RX/TX per transport
+curl "$API/api/messages?bulletins=1"   # recent bulletins
+```
+
 ## Verification at a glance
 | Tier | Means | How |
 |------|-------|-----|
