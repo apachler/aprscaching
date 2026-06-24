@@ -14,3 +14,23 @@ export function parsePosition(payload: string): PositionFix | null {
   if (ew === "W") lon = -lon;
   return { lat, lon, symbol };
 }
+
+export interface FormatPositionOpts {
+  table?: string; code?: string; dataType?: string;
+  course?: number; speedKn?: number; altitudeM?: number; comment?: string;
+}
+/** Build an uncompressed APRS position payload (used to normalise CoT/Meshtastic fixes). */
+export function formatPosition(lat: number, lon: number, o: FormatPositionOpts = {}): string {
+  const dm = (v: number, deg: number) => {
+    const a = Math.abs(v); const d = Math.floor(a); const min = (a - d) * 60;
+    return `${String(d).padStart(deg, "0")}${min.toFixed(2).padStart(5, "0")}`;
+  };
+  const ns = lat >= 0 ? "N" : "S", ew = lon >= 0 ? "E" : "W";
+  const table = o.table ?? "/", code = o.code ?? ">";
+  let s = `${o.dataType ?? "="}${dm(lat, 2)}${ns}${table}${dm(lon, 3)}${ew}${code}`;
+  if (o.course != null && o.speedKn != null)
+    s += `${String(Math.round(o.course)).padStart(3, "0")}/${String(Math.round(o.speedKn)).padStart(3, "0")}`;
+  if (o.altitudeM != null) s += `/A=${String(Math.round(o.altitudeM / 0.3048)).padStart(6, "0")}`;
+  if (o.comment) s += o.comment;
+  return s;
+}

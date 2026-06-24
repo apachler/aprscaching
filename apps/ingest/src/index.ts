@@ -1,4 +1,7 @@
 import { AprsIs } from "./aprsis.js";
+import { KissTnc } from "./kiss.js";
+import { CotListener } from "./cotlisten.js";
+import { MeshtasticReader } from "./mesh.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
 
@@ -16,6 +19,21 @@ const aprs = new AprsIs({
 });
 
 let batch: Packet[] = [];
+const enqueue = (p: Packet) => batch.push(p);
+
+// extra transports (opt-in via env) — all feed the same batch with their own `port`
+if (env.KISS_TNC_HOST) {
+  new KissTnc({ host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) }, enqueue).start();
+  console.log("[kiss] enabled");
+}
+if (env.TAK_COT_PORT) {
+  new CotListener({ port: Number(env.TAK_COT_PORT), bind: env.TAK_COT_BIND }, enqueue).start();
+  console.log("[cot] enabled");
+}
+if (env.MESH_HOST) {
+  new MeshtasticReader({ host: env.MESH_HOST, port: Number(env.MESH_PORT ?? 1883) }, enqueue).start();
+  console.log("[mesh] enabled");
+}
 
 aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));
 aprs.on("down", () => console.log("[aprs-is] disconnected, retrying..."));
