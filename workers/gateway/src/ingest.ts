@@ -2,9 +2,24 @@ import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
 import { IngestBatch } from "@aprsweb/shared";
+import { decodeAprs } from "@aprsweb/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 
-/** Receive batched packets from the ingest box, persist positions, fan out live + geofence prompts. */
+/** Position-bearing decoded data (position/object/item/weather with a fix). */
+function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }):
+  { lat: number; lon: number; symbol?: string; course?: number; speedKn?: number; altitudeM?: number; comment?: string } | null {
+  const d = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
+  if ((d.kind === "position" || d.kind === "object" || d.kind === "item" || d.kind === "weather") && typeof d.lat === "number" && d.lat !== 0) {
+    const sym = d.symbol ? `${d.symbol.table}${d.symbol.code}` : undefined;
+    return { lat: d.lat, lon: d.lon, symbol: sym, course: d.course, speedKn: d.speedKn, altitudeM: d.altitudeM, comment: d.comment };
+  }
+  // fall back to a pre-parsed {lat,lon,symbol} supplied by the ingest box
+  const pp = p.parsed as any;
+  if (pp?.lat != null) return { lat: pp.lat, lon: pp.lon, symbol: pp.symbol };
+  return null;
+}
+
+/** Receive batched packets from the ingest box, persist positions, enrich the workbench, fan out live. */
 export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
   if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET)
     return new Response("unauthorized", { status: 401 });
@@ -13,30 +28,54 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
 
   const stmts: SqlStatement[] = [];
-  const positions: { src: string; lat: number; lon: number; symbol?: string }[] = [];
+  const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
   for (const p of body.data.packets) {
-    const pos = (p.parsed as any)?.lat != null ? (p.parsed as any) : null;
-    if (!pos) continue;
-    positions.push({ src: p.src, lat: pos.lat, lon: pos.lon, symbol: pos.symbol });
+    const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
+
+    // weather -> sensor_readings (latest reading per station+ts)
+    if (data.kind === "weather") {
+      stmts.push(
+        env.DB.prepare(
+          `INSERT OR REPLACE INTO sensor_readings (station, ts, temp_c, humidity, pressure_hpa, wind_dir, wind_kn, rain_mm)
+           VALUES (?,?,?,?,?,?,?,?)`,
+        ).bind(p.src, p.ts, data.tempC ?? null, data.humidity ?? null, data.pressureHpa ?? null,
+          data.windDirDeg ?? null, data.windKn ?? null, data.rain1hMm ?? null),
+      );
+    }
+    // text message -> messages log
+    if (data.kind === "message" && !data.ack && !data.rej) {
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'rx')",
+        ).bind(p.ts, p.src, data.addressee ?? null, data.text ?? "", data.msgNo ?? null),
+      );
+    }
+
+    const fix = fixOf(p);
+    if (!fix) continue;
+    positions.push({ src: p.src, lat: fix.lat, lon: fix.lon, symbol: fix.symbol, course: fix.course });
     stmts.push(
       env.DB.prepare(
         `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source)
          VALUES (?,?,?,?,?,?,?, 'firehose')`,
-      ).bind(p.src, p.ts, pos.lat, pos.lon, p.heardVia, p.igateCall ?? null, p.path.join(",")),
+      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, p.igateCall ?? null, p.path.join(",")),
     );
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol)
-         VALUES (?,?,?,?,?)
-         ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen`,
-      ).bind(p.src, pos.lat, pos.lon, p.ts, pos.symbol ?? null),
+        `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, course, speed_kn, altitude_m, comment, source_call)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen,
+           symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
+           altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)`,
+      ).bind(p.src, fix.lat, fix.lon, p.ts, fix.symbol ?? null, fix.course ?? null,
+        fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, p.igateCall ?? null),
     );
   }
   if (stmts.length) await env.DB.batch(stmts);
 
   // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];
-  for (const p of positions) envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol));
+  for (const p of positions) envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course));
   await dispatchLive(env, envelopes);
 
   return json({ ok: true, stored: positions.length });

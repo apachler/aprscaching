@@ -179,3 +179,27 @@ export interface ActivityItem {
   id: number; loggerCall: string; ts: number; logType: string; verified: boolean; tier: string | null;
   cacheId: number; cacheCode: string; cacheTitle: string;
 }
+
+// ---- M5 workbench: live APRS stations + packet inspector ----
+export interface StationSummary {
+  callsign: string; lat: number; lon: number; symbol: string | null;
+  course: number | null; speedKn: number | null; altitudeM: number | null;
+  comment: string | null; lastSeen: number;
+}
+export interface StationTrackPoint { ts: number; lat: number; lon: number; heardVia: string }
+export interface WxReading {
+  ts: number; tempC: number | null; humidity: number | null; pressureHpa: number | null;
+  windDirDeg: number | null; windKn: number | null; rainMm: number | null;
+}
+export interface StationDetail extends StationSummary {
+  track: StationTrackPoint[];
+  wx: WxReading | null;
+  packets: number;
+}
+/** Result of POST /api/decode — the parsed frame plus the typed APRS data. */
+export interface DecodedPacket {
+  ok: boolean;
+  frame?: { src: string; dst: string; path: string[]; payload: string; heardVia: string; igateCall?: string };
+  data?: Record<string, unknown> & { kind: string };
+  error?: string;
+}

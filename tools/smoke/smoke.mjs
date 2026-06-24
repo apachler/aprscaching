@@ -137,7 +137,9 @@ const amsg = stableStringify({ v: 1, cache: created.data?.cache?.code, instance:
 const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(amsg)));
 const signed = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
 ok("signed find accepted; signerKey echoed", signed.data?.logged === true && signed.data?.signerKey === pubRaw, JSON.stringify(signed.data));
-const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig.slice(0, -2) + "AA", signedAt: at } });
+// flip the first (fully-significant) base64url char so the signature is guaranteed to differ
+const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
+const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: badSig, signedAt: at } });
 ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
 
 // ---- M4: community / gamification ----
@@ -152,6 +154,32 @@ const det = await call("GET", `/api/caches/${id}?callsign=DL1ABC`);
 ok("detail carries favorite + health fields", det.data?.cache?.favorited === true && typeof det.data?.cache?.needsMaintenance === "boolean", JSON.stringify({ favorited: det.data?.cache?.favorited, nm: det.data?.cache?.needsMaintenance }));
 const act = await call("GET", "/api/activity?limit=10");
 ok("activity feed returns recent logs", Array.isArray(act.data?.activity) && act.data.activity.length >= 1, JSON.stringify(act.data?.activity?.length));
+
+// ---- M5: workbench — packet inspector + live station registry ----
+const dec = await call("POST", "/api/decode", { raw: "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.00N/01526.00E>088/036Going home" });
+ok("decode parses an uncompressed position", dec.data?.ok === true && dec.data?.data?.kind === "position" && Math.abs((dec.data?.data?.lat ?? 0) - 47.0667) < 0.01, JSON.stringify(dec.data?.data));
+ok("decode classifies the q-construct (rf)", dec.data?.frame?.heardVia === "rf" && dec.data?.frame?.igateCall === "OE8XXX", JSON.stringify(dec.data?.frame));
+const decBad = await call("POST", "/api/decode", { raw: "not a frame" });
+ok("decode rejects a non-frame -> 400", decBad.status === 400, `status=${decBad.status}`);
+
+// ingest a moving station + a weather station, then read them back from the registry
+const wbIngest = await call("POST", "/ingest", {
+  packets: [
+    { src: "OE1MOB-9", dst: "APRS", path: ["WIDE1-1", "qAR", "OE8XXX"], payload: "!4704.00N/01526.00E>088/036", kind: "position", heardVia: "rf", igateCall: "OE8XXX", port: "aprs-is", ts: now() },
+    { src: "OE1WX", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: "!4705.00N/01527.00E_220/004g005t077r000p000P000h50b09900", kind: "weather", heardVia: "aprs_is", port: "aprs-is", ts: now() },
+  ],
+}, { "x-ingest-secret": SECRET });
+ok("ingest stores 2 enriched stations", wbIngest.data?.ok === true && wbIngest.data?.stored === 2, JSON.stringify(wbIngest.data));
+
+const stations = await call("GET", "/api/stations?bbox=15,46,16,48");
+const mob = (stations.data?.stations ?? []).find((s) => s.callsign === "OE1MOB-9");
+ok("station registry returns the moving station with course + symbol", mob && mob.course === 88 && mob.symbol === "/>", JSON.stringify(mob));
+
+const stDetail = await call("GET", "/api/stations/OE1MOB-9");
+ok("station detail carries a track", (stDetail.data?.station?.track ?? []).length >= 1 && stDetail.data?.station?.packets >= 1, JSON.stringify(stDetail.data?.station?.track?.length));
+
+const wxDetail = await call("GET", "/api/stations/OE1WX");
+ok("weather station detail carries a wx reading", wxDetail.data?.station?.wx && Math.abs((wxDetail.data?.station?.wx?.tempC ?? 0) - 25) < 1, JSON.stringify(wxDetail.data?.station?.wx));
 
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

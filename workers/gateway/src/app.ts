@@ -18,6 +18,7 @@ import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
 import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
+import { handleDecode, handleStations, handleStation } from "./workbench.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -82,6 +83,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/activity" && m === "GET") return handleActivity(req, env);
   const profileMatch = /^\/api\/profile\/([A-Za-z0-9-]+)$/.exec(p);
   if (profileMatch && m === "GET") return handleProfile(req, env, profileMatch[1]!);
+
+  // workbench (M5): packet inspector + live station registry
+  if (p === "/api/decode" && m === "POST") return handleDecode(req);
+  if (p === "/api/stations" && m === "GET") return handleStations(req, env);
+  const stationMatch = /^\/api\/stations\/([A-Za-z0-9-]+)$/.exec(p);
+  if (stationMatch && m === "GET") return handleStation(req, env, stationMatch[1]!);
 
   // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch}
   const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch)?$/.exec(p);

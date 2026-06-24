@@ -38,10 +38,10 @@ export function deliveriesFor(sub: Subscribe | undefined, env: LiveEnvelope): Se
 
 /** Build the live envelope for one ingested position: a station delta + nearby geofence prompts. */
 export async function envelopeForPosition(
-  env: Env, callsign: string, lat: number, lon: number, symbol?: string,
+  env: Env, callsign: string, lat: number, lon: number, symbol?: string, course?: number,
 ): Promise<LiveEnvelope> {
   const cs = callsign.toUpperCase();
-  const station: StationDelta = { type: "station", callsign: cs, lat, lon, symbol, lastSeen: Math.floor(Date.now() / 1000) };
+  const station: StationDelta = { type: "station", callsign: cs, lat, lon, symbol, course, lastSeen: Math.floor(Date.now() / 1000) };
 
   const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
   const dLat = GEOFENCE_RADIUS_M / 111320;
