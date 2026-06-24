@@ -77,6 +77,19 @@ export function setStages(cacheId: number, ownerCall: string, stages: Array<Part
 /** Absolute URL for a media clue path returned by the API. */
 export const mediaUrl = (path: string): string => API_BASE + path;
 
+// ---- BBS store-and-forward ----
+import type { BbsMessage } from "@aprsweb/shared";
+export type { BbsMessage };
+export function getBbsInbox(callsign: string): Promise<{ messages: BbsMessage[] }> {
+  return call(`/api/bbs/messages?to=${encodeURIComponent(callsign)}`);
+}
+export function getBulletins(): Promise<{ bulletins: BbsMessage[] }> {
+  return call(`/api/bbs/bulletins`);
+}
+export function postBbsMessage(body: { fromCall: string; toCall: string; subject?: string; body: string }): Promise<{ ok: boolean; id: number; type: string }> {
+  return call(`/api/bbs/messages`, { method: "POST", body: JSON.stringify(body) });
+}
+
 // ---- account data lifecycle (GDPR) ----
 type SignedAction = { key: string; sig: string; at: number };
 export function exportAccount(callsign: string, auth: SignedAction): Promise<Record<string, unknown>> {

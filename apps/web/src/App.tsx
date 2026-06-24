@@ -6,9 +6,10 @@ import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
   getPorts, getMessages, cotUrl, getStages, unlockStage, mediaUrl, exportAccount, deleteAccount,
+  getBbsInbox, getBulletins, postBbsMessage,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
   type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
-  type PortStat, type MessageItem, type CacheStage,
+  type PortStat, type MessageItem, type CacheStage, type BbsMessage,
 } from "./api.js";
 import { signAuthorship, signAccountAction } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -61,6 +62,7 @@ export function App() {
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
   const [showBoard, setShowBoard] = useState(false);
   const [showWB, setShowWB] = useState(false);
+  const [showMail, setShowMail] = useState(false);
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
@@ -268,6 +270,7 @@ export function App() {
               onHide={startHide} onCancel={cancelHide} count={caches.length}
               onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }}
               onWorkbench={() => { setShowWB(true); setShowBoard(false); setSelectedId(null); setRemote(null); }}
+              onMail={() => { setShowMail(true); setShowWB(false); setShowBoard(false); setSelectedId(null); setRemote(null); }}
               onSettings={() => setShowSettings(true)} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
@@ -308,6 +311,10 @@ export function App() {
 
       {remote && mode === "view" && !showBoard && (
         <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
+      )}
+
+      {showMail && mode === "view" && (
+        <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
       )}
 
       {showSettings && (
@@ -621,11 +628,78 @@ function flatten(data: Record<string, unknown>): Record<string, string> {
   return out;
 }
 
+// ----------------------------------------------------------------- BBS mail + bulletins
+function MailPanel(props: { callsign: string; onClose: () => void }) {
+  const fmt = useFmt();
+  const [tab, setTab] = useState<"inbox" | "bulletins" | "compose">("inbox");
+  const [inbox, setInbox] = useState<BbsMessage[]>([]);
+  const [bulletins, setBulletins] = useState<BbsMessage[]>([]);
+  const [to, setTo] = useState(""); const [body, setBody] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (props.callsign.length >= 3) getBbsInbox(props.callsign).then((r) => setInbox(r.messages)).catch(console.error);
+    getBulletins().then((r) => setBulletins(r.bulletins)).catch(console.error);
+  }, [props.callsign]);
+  useEffect(() => { load(); }, [load]);
+
+  async function send() {
+    if (!to.trim() || !body.trim() || props.callsign.length < 3) { setMsg("Set your callsign, a recipient and a message."); return; }
+    try {
+      const r = await postBbsMessage({ fromCall: props.callsign, toCall: to.trim().toUpperCase(), body: body.trim() });
+      setMsg(r.type === "B" ? "Bulletin posted." : "Held — it'll be delivered when the station is next heard.");
+      setBody(""); setTo(""); load();
+    } catch (e) { setMsg((e as Error).message); }
+  }
+
+  const status = (m: BbsMessage) => ({ held: "⏳ held", sent: "📡 sent", acked: "✓ delivered", expired: "✕ expired" } as Record<string, string>)[m.delivery ?? ""] ?? "";
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>✉ BBS</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <div className="row" style={{ gap: 6 }}>
+        <button className={tab === "inbox" ? "primary" : ""} onClick={() => setTab("inbox")}>Inbox</button>
+        <button className={tab === "bulletins" ? "primary" : ""} onClick={() => setTab("bulletins")}>Bulletins</button>
+        <button className={tab === "compose" ? "primary" : ""} onClick={() => setTab("compose")}>Compose</button>
+      </div>
+
+      {tab === "inbox" && (props.callsign.length < 3 ? <p className="muted">Set your callsign to see your mail.</p> :
+        inbox.length === 0 ? <p className="muted">No messages for {props.callsign}.</p> : (
+        <ul className="logs">{inbox.map((m) => (
+          <li key={m.id}>
+            <strong>{m.fromCall}</strong> <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
+            <span className="badge" style={{ marginLeft: 6 }}>{status(m)}</span>
+            <div className="comment">{m.body}</div>
+          </li>
+        ))}</ul>
+      ))}
+
+      {tab === "bulletins" && (bulletins.length === 0 ? <p className="muted">No bulletins.</p> : (
+        <ul className="logs">{bulletins.map((m) => (
+          <li key={m.id}>
+            <span className="badge">{m.toCall}</span> <strong>{m.fromCall}</strong>
+            <span className="muted"> · {fmt.dateTime(m.postedAt)}</span>
+            <div className="comment">{m.body}</div>
+          </li>
+        ))}</ul>
+      ))}
+
+      {tab === "compose" && (<>
+        <label>To <span className="muted">(callsign, or ALL/BLN… for a bulletin)</span>
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="OE8APR" /></label>
+        <label>Message <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={300} /></label>
+        <div className="row end"><button className="primary" onClick={send}>Send</button></div>
+        <p className="muted">From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded over APRS when the recipient is next heard.</p>
+      </>)}
+      {msg && <p className="muted">{msg}</p>}
+    </aside>
+  );
+}
+
 // ----------------------------------------------------------------- top bar
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
   onHide: () => void; onCancel: () => void; count: number; onBoard: () => void; onWorkbench: () => void;
-  onSettings: () => void;
+  onMail: () => void; onSettings: () => void;
 }) {
   return (
     <header className="topbar">
@@ -637,6 +711,7 @@ function TopBar(props: {
         <input value={props.callsign} placeholder="OE8APR"
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
+      {props.mode === "view" && <button onClick={props.onMail} title="BBS — messages & bulletins">✉</button>}
       {props.mode === "view" && <button onClick={props.onWorkbench} title="Workbench — live stations + packet decoder">📡</button>}
       {props.mode === "view" && <button onClick={props.onBoard} title="Leaderboard">🏆</button>}
       <button onClick={props.onSettings} title="Settings — locale & units">⚙</button>
