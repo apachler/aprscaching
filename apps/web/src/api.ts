@@ -37,6 +37,11 @@ export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }
+import type { ActivityItem } from "@aprsweb/shared";
+export type { ActivityItem };
+export function getActivity(bbox?: BBox): Promise<{ activity: ActivityItem[] }> {
+  return call(`/api/activity?limit=30${bbox ? `&bbox=${bbox.join(",")}` : ""}`);
+}
 export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
 }

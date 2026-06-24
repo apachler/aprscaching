@@ -6,10 +6,10 @@ import {
   listCaches, getCache, createCache, logFind, registerKey, getInstance, API_BASE,
   getLeaderboard, getProfile, toggleFavorite, getStations, getStation, decodePacket,
   getPorts, getMessages, cotUrl, getStages, unlockStage, mediaUrl, exportAccount, deleteAccount,
-  getBbsInbox, getBulletins, postBbsMessage,
+  getBbsInbox, getBulletins, postBbsMessage, getActivity,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type AppGeo, type LogResult,
   type LeaderboardEntry, type Profile, type StationSummary, type StationDetail, type DecodedPacket,
-  type PortStat, type MessageItem, type CacheStage, type BbsMessage,
+  type PortStat, type MessageItem, type CacheStage, type BbsMessage, type ActivityItem,
 } from "./api.js";
 import { signAuthorship, signAccountAction } from "./crypto.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -43,6 +43,14 @@ function useCallsign(): [string, (v: string) => void] {
 
 type Mode = "view" | "hide";
 
+/** Great-circle distance in metres (local copy; the web doesn't depend on @aprsweb/aprs). */
+function haversine(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const R = 6371000, d = Math.PI / 180;
+  const dLat = (bLat - aLat) * d, dLon = (bLon - aLon) * d;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * d) * Math.cos(bLat * d) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 export function App() {
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -63,6 +71,9 @@ export function App() {
   const [showBoard, setShowBoard] = useState(false);
   const [showWB, setShowWB] = useState(false);
   const [showMail, setShowMail] = useState(false);
+  const [showNearby, setShowNearby] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
@@ -81,6 +92,14 @@ export function App() {
       return () => mq.removeEventListener?.("change", apply);
     }
   }, [locSettings.theme]);
+
+  // single-overlay model: close everything, then a nav handler opens exactly one surface
+  const closeAll = useCallback(() => {
+    setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
+    setShowActivity(false); setShowProfile(false); setShowSettings(false);
+    setSelectedId(null); setRemote(null);
+  }, []);
+  const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
 
   const ws = useRef<WebSocket | null>(null);
   const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -279,10 +298,9 @@ export function App() {
     <div className="app">
       <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={caches.length}
-              onBoard={() => { setShowBoard(true); setSelectedId(null); setRemote(null); }}
-              onWorkbench={() => { setShowWB(true); setShowBoard(false); setSelectedId(null); setRemote(null); }}
-              onMail={() => { setShowMail(true); setShowWB(false); setShowBoard(false); setSelectedId(null); setRemote(null); }}
-              onSettings={() => setShowSettings(true)} />
+              onNearby={() => openOnly(() => setShowNearby(true))}
+              onActivity={() => openOnly(() => setShowActivity(true))}
+              onProfile={() => openOnly(() => setShowProfile(true))} />
       <div ref={mapEl} className="map" />
       {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
 
@@ -301,6 +319,23 @@ export function App() {
 
       {mode === "hide" && (
         <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
+      )}
+
+      {showNearby && mode === "view" && (
+        <NearbyPanel caches={caches} map={map.current}
+                     onPick={(id) => openOnly(() => setSelectedId(id))} onClose={() => setShowNearby(false)} />
+      )}
+
+      {showActivity && mode === "view" && (
+        <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
+      )}
+
+      {showProfile && mode === "view" && (
+        <ProfilePanel callsign={callsign} map={map.current}
+                      onWorkbench={() => openOnly(() => setShowWB(true))}
+                      onMail={() => openOnly(() => setShowMail(true))}
+                      onSettings={() => openOnly(() => setShowSettings(true))}
+                      onClose={() => setShowProfile(false)} />
       )}
 
       {showBoard && mode === "view" && (
@@ -713,11 +748,11 @@ function MailPanel(props: { callsign: string; onClose: () => void }) {
   );
 }
 
-// ----------------------------------------------------------------- top bar
+// ----------------------------------------------------------------- top bar (cacher destinations)
 function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
-  onHide: () => void; onCancel: () => void; count: number; onBoard: () => void; onWorkbench: () => void;
-  onMail: () => void; onSettings: () => void;
+  onHide: () => void; onCancel: () => void; count: number;
+  onNearby: () => void; onActivity: () => void; onProfile: () => void;
 }) {
   return (
     <header className="topbar">
@@ -729,14 +764,114 @@ function TopBar(props: {
         <input value={props.callsign} placeholder="OE8APR"
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
-      {props.mode === "view" && <button onClick={props.onMail} title="BBS — messages & bulletins">✉</button>}
-      {props.mode === "view" && <button onClick={props.onWorkbench} title="Workbench — live stations + packet decoder">📡</button>}
-      {props.mode === "view" && <button onClick={props.onBoard} title="Leaderboard">🏆</button>}
-      <button onClick={props.onSettings} title="Settings — locale & units">⚙</button>
+      {props.mode === "view" && <button onClick={props.onNearby}>Nearby</button>}
+      {props.mode === "view" && <button onClick={props.onActivity}>Activity</button>}
+      {props.mode === "view" && <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>}
       {props.mode === "view"
         ? <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
         : <button onClick={props.onCancel}>Cancel</button>}
     </header>
+  );
+}
+
+// ----------------------------------------------------------------- Nearby (caches by distance)
+function NearbyPanel(props: { caches: MapCache[]; map: maplibregl.Map | null; onPick: (id: number) => void; onClose: () => void }) {
+  const fmt = useFmt();
+  const c = props.map?.getCenter();
+  const here = c ? { lat: c.lat, lon: c.lng } : null;
+  const dist = (m: MapCache) => (here && m.lat != null && m.lon != null) ? haversine(here.lat, here.lon, m.lat, m.lon) : Infinity;
+  const list = [...props.caches].filter((m) => m.lat != null && m.lon != null).sort((a, b) => dist(a) - dist(b)).slice(0, 100);
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>Nearby</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <p className="muted">{list.length} caches, nearest first (from the map centre)</p>
+      <ul className="board">
+        {list.map((m) => {
+          const meta = typeMeta(m.type);
+          return (
+            <li key={m.globalId} style={{ cursor: m.id != null ? "pointer" : "default" }} onClick={() => m.id != null && props.onPick(m.id)}>
+              <span className="dot" style={{ background: meta.color }} />
+              <span style={{ flex: 1 }}><span className="mono">{m.code}</span> <span className="muted">{m.title}</span></span>
+              <span className="mono muted">{dist(m) === Infinity ? "" : fmt.distance(dist(m))}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </aside>
+  );
+}
+
+// ----------------------------------------------------------------- Activity (feed + leaderboard glance)
+function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void; onClose: () => void }) {
+  const fmt = useFmt();
+  const [feed, setFeed] = useState<ActivityItem[]>([]);
+  const [top, setTop] = useState<LeaderboardEntry[]>([]);
+  useEffect(() => {
+    const m = props.map; const bbox = m ? [m.getBounds().getWest(), m.getBounds().getSouth(), m.getBounds().getEast(), m.getBounds().getNorth()] as BBox : undefined;
+    getActivity(bbox).then((r) => setFeed(r.activity)).catch(console.error);
+    getLeaderboard(bbox ?? [-180, -90, 180, 90], "points").then((r) => setTop(r.leaderboard.slice(0, 5))).catch(console.error);
+  }, [props.map]);
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>Activity</h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      <h4>Recent finds</h4>
+      {feed.length === 0 ? <p className="muted">No recent activity here.</p> : (
+        <ul className="logs">
+          {feed.map((a) => (
+            <li key={a.id}>
+              {a.logType === "found" && a.verified ? <span className={`badge tier${a.tier ?? "C"}`}>{a.tier === "A" ? "RF" : a.tier === "B" ? "App" : "✓"}</span> : <span className={`badge ${a.logType}`}>{a.logType}</span>}
+              <strong className="mono">{a.loggerCall}</strong> <span className="muted">found</span> <span className="mono">{a.cacheCode}</span>
+              <span className="muted"> · {fmt.ago(a.ts)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="row between"><h4>Top finders</h4><button className="link" onClick={props.onBoard}>full leaderboard →</button></div>
+      <ol className="board">
+        {top.map((e) => (
+          <li key={e.loggerCall}><span className="rank">{e.rank}</span>
+            <span className="mono" style={{ flex: 1 }}>{e.loggerCall}</span><strong>{e.points}</strong>&nbsp;<span className="muted">pts</span></li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
+// ----------------------------------------------------------------- Profile (identity + the advanced door)
+function ProfilePanel(props: {
+  callsign: string; map: maplibregl.Map | null;
+  onWorkbench: () => void; onMail: () => void; onSettings: () => void; onClose: () => void;
+}) {
+  const fmt = useFmt();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => {
+    if (props.callsign.length >= 3) getProfile(props.callsign).then(setProfile).catch(console.error);
+    else setProfile(null);
+  }, [props.callsign]);
+  return (
+    <aside className="panel right">
+      <div className="row between"><h2>👤 <span className="mono">{props.callsign || "Profile"}</span></h2><button className="icon" onClick={props.onClose}>✕</button></div>
+      {props.callsign.length < 3 ? <p className="muted">Set your callsign in the top bar to claim your finds.</p> : (<>
+        <p><span className="badge tierC">unverified account</span> <button className="link" title="Send an APRS message-challenge to your callsign (coming in the identity pass)">verify callsign</button></p>
+        {profile && <p><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · <strong>{profile.hides}</strong> hidden
+          {profile.lastFind && <span className="muted"> · last find {fmt.date(profile.lastFind)}</span>}</p>}
+        {profile && profile.badges.length > 0 && (
+          <div className="badges">{profile.badges.map((b) => <span key={b.badge} className="award">{b.badge}</span>)}</div>
+        )}
+        <label className="geo" style={{ marginTop: 10, opacity: .6 }}>
+          <input type="checkbox" disabled style={{ width: "auto" }} /> &nbsp;Announce finds to APRS-IS
+          <span className="muted">&nbsp;— verify your callsign first</span>
+        </label>
+      </>)}
+
+      <h4>Advanced</h4>
+      <p className="muted">The full APRS workbench — live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        <button onClick={props.onWorkbench}>📡 Workbench</button>
+        <button onClick={props.onMail}>✉ BBS</button>
+        <button onClick={props.onSettings}>⚙ Settings</button>
+      </div>
+    </aside>
   );
 }
 
@@ -948,36 +1083,32 @@ function StagesSection(props: { cacheId: number; callsign: string }) {
   );
 }
 
-// ----------------------------------------------------------------- log form
+// ----------------------------------------------------------------- one-tap log (the core action)
 function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; onLogged: () => void }) {
   const fmt = useFmt();
-  const [logType, setLogType] = useState<LogType>("found");
-  const [comment, setComment] = useState("");
-  const [useGeo, setUseGeo] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<LogType | null>(null);
   const [result, setResult] = useState<LogResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState("");
 
+  // request the device fix (Tier-B path); resolve undefined if denied/unavailable so the tap still succeeds
   function getGeo(): Promise<AppGeo | undefined> {
-    if (!useGeo || logType !== "found" || !navigator.geolocation) return Promise.resolve(undefined);
+    if (!navigator.geolocation) return Promise.resolve(undefined);
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (p) => resolve({
-          lat: p.coords.latitude, lon: p.coords.longitude,
-          accuracyM: p.coords.accuracy ?? 9999, ts: Math.floor(p.timestamp / 1000),
-        }),
+        (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracyM: p.coords.accuracy ?? 9999, ts: Math.floor(p.timestamp / 1000) }),
         () => resolve(undefined),
         { enableHighAccuracy: true, timeout: 8000 },
       );
     });
   }
 
-  async function submit() {
+  async function doLog(logType: LogType, comment?: string) {
     if (props.callsign.length < 3) { setErr("Set your callsign in the top bar first."); return; }
-    setBusy(true); setErr(null); setResult(null);
+    setBusy(logType); setErr(null);
     try {
-      const appGeo = await getGeo();
-      // sign the find with the device key (best-effort) and ensure the key is registered
+      const appGeo = logType === "found" ? await getGeo() : undefined;
       let author;
       try {
         const instance = await getInstance();
@@ -987,48 +1118,56 @@ function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; 
           if (author) await registerKey({ callsign: props.callsign, publicKey: author.authorKey }).catch(() => {});
         }
       } catch { /* unsupported browser -> log unsigned */ }
-      const r = await logFind(props.cacheId, {
-        loggerCall: props.callsign, logType, comment: comment.trim() || undefined, appGeo, author,
-      });
-      setResult(r); setComment(""); props.onLogged();
+      const r = await logFind(props.cacheId, { loggerCall: props.callsign, logType, comment, appGeo, author });
+      setResult(r); setNote(""); setNoteOpen(false); props.onLogged();
     } catch (e) { setErr((e as Error).message); }
-    finally { setBusy(false); }
+    finally { setBusy(null); }
+  }
+
+  // the trust badge IS the feedback, shown after the tap (tap it for the "why")
+  function tierBadge(r: LogResult) {
+    if (r.logType !== "found") return null;
+    if (!r.verified) return <span className="badge tierC" title={r.reason ?? ""}>Logged · unverified</span>;
+    const label = r.tier === "A" ? "RF" : r.tier === "B" ? "App" : String(r.tier);
+    const why = `Tier ${r.tier} · ${r.method ?? ""}${r.distanceM != null ? ` · ${fmt.distance(r.distanceM)}` : ""}${r.corroboratedBy ? ` · via ${r.corroboratedBy}` : ""}`;
+    return <span className={`badge tier${r.tier}`} title={why}>Verified · {label}</span>;
+  }
+
+  if (result) {
+    const verb = result.logType === "found" ? "Logged" : result.logType === "dnf" ? "Marked DNF" : "Note posted";
+    return (
+      <div className="logresult">
+        <div className="big">{verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
+        <div className="tier">{tierBadge(result)}</div>
+        {result.announced && <div className="muted" style={{ marginTop: 4 }}>announced to APRS-IS</div>}
+        {result.signerKey && <div className="muted">signed with your device key ✍</div>}
+        {result.logType === "found" && (noteOpen ? (
+          <div style={{ marginTop: 8 }}>
+            <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
+            <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post</button></div>
+          </div>
+        ) : <button className="link" style={{ marginTop: 8 }} onClick={() => setNoteOpen(true)}>add a note</button>)}
+        <div style={{ marginTop: 8 }}><button className="link" onClick={() => { setResult(null); setNote(""); setNoteOpen(false); }}>log again</button></div>
+      </div>
+    );
   }
 
   return (
     <div className="logform">
-      <div className="row">
-        <select value={logType} onChange={(e) => setLogType(e.target.value as LogType)}>
-          <option value="found">Found it</option>
-          <option value="dnf">Did not find</option>
-          <option value="note">Note</option>
-        </select>
-        {logType === "found" && (
-          <label className="geo">
-            <input type="checkbox" checked={useGeo} onChange={(e) => setUseGeo(e.target.checked)} />
-            use my location (tier&nbsp;B)
-          </label>
-        )}
-      </div>
-      <textarea placeholder="Comment (optional)" rows={2}
-                value={comment} onChange={(e) => setComment(e.target.value)} />
-      <button className="primary" disabled={busy} onClick={submit}>
-        {busy ? "Logging…" : "Log it"}
+      <button className="primary" style={{ width: "100%", fontSize: 16, padding: "11px" }} disabled={!!busy} onClick={() => doLog("found")}>
+        {busy === "found" ? "Logging…" : "✓ Log a find"}
       </button>
-      {err && <p className="error">{err}</p>}
-      {result && (
-        <p className={result.verified ? "ok" : "muted"}>
-          {result.logType === "found"
-            ? (result.verified
-                ? (result.method === "aprs_rf_peer" && result.corroboratedBy
-                    ? `Verified — Tier ${result.tier} · corroborated by ${result.corroboratedBy}`
-                    : `Verified — tier ${result.tier} (${result.method}${result.distanceM != null ? `, ${fmt.distance(result.distanceM)}` : ""})`)
-                : `Logged, unverified${result.reason ? ` — ${result.reason}` : ""}`)
-            : "Logged."}
-          {result.announced && " · announced to APRS-IS"}
-          {result.signerKey && " · signed ✍"}
-        </p>
+      <div className="row between" style={{ marginTop: 8 }}>
+        <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>{busy === "dnf" ? "…" : "Couldn't find it"}</button>
+        <button className="link" onClick={() => setNoteOpen((v) => !v)}>Add a note</button>
+      </div>
+      {noteOpen && (
+        <div style={{ marginTop: 6 }}>
+          <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
+          <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post note</button></div>
+        </div>
       )}
+      {err && <p className="error">{err}</p>}
     </div>
   );
 }
