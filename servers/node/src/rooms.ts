@@ -5,6 +5,7 @@
  */
 import type { WebSocket } from "ws";
 import { Subscribe } from "@aprsweb/shared";
+import { deliveriesFor, type LiveEnvelope } from "@aprsweb/gateway/live";
 
 export class Rooms {
   private rooms = new Map<string, Set<WebSocket>>();
@@ -17,7 +18,7 @@ export class Rooms {
     ws.on("message", (data) => {
       try {
         const parsed = Subscribe.safeParse(JSON.parse(String(data)));
-        if (parsed.success) (ws as unknown as { __sub?: unknown }).__sub = parsed.data;
+        if (parsed.success) (ws as unknown as { __sub?: Subscribe }).__sub = parsed.data;
       } catch { /* ignore malformed */ }
     });
     const drop = () => set!.delete(ws);
@@ -25,12 +26,16 @@ export class Rooms {
     ws.on("error", drop);
   }
 
-  /** Fan a payload out to every socket subscribed to a region. */
-  broadcast(region: string, payload: unknown): void {
+  /** Deliver live envelopes to each subscriber per their subscription (same semantics as the DO). */
+  dispatch(region: string, envelopes: LiveEnvelope[]): void {
     const set = this.rooms.get(region);
     if (!set) return;
-    const text = JSON.stringify(payload);
-    for (const ws of set) { try { ws.send(text); } catch { /* dropped */ } }
+    for (const ws of set) {
+      const sub = (ws as unknown as { __sub?: Subscribe }).__sub;
+      for (const env of envelopes) {
+        for (const msg of deliveriesFor(sub, env)) { try { ws.send(JSON.stringify(msg)); } catch { /* dropped */ } }
+      }
+    }
   }
 
   count(region = "global"): number { return this.rooms.get(region)?.size ?? 0; }

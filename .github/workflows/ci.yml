@@ -32,6 +32,7 @@ jobs:
           DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
             pnpm --filter @aprsweb/node-gateway start &
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
 
   conformance-worker:
     name: conformance (Cloudflare Worker)
@@ -51,6 +52,7 @@ jobs:
           printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\n' "$KEY" > workers/gateway/.dev.vars
           (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
 
   conformance-federation:
     name: conformance (federation — 2 instances)

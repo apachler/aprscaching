@@ -40,8 +40,17 @@ const env: Env = {
   TILES: {}, // R2 unused in M1
   ROOMS: {
     idFromName: (n) => n,
-    // real-time goes through the WS upgrade path below; a plain GET /ws just 426s
-    get: () => ({ fetch: async () => new Response("expected websocket upgrade", { status: 426 }) }),
+    get: (id) => ({
+      fetch: async (req: Request) => {
+        // live dispatch from /ingest; the WS upgrade itself is handled below
+        if (req.method === "POST") {
+          const { envelopes } = (await req.json()) as { envelopes: import("@aprsweb/gateway/live").LiveEnvelope[] };
+          rooms.dispatch(String(id), envelopes);
+          return new Response(null, { status: 204 });
+        }
+        return new Response("expected websocket upgrade", { status: 426 });
+      },
+    }),
   },
   INGEST_SECRET,
   INSTANCE: process.env.INSTANCE,

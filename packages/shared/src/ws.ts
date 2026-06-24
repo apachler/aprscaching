@@ -13,9 +13,13 @@ export const StationDelta = z.object({
   callsign: z.string(), lat: z.number(), lon: z.number(),
   course: z.number().optional(), symbol: z.string().optional(), lastSeen: z.number(),
 });
+export type StationDelta = z.infer<typeof StationDelta>;
+
 export const GeofencePrompt = z.object({
   type: z.literal("near_cache"),
   cacheId: z.number(), code: z.string(), title: z.string(), distanceM: z.number(),
 });
+export type GeofencePrompt = z.infer<typeof GeofencePrompt>;
+
 export const ServerMsg = z.discriminatedUnion("type", [StationDelta, GeofencePrompt]);
 export type ServerMsg = z.infer<typeof ServerMsg>;
