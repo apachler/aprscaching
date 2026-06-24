@@ -23,6 +23,7 @@ import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport } from "./account.js";
+import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead } from "./bbs.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -108,6 +109,13 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   const stationMatch = /^\/api\/stations\/([A-Za-z0-9-]+)$/.exec(p);
   if (stationMatch && m === "GET") return handleStation(req, env, stationMatch[1]!);
+
+  // BBS store-and-forward (messages + bulletins)
+  if (p === "/api/bbs/messages" && m === "POST") return handleBbsPost(req, env);
+  if (p === "/api/bbs/messages" && m === "GET") return handleBbsList(req, env);
+  if (p === "/api/bbs/bulletins" && m === "GET") return handleBbsBulletins(req, env);
+  const bbsReadMatch = /^\/api\/bbs\/messages\/(\d+)\/read$/.exec(p);
+  if (bbsReadMatch && m === "POST") return handleBbsRead(req, env, Number(bbsReadMatch[1]));
 
   // workbench interop + transports (M6)
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));

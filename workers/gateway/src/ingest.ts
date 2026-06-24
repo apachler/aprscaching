@@ -4,6 +4,7 @@ import { json } from "./app.js";
 import { IngestBatch } from "@aprsweb/shared";
 import { decodeAprs } from "@aprsweb/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
+import { deliverHeld, bbsOnAck } from "./bbs.js";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }):
@@ -30,6 +31,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const stmts: SqlStatement[] = [];
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
+  const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   let maxTs = 0;
   for (const p of body.data.packets) {
     portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
@@ -46,13 +48,15 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           data.windDirDeg ?? null, data.windKn ?? null, data.rain1hMm ?? null),
       );
     }
-    // text message -> messages log
+    // text message -> messages log; ack -> BBS delivery confirmation
     if (data.kind === "message" && !data.ack && !data.rej) {
       stmts.push(
         env.DB.prepare(
           "INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'rx')",
         ).bind(p.ts, p.src, data.addressee ?? null, data.text ?? "", data.msgNo ?? null),
       );
+    } else if (data.kind === "message" && data.ack && data.msgNo) {
+      ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
 
     const fix = fixOf(p);
@@ -86,6 +90,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     );
   }
   if (stmts.length) await env.DB.batch(stmts);
+
+  // BBS: confirm deliveries that were acked, and (re)deliver held mail to stations just heard
+  for (const a of ackedBy) await bbsOnAck(env, a.from, a.lineNo);
+  const heardCalls = new Set(positions.map((p) => p.src.toUpperCase()));
+  for (const cs of heardCalls) await deliverHeld(env, cs);
 
   // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];

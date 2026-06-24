@@ -221,3 +221,11 @@ export interface DecodedPacket {
 // ---- M6 interop: transports + messaging ----
 export interface PortStat { port: string; rx: number; tx: number; lastBucket: number }
 export interface MessageItem { id: number; ts: number; fromCall: string; toCall: string | null; body: string; direction: string }
+
+// ---- BBS store-and-forward ----
+export interface BbsMessage {
+  id: number; bid: string | null; type: "P" | "B"; fromCall: string; toCall: string;
+  subject: string | null; body: string; postedAt: number; origin: string; readAt: number | null;
+  // personal-message delivery state (present on inbox listings):
+  delivery?: "held" | "sent" | "acked" | "expired"; lineNo?: number | null; attempts?: number; ackedAt?: number | null;
+}

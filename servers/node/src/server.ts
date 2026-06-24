@@ -62,6 +62,7 @@ const env: Env = {
   FED_DISCOVER: process.env.FED_DISCOVER,
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
+  BBS_CALL: process.env.BBS_CALL,
 };
 
 // ---- node:http <-> Web Request/Response ----

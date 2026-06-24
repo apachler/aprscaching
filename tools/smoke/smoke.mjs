@@ -280,5 +280,26 @@ ok("erased account keys are removed", (goneKeys.data?.keys ?? []).length === 0, 
 const goneProf = await call("GET", "/api/profile/DL1ABC");
 ok("erased account finds are anonymised away", (goneProf.data?.finds ?? 0) === 0, JSON.stringify(goneProf.data?.finds));
 
+// ---- BBS store-and-forward: hold personal mail, deliver when heard, confirm on ack ----
+const bbsP = await call("POST", "/api/bbs/messages", { fromCall: "OE8APR", toCall: "OE7BBS", body: "meet at the summit cache" });
+ok("BBS accepts a personal message", bbsP.status === 201 && bbsP.data?.type === "P" && bbsP.data?.id > 0, JSON.stringify(bbsP.data));
+const msgId = bbsP.data?.id;
+const bbsB = await call("POST", "/api/bbs/messages", { fromCall: "OE8APR", toCall: "ALL", body: "net tonight 8pm local" });
+ok("BBS accepts a bulletin", bbsB.data?.type === "B", JSON.stringify(bbsB.data));
+
+const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
+ok("personal mail starts held", (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "held"), JSON.stringify(list1.data?.messages?.[0]));
+
+await call("POST", "/ingest", { packets: [{ src: "OE7BBS", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: "!4704.00N/01526.00E>", kind: "position", heardVia: "aprs_is", port: "aprs-is", ts: now() }] }, { "x-ingest-secret": SECRET });
+const list2 = await call("GET", "/api/bbs/messages?to=OE7BBS");
+ok("mail is forwarded when the station is heard", (list2.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "sent" && mm.lineNo === msgId), JSON.stringify(list2.data?.messages?.[0]));
+
+await call("POST", "/ingest", { packets: [{ src: "OE7BBS", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: `:APRSCG   :ack${msgId}`, kind: "message", heardVia: "aprs_is", port: "aprs-is", ts: now() }] }, { "x-ingest-secret": SECRET });
+const list3 = await call("GET", "/api/bbs/messages?to=OE7BBS");
+ok("ack confirms delivery", (list3.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "acked"), JSON.stringify(list3.data?.messages?.[0]));
+
+const bulls = await call("GET", "/api/bbs/bulletins");
+ok("bulletin board lists the bulletin", (bulls.data?.bulletins ?? []).some((bb) => /net tonight/.test(bb.body) && bb.type === "B"), JSON.stringify(bulls.data?.bulletins?.length));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

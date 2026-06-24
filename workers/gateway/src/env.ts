@@ -17,4 +17,7 @@ export interface Env {
   // ---- imports (M3) — OpenCaching OKAPI ----
   OKAPI_BASE?: string;      // e.g. https://www.opencaching.de
   OKAPI_KEY?: string;       // free per-node consumer key (Level-1)
+
+  // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
+  BBS_CALL?: string;        // e.g. "OE8APR-5"; defaults to "APRSCG"
 }
