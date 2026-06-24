@@ -11,6 +11,7 @@ export interface Env {
   INSTANCE?: string;        // canonical instance id/domain, e.g. "oe.aprscaching.org"
   FED_PRIVATE_KEY?: string; // base64(JWK) Ed25519 signing key; if set, records are signed
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
+  FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
 
   // ---- imports (M3) — OpenCaching OKAPI ----
   OKAPI_BASE?: string;      // e.g. https://www.opencaching.de

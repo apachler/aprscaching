@@ -20,6 +20,7 @@ export interface ImportScope {
   region?: string;                                    // SOTA "GM/SI" · POTA "US-NY" · WWFF "DLFF" · GCAU "vic"
   bbox?: [number, number, number, number];            // WWBOTA / OpenCaching (minLon,minLat,maxLon,maxLat)
   url?: string;                                        // generic GeoJSON URL / OKAPI base override
+  key?: string;                                        // OKAPI per-node consumer key override (multi-node)
   limit?: number;                                      // Wikidata result cap
   // generic geojson knobs:
   source?: string; type?: CacheType; sourceName?: string; deepLink?: string; // deepLink may contain {ref}
@@ -113,9 +114,10 @@ export const SOURCES: Record<string, SourceAdapter> = {
   opencaching: {
     id: "opencaching", sourceName: "OpenCaching",
     async load(env, scope) {
+      // each OpenCaching node has its OWN database + key: import nodes separately (pass url+key per node)
       const base = (scope.url ?? env.OKAPI_BASE ?? "").replace(/\/+$/, "");
-      const key = env.OKAPI_KEY;
-      if (!base || !key) throw new Error("opencaching: set OKAPI_BASE + OKAPI_KEY (free per-node consumer key)");
+      const key = scope.key ?? env.OKAPI_KEY;
+      if (!base || !key) throw new Error("opencaching: provide {url,key} (per-node) or set OKAPI_BASE + OKAPI_KEY");
       if (!scope.bbox) throw new Error("opencaching: scope.bbox required");
       const [w, s, e, n] = scope.bbox;
       const search = JSON.parse(await fetchText(`${base}/okapi/services/caches/search/bbox?bbox=${s}|${w}|${n}|${e}&status=Available&limit=500&consumer_key=${key}`));

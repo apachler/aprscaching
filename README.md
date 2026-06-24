@@ -66,7 +66,8 @@ node tools/fedkey/genkey.mjs            # prints FED_PRIVATE_KEY (+ the public k
 **Mirroring (F2).** Point an instance at peers with `FED_PEERS=https://a.example,https://b.example`.
 It pulls their feeds on a schedule (cron / 5-min interval), **verifies each record's signature**
 against the peer's published key, and mirrors them locally — peer caches then appear on your map
-(dashed pin, read-only) alongside your own.
+(dashed pin, read-only) alongside your own. Peers are listed manually in `FED_PEERS`; set
+**`FED_DISCOVER=1`** to also auto-adopt the peers each peer advertises (transitive discovery).
 
 **Per-callsign signing (F0).** Each user holds an Ed25519 keypair in their browser and registers
 the public key to their callsign. Find logs are **signed on-device**, so authorship is
@@ -99,8 +100,10 @@ curl -XPOST $API/api/import/gcau   -H x-ingest-secret:$S -d '{"region":"vic"}'  
 curl -XPOST $API/api/import/osm    -H x-ingest-secret:$S -d '{"region":"natural=peak","bbox":[13,46,17,49],"type":"traditional"}'
 curl -XPOST $API/api/import/wikidata -H x-ingest-secret:$S -d '{"region":"Q23413","type":"castle"}'  # castles (CC0)
 curl -XPOST $API/api/import/iota   -H x-ingest-secret:$S -d '{"region":"EU"}'        # IOTA (non-commercial use)
-# OpenCaching needs a free per-node consumer key (set OKAPI_BASE + OKAPI_KEY):
-curl -XPOST $API/api/import/opencaching -H x-ingest-secret:$S -d '{"bbox":[13,46,17,49]}'
+# OpenCaching: each node (.de/.pl/.us/.nl/.ro/opencache.uk) is a SEPARATE database + key —
+# import each node with its own {url,key} (or set OKAPI_BASE + OKAPI_KEY for one):
+curl -XPOST $API/api/import/opencaching -H x-ingest-secret:$S \
+  -d '{"url":"https://www.opencaching.de","key":"YOUR_DE_KEY","bbox":[13,46,17,49]}'
 # WCA / any GeoJSON via the generic adapter:
 curl -XPOST $API/api/import/geojson -H x-ingest-secret:$S \
   -d '{"url":"https://…/wca.geojson","source":"castle","type":"castle","sourceName":"WCA","deepLink":"https://www.cqgma.org/zinfo.php?ref={ref}"}'

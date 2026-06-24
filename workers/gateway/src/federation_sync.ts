@@ -62,9 +62,17 @@ export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: n
 
 async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number }> {
   const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null }>(`${base}/.well-known/aprscaching`);
+  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; peers?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
+
+  // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE)
+  if (env.FED_DISCOVER) {
+    for (const url of (wk.peers ?? []).slice(0, 50)) {
+      const u = String(url).trim().replace(/\/+$/, "");
+      if (u && u !== base) await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url) VALUES (?)").bind(u).run();
+    }
+  }
 
   // never mirror ourselves
   if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0 };
