@@ -2,6 +2,29 @@
 
 Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
 
+## RF / protocol roadmap (proposed — building blocks already exist)
+- [ ] **APRS IGate** (bidirectional RF↔APRS-IS, on the ingest box). RX-IGate: relay KISS-heard RF
+  frames up to APRS-IS with our gate callsign + `qAR`/`,I` (today we only forward them to `/ingest`).
+  TX-IGate: gate IS messages down to RF for stations heard locally (last-N-min), with the standard
+  courtesy/local-only rules. Pieces present: AX.25 codec, KISS RX, `AprsUplink` (IS TX),
+  `stations` last-heard. Gated/opt-in (TX off by default + real callsign+passcode).
+- [ ] **APRS digipeater** (KISS TX). Process RF UI-frame paths: decrement `WIDEn-N`, insert our
+  call with the H-bit, viscous dedup, retransmit. Pure logic over the existing AX.25 + KISS codec.
+- [ ] **BBS store-and-forward** (APRS messaging). We have the *store* (`messages`, `aprs_outbox`);
+  add the *forward*: per-addressee outbound queue, deliver when the addressee is next heard, ack
+  matching (`:ADDR :ackNNN`) + retransmit, bulletin distribution. Builds on messaging-TX.
+- [ ] **Connected-mode AX.25** (NET/ROM node / true RF BBS sessions). Bigger lift than the above —
+  needs the AX.25 v2.2 connected-mode state machine (SABM/UA/DISC, I-frames, seq numbers, T1/T2,
+  REJ). Our codec is UI-only today. Treat as its own milestone.
+- [ ] **Retro read-only access** (Finger / Gopher / Gemini). Small Node daemons (not Workers — they
+  need raw TCP/TLS) exposing caches-near, station info, leaderboard, callsign profile/badge.
+  Finger (79) + Gopher (70) are trivial text; Gemini (1965) needs TLS + gemtext. Reuses the data
+  layer / REST. Fits the "it's a network" + ham-retro aesthetic.
+- [ ] **Ham-radio QSO logbook** (distinct from the *cache* logbook). A worked-stations log
+  (callsign, date/time, band, mode, freq, RST sent/recv, grid, notes) with **ADIF** import/export
+  and optional LoTW/eQSL/QRZ sync; could auto-log from APRS message exchanges or SOTA/POTA imports.
+  ADIF is a well-defined text format → a codec in `packages/` + a `qso_log` table + a web view.
+
 ## Federation hardening
 - [ ] **Signed corroboration responses (F3 anti-forgery).**
   Today a peer's `POST /federation/corroborate` answer is trusted because the peer is configured
