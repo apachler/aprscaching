@@ -12,9 +12,12 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   `WIDEn-N`, loop-guard + duplicate suppression. Pure `digipeat()` in `@aprsweb/aprs`, connector in
   `apps/ingest/digipeater.ts`, opt-in via `DIGI_CALL`. Follow-up: viscous-delay digipeating,
   preemptive/trace handling, per-alias TX policy.
-- [ ] **BBS store-and-forward** (APRS messaging). We have the *store* (`messages`, `aprs_outbox`);
-  add the *forward*: per-addressee outbound queue, deliver when the addressee is next heard, ack
-  matching (`:ADDR :ackNNN`) + retransmit, bulletin distribution. Builds on messaging-TX.
+- [x] **BBS store-and-forward — Stage 1** (connectionless / APRS-message delivery). Personal mail
+  held until the addressee is heard, then forwarded over APRS with line-number ack tracking +
+  bounded retry; bulletins; REST + web mailbox; MBL/FBB-compatible BID/type. (`bbs.ts`, migration
+  0009.) Follow-ups: **federation bulletin forwarding** (store-and-forward over the IP network,
+  deduped by BID), an **APRS message-command interface** (L/R/SP/SB to the BBS callsign over RF),
+  and message expiry/lifetime UX.
 - [ ] **Connected-mode AX.25** (NET/ROM node / true RF BBS sessions). Bigger lift than the above —
   needs the AX.25 v2.2 connected-mode state machine (SABM/UA/DISC, I-frames, seq numbers, T1/T2,
   REJ). Our codec is UI-only today. Treat as its own milestone.

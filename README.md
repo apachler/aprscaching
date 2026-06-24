@@ -207,6 +207,23 @@ curl "$API/api/messages?bulletins=1"   # recent bulletins
 curl "$API/badge/OE8APR.svg"           # embeddable network badge
 ```
 
+## BBS — store-and-forward messaging
+
+A connectionless store-and-forward message BBS (a true connected-mode F6FBB/BPQ32 peer is a later
+milestone — it needs the AX.25 connected-mode stack). Personal mail is **held** until the addressee
+is next **heard**, then **forwarded** as a standard APRS message with line-number ack tracking +
+bounded retry; bulletins are retrievable. Message format (P/B type + BID) is MBL/FBB-compatible.
+
+```bash
+POST /api/bbs/messages        # {fromCall,toCall,body} — personal (held) or bulletin (ALL/BLN…)
+GET  /api/bbs/messages?to=CALL # inbox + per-message delivery status (held/sent/acked/expired)
+GET  /api/bbs/bulletins        # the bulletin board
+```
+
+In the web app the **✉ BBS** panel has Inbox / Bulletins / Compose. Set `BBS_CALL` to the relay
+callsign personal mail is delivered from. (Federation bulletin forwarding + an over-RF message
+command interface are tracked follow-ups.)
+
 ## Accounts & data lifecycle (GDPR / DSGVO)
 
 Sensitive account actions are authorised by a signature from a device key already registered to the
