@@ -223,9 +223,17 @@ re-point attribution via `account_id` (ADR-2), never the bare call string.
 ### T3.3 Owner-controlled field redaction
 Don't federate spoiler fields: drop or coarsen `hint` in feeds, and honor a per-cache
 `fed_scope` (`public | unlisted | local-only`) so owners choose whether a cache federates at all.
+
+**Status — IMPLEMENTED** (migration `0015_fed_scope.sql` · `federation.ts:cacheData`/`CACHE_FEED` ·
+`caches.ts` create/update + `MapCache`/`CacheSummary.fedScope` · web `HidePanel` scope picker · smoke +5
+assertions). The **hint NEVER federates** (dropped from `cacheData` unconditionally — leak-proof);
+`unlisted` additionally withholds `description`; `local-only` is filtered out of `CACHE_FEED` entirely.
+Owners set the scope on the hide form (a `public | unlisted | local-only` segmented control, default
+public). **Retraction:** flipping an already-federated cache to `local-only` emits a **cache tombstone**
+(T1.3) so peers purge their mirrored copy; `public→unlisted` re-propagates the redacted version via the
+bumped `updated_at`. Caveat: re-widening a `local-only` cache later won't un-suppress it on peers (the
+tombstone is sticky) — errs toward privacy; re-create to re-share.
 - **Schema:** `ALTER TABLE caches ADD COLUMN fed_scope TEXT NOT NULL DEFAULT 'public';`
-  `cacheData()` omits `hint` (and `description` when `unlisted`); `handleFederationCaches` filters
-  `fed_scope='local-only'`.
 - *Worth:* protects game integrity (no network-wide hint leak) and owner choice.
 
 ---
@@ -266,7 +274,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   `0013_peer_trust.sql`**; `0012` stays reserved for monetization per CLAUDE.md, gap is intentional)
 - `tombstones` + `remote_tombstones` tables + `fed_peers.tombstones_cursor` + `GET /federation/tombstones`
   (T1.3 / ADR-5; **landed as `0014_tombstones.sql`**)
-- `caches` += `fed_scope` (T3.3)
+- `caches` += `fed_scope` (T3.3 — **landed as `0015_fed_scope.sql`**)
 - key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
 
 ## API additions
@@ -294,7 +302,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   tombstones **(done)**.
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
-- **F6 (commons):** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record · T3.3 redaction.
+- **F6 (commons):** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record · T3.3 redaction **(done)**.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
 
 ## Acceptance (abbreviated, per tier)
@@ -321,5 +329,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   (**met**: smoke asserts originTrust tagging, an unvetted peer's caches hidden by default + revealed by
   `includeUnvetted=1`, and demote/re-promote flips visibility live).
 - **T3.2:** moving OE8APR from A to B re-homes finds and the network attributes them to the account.
-- **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire.
+- **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire
+  (**met**: smoke asserts a public cache federates with description but no hint, unlisted drops the
+  description, local-only is absent from the feed, and no hint text appears anywhere in it).
 - **T4.1:** rotating the instance key keeps past signatures verifiable and new records trusted.

@@ -8,6 +8,7 @@ import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./v
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
+import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo } from "./community.js";
 import { stageCount } from "./stages.js";
@@ -18,7 +19,7 @@ interface CacheDbRow {
   status: string; difficulty: number; terrain: number; lat: number | null; lon: number | null;
   station_call: string | null; source: string; external_id: string | null;
   hint: string | null; description: string | null; min_trust: string | null;
-  source_url: string | null; source_name: string | null;
+  source_url: string | null; source_name: string | null; fed_scope: string;
   created_at: number; updated_at: number;
 }
 interface LogDbRow {
@@ -36,6 +37,7 @@ function toSummary(r: CacheDbRow): CacheSummary {
     stationCall: r.station_call, source: r.source,
     sourceName: r.source_name, sourceUrl: r.source_url,
     minTrust: (r.min_trust as "A" | "B" | null) ?? null,
+    fedScope: (r.fed_scope as CacheSummary["fedScope"]) ?? "public",
   };
 }
 function toLogEntry(r: LogDbRow): CacheLogEntry {
@@ -169,11 +171,11 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
     const ins = await env.DB.prepare(
       `INSERT INTO caches
          (code, owner_call, title, type, status, difficulty, terrain, lat, lon,
-          station_call, source, hint, description, min_trust, created_at, updated_at)
-       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?, ?,?)`,
+          station_call, source, hint, description, min_trust, fed_scope, created_at, updated_at)
+       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?)`,
     ).bind(
       tmpCode, owner, b.title, b.type, b.difficulty, b.terrain, b.lat, b.lon,
-      b.stationCall ?? null, b.hint ?? null, b.description ?? null, b.minTrust ?? null, now, now,
+      b.stationCall ?? null, b.hint ?? null, b.description ?? null, b.minTrust ?? null, b.fedScope, now, now,
     ).run();
     const id = Number(ins.meta.last_row_id);
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
@@ -214,13 +216,21 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     hint: b.hint ?? existing.hint,
     description: b.description ?? existing.description,
     min_trust: b.minTrust ?? existing.min_trust,
+    fed_scope: b.fedScope ?? existing.fed_scope,
   };
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
-       station_call=?, hint=?, description=?, min_trust=?, updated_at=? WHERE id=?`,
+       station_call=?, hint=?, description=?, min_trust=?, fed_scope=?, updated_at=? WHERE id=?`,
   ).bind(m.title, m.type, m.status, m.difficulty, m.terrain, m.lat, m.lon,
-         m.station_call, m.hint, m.description, m.min_trust, now, id).run();
+         m.station_call, m.hint, m.description, m.min_trust, m.fed_scope, now, id).run();
+  // T3.3: turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
+  // tombstone so they purge it (a public→unlisted change re-propagates the redacted version via the
+  // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.
+  if (m.fed_scope === "local-only" && existing.fed_scope !== "local-only") {
+    const instance = env.INSTANCE ?? new URL(req.url).host;
+    await emitTombstones(env, instance, [{ kind: "cache", targetId: `${instance}:cache:${id}` }]);
+  }
   const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   return json({ cache: toSummary(row!) });
 }

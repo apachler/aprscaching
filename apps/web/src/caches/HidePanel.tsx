@@ -2,7 +2,13 @@ import { useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { Panel } from "../ui/index.js";
-import type { CacheType } from "@aprsweb/shared";
+import type { CacheType, FedScope } from "@aprsweb/shared";
+
+const SCOPES: { v: FedScope; label: string; help: string }[] = [
+  { v: "public", label: "Public", help: "Shared across the whole network." },
+  { v: "unlisted", label: "Unlisted", help: "On the network map, but its description stays on this instance." },
+  { v: "local-only", label: "Local only", help: "Never leaves this instance." },
+];
 
 /** Hide a cache — sectioned form; submit is gated on a dropped pin + title + callsign. */
 export function HidePanel(props: {
@@ -16,6 +22,7 @@ export function HidePanel(props: {
   const [hint, setHint] = useState("");
   const [description, setDescription] = useState("");
   const [stationCall, setStationCall] = useState("");
+  const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -31,6 +38,7 @@ export function HidePanel(props: {
         ownerCall: props.callsign,
         hint: hint.trim() || undefined,
         description: description.trim() || undefined,
+        fedScope,
         stationCall: type === "aprs_living" ? (stationCall.trim().toUpperCase() || undefined) : undefined,
       });
       props.onCreated(cache);
@@ -67,6 +75,14 @@ export function HidePanel(props: {
       <label>Hint<input value={hint} onChange={(e) => setHint(e.target.value)} /></label>
       <label>Description
         <textarea value={description} rows={3} onChange={(e) => setDescription(e.target.value)} /></label>
+      <h4>Federation</h4>
+      <div className="badges" role="radiogroup" aria-label="Federation scope">
+        {SCOPES.map((s) => (
+          <button key={s.v} type="button" role="radio" aria-checked={fedScope === s.v}
+            className={`chip-btn${fedScope === s.v ? " primary" : ""}`} onClick={() => setFedScope(s.v)}>{s.label}</button>
+        ))}
+      </div>
+      <p className="muted">{SCOPES.find((s) => s.v === fedScope)?.help} The hint is never federated.</p>
       {err && <p className="error">{err}</p>}
       <div className="row end">
         <button onClick={props.onCancel}>Cancel</button>

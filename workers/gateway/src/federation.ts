@@ -26,7 +26,7 @@ interface CacheRow {
   id: number; code: string; owner_call: string; title: string; type: string; status: string;
   difficulty: number; terrain: number; lat: number | null; lon: number | null;
   station_call: string | null; source: string; external_id: string | null;
-  hint: string | null; description: string | null; min_trust: string | null;
+  hint: string | null; description: string | null; min_trust: string | null; fed_scope: string;
   created_at: number; updated_at: number;
 }
 interface FindRow {
@@ -38,11 +38,14 @@ interface FindRow {
 interface KeyRow { id: number; callsign: string; public_key: string; verified: number; created_at: number }
 
 function cacheData(r: CacheRow) {
+  // T3.3 redaction: the hint is a spoiler and NEVER federates; an `unlisted` cache withholds its
+  // description too (location/title only). `local-only` caches are filtered out before this (CACHE_FEED).
   return {
     code: r.code, ownerCall: r.owner_call, title: r.title, type: r.type, status: r.status,
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
     stationCall: r.station_call, source: r.source, externalId: r.external_id,
-    hint: r.hint, description: r.description, minTrust: r.min_trust,
+    description: r.fed_scope === "unlisted" ? null : r.description, minTrust: r.min_trust,
+    fedScope: r.fed_scope,
     createdAt: r.created_at, updatedAt: r.updated_at,
   };
 }
@@ -204,7 +207,7 @@ export async function feedPublicKey(env: Env): Promise<string | null> {
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   selectRows: async (env, since, limit) => (await env.DB.prepare(
-    "SELECT * FROM caches WHERE source = 'native' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
+    "SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
   ).bind(since, limit).all<CacheRow>()).results,
   recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
 };

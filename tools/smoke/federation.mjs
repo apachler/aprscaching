@@ -327,6 +327,26 @@ const mRe = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
 ok("re-promoting restores the cache to the default map",
   (mRe.data?.caches ?? []).some((c) => c.title === G_TITLE && c.originTrust === "trusted"), "missing after re-promote");
 
+// ---- F6/T3.3: owner-controlled field redaction (hint never federates; unlisted hides description; local-only never) ----
+const HINT = "under the third rock from the bench";
+const mkScoped = (title, fedScope) => call(PUB, "POST", "/api/caches",
+  { title, type: "single", lat: 47.31, lon: 15.31, ownerCall: "OE8APR", hint: HINT, description: "full description of " + title, fedScope });
+const cPub = await mkScoped("Scope Public " + now(), "public");
+const cUnl = await mkScoped("Scope Unlisted " + now(), "unlisted");
+const cLoc = await mkScoped("Scope Local " + now(), "local-only");
+ok("scoped caches created", cPub.status === 201 && cUnl.status === 201 && cLoc.status === 201, `${cPub.status}/${cUnl.status}/${cLoc.status}`);
+
+const cfeed = await call(PUB, "GET", "/federation/caches?since=0&limit=1000");
+const citems = cfeed.data?.items ?? [];
+const byT = (t) => citems.find((r) => r.data?.title === t);
+const pubRec = byT(cPub.data?.cache?.title), unlRec = byT(cUnl.data?.cache?.title), locRec = byT(cLoc.data?.cache?.title);
+ok("a public cache federates with description but NEVER the hint",
+  !!pubRec && !("hint" in pubRec.data) && pubRec.data.description != null && pubRec.data.fedScope === "public", JSON.stringify(pubRec?.data));
+ok("an unlisted cache federates without its description (and no hint)",
+  !!unlRec && unlRec.data.description == null && !("hint" in unlRec.data), JSON.stringify(unlRec?.data));
+ok("a local-only cache never enters the feed at all", !locRec, cLoc.data?.cache?.title);
+ok("no hint text leaks anywhere in the caches feed", !new RegExp(HINT).test(JSON.stringify(cfeed.data)));
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

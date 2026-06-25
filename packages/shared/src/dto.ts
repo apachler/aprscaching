@@ -15,6 +15,10 @@ export type TrustTier = z.infer<typeof TrustTier>;
 /** Per-cache minimum-trust override: only A or B may be required (C = "no requirement"). */
 export const MinTrust = z.enum(["A", "B"]);
 
+/** How far a cache federates (T3.3): public (default), unlisted (no description), local-only (never federates). */
+export const FedScope = z.enum(["public", "unlisted", "local-only"]);
+export type FedScope = z.infer<typeof FedScope>;
+
 export const LogType = z.enum([
   "found", "dnf", "note", "maintenance", "enabled", "disabled",
 ]);
@@ -43,6 +47,7 @@ export const CreateCacheRequest = z.object({
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
+  fedScope: FedScope.default("public"),        // how far this cache federates (T3.3)
   code: z.string().trim().max(32).optional(),  // explicit code (imports); else AC-#### is minted
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
@@ -61,6 +66,7 @@ export const UpdateCacheRequest = z.object({
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
+  fedScope: FedScope.optional(),               // change federation scope (T3.3)
 });
 export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
@@ -114,6 +120,7 @@ export interface CacheSummary {
   sourceName: string | null;   // attribution label when imported
   sourceUrl: string | null;    // deep link to the source page
   minTrust: "A" | "B" | null;
+  fedScope: FedScope;          // owner's federation scope (T3.3)
 }
 
 /** A cache as it appears on the map — native or mirrored from a federation peer (F2). */
