@@ -7,7 +7,8 @@ const now = () => Math.floor(Date.now() / 1000);
 const j = (method, path, body, headers = {}) =>
   fetch(API + path, {
     method,
-    headers: { "content-type": "application/json", ...headers },
+    // the ingest secret authorises the body ownerCall/loggerCall on write endpoints (actor())
+    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, ...headers },
     body: body ? JSON.stringify(body) : undefined,
   }).then(async (r) => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }));
 
