@@ -6,7 +6,8 @@ import {
   listCaches, getCache, getStations, API_BASE, flushLogQueue, queuedLogCount,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary,
 } from "./api.js";
-import { ToastProvider, Icon } from "./ui/index.js";
+import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
+import { Landing } from "./Landing.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
@@ -41,6 +42,12 @@ const STYLE: string | StyleSpecification =
 
 type Mode = "view" | "hide";
 
+// Quick-tour steps are config-driven and DEFERRED to the content pass (docs/18) — one neutral
+// placeholder so the framework is live and testable without committing copy.
+const TOUR_STEPS: TourStep[] = [
+  { title: "Quick tour", body: "Guided tour coming soon. For now you're browsing in read-only mode — explore the map and caches freely. Sign in to log finds, hide caches, and unlock the workbench." },
+];
+
 export function App() {
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -53,6 +60,11 @@ export function App() {
   const callsign = session.callsign;
   const verified = session.verified;
   const [showSignIn, setShowSignIn] = useState(false);
+  // landing gate (docs/18): signed-in skips the landing; signed-out sees it until they Explore
+  // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
+  const [explored, setExplored] = useState(() => { try { return sessionStorage.getItem("acs.explore") === "1"; } catch { return false; } });
+  const [tourOpen, setTourOpen] = useState(false);
+  const active = session.signedIn || explored;
   const [caches, setCaches] = useState<MapCache[]>([]);
   const [mode, setMode] = useState<Mode>("view");
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
@@ -104,6 +116,22 @@ export function App() {
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
 
+  // Explore → drop into the read-only platform for this session; run the tour once (first time).
+  const onExplore = useCallback(() => {
+    try { sessionStorage.setItem("acs.explore", "1"); } catch { /* ignore */ }
+    setExplored(true);
+    if (!tourSeen()) setTourOpen(true);
+  }, []);
+  // Signing out returns to the landing (clears the per-session explore intent).
+  const prevSignedIn = useRef(session.signedIn);
+  useEffect(() => {
+    if (prevSignedIn.current && !session.signedIn) {
+      try { sessionStorage.removeItem("acs.explore"); } catch { /* ignore */ }
+      setExplored(false);
+    }
+    prevSignedIn.current = session.signedIn;
+  }, [session.signedIn]);
+
   // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
   const shown = useMemo(() => caches.filter((c) =>
     (filters.types.length === 0 || filters.types.includes(c.type)) &&
@@ -152,6 +180,7 @@ export function App() {
 
   // live WebSocket: geofence prompts ("you're near a cache")
   useEffect(() => {
+    if (!active) return;
     const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
     ws.current = s;
     s.addEventListener("open", () => { const m = map.current; if (m) { const b = m.getBounds(); subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]); } });
@@ -170,7 +199,7 @@ export function App() {
       } catch { /* ignore */ }
     });
     return () => { try { s.close(); } catch { /* */ } ws.current = null; };
-  }, [subscribeLive]);
+  }, [subscribeLive, active]);
 
   // re-subscribe when the callsign changes so prompts are addressed to you
   useEffect(() => {
@@ -181,7 +210,7 @@ export function App() {
 
   // ---- init map once ----
   useEffect(() => {
-    if (!mapEl.current || map.current) return;
+    if (!active || !mapEl.current || map.current) return;
     const m = new maplibregl.Map({
       container: mapEl.current, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
     });
@@ -209,7 +238,7 @@ export function App() {
       });
     });
     return () => { m.remove(); map.current = null; };
-  }, [refresh]);
+  }, [refresh, active]);
 
   // ---- render cache markers (diffed against the live map) ----
   useEffect(() => {
@@ -338,6 +367,16 @@ export function App() {
   return (
     <FormatContext.Provider value={fmt}>
     <ToastProvider>
+    {session.loading ? (
+      <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>
+    ) : !active ? (
+      <>
+        <Landing onRegister={() => setShowSignIn(true)} onLogin={() => setShowSignIn(true)} onExplore={onExplore} />
+        {showSignIn && (
+          <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />
+        )}
+      </>
+    ) : (
     <div className="app">
       <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => (session.signedIn ? setShowSettings(true) : setShowSignIn(true)))} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
@@ -448,7 +487,9 @@ export function App() {
             else if (selectedId == null) startHide();
           }} />
       )}
+      {tourOpen && <Tour steps={TOUR_STEPS} onDone={() => setTourOpen(false)} />}
     </div>
+    )}
     </ToastProvider>
     </FormatContext.Provider>
   );

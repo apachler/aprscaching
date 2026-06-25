@@ -560,3 +560,31 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 }
 .splash::before { content: ""; position: absolute; inset: 0; background: rgba(15,28,34,.82); }
 .splash img { position: relative; width: min(360px, 70vw); }
+
+/* marketing landing (docs/18 — mechanics; content deferred). Brand hero = bg.jpg + blue overlay. */
+.landing {
+  position: relative; min-height: 100dvh; display: grid; place-items: center;
+  padding: clamp(24px, 6vw, 72px) 20px calc(28px + env(safe-area-inset-bottom));
+  background: var(--brand) url("/brand/bg.jpg") center/cover no-repeat; color: #fff;
+}
+.landing::before { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, color-mix(in oklch, var(--brand) 78%, transparent), color-mix(in oklch, var(--brand) 92%, black)); }
+.landing-inner { position: relative; width: min(560px, 100%); display: grid; gap: 16px; justify-items: center; text-align: center; }
+.landing-logo { width: min(340px, 78vw); height: auto; filter: drop-shadow(0 2px 12px rgba(0,0,0,.35)); }
+.landing-sub { margin: 0; font-size: clamp(15px, 2.4vw, 18px); opacity: .92; max-width: 40ch; }
+.landing-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+.landing-cta button { min-height: 44px; padding: 0 18px; border-radius: 10px; font-weight: 600; }
+.landing-explore { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
+.landing-note { margin: 14px 0 0; font-size: 12px; opacity: .75; }
+
+/* quick-tour framework (docs/18 — mechanics; steps deferred). Bottom-anchored accessible dialog. */
+.tour-scrim { position: fixed; inset: 0; z-index: 60; display: grid; align-items: end; justify-items: center;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom)); background: color-mix(in oklch, black 50%, transparent);
+  animation: tour-in .18s ease; }
+.tour-card { width: min(460px, 100%); background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: 0 14px 44px var(--shadow); }
+.tour-card h3 { margin: 4px 0 6px; color: var(--heading); }
+.tour-stepn { font-size: 12px; color: var(--muted); }
+.tour-actions { margin-top: 14px; gap: 8px; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tour-scrim { animation: none; } }

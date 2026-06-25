@@ -8,4 +8,5 @@ export { Card } from "./Card.js";
 export { EmptyState } from "./EmptyState.js";
 export { ToastProvider, useToast } from "./Toast.js";
 export { Icon, type IconName } from "./Icon.js";
+export { Tour, tourSeen, type TourStep } from "./Tour.js";
 export { TierChip, MinTier, DtBars, Stat, VerifyPanel, VerifyRow, type Tier } from "./operator.js";
