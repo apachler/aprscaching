@@ -1,18 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { toggleFavorite, type CacheDetail } from "../api.js";
+import type { CacheLogEntry } from "@aprsweb/shared";
 import { typeMeta } from "../cacheTypes.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge } from "../ui/index.js";
+import { maidenhead } from "../map/geo.js";
+import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, useToast, type Tier } from "../ui/index.js";
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 
-/** Cache detail + logbook — single primary action (Log a find); favourite + close recede. */
+const TIER_DESC: Record<Tier, string> = {
+  A: "RF-corroborated — heard on RF via an independent IGate.",
+  B: "App-corroborated — in-app device geolocation at the cache.",
+  C: "IS-only — a bare APRS-IS beacon, logged but unverified.",
+};
+
+/** Cache detail + logbook — operator layout; single primary action (Log a find). */
 export function DetailPanel(props: {
   detail: CacheDetail; callsign: string; onClose: () => void; onLogged: () => void;
 }) {
   const c = props.detail;
   const meta = typeMeta(c.type);
   const fmt = useFmt();
+  const toast = useToast();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
   async function toggleFav() {
@@ -21,49 +30,82 @@ export function DetailPanel(props: {
     setFav((f) => ({ on: want, count: f.count + (want ? 1 : -1) })); // optimistic
     try { const r = await toggleFavorite(c.id, props.callsign, want); setFav(r); } catch { setFav({ on: c.favorited, count: c.favorites }); }
   }
+  const minTier: Tier = c.minTrust ?? "B"; // site default is B (CLAUDE.md)
+  const grid = c.lat != null && c.lon != null ? maidenhead(c.lat, c.lon) : null;
+  function copyCoords() {
+    if (c.lat == null || c.lon == null) return;
+    navigator.clipboard?.writeText(`${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);
+    toast("Coordinates copied");
+  }
   return (
-    <Panel onClose={props.onClose}
-      title={<><span className="dot" style={{ background: meta.color }} /> <span className="code">{c.code}</span></>}
+    <Panel onClose={props.onClose} title={c.title}
       actions={<button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>{fav.on ? "♥" : "♡"} {fav.count}</button>}>
-      <h3>{c.title}</h3>
-      <p className="muted">
-        {meta.label} · D {c.difficulty.toFixed(1)} / T {c.terrain.toFixed(1)} · by {c.ownerCall}
-        {c.minTrust && <> · requires tier {c.minTrust}</>}
-      </p>
-      {c.source !== "native" && (
-        <p className="imported">
-          ⤓ Imported from <strong>{c.sourceName ?? c.source}</strong>
-          {c.sourceUrl && <> · <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">view source ↗</a></>}
-        </p>
+      <div className="detail-meta">
+        <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>{meta.glyph} {meta.label}</span>
+        <span className="srcchip">{c.source === "native" ? "APRS-Caching" : `imported · ${c.sourceName ?? c.source}`}</span>
+        <span className="dataval">{c.code}</span>
+      </div>
+      <p className="muted mt-1">by <span className="mono">{c.ownerCall}</span></p>
+
+      <div className="detail-stats">
+        <Stat label="Difficulty"><DtBars value={c.difficulty} /><div className="mt-2">{c.difficulty.toFixed(1)} / 5</div></Stat>
+        <Stat label="Terrain"><DtBars value={c.terrain} /><div className="mt-2">{c.terrain.toFixed(1)} / 5</div></Stat>
+      </div>
+
+      <MinTier tier={minTier} desc={TIER_DESC[minTier]} />
+
+      {grid && (
+        <div className="coordblock">
+          <div className="coordblock-h">
+            <span className="ulabel">Coordinates</span>
+            <button className="iconbtn" aria-label="Copy coordinates" onClick={copyCoords}><Icon name="copy" size={16} /></button>
+          </div>
+          <div className="coordblock-g">
+            <span className="k">LAT/LON</span><span className="v">{c.lat!.toFixed(4)}° · {c.lon!.toFixed(4)}°</span>
+            <span className="k">GRID</span><span className="v">{grid}</span>
+          </div>
+        </div>
+      )}
+
+      {c.source !== "native" && c.sourceUrl && (
+        <p className="imported">⤓ Imported from <strong>{c.sourceName ?? c.source}</strong> · <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">view source ↗</a></p>
       )}
       <p><strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}
         {c.status !== "active" && <> · <em>{c.status}</em></>}
         {c.needsMaintenance && <span className="warn"> · ⚠ needs maintenance</span>}</p>
-      {c.description && <p>{c.description}</p>}
+      {c.description && <p className="desc">{c.description}</p>}
       {c.hint && <details><summary>Hint</summary><p>{c.hint}</p></details>}
 
       {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={props.callsign} />}
 
       <LogForm cacheId={c.id} cacheCode={c.code} callsign={props.callsign} onLogged={props.onLogged} />
 
-      <h4>Logbook</h4>
+      <div className="row between logbook-h">
+        <h4 className="m-0">Logbook</h4>
+        <span className="ulabel">{c.finds} finds</span>
+      </div>
       {c.logs.length === 0 && <p className="muted">No logs yet — be the first to find it.</p>}
-      <ul className="logs">
-        {c.logs.map((l) => (
-          <li key={l.id}>
-            <Badge kind={l.logType}>{l.logType}</Badge>
-            <strong>{l.loggerCall}</strong>
-            {l.logType === "found" && (
-              l.verified
-                ? <span className="ok">✓ tier {l.tier}</span>
-                : <span className="muted">unverified{l.tier ? ` (tier ${l.tier})` : ""}</span>
-            )}
-            {l.corroboratedBy && <span className="muted"> · ⇄ via {l.corroboratedBy}</span>}
-            <span className="muted"> · {fmt.date(l.ts)}</span>
-            {l.comment && <div className="comment">{l.comment}</div>}
-          </li>
-        ))}
-      </ul>
+      {c.logs.map((l) => <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />)}
     </Panel>
+  );
+}
+
+function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null }) {
+  const l = props.log;
+  const method = [l.verifyMethod && `method: ${l.verifyMethod}`, props.dist, l.corroboratedBy && `via ${l.corroboratedBy}`].filter(Boolean).join(" · ");
+  return (
+    <div className="logrow">
+      {l.logType === "found" ? <TierChip tier={(l.tier ?? "C") as Tier} title={l.verified ? `Verified · tier ${l.tier}` : "unverified"} />
+        : <Badge kind={l.logType}>{l.logType}</Badge>}
+      <div className="logrow-t">
+        <div className="logrow-h">
+          <span className="call">{l.loggerCall}</span>
+          {l.signerKey && <span className="signed" title="device-signed"><Icon name="shield-check" size={14} /></span>}
+          <span className="logrow-when">{props.ago}</span>
+        </div>
+        {method && <div className="logrow-method">{method}</div>}
+        {l.comment && <div className="logrow-note">{l.comment}</div>}
+      </div>
+    </div>
   );
 }

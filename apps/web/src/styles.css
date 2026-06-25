@@ -6,6 +6,14 @@
 @font-face { font-family: "Fredoka"; src: url("/fonts/Fredoka-700.woff2") format("woff2");
   font-weight: 700; font-style: normal; font-display: swap; }
 
+/* ---- data font: IBM Plex Mono (OFL) — callsigns, grids, coordinates, ids, tier letters ---- */
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/IBMPlexMono-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/IBMPlexMono-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/IBMPlexMono-600.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap; }
+
 /* ---- design tokens (OKLCH) — dark field-console by default, light as an option (M7) ----
    Per .claude/rules/css.md: theming is token-driven in an @layer, colours are OKLCH, and the
    trust-tier / status palette derives from bases via color-mix() so brightness stays even across
@@ -44,11 +52,20 @@
     --warn:   oklch(0.80 0.15 85);
     --bad:    oklch(0.66 0.19 27);
 
+    /* operator surfaces (M8) — denser console chrome, derived in the same OKLCH family.
+       Used by the nav rail, side panels and data chips; the core --surface/--ink stay as-is so
+       existing surfaces don't regress, and each surface opts in as it's restyled. */
+    --rail-bg:   oklch(0.20 0.012 230);   /* nav rail / top bar chrome */
+    --panel-2:   oklch(0.185 0.010 225);  /* operator side-panel background (darker than --surface) */
+    --hair:      oklch(0.30 0.012 226);   /* hairline divider */
+    --ink-2:     oklch(0.80 0.012 220);   /* bright data text (mono values) */
+    --ink-tier:  oklch(0.18 0.02 245);    /* near-black ink on a solid tier chip */
+
     /* spacing scale (the source of truth for the layout utilities below) */
     --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 14px;
 
     --font-brand: "Fredoka", system-ui, sans-serif;
-    --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
   }
   :root[data-theme="dark"] { color-scheme: dark; }
   :root[data-theme="light"] {
@@ -65,6 +82,12 @@
     --topbar-bg:  oklch(0.60 0.085 232);
     --chip-bg:    oklch(0.96 0.004 220);
     --shadow:     oklch(0 0 0 / 0.16);
+    /* operator surfaces (light) */
+    --rail-bg:    oklch(0.97 0.003 220);
+    --panel-2:    oklch(0.99 0.002 220);
+    --hair:       oklch(0.91 0.004 220);
+    --ink-2:      oklch(0.40 0.008 220);
+    --ink-tier:   oklch(0.99 0 0);
   }
 }
 
@@ -229,6 +252,82 @@ button.link:hover { text-decoration: underline; }
 .badge.tierA { background: color-mix(in oklch, var(--tier-a) 20%, transparent); color: var(--tier-a); }
 .badge.tierB { background: color-mix(in oklch, var(--tier-b) 20%, transparent); color: var(--tier-b); }
 .badge.tierC { background: color-mix(in oklch, var(--tier-c) 16%, transparent); color: var(--muted); }
+
+/* ---- operator data chips & verification (M8) ---- */
+/* square trust-tier chip: solid tier colour, near-black letter (A/B/C) */
+.tierchip { display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 22px; height: 22px; border-radius: 6px; font-family: var(--font-mono); font-weight: 700;
+  font-size: 12px; line-height: 1; color: var(--ink-tier); }
+.tierchip.lg { width: 34px; height: 34px; border-radius: 9px; font-size: 15px; }
+.tierchip.A { background: var(--tier-a); }
+.tierchip.B { background: var(--tier-b); }
+.tierchip.C { background: var(--tier-c); }
+
+/* min-verification-tier card (kept neutral for C — unverified ≠ error) */
+.mintier { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--surface-2); margin: 14px 0; }
+.mintier.A { border-color: color-mix(in oklch, var(--tier-a) 45%, var(--line)); background: color-mix(in oklch, var(--tier-a) 12%, transparent); }
+.mintier.B { border-color: color-mix(in oklch, var(--tier-b) 45%, var(--line)); background: color-mix(in oklch, var(--tier-b) 12%, transparent); }
+.mintier-t { flex: 1; min-width: 0; }
+.mintier-t b { font-weight: 600; font-size: 13px; }
+.mintier-t p { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
+
+/* difficulty / terrain segmented bars */
+.dtbars { display: flex; gap: 3px; }
+.dtbars > span { flex: 1; height: 6px; border-radius: 2px; background: var(--line); }
+.dtbars > span.on { background: var(--accent); }
+
+/* verification status panel (signal → state rows) */
+.verify { border: 1px solid var(--line); border-radius: 13px; overflow: hidden; margin: 14px 0; }
+.verify-row { display: flex; align-items: center; gap: 11px; padding: 13px 14px; }
+.verify-row + .verify-row { border-top: 1px solid var(--hair); }
+.vr-t { flex: 1; min-width: 0; }
+.vr-t b { font-weight: 600; font-size: 13.5px; }
+.vr-t p { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
+.vr-ic.ok { color: var(--ok); } .vr-ic.warn { color: var(--warn); } .vr-ic.muted { color: var(--muted); }
+.tcol.A { color: var(--tier-a); } .tcol.B { color: var(--tier-b); } .tcol.C { color: var(--tier-c); }
+
+/* cache-type chip (keeps OUR cache-type glyph + colour; --tc carries the per-type colour) */
+.typechip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono);
+  font-weight: 600; font-size: 11px; padding: 4px 8px; border-radius: 6px;
+  background: color-mix(in oklch, var(--tc, var(--accent)) 18%, transparent); color: var(--tc, var(--accent)); }
+.srcchip { font-family: var(--font-mono); font-weight: 500; font-size: 11px; color: var(--muted);
+  padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.detail-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.detail-stats { display: flex; gap: 18px; padding: 14px 0; border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair); margin: 14px 0; }
+.detail-stats > div { flex: 1; }
+/* logbook row, operator style */
+.logrow { display: flex; gap: 11px; padding: 11px 0; border-top: 1px solid var(--hair); }
+.logrow-t { flex: 1; min-width: 0; }
+.logrow-h { display: flex; align-items: center; gap: 7px; }
+.logrow-h .call { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+.logrow-when { margin-left: auto; font-size: 11px; color: var(--muted); }
+.logrow-method { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+.logrow-note { font-size: 12px; color: var(--ink-2); margin-top: 6px; line-height: 1.4; }
+.signed { color: var(--tier-b); display: inline-flex; }
+.desc { color: var(--ink-2); line-height: 1.55; }
+.logbook-h { margin: 16px 0 4px; }
+
+/* labelled stat + mono micro-label + bright data value */
+.stat-l { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.stat-v { font-family: var(--font-mono); font-weight: 600; font-size: 12px; }
+.ulabel { font-family: var(--font-mono); font-weight: 600; font-size: 10.5px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+.dataval { font-family: var(--font-mono); color: var(--ink-2); }
+
+/* coordinate block (label/value grid with a copy affordance) */
+.coordblock { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; margin: 0 0 14px; }
+.coordblock-h { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px;
+  border-bottom: 1px solid var(--hair); background: color-mix(in oklch, var(--surface-2) 60%, transparent); }
+.coordblock-g { padding: 12px 13px; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.3; }
+.coordblock-g .k { color: var(--muted); }
+.coordblock-g .v { color: var(--ink-2); }
+.iconbtn { border: none; background: none; color: var(--muted); cursor: pointer; padding: 2px;
+  display: inline-flex; border-radius: 6px; }
+.iconbtn:hover { color: var(--ink); }
+.iconbtn:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
 
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }

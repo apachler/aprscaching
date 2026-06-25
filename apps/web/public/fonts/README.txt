@@ -10,3 +10,13 @@ Fredoka-500.woff2 / Fredoka-600.woff2 / Fredoka-700.woff2
 
 The OFL permits bundling and self-hosting; see the upstream repository for the
 full license text. Used here for headings to match the logo.
+
+IBMPlexMono-400.woff2 / IBMPlexMono-500.woff2 / IBMPlexMono-600.woff2
+  Family : IBM Plex Mono (technical/data type — callsigns, coordinates, ids)
+  Author : Mike Abbink / Bold Monday, for IBM
+  License: SIL Open Font License 1.1 (OFL-1.1)
+  Source : https://fonts.google.com/specimen/IBM+Plex+Mono  ·  https://github.com/IBM/plex
+  Subset : latin, weights 400/500/600.
+
+Used for the "operator" data surfaces (callsigns, grids, coordinates, cache ids)
+alongside Fredoka, per the M8 operator-UI design pass. OFL permits self-hosting.
