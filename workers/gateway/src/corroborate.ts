@@ -119,12 +119,35 @@ export function selectCorroboration(hits: Evidence[], quorum: number): Evidence 
  * `blocked` peers are already filtered out by `listEnabledPeers`. So a stranger a peer auto-discovered
  * can't mint Tier A — only the operator's curated trust set can.
  */
+/** Auto-promotion rule (pure, testable — T1.1): an unvetted peer that has earned enough confirmed
+ *  corroborations (and no contradictions) crosses into `trusted`. threshold ≤ 0 disables it. */
+export function shouldAutoPromote(trust: string, repConfirmed: number, repFailed: number, threshold: number): boolean {
+  return threshold > 0 && trust === "unvetted" && repFailed === 0 && repConfirmed >= threshold;
+}
+
+/** Reward the peers whose corroboration was independently confirmed (the find reached Tier A): bump
+ *  rep_confirmed, and auto-promote any unvetted peer that crosses the threshold (T1.1). */
+async function creditCorroboration(env: Env, urls: string[], threshold: number): Promise<void> {
+  const at = Math.floor(Date.now() / 1000);
+  for (const url of new Set(urls)) {
+    await env.DB.prepare("UPDATE fed_peers SET rep_confirmed = rep_confirmed + 1 WHERE url = ?").bind(url).run();
+    if (threshold > 0)
+      await env.DB.prepare(
+        "UPDATE fed_peers SET trust='trusted', added_via='auto-promoted', approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
+      ).bind(at, url, threshold).run();
+  }
+}
+
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
-  const peers = (await listEnabledPeers(env))
-    .filter((p) => p.trust === "trusted")
-    .filter((p) => !(p.instance && p.instance === env.INSTANCE))
-    .slice(0, CORROBORATION_FANOUT); // bounded fan-out budget
   const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 1);
+  const threshold = Number(env.FED_AUTO_PROMOTE ?? 0);
+  // trusted peers count toward Tier A; when reputation/promotion is enabled, unvetted peers are also
+  // probed but ONLY advisorily — their hits never reach quorum, they just let an unvetted peer EARN
+  // trust by agreeing with confirmed corroborations (T1.1). Default (threshold 0) = trusted-only.
+  const pool = (await listEnabledPeers(env))
+    .filter((p) => !(p.instance && p.instance === env.INSTANCE))
+    .filter((p) => p.trust === "trusted" || (threshold > 0 && p.trust === "unvetted"))
+    .slice(0, CORROBORATION_FANOUT); // bounded fan-out budget
 
   // good-citizen request coarsening: snap the center to a grid cell, widen the radius to cover the
   // snap, bucket the time window — peers never see our exact lat/lon/second (T1.2 privacy).
@@ -139,16 +162,21 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (env.FED_CORROBORATION_SECRET) headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
 
-  const results = await Promise.all(peers.map(async (peer): Promise<Evidence | null> => {
+  const probes = await Promise.all(pool.map(async (peer): Promise<{ peer: typeof pool[number]; ev: Evidence | null }> => {
     const base = peer.url.replace(/\/+$/, "");
     try {
       const r = await fetch(`${base}/federation/corroborate`, {
         method: "POST", headers, body: JSON.stringify(cq), signal: AbortSignal.timeout(3000),
       });
-      if (!r.ok) return null;
+      if (!r.ok) return { peer, ev: null };
       const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };
-      return data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null;
-    } catch { return null; }
+      return { peer, ev: data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null };
+    } catch { return { peer, ev: null }; }
   }));
-  return selectCorroboration(results.filter((e): e is Evidence => e != null), quorum);
+
+  // Tier A is decided from TRUSTED hits only (quorum unchanged); unvetted hits are advisory.
+  const trustedHits = probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => x.ev as Evidence);
+  const winner = selectCorroboration(trustedHits, quorum);
+  if (winner) await creditCorroboration(env, probes.filter((x) => x.ev).map((x) => x.peer.url), threshold);
+  return winner;
 }

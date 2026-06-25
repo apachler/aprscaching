@@ -41,8 +41,16 @@ seed as `manual`+`trusted` (a manual peer an operator `blocked` stays blocked ac
 FED_DISCOVER peers as `discovered`+`unvetted`; `listEnabledPeers` never returns `blocked` peers (no
 fetch on sync *or* corroborate); **corroboration counts only `trusted` peers** (closes the T1.2 gap);
 `POST /federation/peers/trust` (INGEST_SECRET-gated) lets the operator promote/demote/block and
-`GET /federation/peers` exposes trust+reputation. **Deferred:** the `rep_confirmed/rep_failed`
-auto-promotion loop (needs a later independent-confirmation signal) and the Settings → Federation UI.
+`GET /federation/peers` exposes trust+reputation.
+
+**Reputation loop — DONE** (`corroborate.ts` · `shouldAutoPromote` unit-tested · smoke +1): when a find
+reaches Tier A, every peer whose corroboration was thus independently confirmed earns `rep_confirmed++`
+(measured in `queryPeerCorroboration`). With `FED_AUTO_PROMOTE=N` set (default 0 = off), `unvetted` peers
+are *also* probed — **advisorily, never counting toward quorum** — so they can EARN trust by agreeing with
+confirmed corroborations, and one crosses to `trusted` automatically once `rep_confirmed ≥ N` with no
+contradictions (`shouldAutoPromote`). Default behaviour + cost are unchanged (trusted-only) until an
+operator opts in. **Still deferred:** an automatic *contradiction* signal for `rep_failed`, and a
+dedicated Settings → Federation UI (the Workbench → Federation group now shows trust + health + reputation).
 
 - **Schema** — extend `fed_peers`:
   ```sql

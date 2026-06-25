@@ -1,7 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { selectCorroboration, type Evidence } from "../src/corroborate.js";
+import { selectCorroboration, shouldAutoPromote, type Evidence } from "../src/corroborate.js";
 
 const ev = (instance: string, distanceM: number): Evidence => ({ instance, igateCall: "OE8XXX", distanceM, ts: 1 });
+
+describe("peer auto-promotion (T1.1 reputation)", () => {
+  it("promotes an unvetted peer only past the threshold with no contradictions", () => {
+    expect(shouldAutoPromote("unvetted", 5, 0, 5)).toBe(true);   // exactly at threshold
+    expect(shouldAutoPromote("unvetted", 4, 0, 5)).toBe(false);  // below threshold
+    expect(shouldAutoPromote("unvetted", 9, 1, 5)).toBe(false);  // any contradiction blocks it
+  });
+  it("never promotes trusted/blocked, and is off when the threshold is 0", () => {
+    expect(shouldAutoPromote("trusted", 99, 0, 5)).toBe(false);  // already trusted
+    expect(shouldAutoPromote("blocked", 99, 0, 5)).toBe(false);  // quarantined stays quarantined
+    expect(shouldAutoPromote("unvetted", 99, 0, 0)).toBe(false); // disabled
+  });
+});
 
 describe("corroboration quorum (F4/T1.2)", () => {
   it("no evidence → null at any quorum", () => {

@@ -73,6 +73,7 @@ export interface FedPeer {
   health: "ok" | "error" | "new" | "blocked"; errorRate: number;
   last_sync: number | null; last_ok: number | null; last_error: string | null;
   sync_ok: number; sync_err: number; mirrored_total: number;
+  rep_confirmed: number; rep_failed: number;
   lastCounts: Record<string, number> | null;
 }
 export function listFederationPeers(): Promise<{ peers: FedPeer[] }> {

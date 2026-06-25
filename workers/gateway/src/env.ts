@@ -16,6 +16,7 @@ export interface Env {
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)
+  FED_AUTO_PROMOTE?: string;         // confirmed-corroboration count to auto-promote an unvetted peer to trusted (T1.1; 0=off)
   TOMBSTONE_TTL_DAYS?: string;       // retention for delete tombstones before GC (F4/T1.3; default 180)
   // ---- corroboration hardening + privacy coarsening (F4/T1.2) — all optional ----
   FED_CORROBORATION_SECRET?: string;        // if set, /federation/corroborate requires x-fed-secret (peer allowlist)

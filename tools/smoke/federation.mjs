@@ -384,6 +384,8 @@ ok("peer health metrics tracked (health ok, sync_ok>0, mirrored_total>0)",
   JSON.stringify(pubPeer && { health: pubPeer.health, sync_ok: pubPeer.sync_ok, total: pubPeer.mirrored_total }));
 ok("the last sync's per-feed breakdown is reported", pubPeer?.lastCounts && typeof pubPeer.lastCounts === "object", JSON.stringify(pubPeer?.lastCounts));
 ok("a healthy peer has last_ok set and a zero error rate", pubPeer?.last_ok != null && pubPeer?.errorRate === 0, JSON.stringify({ last_ok: pubPeer?.last_ok, errorRate: pubPeer?.errorRate }));
+// T1.1 reputation: the publisher corroborated finds that reached Tier A → it earned rep_confirmed
+ok("a corroborating peer earns reputation (rep_confirmed > 0)", (pubPeer?.rep_confirmed ?? 0) > 0, JSON.stringify({ rep_confirmed: pubPeer?.rep_confirmed }));
 
 // ---- F7/T4.1: key rotation + multi-key + revocation ----
 // The publisher is started with FED_KEY_HISTORY (an extra active key + a revoked one), so every
