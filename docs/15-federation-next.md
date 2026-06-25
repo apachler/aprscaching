@@ -135,9 +135,11 @@ history.
 
 ### T4.2 Instance registry / namespace authority  *(resolves docs/06 #2)*
 A lightweight, **signed instance registry** (a public repo/feed mapping `instance-prefix → {url, key,
-operator}`) bootstraps discovery and prevents prefix collisions / instance-name spoofing. Opt-in;
-instances can still peer directly without it. Could be DNS-anchored (`TXT` at the instance domain) or a
-community-maintained signed list.
+operator, aprsCall}`) bootstraps discovery and prevents prefix collisions / instance-name spoofing.
+The **`aprsCall`** binding (the peer's `<licensedCall>-<SERVICE_SSID>` APRS-IS service address, per
+`docs/19`) is what makes a peer directly addressable *as a network node* — so the platform/any peer
+can resolve and message it on APRS. Opt-in; instances can still peer directly without it. Could be
+DNS-anchored (`TXT` at the instance domain) or a community-maintained signed list.
 - *Worth:* as the network grows, namespaced ids (`instance:cache:N`) must not collide and `signer` names
   must not be forgeable.
 

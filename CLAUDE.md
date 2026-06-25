@@ -93,6 +93,14 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   Chromium-only, not iOS. H1 Web Serial KISS · H2 BLE-KISS · H3 Meshtastic/LoRa · H4 soundcard AFSK ·
   H5 gated browser TX (callsign-verified, opt-in). Recommended hw: DigiRig, NinoTNC, Mobilinkd TNC4,
   Kenwood TH-D74/75, Meshtastic ESP32, RTL-SDR+Direwolf. RX ≠ trust — still gated by `verify.ts`.
+- APRS-IS identity & passcodes — `docs/19-aprs-is-identity.md`: the passcode verifies *nothing*
+  (public hash; APRS-IS won't block invented calls) — the real gate for RF is **licensing** +
+  our control-verification, never the passcode. Peer service id = `<licensedCall>-<SERVICE_SSID>`
+  (network-fixed SSID) + shared `TOCALL` + a federation-registry `aprsCall` binding (directly
+  addressable; ties to `docs/15` T4.2). TOCALL: `APZACG` now (self-assigned), register an `APAC…`
+  via `aprsorg/aprs-deviceid` (we qualify as a service). Adopt **LoTW-TLS** APRS-IS auth (proper,
+  passwordless). Users never enter a passcode: gated via the peer (third-party/`qAR`, verification-
+  gated) or direct (auto-computed passcode/LoTW, verified + opt-in, `docs/16` H5). RX-only = `-1`.
 - Federation next level (F4–F7) — `docs/15-federation-next.md`: takes live federation (F0–F3) further.
   F4 trust (**launch-gating** before opening the network): peer trust tiers + quarantine, corroboration
   **quorum** + hardening (parallel, grid/time-bucket privacy, rate-limit), ADR-5 tombstones. F5 reach:
