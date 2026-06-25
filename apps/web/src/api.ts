@@ -185,6 +185,10 @@ export function claim(callsign: string): Promise<{ callsign: string; exists: boo
 export function emailStart(email: string, callsign?: string): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, callsign }) });
 }
+/** Change the signed-in account's active callsign (sets it unverified — re-verify after). */
+export function changeCallsign(callsign: string): Promise<{ ok: boolean; callsign: string }> {
+  return call(`/auth/callsign`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
 
 function b64uToBuf(s: string): ArrayBuffer {
   const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));

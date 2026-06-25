@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { startAprsVerify, confirmAprsVerify } from "../api.js";
-import { Group, Badge, Icon } from "../ui/index.js";
+import { startAprsVerify, confirmAprsVerify, changeCallsign } from "../api.js";
+import { Group, Badge, Icon, Advanced } from "../ui/index.js";
 
 type Session = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 const baseCall = (c: string) => c.toUpperCase().split("-")[0] ?? "";
@@ -11,8 +11,17 @@ export function AccountSettings(props: { session: Session; onSignIn: () => void 
   const { callsign, verified, email, signedIn, signOut, refresh } = props.session;
   const [verifying, setVerifying] = useState(false);
   const [code, setCode] = useState("");
+  const [newCs, setNewCs] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  async function doChange() {
+    const n = newCs.toUpperCase().trim();
+    if (n.length < 3) { setMsg("Enter the new callsign."); return; }
+    setBusy(true); setMsg(null);
+    try { await changeCallsign(n); setNewCs(""); setMsg(`Now operating as ${n} — re-verify to re-enable announce.`); refresh(); }
+    catch (e) { setMsg((e as Error).message.replace(/^.*?: /, "")); } finally { setBusy(false); }
+  }
 
   async function startVerify() {
     setBusy(true); setMsg(null);
@@ -58,6 +67,13 @@ export function AccountSettings(props: { session: Session; onSignIn: () => void 
         </div>
       )}
       {email && <div className="setrow"><div className="setrow-l"><div>Email</div></div><div className="setrow-c muted">{email}</div></div>}
+      <Advanced label="Change callsign">
+        <p className="muted fine">Switch the call you operate under (one active at a time). The new call starts unverified — re-verify it above. Past finds stay attributed to the call they were logged with.</p>
+        <div className="row">
+          <input value={newCs} placeholder="OE1XYZ" onChange={(e) => setNewCs(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doChange(); }} />
+          <button className="primary" disabled={busy} onClick={doChange}>Change</button>
+        </div>
+      </Advanced>
       <div className="row end mt-3"><button className="danger" onClick={signOut}>Sign out</button></div>
       {msg && <p className="muted mt-2">{msg}</p>}
       <p className="muted fine mt-2">Verification proves you hold the licensed base call; its SSID stations (-7 HT, -9 mobile, -10 IGate…) inherit it.</p>

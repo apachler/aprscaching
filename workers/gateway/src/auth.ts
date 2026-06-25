@@ -126,6 +126,33 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   } catch (e) { return json({ error: "login failed: " + (e as Error).message }, { status: 400 }); }
 }
 
+/**
+ * POST /auth/callsign {callsign} — change the signed-in account's active callsign (S5). The new
+ * call is set immediately but UNVERIFIED (must re-run the APRS challenge); passkeys follow the
+ * account so login still works; history under the previous call is left intact (audit-true). The
+ * change is recorded in callsign_history and the session cookie is re-bound to the new call.
+ */
+export async function handleChangeCallsign(req: Request, env: Env): Promise<Response> {
+  const sess = await sessionCallsign(req, env);
+  if (!sess) return json({ error: "sign in first" }, { status: 401 });
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const next = String(callsign ?? "").toUpperCase().trim();
+  if (next.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const cur = sess.toUpperCase();
+  if (next === cur) return json({ error: "that is already your callsign" }, { status: 400 });
+  const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(cur).first<{ account_id: string }>();
+  if (!me) return json({ error: "account not found" }, { status: 404 });
+  const taken = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(next).first<{ account_id: string }>();
+  if (taken && taken.account_id !== me.account_id) return json({ error: "callsign already claimed by another account" }, { status: 409 });
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE accounts SET callsign=?, verified=0, verify_method=NULL, verified_at=NULL WHERE account_id=?").bind(next, me.account_id),
+    env.DB.prepare("UPDATE credentials SET callsign=? WHERE callsign=?").bind(next, cur),
+    env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?,?,?,0)").bind(me.account_id, next, now),
+  ]);
+  return json({ ok: true, callsign: next }, { headers: { "set-cookie": await issueSessionCookie(next, env) } });
+}
+
 /** Returns the signed-in callsign, or null. Used to attribute logs and gate announce. */
 export async function sessionCallsign(req: Request, env: Env): Promise<string | null> {
   const cookie = req.headers.get("cookie") ?? "";

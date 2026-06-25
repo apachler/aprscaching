@@ -123,6 +123,17 @@ ok("session (email) log succeeds", sessLog.status === 200 && sessLogBody.logged 
 const sessDetail = await call("GET", `/api/caches/${sCacheId}`);
 ok("the session find is attributed to the signed-in callsign", (sessDetail.data?.cache?.logs ?? []).some((l) => l.loggerCall === SESSCALL), JSON.stringify((sessDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)));
 
+// S5: change the active callsign — re-binds the session and resets verification to pending
+const chg = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ callsign: "OE9CHG" }) });
+const chgBody = await chg.json().catch(() => ({}));
+const cookie2 = (chg.headers.get("set-cookie") ?? "").split(";")[0] || cookie;
+ok("change callsign succeeds + re-binds the session", chg.status === 200 && chgBody.callsign === "OE9CHG", `status=${chg.status} ${JSON.stringify(chgBody)}`);
+const who = await fetch(`${BASE}/auth/session`, { headers: { cookie: cookie2 } });
+const whoBody = await who.json().catch(() => ({}));
+ok("session reports the new callsign, unverified", whoBody.callsign === "OE9CHG" && whoBody.verified === false, JSON.stringify(whoBody));
+const chgSame = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie: cookie2 }, body: JSON.stringify({ callsign: "OE9CHG" }) });
+ok("changing to your current callsign -> 400", chgSame.status === 400, `status=${chgSame.status}`);
+
 // owner gating + auth guards
 const wrongOwner = await call("PATCH", `/api/caches/${id}`, { ownerCall: "DL9NO", difficulty: 5 });
 ok("non-owner edit -> 403", wrongOwner.status === 403, `status=${wrongOwner.status}`);

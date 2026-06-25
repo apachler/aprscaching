@@ -60,6 +60,16 @@ non-prod / written to `aprs_outbox`-style table) → `POST /auth/email/verify` �
 tests authenticate via that path before logging. So we gate logging only *after* this exists, and the
 smoke suite is updated in the same commit.
 
+## Status
+**S1–S5 are implemented and CI-green.** Passkey (WebAuthn) ceremonies verify on workerd + Node with
+Web Crypto (no deps), browser-verified via a Playwright virtual authenticator; web sign-in (passkey +
+email magic-link) drives a real session; web logging/hiding is gated behind that session while the
+over-APRS path stays open via the ingest secret; and the active callsign can be changed (re-binding
+the session and resetting verification to pending). Deferred extensions: **multiple verified base
+calls per account** (`account_callsigns`/`account_stations`); reconciling the **callsign-reassignment**
+edge (a callsign later re-licensed to a different person still shows the prior holder's finds, since
+history is per-callsign string); and gating **leaderboard credit** on verification.
+
 ## Sequencing (each step independently committable + CI-green)
 - **S1 — schema + email/session backend** (additive; nothing gated yet): migration `0010` adds
   `account_id` surrogate + `email` on accounts, `webauthn_credentials`, `auth_challenges`,
