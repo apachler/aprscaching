@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { toggleFavorite, type CacheDetail } from "../api.js";
+import { toggleFavorite, type CacheDetail, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";
 import { typeMeta } from "../cacheTypes.js";
 import { useFmt } from "../format.js";
@@ -16,7 +16,7 @@ const TIER_DESC: Record<Tier, string> = {
 
 /** Cache detail + logbook — operator layout; single primary action (Log a find). */
 export function DetailPanel(props: {
-  detail: CacheDetail; callsign: string; onClose: () => void; onLogged: () => void;
+  detail: CacheDetail; callsign: string; activating?: Spot | null; onClose: () => void; onLogged: () => void;
 }) {
   const c = props.detail;
   const meta = typeMeta(c.type);
@@ -40,6 +40,12 @@ export function DetailPanel(props: {
   return (
     <Panel onClose={props.onClose} title={c.title}
       actions={<button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>{fav.on ? "♥" : "♡"} {fav.count}</button>}>
+      {props.activating && (
+        <div className="activating-now" role="status">
+          <span className="pulse" aria-hidden="true" /> Being activated now by <strong className="mono">{props.activating.callsign}</strong>
+          {props.activating.band ? <span className="muted"> · {props.activating.band}{props.activating.mode ? ` ${props.activating.mode}` : ""}</span> : null}
+        </div>
+      )}
       <div className="detail-meta">
         <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>{meta.glyph} {meta.label}</span>
         <span className="srcchip">{c.source === "native" ? "APRScaching" : `imported · ${c.sourceName ?? c.source}`}</span>

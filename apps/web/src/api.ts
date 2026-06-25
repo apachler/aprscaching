@@ -1,10 +1,10 @@
 import type {
   CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
   MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile,
-  StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem,
+  StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem };
+export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -44,6 +44,16 @@ export function getActivity(bbox?: BBox): Promise<{ activity: ActivityItem[] }> 
 }
 export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
+}
+
+// ---- live activity spots (docs/20 S2) — read-only overlay, opt-in ----
+export function getSpots(bbox: BBox, opts: { bands?: string[]; modes?: string[]; sources?: string[] } = {}):
+  Promise<{ enabled: boolean; count: number; fetchedAt: number | null; spots: Spot[] }> {
+  const q = new URLSearchParams({ bbox: bbox.join(",") });
+  if (opts.bands?.length) q.set("bands", opts.bands.join(","));
+  if (opts.modes?.length) q.set("modes", opts.modes.join(","));
+  if (opts.sources?.length) q.set("sources", opts.sources.join(","));
+  return call(`/api/spots?${q.toString()}`);
 }
 
 // ---- M5 workbench: live stations + packet inspector ----

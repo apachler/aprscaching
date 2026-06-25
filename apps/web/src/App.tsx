@@ -3,8 +3,8 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, getStations, API_BASE, flushLogQueue, queuedLogCount,
-  type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary,
+  listCaches, getCache, getStations, getSpots, API_BASE, flushLogQueue, queuedLogCount,
+  type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot,
 } from "./api.js";
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
 import { Landing } from "./Landing.js";
@@ -20,13 +20,14 @@ import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import { useSession } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
-import { maidenhead, gridCenter } from "./map/geo.js";
+import { maidenhead, gridCenter, haversine } from "./map/geo.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
 import { FilterPanel } from "./caches/FilterPanel.js";
 import { HidePanel } from "./caches/HidePanel.js";
 import { DetailPanel } from "./caches/DetailPanel.js";
+import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
@@ -90,6 +91,12 @@ export function App() {
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
+  // live activity spots (docs/20 S2) — opt-in overlay, off by default like raster layers
+  const [spotsOn, setSpotsOn] = useState(false);
+  const [spots, setSpots] = useState<Spot[]>([]);
+  const [pickedSpot, setPickedSpot] = useState<Spot | null>(null);
+  const spotsOnRef = useRef(spotsOn);
+  useEffect(() => { spotsOnRef.current = spotsOn; }, [spotsOn]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showSiteMap, setShowSiteMap] = useState(false);
@@ -172,6 +179,7 @@ export function App() {
 
   const ws = useRef<WebSocket | null>(null);
   const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const spotMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
   const stationsOnRef = useRef(stationsOn);
   useEffect(() => { stationsOnRef.current = stationsOn; }, [stationsOn]);
   const callsignRef = useRef(callsign);
@@ -196,6 +204,9 @@ export function App() {
     finally { setReady(true); }
     if (stationsOnRef.current) {
       try { setStations((await getStations(bbox)).stations); } catch (e) { console.error(e); }
+    }
+    if (spotsOnRef.current) {
+      try { setSpots((await getSpots(bbox)).spots); } catch (e) { console.error(e); }
     }
   }, [subscribeLive]);
 
@@ -348,6 +359,36 @@ export function App() {
     }
   }, [stations, stationsOn]);
 
+  // ---- live activity-spots layer (docs/20 S2): opt-in overlay, distinct marker class ----
+  useEffect(() => {
+    if (spotsOn) { refresh(); }
+    else { for (const [, mk] of spotMarkers.current) mk.remove(); spotMarkers.current.clear(); setSpots([]); setPickedSpot(null); }
+  }, [spotsOn, refresh]);
+
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    if (!spotsOn) return;
+    const seen = new Set<string>();
+    for (const s of spots) {
+      seen.add(s.id);
+      let mk = spotMarkers.current.get(s.id);
+      if (!mk) {
+        const btn = document.createElement("button");
+        btn.className = "spot-pin";
+        btn.innerHTML = "<span>◎</span>";
+        btn.onclick = (ev) => { ev.stopPropagation(); setPickedSpot(s); };
+        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
+        spotMarkers.current.set(s.id, mk);
+      } else {
+        mk.setLngLat([s.lon, s.lat]);
+      }
+      mk.getElement().title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
+    }
+    for (const [id, mk] of spotMarkers.current) {
+      if (!seen.has(id)) { mk.remove(); spotMarkers.current.delete(id); }
+    }
+  }, [spots, spotsOn]);
+
   // ---- load detail when a cache is selected ----
   useEffect(() => {
     if (selectedId == null) { setDetail(null); return; }
@@ -447,7 +488,8 @@ export function App() {
         )}
         {showFilter && mode === "view" && (
           <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}
-            includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted} onClose={() => setShowFilter(false)} />
+            includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted}
+            spotsOn={spotsOn} setSpotsOn={setSpotsOn} onClose={() => setShowFilter(false)} />
         )}
         {showProfile && mode === "view" && (
           <ProfilePanel callsign={callsign} map={map.current}
@@ -502,11 +544,20 @@ export function App() {
               <button className="icon" onClick={() => setNearPrompt(null)}>✕</button>
             </div>
           )}
+          {pickedSpot && mode === "view" && (
+            <SpotCard spot={pickedSpot} onClose={() => setPickedSpot(null)}
+              onViewCache={(() => {
+                const c = caches.find((c) => c.id != null && c.lat != null && c.lon != null && haversine(pickedSpot.lat, pickedSpot.lon, c.lat, c.lon) <= 300);
+                return c ? () => { setRemote(null); setSelectedId(c.id!); setPickedSpot(null); } : undefined;
+              })()} />
+          )}
         </div>
 
         {/* right-dock: cache detail / mirrored cache — docked right at ≥1024px (coexists with a left panel) */}
         {detail && mode === "view" && !remote && !showBoard && (
           <DetailPanel detail={detail} callsign={callsign}
+                       activating={detail.lat != null && detail.lon != null
+                         ? spots.find((s) => haversine(s.lat, s.lon, detail.lat!, detail.lon!) <= 300) ?? null : null}
                        onClose={() => setSelectedId(null)} onLogged={reloadDetail} />
         )}
         {remote && mode === "view" && !showBoard && (

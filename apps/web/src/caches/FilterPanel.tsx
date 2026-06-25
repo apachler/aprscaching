@@ -7,6 +7,7 @@ import type { CacheType } from "@aprsweb/shared";
 export function FilterPanel(props: {
   filters: { types: CacheType[]; q: string }; setFilters: (f: { types: CacheType[]; q: string }) => void;
   includeUnvetted: boolean; setIncludeUnvetted: (v: boolean) => void;
+  spotsOn: boolean; setSpotsOn: (v: boolean) => void;
   count: number; onClose: () => void;
 }) {
   const { filters, setFilters } = props;
@@ -29,6 +30,13 @@ export function FilterPanel(props: {
           <span className="muted block">Caches mirrored from peers you haven't vetted. Off by default.</span>
         </label>
         <Switch label="Include unvetted network data" checked={props.includeUnvetted} onChange={props.setIncludeUnvetted} />
+      </div>
+      <h4>Live layers</h4>
+      <div className="row between">
+        <label>Activity spots
+          <span className="muted block">Live POTA/SOTA activations on the map. Off by default; opt-in.</span>
+        </label>
+        <Switch label="Activity spots" checked={props.spotsOn} onChange={props.setSpotsOn} />
       </div>
       <div className="row between mt-5">
         <button className="link" onClick={() => setFilters({ types: [], q: "" })}>clear all</button>
