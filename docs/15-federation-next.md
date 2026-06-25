@@ -57,6 +57,14 @@ records inherit their origin peer's trust at read time.
 ### T1.2 Corroboration quorum + hardening  *(resolves docs/06 #4)*
 Tier A via the network should mean **multiple independent instances agree**, not "the first peer said yes."
 
+**Status — quorum core IMPLEMENTED** (`corroborate.ts` · `test/corroborate.test.ts` · federation smoke green
+at default quorum 1): `queryPeerCorroboration()` now fans out to peers **in parallel** (3 s per-peer timeout),
+and a pure, unit-tested `selectCorroboration(hits, quorum)` de-dupes by instance (same instance twice = one
+voice), enforces **≥ `FED_CORROBORATION_QUORUM` distinct instances** (floors at 1 so a 0/NaN config never
+disables the gate), and returns the closest evidence annotated with `corroborators` (the instance count).
+**Still pending:** `trusted`-peer filtering (needs T1.1 tiers — today it trusts the curated `fed_peers` set),
+endpoint hardening, and privacy coarsening (below).
+
 - **Quorum** — `queryPeerCorroboration()` collects evidence from peers **in parallel**, keeps only
   `trusted` peers (T1.1), de-dupes by instance + IGate (independence), and upgrades to Tier A only at
   **≥ N distinct instances** (config `FED_CORROBORATION_QUORUM`, default 1 for a small network → raise as
@@ -180,7 +188,7 @@ grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T
 
 ## Milestone / sequence
 - **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine · T1.2
-  corroboration quorum + hardening · T1.3 tombstones.
+  corroboration quorum **(quorum core done; hardening/privacy pending)** + hardening · T1.3 tombstones.
 - **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation.
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.

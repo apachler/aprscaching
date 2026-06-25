@@ -16,7 +16,7 @@ import { haversineMeters } from "@aprsweb/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers } from "./federation_sync.js";
 
-export interface Evidence { instance: string; igateCall: string; distanceM: number; ts: number }
+export interface Evidence { instance: string; igateCall: string; distanceM: number; ts: number; corroborators?: number }
 export interface CorroborationQuery {
   callsign: string; lat: number; lon: number; radiusM: number; since: number; until: number;
 }
@@ -58,11 +58,33 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
   return json(ev ? { corroborated: true, evidence: ev } : { corroborated: false });
 }
 
-/** Client: ask each peer to corroborate; return the first independent match (with its instance). */
+/**
+ * Quorum decision (pure, testable — F4/T1.2): require corroboration from **≥ quorum DISTINCT
+ * instances** before a find may reach Tier A. De-dupes by instance (the same instance answering
+ * twice is one voice) so no single peer can mint Tier A; below quorum returns null. Returns the
+ * closest evidence, annotated with how many independent instances corroborated.
+ */
+export function selectCorroboration(hits: Evidence[], quorum: number): Evidence | null {
+  const need = Math.max(1, Math.floor(quorum) || 1);
+  const byInstance = new Map<string, Evidence>();
+  for (const h of hits) {
+    const prev = byInstance.get(h.instance);
+    if (!prev || h.distanceM < prev.distanceM) byInstance.set(h.instance, h); // keep the closest per instance
+  }
+  if (byInstance.size < need) return null;
+  const best = [...byInstance.values()].sort((a, b) => a.distanceM - b.distanceM)[0]!;
+  return { ...best, corroborators: byInstance.size };
+}
+
+/**
+ * Client: ask peers to corroborate **in parallel**, then apply the quorum gate (default 1; raise via
+ * `FED_CORROBORATION_QUORUM` as the network grows). Peers are the operator's curated set (`fed_peers`),
+ * so they are the trusted corroboration pool until per-peer trust tiers land (docs/15 T1.1).
+ */
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
-  const peers = await listEnabledPeers(env);
-  for (const peer of peers) {
-    if (peer.instance && peer.instance === env.INSTANCE) continue; // never ask ourselves
+  const peers = (await listEnabledPeers(env)).filter((p) => !(p.instance && p.instance === env.INSTANCE));
+  const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 1);
+  const results = await Promise.all(peers.map(async (peer): Promise<Evidence | null> => {
     const base = peer.url.replace(/\/+$/, "");
     try {
       const r = await fetch(`${base}/federation/corroborate`, {
@@ -71,10 +93,10 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
         body: JSON.stringify(q),
         signal: AbortSignal.timeout(3000),
       });
-      if (!r.ok) continue;
+      if (!r.ok) return null;
       const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };
-      if (data.corroborated && data.evidence) return { instance: peer.instance ?? base, ...data.evidence };
-    } catch { /* try the next peer */ }
-  }
-  return null;
+      return data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null;
+    } catch { return null; }
+  }));
+  return selectCorroboration(results.filter((e): e is Evidence => e != null), quorum);
 }

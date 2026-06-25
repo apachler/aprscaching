@@ -73,6 +73,7 @@ const env: Env = {
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_PEERS: process.env.FED_PEERS,
   FED_DISCOVER: process.env.FED_DISCOVER,
+  FED_CORROBORATION_QUORUM: process.env.FED_CORROBORATION_QUORUM,
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
   BBS_CALL: process.env.BBS_CALL,
