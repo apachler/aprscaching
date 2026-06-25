@@ -155,21 +155,29 @@ corroboration** — nobody can reach it. So today it's a read/verify-only leaf, 
 caches/finds + independent IGate hearings never reach the commons. Three ways to let it fully join,
 in increasing effort — the first needs **no code** and already meets the requirement for most operators:
 
+**Status — paths (0) + (1) DONE; (2) deferred.** (0) is documented (`docs/23` Topology 1). (1) push-to-hub
+shipped: `POST /federation/submit` (`federation_sync.ts`) + the spoke-side `pushToHub` (wired into
+`runScheduled`), `test`-covered by the federation smoke (+6 assertions). (2) the persistent-WS rendezvous
+relay — the only tunnel-free path that restores *corroboration* contribution — remains deferred (large,
+runtime-divergent infra; needs the instance-key registry T4.2 for downstream re-serving).
+
 - **(0) Reverse tunnel — supported today, zero new code.** A free **Cloudflare Tunnel** (`cloudflared`,
   already the `docs/23` Topology 1 recipe), Tailscale Funnel, or ngrok gives the box a stable public
   hostname + TLS over an *outbound* tunnel — **no FQDN-you-own, no static IP, no port-forward, no
   firewall changes**. Through it the box is a **full peer** (feeds *and* corroboration work). This is the
   recommended firewalled-peer path and what `fed_peers.url` should point at.
-- **(1) Push-to-hub for feeds — cheap interim (mirroring only).** Because every record is **Ed25519-signed
-  by its origin and signatures are portable**, a NAT'd peer can *push* its signed caches/finds to a
-  reachable **home/hub** peer over an outbound connection; the hub **re-serves them in its own feed with
-  the original `signer` preserved**. Consumers verify the origin's signature regardless of who served it —
-  no trust delegation, no forgery surface. The mirror path *already* preserves `rec.signer` and verifies
-  against the signer's published key (`federation_sync.ts:accept`); the only missing pieces are a
-  **`POST /federation/submit`** (signed-envelope intake, signer-key-verified, rate-limited) on the hub and
-  a **re-host-with-original-signer** emit in `handleFederationCaches/Finds`. Restores **commons
-  visibility** for outbound-only peers. Does **NOT** solve live corroboration (that needs the box's live
-  RF positions, which it isn't shipping).
+- **(1) Push-to-hub for feeds — DONE (push-mode mirroring).** A spoke pushes its **signed** records to a
+  reachable hub's **`POST /federation/submit`** (secret-gated via `FED_SUBMIT_SECRET`, optional instance
+  allowlist `FED_SUBMIT_INSTANCES`); the hub verifies each record against the **supplied key**, requires
+  `signer === submitter` (so a spoke can only contribute records as *itself*, never impersonate another
+  instance), and **mirrors them into the same `remote_*` tables as pull-sync** — display-only, idempotent
+  by global id. The spoke side is `pushToHub` (`FED_HUB_URL` + the shared secret), incremental via in-memory
+  cursors, run from `runScheduled` and reusing the T2.2 `buildFeed` to produce the same signed records.
+  This restores **commons visibility** for an outbound-only peer at its hub (e.g. the flagship `.net`
+  instance most users see). It does **NOT** solve live corroboration (the spoke isn't shipping its RF
+  positions), and the hub does **not re-serve** submitted records to *its* downstream pull-peers — that
+  downstream re-host needs the instance-key registry (T4.2), so submitted records stop at the hub, exactly
+  like any other mirror (`federation_sync.ts` header: mirrors are display-only, never re-published).
 - **(2) Gateway-as-relay / rendezvous — full solution.** The NAT'd peer opens a **persistent outbound
   WebSocket** to a reachable rendezvous instance; the rendezvous **relays both feed-pull and corroboration
   queries** back over that socket (request/response framed; the peer answers from its own DB). This is the
@@ -256,7 +264,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 · `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
 (T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2, **shipped** — coarse distance + bucketed ts + instance, no exact IGate; optional
 `x-fed-secret` allowlist). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
-(signed-envelope intake for push-to-hub) + a relay/rendezvous WS endpoint (T2.3).
+(signed-envelope intake for push-to-hub, T2.3 **shipped**) + a relay/rendezvous WS endpoint (T2.3 path 2, deferred).
 
 ## Rule / cost / privacy compliance
 - **Trust-model invariant:** a session or a mirror NEVER upgrades a find's tier; only quorum
@@ -273,7 +281,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F4 (trust — launch-gating before opening the network) — COMPLETE:** T1.1 peer tiers + quarantine
   **(done)** · T1.2 corroboration quorum + hardening + privacy coarsening **(done)** · T1.3 signed
   tombstones **(done)**.
-- **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall
+- **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
@@ -293,9 +301,11 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T2.2:** every feed serves + syncs through one generic envelope; a newer consumer syncing an older
   peer skips feeds it doesn't serve (404-as-skip) instead of failing the whole pull (**met**: negotiation
   unit-tested; smoke asserts `protocolVersions`/`capabilities` are advertised and an unknown feed 404s).
-- **T2.3:** a peer with no inbound reachability joins as a full contributor — its caches/finds appear on
-  peers' maps and its IGate hearings count toward others' quorum — via a tunnel (today), or push-to-hub
-  (mirroring) / rendezvous relay (corroboration); a relayed packet is no more trusted than a direct one.
+- **T2.3:** a peer with no inbound reachability contributes its caches/finds to a reachable hub via a
+  tunnel (today) or push-to-hub (**met**: smoke asserts a spoke's signed cache is verified + mirrored onto
+  the hub map, secret-gated, tampered records rejected, no cross-instance impersonation). Quorum
+  corroboration from a tunnel-free spoke awaits the rendezvous relay (path 2, deferred). A pushed packet
+  is no more trusted than a pulled one — same `remote_*` mirror, same display-only semantics.
 - **T3.1:** the public map/API shows trusted-peer caches with origin attribution; unvetted are opt-in.
 - **T3.2:** moving OE8APR from A to B re-homes finds and the network attributes them to the account.
 - **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire.

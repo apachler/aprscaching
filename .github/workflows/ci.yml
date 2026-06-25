@@ -69,6 +69,7 @@ jobs:
           DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" \
             pnpm --filter @aprsweb/node-gateway start &
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
+            FED_SUBMIT_SECRET=submitsecret \
             pnpm --filter @aprsweb/node-gateway start &
           PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
 

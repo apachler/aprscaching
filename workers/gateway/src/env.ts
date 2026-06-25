@@ -22,6 +22,11 @@ export interface Env {
   FED_CORROBORATION_TIME_BUCKET_SEC?: string; // request/response time bucket (default 600)
   FED_CORROBORATION_DIST_BUCKET_M?: string; // response distance bucket in metres (default 100)
 
+  // ---- push-to-hub: NAT/firewall peers contribute without inbound reachability (F5/T2.3) ----
+  FED_SUBMIT_SECRET?: string;    // HUB: if set, enables POST /federation/submit, gated by x-fed-secret. SPOKE: the secret it pushes with.
+  FED_SUBMIT_INSTANCES?: string; // HUB: optional comma-separated allowlist of submitter instance ids (else any non-self)
+  FED_HUB_URL?: string;          // SPOKE: a reachable hub to push our signed records to (push-mode mirroring)
+
   // ---- imports (M3) — OpenCaching OKAPI ----
   OKAPI_BASE?: string;      // e.g. https://www.opencaching.de
   OKAPI_KEY?: string;       // free per-node consumer key (Level-1)

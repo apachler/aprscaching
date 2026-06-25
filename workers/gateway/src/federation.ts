@@ -139,7 +139,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     protocolVersions: PROTOCOL_VERSIONS,
     instance: instanceOf(req, env),
     software: "aprscaching",
-    capabilities: ["caches", "finds", "keys", "tombstones", "notify"],
+    capabilities: ["caches", "finds", "keys", "tombstones", "notify", env.FED_SUBMIT_SECRET ? "submit" : null].filter(Boolean),
     endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones", notify: "/federation/notify" },
     sigAlg: "Ed25519",
     signed: !!fk,
@@ -170,9 +170,10 @@ function feedParams(req: Request): { since: number; limit: number } {
   };
 }
 
-export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Promise<Response> {
-  const { since, limit } = feedParams(req);
-  const instance = instanceOf(req, env);
+/** Build the signed record items for a feed page (shared by serveFeed and the push-to-hub client, T2.3). */
+export async function buildFeed(
+  env: Env, instance: string, def: FeedServeDef, since: number, limit: number,
+): Promise<{ items: Record<string, unknown>[]; nextCursor: number; complete: boolean }> {
   const sign = await feedSigner(env);
   const rows = await def.selectRows(env, since, limit);
   let nextCursor = since;
@@ -184,18 +185,30 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
     items.push(rec);
     if (cursor > nextCursor) nextCursor = cursor;
   }
-  return json({ instance, type: def.type, since, nextCursor, count: items.length, complete: items.length < limit, items });
+  return { items, nextCursor, complete: items.length < limit };
+}
+
+export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Promise<Response> {
+  const { since, limit } = feedParams(req);
+  const instance = instanceOf(req, env);
+  const { items, nextCursor, complete } = await buildFeed(env, instance, def, since, limit);
+  return json({ instance, type: def.type, since, nextCursor, count: items.length, complete, items });
+}
+
+/** This instance's raw Ed25519 public key (base64url), or null if unsigned — for push-to-hub (T2.3). */
+export async function feedPublicKey(env: Env): Promise<string | null> {
+  return (await loadKey(env))?.publicX ?? null;
 }
 
 // only NATIVE caches are federated; imported third-party data stays local (M3 decision)
-const CACHE_FEED: FeedServeDef<CacheRow> = {
+export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   selectRows: async (env, since, limit) => (await env.DB.prepare(
     "SELECT * FROM caches WHERE source = 'native' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
   ).bind(since, limit).all<CacheRow>()).results,
   recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
 };
-const FIND_FEED: FeedServeDef<FindRow> = {
+export const FIND_FEED: FeedServeDef<FindRow> = {
   type: "find",
   selectRows: async (env, since, limit) => (await env.DB.prepare(
     `SELECT l.*, c.code AS cache_code FROM cache_logs l
@@ -204,7 +217,7 @@ const FIND_FEED: FeedServeDef<FindRow> = {
   ).bind(since, limit).all<FindRow>()).results,
   recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.id, data: findData(r, instance) }),
 };
-const KEY_FEED: FeedServeDef<KeyRow> = {
+export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",
   selectRows: async (env, since, limit) => (await env.DB.prepare(
     "SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",

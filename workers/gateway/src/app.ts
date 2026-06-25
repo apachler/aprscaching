@@ -16,7 +16,7 @@ import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./ca
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
-import { handleFederationSync, handleFederationPeers, handlePeerTrust, syncAllPeers } from "./federation_sync.js";
+import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleCorroborate } from "./corroborate.js";
@@ -52,6 +52,8 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM remote_tombstones WHERE ts < ?").bind(nowS - tombTtl),
   ]);
   try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
+  // push-to-hub (T2.3): a NAT'd spoke contributes its records to a reachable hub (no-op unless configured)
+  try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
 }
 
 export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
@@ -79,6 +81,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
   if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // T1.3/ADR-5 delete propagation
   if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // T2.1 gossip push-to-pull
+  if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // T2.3 push-to-hub (NAT/firewall peers)
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);

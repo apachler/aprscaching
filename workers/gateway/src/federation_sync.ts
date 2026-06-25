@@ -8,7 +8,11 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION } from "./federation.js";
+import {
+  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION,
+  buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
+} from "./federation.js";
+import { TOMBSTONE_FEED } from "./tombstones.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -282,4 +286,81 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
     "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
   ).bind(trust, trust, now(), url).run();
   return json({ ok: true, url, trust });
+}
+
+// ---- push-to-hub (T2.3): NAT/firewall peers contribute without inbound reachability ----
+
+/** type → applier, reusing the exact mirror path as pull-sync (display-only, idempotent by global id). */
+const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> =
+  Object.fromEntries(SYNC_DEFS.map((d) => [d.type, d.apply]));
+
+/** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
+const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
+const PUSH_CURSORS = new Map<string, number>(); // "hub|type" -> last pushed cursor (in-memory; re-push on restart is idempotent)
+
+/**
+ * HUB endpoint (T2.3): accept a spoke's signed records and mirror them as if we had pulled them
+ * (push-mode mirroring — same remote_* tables, same display-only semantics). Secret-gated; optionally
+ * restricted to an instance allowlist. Each record is verified against the supplied key and MUST name
+ * the submitter as its signer, so a spoke can only contribute records as ITSELF — never impersonate
+ * another instance. Downstream re-serving of submitted records needs the instance-key registry (T4.2).
+ */
+export async function handleFederationSubmit(req: Request, env: Env): Promise<Response> {
+  const secret = env.FED_SUBMIT_SECRET;
+  if (!secret) return json({ ok: false, error: "submit disabled" }, { status: 403 });
+  if (req.headers.get("x-fed-secret") !== secret) return json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const b = (await req.json().catch(() => null)) as { instance?: string; publicKey?: string; records?: FeedRecord[] } | null;
+  if (!b?.instance || !b.publicKey || !Array.isArray(b.records))
+    return json({ ok: false, error: "instance, publicKey, records required" }, { status: 400 });
+  if (b.instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
+  const allow = (env.FED_SUBMIT_INSTANCES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (allow.length && !allow.includes(b.instance)) return json({ ok: false, error: "instance not allowed" }, { status: 403 });
+
+  let key: CryptoKey;
+  try { key = await importVerifyKey(b.publicKey); } catch { return json({ ok: false, error: "bad public key" }, { status: 400 }); }
+
+  let applied = 0, rejected = 0;
+  for (const rec of b.records) {
+    const apply = APPLIERS[rec.type];
+    if (!apply || rec.signer !== b.instance) { rejected++; continue; }   // unknown type / wrong (or absent) signer
+    if (!(await verifyRecordSig(key, rec))) { rejected++; continue; }     // integrity
+    if (await isTombstoned(env, rec.id)) { rejected++; continue; }        // already purged by a tombstone
+    await apply(env, rec, b.instance);
+    applied++;
+  }
+  return json({ ok: true, applied, rejected });
+}
+
+/**
+ * SPOKE side (T2.3): push our signed records to a configured hub (push-mode mirroring) when we can't be
+ * pulled. Incremental via in-memory cursors; idempotent (the hub upserts by global id), so a restart that
+ * re-pushes from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
+ */
+export async function pushToHub(env: Env): Promise<{ pushed: number } | null> {
+  const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
+  const secret = env.FED_SUBMIT_SECRET;
+  if (!hub || !secret || !env.INSTANCE) return null;
+  const publicKey = await feedPublicKey(env);
+  if (!publicKey) return null; // unsigned instance: the hub couldn't verify our records
+  let pushed = 0;
+  for (const def of PUSH_FEEDS) {
+    const ckey = `${hub}|${def.type}`;
+    let cursor = PUSH_CURSORS.get(ckey) ?? 0;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const { items, nextCursor, complete } = await buildFeed(env, env.INSTANCE, def, cursor, 500);
+      if (!items.length) break;
+      const res = await fetch(`${hub}/federation/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-fed-secret": secret },
+        body: JSON.stringify({ instance: env.INSTANCE, publicKey, records: items }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return { pushed }; // stop; retry next cycle from the same cursor
+      PUSH_CURSORS.set(ckey, nextCursor);
+      pushed += items.length;
+      if (complete || nextCursor === cursor) break;
+      cursor = nextCursor;
+    }
+  }
+  return { pushed };
 }

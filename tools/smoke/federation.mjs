@@ -7,6 +7,7 @@
 const PUB = process.env.PUB ?? "http://127.0.0.1:8801";
 const SUB = process.env.SUB ?? "http://127.0.0.1:8802";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
+const SUBMIT_SECRET = process.env.SUBMIT_SECRET ?? "submitsecret"; // SUB is started as a hub with this (T2.3)
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 
@@ -274,6 +275,33 @@ ok("descriptor advertises every feed capability",
   ["caches", "finds", "keys", "tombstones", "notify"].every((c) => (wk2.data?.capabilities ?? []).includes(c)), JSON.stringify(wk2.data?.capabilities));
 const bogusFeed = await call(PUB, "GET", "/federation/bogus");
 ok("an unknown feed path 404s (the consumer skips it forward-compatibly)", bogusFeed.status === 404, `status=${bogusFeed.status}`);
+
+// ---- F5/T2.3: push-to-hub (NAT/firewall peers contribute via submit) ----
+// the publisher has no submit secret configured → the endpoint is disabled there
+ok("submit is disabled where no secret is configured -> 403",
+  (await call(PUB, "POST", "/federation/submit", { instance: "x", publicKey: "x", records: [] })).status === 403);
+ok("submit without the secret -> 401",
+  (await call(SUB, "POST", "/federation/submit", { instance: "oe.spoke", publicKey: "x", records: [] })).status === 401);
+
+// a NAT'd spoke "oe.spoke" (which the subscriber does NOT pull) pushes a signed cache it owns
+const skp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const spub = b64u(await crypto.subtle.exportKey("raw", skp.publicKey));
+const spokeData = { code: "SP-0001", ownerCall: "OE0SPK", title: "Spoke Cache " + now(), type: "single", status: "active", lat: 47.5, lon: 16.0, createdAt: now(), updatedAt: now() };
+const spokeId = "oe.spoke:cache:1";
+const spokeSig = b64u(await crypto.subtle.sign("Ed25519", skp.privateKey, new TextEncoder().encode(stableStringify({ type: "cache", id: spokeId, data: spokeData }))));
+const spokeRec = { type: "cache", id: spokeId, cursor: spokeData.updatedAt, data: spokeData, sig: spokeSig, signer: "oe.spoke" };
+const sub1 = await call(SUB, "POST", "/federation/submit", { instance: "oe.spoke", publicKey: spub, records: [spokeRec] }, { "x-fed-secret": SUBMIT_SECRET });
+ok("hub accepts a signed submission from a spoke (applied 1)", sub1.data?.ok === true && sub1.data?.applied === 1, JSON.stringify(sub1.data));
+const smap = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
+ok("the spoke's cache is mirrored onto the hub map (push-mode mirroring)",
+  (smap.data?.caches ?? []).some((c) => c.origin === "oe.spoke" && c.mirrored), JSON.stringify((smap.data?.caches ?? []).map((c) => c.origin)));
+
+// integrity: a tampered record is rejected; impersonating the hub's own instance is refused
+const tampered = { ...spokeRec, data: { ...spokeData, title: "TAMPERED" } };
+const sub2 = await call(SUB, "POST", "/federation/submit", { instance: "oe.spoke", publicKey: spub, records: [tampered] }, { "x-fed-secret": SUBMIT_SECRET });
+ok("a tampered submission is rejected (signature integrity)", sub2.data?.applied === 0 && sub2.data?.rejected === 1, JSON.stringify(sub2.data));
+const sub3 = await call(SUB, "POST", "/federation/submit", { instance: "oe.sub", publicKey: spub, records: [] }, { "x-fed-secret": SUBMIT_SECRET });
+ok("a spoke cannot submit as the hub's own instance -> 400", sub3.status === 400, JSON.stringify(sub3.data));
 
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)

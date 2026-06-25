@@ -45,7 +45,7 @@ export async function emitTombstones(env: Env, origin: string, items: TombstoneI
 }
 
 /** Tombstone feed via the generalized envelope (T2.2) — cursor = monotonic seq, signed at serve time. */
-const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
+export const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
   type: "tombstone",
   selectRows: async (env, since, limit) => (await env.DB.prepare(
     "SELECT seq, kind, target_id, origin, ts FROM tombstones WHERE seq > ? ORDER BY seq LIMIT ?",
