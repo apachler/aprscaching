@@ -1,0 +1,42 @@
+# Base stack: gateway + ingest + Caddy. Topology 2 (OCI all-in-one) and any VPS.
+# Up:  docker compose up -d --build
+services:
+  gateway:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    image: aprscaching:local
+    command: ["pnpm","--filter","@aprsweb/node-gateway","start"]
+    environment:
+      DB_PATH: /data/aprscaching.db
+      PORT: "8080"
+    volumes: [ "data:/data" ]
+    restart: unless-stopped
+
+  ingest:                     # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
+    image: aprscaching:local
+    command: ["pnpm","--filter","@aprsweb/ingest","start"]
+    environment:
+      APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
+      APRSIS_PORT: ${APRSIS_PORT:-14580}
+      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN}
+      APRSIS_PASSCODE: ${APRSIS_PASSCODE}
+      APRSIS_FILTER: ${APRSIS_FILTER}
+      INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
+      INGEST_SECRET: ${INGEST_SECRET}
+      BATCH_MS: ${BATCH_MS:-2000}
+    depends_on: [gateway]
+    restart: unless-stopped
+
+  caddy:                      # TLS + static SPA + reverse proxy
+    image: caddy:2
+    ports: ["80:80","443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../apps/web/dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [gateway]
+    restart: unless-stopped
+
+volumes: { data: {}, caddy_data: {}, caddy_config: {} }

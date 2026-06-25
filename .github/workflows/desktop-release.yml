@@ -1,0 +1,23 @@
+name: desktop-release
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest        # Bun cross-compiles every target from one runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: pnpm install --frozen-lockfile
+      - run: bash deploy/desktop/build-exe.sh "${GITHUB_REF_NAME:-dev}"
+      - uses: actions/upload-artifact@v4
+        with: { name: aprscaching-desktop, path: dist/desktop/* }
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with: { files: dist/desktop/* }
+  # NOTE: signed/notarized macOS binaries need a macos runner + Apple Developer ID secrets;
+  # signed Windows needs an Authenticode cert. Add a separate job when you have them.

@@ -1,8 +1,9 @@
 # CLAUDE.md — aprscaching.com (reborn)
 
-## Design rules (read before building/changing any UI)
+## Rules (read before building/changing the relevant area)
 @.claude/rules/ui-ux.md
 @.claude/rules/css.md
+@.claude/rules/ingest-locality.md
 
 ## What this is
 APRScaching-first web workbench. APRScaching is the product; a full APRS workbench is the
@@ -19,8 +20,17 @@ Objects + D1 + R2. **Canonical host = `aprscaching.net`** (the first network pee
 + platform); `aprscaching.com` 301-redirects to `.net` (pre-auth, edge). `INSTANCE`/`APP_URL`/`RP_ID`
 = `.net`; API host `api.aprscaching.net`. WebAuthn `rpId` binds to one domain → `.com` is a pure
 redirect, never a sign-in origin (see `docs/18`).
-apps/ingest = always-on APRS-IS forwarder (Fly/Railway/Pi). packages/aprs = pure parser
-(runs in Worker, Node, browser). packages/shared = zod contracts.
+apps/ingest = the operator-local RF/APRS-IS ingest (Pi/PC/mini-PC; a cloud box MAY run an IS-only
+feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs = pure parser (runs in
+Worker, Node, Bun, browser). packages/shared = zod contracts.
+
+## Deployment
+Five topologies (`docs/23-deployment.md` + `deploy/`): **0** Bun single-binary desktop · **1** Pi at
+home (Cloudflare Tunnel) · **2** OCI all-in-one VM (Caddy) · **3** OCI core + Cloudflare CDN · **4** OCI
+ingest + CF Workers/D1/R2. **Tri-runtime:** Node+SQLite (1–3) · CF Worker+D1 (4) · Bun+`bun:sqlite` (0,
+adopted-but-unfinished — adapter + a Bun conformance lane still to do). RF ingest is ALWAYS
+operator-local (local `apps/ingest` *or* browser Web Serial/BLE). Every instance MUST expose the ADR-3
+Source link + back up its DB. `deploy/` scaffolding is validate-at-deploy (not yet CI-exercised).
 
 ## Verification (the core)
 Trust follows corroboration, not transport:

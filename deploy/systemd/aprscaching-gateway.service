@@ -1,0 +1,14 @@
+[Unit]
+Description=aprscaching gateway (Node + SQLite)
+After=network-online.target
+Wants=network-online.target
+[Service]
+WorkingDirectory=/opt/aprscaching
+Environment=DB_PATH=/opt/aprscaching/data/aprscaching.db
+Environment=PORT=8080
+ExecStart=/usr/bin/pnpm --filter @aprsweb/node-gateway start
+Restart=always
+RestartSec=5
+User=aprscaching
+[Install]
+WantedBy=multi-user.target

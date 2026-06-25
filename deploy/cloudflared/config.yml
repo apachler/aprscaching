@@ -1,0 +1,7 @@
+# Alternative to TUNNEL_TOKEN: a credentials-file named tunnel.
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: aprscaching.example.org
+    service: http://caddy:80
+  - service: http_status:404
