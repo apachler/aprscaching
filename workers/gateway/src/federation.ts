@@ -97,6 +97,17 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
   return b64url(await crypto.subtle.sign("Ed25519", fk.key, msg));
 }
 
+/**
+ * Serve-time feed signer (shared with new feeds, e.g. tombstones). Returns a closure that signs a
+ * `{type,id,data}` record exactly like the caches/finds/keys feeds, or null if the instance has no
+ * FED_PRIVATE_KEY (feeds are then served unsigned). Callers set `rec.signer = instance` when signed.
+ */
+export async function feedSigner(env: Env): Promise<((type: string, id: string, data: unknown) => Promise<string>) | null> {
+  const fk = await loadKey(env);
+  if (!fk) return null;
+  return (type, id, data) => sign(fk, type, id, data);
+}
+
 /** Import a peer's raw Ed25519 public key (base64url) for verifying its feed (F2). */
 export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", fromB64(rawB64url), { name: "Ed25519" }, false, ["verify"]);
@@ -124,8 +135,8 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     protocol: PROTOCOL,
     instance: instanceOf(req, env),
     software: "aprscaching",
-    capabilities: ["caches", "finds"],
-    endpoints: { caches: "/federation/caches", finds: "/federation/finds" },
+    capabilities: ["caches", "finds", "keys", "tombstones"],
+    endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones" },
     sigAlg: "Ed25519",
     signed: !!fk,
     publicKey: fk?.publicX ?? null,        // raw Ed25519 public key (base64url)

@@ -18,7 +18,7 @@ export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "bloc
 
 interface PeerRow {
   url: string; instance: string | null; public_key: string | null;
-  caches_cursor: number; finds_cursor: number; keys_cursor: number; enabled: number;
+  caches_cursor: number; finds_cursor: number; keys_cursor: number; tombstones_cursor: number; enabled: number;
   trust: TrustLevel;
 }
 
@@ -61,24 +61,24 @@ export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1 AND trust != 'blocked'").all<PeerRow>()).results;
 }
 
-export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; errors: string[] }> {
+export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; tombstones: number; errors: string[] }> {
   const peers = await listEnabledPeers(env);
-  let caches = 0, finds = 0, keys = 0;
+  let caches = 0, finds = 0, keys = 0, tombstones = 0;
   const errors: string[] = [];
   for (const p of peers) {
     try {
       const r = await syncPeer(env, p);
-      caches += r.caches; finds += r.finds; keys += r.keys;
+      caches += r.caches; finds += r.finds; keys += r.keys; tombstones += r.tombstones;
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
       await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=? WHERE url=?").bind(msg, now(), p.url).run();
     }
   }
-  return { peers: peers.length, caches, finds, keys, errors };
+  return { peers: peers.length, caches, finds, keys, tombstones, errors };
 }
 
-async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number }> {
+async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number }> {
   const base = p.url.replace(/\/+$/, "");
   const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; peers?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
@@ -96,20 +96,63 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   }
 
   // never mirror ourselves
-  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0 };
+  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0 };
 
   const verifyKey = pub ? await importVerifyKey(pub) : null;
+  // tombstones FIRST: a delete recorded before this pass suppresses re-mirroring of a stale record
+  // that the caches/finds feeds might still hand us in the same sync (T1.3).
+  const tombstones = await syncTombstones(env, base, p, wk.instance, verifyKey);
   const caches = await syncCaches(env, base, p, wk.instance, verifyKey);
   const finds = await syncFinds(env, base, p, wk.instance, verifyKey);
   const keys = await syncKeys(env, base, p, wk.instance, verifyKey);
   await env.DB.prepare("UPDATE fed_peers SET last_sync=?, last_error=NULL WHERE url=?").bind(now(), p.url).run();
-  return { caches, finds, keys };
+  return { caches, finds, keys, tombstones };
+}
+
+/** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
+async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
+  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?").bind(globalId).first<{ x: number }>());
 }
 
 async function accept(env: Env, rec: FeedRecord, verifyKey: CryptoKey | null): Promise<boolean> {
   if (verifyKey && !(await verifyRecordSig(verifyKey, rec))) return false; // bad signature
   if (rec.signer && rec.signer === ours(env)) return false;                // never mirror our own
+  if (await isTombstoned(env, rec.id)) return false;                       // purged by a peer tombstone
   return true;
+}
+
+/**
+ * Apply a peer's tombstone (T1.3): verify-then-purge. Deletes any mirrored cache/find whose global id
+ * matches `targetId` (the global-id namespace makes kind unambiguous), and records it so the record
+ * is never re-mirrored. PII-free — the tombstone carries only signed ids + a timestamp.
+ */
+async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promise<void> {
+  const d = rec.data as { kind?: string; targetId?: string; ts?: number };
+  const target = d.targetId;
+  if (!target) return;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM remote_caches WHERE global_id = ?").bind(target),
+    env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
+    env.DB.prepare("INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)")
+      .bind(target, origin, d.kind ?? "unknown", d.ts ?? now(), now()),
+  ]);
+}
+
+async function syncTombstones(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
+  let cursor = p.tombstones_cursor, applied = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const feed = await fetchJson<Feed>(`${base}/federation/tombstones?since=${cursor}&limit=500`);
+    for (const rec of feed.items ?? []) {
+      if (!(await accept(env, rec, verifyKey))) continue;
+      await applyTombstone(env, rec, rec.signer ?? feed.instance ?? instance);
+      applied++;
+    }
+    const next = feed.nextCursor ?? cursor;
+    await env.DB.prepare("UPDATE fed_peers SET tombstones_cursor=? WHERE url=?").bind(next, p.url).run();
+    if (feed.complete || next === cursor) break;
+    cursor = next;
+  }
+  return applied;
 }
 
 async function syncCaches(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
@@ -210,7 +253,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
   await seedPeers(env);
   const peers = (await env.DB.prepare(
     `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
-            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, enabled, last_sync, last_error
+            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, enabled, last_sync, last_error
        FROM fed_peers ORDER BY url`,
   ).all()).results;
   return json({ peers });

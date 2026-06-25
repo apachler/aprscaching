@@ -17,6 +17,7 @@ import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, syncAllPeers } from "./federation_sync.js";
+import { handleFederationTombstones } from "./tombstones.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -38,8 +39,14 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
 
 /** Scheduled work: TTL firehose positions (loggers kept longer) + pull from federation peers. */
 export async function runScheduled(env: Env): Promise<void> {
-  const cutoff = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
-  await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(cutoff).run();
+  const nowS = Math.floor(Date.now() / 1000);
+  await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(nowS - 7 * 24 * 3600).run();
+  // tombstones are tiny + PII-free; retain long enough for every peer to converge (T1.3, default 180d)
+  const tombTtl = (Number(env.TOMBSTONE_TTL_DAYS) || 180) * 24 * 3600;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM tombstones WHERE ts < ?").bind(nowS - tombTtl),
+    env.DB.prepare("DELETE FROM remote_tombstones WHERE ts < ?").bind(nowS - tombTtl),
+  ]);
   try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
 }
 
@@ -66,6 +73,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
+  if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // T1.3/ADR-5 delete propagation
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);

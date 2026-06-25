@@ -92,6 +92,16 @@ lend Tier-A weight). **Still pending:** endpoint hardening and privacy coarsenin
 GDPR deletes and removed caches propagate. Full spec in `docs/14`; here it joins the feed family:
 `tombstones` table, `GET /federation/tombstones?since=<cursor>` (Ed25519-signed like the others), peer
 verify-and-purge on sync, PII-free (signed global ids + ts only), long retention for convergence.
+
+**Status — IMPLEMENTED** (migration `0014_tombstones.sql` · `tombstones.ts` · `federation_sync.ts` ·
+federation smoke +9 assertions green): a GDPR account-delete now emits **PII-free find tombstones**
+(`emitTombstones`, signed at serve time by `GET /federation/tombstones`, cursor = monotonic `seq`); the
+peer sync loop pulls tombstones **first**, verifies each against the origin's key, and **purges the
+matching `remote_caches`/`remote_finds` by global id**, recording it in `remote_tombstones` to suppress
+re-mirroring (`accept()` gate). Caches propagate their removal via **archive + `updated_at` bump** (they
+re-serve through the caches feed and drop off peer maps), so no cache tombstone is needed on
+account-delete. Retention GC runs in `runScheduled` (`TOMBSTONE_TTL_DAYS`, default 180). The apply path
+already handles `kind='cache'` for when an explicit cache-delete endpoint lands.
 - *Worth:* EU-mandatory, and keeps the mirrored catalog correct (no zombie caches/finds).
 
 ---
@@ -213,12 +223,13 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 ## Schema additions (new migrations after `0012`; numbers assigned at implementation, never renumber)
 - `fed_peers` += `trust, added_via, approved_at, rep_confirmed, rep_failed` (T1.1 — **landed as
   `0013_peer_trust.sql`**; `0012` stays reserved for monetization per CLAUDE.md, gap is intentional)
-- `tombstones` table + `GET /federation/tombstones` (T1.3 / ADR-5; per `docs/14`)
+- `tombstones` + `remote_tombstones` tables + `fed_peers.tombstones_cursor` + `GET /federation/tombstones`
+  (T1.3 / ADR-5; **landed as `0014_tombstones.sql`**)
 - `caches` += `fed_scope` (T3.3)
 - key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
 
 ## API additions
-`POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3) · `account-move` feed type
+`POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3, **shipped**) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
 · `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
 (T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
@@ -237,7 +248,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 
 ## Milestone / sequence
 - **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine **(done)** · T1.2
-  corroboration quorum **(quorum core + trusted-only filter done; hardening/privacy pending)** · T1.3 tombstones.
+  corroboration quorum **(quorum core + trusted-only filter done; hardening/privacy pending)** · T1.3
+  signed tombstones **(done)**.
 - **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
@@ -248,7 +260,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   excluded from verification until promoted; a blocked peer is never fetched.
 - **T1.2:** a find upgrades to Tier A only when ≥ quorum distinct trusted instances corroborate; the
   corroboration endpoint rejects unauthenticated abuse and answers in grid+bucket, not exact coords.
-- **T1.3:** deleting an account/cache on instance A removes its mirrored copies on peer B after sync.
+- **T1.3:** deleting an account on instance A removes its mirrored copies on peer B after sync — the
+  tombstone is signed, verifies against A's key, and carries no callsign/PII (**met**: smoke asserts the
+  TOMB1 cache drops off B's map and the find tombstone is signed + PII-free).
 - **T2.1:** a new find on A is mirrored/corroborated on B within seconds of a notify, not a poll cycle.
 - **T2.3:** a peer with no inbound reachability joins as a full contributor — its caches/finds appear on
   peers' maps and its IGate hearings count toward others' quorum — via a tunnel (today), or push-to-hub

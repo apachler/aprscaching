@@ -199,5 +199,56 @@ const rCache = await call(SUB, "POST", "/api/caches", { title: "Re-trusted Summi
 const reLog = await call(SUB, "POST", `/api/caches/${rCache.data?.cache?.id}/logs`, { loggerCall: "LO3RF", logType: "found" });
 ok("a re-trusted peer grants Tier A again", reLog.data?.tier === "A" && reLog.data?.method === "aprs_rf_peer", JSON.stringify(reLog.data));
 
+// ---- F4/T1.3 + ADR-5: signed tombstones (GDPR delete propagation) ----
+const accMsg = (action, cs, at) => stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: pubInstance, at });
+const tkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const tpub = b64u(await crypto.subtle.exportKey("raw", tkp.publicKey));
+await call(PUB, "POST", "/keys/register", { callsign: "TOMB1", publicKey: tpub, label: "device" });
+
+// TOMB1 owns a cache and logs a find on the publisher
+const T_TITLE = "Tombstone Cache " + now();
+const tCache = await call(PUB, "POST", "/api/caches", { title: T_TITLE, type: "single", lat: 48.21, lon: 16.37, ownerCall: "TOMB1" });
+await call(PUB, "POST", `/api/caches/${tCache.data?.cache?.id}/logs`, { loggerCall: "TOMB1", logType: "found" });
+ok("publisher created a TOMB1-owned cache + find", tCache.status === 201, JSON.stringify(tCache.data));
+
+// subscriber mirrors it onto its map
+const BBOXT = "16.2,48.0,16.6,48.4";
+await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const mapBefore = await call(SUB, "GET", `/api/caches?bbox=${BBOXT}`);
+ok("TOMB1 cache mirrored onto the subscriber map",
+  (mapBefore.data?.caches ?? []).some((c) => c.mirrored && c.title === T_TITLE),
+  JSON.stringify((mapBefore.data?.caches ?? []).map((c) => c.title)));
+
+// erase TOMB1's account on the publisher (signed) → emits PII-free find tombstone(s), archives the cache
+const dAt = now();
+const dSig = b64u(await crypto.subtle.sign("Ed25519", tkp.privateKey, new TextEncoder().encode(accMsg("delete", "TOMB1", dAt))));
+const tdel = await call(PUB, "POST", "/api/account/TOMB1/delete", { key: tpub, sig: dSig, at: dAt });
+ok("publisher erased TOMB1 and emitted >= 1 find tombstone", tdel.data?.ok === true && (tdel.data?.tombstones ?? 0) >= 1, JSON.stringify(tdel.data));
+
+// the tombstone feed serves a signed, PII-free find tombstone, verifiable against the publisher key
+const tfeed = await call(PUB, "GET", "/federation/tombstones?since=0&limit=500");
+const trec = (tfeed.data?.items ?? []).find((r) => r.data?.kind === "find" && /:find:/.test(r.data?.targetId ?? ""));
+ok("tombstone feed carries a signed find tombstone", !!trec && !!trec.sig && trec.signer === pubInstance, JSON.stringify(trec));
+ok("tombstone is PII-free (no callsign on the wire)", !!trec && !/TOMB1/.test(JSON.stringify(trec)), JSON.stringify(trec?.data));
+let tsigOk = false;
+if (trec) {
+  const pk = await crypto.subtle.importKey("raw", ub64(pubWk.data.publicKey), { name: "Ed25519" }, false, ["verify"]);
+  const msg = new TextEncoder().encode(stableStringify({ type: "tombstone", id: trec.id, data: trec.data }));
+  tsigOk = await crypto.subtle.verify("Ed25519", pk, ub64(trec.sig), msg);
+}
+ok("tombstone signature verifies against the publisher key", tsigOk);
+
+// subscriber syncs → applies the tombstone (purges the mirrored find) + re-mirrors the now-archived
+// cache; the cache drops off the subscriber map
+const tsync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+ok("subscriber applied >= 1 tombstone", (tsync.data?.tombstones ?? 0) >= 1, JSON.stringify(tsync.data));
+const mapAfter = await call(SUB, "GET", `/api/caches?bbox=${BBOXT}`);
+ok("TOMB1 cache removed from the subscriber map after the delete",
+  !(mapAfter.data?.caches ?? []).some((c) => c.title === T_TITLE),
+  JSON.stringify((mapAfter.data?.caches ?? []).map((c) => c.title)));
+const peersT = await call(SUB, "GET", "/federation/peers");
+ok("subscriber tombstones_cursor advanced",
+  (peersT.data?.peers ?? []).some((p) => p.instance === pubInstance && p.tombstones_cursor > 0), JSON.stringify(peersT.data));
+
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

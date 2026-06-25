@@ -9,6 +9,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { accountActionMessage } from "@aprsweb/shared";
 import { importVerifyKey, fromB64 } from "./federation.js";
+import { emitTombstones } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
 import { sessionCallsign } from "./auth.js";
 
@@ -68,10 +69,18 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   const auth = await authorize(env, req, callsign, "delete");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
+  const instance = instanceOf(env, req);
+  // Capture this callsign's federated find ids BEFORE anonymising — once logger_call becomes
+  // WITHDRAWN we can't find them, and peers mirrored them with the real call (PII). The finds feed is
+  // append-only by id, so an UPDATE never re-serves the anonymised row → a tombstone is the only way
+  // to purge the pre-deletion copies on peers (T1.3/ADR-5).
+  const findIds = (await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=?").bind(cs).all<{ id: number }>()).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
     env.DB.prepare("UPDATE cache_logs SET logger_call='WITHDRAWN', comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=?").bind(cs),
-    env.DB.prepare("UPDATE caches SET owner_call='WITHDRAWN', status='archived' WHERE owner_call=?").bind(cs),
+    // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
+    // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
+    env.DB.prepare("UPDATE caches SET owner_call='WITHDRAWN', status='archived', updated_at=? WHERE owner_call=?").bind(now(), cs),
     env.DB.prepare("UPDATE messages SET from_call='WITHDRAWN' WHERE from_call=?").bind(cs),
     env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=?").bind(cs),
@@ -83,7 +92,9 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     env.DB.prepare("DELETE FROM accounts WHERE callsign=?").bind(cs),
     env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'deleted', NULL, ?)").bind(cs, now()),
   ]);
-  return json({ ok: true, erased: cs });
+  // emit PII-free find tombstones so the network purges the mirrored copies that still carry the call
+  const tombstones = await emitTombstones(env, instance, findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })));
+  return json({ ok: true, erased: cs, tombstones });
 }
 
 // ----------------------------------------------------- portability: signed migration bundle (source)

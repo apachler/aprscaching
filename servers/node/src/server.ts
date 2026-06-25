@@ -74,6 +74,7 @@ const env: Env = {
   FED_PEERS: process.env.FED_PEERS,
   FED_DISCOVER: process.env.FED_DISCOVER,
   FED_CORROBORATION_QUORUM: process.env.FED_CORROBORATION_QUORUM,
+  TOMBSTONE_TTL_DAYS: process.env.TOMBSTONE_TTL_DAYS,
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
   BBS_CALL: process.env.BBS_CALL,

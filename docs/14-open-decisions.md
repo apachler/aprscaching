@@ -116,6 +116,12 @@ AGPL-3.0 §13. Launch-blocking for the first public deploy.
 **Goal.** A delete on one instance removes mirrored copies on peers, signed so peers can trust it,
 carrying **no PII**.
 
+> **Status — IMPLEMENTED** (migration `0014_tombstones.sql`; `workers/gateway/src/tombstones.ts` +
+> `federation_sync.ts`; `docs/15` T1.3). Account-delete emits signed PII-free find tombstones; peers
+> verify-and-purge on sync; caches propagate removal via archive + `updated_at` bump. The `0012` the
+> schema note below anticipated was reserved for monetization, so tombstones landed at the next free
+> number, `0014` (peer-trust took `0013`).
+
 - **Schema (federation migration, next free number after `0012`).**
   ```sql
   CREATE TABLE tombstones (
