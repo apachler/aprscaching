@@ -383,6 +383,28 @@ button.link:hover { text-decoration: underline; }
 .topsearch input:focus { outline: none; }
 @media (min-width: 768px) { .topsearch { display: flex; } }
 
+/* ---- identity chip (top bar) + account callsign list (M9 Phase 1) ---- */
+.idchip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); border-radius: 8px;
+  color: #fff; cursor: pointer; font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+.idchip:hover { background: rgba(255,255,255,.18); }
+.idchip.ok { border-color: color-mix(in oklch, var(--tier-a) 60%, transparent); }
+.idchip.ok svg { color: #9ee1ab; }
+.idchip-x { font-family: system-ui, sans-serif; font-weight: 500; font-size: 11px; color: rgba(255,255,255,.6); }
+
+.callsigns { list-style: none; margin: 8px 0 0; padding: 0; }
+.callsigns li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--hair); }
+.callsigns li:first-child { border-top: none; }
+.cs-pick { flex: 1; display: flex; align-items: center; gap: 9px; border: none; background: none; color: var(--ink);
+  cursor: pointer; padding: 2px 0; text-align: left; }
+.cs-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; border: 2px solid var(--muted); }
+.cs-dot.on { border-color: var(--accent); background: var(--accent); }
+.cs-name { font-size: 13.5px; }
+.callsigns li.active .cs-name { font-weight: 600; }
+.cs-pick:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; border-radius: 6px; }
+.verify-code { border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; margin: 8px 0; background: var(--surface-2); }
+.fine { font-size: 12px; }
+
 /* labelled stat + mono micro-label + bright data value */
 .stat-l { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
 .stat-v { font-family: var(--font-mono); font-weight: 600; font-size: 12px; }

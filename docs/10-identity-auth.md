@@ -16,6 +16,36 @@ the author:
 4. **Callsign field moves out of the header → Settings → Account.** The header becomes a sign-in
    chip (signed-out → "Sign in"; signed-in → callsign + menu).
 
+## Multiple callsigns & SSIDs — the ham-correct identity model
+A person (account) is **not** one callsign. In APRS/AX.25 a callsign carries an **SSID 0–15**
+(`OE8APR`, `OE8APR-9`, …) where the **base callsign is the license** and the **SSID is a
+station/role** the same licensee runs — by convention: `-0` home, `-5` app/phone, `-7` HT, `-9`
+primary mobile, `-10` IGate, `-11` balloon/air, `-13` weather, `-15` generic/HF. So:
+
+- **Account = person** (durable `account_id`, passkey + email).
+- Account holds **one or more *base* callsigns**, each independently **verified** (the APRS
+  message-challenge / LoTW proves control of the *license* = the base call). A club call or a
+  second-country call is just another verified base call on the same account.
+- Each verified base call covers **all its SSID stations** (`OE8APR`, `OE8APR-9`, `OE8APR-7`…) — no
+  per-SSID re-verification; same license. Users register the SSIDs they operate (for the picker)
+  and pick which station they're **operating as** when they log/beacon.
+- **Attribution:** a find/hide stores the exact operating callsign incl. SSID (audit + role), while
+  **credit/leaderboard aggregate at the account / base-call level** (the person). Device-key
+  signatures are per-account, so authorship is cryptographic regardless of which SSID was on air.
+- **"Changing" your callsign** = selecting a different call you already hold, or **adding** a new
+  base call (→ verify it). Nothing is rewritten; history stays under the call it was made on
+  (preserves per-callsign federation signatures). This supersedes the earlier "1 callsign, destructive
+  change" framing.
+
+Schema direction (lands with the account-id/passkey milestone): `account_callsigns(account_id,
+callsign, verified, method, verified_at, is_primary)` for verified base calls + `account_stations
+(account_id, callsign_ssid, label, role)` for the SSID stations; `cache_logs.logger_call` keeps the
+full operating callsign; credit joins through `account_callsigns` to the account.
+
+**Phase 1 (now, pre-account-backend):** the web identity store holds a **list of callsigns with an
+active selection** (localStorage), the callsign field moves to Settings → Account, and the **real**
+`/verify/aprs` challenge is wired per base call. This is forward-compatible with the model above.
+
 ## The migration problem (why this is more than a settings edit)
 `accounts.callsign` is the PRIMARY KEY and is denormalised as a string across `caches.owner_call`,
 `cache_logs.logger_call`, `callsign_keys`, leaderboard/profile, BBS, federation namespacing. So a

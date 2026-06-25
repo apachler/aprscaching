@@ -36,3 +36,10 @@ export async function isCallsignVerified(env: Env, callsign: string): Promise<bo
   const r = await env.DB.prepare("SELECT status FROM callsign_verifications WHERE callsign = ?").bind(callsign).first<{ status: string }>();
   return r?.status === "verified";
 }
+
+/** GET /verify/aprs/status?callsign= — control-verification state of a callsign's BASE call. */
+export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response> {
+  const cs = (new URL(req.url).searchParams.get("callsign") ?? "").toUpperCase().split("-")[0]!;
+  if (cs.length < 3) return json({ verified: false });
+  return json({ verified: await isCallsignVerified(env, cs) });
+}

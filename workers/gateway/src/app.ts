@@ -11,7 +11,7 @@ import {
 } from "./caches.js";
 import { handleClaim, handlePasskeyVerify, handleSession, handleLogout } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
-import { startAprsChallenge, confirmAprsChallenge } from "./callsign.js";
+import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
 import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
@@ -98,6 +98,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // async callsign-control verification badge
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
   if (p === "/verify/aprs/confirm" && m === "POST") return confirmAprsChallenge(req, env);
+  if (p === "/verify/aprs/status" && m === "GET") return aprsVerifyStatus(req, env);
 
   // caching REST
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);

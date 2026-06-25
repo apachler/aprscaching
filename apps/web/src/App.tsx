@@ -16,7 +16,8 @@ import {
 } from "./format.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
-import { useCallsign } from "./identity/useCallsign.js";
+import { useIdentity, baseCall } from "./identity/useIdentity.js";
+import { getVerifyStatus } from "./api.js";
 import { maidenhead, gridCenter } from "./map/geo.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
@@ -48,7 +49,15 @@ export function App() {
   const modeRef = useRef<Mode>("view");
   const debounce = useRef<ReturnType<typeof setTimeout>>();
 
-  const [callsign, setCallsign] = useCallsign();
+  const identity = useIdentity();
+  const callsign = identity.active;
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (baseCall(callsign).length < 3) { setVerified(false); return; }
+    let live = true;
+    getVerifyStatus(baseCall(callsign)).then((r) => { if (live) setVerified(r.verified); }).catch(() => {});
+    return () => { live = false; };
+  }, [callsign]);
   const [caches, setCaches] = useState<MapCache[]>([]);
   const [mode, setMode] = useState<Mode>("view");
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
@@ -335,7 +344,7 @@ export function App() {
     <FormatContext.Provider value={fmt}>
     <ToastProvider>
     <div className="app">
-      <TopBar callsign={callsign} setCallsign={setCallsign} mode={mode}
+      <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => setShowSettings(true))} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
               onFilters={() => openOnly(() => setShowFilter(true))}
               filtered={filters.types.length > 0 || filters.q.length > 0}
@@ -391,7 +400,7 @@ export function App() {
           <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
         )}
         {showSettings && (
-          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} onClose={() => setShowSettings(false)} />
+          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} identity={identity} onClose={() => setShowSettings(false)} />
         )}
 
         <div className="mapwrap">
@@ -448,7 +457,7 @@ export function App() {
 
 // ----------------------------------------------------------------- top bar (cacher destinations)
 function TopBar(props: {
-  callsign: string; setCallsign: (v: string) => void; mode: Mode;
+  callsign: string; verified: boolean; onAccount: () => void; mode: Mode;
   onHide: () => void; onCancel: () => void; count: number; queued: number;
   onFilters: () => void; filtered: boolean;
   q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
@@ -469,11 +478,11 @@ function TopBar(props: {
       <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
       {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
       <span className="spacer" />
-      <label className="call">
-        callsign&nbsp;
-        <input value={props.callsign} placeholder="OE8APR"
-               onChange={(e) => props.setCallsign(e.target.value)} size={9} />
-      </label>
+      <button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
+        {props.callsign
+          ? <><span className="mono">{props.callsign}</span>{props.verified ? <Icon name="check" size={14} /> : <span className="idchip-x">unverified</span>}</>
+          : <><Icon name="profile" size={15} /> Sign in</>}
+      </button>
       {props.mode === "view"
         ? <>
             <span className="nav-desktop">

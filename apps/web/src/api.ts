@@ -164,6 +164,17 @@ export function registerKey(body: { callsign: string; publicKey: string; label?:
   return call(`/keys/register`, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** Callsign-control verification (the APRS message-challenge). Verify the BASE call (SSIDs inherit). */
+export function startAprsVerify(callsign: string): Promise<{ sent: boolean }> {
+  return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+export function confirmAprsVerify(callsign: string, code: string): Promise<{ verified: boolean }> {
+  return call(`/verify/aprs/confirm`, { method: "POST", body: JSON.stringify({ callsign, code }) });
+}
+export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }> {
+  return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);
+}
+
 let instanceCache: Promise<string> | null = null;
 /** This instance's federation id (cached), used to build the canonical authorship message. */
 export function getInstance(): Promise<string> {
