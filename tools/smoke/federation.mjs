@@ -16,7 +16,7 @@ function ok(name, cond, detail = "") {
 }
 async function call(base, method, path, body, headers = {}) {
   const res = await fetch(base + path, {
-    method, headers: { "content-type": "application/json", ...headers },
+    method, headers: { "content-type": "application/json", "x-ingest-secret": SECRET, ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null; try { data = await res.json(); } catch {}

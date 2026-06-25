@@ -76,7 +76,7 @@ export const AuthorSig = z.object({
 /** A log entry against a cache (found/DNF/note/…). Verification only runs for `found`. */
 export const LogRequest = z.object({
   cacheId: z.number().int().positive().optional(),  // omitted when posted to /api/caches/:id/logs
-  loggerCall: Callsign,
+  loggerCall: Callsign.optional(),                  // omitted by signed-in web (attributed to the session)
   logType: LogType.default("found"),
   comment: z.string().max(2000).optional(),
   appGeo: AppGeo.optional(),

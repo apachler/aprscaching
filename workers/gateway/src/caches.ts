@@ -48,11 +48,21 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
   };
 }
 
-/** The acting callsign: a signed-in session wins; otherwise the (advisory) body callsign. */
+function ingestOk(req: Request, env: Env): boolean { return (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET; }
+function baseCall(c: string): string { return c.toUpperCase().split("-")[0] ?? ""; }
+
+/**
+ * The AUTHORISED acting callsign for a write (hide / log): a signed-in passkey session wins;
+ * otherwise the body callsign IS allowed only when the request carries the ingest secret — i.e.
+ * the trusted backend / APRS-originated path (an RF-heard find attributed to its callsign). A bare
+ * web request with neither is rejected (null → 401). This is what gates web logging behind sign-in
+ * without breaking the over-APRS logging path.
+ */
 export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
   const s = await sessionCallsign(req, env);
   if (s) return s.toUpperCase();
-  return fallback ? fallback.toUpperCase() : null;
+  if (ingestOk(req, env) && fallback) return fallback.toUpperCase();
+  return null;
 }
 
 interface RemoteCacheRow {
@@ -212,9 +222,19 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   const cacheId = cacheIdFromPath ?? parsed.data.cacheId;
   if (cacheId == null) return json({ error: "cacheId required" }, { status: 400 });
 
-  // logging stays easy: prefer the signed-in callsign; fall back to the claimed one.
+  // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
+  // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
   const sessionCall = await sessionCallsign(req, env);
-  const loggerCall = (sessionCall ?? parsed.data.loggerCall).toUpperCase();
+  let loggerCall: string;
+  if (sessionCall) {
+    loggerCall = sessionCall.toUpperCase();
+    const claimed = parsed.data.loggerCall?.toUpperCase();
+    if (claimed && baseCall(claimed) === baseCall(loggerCall)) loggerCall = claimed; // operate as an SSID of your own call
+  } else if (ingestOk(req, env) && parsed.data.loggerCall) {
+    loggerCall = parsed.data.loggerCall.toUpperCase();
+  } else {
+    return json({ error: "sign in to log a find" }, { status: 401 });
+  }
   const accountVerified = sessionCall != null; // session => passkey-bound account
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(cacheId)

@@ -16,9 +16,12 @@ function ok(name, cond, detail = "") {
 }
 
 async function call(method, path, body, headers = {}) {
+  // The smoke acts as the trusted backend (it holds INGEST_SECRET), so writes that attribute an
+  // arbitrary RF/heard callsign go through the ingest-authorised path. Explicit headers still win
+  // (e.g. the bad-secret rejection tests). Web session gating is checked separately below.
   const res = await fetch(BASE + path, {
     method,
-    headers: { "content-type": "application/json", ...headers },
+    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -91,6 +94,34 @@ ok("Tier A verified (aprs_rf)", ta.data?.verified === true && ta.data?.tier === 
 // DNF — recorded, never verified
 const dnf = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ", logType: "dnf" });
 ok("DNF logged, unverified", dnf.data?.logged === true && dnf.data?.verified === false, JSON.stringify(dnf.data));
+
+// --- S4: web logging/hiding is gated behind a session (the over-APRS path stays open via secret) ---
+const noAuthLog = await fetch(`${BASE}/api/caches/${id}/logs`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ loggerCall: "NOSESS", logType: "found" }),
+});
+ok("web log without a session is rejected (401)", noAuthLog.status === 401, `status=${noAuthLog.status}`);
+const noAuthHide = await fetch(`${BASE}/api/caches`, {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ title: "x", type: "single", lat: 47, lon: 15, ownerCall: "NOSESS" }),
+});
+ok("web hide without a session is rejected (401)", noAuthHide.status === 401, `status=${noAuthHide.status}`);
+// the genuine web path: register via email magic-link -> session cookie -> log attributed to it
+// (on its own cache, so the find count of the shared `id` cache is left untouched)
+const SESSCALL = "OE9SESS";
+const eStart = await call("POST", "/auth/email/start", { email: `s${now()}@example.com`, callsign: SESSCALL });
+const eVer = await fetch(`${BASE}/auth/email/verify?token=${eStart.data.devToken}`, { headers: { accept: "application/json" } });
+const cookie = (eVer.headers.get("set-cookie") ?? "").split(";")[0];
+const sCache = await call("POST", "/api/caches", { title: "Session Find " + now(), type: "single", lat: 47.2, lon: 15.6, ownerCall: "OE8APR" });
+const sCacheId = sCache.data?.cache?.id;
+const sessLog = await fetch(`${BASE}/api/caches/${sCacheId}/logs`, {
+  method: "POST", headers: { "content-type": "application/json", cookie },
+  body: JSON.stringify({ logType: "found" }),   // no loggerCall: the session attributes it
+});
+const sessLogBody = await sessLog.json().catch(() => ({}));
+ok("session (email) log succeeds", sessLog.status === 200 && sessLogBody.logged === true, `status=${sessLog.status} ${JSON.stringify(sessLogBody)}`);
+const sessDetail = await call("GET", `/api/caches/${sCacheId}`);
+ok("the session find is attributed to the signed-in callsign", (sessDetail.data?.cache?.logs ?? []).some((l) => l.loggerCall === SESSCALL), JSON.stringify((sessDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)));
 
 // owner gating + auth guards
 const wrongOwner = await call("PATCH", `/api/caches/${id}`, { ownerCall: "DL9NO", difficulty: 5 });
@@ -242,7 +273,7 @@ const notOwner = await call("POST", `/api/caches/${mid}/stages`, { ownerCall: "D
 ok("non-owner cannot set stages -> 403", notOwner.status === 403, `status=${notOwner.status}`);
 
 // upload an audio clue to stage 1 (raw audio body)
-const upRes = await fetch(`${BASE}/api/caches/${mid}/stages/1/media`, { method: "PUT", headers: { "content-type": "audio/mpeg", "x-owner-call": "OE8APR" }, body: new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]) });
+const upRes = await fetch(`${BASE}/api/caches/${mid}/stages/1/media`, { method: "PUT", headers: { "content-type": "audio/mpeg", "x-owner-call": "OE8APR", "x-ingest-secret": SECRET }, body: new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]) });
 const upJson = await upRes.json().catch(() => ({}));
 ok("owner uploads an audio clue", upRes.status === 200 && typeof upJson.mediaKey === "string", JSON.stringify(upJson));
 const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}`);
