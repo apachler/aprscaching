@@ -61,6 +61,23 @@ export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1 AND trust != 'blocked'").all<PeerRow>()).results;
 }
 
+/**
+ * Sync a single peer by its instance id — the gossip-ping target (T2.1). Only an enabled, non-blocked
+ * peer we already follow is synced; the pull is signature-verified as usual. Returns whether it ran.
+ */
+export async function syncPeerByInstance(env: Env, instance: string): Promise<boolean> {
+  await seedPeers(env);
+  const p = await env.DB.prepare(
+    "SELECT * FROM fed_peers WHERE instance = ? AND enabled = 1 AND trust != 'blocked' LIMIT 1",
+  ).bind(instance).first<PeerRow>();
+  if (!p) return false;
+  try { await syncPeer(env, p); return true; }
+  catch (e) {
+    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=? WHERE url=?").bind((e as Error).message, now(), p.url).run();
+    return false;
+  }
+}
+
 export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; tombstones: number; errors: string[] }> {
   const peers = await listEnabledPeers(env);
   let caches = 0, finds = 0, keys = 0, tombstones = 0;

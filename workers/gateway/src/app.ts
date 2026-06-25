@@ -18,6 +18,7 @@ import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleF
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, syncAllPeers } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
+import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -34,6 +35,9 @@ export { syncAllPeers } from "./federation_sync.js";
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req);
   const res = await route(req, env, ctx);
+  // gossip ping (T2.1): a successful federated write coalesces into one "come pull" to our peers
+  if (res.ok && isFederatedWrite(req.method, new URL(req.url).pathname))
+    ctx.waitUntil(notifyPeers(env).catch(() => {}));
   return withCors(res, req);
 }
 
@@ -74,6 +78,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
   if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // T1.3/ADR-5 delete propagation
+  if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // T2.1 gossip push-to-pull
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);

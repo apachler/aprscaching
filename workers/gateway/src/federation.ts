@@ -135,8 +135,8 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     protocol: PROTOCOL,
     instance: instanceOf(req, env),
     software: "aprscaching",
-    capabilities: ["caches", "finds", "keys", "tombstones"],
-    endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones" },
+    capabilities: ["caches", "finds", "keys", "tombstones", "notify"],
+    endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones", notify: "/federation/notify" },
     sigAlg: "Ed25519",
     signed: !!fk,
     publicKey: fk?.publicX ?? null,        // raw Ed25519 public key (base64url)

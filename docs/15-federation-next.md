@@ -110,9 +110,19 @@ already handles `kind='cache'` for when an explicit cache-delete endpoint lands.
 ## Tier 2 — Reach & freshness (network-effect multipliers)
 
 ### T2.1 Gossip ping (push-to-pull)
-A tiny `POST /federation/notify {instance, types, maxCursor}` lets a peer say "I have new records past
-X — come pull." Receivers debounce and trigger an incremental `syncPeer` for that origin instead of
-waiting for the 5-min poll. Authenticated to known peers; coalesced.
+A tiny `POST /federation/notify {instance}` lets a peer say "I have new records — come pull." Receivers
+debounce and trigger an incremental `syncPeer` for that origin instead of waiting for the 5-min poll.
+
+**Status — IMPLEMENTED** (`gossip.ts` · `test/gossip.test.ts` · federation smoke +3 assertions green):
+the **receiver** `POST /federation/notify` looks up the named instance among the peers it follows
+(enabled, non-blocked), coalesces (a 2 s per-instance cooldown), and triggers the incremental sync off
+the response path via `ctx.waitUntil` → `syncPeerByInstance`. The **emitter** fires from `handle()`
+after any successful *federated write* (`isFederatedWrite`: cache create, find log, key register,
+account delete), coalescing a burst into one "come pull" round to the instance's known peers. The pull
+stays signature-verified, so a forged notify only causes a (coalesced) pull from an already-trusted
+peer — the signed feed remains the security boundary, not the ping. `/.well-known` advertises the
+`notify` capability. **Deferred:** a `types`/`maxCursor` hint to scope the pull (today it syncs all
+feeds) — folds into the T2.2 capability envelope.
 - *Cost-safe:* it's a ping, not a stream — no firehose across instances, stays inside the cost rules
   (no new always-on connections; reuses the existing pull path).
 - *Worth:* near-real-time cross-instance corroboration (a find verifies in seconds) and live mirrored
@@ -230,7 +240,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
 
 ## API additions
-`POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3, **shipped**) · `account-move` feed type
+`POST /federation/notify` (T2.1, **shipped**) · `GET /federation/tombstones` (T1.3, **shipped**) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
 · `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
 (T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2, **shipped** — coarse distance + bucketed ts + instance, no exact IGate; optional
@@ -252,7 +262,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F4 (trust — launch-gating before opening the network) — COMPLETE:** T1.1 peer tiers + quarantine
   **(done)** · T1.2 corroboration quorum + hardening + privacy coarsening **(done)** · T1.3 signed
   tombstones **(done)**.
-- **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
+- **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
@@ -266,7 +276,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T1.3:** deleting an account on instance A removes its mirrored copies on peer B after sync — the
   tombstone is signed, verifies against A's key, and carries no callsign/PII (**met**: smoke asserts the
   TOMB1 cache drops off B's map and the find tombstone is signed + PII-free).
-- **T2.1:** a new find on A is mirrored/corroborated on B within seconds of a notify, not a poll cycle.
+- **T2.1:** a new find on A is mirrored/corroborated on B within seconds of a notify, not a poll cycle
+  (**met**: smoke pings the subscriber and asserts the new cache mirrors without a manual sync, and that
+  a rapid repeat notify is coalesced).
 - **T2.3:** a peer with no inbound reachability joins as a full contributor — its caches/finds appear on
   peers' maps and its IGate hearings count toward others' quorum — via a tunnel (today), or push-to-hub
   (mirroring) / rendezvous relay (corroboration); a relayed packet is no more trusted than a direct one.

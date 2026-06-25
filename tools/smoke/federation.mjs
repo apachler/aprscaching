@@ -250,6 +250,22 @@ const peersT = await call(SUB, "GET", "/federation/peers");
 ok("subscriber tombstones_cursor advanced",
   (peersT.data?.peers ?? []).some((p) => p.instance === pubInstance && p.tombstones_cursor > 0), JSON.stringify(peersT.data));
 
+// ---- F5/T2.1: gossip ping (push-to-pull) ----
+// publish a fresh cache on PUB, then ping SUB directly — it must pull immediately (no manual /sync)
+const G_TITLE = "Gossip Cache " + now();
+await call(PUB, "POST", "/api/caches", { title: G_TITLE, type: "single", lat: 47.09, lon: 15.44, ownerCall: "OE8APR" });
+const notif = await call(SUB, "POST", "/federation/notify", { instance: pubInstance });
+ok("gossip notify is accepted (202, triggers a pull)", notif.status === 202 && notif.data?.syncing === pubInstance, JSON.stringify(notif.data));
+const notif2 = await call(SUB, "POST", "/federation/notify", { instance: pubInstance });
+ok("a rapid repeat notify is coalesced", notif2.data?.coalesced === true, JSON.stringify(notif2.data));
+let gMirrored = false;
+for (let i = 0; i < 20 && !gMirrored; i++) {
+  await new Promise((r) => setTimeout(r, 150));
+  const gmap = await call(SUB, "GET", "/api/caches?bbox=15,46,16,48");
+  gMirrored = (gmap.data?.caches ?? []).some((c) => c.mirrored && c.title === G_TITLE);
+}
+ok("the notify triggered an immediate pull — cache mirrored without a manual sync", gMirrored);
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",
