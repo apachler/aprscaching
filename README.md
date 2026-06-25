@@ -266,3 +266,23 @@ author's (OE8APR) own work.
 Other attributions: maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; imported
 heritage data carries its source's own licence and disclaimer (see *Imports* above). The same
 credit appears in-app under **⚙ Settings → About & credits**.
+
+## License
+
+aprscaching is open source. The monorepo is licensed by unit so the reusable parts stay broadly
+usable while the hosted service stays open:
+
+| Part | Licence | Why |
+|---|---|---|
+| **App & gateway** — `apps/`, `workers/gateway`, `servers/node`, `db/`, `tools/` | **AGPL-3.0-or-later** (`LICENSE`) | It's a hosted network service, so the AGPL's network-use clause (§13) keeps any *hosted* fork's source open to its users — not just redistributed copies. |
+| **Reusable libraries** — `packages/aprs` (parser), `packages/shared` (contracts) | **MIT** (per-package `LICENSE`) | So other amateur-radio software can embed the decoder and zod contracts freely. |
+| **Documentation** — `docs/` | **CC-BY-SA-4.0** (`docs/LICENSE`) | Free-culture share-alike for prose, specs, and diagrams. |
+
+Each file's licence is the one of the unit it lives in; per-package `LICENSE` files and the
+`license` field in every `package.json` are the machine-readable source of truth. **Contributions
+are inbound=outbound** — opening a pull request licenses your change under the same licence as the
+files it touches (add a `Signed-off-by` DCO line if you prefer explicit sign-off).
+
+Being open under these licences also satisfies **ARDC's open-access requirement** for grant funding
+(AGPL-3.0 is among ARDC's recommended software licences; CC-BY-SA for documentation) — see
+`docs/12-sustainability-donations.md`.

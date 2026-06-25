@@ -89,9 +89,12 @@ caching platform lands squarely in their goals of getting people *learning, expe
 
 **The two requirements:**
 1. **Open access — satisfied.** Funded work must be public under an open licence. We're open
-   source. Recommended licence: **AGPLv3** (ARDC's first-listed software licence) — its network
-   copyleft clause fits a *hosted* service, so the platform and any hosted fork stay open. (MIT,
-   BSD, GPL, LGPL are also accepted if you prefer permissive.)
+   source under the chosen split (below). ARDC's recommended software licences are **AGPL/GPL/MIT/
+   BSD/LGPL**; for docs/media, **CC-BY-SA** (preferred), CC-BY, or CC0. **Adopted:** the hosted
+   **app & gateway are AGPL-3.0-or-later** (its network-use clause keeps a *hosted* fork open — the
+   right fit for a service), the **reusable libraries** (`packages/aprs`, `packages/shared`) are
+   **MIT** so other ham software can embed them, and **`docs/` are CC-BY-SA-4.0**. All sit inside
+   ARDC's recommended set. See the repo `LICENSE` files + the README "License" section.
 2. **Eligibility — needs a nonprofit.** ARDC funds **nonprofits** (US 501(c)(3) or international
    equivalents); **for-profits and individuals are ineligible without a nonprofit fiscal sponsor.**
    As OE8APR (Austria), apply *through* an Austrian amateur-radio Verein/club (e.g. ÖVSV or a local
@@ -102,7 +105,8 @@ caching platform lands squarely in their goals of getting people *learning, expe
 Grants Advisory Committee. Allow **60–120 days**; applications batch into review windows.
 
 ### ARDC readiness checklist
-- [ ] Public **GitHub repo** with a clear README + an OSI licence (recommended **AGPLv3**).
+- [x] Public **GitHub repo** with a clear README + OSI licences (**AGPL-3.0** app/gateway · **MIT**
+      libraries · **CC-BY-SA-4.0** docs) — done; satisfies ARDC open access.
 - [ ] A nonprofit **fiscal sponsor** lined up (Austrian ham club/Verein, e.g. ÖVSV, or equivalent).
 - [ ] Proposal framed to ARDC priorities: **open software + open education** for clubs/new hams,
       and digital-comms experimentation (presence-verified caching, the APRS workbench).

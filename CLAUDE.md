@@ -53,7 +53,15 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   M4 deep-link/embeddable widget + QR · push alerts (nearby/new-cache/DNF) · API keys;
   M5 station telemetry/weather graphs · raw packet view (workbench).
 - Sustainability & supporter donations — `docs/12-sustainability-donations.md` (free-in-full,
-  recognition-only, never feature-gating): Now (no code) donation links + transparency page + the
-  open-source LICENSE that unlocks the ARDC grant; M4 supporter badge + hide-nag + `/support`
-  ledger; M5 peer cost-reimbursement (Open Collective). Monetization schema lands as a new migration
-  (next free number), not the `0003` the doc names retrospectively.
+  recognition-only, never feature-gating): Now (no code) donation links + transparency page (the
+  open-source LICENSE that unlocks the ARDC grant is **done** — AGPL-3.0 app/gateway · MIT libraries
+  · CC-BY-SA-4.0 docs); M4 supporter badge + hide-nag + `/support` ledger; M5 peer cost-reimbursement
+  (Open Collective). Monetization schema lands as a new migration (next free number), not the `0003`
+  the doc names retrospectively.
+
+## Licensing
+Monorepo licensed by unit (see `LICENSE`, per-package `LICENSE`, README "License"): hosted app &
+gateway (`apps/`, `workers/gateway`, `servers/node`, `db/`, `tools/`) = **AGPL-3.0-or-later**;
+reusable libraries (`packages/aprs`, `packages/shared`) = **MIT**; docs (`docs/`) = **CC-BY-SA-4.0**.
+New code inherits the licence of its unit. Keep `packages/*` MIT-clean (embeddable); never add
+AGPL-only deps there. Contributions are inbound=outbound.
