@@ -266,6 +266,15 @@ for (let i = 0; i < 20 && !gMirrored; i++) {
 }
 ok("the notify triggered an immediate pull — cache mirrored without a manual sync", gMirrored);
 
+// ---- F5/T2.2: generalized envelope + capability negotiation ----
+const wk2 = await call(PUB, "GET", "/.well-known/aprscaching");
+ok("descriptor advertises protocolVersions incl. 0.2",
+  Array.isArray(wk2.data?.protocolVersions) && wk2.data.protocolVersions.includes("0.2"), JSON.stringify(wk2.data?.protocolVersions));
+ok("descriptor advertises every feed capability",
+  ["caches", "finds", "keys", "tombstones", "notify"].every((c) => (wk2.data?.capabilities ?? []).includes(c)), JSON.stringify(wk2.data?.capabilities));
+const bogusFeed = await call(PUB, "GET", "/federation/bogus");
+ok("an unknown feed path 404s (the consumer skips it forward-compatibly)", bogusFeed.status === 404, `status=${bogusFeed.status}`);
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

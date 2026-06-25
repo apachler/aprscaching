@@ -8,7 +8,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { importVerifyKey, verifyRecordSig } from "./federation.js";
+import { importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION } from "./federation.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -97,7 +97,7 @@ export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: n
 
 async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number }> {
   const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; peers?: string[] }>(`${base}/.well-known/aprscaching`);
+  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
 
@@ -116,14 +116,69 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0 };
 
   const verifyKey = pub ? await importVerifyKey(pub) : null;
-  // tombstones FIRST: a delete recorded before this pass suppresses re-mirroring of a stale record
-  // that the caches/finds feeds might still hand us in the same sync (T1.3).
-  const tombstones = await syncTombstones(env, base, p, wk.instance, verifyKey);
-  const caches = await syncCaches(env, base, p, wk.instance, verifyKey);
-  const finds = await syncFinds(env, base, p, wk.instance, verifyKey);
-  const keys = await syncKeys(env, base, p, wk.instance, verifyKey);
+  // capability negotiation (T2.2): a peer that speaks our protocol version has an authoritative
+  // capability list → skip feeds it doesn't advertise; a legacy peer (no version match) is tried for
+  // every known feed and a 404 is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered
+  // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass (T1.3).
+  const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
+  const counts: Record<string, number> = {};
+  for (const def of SYNC_DEFS) // iterate SYNC_DEFS to preserve the tombstones-first order
+    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKey, def) : 0;
   await env.DB.prepare("UPDATE fed_peers SET last_sync=?, last_error=NULL WHERE url=?").bind(now(), p.url).run();
-  return { caches, finds, keys, tombstones };
+  return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0 };
+}
+
+/**
+ * Capability negotiation (T2.2, pure/testable): which of our feed defs to pull from a peer. A peer that
+ * advertises our protocol version has an authoritative capability list → pull only the feeds it offers;
+ * a legacy peer (no version match / no list) is tried for every known feed (a 404 is handled gracefully
+ * by syncFeed). Order is preserved, so the tombstones-first invariant survives.
+ */
+export function negotiateFeeds<T extends { capability: string }>(
+  wk: { capabilities?: string[]; protocolVersions?: string[] }, defs: T[], ourVersion: string,
+): T[] {
+  const negotiated = Array.isArray(wk.protocolVersions) && wk.protocolVersions.includes(ourVersion);
+  if (!negotiated) return defs;
+  const caps = new Set(wk.capabilities ?? []);
+  return defs.filter((d) => caps.has(d.capability));
+}
+
+/** Which feed each sync def consumes: its endpoint, advertised capability, peer cursor, and applier. */
+interface SyncDef {
+  type: string; path: string; capability: string;
+  cursorCol: "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor";
+  apply(env: Env, rec: FeedRecord, origin: string): Promise<void>;
+}
+const SYNC_DEFS: SyncDef[] = [
+  { type: "tombstone", path: "/federation/tombstones", capability: "tombstones", cursorCol: "tombstones_cursor", apply: applyTombstone },
+  { type: "cache", path: "/federation/caches", capability: "caches", cursorCol: "caches_cursor", apply: upsertRemoteCache },
+  { type: "find", path: "/federation/finds", capability: "finds", cursorCol: "finds_cursor", apply: upsertRemoteFind },
+  { type: "key", path: "/federation/keys", capability: "keys", cursorCol: "keys_cursor", apply: upsertRemoteKey },
+];
+
+/**
+ * Generalized feed consumer (T2.2): pull pages, verify+accept each record, apply it, advance the
+ * peer cursor — one loop for every record type. A 404 means the peer doesn't serve this feed (an
+ * older peer, or one with the capability disabled) → skip it gracefully, never failing the whole sync.
+ */
+async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null, def: SyncDef): Promise<number> {
+  let cursor = (p[def.cursorCol] as number) ?? 0, applied = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, { headers: { accept: "application/json" } });
+    if (res.status === 404) return applied;                                       // feed not supported → forward-compat skip
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
+    const feed = (await res.json()) as Feed;
+    for (const rec of feed.items ?? []) {
+      if (!(await accept(env, rec, verifyKey))) continue;
+      await def.apply(env, rec, rec.signer ?? feed.instance ?? instance);
+      applied++;
+    }
+    const next = feed.nextCursor ?? cursor;
+    await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
+    if (feed.complete || next === cursor) break;
+    cursor = next;
+  }
+  return applied;
 }
 
 /** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
@@ -155,73 +210,6 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   ]);
 }
 
-async function syncTombstones(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
-  let cursor = p.tombstones_cursor, applied = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const feed = await fetchJson<Feed>(`${base}/federation/tombstones?since=${cursor}&limit=500`);
-    for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKey))) continue;
-      await applyTombstone(env, rec, rec.signer ?? feed.instance ?? instance);
-      applied++;
-    }
-    const next = feed.nextCursor ?? cursor;
-    await env.DB.prepare("UPDATE fed_peers SET tombstones_cursor=? WHERE url=?").bind(next, p.url).run();
-    if (feed.complete || next === cursor) break;
-    cursor = next;
-  }
-  return applied;
-}
-
-async function syncCaches(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
-  let cursor = p.caches_cursor, mirrored = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const feed = await fetchJson<Feed>(`${base}/federation/caches?since=${cursor}&limit=500`);
-    for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKey))) continue;
-      await upsertRemoteCache(env, rec, rec.signer ?? feed.instance ?? instance);
-      mirrored++;
-    }
-    const next = feed.nextCursor ?? cursor;
-    await env.DB.prepare("UPDATE fed_peers SET caches_cursor=? WHERE url=?").bind(next, p.url).run();
-    if (feed.complete || next === cursor) break; // no further progress
-    cursor = next;
-  }
-  return mirrored;
-}
-
-async function syncFinds(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
-  let cursor = p.finds_cursor, mirrored = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const feed = await fetchJson<Feed>(`${base}/federation/finds?since=${cursor}&limit=500`);
-    for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKey))) continue;
-      await upsertRemoteFind(env, rec, rec.signer ?? feed.instance ?? instance);
-      mirrored++;
-    }
-    const next = feed.nextCursor ?? cursor;
-    await env.DB.prepare("UPDATE fed_peers SET finds_cursor=? WHERE url=?").bind(next, p.url).run();
-    if (feed.complete || next === cursor) break;
-    cursor = next;
-  }
-  return mirrored;
-}
-
-async function syncKeys(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null): Promise<number> {
-  let cursor = p.keys_cursor, mirrored = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const feed = await fetchJson<Feed>(`${base}/federation/keys?since=${cursor}&limit=500`);
-    for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKey))) continue;
-      await upsertRemoteKey(env, rec, rec.signer ?? feed.instance ?? instance);
-      mirrored++;
-    }
-    const next = feed.nextCursor ?? cursor;
-    await env.DB.prepare("UPDATE fed_peers SET keys_cursor=? WHERE url=?").bind(next, p.url).run();
-    if (feed.complete || next === cursor) break;
-    cursor = next;
-  }
-  return mirrored;
-}
 
 async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;

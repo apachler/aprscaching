@@ -14,8 +14,7 @@
  * unsigned-instance behaviour stay consistent).
  */
 import type { Env } from "./env.js";
-import { json } from "./app.js";
-import { feedSigner } from "./federation.js";
+import { serveFeed, type FeedServeDef } from "./federation.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -45,26 +44,13 @@ export async function emitTombstones(env: Env, origin: string, items: TombstoneI
   return items.length;
 }
 
-export async function handleFederationTombstones(req: Request, env: Env): Promise<Response> {
-  const u = new URL(req.url);
-  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
-  const instance = env.INSTANCE ?? u.host;
-  const sign = await feedSigner(env);
-
-  const rows = (await env.DB.prepare(
+/** Tombstone feed via the generalized envelope (T2.2) — cursor = monotonic seq, signed at serve time. */
+const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
+  type: "tombstone",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
     "SELECT seq, kind, target_id, origin, ts FROM tombstones WHERE seq > ? ORDER BY seq LIMIT ?",
-  ).bind(since, limit).all<TombstoneRow>()).results;
+  ).bind(since, limit).all<TombstoneRow>()).results,
+  recordOf: (r, instance) => ({ id: `${instance}:tombstone:${r.seq}`, cursor: r.seq, data: tombstoneData(r) }),
+};
 
-  let nextCursor = since;
-  const items = [];
-  for (const r of rows) {
-    const id = `${instance}:tombstone:${r.seq}`;
-    const data = tombstoneData(r);
-    const rec: Record<string, unknown> = { type: "tombstone", id, cursor: r.seq, data };
-    if (sign) { rec.sig = await sign("tombstone", id, data); rec.signer = instance; }
-    items.push(rec);
-    if (r.seq > nextCursor) nextCursor = r.seq;
-  }
-  return json({ instance, type: "tombstone", since, nextCursor, count: items.length, complete: items.length < limit, items });
-}
+export const handleFederationTombstones = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, TOMBSTONE_FEED);

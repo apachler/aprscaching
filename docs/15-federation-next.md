@@ -133,6 +133,17 @@ Lift the record envelope (`{type,id,data,cursor,sig,signer}`) and the cursor/ver
 generic feed so new record types (tombstones, account-moves T3.2, presence digests, badges) ride
 existing, tested plumbing. `/.well-known` advertises `capabilities` + `protocolVersions`; consumers
 negotiate and skip unknown types forward-compatibly.
+
+**Status — IMPLEMENTED** (`federation.ts:serveFeed` + `FeedServeDef` · `federation_sync.ts:syncFeed` +
+`SYNC_DEFS` + `negotiateFeeds` · `test/negotiate.test.ts` · smoke +3 assertions; the 4 serve handlers
+and 4 sync consumers collapsed to one generic path each). The **serve** side is one `serveFeed(def)` —
+select rows → shape `{type,id,cursor,data}` → sign → standard envelope; caches/finds/keys/tombstones are
+now just `FeedServeDef`s (a new feed = one def, no endpoint/signing code). The **sync** side is one
+`syncFeed(def)` over a `SYNC_DEFS` table (tombstones-first preserved). `/.well-known` advertises
+`protocolVersions: ["0.1","0.2"]` + the full `capabilities`; the consumer **negotiates** (`negotiateFeeds`):
+a peer that speaks our version → pull only what it advertises; a legacy peer → try every known feed with
+a **404-as-skip** fallback, so a newer consumer never fails its whole sync against an older peer.
+**Deferred:** the gossip `types`/`maxCursor` scoping hint (T2.1) now has a clean home in this envelope.
 - *Worth:* future federation features need no new endpoints or bespoke verify code; older peers don't break.
 
 ### T2.3 Joining from behind NAT / firewall (outbound-only peers)  *(serves docs/06 §6 #4 replication, §9 mesh)*
@@ -262,7 +273,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F4 (trust — launch-gating before opening the network) — COMPLETE:** T1.1 peer tiers + quarantine
   **(done)** · T1.2 corroboration quorum + hardening + privacy coarsening **(done)** · T1.3 signed
   tombstones **(done)**.
-- **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
+- **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
@@ -279,6 +290,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T2.1:** a new find on A is mirrored/corroborated on B within seconds of a notify, not a poll cycle
   (**met**: smoke pings the subscriber and asserts the new cache mirrors without a manual sync, and that
   a rapid repeat notify is coalesced).
+- **T2.2:** every feed serves + syncs through one generic envelope; a newer consumer syncing an older
+  peer skips feeds it doesn't serve (404-as-skip) instead of failing the whole pull (**met**: negotiation
+  unit-tested; smoke asserts `protocolVersions`/`capabilities` are advertised and an unknown feed 404s).
 - **T2.3:** a peer with no inbound reachability joins as a full contributor — its caches/finds appear on
   peers' maps and its IGate hearings count toward others' quorum — via a tunnel (today), or push-to-hub
   (mirroring) / rendezvous relay (corroboration); a relayed packet is no more trusted than a direct one.

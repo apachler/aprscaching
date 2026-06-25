@@ -17,6 +17,9 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
+/** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation (T2.2). */
+export const FED_PROTOCOL_VERSION = "0.2";
+const PROTOCOL_VERSIONS = ["0.1", "0.2"];
 
 // ---- D1 row shapes (subset) ----
 interface CacheRow {
@@ -133,6 +136,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
   const peers = (env.FED_PEERS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return json({
     protocol: PROTOCOL,
+    protocolVersions: PROTOCOL_VERSIONS,
     instance: instanceOf(req, env),
     software: "aprscaching",
     capabilities: ["caches", "finds", "keys", "tombstones", "notify"],
@@ -145,77 +149,69 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
   });
 }
 
-export async function handleFederationCaches(req: Request, env: Env): Promise<Response> {
-  const u = new URL(req.url);
-  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
-  const instance = instanceOf(req, env);
-  const fk = await loadKey(env);
-
-  // only NATIVE caches are federated; imported third-party data stays local (M3 decision)
-  const rows = (await env.DB.prepare(
-    "SELECT * FROM caches WHERE source = 'native' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
-  ).bind(since, limit).all<CacheRow>()).results;
-
-  let nextCursor = since;
-  const items = [];
-  for (const r of rows) {
-    const id = `${instance}:cache:${r.id}`;
-    const data = cacheData(r);
-    const rec: Record<string, unknown> = { type: "cache", id, cursor: r.updated_at, data };
-    if (fk) { rec.sig = await sign(fk, "cache", id, data); rec.signer = instance; }
-    items.push(rec);
-    if (r.updated_at > nextCursor) nextCursor = r.updated_at;
-  }
-  return json({ instance, type: "cache", since, nextCursor, count: items.length, complete: items.length < limit, items });
+/**
+ * Generalized feed envelope (T2.2). Every record type rides ONE serve path: select rows, shape each
+ * into `{type,id,cursor,data}`, sign at serve time, and emit the standard
+ * `{instance,type,since,nextCursor,count,complete,items}` envelope. A new feed type is just a
+ * `FeedServeDef` (used by tombstones.ts and future presence/badge/account-move feeds) — no bespoke
+ * endpoint or signing code.
+ */
+export interface FeedServeDef<Row = any> {
+  type: string;
+  selectRows(env: Env, since: number, limit: number): Promise<Row[]>;
+  recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown };
 }
 
-export async function handleFederationFinds(req: Request, env: Env): Promise<Response> {
+function feedParams(req: Request): { since: number; limit: number } {
   const u = new URL(req.url);
-  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
-  const instance = instanceOf(req, env);
-  const fk = await loadKey(env);
+  return {
+    since: Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0),
+    limit: Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000),
+  };
+}
 
-  const rows = (await env.DB.prepare(
+export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Promise<Response> {
+  const { since, limit } = feedParams(req);
+  const instance = instanceOf(req, env);
+  const sign = await feedSigner(env);
+  const rows = await def.selectRows(env, since, limit);
+  let nextCursor = since;
+  const items: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    const { id, cursor, data } = def.recordOf(r, instance);
+    const rec: Record<string, unknown> = { type: def.type, id, cursor, data };
+    if (sign) { rec.sig = await sign(def.type, id, data); rec.signer = instance; }
+    items.push(rec);
+    if (cursor > nextCursor) nextCursor = cursor;
+  }
+  return json({ instance, type: def.type, since, nextCursor, count: items.length, complete: items.length < limit, items });
+}
+
+// only NATIVE caches are federated; imported third-party data stays local (M3 decision)
+const CACHE_FEED: FeedServeDef<CacheRow> = {
+  type: "cache",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
+    "SELECT * FROM caches WHERE source = 'native' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
+  ).bind(since, limit).all<CacheRow>()).results,
+  recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
+};
+const FIND_FEED: FeedServeDef<FindRow> = {
+  type: "find",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
     `SELECT l.*, c.code AS cache_code FROM cache_logs l
        LEFT JOIN caches c ON c.id = l.cache_id
       WHERE l.id > ? ORDER BY l.id LIMIT ?`,
-  ).bind(since, limit).all<FindRow>()).results;
-
-  let nextCursor = since;
-  const items = [];
-  for (const r of rows) {
-    const id = `${instance}:find:${r.id}`;
-    const data = findData(r, instance);
-    const rec: Record<string, unknown> = { type: "find", id, cursor: r.id, data };
-    if (fk) { rec.sig = await sign(fk, "find", id, data); rec.signer = instance; }
-    items.push(rec);
-    if (r.id > nextCursor) nextCursor = r.id;
-  }
-  return json({ instance, type: "find", since, nextCursor, count: items.length, complete: items.length < limit, items });
-}
-
-export async function handleFederationKeys(req: Request, env: Env): Promise<Response> {
-  const u = new URL(req.url);
-  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
-  const instance = instanceOf(req, env);
-  const fk = await loadKey(env);
-
-  const rows = (await env.DB.prepare(
+  ).bind(since, limit).all<FindRow>()).results,
+  recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.id, data: findData(r, instance) }),
+};
+const KEY_FEED: FeedServeDef<KeyRow> = {
+  type: "key",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
     "SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
-  ).bind(since, limit).all<KeyRow>()).results;
+  ).bind(since, limit).all<KeyRow>()).results,
+  recordOf: (r, instance) => ({ id: `${instance}:key:${r.id}`, cursor: r.id, data: keyData(r) }),
+};
 
-  let nextCursor = since;
-  const items = [];
-  for (const r of rows) {
-    const id = `${instance}:key:${r.id}`;
-    const data = keyData(r);
-    const rec: Record<string, unknown> = { type: "key", id, cursor: r.id, data };
-    if (fk) { rec.sig = await sign(fk, "key", id, data); rec.signer = instance; }
-    items.push(rec);
-    if (r.id > nextCursor) nextCursor = r.id;
-  }
-  return json({ instance, type: "key", since, nextCursor, count: items.length, complete: items.length < limit, items });
-}
+export const handleFederationCaches = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, CACHE_FEED);
+export const handleFederationFinds = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, FIND_FEED);
+export const handleFederationKeys = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, KEY_FEED);
