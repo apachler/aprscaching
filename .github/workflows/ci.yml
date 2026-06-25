@@ -66,7 +66,10 @@ jobs:
       - name: publisher + subscriber + federation smoke
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
-          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" \
+          PUB2=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
+          PUB3=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
+          HIST="[{\"x\":\"$PUB2\",\"since\":1},{\"x\":\"$PUB3\",\"since\":1,\"revoked\":true}]"
+          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
             pnpm --filter @aprsweb/node-gateway start &
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
             FED_SUBMIT_SECRET=submitsecret \

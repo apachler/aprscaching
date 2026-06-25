@@ -10,7 +10,9 @@ export interface Env {
 
   // ---- federation (F1) — all optional; absent => feeds served unsigned ----
   INSTANCE?: string;        // canonical instance id/domain, e.g. "oe.aprscaching.org"
-  FED_PRIVATE_KEY?: string; // base64(JWK) Ed25519 signing key; if set, records are signed
+  FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed
+  FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations (T4.1)
+  FED_ROTATIONS?: string;   // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old (T4.1)
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)

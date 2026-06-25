@@ -256,6 +256,17 @@ tombstone is sticky) — errs toward privacy; re-create to re-share.
 record** announces a new key signed by the old. Consumers accept records signed by any non-revoked
 published key within its validity window; a revocation entry invalidates a leaked key without discarding
 history.
+
+**Status — IMPLEMENTED** (`federation.ts` multi-key publish/verify · `federation_sync.ts` key-set verify ·
+`tools/fedkey/rotatekey.mjs` · `test/keyrotation.test.ts` · smoke +2 assertions; no migration — keys live
+in config). `/.well-known` now publishes `publicKeys: [{x,since?,until?,revoked?}]` (current from
+`FED_PRIVATE_KEY` + `FED_KEY_HISTORY`) and `rotations: [{key,prevKey,at,sig}]` (`FED_ROTATIONS`); the legacy
+single `publicKey` stays for old peers. The **consumer verifies each record against ANY active key**
+(`importActiveKeys` → `accept` loops the set) — so an instance can rotate without breaking federation
+(serve-time signing means feeds re-sign with the current key; the window covers in-flight consumers), and a
+**revoked key is dropped from the accept set** (a leaked key is rejected immediately). `activeFedKeys` (window
++ revocation filter) and `verifyRotationRecord` (continuity: new key vouched by old) are pure + unit-tested;
+`rotatekey.mjs` mints the new key + history + a verifying rotation record in one step.
 - *Worth:* operational hygiene — rotate or recover from a key leak without breaking every past signature.
 
 ### T4.2 Instance registry / namespace authority  *(resolves docs/06 #2)*
@@ -287,7 +298,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   (T1.3 / ADR-5; **landed as `0014_tombstones.sql`**)
 - `caches` += `fed_scope` (T3.3 — **landed as `0015_fed_scope.sql`**)
 - `account_moves` + `remote_account_moves` tables + `fed_peers.moves_cursor` (T3.2 — **landed as `0016_account_moves.sql`**)
-- key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
+- key rotation (T4.1) is **config-only** (`FED_KEY_HISTORY`/`FED_ROTATIONS`), no local schema — **done**;
+  registry is external/signed, no local schema required
 
 ## API additions
 `POST /federation/notify` (T2.1, **shipped**) · `GET /federation/tombstones` (T1.3, **shipped**) · `GET /federation/account-moves` (T3.2, **shipped**) · `account-move` feed type
@@ -315,7 +327,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons) — COMPLETE:** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record **(done)** · T3.3 redaction **(done)**.
-- **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
+- **F7 (governance):** T4.1 key rotation **(done)** · T4.2 instance registry · T4.3 observability.
 
 ## Acceptance (abbreviated, per tier)
 - **T1.1:** an unvetted/auto-discovered peer's caches are mirrored but hidden from the default map and
@@ -347,4 +359,6 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire
   (**met**: smoke asserts a public cache federates with description but no hint, unlisted drops the
   description, local-only is absent from the feed, and no hint text appears anywhere in it).
-- **T4.1:** rotating the instance key keeps past signatures verifiable and new records trusted.
+- **T4.1:** rotating the instance key keeps records verifiable and new records trusted; a revoked key is
+  rejected (**met**: smoke runs the whole mirror suite against a publisher with a 3-key set incl. a revoked
+  one; `activeFedKeys`/`verifyRotationRecord` unit-tested; `rotatekey.mjs` output verifies end-to-end).

@@ -103,6 +103,46 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
   return b64url(await crypto.subtle.sign("Ed25519", fk.key, msg));
 }
 
+// ---- key rotation + multi-key + revocation (T4.1) ----
+export interface FedPublicKey { x: string; since?: number; until?: number; revoked?: boolean }
+export interface RotationRecord { key: string; prevKey: string; at: number; sig: string }
+
+function parseJsonArray<T>(s: string | undefined): T[] {
+  try { const a = JSON.parse(s ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+
+/** This instance's published key set: the current signing key + any history/revocations from config. */
+async function instanceKeys(env: Env): Promise<FedPublicKey[]> {
+  const fk = await loadKey(env);
+  const history = parseJsonArray<FedPublicKey>(env.FED_KEY_HISTORY).filter((k) => k && k.x && k.x !== fk?.publicX);
+  return [...(fk ? [{ x: fk.publicX } as FedPublicKey] : []), ...history];
+}
+
+/** Pure (T4.1): the non-revoked, in-window key strings from a published key list — the accept set. */
+export function activeFedKeys(keys: FedPublicKey[], nowS: number): string[] {
+  return keys
+    .filter((k) => k && k.x && !k.revoked && (k.since == null || k.since <= nowS) && (k.until == null || k.until > nowS))
+    .map((k) => k.x);
+}
+
+/** Import a peer's ACTIVE published keys (falling back to a legacy single `publicKey`) for verifying its feed. */
+export async function importActiveKeys(publicKeys: FedPublicKey[] | undefined, fallback: string | null, nowS: number): Promise<CryptoKey[]> {
+  const xs = Array.isArray(publicKeys) && publicKeys.length ? activeFedKeys(publicKeys, nowS) : (fallback ? [fallback] : []);
+  const out: CryptoKey[] = [];
+  for (const x of xs) { try { out.push(await importVerifyKey(x)); } catch { /* skip an unparseable key */ } }
+  return out;
+}
+
+/** Verify a rotation record's continuity: the new `key` is vouched for by `prevKey` (sig over {key,prevKey,at}). */
+export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> {
+  if (!r?.key || !r.prevKey || !r.at || !r.sig) return false;
+  try {
+    const pk = await importVerifyKey(r.prevKey);
+    const msg = new TextEncoder().encode(stableStringify({ key: r.key, prevKey: r.prevKey, at: r.at }));
+    return crypto.subtle.verify("Ed25519", pk, fromB64(r.sig), msg);
+  } catch { return false; }
+}
+
 /**
  * Serve-time feed signer (shared with new feeds, e.g. tombstones). Returns a closure that signs a
  * `{type,id,data}` record exactly like the caches/finds/keys feeds, or null if the instance has no
@@ -146,8 +186,10 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones", "account-moves": "/federation/account-moves", notify: "/federation/notify" },
     sigAlg: "Ed25519",
     signed: !!fk,
-    publicKey: fk?.publicX ?? null,        // raw Ed25519 public key (base64url)
+    publicKey: fk?.publicX ?? null,        // current raw Ed25519 public key (base64url) — legacy single-key field
     publicKeyJwk: fk?.jwk ?? null,
+    publicKeys: await instanceKeys(env),   // T4.1: current + previous keys + revocations, each {x,since?,until?,revoked?}
+    rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // T4.1: continuity proofs (new key signed by old)
     peers,
   });
 }

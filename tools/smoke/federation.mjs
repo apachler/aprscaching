@@ -376,6 +376,16 @@ ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.st
 const mpeers = await call(SUB, "GET", "/federation/peers");
 ok("subscriber moves_cursor advanced", (mpeers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.moves_cursor > 0), JSON.stringify(mpeers.data));
 
+// ---- F7/T4.1: key rotation + multi-key + revocation ----
+// The publisher is started with FED_KEY_HISTORY (an extra active key + a revoked one), so every
+// mirror assertion above already exercises multi-key verification (current key ∈ the active set).
+const wkk = await call(PUB, "GET", "/.well-known/aprscaching");
+const pks = wkk.data?.publicKeys ?? [];
+ok("well-known publishes a publicKeys[] including the current signing key",
+  Array.isArray(pks) && pks.some((k) => k.x === wkk.data.publicKey), JSON.stringify(pks));
+ok("publicKeys carries an extra active key (multi-key) and a revoked one",
+  pks.length >= 3 && pks.some((k) => k.revoked === true), JSON.stringify(pks.map((k) => [k.x?.slice(0, 6), !!k.revoked])));
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

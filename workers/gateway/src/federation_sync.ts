@@ -9,7 +9,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import {
-  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION,
+  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, type FedPublicKey,
   buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
@@ -101,7 +101,7 @@ export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: n
 
 async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number }> {
   const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
+  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; publicKeys?: FedPublicKey[]; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
 
@@ -119,7 +119,10 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   // never mirror ourselves
   if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0 };
 
-  const verifyKey = pub ? await importVerifyKey(pub) : null;
+  // T4.1: verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
+  // can rotate its key without breaking federation, and a revoked/leaked key is rejected. Falls back to
+  // the legacy single `publicKey` for older peers.
+  const verifyKeys = await importActiveKeys(wk.publicKeys, pub, now());
   // capability negotiation (T2.2): a peer that speaks our protocol version has an authoritative
   // capability list → skip feeds it doesn't advertise; a legacy peer (no version match) is tried for
   // every known feed and a 404 is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered
@@ -127,7 +130,7 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
   const counts: Record<string, number> = {};
   for (const def of SYNC_DEFS) // iterate SYNC_DEFS to preserve the tombstones-first order
-    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKey, def) : 0;
+    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKeys, def) : 0;
   await env.DB.prepare("UPDATE fed_peers SET last_sync=?, last_error=NULL WHERE url=?").bind(now(), p.url).run();
   return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0, moves: counts["account-move"] ?? 0 };
 }
@@ -166,7 +169,7 @@ const SYNC_DEFS: SyncDef[] = [
  * peer cursor — one loop for every record type. A 404 means the peer doesn't serve this feed (an
  * older peer, or one with the capability disabled) → skip it gracefully, never failing the whole sync.
  */
-async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, verifyKey: CryptoKey | null, def: SyncDef): Promise<number> {
+async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, verifyKeys: CryptoKey[], def: SyncDef): Promise<number> {
   let cursor = (p[def.cursorCol] as number) ?? 0, applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, { headers: { accept: "application/json" } });
@@ -174,7 +177,7 @@ async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, ve
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
     const feed = (await res.json()) as Feed;
     for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKey))) continue;
+      if (!(await accept(env, rec, verifyKeys))) continue;
       await def.apply(env, rec, rec.signer ?? feed.instance ?? instance);
       applied++;
     }
@@ -191,8 +194,15 @@ async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
   return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?").bind(globalId).first<{ x: number }>());
 }
 
-async function accept(env: Env, rec: FeedRecord, verifyKey: CryptoKey | null): Promise<boolean> {
-  if (verifyKey && !(await verifyRecordSig(verifyKey, rec))) return false; // bad signature
+/** Does the record verify under ANY of the peer's active keys (T4.1)? Empty set = unsigned peer (skip). */
+async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boolean> {
+  if (!keys.length) return true; // unsigned peer — nothing to verify against (legacy behaviour)
+  for (const k of keys) if (await verifyRecordSig(k, rec)) return true;
+  return false;
+}
+
+async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[]): Promise<boolean> {
+  if (!(await verifiesUnderAny(verifyKeys, rec))) return false;            // bad/unrecognised signature
   if (rec.signer && rec.signer === ours(env)) return false;                // never mirror our own
   if (await isTombstoned(env, rec.id)) return false;                       // purged by a peer tombstone
   return true;
