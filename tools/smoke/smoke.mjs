@@ -178,6 +178,12 @@ ok("bad ingest secret -> 401", badSecret.status === 401, `status=${badSecret.sta
 const missing = await call("GET", "/api/caches/999999");
 ok("unknown cache -> 404", missing.status === 404, `status=${missing.status}`);
 
+// AGPL §13 source link (ADR-3) — every instance exposes its running source
+const srcDesc = await call("GET", "/.well-known/source");
+ok("AGPL §13 source descriptor (repo + AGPL licence)", /github\.com/.test(srcDesc.data?.repo ?? "") && srcDesc.data?.license === "AGPL-3.0-or-later", JSON.stringify(srcDesc.data));
+const srcRedir = await fetch(`${BASE}/source`, { redirect: "manual" });
+ok("/source 302-redirects to the repo", srcRedir.status === 302 && /github\.com/.test(srcRedir.headers.get("location") ?? ""), `status=${srcRedir.status} loc=${srcRedir.headers.get("location")}`);
+
 // detail: 2 verified finds + a 4-entry-less logbook (3 logs here)
 const detail = await call("GET", `/api/caches/${id}`);
 ok("detail: 2 verified finds", detail.data?.cache?.finds === 2, JSON.stringify(detail.data?.cache?.finds));

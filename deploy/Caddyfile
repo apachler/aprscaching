@@ -2,7 +2,7 @@
 # DOMAIN=:80 -> plain HTTP (local/off-grid). DOMAIN=host -> automatic Let's Encrypt TLS.
 {$DOMAIN} {
 	encode zstd gzip
-	@dynamic path /api/* /auth/* /ws* /ingest /outbox* /federation/* /.well-known/*
+	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /outbox* /federation/* /source /health /.well-known/*
 	reverse_proxy @dynamic gateway:8080
 	root * /srv/web
 	try_files {path} /index.html

@@ -12,6 +12,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import { handle, runScheduled, syncAllPeers } from "@aprsweb/gateway/app";
 import type { Env } from "@aprsweb/gateway/env";
 import type { LiveEnvelope } from "@aprsweb/gateway/live";
@@ -26,6 +27,10 @@ const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? join(HERE, "data/media");
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "change-me";
+function gitHead(): string | undefined {
+  try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || undefined; }
+  catch { return undefined; }
+}
 
 // ---- storage ----
 mkdirSync(dirname(DB_PATH), { recursive: true });
@@ -61,6 +66,11 @@ const env: Env = {
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
   BBS_CALL: process.env.BBS_CALL,
+  // AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source)
+  SOURCE_REPO: process.env.SOURCE_REPO,
+  SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
+  SOURCE_TAG: process.env.SOURCE_TAG,
+  SOURCE_BUILT_AT: process.env.SOURCE_BUILT_AT,
 };
 
 const server = Bun.serve<WsData, undefined>({

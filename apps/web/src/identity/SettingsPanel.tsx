@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { getInstance, exportAccount, deleteAccount } from "../api.js";
+import { useEffect, useState } from "react";
+import { getInstance, getSource, sourceLinkUrl, exportAccount, deleteAccount, type SourceInfo } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import {
   useFmt, browserLocale, browserTimeZone, type LocaleSettings,
@@ -98,8 +98,23 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
             is not affiliated with, sponsored by, or endorsed by him or his estate.</p>
           <p className="muted">Maps © OpenStreetMap contributors, rendered with MapLibre. Built on open
             source; the APRScaching game and this app are the author’s own work.</p>
+          <SourceLink />
         </Group>
       )}
     </Panel>
+  );
+}
+
+/** AGPL §13 (ADR-3): a visible link to the exact source this instance is running. */
+function SourceLink() {
+  const [src, setSrc] = useState<SourceInfo | null>(null);
+  useEffect(() => { getSource().then(setSrc).catch(() => {}); }, []);
+  const short = src?.commit ? src.commit.slice(0, 8) : src?.tag ?? null;
+  return (
+    <p className="muted fine">
+      <a href={sourceLinkUrl} target="_blank" rel="noreferrer">Source code</a>
+      {" — "}{src?.license ?? "AGPL-3.0-or-later"}{short ? <> · <span className="mono">{short}</span></> : null}.
+      {" "}This is the AGPL §13 link to the source this instance runs.
+    </p>
   );
 }

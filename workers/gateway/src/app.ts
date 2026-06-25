@@ -15,6 +15,7 @@ import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
+import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
@@ -47,6 +48,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const p = url.pathname, m = req.method;
 
   if (p === "/health") return json({ ok: true });
+
+  // AGPL §13 source link (ADR-3) — the source this instance is running
+  if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
+  if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

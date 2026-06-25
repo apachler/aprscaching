@@ -8,6 +8,7 @@ echo ">> Paste the database_id into wrangler.toml, then press Enter."; read -r _
 wrangler d1 migrations apply aprscaching --remote
 wrangler r2 bucket create aprscaching-media || true
 wrangler secret put INGEST_SECRET
-wrangler deploy
+SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+wrangler deploy --var SOURCE_COMMIT:"$SOURCE_COMMIT" --var SOURCE_BUILT_AT:"$(date +%s)" --var SOURCE_REPO:"${SOURCE_REPO:-https://github.com/apachler/aprscaching}"
 cd "$ROOT" && wrangler pages deploy apps/web/dist --project-name aprscaching
 echo ">> Done. Run the operator RF ingest with INGEST_URL=https://<your-worker>/ingest (compose.ingest-only.yml)."

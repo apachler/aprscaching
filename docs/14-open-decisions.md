@@ -99,13 +99,15 @@ AGPL-3.0 §13. Launch-blocking for the first public deploy.
 - **SPDX headers.** Begin adding `SPDX-License-Identifier` headers per file incrementally; not a
   blocker for the source link.
 
-**Launch checklist (ADR-3):**
-- [ ] Build injects `VERSION` (commit/tag/builtAt) on Worker, Node, and web.
-- [ ] `GET /.well-known/source` returns repo+commit+license JSON on both runtimes.
-- [ ] `GET /source` 302-redirects to the repo tree at the running commit.
-- [ ] Footer/About shows a visible "Source" link with the short commit.
-- [ ] Self-host README documents `SOURCE_REPO`/`SOURCE_COMMIT` for modified deployments.
-- [ ] (Non-blocking) SPDX headers started across `apps/`, `workers/`, `servers/`.
+**Launch checklist (ADR-3) — IMPLEMENTED (`source.ts`), smoke-covered on all 3 runtimes:**
+- [x] Host stamps the commit (env, else `git rev-parse HEAD`) into `Env.SOURCE_*` on Node, Bun, the
+      desktop binary (from `BUILD_VERSION`), and the Worker (`deploy-cf.sh --var SOURCE_COMMIT`).
+- [x] `GET /.well-known/source` returns `{repo, commit, tag, builtAt, license}` (runtime-neutral).
+- [x] `GET /source` 302-redirects to `<repo>/tree/<commit>` (the exact running source).
+- [x] About & credits shows a visible "Source code" link (license + short commit), via the web app.
+- [x] Self-host docs: `SOURCE_REPO`/`SOURCE_COMMIT` in `deploy/.env.example` + the deploy README +
+      `docs/23`; Caddy/Cloudflare route + bypass `/source`.
+- [ ] (Non-blocking, deferred) SPDX headers across `apps/`, `workers/`, `servers/`.
 
 ---
 

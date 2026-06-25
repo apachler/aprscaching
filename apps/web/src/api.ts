@@ -241,3 +241,8 @@ export function getInstance(): Promise<string> {
   if (!instanceCache) instanceCache = call<{ instance: string }>(`/.well-known/aprscaching`).then((d) => d.instance).catch(() => "");
   return instanceCache;
 }
+
+/** AGPL §13 (ADR-3): the source the running instance reports, + the redirect link to it. */
+export type SourceInfo = { repo: string; commit: string | null; tag: string | null; builtAt: number | null; license: string };
+export function getSource(): Promise<SourceInfo> { return call<SourceInfo>(`/.well-known/source`); }
+export const sourceLinkUrl = `${API_BASE}/source`;

@@ -92,8 +92,11 @@ or a remote cloud gateway. The four topologies below choose where the **gateway/
   d1 migrations apply`.
 - **TLS:** self-host (1–2) use **Caddy** (automatic Let's Encrypt). Behind Cloudflare (3) TLS is
   terminated at the edge. CF Pages/Workers (4) is TLS by default.
-- **AGPL §13 (ADR-3):** every instance MUST show the in-app **Source** link pinned to its running
-  commit + serve `/.well-known/source`. Self-hosters who modify code MUST point it at their fork.
+- **AGPL §13 (ADR-3) — built:** every instance shows the in-app **Source** link (About & credits)
+  pinned to its running commit and serves `/.well-known/source` + `/source` (302 → the repo tree at
+  that commit). The commit auto-stamps from git when run from a clone; **self-hosters who modify the
+  code MUST set `SOURCE_REPO` to their published fork** (`SOURCE_COMMIT` too if not deploying from
+  git). `deploy-cf.sh` passes it as a Worker `--var`; Caddy/Cloudflare route `/source`.
 - **Backups (mandatory):** SQLite is one file — snapshot it on a schedule to **OCI Object Storage**
   (20 GB free) or R2. For #4, schedule a **D1 export**. This is your only data SPOF on a free host.
 - **Ingest secret:** the ingest→gateway POST is authed by `INGEST_SECRET`; the **over-APRS logging

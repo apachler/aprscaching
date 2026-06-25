@@ -26,4 +26,10 @@ export interface Env {
   RP_ID?: string;           // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
   EMAIL_FROM?: string;      // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string;   // Resend-style API key; absent => dev mode (no real send)
+
+  // ---- AGPL §13 source link (ADR-3) — the running instance's published source ----
+  SOURCE_REPO?: string;     // repo URL; absent => upstream default. Self-hosters who MODIFY code MUST set this to their fork.
+  SOURCE_COMMIT?: string;   // commit (or tag) the instance is running; host-resolved at build/start
+  SOURCE_TAG?: string;      // optional release tag
+  SOURCE_BUILT_AT?: string; // optional build unix-seconds
 }

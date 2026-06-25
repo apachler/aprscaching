@@ -11,6 +11,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { WebSocketServer } from "ws";
 import { handle, runScheduled, syncAllPeers } from "@aprsweb/gateway/app";
@@ -34,6 +35,18 @@ sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 const ran = migrate(sqlite, MIGRATIONS_DIR);
 console.log(ran.length ? `migrations applied: ${ran.join(", ")}` : "migrations up to date");
+
+// ---- AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source) ----
+function gitHead(): string | undefined {
+  try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || undefined; }
+  catch { return undefined; }
+}
+const SOURCE = {
+  SOURCE_REPO: process.env.SOURCE_REPO,
+  SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
+  SOURCE_TAG: process.env.SOURCE_TAG,
+  SOURCE_BUILT_AT: process.env.SOURCE_BUILT_AT,
+};
 
 // ---- env (runtime-neutral bindings) ----
 const rooms = new Rooms();
@@ -63,6 +76,7 @@ const env: Env = {
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
   BBS_CALL: process.env.BBS_CALL,
+  ...SOURCE,
 };
 
 // ---- node:http <-> Web Request/Response ----

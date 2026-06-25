@@ -82,6 +82,9 @@ const env: Env = {
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_PEERS: process.env.FED_PEERS,
   FED_DISCOVER: process.env.FED_DISCOVER,
+  // AGPL §13 source (ADR-3): the build stamps BUILD_VERSION (git describe) as the commit/tag.
+  SOURCE_REPO: process.env.SOURCE_REPO,
+  SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? (VERSION !== "dev" ? VERSION : undefined),
 };
 
 // ---- SPA serving ----
@@ -107,7 +110,7 @@ function serveSpa(pathname: string): Response {
 }
 
 // gateway (dynamic) paths go to handle(); everything else is the SPA.
-const DYNAMIC = /^\/(api|auth|verify|keys|ingest|outbox|federation|badge|health|\.well-known)(\/|$|\?)/;
+const DYNAMIC = /^\/(api|auth|verify|keys|ingest|outbox|federation|badge|health|source|\.well-known)(\/|$|\?)/;
 
 const server = Bun.serve<WsData, undefined>({
   port: PORT,
