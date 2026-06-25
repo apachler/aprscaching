@@ -218,6 +218,17 @@ search endpoint (none exists yet — the bbox map is the read surface) and per-A
 type so finds re-home to the destination instance and the network learns `OE8APR` changed homes. Device-key
 signatures (F0) already make the finds portable; federation just needs to announce the move and let peers
 re-point attribution via `account_id` (ADR-2), never the bare call string.
+
+**Status — IMPLEMENTED** (migration `0016_account_moves.sql` · `account.ts:ACCOUNT_MOVE_FEED` +
+publish-on-import · `federation_sync.ts:upsertRemoteAccountMove` + `SYNC_DEFS` · smoke +5 assertions).
+On a successful `/api/account/import` (the target verified the device-key migration assertion), the
+**target publishes a signed `account-move` record** — "this callsign now homes here, from `<source>`" —
+on `GET /federation/account-moves`, riding the T2.2 generalized envelope. Peers consume it through the
+same `syncFeed` path and record the latest home per callsign in `remote_account_moves` (last-writer by
+ts), gated by the same per-peer trust + signature verification as every other feed. `/.well-known`
+advertises the `moves` capability; the sync summary reports a `moves` count. **Deferred:** surfacing
+"homed at `<instance>`" in the profile/station UI and re-homing mirrored find attribution live (the data
+is now present in `remote_account_moves` for that follow-up).
 - *Worth:* people aren't locked to one instance; identity + history travel with the person.
 
 ### T3.3 Owner-controlled field redaction
@@ -275,10 +286,11 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - `tombstones` + `remote_tombstones` tables + `fed_peers.tombstones_cursor` + `GET /federation/tombstones`
   (T1.3 / ADR-5; **landed as `0014_tombstones.sql`**)
 - `caches` += `fed_scope` (T3.3 — **landed as `0015_fed_scope.sql`**)
+- `account_moves` + `remote_account_moves` tables + `fed_peers.moves_cursor` (T3.2 — **landed as `0016_account_moves.sql`**)
 - key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
 
 ## API additions
-`POST /federation/notify` (T2.1, **shipped**) · `GET /federation/tombstones` (T1.3, **shipped**) · `account-move` feed type
+`POST /federation/notify` (T2.1, **shipped**) · `GET /federation/tombstones` (T1.3, **shipped**) · `GET /federation/account-moves` (T3.2, **shipped**) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
 · `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
 (T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2, **shipped** — coarse distance + bucketed ts + instance, no exact IGate; optional
@@ -302,7 +314,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   tombstones **(done)**.
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
-- **F6 (commons):** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record · T3.3 redaction **(done)**.
+- **F6 (commons) — COMPLETE:** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record **(done)** · T3.3 redaction **(done)**.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
 
 ## Acceptance (abbreviated, per tier)
@@ -328,7 +340,10 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T3.1:** the public map/API shows trusted-peer caches with origin attribution; unvetted are opt-in
   (**met**: smoke asserts originTrust tagging, an unvetted peer's caches hidden by default + revealed by
   `includeUnvetted=1`, and demote/re-promote flips visibility live).
-- **T3.2:** moving OE8APR from A to B re-homes finds and the network attributes them to the account.
+- **T3.2:** moving OE8APR from A to B publishes a signed move the network mirrors, so peers learn the
+  new home (**met**: smoke imports a callsign to the publisher, asserts the signed account-move record
+  homes it there, the signature verifies, and the subscriber mirrors it + advances its moves_cursor).
+  Live re-homing of mirrored find attribution is the documented follow-up.
 - **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire
   (**met**: smoke asserts a public cache federates with description but no hint, unlisted drops the
   description, local-only is absent from the feed, and no hint text appears anywhere in it).

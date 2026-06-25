@@ -8,7 +8,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { accountActionMessage } from "@aprsweb/shared";
-import { importVerifyKey, fromB64 } from "./federation.js";
+import { importVerifyKey, fromB64, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
 import { sessionCallsign } from "./auth.js";
@@ -148,6 +148,10 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
       .bind(cs, bundle.verified ? 1 : 0, "migrated", now()),
     env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)")
       .bind(cs, `from:${bundle.instance ?? "?"}`, now()),
+    // T3.2: announce the move to the network — the target attests "this callsign now homes here",
+    // signed at serve time on the account-move feed so peers can re-point attribution (ADR-2).
+    env.DB.prepare("INSERT INTO account_moves (callsign, from_instance, to_instance, ts) VALUES (?,?,?,?)")
+      .bind(cs, bundle.instance ?? null, instanceOf(env, req), now()),
   ];
   for (const k of bundle.keys)
     stmts.push(env.DB.prepare("INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)")
@@ -155,3 +159,17 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   await env.DB.batch(stmts);
   return json({ ok: true, callsign: cs, importedKeys: bundle.keys.length, from: bundle.instance ?? null });
 }
+
+// ----------------------------------------------------- federation: account-move feed (T3.2)
+interface MoveRow { seq: number; callsign: string; from_instance: string | null; to_instance: string; ts: number }
+const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
+  type: "account-move",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
+    "SELECT seq, callsign, from_instance, to_instance, ts FROM account_moves WHERE seq > ? ORDER BY seq LIMIT ?",
+  ).bind(since, limit).all<MoveRow>()).results,
+  recordOf: (r, instance) => ({
+    id: `${instance}:move:${r.seq}`, cursor: r.seq,
+    data: { callsign: r.callsign, fromInstance: r.from_instance, toInstance: r.to_instance, ts: r.ts },
+  }),
+};
+export const handleFederationAccountMoves = (req: Request, env: Env): Promise<Response> => serveFeed(req, env, ACCOUNT_MOVE_FEED);

@@ -27,7 +27,7 @@ import { handleDecode, handleStations, handleStation, handlePorts, handleMessage
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
-import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport } from "./account.js";
+import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
 import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead } from "./bbs.js";
 export { syncAllPeers } from "./federation_sync.js";
 
@@ -82,6 +82,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // T1.3/ADR-5 delete propagation
   if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // T2.1 gossip push-to-pull
   if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // T2.3 push-to-hub (NAT/firewall peers)
+  if (p === "/federation/account-moves" && m === "GET") return handleFederationAccountMoves(req, env); // T3.2 account-move feed
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);

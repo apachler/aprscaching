@@ -347,6 +347,35 @@ ok("an unlisted cache federates without its description (and no hint)",
 ok("a local-only cache never enters the feed at all", !locRec, cLoc.data?.cache?.title);
 ok("no hint text leaks anywhere in the caches feed", !new RegExp(HINT).test(JSON.stringify(cfeed.data)));
 
+// ---- F6/T3.2: account-move as a signed federation record ----
+// migrate OE7MOV onto the publisher (device-key assertion bound to oe.pub) → it announces the move
+const mkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const mpub = b64u(await crypto.subtle.exportKey("raw", mkp.publicKey));
+const mvAt = now();
+const mvSig = b64u(await crypto.subtle.sign("Ed25519", mkp.privateKey, new TextEncoder().encode(accMsg("migrate", "OE7MOV", mvAt))));
+const imp = await call(PUB, "POST", "/api/account/import", {
+  bundle: { v: 1, instance: "oe.origin", callsign: "OE7MOV", verified: true, keys: [{ publicKey: mpub, label: "dev", verified: 1 }], at: mvAt },
+  assertion: { key: mpub, sig: mvSig, at: mvAt },
+});
+ok("account import (move) accepted on the publisher", imp.data?.ok === true, JSON.stringify(imp.data));
+
+const mfeed = await call(PUB, "GET", "/federation/account-moves?since=0&limit=100");
+const mrec = (mfeed.data?.items ?? []).find((r) => r.data?.callsign === "OE7MOV");
+ok("account-move feed carries the signed move (homed to the publisher)",
+  !!mrec && mrec.data.toInstance === pubInstance && mrec.data.fromInstance === "oe.origin" && !!mrec.sig && mrec.signer === pubInstance, JSON.stringify(mrec));
+let mvOk = false;
+if (mrec) {
+  const pk = await crypto.subtle.importKey("raw", ub64(pubWk.data.publicKey), { name: "Ed25519" }, false, ["verify"]);
+  const msg = new TextEncoder().encode(stableStringify({ type: "account-move", id: mrec.id, data: mrec.data }));
+  mvOk = await crypto.subtle.verify("Ed25519", pk, ub64(mrec.sig), msg);
+}
+ok("the move record signature verifies against the publisher key", mvOk);
+
+const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));
+const mpeers = await call(SUB, "GET", "/federation/peers");
+ok("subscriber moves_cursor advanced", (mpeers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.moves_cursor > 0), JSON.stringify(mpeers.data));
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",
