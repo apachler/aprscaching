@@ -6,3 +6,9 @@ dist
 
 # teaser output
 tools/teaser/out
+
+# node self-host runtime data (local sqlite db + media store, created on `start`)
+servers/node/data/
+*.db
+*.db-shm
+*.db-wal
