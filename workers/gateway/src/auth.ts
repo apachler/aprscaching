@@ -56,8 +56,14 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     accountId = existing.account_id;
   } else {
     accountId = crypto.randomUUID();
-    await env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)")
-      .bind(cs, accountId, email ? String(email).trim().toLowerCase() : null, Math.floor(Date.now() / 1000)).run();
+    const now = Math.floor(Date.now() / 1000);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)")
+        .bind(cs, accountId, email ? String(email).trim().toLowerCase() : null, now),
+      // seed the held-callsign set with this call as the account's primary (the passkey binds here)
+      env.DB.prepare("INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)")
+        .bind(accountId, cs.split("-")[0], now),
+    ]);
   }
   const challenge = randomChallenge();
   await storeChallenge(env, cs, "webauthn_reg", challenge);
@@ -126,31 +132,86 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   } catch (e) { return json({ error: "login failed: " + (e as Error).message }, { status: 400 }); }
 }
 
+const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
+
+/** Resolve the durable account behind the signed-in session (by its active callsign). */
+async function sessionAccountId(req: Request, env: Env): Promise<{ accountId: string; callsign: string } | null> {
+  const cur = await sessionCallsign(req, env);
+  if (!cur) return null;
+  const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(cur).first<{ account_id: string }>();
+  return me ? { accountId: me.account_id, callsign: cur } : null;
+}
+
 /**
- * POST /auth/callsign {callsign} — change the signed-in account's active callsign (S5). The new
- * call is set immediately but UNVERIFIED (must re-run the APRS challenge); passkeys follow the
- * account so login still works; history under the previous call is left intact (audit-true). The
- * change is recorded in callsign_history and the session cookie is re-bound to the new call.
+ * GET /auth/callsigns — the held base calls of the signed-in account, with verification state and
+ * which one is currently active / primary. The account (person) holds one or more base calls; the
+ * passkey lives on the primary; the active call is whichever the session is bound to.
+ */
+export async function handleListCallsigns(req: Request, env: Env): Promise<Response> {
+  const me = await sessionAccountId(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
+  const active = baseOf(me.callsign);
+  const rows = (await env.DB.prepare(
+    "SELECT callsign, verified, is_primary FROM account_callsigns WHERE account_id=? ORDER BY is_primary DESC, added_at ASC, callsign ASC",
+  ).bind(me.accountId).all<{ callsign: string; verified: number; is_primary: number }>()).results ?? [];
+  return json({
+    active,
+    callsigns: rows.map((r) => ({ callsign: r.callsign, verified: !!r.verified, isPrimary: !!r.is_primary, active: r.callsign === active })),
+  });
+}
+
+/**
+ * POST /auth/callsigns {callsign} — add another base call to the signed-in account (unverified;
+ * verify it via the APRS challenge). Does NOT change the active call. A base call can be held by
+ * only one account, so a call already on another account is rejected.
+ */
+export async function handleAddCallsign(req: Request, env: Env): Promise<Response> {
+  const me = await sessionAccountId(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const base = baseOf(String(callsign ?? ""));
+  if (base.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const held = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?").bind(base).first<{ account_id: string }>();
+  if (held) return json(held.account_id === me.accountId ? { error: "you already hold that callsign" } : { error: "callsign already held by another account" }, { status: 409 });
+  await env.DB.prepare("INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?,?,0,0,?)")
+    .bind(me.accountId, base, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true, callsign: base, verified: false });
+}
+
+/**
+ * POST /auth/callsign {callsign} — switch the active operating callsign of the signed-in account.
+ * Switching to a base call the account ALREADY HOLDS is non-destructive: its prior verification is
+ * preserved (no re-challenge). Switching to a NEW base call adds it (unverified) and switches. The
+ * passkey stays on the primary call (login is unaffected); the session cookie re-binds to the new
+ * active call and the change is recorded in callsign_history.
  */
 export async function handleChangeCallsign(req: Request, env: Env): Promise<Response> {
-  const sess = await sessionCallsign(req, env);
-  if (!sess) return json({ error: "sign in first" }, { status: 401 });
+  const me = await sessionAccountId(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const next = String(callsign ?? "").toUpperCase().trim();
+  const next = baseOf(String(callsign ?? ""));
   if (next.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const cur = sess.toUpperCase();
-  if (next === cur) return json({ error: "that is already your callsign" }, { status: 400 });
-  const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(cur).first<{ account_id: string }>();
-  if (!me) return json({ error: "account not found" }, { status: 404 });
-  const taken = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(next).first<{ account_id: string }>();
-  if (taken && taken.account_id !== me.account_id) return json({ error: "callsign already claimed by another account" }, { status: 409 });
+  const cur = baseOf(me.callsign);
+  if (next === cur) return json({ error: "that is already your active callsign" }, { status: 400 });
+  // a base call held by a DIFFERENT account is off-limits
+  const owner = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?").bind(next).first<{ account_id: string }>();
+  if (owner && owner.account_id !== me.accountId) return json({ error: "callsign already held by another account" }, { status: 409 });
   const now = Math.floor(Date.now() / 1000);
-  await env.DB.batch([
-    env.DB.prepare("UPDATE accounts SET callsign=?, verified=0, verify_method=NULL, verified_at=NULL WHERE account_id=?").bind(next, me.account_id),
-    env.DB.prepare("UPDATE credentials SET callsign=? WHERE callsign=?").bind(next, cur),
-    env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?,?,?,0)").bind(me.account_id, next, now),
-  ]);
-  return json({ ok: true, callsign: next }, { headers: { "set-cookie": await issueSessionCookie(next, env) } });
+  const held = await env.DB.prepare("SELECT verified, method, verified_at FROM account_callsigns WHERE account_id=? AND callsign=?")
+    .bind(me.accountId, next).first<{ verified: number; method: string | null; verified_at: number | null }>();
+  const ops = [];
+  if (held) {
+    // already a held call — restore its verification state onto the active account row (no re-verify)
+    ops.push(env.DB.prepare("UPDATE accounts SET callsign=?, verified=?, verify_method=?, verified_at=? WHERE account_id=?")
+      .bind(next, held.verified, held.method, held.verified_at, me.accountId));
+  } else {
+    // a brand-new base call — hold it (unverified) and switch to it
+    ops.push(env.DB.prepare("INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?,?,0,0,?)").bind(me.accountId, next, now));
+    ops.push(env.DB.prepare("UPDATE accounts SET callsign=?, verified=0, verify_method=NULL, verified_at=NULL WHERE account_id=?").bind(next, me.accountId));
+  }
+  ops.push(env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?,?,?,?)").bind(me.accountId, next, now, held?.verified ?? 0));
+  await env.DB.batch(ops);
+  return json({ ok: true, callsign: next, verified: !!held?.verified }, { headers: { "set-cookie": await issueSessionCookie(next, env) } });
 }
 
 /** Returns the signed-in callsign, or null. Used to attribute logs and gate announce. */

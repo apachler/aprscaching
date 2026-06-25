@@ -134,6 +134,42 @@ ok("session reports the new callsign, unverified", whoBody.callsign === "OE9CHG"
 const chgSame = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie: cookie2 }, body: JSON.stringify({ callsign: "OE9CHG" }) });
 ok("changing to your current callsign -> 400", chgSame.status === 400, `status=${chgSame.status}`);
 
+// --- multiple verified base calls per account (account_callsigns) ---
+// the account now holds OE9SESS (primary, from email register) + OE9CHG (switched-to). Verify the
+// active call, switch away to the primary, switch BACK, and confirm verification is preserved —
+// switching among held calls must never re-challenge.
+const mcList1 = await (await fetch(`${BASE}/auth/callsigns`, { headers: { cookie: cookie2 } })).json();
+const mcCalls1 = mcList1.callsigns ?? [];
+ok("account holds its primary + the switched-to call", mcCalls1.some((c) => c.callsign === "OE9SESS" && c.isPrimary) && mcCalls1.some((c) => c.callsign === "OE9CHG" && c.active), JSON.stringify(mcList1));
+ok("active callsign verifies over APRS", await verifyCallsign("OE9CHG"));
+const whoV = await (await fetch(`${BASE}/auth/session`, { headers: { cookie: cookie2 } })).json();
+ok("session reports the active callsign as verified", whoV.callsign === "OE9CHG" && whoV.verified === true, JSON.stringify(whoV));
+const toPrimary = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie: cookie2 }, body: JSON.stringify({ callsign: "OE9SESS" }) });
+const cookieP = (toPrimary.headers.get("set-cookie") ?? "").split(";")[0] || cookie2;
+const whoP = await (await fetch(`${BASE}/auth/session`, { headers: { cookie: cookieP } })).json();
+ok("switching to the unverified primary reports it unverified (per-call state)", whoP.callsign === "OE9SESS" && whoP.verified === false, JSON.stringify(whoP));
+const back = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie: cookieP }, body: JSON.stringify({ callsign: "OE9CHG" }) });
+const backBody = await back.json().catch(() => ({}));
+const cookieB = (back.headers.get("set-cookie") ?? "").split(";")[0] || cookieP;
+ok("switching back to a held verified call preserves verification (no re-challenge)", backBody.verified === true, JSON.stringify(backBody));
+const whoB = await (await fetch(`${BASE}/auth/session`, { headers: { cookie: cookieB } })).json();
+ok("session confirms the restored verification", whoB.callsign === "OE9CHG" && whoB.verified === true, JSON.stringify(whoB));
+// add a brand-new base call (held + unverified; SSID is stripped; active call unchanged)
+const add = await fetch(`${BASE}/auth/callsigns`, { method: "POST", headers: { "content-type": "application/json", cookie: cookieB }, body: JSON.stringify({ callsign: "OE9ADD-7" }) });
+const addBody = await add.json().catch(() => ({}));
+ok("adding a base call holds it unverified without switching", add.status === 200 && addBody.callsign === "OE9ADD" && addBody.verified === false, `status=${add.status} ${JSON.stringify(addBody)}`);
+const mcList2 = await (await fetch(`${BASE}/auth/callsigns`, { headers: { cookie: cookieB } })).json();
+ok("the added call joins the held set; active is unchanged", (mcList2.callsigns ?? []).some((c) => c.callsign === "OE9ADD") && mcList2.active === "OE9CHG", JSON.stringify(mcList2));
+const addDup = await fetch(`${BASE}/auth/callsigns`, { method: "POST", headers: { "content-type": "application/json", cookie: cookieB }, body: JSON.stringify({ callsign: "OE9ADD" }) });
+ok("adding a call you already hold -> 409", addDup.status === 409, `status=${addDup.status}`);
+// a base call held by ANOTHER account is off-limits (both add and switch are rejected)
+const otherStart = await call("POST", "/auth/email/start", { email: `o${now()}@example.com`, callsign: "OE2OTHER" });
+await fetch(`${BASE}/auth/email/verify?token=${otherStart.data.devToken}`, { headers: { accept: "application/json" } });
+const addOther = await fetch(`${BASE}/auth/callsigns`, { method: "POST", headers: { "content-type": "application/json", cookie: cookieB }, body: JSON.stringify({ callsign: "OE2OTHER" }) });
+ok("adding a call held by another account -> 409", addOther.status === 409, `status=${addOther.status}`);
+const switchOther = await fetch(`${BASE}/auth/callsign`, { method: "POST", headers: { "content-type": "application/json", cookie: cookieB }, body: JSON.stringify({ callsign: "OE2OTHER" }) });
+ok("switching to a call held by another account -> 409", switchOther.status === 409, `status=${switchOther.status}`);
+
 // owner gating + auth guards
 const wrongOwner = await call("PATCH", `/api/caches/${id}`, { ownerCall: "DL9NO", difficulty: 5 });
 ok("non-owner edit -> 403", wrongOwner.status === 403, `status=${wrongOwner.status}`);

@@ -470,6 +470,9 @@ button.link:hover { text-decoration: underline; }
 .setrow:first-child { border-top: none; }
 .setrow-l { min-width: 0; } .setrow-help { font-size: 12px; margin-top: 1px; }
 .setrow-c { flex: none; display: flex; align-items: center; gap: 6px; }
+/* held-callsign list (Account → callsigns) reuses the .setrow anatomy as a real <ul> */
+.cs-list { list-style: none; margin: 0; padding: 0; }
+.cs-list .setrow-l { display: flex; align-items: center; gap: 6px; }
 .adv-toggle { border: none; background: none; color: var(--heading); font-weight: 600; cursor: pointer;
   display: flex; align-items: center; gap: 6px; padding: 8px 0 4px; }
 .adv-body { padding: 2px 0 4px 6px; }

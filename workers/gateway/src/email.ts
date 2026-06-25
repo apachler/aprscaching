@@ -79,6 +79,10 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     await env.DB.prepare(
       "INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)",
     ).bind(id, cs, now).run();
+    // seed the held-callsign set with this call as the account's primary base call
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
+    ).bind(id, cs.split("-")[0], now).run();
     acct = { account_id: id, callsign: cs };
   }
 

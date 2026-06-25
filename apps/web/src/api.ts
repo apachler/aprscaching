@@ -185,9 +185,19 @@ export function claim(callsign: string): Promise<{ callsign: string; exists: boo
 export function emailStart(email: string, callsign?: string): Promise<{ sent: boolean; purpose: string; devLink?: string }> {
   return call(`/auth/email/start`, { method: "POST", body: JSON.stringify({ email, callsign }) });
 }
-/** Change the signed-in account's active callsign (sets it unverified — re-verify after). */
-export function changeCallsign(callsign: string): Promise<{ ok: boolean; callsign: string }> {
+/** Switch the signed-in account's active callsign. Switching to a held call preserves its
+ *  verification; switching to a new base call adds it (unverified). */
+export function changeCallsign(callsign: string): Promise<{ ok: boolean; callsign: string; verified: boolean }> {
   return call(`/auth/callsign`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+export type HeldCallsign = { callsign: string; verified: boolean; isPrimary: boolean; active: boolean };
+/** The base callsigns this account holds, with verification + which is active/primary. */
+export function listCallsigns(): Promise<{ active: string; callsigns: HeldCallsign[] }> {
+  return call(`/auth/callsigns`);
+}
+/** Add another base callsign to the account (held + unverified; does not switch the active call). */
+export function addCallsign(callsign: string): Promise<{ ok: boolean; callsign: string; verified: boolean }> {
+  return call(`/auth/callsigns`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 
 function b64uToBuf(s: string): ArrayBuffer {

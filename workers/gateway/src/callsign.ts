@@ -28,6 +28,9 @@ export async function confirmAprsChallenge(req: Request, env: Env): Promise<Resp
   await env.DB.batch([
     env.DB.prepare("UPDATE callsign_verifications SET status='verified', verified_at=? WHERE callsign=?").bind(now, cs),
     env.DB.prepare("UPDATE accounts SET verified=1, verify_method='aprs_msg', verified_at=? WHERE callsign=?").bind(now, cs),
+    // mirror onto the held base call (account_callsigns) so a verified call keeps its status when
+    // the account later switches its active call to (or away from) this one.
+    env.DB.prepare("UPDATE account_callsigns SET verified=1, method='aprs_msg', verified_at=? WHERE callsign=?").bind(now, cs),
   ]);
   return json({ verified: true });
 }

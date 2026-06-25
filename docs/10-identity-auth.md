@@ -65,10 +65,27 @@ smoke suite is updated in the same commit.
 Web Crypto (no deps), browser-verified via a Playwright virtual authenticator; web sign-in (passkey +
 email magic-link) drives a real session; web logging/hiding is gated behind that session while the
 over-APRS path stays open via the ingest secret; and the active callsign can be changed (re-binding
-the session and resetting verification to pending). Deferred extensions: **multiple verified base
-calls per account** (`account_callsigns`/`account_stations`); reconciling the **callsign-reassignment**
-edge (a callsign later re-licensed to a different person still shows the prior holder's finds, since
-history is per-callsign string).
+the session and resetting verification to pending).
+
+**Multiple verified base calls per account is implemented.** Migration `0011` adds `account_callsigns`
+(the held base-call set keyed by `account_id`, with a unique index so a call is held by one account
+only); `accounts.callsign` stays the active-call anchor and `account_id` the durable id. Endpoints:
+`GET /auth/callsigns` (held set + which is active/primary), `POST /auth/callsigns` (add a base call,
+held + unverified, no switch), and a reworked `POST /auth/callsign` that **switches non-destructively**
+— moving to a call the account already holds restores that call's prior verification (no re-challenge),
+while moving to a new base call adds it unverified. Passkeys stay bound to the primary call (login is
+by the primary), so switching the active call no longer moves credentials. Verifying a call mirrors
+its `verified` state onto `account_callsigns` so it survives switches. Settings → Account lists the
+held calls with per-call verify / set-active and an "Add a callsign" disclosure. Smoke covers
+hold → verify → switch-away → switch-back-preserves-verification, add, and the
+held-by-another-account guards on both runtimes.
+
+Deferred extensions: **SSID station registry** (`account_stations` — the per-SSID picker; base-call
+verification already covers all SSIDs, this is operating-station UX only); **account-level credit
+aggregation** (today the leaderboard credits per base call — a person holding two base calls shows as
+two rows; joining credit through `account_callsigns` to one account is a later refinement); and
+reconciling the **callsign-reassignment** edge (a callsign later re-licensed to a different person
+still shows the prior holder's finds, since history is per-callsign string).
 
 **Leaderboard credit now gates on control-verification.** Competitive standings only count finds
 whose `logger_call` is control-verified (APRS message-challenge / LoTW) — an unverified callsign
