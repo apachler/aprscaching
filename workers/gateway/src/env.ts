@@ -20,4 +20,10 @@ export interface Env {
 
   // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
   BBS_CALL?: string;        // e.g. "OE8APR-5"; defaults to "APRSCG"
+
+  // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
+  APP_URL?: string;         // app origin for magic-link redirects, e.g. "https://aprscaching.com"
+  RP_ID?: string;           // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
+  EMAIL_FROM?: string;      // sender address for magic-link mail; absent => dev mode
+  EMAIL_API_KEY?: string;   // Resend-style API key; absent => dev mode (no real send)
 }

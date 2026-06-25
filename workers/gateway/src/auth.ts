@@ -23,8 +23,8 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
   }
   // new callsign -> create account + begin passkey REGISTRATION ceremony
   await env.DB.prepare(
-    "INSERT INTO accounts (callsign, verified, created_at) VALUES (?, 0, ?)",
-  ).bind(cs, Math.floor(Date.now() / 1000)).run();
+    "INSERT INTO accounts (callsign, account_id, verified, created_at) VALUES (?, ?, 0, ?)",
+  ).bind(cs, crypto.randomUUID(), Math.floor(Date.now() / 1000)).run();
   // TODO: generateRegistrationOptions() and store challenge
   return json({ mode: "register", callsign: cs, challenge: "TODO_webauthn_challenge" });
 }
@@ -33,9 +33,8 @@ export async function handlePasskeyVerify(req: Request, env: Env): Promise<Respo
   const body = (await req.json()) as { callsign: string; assertion: unknown };
   // TODO: verifyRegistrationResponse / verifyAuthenticationResponse, persist/lookup credential.
   // On success, issue a session bound to the callsign.
-  const token = await signSession(body.callsign.toUpperCase(), env);
   return json({ ok: true, callsign: body.callsign.toUpperCase() }, {
-    headers: { "set-cookie": `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000` },
+    headers: { "set-cookie": await issueSessionCookie(body.callsign.toUpperCase(), env) },
   });
 }
 
@@ -45,6 +44,26 @@ export async function sessionCallsign(req: Request, env: Env): Promise<string | 
   const m = /(?:^|;\s*)acs=([^;]+)/.exec(cookie);
   if (!m) return null;
   return verifySession(m[1]!, env);
+}
+
+/** Set-Cookie header value for a session bound to a callsign (the durable account behind it). */
+export async function issueSessionCookie(callsign: string, env: Env): Promise<string> {
+  const token = await signSession(callsign.toUpperCase(), env);
+  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`;
+}
+
+/** GET /auth/session — "who am I": the signed-in callsign + verification + email, or null. */
+export async function handleSession(req: Request, env: Env): Promise<Response> {
+  const callsign = await sessionCallsign(req, env);
+  if (!callsign) return json({ callsign: null });
+  const acct = await env.DB.prepare("SELECT verified, email FROM accounts WHERE callsign = ?")
+    .bind(callsign).first<{ verified: number; email: string | null }>();
+  return json({ callsign, verified: !!acct?.verified, email: acct?.email ?? null });
+}
+
+/** POST /auth/logout — clear the session cookie. */
+export async function handleLogout(): Promise<Response> {
+  return json({ ok: true }, { headers: { "set-cookie": `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0` } });
 }
 
 // --- minimal signed session (HMAC). Replace with your preferred session strategy. ---

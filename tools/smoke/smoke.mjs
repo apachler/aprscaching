@@ -37,6 +37,25 @@ async function waitHealthy() {
 console.log(`smoke: ${BASE}`);
 ok("health", await waitHealthy());
 
+// ---- M9 auth: email magic-link register -> session (the headless-exercisable path) ----
+{
+  const email = `smoke+${now()}@example.test`;
+  const callsign = `OE${now() % 1000}X`;
+  const start = await call("POST", "/auth/email/start", { email, callsign });
+  ok("auth: email/start -> devToken (dev mode)", start.status === 200 && !!start.data?.devToken,
+    `status=${start.status} ${JSON.stringify(start.data)}`);
+  const vr = await fetch(BASE + "/auth/email/verify", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: start.data?.devToken }),
+  });
+  const vd = await vr.json().catch(() => ({}));
+  const cookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  ok("auth: email/verify -> session cookie + callsign", vr.status === 200 && vd.callsign === callsign && cookie.startsWith("acs="),
+    `status=${vr.status} cookie=${cookie} ${JSON.stringify(vd)}`);
+  const sess = await call("GET", "/auth/session", undefined, { cookie });
+  ok("auth: session -> signed-in callsign", sess.data?.callsign === callsign, JSON.stringify(sess.data));
+}
+
 // hide a cache
 const created = await call("POST", "/api/caches", {
   title: "Smoke Cache", type: "single", lat: 47.0735, lon: 15.4378,

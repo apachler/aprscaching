@@ -9,7 +9,8 @@ import { handleIngest } from "./ingest.js";
 import {
   handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleUpdateCache,
 } from "./caches.js";
-import { handleClaim, handlePasskeyVerify } from "./auth.js";
+import { handleClaim, handlePasskeyVerify, handleSession, handleLogout } from "./auth.js";
+import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { startAprsChallenge, confirmAprsChallenge } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
@@ -86,9 +87,13 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     return env.ROOMS.get(env.ROOMS.idFromName(region)).fetch(req);
   }
 
-  // auth (passkey identity; never blocks logging)
+  // auth (M9 identity: passkey + email magic-link). Sessions attribute logs once gating lands.
   if (p === "/auth/claim" && m === "POST") return handleClaim(req, env);
   if (p === "/auth/passkey/verify" && m === "POST") return handlePasskeyVerify(req, env);
+  if (p === "/auth/email/start" && m === "POST") return handleEmailStart(req, env);
+  if (p === "/auth/email/verify" && (m === "POST" || m === "GET")) return handleEmailVerify(req, env);
+  if (p === "/auth/session" && m === "GET") return handleSession(req, env);
+  if (p === "/auth/logout" && m === "POST") return handleLogout();
 
   // async callsign-control verification badge
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
