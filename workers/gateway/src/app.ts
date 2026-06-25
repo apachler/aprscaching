@@ -9,7 +9,8 @@ import { handleIngest } from "./ingest.js";
 import {
   handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleUpdateCache,
 } from "./caches.js";
-import { handleClaim, handlePasskeyVerify, handleSession, handleLogout } from "./auth.js";
+import { handleClaim, handleSession, handleLogout,
+  handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
@@ -89,7 +90,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // auth (M9 identity: passkey + email magic-link). Sessions attribute logs once gating lands.
   if (p === "/auth/claim" && m === "POST") return handleClaim(req, env);
-  if (p === "/auth/passkey/verify" && m === "POST") return handlePasskeyVerify(req, env);
+  if (p === "/auth/passkey/register/begin" && m === "POST") return handlePasskeyRegisterBegin(req, env);
+  if (p === "/auth/passkey/register/finish" && m === "POST") return handlePasskeyRegisterFinish(req, env);
+  if (p === "/auth/passkey/login/begin" && m === "POST") return handlePasskeyLoginBegin(req, env);
+  if (p === "/auth/passkey/login/finish" && m === "POST") return handlePasskeyLoginFinish(req, env);
   if (p === "/auth/email/start" && m === "POST") return handleEmailStart(req, env);
   if (p === "/auth/email/verify" && (m === "POST" || m === "GET")) return handleEmailVerify(req, env);
   if (p === "/auth/session" && m === "GET") return handleSession(req, env);

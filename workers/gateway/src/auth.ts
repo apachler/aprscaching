@@ -1,41 +1,129 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
 
 /**
- * Auth scaffold. Identity = callsign + passkey (WebAuthn). Logging is never blocked by this;
- * an unverified account can still log finds (flagged). Callsign-CONTROL verification is a
- * separate async badge (see verifyCallsign*) that gates the APRS-IS announce feature.
- *
- * Integrate a WebAuthn lib (e.g. @simplewebauthn/server, confirm edge-runtime support) at the
- * marked TODOs. Sessions here use a signed cookie kept simple for the scaffold.
+ * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
+ * ceremonies are verified in webauthn.ts (Web Crypto, runtime-agnostic). Sessions are a signed
+ * (HMAC) cookie bound to the callsign of the durable account behind it.
  */
 
 const SESSION_COOKIE = "acs";
+const CHALLENGE_TTL = 300;
 
-export async function handleClaim(req: Request, env: Env): Promise<Response> {
-  const { callsign } = (await req.json()) as { callsign: string };
-  const cs = callsign.toUpperCase().trim();
-  const existing = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign = ?").bind(cs).first();
-  if (existing) {
-    // account exists -> begin passkey LOGIN ceremony
-    // TODO: generateAuthenticationOptions() and store challenge
-    return json({ mode: "login", callsign: cs, challenge: "TODO_webauthn_challenge" });
-  }
-  // new callsign -> create account + begin passkey REGISTRATION ceremony
-  await env.DB.prepare(
-    "INSERT INTO accounts (callsign, account_id, verified, created_at) VALUES (?, ?, 0, ?)",
-  ).bind(cs, crypto.randomUUID(), Math.floor(Date.now() / 1000)).run();
-  // TODO: generateRegistrationOptions() and store challenge
-  return json({ mode: "register", callsign: cs, challenge: "TODO_webauthn_challenge" });
+function authOrigins(req: Request, env: Env): string[] {
+  const o = env.APP_URL ?? req.headers.get("Origin");
+  return o ? [o] : [];
+}
+function rpId(req: Request, env: Env): string {
+  if (env.RP_ID) return env.RP_ID;
+  const o = env.APP_URL ?? req.headers.get("Origin");
+  try { return o ? new URL(o).hostname : "localhost"; } catch { return "localhost"; }
+}
+async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), cs, kind, value, Math.floor(Date.now() / 1000) + CHALLENGE_TTL).run();
+}
+async function takeChallenge(env: Env, cs: string, kind: string): Promise<string | null> {
+  const row = await env.DB.prepare("SELECT id, value FROM auth_challenges WHERE callsign=? AND kind=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1")
+    .bind(cs, kind, Math.floor(Date.now() / 1000)).first<{ id: string; value: string }>();
+  if (!row) return null;
+  await env.DB.prepare("DELETE FROM auth_challenges WHERE id=?").bind(row.id).run();
+  return row.value;
 }
 
-export async function handlePasskeyVerify(req: Request, env: Env): Promise<Response> {
-  const body = (await req.json()) as { callsign: string; assertion: unknown };
-  // TODO: verifyRegistrationResponse / verifyAuthenticationResponse, persist/lookup credential.
-  // On success, issue a session bound to the callsign.
-  return json({ ok: true, callsign: body.callsign.toUpperCase() }, {
-    headers: { "set-cookie": await issueSessionCookie(body.callsign.toUpperCase(), env) },
+/** POST /auth/claim {callsign} — probe whether a callsign exists / has a passkey (no side effects). */
+export async function handleClaim(req: Request, env: Env): Promise<Response> {
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const cs = String(callsign ?? "").toUpperCase().trim();
+  if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const existing = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
+  const hasPasskey = existing ? await env.DB.prepare("SELECT 1 FROM credentials WHERE callsign=? LIMIT 1").bind(cs).first() : null;
+  return json({ callsign: cs, exists: !!existing, hasPasskey: !!hasPasskey });
+}
+
+type Cred = { id?: string; response?: { clientDataJSON: string; attestationObject?: string; authenticatorData?: string; signature?: string; transports?: string[] } };
+
+/** POST /auth/passkey/register/begin {callsign, email?} — PublicKeyCredentialCreationOptions. */
+export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promise<Response> {
+  const { callsign, email } = (await req.json().catch(() => ({}))) as { callsign?: string; email?: string };
+  const cs = String(callsign ?? "").toUpperCase().trim();
+  if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const existing = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(cs).first<{ account_id: string }>();
+  let accountId: string;
+  if (existing) {
+    if ((await sessionCallsign(req, env)) !== cs) return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
+    accountId = existing.account_id;
+  } else {
+    accountId = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)")
+      .bind(cs, accountId, email ? String(email).trim().toLowerCase() : null, Math.floor(Date.now() / 1000)).run();
+  }
+  const challenge = randomChallenge();
+  await storeChallenge(env, cs, "webauthn_reg", challenge);
+  const excl = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
+  return json({
+    challenge, rp: { id: rpId(req, env), name: "APRScaching" },
+    user: { id: bytesToB64url(new TextEncoder().encode(accountId)), name: cs, displayName: cs },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    attestation: "none", timeout: 60000,
+    excludeCredentials: (excl.results ?? []).map((c) => ({ type: "public-key", id: c.id })),
   });
+}
+
+/** POST /auth/passkey/register/finish {callsign, credential} — verify attestation, open session. */
+export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promise<Response> {
+  const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
+  const cs = String(callsign ?? "").toUpperCase().trim();
+  const challenge = await takeChallenge(env, cs, "webauthn_reg");
+  if (!challenge || !credential?.response?.attestationObject) return json({ error: "no pending registration" }, { status: 400 });
+  try {
+    const r = await verifyRegistration({
+      clientDataJSON: b64urlToBytes(credential.response.clientDataJSON),
+      attestationObject: b64urlToBytes(credential.response.attestationObject),
+      challenge, origins: authOrigins(req, env), rpId: rpId(req, env),
+    });
+    await env.DB.prepare("INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(r.credentialId, cs, r.coseKey, r.signCount, JSON.stringify(credential.response.transports ?? []), Math.floor(Date.now() / 1000)).run();
+    return json({ ok: true, callsign: cs }, { headers: { "set-cookie": await issueSessionCookie(cs, env) } });
+  } catch (e) { return json({ error: "registration failed: " + (e as Error).message }, { status: 400 }); }
+}
+
+/** POST /auth/passkey/login/begin {callsign} — PublicKeyCredentialRequestOptions. */
+export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<Response> {
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const cs = String(callsign ?? "").toUpperCase().trim();
+  const creds = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
+  if (!creds.results?.length) return json({ error: "no passkey for this callsign" }, { status: 404 });
+  const challenge = randomChallenge();
+  await storeChallenge(env, cs, "webauthn_login", challenge);
+  return json({
+    challenge, rpId: rpId(req, env), userVerification: "preferred", timeout: 60000,
+    allowCredentials: creds.results.map((c) => ({ type: "public-key", id: c.id })),
+  });
+}
+
+/** POST /auth/passkey/login/finish {callsign, credential} — verify assertion, open session. */
+export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<Response> {
+  const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
+  const cs = String(callsign ?? "").toUpperCase().trim();
+  const challenge = await takeChallenge(env, cs, "webauthn_login");
+  if (!challenge || !credential?.id || !credential?.response?.signature) return json({ error: "no pending login" }, { status: 400 });
+  const cred = await env.DB.prepare("SELECT public_key, counter FROM credentials WHERE id=? AND callsign=?")
+    .bind(credential.id, cs).first<{ public_key: string; counter: number }>();
+  if (!cred) return json({ error: "unknown credential" }, { status: 400 });
+  try {
+    const r = await verifyAssertion({
+      clientDataJSON: b64urlToBytes(credential.response.clientDataJSON),
+      authenticatorData: b64urlToBytes(credential.response.authenticatorData!),
+      signature: b64urlToBytes(credential.response.signature),
+      coseKey: cred.public_key, storedCounter: cred.counter,
+      challenge, origins: authOrigins(req, env), rpId: rpId(req, env),
+    });
+    await env.DB.prepare("UPDATE credentials SET counter=? WHERE id=?").bind(r.newCounter, credential.id).run();
+    return json({ ok: true, callsign: cs }, { headers: { "set-cookie": await issueSessionCookie(cs, env) } });
+  } catch (e) { return json({ error: "login failed: " + (e as Error).message }, { status: 400 }); }
 }
 
 /** Returns the signed-in callsign, or null. Used to attribute logs and gate announce. */
