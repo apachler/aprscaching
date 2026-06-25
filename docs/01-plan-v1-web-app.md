@@ -276,6 +276,8 @@ callsign+passcode; ack handling/retransmit; clear UI that transmitting requires 
 passcode users are blocked in UI and server-side.
 
 ### Phase 8 — Local hardware via Web Serial / BLE (stretch)
+> Superseded/expanded by **`docs/16-rf-hardware-interfacing.md`** (the full two-path architecture,
+> BLE-KISS standard, supported-hardware matrix, soundcard-AFSK + gated-TX milestones, iOS limits).
 **Tasks:** Web Serial KISS TNC port (frame/deframe in-browser); Web Bluetooth/USB Meshtastic
 import of node positions; feed local frames into the same map + (optionally) up to the worker
 for IGate. Document Chromium-only + HTTPS + permission-grant constraints.

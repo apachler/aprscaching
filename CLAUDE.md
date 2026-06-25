@@ -70,6 +70,13 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;
   M5 operated SSID stations (needs `account_stations`). One small `accounts` migration; all inside
   the existing GDPR export/erase.
+- RF hardware interfacing — `docs/16-rf-hardware-interfacing.md`: two paths, one shared codec
+  (`@aprsweb/aprs` KISS/AX.25 framing is already pure). Path A = the always-on ingest box (KISS-over-TCP,
+  CoT, Meshtastic, IGate/digi — built; iOS-capable). Path B = browser-direct via Web Serial / Web
+  Bluetooth (**adopt the BLE-KISS API**) / WebUSB / Web Audio (in-browser Bell-202 AFSK = no-TNC mode),
+  Chromium-only, not iOS. H1 Web Serial KISS · H2 BLE-KISS · H3 Meshtastic/LoRa · H4 soundcard AFSK ·
+  H5 gated browser TX (callsign-verified, opt-in). Recommended hw: DigiRig, NinoTNC, Mobilinkd TNC4,
+  Kenwood TH-D74/75, Meshtastic ESP32, RTL-SDR+Direwolf. RX ≠ trust — still gated by `verify.ts`.
 - Federation next level (F4–F7) — `docs/15-federation-next.md`: takes live federation (F0–F3) further.
   F4 trust (**launch-gating** before opening the network): peer trust tiers + quarantine, corroboration
   **quorum** + hardening (parallel, grid/time-bucket privacy, rate-limit), ADR-5 tombstones. F5 reach:
