@@ -571,7 +571,7 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
   background: linear-gradient(180deg, color-mix(in oklch, var(--brand) 78%, transparent), color-mix(in oklch, var(--brand) 92%, black)); }
 .landing-inner { position: relative; width: min(560px, 100%); display: grid; gap: 16px; justify-items: center; text-align: center; }
 .landing-logo { width: min(340px, 78vw); height: auto; filter: drop-shadow(0 2px 12px rgba(0,0,0,.35)); }
-.landing-sub { margin: 0; font-size: clamp(15px, 2.4vw, 18px); opacity: .92; max-width: 40ch; }
+.landing-slogan { margin: 2px 0 0; font-size: clamp(17px, 3vw, 24px); font-weight: 600; letter-spacing: .01em; opacity: .96; max-width: 40ch; }
 .landing-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 .landing-cta button { min-height: 44px; padding: 0 18px; border-radius: 10px; font-weight: 600; }
 .landing-explore { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
