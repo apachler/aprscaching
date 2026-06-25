@@ -105,6 +105,44 @@ existing, tested plumbing. `/.well-known` advertises `capabilities` + `protocolV
 negotiate and skip unknown types forward-compatibly.
 - *Worth:* future federation features need no new endpoints or bespoke verify code; older peers don't break.
 
+### T2.3 Joining from behind NAT / firewall (outbound-only peers)  *(serves docs/06 §6 #4 replication, §9 mesh)*
+**Problem.** Federation is **pull-based**: a contributing peer must be *inbound-reachable* at a URL.
+Others pull its `GET /federation/{caches,finds,keys}` and `POST` its `/federation/corroborate`. A box
+behind CGNAT / a dynamic IP / a firewall, with no FQDN, can pull (outbound works) and can get *its own*
+finds to Tier A (it queries reachable peers), but **cannot be mirrored and cannot contribute
+corroboration** — nobody can reach it. So today it's a read/verify-only leaf, not a full peer, and its
+caches/finds + independent IGate hearings never reach the commons. Three ways to let it fully join,
+in increasing effort — the first needs **no code** and already meets the requirement for most operators:
+
+- **(0) Reverse tunnel — supported today, zero new code.** A free **Cloudflare Tunnel** (`cloudflared`,
+  already the `docs/23` Topology 1 recipe), Tailscale Funnel, or ngrok gives the box a stable public
+  hostname + TLS over an *outbound* tunnel — **no FQDN-you-own, no static IP, no port-forward, no
+  firewall changes**. Through it the box is a **full peer** (feeds *and* corroboration work). This is the
+  recommended firewalled-peer path and what `fed_peers.url` should point at.
+- **(1) Push-to-hub for feeds — cheap interim (mirroring only).** Because every record is **Ed25519-signed
+  by its origin and signatures are portable**, a NAT'd peer can *push* its signed caches/finds to a
+  reachable **home/hub** peer over an outbound connection; the hub **re-serves them in its own feed with
+  the original `signer` preserved**. Consumers verify the origin's signature regardless of who served it —
+  no trust delegation, no forgery surface. The mirror path *already* preserves `rec.signer` and verifies
+  against the signer's published key (`federation_sync.ts:accept`); the only missing pieces are a
+  **`POST /federation/submit`** (signed-envelope intake, signer-key-verified, rate-limited) on the hub and
+  a **re-host-with-original-signer** emit in `handleFederationCaches/Finds`. Restores **commons
+  visibility** for outbound-only peers. Does **NOT** solve live corroboration (that needs the box's live
+  RF positions, which it isn't shipping).
+- **(2) Gateway-as-relay / rendezvous — full solution.** The NAT'd peer opens a **persistent outbound
+  WebSocket** to a reachable rendezvous instance; the rendezvous **relays both feed-pull and corroboration
+  queries** back over that socket (request/response framed; the peer answers from its own DB). This is the
+  same **"gateway-as-cloud-relay (ECHOCAT pattern; no port-forward)"** already reserved in `docs/20` for
+  remote ingest control — federation reuses the seam. It is the *only* option that lets a firewalled box
+  **contribute corroboration** without a tunnel. One always-on outbound WS per relayed peer → gate behind
+  an explicit opt-in and prefer (0) where a tunnel is acceptable (cost rules: no firehose, request/response
+  only, the relay never upgrades trust — it's pure transport, quorum still counts *distinct instances*).
+- *Worth:* makes the "operator-owned box, anywhere" promise real for the home/off-the-shelf case the
+  ingest-locality rule centers on — a Pi behind CGNAT becomes a first-class contributing peer, not just a
+  consumer. **Reachability is transport, never trust:** a relayed/tunnelled packet is exactly as trusted as
+  a directly-served one (Tier still set by `verify.ts` + quorum), consistent with `docs/22`'s "transport
+  convenience ≠ trust uplift."
+
 ---
 
 ## Tier 3 — Data-commons value (turn mirroring into user-visible payoff)
@@ -173,7 +211,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 `POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
 · `GET /federation/peers` returns trust+reputation (T1.1). Corroboration query/response shape changes to
-grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1).
+grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
+(signed-envelope intake for push-to-hub) + a relay/rendezvous WS endpoint (T2.3).
 
 ## Rule / cost / privacy compliance
 - **Trust-model invariant:** a session or a mirror NEVER upgrades a find's tier; only quorum
@@ -189,7 +228,8 @@ grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T
 ## Milestone / sequence
 - **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine · T1.2
   corroboration quorum **(quorum core done; hardening/privacy pending)** + hardening · T1.3 tombstones.
-- **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation.
+- **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
+  join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
 
@@ -200,6 +240,9 @@ grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T
   corroboration endpoint rejects unauthenticated abuse and answers in grid+bucket, not exact coords.
 - **T1.3:** deleting an account/cache on instance A removes its mirrored copies on peer B after sync.
 - **T2.1:** a new find on A is mirrored/corroborated on B within seconds of a notify, not a poll cycle.
+- **T2.3:** a peer with no inbound reachability joins as a full contributor — its caches/finds appear on
+  peers' maps and its IGate hearings count toward others' quorum — via a tunnel (today), or push-to-hub
+  (mirroring) / rendezvous relay (corroboration); a relayed packet is no more trusted than a direct one.
 - **T3.1:** the public map/API shows trusted-peer caches with origin attribution; unvetted are opt-in.
 - **T3.2:** moving OE8APR from A to B re-homes finds and the network attributes them to the account.
 - **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire.

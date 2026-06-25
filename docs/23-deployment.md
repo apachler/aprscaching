@@ -183,6 +183,17 @@ INGEST_URL=http://localhost:8080/ingest INGEST_SECRET=…` · `ExecStart=/usr/bi
 @aprsweb/ingest start`.
 *Backup:* nightly `sqlite3 aprscaching.db ".backup ..."` → push to R2/Object Storage.
 
+> **The tunnel is the supported way to join federation from behind a firewall.** Federation is
+> **pull-based** — to be a *contributing* peer (caches/finds mirrored onto others' maps, IGate hearings
+> counting toward Tier-A corroboration quorum) a box must be **inbound-reachable at a URL**. A purely
+> NAT'd/CGNAT box with no FQDN can pull and get *its own* finds to Tier A, but **can't be mirrored or
+> answer corroboration**, so it's a read/verify-only leaf. The `cloudflared` step above fixes that with
+> **no static IP, no FQDN-you-own, and no port-forward** — the tunnel's public hostname is what you put
+> in peers' `fed_peers.url`, making the Pi a **full peer**. (Tailscale Funnel / ngrok are equivalents.)
+> Reachability is pure transport: a tunnelled packet is no more or less trusted than a directly-served
+> one — Tier is still set by `verify.ts` + quorum. A native, tunnel-free outbound-only join (push-to-hub
+> for mirroring, rendezvous relay for corroboration) is specced as `docs/15` **T2.3** (F5).
+
 ---
 
 ## Topology 2 — OCI all-in-one VM (Node + SQLite + Caddy)
