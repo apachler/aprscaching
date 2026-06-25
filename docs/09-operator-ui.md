@@ -42,9 +42,15 @@ not a copy of the mockup's inline-styled markup. Governed by `.claude/rules/ui-u
   drawer (unchanged); **≥1024px** the operator console — `NavRail` (Map/Nearby/Activity/Ranks/Bench/
   BBS/You/Setup, inline-SVG) + side panels dock in-flow, the cache detail docks right and coexists
   with a left panel. MapLibre `resize()` fires on dock open/close.
-- **P3 — Nearby cards + top bar**: cache cards (icon tile · tier dot · D/T · distance/bearing ·
-  last-found), live-stations section, top-bar global search + APRS-IS-LIVE status pill.
-- **P4 — map**: coordinate/grid readout, restyled controls + Hide-a-cache FAB, Maidenhead overlay.
+- **P3 — Nearby cards + top-bar search** ✅: Nearby restyled to operator cache cards (cache-type
+  icon tile · name · id·source · D/T pill · distance + compass bearing), All/Caches/Stations
+  filter chips, and a live-stations section (heading arrow rotated by course). Top-bar **global
+  search** binds to the text filter and, on Enter, flies to a Maidenhead locator or "lat, lon".
+  (Per-cache tier dot deferred — `MapCache` doesn't carry `minTrust`; needs a small DTO add. The
+  APRS-IS-LIVE rx/min pill is deferred — needs a live ingest-rate feed.)
+- **P4 — map coordinate readout** ✅: a frosted Lat/Lon · Maidenhead-grid readout (bottom-left),
+  updated on every pan. (Restyling MapLibre's own controls + a Maidenhead overlay are deferred
+  polish; the offline basemap already draws a graticule.)
 
 Each phase ships token-driven, real-semantic, reduced-motion-aware, typechecked, built, screenshot-
 verified, and CI-green — same cadence as M7.

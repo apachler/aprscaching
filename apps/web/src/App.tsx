@@ -6,7 +6,7 @@ import {
   listCaches, getCache, getStations, API_BASE, flushLogQueue, queuedLogCount,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary,
 } from "./api.js";
-import { ToastProvider } from "./ui/index.js";
+import { ToastProvider, Icon } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
@@ -17,6 +17,7 @@ import {
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import { useCallsign } from "./identity/useCallsign.js";
+import { maidenhead, gridCenter } from "./map/geo.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
@@ -69,6 +70,7 @@ export function App() {
   const [pickedStation, setPickedStation] = useState<string | null>(null);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
 
@@ -183,8 +185,10 @@ export function App() {
     m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
     map.current = m;
 
-    m.on("load", refresh);
+    const trackCenter = () => setCenter([m.getCenter().lat, m.getCenter().lng]);
+    m.on("load", () => { trackCenter(); refresh(); });
     m.on("moveend", () => {
+      trackCenter();
       clearTimeout(debounce.current);
       debounce.current = setTimeout(refresh, 250);
     });
@@ -297,6 +301,18 @@ export function App() {
     return () => clearTimeout(t);
   }, [op, leftOpen, rightOpen]);
 
+  // global search: a Maidenhead locator or "lat, lon" flies the map there; otherwise filter by text
+  function runSearch(raw: string) {
+    const q = raw.trim();
+    const g = gridCenter(q);
+    if (g) { map.current?.flyTo({ center: [g[1], g[0]], zoom: Math.max(map.current.getZoom(), 10) }); return; }
+    const ll = q.match(/^(-?\d+(?:\.\d+)?)\s*[ ,]\s*(-?\d+(?:\.\d+)?)$/);
+    if (ll) {
+      const lat = +ll[1]!, lon = +ll[2]!;
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) });
+    }
+  }
+
   function startHide() {
     setSelectedId(null);
     setRemote(null);
@@ -323,6 +339,7 @@ export function App() {
               onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
               onFilters={() => openOnly(() => setShowFilter(true))}
               filtered={filters.types.length > 0 || filters.q.length > 0}
+              q={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} onSearchSubmit={runSearch}
               onNearby={() => openOnly(() => setShowNearby(true))}
               onActivity={() => openOnly(() => setShowActivity(true))}
               onProfile={() => openOnly(() => setShowProfile(true))} />
@@ -343,7 +360,7 @@ export function App() {
           <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
         )}
         {showNearby && mode === "view" && (
-          <NearbyPanel caches={shown} map={map.current}
+          <NearbyPanel caches={shown} stations={stations} map={map.current} selectedId={selectedId}
                        onPick={(id) => { if (op) { setRemote(null); setSelectedId(id); } else openOnly(() => setSelectedId(id)); }}
                        onClose={() => setShowNearby(false)} />
         )}
@@ -379,6 +396,12 @@ export function App() {
 
         <div className="mapwrap">
           <div ref={mapEl} className="map" />
+          {ready && center && (
+            <div className="coordreadout">
+              <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>
+              <div><div className="crl">Grid</div><div className="crv">{maidenhead(center[0], center[1])}</div></div>
+            </div>
+          )}
           {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
           {nearPrompt && mode === "view" && (
             <div className="geo-banner">
@@ -428,12 +451,21 @@ function TopBar(props: {
   callsign: string; setCallsign: (v: string) => void; mode: Mode;
   onHide: () => void; onCancel: () => void; count: number; queued: number;
   onFilters: () => void; filtered: boolean;
+  q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
   onNearby: () => void; onActivity: () => void; onProfile: () => void;
 }) {
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      {props.mode === "view" && <button className={`icon${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Search & filter">⌕</button>}
+      {props.mode === "view" && <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type">⌕</button>}
+      {props.mode === "view" && (
+        <label className="topsearch">
+          <Icon name="search" size={16} />
+          <input value={props.q} placeholder="Search callsign, cache id, or grid…" aria-label="Search caches"
+                 onChange={(e) => props.onSearch(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === "Enter") props.onSearchSubmit(props.q); }} />
+        </label>
+      )}
       <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
       {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
       <span className="spacer" />

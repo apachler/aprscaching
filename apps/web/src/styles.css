@@ -333,6 +333,56 @@ button.link:hover { text-decoration: underline; }
 .desc { color: var(--ink-2); line-height: 1.55; }
 .logbook-h { margin: 16px 0 4px; }
 
+/* ---- Nearby: operator cache cards + station rows (M8 P3) ---- */
+.nearby-h { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 12px; }
+.nearby-grid { font-family: var(--font-mono); font-weight: 500; font-size: 11px; color: var(--muted); }
+.cardsec { padding: 2px 2px 8px; } .cardsec.top { padding-top: 14px; }
+.seg-chips { display: flex; gap: 6px; margin-bottom: 14px; }
+.seg-chips button { flex: 1; padding: 7px 0; border-radius: 7px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.seg-chips button.on { background: color-mix(in oklch, var(--brand) 20%, transparent);
+  border-color: color-mix(in oklch, var(--brand) 45%, var(--line)); color: var(--heading); }
+.seg-chips button:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
+.cardlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.ccard { position: relative; display: flex; gap: 10px; padding: 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--hair); background: var(--surface-2); overflow: hidden; text-align: left; width: 100%; font: inherit; color: inherit; }
+.ccard:hover { border-color: color-mix(in oklch, var(--brand) 40%, var(--line)); }
+.ccard:focus-visible { outline: 2px solid var(--heading); outline-offset: 1px; }
+.ccard.active { border-color: color-mix(in oklch, var(--brand) 55%, var(--line)); background: color-mix(in oklch, var(--brand) 10%, var(--surface-2)); }
+.ccard.active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--brand); }
+.ccard-ico { width: 30px; height: 30px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; background: color-mix(in oklch, var(--tc, var(--accent)) 20%, transparent); color: var(--tc, var(--accent)); }
+.ccard-b { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ccard-name { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ccard-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ccard-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.dtpill { font-family: var(--font-mono); font-weight: 600; font-size: 10.5px; color: var(--ink-2);
+  background: var(--field-bg); padding: 3px 6px; border-radius: 5px; }
+.ccard-dist { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+.srow { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--hair); margin-bottom: 5px; }
+.srow-b { flex: 1; min-width: 0; }
+.srow-call { font-family: var(--font-mono); font-weight: 600; font-size: 12.5px; }
+.srow-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.srow-heard { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+/* ---- map coordinate / grid readout (M8 P4) ---- */
+.coordreadout { position: absolute; left: 12px; bottom: 12px; z-index: 5; display: flex; gap: 1px;
+  background: color-mix(in oklch, var(--surface) 82%, transparent); border: 1px solid var(--hair);
+  border-radius: 8px; overflow: hidden; backdrop-filter: blur(6px); }
+.coordreadout > div { padding: 7px 11px; }
+.coordreadout > div + div { border-left: 1px solid var(--hair); }
+.coordreadout .crl { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.coordreadout .crv { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+
+/* ---- top-bar global search (M8 P3) ---- */
+.topsearch { display: none; align-items: center; gap: 8px; height: 34px; padding: 0 12px; flex: 1; max-width: 420px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: rgba(255,255,255,.6); }
+.topsearch input { border: none; background: none; color: #fff; padding: 0; font-family: var(--font-mono); font-size: 13px; }
+.topsearch input::placeholder { color: rgba(255,255,255,.5); font-family: system-ui, sans-serif; }
+.topsearch input:focus { outline: none; }
+@media (min-width: 768px) { .topsearch { display: flex; } }
+
 /* labelled stat + mono micro-label + bright data value */
 .stat-l { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
 .stat-v { font-family: var(--font-mono); font-weight: 600; font-size: 12px; }
