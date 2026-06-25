@@ -78,11 +78,15 @@ export function selectCorroboration(hits: Evidence[], quorum: number): Evidence 
 
 /**
  * Client: ask peers to corroborate **in parallel**, then apply the quorum gate (default 1; raise via
- * `FED_CORROBORATION_QUORUM` as the network grows). Peers are the operator's curated set (`fed_peers`),
- * so they are the trusted corroboration pool until per-peer trust tiers land (docs/15 T1.1).
+ * `FED_CORROBORATION_QUORUM` as the network grows). Only **`trusted`** peers count toward Tier A (T1.1):
+ * `unvetted`/auto-discovered peers are mirrored-but-flagged and never lend verification weight, and
+ * `blocked` peers are already filtered out by `listEnabledPeers`. So a stranger a peer auto-discovered
+ * can't mint Tier A — only the operator's curated trust set can.
  */
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
-  const peers = (await listEnabledPeers(env)).filter((p) => !(p.instance && p.instance === env.INSTANCE));
+  const peers = (await listEnabledPeers(env))
+    .filter((p) => p.trust === "trusted")
+    .filter((p) => !(p.instance && p.instance === env.INSTANCE));
   const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 1);
   const results = await Promise.all(peers.map(async (peer): Promise<Evidence | null> => {
     const base = peer.url.replace(/\/+$/, "");

@@ -169,5 +169,35 @@ ok("subscriber mirrors keys", (syncK.data?.keys ?? 0) >= 1, JSON.stringify(syncK
 const peers2 = await call(SUB, "GET", "/federation/peers");
 ok("subscriber keys_cursor advanced", (peers2.data?.peers ?? []).some((p) => p.instance === pubInstance && p.keys_cursor > 0), JSON.stringify(peers2.data));
 
+// ---- F4/T1.1: peer trust tiers + quarantine ----
+// The subscriber's only peer is the publisher, listed in FED_PEERS → it must be manual + trusted.
+const pall = await call(SUB, "GET", "/federation/peers");
+const peerRec = (pall.data?.peers ?? []).find((p) => p.instance === pubInstance) ?? {};
+ok("manual peer is trusted + added_via=manual", peerRec.trust === "trusted" && peerRec.added_via === "manual", JSON.stringify(peerRec));
+
+// operator control endpoint guards
+const t401 = await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "blocked" }, { "x-ingest-secret": "" });
+ok("trust change without the ingest secret -> 401", t401.status === 401, `status=${t401.status}`);
+const t400 = await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "bogus" }, { "x-ingest-secret": SECRET });
+ok("an invalid trust level -> 400", t400.status === 400, `status=${t400.status}`);
+const t404 = await call(SUB, "POST", "/federation/peers/trust", { url: "http://127.0.0.1:9", trust: "trusted" }, { "x-ingest-secret": SECRET });
+ok("an unknown peer -> 404", t404.status === 404, `status=${t404.status}`);
+
+// quarantine: block the only peer → a fresh find can no longer reach Tier A (empty trusted pool)
+const blk = await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "blocked" }, { "x-ingest-secret": SECRET });
+ok("operator blocked the peer", blk.data?.ok === true && blk.data?.trust === "blocked", JSON.stringify(blk.data));
+const bCache = await call(SUB, "POST", "/api/caches", { title: "Blocked-Peer Summit " + now(), type: "single", lat: LAT, lon: LON, ownerCall: "OE8SUB" });
+const blockedLog = await call(SUB, "POST", `/api/caches/${bCache.data?.cache?.id}/logs`, { loggerCall: "LO3RF", logType: "found" });
+ok("a blocked peer cannot grant Tier A", blockedLog.data?.tier !== "A", JSON.stringify(blockedLog.data));
+const blkSync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+ok("a blocked peer is skipped on sync (no fetch, no error)", blkSync.data?.ok === true && (blkSync.data?.errors ?? []).length === 0, JSON.stringify(blkSync.data));
+
+// promote back to trusted → corroboration is restored, and approval is stamped
+const prom = await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "trusted" }, { "x-ingest-secret": SECRET });
+ok("operator promoted the peer to trusted", prom.data?.ok === true && prom.data?.trust === "trusted", JSON.stringify(prom.data));
+const rCache = await call(SUB, "POST", "/api/caches", { title: "Re-trusted Summit " + now(), type: "single", lat: LAT, lon: LON, ownerCall: "OE8SUB" });
+const reLog = await call(SUB, "POST", `/api/caches/${rCache.data?.cache?.id}/logs`, { loggerCall: "LO3RF", logType: "found" });
+ok("a re-trusted peer grants Tier A again", reLog.data?.tier === "A" && reLog.data?.method === "aprs_rf_peer", JSON.stringify(reLog.data));
+
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

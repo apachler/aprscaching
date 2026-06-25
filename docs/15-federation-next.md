@@ -35,6 +35,15 @@ authority.
 Federation becomes **peer-approved by default, open-pull opt-in.** Each peer carries a trust level;
 records inherit their origin peer's trust at read time.
 
+**Status — IMPLEMENTED** (migration `0013_peer_trust.sql` · `federation_sync.ts` · federation smoke +9
+assertions green): `fed_peers` carries `trust/added_via/approved_at/rep_confirmed/rep_failed`; FED_PEERS
+seed as `manual`+`trusted` (a manual peer an operator `blocked` stays blocked across re-seeds),
+FED_DISCOVER peers as `discovered`+`unvetted`; `listEnabledPeers` never returns `blocked` peers (no
+fetch on sync *or* corroborate); **corroboration counts only `trusted` peers** (closes the T1.2 gap);
+`POST /federation/peers/trust` (INGEST_SECRET-gated) lets the operator promote/demote/block and
+`GET /federation/peers` exposes trust+reputation. **Deferred:** the `rep_confirmed/rep_failed`
+auto-promotion loop (needs a later independent-confirmation signal) and the Settings → Federation UI.
+
 - **Schema** — extend `fed_peers`:
   ```sql
   ALTER TABLE fed_peers ADD COLUMN trust TEXT NOT NULL DEFAULT 'unvetted'; -- trusted | unvetted | blocked
@@ -61,9 +70,9 @@ Tier A via the network should mean **multiple independent instances agree**, not
 at default quorum 1): `queryPeerCorroboration()` now fans out to peers **in parallel** (3 s per-peer timeout),
 and a pure, unit-tested `selectCorroboration(hits, quorum)` de-dupes by instance (same instance twice = one
 voice), enforces **≥ `FED_CORROBORATION_QUORUM` distinct instances** (floors at 1 so a 0/NaN config never
-disables the gate), and returns the closest evidence annotated with `corroborators` (the instance count).
-**Still pending:** `trusted`-peer filtering (needs T1.1 tiers — today it trusts the curated `fed_peers` set),
-endpoint hardening, and privacy coarsening (below).
+disables the gate), and returns the closest evidence annotated with `corroborators` (the instance count). **`trusted`-peer filtering is now in place** (T1.1 landed —
+`queryPeerCorroboration` narrows the pool to `trust='trusted'`, so unvetted/auto-discovered peers never
+lend Tier-A weight). **Still pending:** endpoint hardening and privacy coarsening (below).
 
 - **Quorum** — `queryPeerCorroboration()` collects evidence from peers **in parallel**, keeps only
   `trusted` peers (T1.1), de-dupes by instance + IGate (independence), and upgrades to Tier A only at
@@ -202,7 +211,8 @@ and tamper-evidence; anything heavier fights the cost model for no real gain. St
 across instances is also out (cost) — corroboration stays on-demand (T1.2) with gossip (T2.1) for freshness.
 
 ## Schema additions (new migrations after `0012`; numbers assigned at implementation, never renumber)
-- `fed_peers` += `trust, added_via, approved_at, rep_confirmed, rep_failed` (T1.1)
+- `fed_peers` += `trust, added_via, approved_at, rep_confirmed, rep_failed` (T1.1 — **landed as
+  `0013_peer_trust.sql`**; `0012` stays reserved for monetization per CLAUDE.md, gap is intentional)
 - `tombstones` table + `GET /federation/tombstones` (T1.3 / ADR-5; per `docs/14`)
 - `caches` += `fed_scope` (T3.3)
 - key-rotation columns/feed (T4.1); registry is external/signed, no local schema required
@@ -210,8 +220,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 ## API additions
 `POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
-· `GET /federation/peers` returns trust+reputation (T1.1). Corroboration query/response shape changes to
-grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
+· `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
+(T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
 (signed-envelope intake for push-to-hub) + a relay/rendezvous WS endpoint (T2.3).
 
 ## Rule / cost / privacy compliance
@@ -226,8 +236,8 @@ grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T
   unvetted network data" is an explicit off-by-default switch; none of this reaches the cacher's default map.
 
 ## Milestone / sequence
-- **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine · T1.2
-  corroboration quorum **(quorum core done; hardening/privacy pending)** + hardening · T1.3 tombstones.
+- **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine **(done)** · T1.2
+  corroboration quorum **(quorum core + trusted-only filter done; hardening/privacy pending)** · T1.3 tombstones.
 - **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.

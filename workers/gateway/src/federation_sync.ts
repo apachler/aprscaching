@@ -13,9 +13,13 @@ import { importVerifyKey, verifyRecordSig } from "./federation.js";
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
 
+export type TrustLevel = "trusted" | "unvetted" | "blocked";
+export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
+
 interface PeerRow {
   url: string; instance: string | null; public_key: string | null;
   caches_cursor: number; finds_cursor: number; keys_cursor: number; enabled: number;
+  trust: TrustLevel;
 }
 
 interface FeedRecord { type: string; id: string; cursor: number; data: Record<string, unknown>; sig?: string; signer?: string }
@@ -29,18 +33,32 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 function ours(env: Env): string | null { return env.INSTANCE ?? null; }
 
-/** Seed fed_peers from the FED_PEERS env (idempotent), so config or the table can drive sync. */
+/**
+ * Seed fed_peers from the FED_PEERS env (idempotent). FED_PEERS are operator-curated, so they are
+ * `manual` + `trusted` by definition (T1.1) — a manual peer the operator explicitly `blocked` stays
+ * blocked (quarantine wins over re-seeding); `approved_at` is stamped once and preserved.
+ */
 async function seedPeers(env: Env): Promise<void> {
   const urls = (env.FED_PEERS ?? "").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
   for (const url of urls) {
-    await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url) VALUES (?)").bind(url).run();
+    await env.DB.prepare(
+      `INSERT INTO fed_peers (url, trust, added_via, approved_at) VALUES (?, 'trusted', 'manual', ?)
+       ON CONFLICT(url) DO UPDATE SET
+         added_via   = 'manual',
+         trust       = CASE WHEN fed_peers.trust = 'blocked' THEN 'blocked' ELSE 'trusted' END,
+         approved_at = COALESCE(fed_peers.approved_at, excluded.approved_at)`,
+    ).bind(url, now()).run();
   }
 }
 
-/** Seed from FED_PEERS then return the enabled peers (shared by sync + corroboration). */
+/**
+ * Seed from FED_PEERS then return the **fetchable** peers — `enabled` and not `blocked` (quarantined
+ * peers are never contacted, T1.1). Shared by sync (mirrors trusted + unvetted) and corroboration
+ * (which further narrows to `trusted` only, T1.2).
+ */
 export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   await seedPeers(env);
-  return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1").all<PeerRow>()).results;
+  return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1 AND trust != 'blocked'").all<PeerRow>()).results;
 }
 
 export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; errors: string[] }> {
@@ -66,11 +84,14 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   const pub = wk.signed ? wk.publicKey : null;
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
 
-  // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE)
+  // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
+  // Discovered peers start `unvetted` — mirrored-but-flagged, excluded from corroboration until an
+  // operator promotes them (T1.1). INSERT OR IGNORE never downgrades a peer already known/trusted.
   if (env.FED_DISCOVER) {
     for (const url of (wk.peers ?? []).slice(0, 50)) {
       const u = String(url).trim().replace(/\/+$/, "");
-      if (u && u !== base) await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url) VALUES (?)").bind(u).run();
+      if (u && u !== base)
+        await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url, trust, added_via) VALUES (?, 'unvetted', 'discovered')").bind(u).run();
     }
   }
 
@@ -188,7 +209,29 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
   await seedPeers(env);
   const peers = (await env.DB.prepare(
-    "SELECT url, instance, public_key IS NOT NULL AS signed, caches_cursor, finds_cursor, keys_cursor, enabled, last_sync, last_error FROM fed_peers ORDER BY url",
+    `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
+            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, enabled, last_sync, last_error
+       FROM fed_peers ORDER BY url`,
   ).all()).results;
   return json({ peers });
+}
+
+/**
+ * Operator control (T1.1): set a peer's trust level. INGEST_SECRET-gated (operator-only), so the
+ * Workbench Settings → Federation surface can promote (`trusted`), demote (`unvetted`), or quarantine
+ * (`blocked`) a peer. Promotion stamps `approved_at` once.
+ */
+export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
+  if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return new Response("unauthorized", { status: 401 });
+  const b = (await req.json().catch(() => null)) as { url?: string; trust?: string } | null;
+  const trust = b?.trust as TrustLevel | undefined;
+  if (!b?.url || !trust || !TRUST_LEVELS.includes(trust))
+    return json({ ok: false, error: "url + trust (trusted|unvetted|blocked) required" }, { status: 400 });
+  const url = b.url.trim().replace(/\/+$/, "");
+  const exists = await env.DB.prepare("SELECT url FROM fed_peers WHERE url = ?").bind(url).first<{ url: string }>();
+  if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
+  await env.DB.prepare(
+    "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
+  ).bind(trust, trust, now(), url).run();
+  return json({ ok: true, url, trust });
 }

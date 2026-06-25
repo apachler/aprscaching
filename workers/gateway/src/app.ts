@@ -16,7 +16,7 @@ import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./ca
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
-import { handleFederationSync, handleFederationPeers, syncAllPeers } from "./federation_sync.js";
+import { handleFederationSync, handleFederationPeers, handlePeerTrust, syncAllPeers } from "./federation_sync.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -62,6 +62,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
   if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
+  if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // T1.1 operator promote/block
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
