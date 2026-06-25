@@ -13,6 +13,7 @@ ingest box), with milestones, schema, API, and rule compliance. Build against th
 | **Topo + satellite basemaps** | Outdoor cachers want terrain. Vector base = PMTiles (Protomaps) on R2 (free egress, default); **Topo** layer (OpenTopoMap-style) and **Satellite** layer as opt-in. Layer switcher grouped per ui-ux (extras off by default). | web (MapLibre style switch) · R2 (vector tiles) | M1 base · topo/sat M2 |
 | **Distance/bearing + route guidance** | A ruler (distance + bearing between two points) and a **"navigate to cache"** action (bearing/compass in-field + hand off to device maps / OSRM directions). | web (client geo math; external directions link) | M2 |
 | **Range rings + grid/locator overlay** | Concentric distance rings around *you* or a *cache* ("how far"), plus the Maidenhead grid + MGRS overlay (already borrowed from APRStac). | web (MapLibre layers) | M2 |
+| **Day/night terminator + bearing arc** *(from POTACAT, `docs/20`)* | A day/night terminator overlay, a great-circle **bearing arc** from your home QTH to a selected cache/station, and a home-QTH marker. | web (MapLibre layers; client geo math) | M2 |
 | **Save & share map view (permalinks)** | Encode map state (center/zoom/layers/filters/selected cache) in the URL; restore on load; shareable. Deep-link a cache or a curated map. | web (URL state) · edge (optional short-link → `saved_views`) | M1–M2 |
 **Tile/cost note:** vector base on R2 = ~free. Topo/satellite raster carries provider egress —
 use OpenTopoMap within its usage policy, or a keyed provider (MapTiler Outdoor/Satellite, Esri
@@ -31,8 +32,8 @@ protect the cost model.
 | Feature | Cache-first adaptation | Stack | Milestone |
 |---|---|---|---|
 | **Deep-link + embeddable cache-map widget** | A lightweight `/embed` iframe (a cache or an area) for clubs/blogs, plus shareable cache pages — the geocaching "listing page" idea. **QR on a physical cache → its page.** | web (small embed route) · edge | M4 |
-| **GPX/KML export + public API** | GPX export of caches (for GPS devices) + KML of tracks; a public **read API** (caches in bbox, cache detail, station track) à la the aprs.fi API. | edge (Worker endpoints generate GPX/KML/JSON; rate-limited + keys) | GPX M3 · API M3–M4 |
-| **Proximity / new-cache-nearby alerts** | In-field geofence prompt already exists (M2). Add **background** alerts: "new cache published near you," "a cache you watch had a find/DNF." | web (Service Worker + Push API) · edge (DO/cron dispatch) | M4 |
+| **GPX/KML/ADIF export + public API** | GPX export of caches (for GPS devices) + KML of tracks + **ADIF** export of finds/activations (for standard logbooks — Log4OM/N1MM/DXLab; *from POTACAT, `docs/20`*); a public **read API** (caches in bbox, cache detail, station track) à la the aprs.fi API. | edge (Worker endpoints generate GPX/KML/ADIF/JSON; rate-limited + keys) | GPX M3 · API M3–M4 |
+| **Proximity / new-cache / watchlist alerts** | In-field geofence prompt already exists (M2). Add **background** alerts: "new cache published near you," "a cache you watch had a find/DNF," and **"a watched callsign is active/heard/near a cache"** (*watchlist, from POTACAT, `docs/20`*). | web (Service Worker + Push API) · edge (DO/cron dispatch) | M4 |
 | **Favorites + search-as-you-type** | Favorite/watch caches; unified autocomplete over **cache code/name + callsign + address/locator**, with recent searches. | web (search UI) · edge (search endpoint; D1 FTS5 + geocoder for addresses) | favorites/search M1 · enrich M2 |
 **Push note (decided — `docs/14` ADR-4b):** push is **permission- and PWA-install-gated** (iOS needs
 an installed PWA). Non-push users get **in-app alerts + an email digest** — the iOS/no-push fallback

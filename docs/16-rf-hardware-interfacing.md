@@ -116,6 +116,10 @@ Proven prior art: `SQ2CPA/aprs-tnc-web` (browser KISS TNC), Meshtastic Web (Web 
 - **H4 — Soundcard AFSK (Web Audio):** in-browser Bell-202 modem; HT + audio cable, no TNC; VOX/RTS PTT.
 - **H5 — TX from the browser (gated):** KISS/AFSK transmit (beacon, message, ack) — **off by default,
   callsign-verified + explicit opt-in**, same gating as the box's IGate/digi TX.
+- **H6 — Web Serial CAT (one-click tune)** *(from POTACAT, `docs/20`)*: drive a transceiver's
+  frequency/mode over Web Serial (Kenwood / Icom CI-V / Hamlib-style) so clicking a cache/station/spot
+  tunes the radio to the APRS frequency (144.800 / 144.390) or the spot's freq+mode. Rig profiles;
+  Chromium-only. RX-only by default; any keying still H5-gated.
 - **Path A deepening (parallel):** native Meshtastic protobuf over MQTT/BLE/serial; AGWPE; more transports.
 
 ## Non-goals

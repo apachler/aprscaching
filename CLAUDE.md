@@ -93,6 +93,13 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   Chromium-only, not iOS. H1 Web Serial KISS · H2 BLE-KISS · H3 Meshtastic/LoRa · H4 soundcard AFSK ·
   H5 gated browser TX (callsign-verified, opt-in). Recommended hw: DigiRig, NinoTNC, Mobilinkd TNC4,
   Kenwood TH-D74/75, Meshtastic ESP32, RTL-SDR+Direwolf. RX ≠ trust — still gated by `verify.ts`.
+- Live spots & remote control — `docs/20-live-spots-and-remote-control.md` (reframed from POTACAT,
+  Apache-2.0): a **live activity-spots layer** (POTA/SOTA/WWBOTA/GMA + DX-cluster/RBN/PSKReporter on
+  the map, opt-in/filtered/deduped; "being activated now" on coincident caches) and **remote control
+  of your own ingest box** via the gateway-as-cloud-relay (ECHOCAT pattern; no port-forward; beacon/
+  message/TX-IGate, H5-gated). Off-mission HF machinery (FT8/SSTV/FreeDV/CW/panadapter/DXCC) NOT
+  adopted. Small extensions live in their home docs: Web Serial CAT one-click tune → `docs/16` H6;
+  day/night + bearing arc + ADIF export + watchlist alerts → `docs/11`.
 - APRS-IS identity & passcodes — `docs/19-aprs-is-identity.md`: the passcode verifies *nothing*
   (public hash; APRS-IS won't block invented calls) — the real gate for RF is **licensing** +
   our control-verification, never the passcode. Peer service id = `<licensedCall>-<SERVICE_SSID>`
