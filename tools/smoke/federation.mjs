@@ -250,5 +250,22 @@ const peersT = await call(SUB, "GET", "/federation/peers");
 ok("subscriber tombstones_cursor advanced",
   (peersT.data?.peers ?? []).some((p) => p.instance === pubInstance && p.tombstones_cursor > 0), JSON.stringify(peersT.data));
 
+// ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
+// (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
+const probe = await call(PUB, "POST", "/federation/corroborate",
+  { callsign: "LO3RF", lat: LAT, lon: LON, radiusM: 200, since: t - 3600, until: t + 3600 });
+ok("a direct corroboration probe is answered", probe.data?.corroborated === true, JSON.stringify(probe.data));
+ok("the response distance is bucketed (no exact metres)",
+  Number.isInteger((probe.data?.evidence?.distanceM ?? 1) / 100), JSON.stringify(probe.data?.evidence));
+ok("the response hides the exact IGate by default", probe.data?.evidence?.igateCall === undefined, JSON.stringify(probe.data?.evidence));
+ok("no IGate callsign leaks on the wire (not a location oracle)", !/OE8XXX/.test(JSON.stringify(probe.data)), JSON.stringify(probe.data));
+
+let got429 = false;
+for (let i = 0; i < 70 && !got429; i++) {
+  const r = await call(PUB, "POST", "/federation/corroborate", { callsign: "FLOOD1", lat: 0, lon: 0, radiusM: 10, since: 0, until: 1 });
+  if (r.status === 429) got429 = true;
+}
+ok("the corroboration endpoint rate-limits abusive probing (429)", got429);
+
 console.log(failures ? `\nFEDERATION FAILED (${failures})` : "\nFEDERATION CONFORMANCE PASSED");
 process.exit(failures ? 1 : 0);

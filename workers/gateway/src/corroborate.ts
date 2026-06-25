@@ -15,8 +15,15 @@ import { json } from "./app.js";
 import { haversineMeters } from "@aprsweb/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers } from "./federation_sync.js";
+import {
+  coarsenConfig, snapToGrid, gridSlackM, bucketWindow, distanceBucketM, bucketTs,
+  corroborationAuthorized, clientIp, rateLimited, negCached, negStore,
+} from "./corroborate_privacy.js";
 
-export interface Evidence { instance: string; igateCall: string; distanceM: number; ts: number; corroborators?: number }
+/** Cap the peers probed per find — a bounded fan-out budget (T1.2 hardening). */
+const CORROBORATION_FANOUT = 16;
+
+export interface Evidence { instance: string; igateCall?: string; distanceM: number; ts: number; corroborators?: number }
 export interface CorroborationQuery {
   callsign: string; lat: number; lon: number; radiusM: number; since: number; until: number;
 }
@@ -48,14 +55,43 @@ async function localCorroboration(
   return null;
 }
 
-/** Endpoint: a peer asks us to corroborate a find. Yes/no + minimal evidence. */
+/** A stable key for rate-limit / negative memoization: callsign + the coarsened cell + time bucket. */
+function probeKey(b: CorroborationQuery, cfg: ReturnType<typeof coarsenConfig>): string {
+  const c = snapToGrid(b.lat, b.lon, cfg.gridDeg);
+  const w = bucketWindow(b.since, b.until, cfg.timeBucketSec);
+  return `${baseCall(b.callsign)}|${c.lat}|${c.lon}|${w.since}|${w.until}`;
+}
+
+/**
+ * Endpoint: a peer asks us to corroborate a find. Yes/no + **coarse** evidence (T1.2). The response is
+ * coarsened unconditionally — a distance bucket + bucketed ts + this instance, never the exact IGate
+ * (unless FED_REVEAL_IGATE) — so even a prober sending exact coordinates can't use this as a precise
+ * location oracle. Gated by an optional shared secret, in-memory rate limits, and negative memoization.
+ */
 export async function handleCorroborate(req: Request, env: Env): Promise<Response> {
+  if (!corroborationAuthorized(env, req)) return json({ corroborated: false, error: "unauthorized" }, { status: 401 });
   const b = (await req.json().catch(() => null)) as (CorroborationQuery & { excludeIgates?: string[] }) | null;
   if (!b || !b.callsign || b.lat == null || b.lon == null || b.since == null || b.until == null)
     return json({ corroborated: false, error: "bad query" }, { status: 400 });
+
+  const cfg = coarsenConfig(env);
+  const nowMs = Date.now();
+  if (rateLimited(`ip:${clientIp(req)}`, nowMs) || rateLimited(`call:${baseCall(b.callsign)}`, nowMs))
+    return json({ corroborated: false, error: "rate limited" }, { status: 429 });
+
+  const key = probeKey(b, cfg);
+  if (negCached(key, nowMs)) return json({ corroborated: false, cached: true });
+
   const exclude = new Set((b.excludeIgates ?? []).map(baseCall));
   const ev = await localCorroboration(env, b, exclude);
-  return json(ev ? { corroborated: true, evidence: ev } : { corroborated: false });
+  if (!ev) { negStore(key, nowMs); return json({ corroborated: false }); }
+
+  const evidence: { distanceM: number; ts: number; igateCall?: string } = {
+    distanceM: distanceBucketM(ev.distanceM, cfg.distBucketM),
+    ts: bucketTs(ev.ts, cfg.timeBucketSec),
+  };
+  if (env.FED_REVEAL_IGATE && ev.igateCall) evidence.igateCall = ev.igateCall; // both-opt-in only
+  return json({ corroborated: true, evidence });
 }
 
 /**
@@ -86,16 +122,28 @@ export function selectCorroboration(hits: Evidence[], quorum: number): Evidence 
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
   const peers = (await listEnabledPeers(env))
     .filter((p) => p.trust === "trusted")
-    .filter((p) => !(p.instance && p.instance === env.INSTANCE));
+    .filter((p) => !(p.instance && p.instance === env.INSTANCE))
+    .slice(0, CORROBORATION_FANOUT); // bounded fan-out budget
   const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 1);
+
+  // good-citizen request coarsening: snap the center to a grid cell, widen the radius to cover the
+  // snap, bucket the time window — peers never see our exact lat/lon/second (T1.2 privacy).
+  const cfg = coarsenConfig(env);
+  const c = snapToGrid(q.lat, q.lon, cfg.gridDeg);
+  const w = bucketWindow(q.since, q.until, cfg.timeBucketSec);
+  const cq: CorroborationQuery = {
+    ...q, lat: c.lat, lon: c.lon,
+    radiusM: (q.radiusM || DEFAULT_POLICY.radiusM) + gridSlackM(cfg.gridDeg),
+    since: w.since, until: w.until,
+  };
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (env.FED_CORROBORATION_SECRET) headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
+
   const results = await Promise.all(peers.map(async (peer): Promise<Evidence | null> => {
     const base = peer.url.replace(/\/+$/, "");
     try {
       const r = await fetch(`${base}/federation/corroborate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(q),
-        signal: AbortSignal.timeout(3000),
+        method: "POST", headers, body: JSON.stringify(cq), signal: AbortSignal.timeout(3000),
       });
       if (!r.ok) return null;
       const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };

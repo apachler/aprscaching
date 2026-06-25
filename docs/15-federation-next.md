@@ -66,25 +66,26 @@ auto-promotion loop (needs a later independent-confirmation signal) and the Sett
 ### T1.2 Corroboration quorum + hardening  *(resolves docs/06 #4)*
 Tier A via the network should mean **multiple independent instances agree**, not "the first peer said yes."
 
-**Status — quorum core IMPLEMENTED** (`corroborate.ts` · `test/corroborate.test.ts` · federation smoke green
-at default quorum 1): `queryPeerCorroboration()` now fans out to peers **in parallel** (3 s per-peer timeout),
-and a pure, unit-tested `selectCorroboration(hits, quorum)` de-dupes by instance (same instance twice = one
-voice), enforces **≥ `FED_CORROBORATION_QUORUM` distinct instances** (floors at 1 so a 0/NaN config never
-disables the gate), and returns the closest evidence annotated with `corroborators` (the instance count). **`trusted`-peer filtering is now in place** (T1.1 landed —
-`queryPeerCorroboration` narrows the pool to `trust='trusted'`, so unvetted/auto-discovered peers never
-lend Tier-A weight). **Still pending:** endpoint hardening and privacy coarsening (below).
+**Status — IMPLEMENTED** (`corroborate.ts` · `corroborate_privacy.ts` · `test/corroborate.test.ts` +
+`test/corroborate_privacy.test.ts` · federation smoke +5 assertions green). All three pieces landed:
 
-- **Quorum** — `queryPeerCorroboration()` collects evidence from peers **in parallel**, keeps only
-  `trusted` peers (T1.1), de-dupes by instance + IGate (independence), and upgrades to Tier A only at
-  **≥ N distinct instances** (config `FED_CORROBORATION_QUORUM`, default 1 for a small network → raise as
-  it grows). Records which instances corroborated (audit).
-- **Endpoint hardening** — `handleCorroborate` gains: rate-limiting (per-IP + per-peer), an optional
-  shared-secret/allowlist so only known peers can probe, negative-result memoization, and a bounded
-  fan-out budget.
-- **Privacy coarsening** *(docs/06 #4)* — queries carry a **grid square + time bucket**, not exact
-  lat/lon/second; responses return yes/no + coarse distance bucket + corroborating instance, **not the
-  exact IGate** unless both peers opt in. The endpoint stops being a precise public "where was OE8APR at
-  time T" oracle.
+- **Quorum** — `queryPeerCorroboration()` fans out to **`trusted`** peers only (T1.1) **in parallel**
+  (3 s per-peer timeout, bounded to 16 peers), and a pure, unit-tested `selectCorroboration(hits, quorum)`
+  de-dupes by instance (same instance twice = one voice), enforces **≥ `FED_CORROBORATION_QUORUM` distinct
+  instances** (floors at 1 so a 0/NaN config never disables the gate), and returns the closest evidence
+  annotated with `corroborators` (the instance count).
+- **Endpoint hardening** *(done)* — `handleCorroborate` gains an optional **shared-secret allowlist**
+  (`FED_CORROBORATION_SECRET` → require `x-fed-secret`), best-effort **in-memory rate limiting** (per-IP +
+  per-callsign fixed window), **negative-result memoization** (30 s), and a **bounded fan-out** on the ask
+  side. The in-memory limiters are per-isolate (weaker on Workers' fan-out) — the secret + coarse responses
+  are the load-bearing guarantees.
+- **Privacy coarsening** *(done; docs/06 #4)* — the **asker** snaps its query center to a **grid square**
+  and buckets the **time window** (radius widened by the grid half-diagonal so a snap never misses); the
+  **answerer** coarsens its response **unconditionally** — a distance **bucket** + a bucketed ts + the
+  corroborating instance, **never the exact IGate** unless `FED_REVEAL_IGATE` is set. So even a prober
+  sending exact coordinates gets only a coarse answer: the endpoint is no longer a precise "where was OE8APR
+  at time T" oracle. Grid/bucket sizes are tunable (`FED_CORROBORATION_GRID_DEG` ≈ 550 m,
+  `…_TIME_BUCKET_SEC` 600, `…_DIST_BUCKET_M` 100 by default).
 - *Worth:* this is the real anti-spoofing upgrade to the headline trust feature — Tier A becomes
   "corroborated by the network," resistant to a single colluding instance, and not abusable as a tracker.
 
@@ -232,7 +233,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 `POST /federation/notify` (T2.1) · `GET /federation/tombstones` (T1.3, **shipped**) · `account-move` feed type
 (T3.2) · extended `/.well-known` (`publicKeys[]`, `protocolVersions`, richer `capabilities`) (T2.2/T4.1)
 · `GET /federation/peers` returns trust+reputation + `POST /federation/peers/trust` operator promote/block
-(T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
+(T1.1, **shipped**). Corroboration query/response shape changes to grid+bucket (T1.2, **shipped** — coarse distance + bucketed ts + instance, no exact IGate; optional
+`x-fed-secret` allowlist). Public read API gains origin+trust-tagged mirrored caches (T3.1). `POST /federation/submit`
 (signed-envelope intake for push-to-hub) + a relay/rendezvous WS endpoint (T2.3).
 
 ## Rule / cost / privacy compliance
@@ -247,9 +249,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   unvetted network data" is an explicit off-by-default switch; none of this reaches the cacher's default map.
 
 ## Milestone / sequence
-- **F4 (trust — launch-gating before opening the network):** T1.1 peer tiers + quarantine **(done)** · T1.2
-  corroboration quorum **(quorum core + trusted-only filter done; hardening/privacy pending)** · T1.3
-  signed tombstones **(done)**.
+- **F4 (trust — launch-gating before opening the network) — COMPLETE:** T1.1 peer tiers + quarantine
+  **(done)** · T1.2 corroboration quorum + hardening + privacy coarsening **(done)** · T1.3 signed
+  tombstones **(done)**.
 - **F5 (reach):** T2.1 gossip ping · T2.2 generalized envelope/capability negotiation · T2.3 NAT/firewall
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
@@ -259,7 +261,8 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T1.1:** an unvetted/auto-discovered peer's caches are mirrored but hidden from the default map and
   excluded from verification until promoted; a blocked peer is never fetched.
 - **T1.2:** a find upgrades to Tier A only when ≥ quorum distinct trusted instances corroborate; the
-  corroboration endpoint rejects unauthenticated abuse and answers in grid+bucket, not exact coords.
+  corroboration endpoint rate-limits abuse and answers in coarse buckets, never exact coords/IGate
+  (**met**: smoke asserts a bucketed distance, hidden IGate, no callsign on the wire, and a 429 under load).
 - **T1.3:** deleting an account on instance A removes its mirrored copies on peer B after sync — the
   tombstone is signed, verifies against A's key, and carries no callsign/PII (**met**: smoke asserts the
   TOMB1 cache drops off B's map and the find tombstone is signed + PII-free).

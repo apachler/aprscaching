@@ -15,6 +15,12 @@ export interface Env {
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)
   TOMBSTONE_TTL_DAYS?: string;       // retention for delete tombstones before GC (F4/T1.3; default 180)
+  // ---- corroboration hardening + privacy coarsening (F4/T1.2) — all optional ----
+  FED_CORROBORATION_SECRET?: string;        // if set, /federation/corroborate requires x-fed-secret (peer allowlist)
+  FED_REVEAL_IGATE?: string;                // if set, corroboration responses include the exact IGate (both peers opt in)
+  FED_CORROBORATION_GRID_DEG?: string;      // request center grid-snap size in degrees (default 0.005 ≈ 550 m)
+  FED_CORROBORATION_TIME_BUCKET_SEC?: string; // request/response time bucket (default 600)
+  FED_CORROBORATION_DIST_BUCKET_M?: string; // response distance bucket in metres (default 100)
 
   // ---- imports (M3) — OpenCaching OKAPI ----
   OKAPI_BASE?: string;      // e.g. https://www.opencaching.de
