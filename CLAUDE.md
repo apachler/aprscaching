@@ -58,6 +58,11 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   · CC-BY-SA-4.0 docs); M4 supporter badge + hide-nag + `/support` ledger; M5 peer cost-reimbursement
   (Open Collective). Monetization schema lands as a new migration (next free number), not the `0003`
   the doc names retrospectively.
+- Profiles — `docs/13-profiles.md`: a thin, opt-in ham profile (display name, locator, avatar, bio,
+  links, operated SSIDs, opt-in public contact) — borrow QRZ's self-curated profile, reject its
+  name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;
+  M5 operated SSID stations (needs `account_stations`). One small `accounts` migration; all inside
+  the existing GDPR export/erase.
 
 ## Licensing
 Monorepo licensed by unit (see `LICENSE`, per-package `LICENSE`, README "License"): hosted app &
