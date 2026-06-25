@@ -39,8 +39,8 @@ radio ── [TNC | soundcard | mesh node]
 
 | Capability | Browser-direct (Path B) | Notes |
 |---|---|---|
-| KISS TNC over **USB serial** | ✅ Chromium desktop/Android | Web Serial — **no Safari/Firefox/iOS** (~72% global) |
-| KISS TNC over **Bluetooth LE** | ✅ Chromium desktop/Android | Web Bluetooth + **BLE-KISS API** (below); **not iOS Safari** |
+| KISS TNC over **USB serial** | ✅ Chromium **desktop** (Android emerging) | Web Serial — desktop solid; Android only from Chrome 148 beta (Apr 2026), BT-RFCOMM-first, USB-serial limited ~2026Q2. **No Safari/Firefox/iOS** → companion (`docs/21`) |
+| KISS TNC over **Bluetooth LE** | ✅ Chromium desktop/Android | Web Bluetooth + **BLE-KISS API** (below); **not iOS Safari** (iOS BLE = the Capacitor companion, `docs/21`) |
 | Meshtastic / LoRa node | ✅ | Web Serial / BLE (Meshtastic's own web client already does this) |
 | **Soundcard AFSK — no TNC at all** | ⚠️ stretch | Web Audio Bell-202 modem (proven by `modem.js`/`afsk.js`) |
 | CAT control + PTT of a transceiver | ✅ | serial RTS / CAT command over Web Serial (DigiRig-class CDC) |
@@ -116,10 +116,11 @@ Proven prior art: `SQ2CPA/aprs-tnc-web` (browser KISS TNC), Meshtastic Web (Web 
 - **H4 — Soundcard AFSK (Web Audio):** in-browser Bell-202 modem; HT + audio cable, no TNC; VOX/RTS PTT.
 - **H5 — TX from the browser (gated):** KISS/AFSK transmit (beacon, message, ack) — **off by default,
   callsign-verified + explicit opt-in**, same gating as the box's IGate/digi TX.
-- **H6 — Web Serial CAT (one-click tune)** *(from POTACAT, `docs/20`)*: drive a transceiver's
-  frequency/mode over Web Serial (Kenwood / Icom CI-V / Hamlib-style) so clicking a cache/station/spot
-  tunes the radio to the APRS frequency (144.800 / 144.390) or the spot's freq+mode. Rig profiles;
-  Chromium-only. RX-only by default; any keying still H5-gated.
+- **H6 — Web Serial CAT (one-click tune)** *(from POTACAT, `docs/20`; full design in `docs/21`)*: drive
+  a transceiver's frequency/mode over Web Serial (Kenwood / Icom CI-V / Yaesu) so clicking a
+  cache/station/spot tunes the radio to the APRS frequency (144.800 / 144.390) or the spot's freq+mode.
+  Rig profiles; Chromium-only. RX-only by default; any keying still H5-gated. The 200+ rig long tail +
+  iOS/non-Chromium go through the **Hamlib companion** (`docs/21`), not the browser.
 - **Path A deepening (parallel):** native Meshtastic protobuf over MQTT/BLE/serial; AGWPE; more transports.
 
 ## Non-goals

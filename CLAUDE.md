@@ -93,6 +93,14 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   Chromium-only, not iOS. H1 Web Serial KISS · H2 BLE-KISS · H3 Meshtastic/LoRa · H4 soundcard AFSK ·
   H5 gated browser TX (callsign-verified, opt-in). Recommended hw: DigiRig, NinoTNC, Mobilinkd TNC4,
   Kenwood TH-D74/75, Meshtastic ESP32, RTL-SDR+Direwolf. RX ≠ trust — still gated by `verify.ts`.
+- CAT rig control & companion apps — `docs/21-cat-control-and-companions.md` (adopts WAAT's serial→
+  WebSocket/JSON-RPC *pattern*, not its one-rig engine): one rig-control API, two backends —
+  browser-direct Web Serial CAT (Kenwood/Icom-CIV/Yaesu, `docs/16` H6) + a **Hamlib `rigctld`
+  companion** for the 200+ rig long tail (capability negotiation; `rigctld` as a separate process →
+  no GPL contamination). Companions close the browser's RF gaps: Linux/Pi = productized `apps/ingest`
+  (Hamlib CAT + gateway remote channel + `docker`/`.deb`/AppImage); mobile = a **Capacitor shell**
+  reusing the web app + native USB-serial/BLE-KISS/background (iOS RF = BLE here only). All keying
+  H5-gated. OmniRig=Windows-only, grig=reference.
 - Live spots & remote control — `docs/20-live-spots-and-remote-control.md` (reframed from POTACAT,
   Apache-2.0): a **live activity-spots layer** (POTA/SOTA/WWBOTA/GMA + DX-cluster/RBN/PSKReporter on
   the map, opt-in/filtered/deduped; "being activated now" on coincident caches) and **remote control
