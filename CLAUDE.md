@@ -93,6 +93,15 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   Chromium-only, not iOS. H1 Web Serial KISS · H2 BLE-KISS · H3 Meshtastic/LoRa · H4 soundcard AFSK ·
   H5 gated browser TX (callsign-verified, opt-in). Recommended hw: DigiRig, NinoTNC, Mobilinkd TNC4,
   Kenwood TH-D74/75, Meshtastic ESP32, RTL-SDR+Direwolf. RX ≠ trust — still gated by `verify.ts`.
+- RF-over-internet transports — `docs/22-rf-over-internet-transports.md` (decision-support, RESOLVED
+  2026-06-25): whether to add AXIP/AXUDP, HAMNET, AMPRNet/44net. Posture = **lean core, reserved
+  seams**. Core rule: **transport convenience ≠ trust uplift** — every internet-sourced packet (APRS-IS,
+  AXIP, HAMNET-tunnelled) stays Tier C *unless* it arrives via a first-party RF site we operate +
+  attest. Build now: the **`provenance` abstraction** (transport enum + `firstPartyAttested` flag) the
+  verify engine consumes — Tier A gated on the flag, never on transport. Launch trust = Tier B (app-geo)
+  + honest Tier C; Tier A is designed-for, deferred (needs owned OE RF/HAMNET). AXIP = workbench BBS
+  federation, Phase 2+. 44net = trust-neutral reachability (Connect→Mesh→BGP; HAMNET native, AREDN
+  gateway-only); hybrid topology (Cloudflare web channel + optional 44net PoP), reserve `amateurEndpoint?`.
 - CAT rig control & companion apps — `docs/21-cat-control-and-companions.md` (adopts WAAT's serial→
   WebSocket/JSON-RPC *pattern*, not its one-rig engine): one rig-control API, two backends —
   browser-direct Web Serial CAT (Kenwood/Icom-CIV/Yaesu, `docs/16` H6) + a **Hamlib `rigctld`
