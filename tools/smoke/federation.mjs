@@ -77,9 +77,9 @@ const list2 = await call(SUB, "GET", "/api/caches?bbox=15,46,16,48");
 ok("no duplicate mirror after re-sync",
   (list2.data?.caches ?? []).filter((c) => c.title === TITLE).length === 1);
 
-// auth: sync requires the ingest secret
-const noauth = await call(SUB, "POST", "/federation/sync");
-ok("sync without secret -> 401", noauth.status === 401, `status=${noauth.status}`);
+// auth: sync requires the ingest secret (the call() default is overridden with an invalid one)
+const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": "" });
+ok("sync with an invalid secret -> 401", noauth.status === 401, `status=${noauth.status}`);
 
 // ---- F3: cross-instance verification (the network effect) ----
 // The logger's RF position is heard only by the PUBLISHER's IGate (independent of the logger).
