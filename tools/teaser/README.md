@@ -27,12 +27,17 @@ One command, hermetic, against a fresh temp SQLite DB:
 5. **Runs the tour** (`tour.mjs`) once per viewport through a sane operator journey:
    landing → sign-in → map → filter → cache detail → hide-a-cache → nearby → activity →
    leaderboard → profile → workbench → BBS → settings.
-6. **Assembles the video** (`build-video.sh`): frames letterboxed onto a uniform 1920×1080 canvas,
-   captioned per step, faded between steps. Background servers are torn down on exit.
+6. **Assembles the video** (`build-video.sh` → `compose.mjs`): frames letterboxed onto a uniform
+   1920×1080 canvas, captioned per step, crossfaded between steps. Background servers are torn down
+   on exit.
+
+> Composition runs **in Chromium** (canvas + MediaRecorder), not ffmpeg: the Playwright-bundled
+> ffmpeg is a minimal screencast build (no PNG decode, no drawtext/fade), so we record the canvas
+> stream to webm directly. No ffmpeg dependency.
 
 ### Output (git-ignored — generated artifacts)
 
-- `tour/aprscaching-ui-teaser.mp4` — the teaser video (+ a `.gif` preview).
+- `tour/aprscaching-ui-teaser.webm` — the teaser video.
 - `tour/[123]-NN-<view>-<step>.png` — ordered frames (prefix `1/2/3` = desktop/tablet/mobile).
 - `tour/manifest-<view>.json` — frame → label map.
 
@@ -42,7 +47,8 @@ One command, hermetic, against a fresh temp SQLite DB:
 |---|---|
 | `run-tour.sh` | One-shot orchestrator (build → serve → seed → tour → video). **Start here.** |
 | `tour.mjs` | Playwright driver. One viewport per process via `VIEW=desktop\|tablet\|mobile`. |
-| `build-video.sh` | Frames → captioned mp4/gif via bundled ffmpeg (`HOLD`, `FADE` env knobs). |
+| `build-video.sh` | Thin wrapper → `compose.mjs`. |
+| `compose.mjs` | Frames → captioned `.webm` via Chromium canvas + MediaRecorder (`HOLD`, `FADE` env knobs). |
 | `run-views.sh` | Re-run just the tour (all viewports) against already-running servers. |
 | `diag.mjs` | Minimal load/console diagnostic for one viewport (debugging). |
 
@@ -84,8 +90,7 @@ out/teaser.png      the composed poster (hero)
   - **This sandbox:** prebuilt at `/opt/pw-browsers` (auto-detected via `PW_CHROMIUM`).
   - **Elsewhere:** `cd tools/teaser && npm install && npx playwright install chromium`, then leave
     `PW_CHROMIUM` unset so Playwright resolves its own browser.
-- ffmpeg (video only): bundled at `/opt/pw-browsers/ffmpeg-*/ffmpeg-linux` (auto-detected; override
-  with `FFMPEG=`). No system ffmpeg required.
+- Video assembly needs **no ffmpeg** — it composes in Chromium (the same browser the tour uses).
 
 ## Knobs
 
@@ -95,9 +100,8 @@ out/teaser.png      the composed poster (hero)
 | `API_BASE` | `http://127.0.0.1:<PORT_API>` | gateway base for seeding |
 | `BASE` | `http://127.0.0.1:<PORT_WEB>` | app base for the crawl |
 | `VIEW` | all | tour viewport: `desktop` / `tablet` / `mobile` |
-| `HOLD` / `FADE` | `2.4` / `0.35` | video per-step seconds / crossfade seconds |
+| `HOLD` / `FADE` | `2.4` / `0.45` | video per-step seconds / crossfade seconds |
 | `PW_CHROMIUM` | `/opt/pw-browsers/chromium` if present | Chromium executable |
-| `FFMPEG` | bundled `/opt/pw-browsers/ffmpeg-*` | ffmpeg executable |
 | `INGEST_SECRET` | `change-me` | matches the gateway secret (for the Tier-A RF seed) |
 
 The `tour/` and `out/` directories are git-ignored; only the tooling is tracked.
