@@ -115,8 +115,10 @@ async function advancedTools(page) {
   await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
   await clickAny(page, [".group-toggle:has-text('Advanced')"]);
   await page.waitForTimeout(300);
+  // tool buttons read like "📡 Workbench": a leading glyph THEN a word. Require letters so bare-glyph
+  // controls (e.g. the panel's ✕ close button) are not mistaken for destinations.
   const labels = await page.$$eval(".panel button", (els) =>
-    els.map((e) => (e.textContent || "").trim()).filter((t) => t && /^[^\w\s]/.test(t) && t.length <= 28)
+    els.map((e) => (e.textContent || "").trim()).filter((t) => t && /^[^\w\s]/.test(t) && /[A-Za-z]{2,}/.test(t) && t.length <= 28)
   ).catch(() => []);
   const seen = new Set();
   return labels.filter((t) => !seen.has(t) && seen.add(t)).map((t) => ({
