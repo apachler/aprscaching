@@ -9,18 +9,24 @@ federation peer like any other instance.
 ## Files
 | File | Purpose |
 |---|---|
-| `launcher.ts` | entry point: start gateway → serve SPA → open browser → SQLite in app-data |
-| `db-bun-sqlite.ts` | D1-compatible DB adapter over `bun:sqlite` (no native module) |
+| `launcher.ts` | entry point: run migrations → start gateway (`handle()`) → serve the embedded SPA → open browser → SQLite in app-data |
+| `gen-assets.ts` | build step: embeds `apps/web/dist` + `db/migrations` into the binary (`import … with { type: "file" }`) → `assets.generated.ts` (gitignored) |
+| `db-bun-sqlite.ts` | re-exports the conformance-tested `bun:sqlite` adapter (`servers/bun/d1.ts`) |
 | `appdata.ts` | per-OS data directory resolver |
-| `build-exe.sh` | cross-compile the matrix from one machine |
+| `build-exe.sh` | cross-compile the matrix from one machine (web build → embed → `bun build --compile`) |
 | `entitlements.plist` | macOS JIT entitlements for codesigning |
 | `../../.github/workflows/desktop-release.yml` | CI: build matrix + attach to a tagged release |
 
-## Wire-up (Claude Code)
-In `launcher.ts`, connect the real repo exports (marked `TODO`): the runtime-neutral gateway handler
-(as used by `servers/node`), the migration runner, the optional ingest starter, and the embedded
-SPA import. Add a **`bun:sqlite` adapter** as a third DB backend behind your existing interface and
-run the conformance suites under Bun too (same as Worker vs Node).
+## How it works (done)
+The launcher reuses the **runtime-neutral gateway** (`handle()` from `@aprsweb/gateway`) and the Bun
+adapters (`servers/bun/{d1,migrate,media,rooms,gateway}.ts` — the same code the Bun conformance lane
+exercises), so the desktop core is the *identical* business logic as the Worker and Node runtimes. At
+build time `gen-assets.ts` embeds the built SPA + SQL migrations into the executable; the launcher
+applies migrations on first run, routes dynamic paths through `handle()` and serves everything else as
+the SPA (router-fallback to `index.html`), and keeps SQLite in the OS app-data dir. `bun run
+launcher.ts` in the repo gives a disk-backed dev run (no embed needed). RF is browser Web Serial/BLE
+(operator-local); an always-on local feed is `apps/ingest`, run separately. *Validated: the compiled
+linux-x64 binary serves the embedded SPA + gateway + migrations from an isolated dir.*
 
 ## Build (one machine → all platforms)
 ```bash
@@ -47,4 +53,4 @@ Unsigned binaries trip macOS Gatekeeper and Windows SmartScreen.
 ## Caveats
 "One exe" = **one binary per OS/arch** (cross-built from a single machine), ~50–100 MB each (the Bun
 runtime is inside). The desktop app is a single-user local instance — for shared/always-on use, see
-the other topologies in `docs/14-deployment.md`.
+the other topologies in `docs/23-deployment.md`.

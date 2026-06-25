@@ -6,8 +6,11 @@ cd "$(dirname "$0")/../.."                                  # repo root
 VERSION="${1:-$(git describe --tags --always 2>/dev/null || echo dev)}"
 OUT="dist/desktop"; mkdir -p "$OUT"
 
-echo ">> building SPA (apps/web)"
-pnpm --filter @aprsweb/web build                           # -> apps/web/dist
+echo ">> building SPA (apps/web) — same-origin API + offline basemap for the desktop binary"
+VITE_API_BASE="" VITE_BASEMAP=offline pnpm --filter @aprsweb/web build   # -> apps/web/dist
+
+echo ">> embedding SPA + migrations"
+bun run deploy/desktop/gen-assets.ts                       # -> deploy/desktop/assets.generated.ts
 
 ENTRY="deploy/desktop/launcher.ts"
 build() { echo ">> $2"; bun build --compile --target="$1" \
