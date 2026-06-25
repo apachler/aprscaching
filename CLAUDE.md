@@ -70,6 +70,12 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;
   M5 operated SSID stations (needs `account_stations`). One small `accounts` migration; all inside
   the existing GDPR export/erase.
+- Weather stations — `docs/17-weather-stations.md`: APRS weather is first-class and the RX side is
+  built (`decode.ts` wx parse → `sensor_readings`; shown on station page). Adds user-origination of
+  their own PWS: W1 direct platform ingest (Ecowitt / WU-Rapidfire → `-13` weather SSID, no licence) ·
+  W2 APRS WX beacon TX (gated, verified callsign) · W3 CWOP relay (feeds NOAA) · W4 browser-direct
+  Davis/Ultimeter via Web Serial (with `docs/16`). Small additive `sensor_readings` migration (gust,
+  split rain, luminosity, snow, source). Weather is observational — never touches the A/B/C find tiers.
 - RF hardware interfacing — `docs/16-rf-hardware-interfacing.md`: two paths, one shared codec
   (`@aprsweb/aprs` KISS/AX.25 framing is already pure). Path A = the always-on ingest box (KISS-over-TCP,
   CoT, Meshtastic, IGate/digi — built; iOS-capable). Path B = browser-direct via Web Serial / Web
