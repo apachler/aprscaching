@@ -69,6 +69,7 @@ interface RemoteCacheRow {
   global_id: string; origin: string; code: string; owner_call: string; title: string; type: string;
   status: string; difficulty: number; terrain: number; lat: number | null; lon: number | null;
   station_call: string | null; source: string; external_id: string | null; min_trust: string | null;
+  origin_trust: string; // joined from fed_peers (T3.1): 'trusted' | 'unvetted' (blocked is filtered out)
 }
 
 function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
@@ -76,7 +77,7 @@ function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     globalId: `${instance}:cache:${r.id}`, id: r.id, code: r.code, ownerCall: r.owner_call,
     title: r.title, type: r.type as MapCache["type"], status: r.status as MapCache["status"],
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
-    origin: instance, mirrored: false,
+    origin: instance, mirrored: false, originTrust: "native",
     source: r.source, sourceName: r.source_name, sourceUrl: r.source_url,
   };
 }
@@ -85,13 +86,16 @@ function remoteMapCache(r: RemoteCacheRow): MapCache {
     globalId: r.global_id, id: null, code: r.code, ownerCall: r.owner_call, title: r.title,
     type: r.type as MapCache["type"], status: r.status as MapCache["status"],
     difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
-    origin: r.origin, mirrored: true,
+    origin: r.origin, mirrored: true, originTrust: r.origin_trust === "trusted" ? "trusted" : "unvetted",
     source: r.source, sourceName: null, sourceUrl: null,
   };
 }
 
 // ---------------------------------------------------------------- list (map layer)
-// Aggregates native caches + caches mirrored from federation peers (F2).
+// Aggregates native caches + caches mirrored from federation peers (F2), each tagged with its origin's
+// trust (T3.1). Trust policy: native always shown; `trusted`-origin mirrors shown by default; `unvetted`
+// (auto-discovered, T1.1) hidden unless `?includeUnvetted=1`; `blocked` never surfaced. The trust is a
+// read-time join to fed_peers, so promoting/blocking a peer takes effect immediately, no re-mirror.
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const [minLon, minLat, maxLon, maxLat] = (u.searchParams.get("bbox") ?? "-180,-90,180,90")
@@ -99,21 +103,28 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   if ([minLon, minLat, maxLon, maxLat].some(Number.isNaN))
     return json({ error: "bad bbox" }, { status: 400 });
   const instance = env.INSTANCE ?? u.host;
+  const includeUnvetted = u.searchParams.get("includeUnvetted") === "1" || u.searchParams.get("network") === "all";
 
   const native = await env.DB.prepare(
     `SELECT * FROM caches
      WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' LIMIT 1000`,
   ).bind(minLat, maxLat, minLon, maxLon).all<CacheDbRow>();
+  // origin trust defaults to 'unvetted' when the origin peer is unknown (e.g. removed) — hidden by default.
   const remote = await env.DB.prepare(
-    `SELECT * FROM remote_caches
-     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' LIMIT 1000`,
-  ).bind(minLat, maxLat, minLon, maxLon).all<RemoteCacheRow>();
+    `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust
+       FROM remote_caches rc
+       LEFT JOIN fed_peers fp ON fp.instance = rc.origin
+      WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'
+        AND COALESCE(fp.trust, 'unvetted') != 'blocked'
+        AND (? = 1 OR COALESCE(fp.trust, 'unvetted') = 'trusted')
+      LIMIT 1000`,
+  ).bind(minLat, maxLat, minLon, maxLon, includeUnvetted ? 1 : 0).all<RemoteCacheRow>();
 
   const caches: MapCache[] = [
     ...native.results.map((r) => nativeMapCache(r, instance)),
     ...remote.results.map(remoteMapCache),
   ];
-  return json({ caches });
+  return json({ caches, includeUnvetted });
 }
 
 // ---------------------------------------------------------------- detail + logbook

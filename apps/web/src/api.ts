@@ -23,8 +23,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
-export function listCaches(bbox: BBox): Promise<{ caches: MapCache[] }> {
-  return call(`/api/caches?bbox=${bbox.join(",")}`);
+export function listCaches(bbox: BBox, includeUnvetted = false): Promise<{ caches: MapCache[] }> {
+  return call(`/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`);
 }
 
 export function getCache(id: number, callsign?: string): Promise<{ cache: CacheDetail }> {

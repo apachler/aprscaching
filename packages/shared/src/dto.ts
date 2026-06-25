@@ -131,6 +131,7 @@ export interface MapCache {
   lon: number | null;
   origin: string;            // originating instance id
   mirrored: boolean;
+  originTrust: "native" | "trusted" | "unvetted"; // first-party, or the origin peer's T1.1 trust tier (blocked never surfaced)
   source: string;            // "native" or an import source ("sota","pota",…)
   sourceName: string | null; // attribution label for imported caches
   sourceUrl: string | null;  // deep link to the source page

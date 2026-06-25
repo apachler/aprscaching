@@ -319,6 +319,13 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   let key: CryptoKey;
   try { key = await importVerifyKey(b.publicKey); } catch { return json({ ok: false, error: "bad public key" }, { status: 400 }); }
 
+  // Register the (operator-authorised) spoke as a TRUSTED, never-pulled peer so its mirrored records
+  // surface on the default map (T3.1) and carry a uniform trust binding. enabled=0 → never fetched; the
+  // synthetic `submit:<instance>` url keeps it out of the pull set. INSERT OR IGNORE respects a later block.
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via, approved_at, enabled) VALUES (?, ?, ?, 'trusted', 'submitted', ?, 0)",
+  ).bind(`submit:${b.instance}`, b.instance, b.publicKey, now()).run();
+
   let applied = 0, rejected = 0;
   for (const rec of b.records) {
     const apply = APPLIERS[rec.type];

@@ -13,7 +13,10 @@ export function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }
       <p className="muted">
         {meta.label} · D {c.difficulty.toFixed(1)} / T {c.terrain.toFixed(1)} · by {c.ownerCall}
       </p>
-      <p className="federated">⇄ mirrored from <strong>{c.origin}</strong></p>
+      <p className="federated">
+        ⇄ mirrored from <strong>{c.origin}</strong>
+        {c.originTrust === "unvetted" && <span className="badge warn" title="From a peer you haven't vetted">unvetted</span>}
+      </p>
       <p className="muted">
         This cache lives on another instance in the network. Log your find on its home instance;
         it will appear here once that instance publishes it.

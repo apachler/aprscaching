@@ -303,6 +303,30 @@ ok("a tampered submission is rejected (signature integrity)", sub2.data?.applied
 const sub3 = await call(SUB, "POST", "/federation/submit", { instance: "oe.sub", publicKey: spub, records: [] }, { "x-fed-secret": SUBMIT_SECRET });
 ok("a spoke cannot submit as the hub's own instance -> 400", sub3.status === 400, JSON.stringify(sub3.data));
 
+// ---- F6/T3.1: federated catalog on the map (origin + trust tagging; unvetted hidden by default) ----
+const GBBOX = "15,46,16,48"; // covers the gossip cache (47.09,15.44) mirrored from the trusted publisher
+const m0 = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
+const gossipOnSub = (m0.data?.caches ?? []).find((c) => c.title === G_TITLE);
+ok("a trusted peer's mirrored cache is tagged originTrust=trusted",
+  gossipOnSub?.mirrored === true && gossipOnSub?.originTrust === "trusted", JSON.stringify(gossipOnSub));
+ok("native caches are tagged originTrust=native",
+  (m0.data?.caches ?? []).some((c) => !c.mirrored && c.originTrust === "native"), "no native cache in bbox");
+
+// demote the publisher to unvetted → its caches drop off the DEFAULT map, return only with includeUnvetted
+await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "unvetted" }, { "x-ingest-secret": SECRET });
+const mDef = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
+ok("an unvetted peer's caches are hidden from the default map",
+  !(mDef.data?.caches ?? []).some((c) => c.title === G_TITLE), JSON.stringify((mDef.data?.caches ?? []).map((c) => [c.title, c.originTrust])));
+const mAll = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}&includeUnvetted=1`);
+ok("includeUnvetted=1 surfaces them, tagged originTrust=unvetted",
+  (mAll.data?.caches ?? []).find((c) => c.title === G_TITLE)?.originTrust === "unvetted", JSON.stringify(mAll.data?.includeUnvetted));
+
+// re-promote → back on the default map
+await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "trusted" }, { "x-ingest-secret": SECRET });
+const mRe = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
+ok("re-promoting restores the cache to the default map",
+  (mRe.data?.caches ?? []).some((c) => c.title === G_TITLE && c.originTrust === "trusted"), "missing after re-promote");
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

@@ -276,6 +276,8 @@ button.link:hover { text-decoration: underline; }
 .badge.tierA { background: color-mix(in oklch, var(--tier-a) 20%, transparent); color: var(--tier-a); }
 .badge.tierB { background: color-mix(in oklch, var(--tier-b) 20%, transparent); color: var(--tier-b); }
 .badge.tierC { background: color-mix(in oklch, var(--tier-c) 16%, transparent); color: var(--muted); }
+.badge.warn  { background: color-mix(in oklch, var(--warn) 20%, transparent); color: var(--warn); }
+.block { display: block; }
 
 /* ---- operator data chips & verification (M8) ---- */
 /* square trust-tier chip: solid tier colour, near-black letter (A/B/C) */

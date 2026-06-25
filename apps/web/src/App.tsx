@@ -81,6 +81,10 @@ export function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
+  // T3.1: include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
+  const [includeUnvetted, setIncludeUnvetted] = useState(false);
+  const includeUnvettedRef = useRef(includeUnvetted);
+  includeUnvettedRef.current = includeUnvetted;
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
@@ -159,13 +163,16 @@ export function App() {
     const b = m.getBounds();
     const bbox: BBox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
     subscribeLive(bbox);
-    try { setCaches((await listCaches(bbox)).caches); }
+    try { setCaches((await listCaches(bbox, includeUnvettedRef.current)).caches); }
     catch (e) { console.error(e); }
     finally { setReady(true); }
     if (stationsOnRef.current) {
       try { setStations((await getStations(bbox)).stations); } catch (e) { console.error(e); }
     }
   }, [subscribeLive]);
+
+  // re-fetch the map when the unvetted-network toggle flips (T3.1)
+  useEffect(() => { refresh(); }, [includeUnvetted, refresh]);
 
   // flush any finds queued while offline — on load and whenever connectivity returns
   const [queued, setQueued] = useState(queuedLogCount());
@@ -411,7 +418,8 @@ export function App() {
           <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
         )}
         {showFilter && mode === "view" && (
-          <FilterPanel filters={filters} setFilters={setFilters} count={shown.length} onClose={() => setShowFilter(false)} />
+          <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}
+            includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted} onClose={() => setShowFilter(false)} />
         )}
         {showProfile && mode === "view" && (
           <ProfilePanel callsign={callsign} map={map.current}

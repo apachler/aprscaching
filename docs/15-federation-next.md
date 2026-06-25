@@ -200,6 +200,17 @@ runtime-divergent infra; needs the instance-key registry T4.2 for downstream re-
 Surface mirrored caches (already in `remote_caches`) through the public read API (`docs/11` / ADR-4a)
 and the map layer switcher, each tagged with **origin instance + trust flag** (unvetted hidden by
 default per T1.1). A combined bbox/search spans native + trusted-mirrored.
+
+**Status — IMPLEMENTED** (`caches.ts:handleCachesInBBox` · `MapCache.originTrust` · web `FilterPanel`
+toggle + `RemoteCachePanel` badge · federation smoke +5 assertions). `GET /api/caches?bbox=` now
+**LEFT JOINs `remote_caches` to `fed_peers`** at read time and applies the T1.1 trust policy: native
+always shown; `trusted`-origin mirrors shown by default; `unvetted` (auto-discovered) hidden unless
+`?includeUnvetted=1`; `blocked` never surfaced. Because trust is a read-time join, promoting/blocking a
+peer takes effect immediately with no re-mirror. Each cache carries `originTrust`
+(`native | trusted | unvetted`); push-to-hub spokes (T2.3) are registered `trusted` so their caches
+surface by default. The web map gains an off-by-default **"include unvetted network data"** switch
+(`FilterPanel`, ui-ux §2) and an `unvetted` badge on the mirrored-cache panel. **Deferred:** a dedicated
+search endpoint (none exists yet — the bbox map is the read surface) and per-API-key read limits (ADR-4a).
 - *Worth:* delivers the "one global map" promise — today mirroring happens but barely surfaces to users.
 
 ### T3.2 Account-move as a signed federation record  *(pairs with ADR-2)*
@@ -283,7 +294,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   tombstones **(done)**.
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
-- **F6 (commons):** T3.1 federated catalog in API+map · T3.2 account-move record · T3.3 redaction.
+- **F6 (commons):** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record · T3.3 redaction.
 - **F7 (governance):** T4.1 key rotation · T4.2 instance registry · T4.3 observability.
 
 ## Acceptance (abbreviated, per tier)
@@ -306,7 +317,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   the hub map, secret-gated, tampered records rejected, no cross-instance impersonation). Quorum
   corroboration from a tunnel-free spoke awaits the rendezvous relay (path 2, deferred). A pushed packet
   is no more trusted than a pulled one — same `remote_*` mirror, same display-only semantics.
-- **T3.1:** the public map/API shows trusted-peer caches with origin attribution; unvetted are opt-in.
+- **T3.1:** the public map/API shows trusted-peer caches with origin attribution; unvetted are opt-in
+  (**met**: smoke asserts originTrust tagging, an unvetted peer's caches hidden by default + revealed by
+  `includeUnvetted=1`, and demote/re-promote flips visibility live).
 - **T3.2:** moving OE8APR from A to B re-homes finds and the network attributes them to the account.
 - **T3.3:** a `local-only` cache never appears in any peer's mirror; `hint` never crosses the wire.
 - **T4.1:** rotating the instance key keeps past signatures verifiable and new records trusted.
