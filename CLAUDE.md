@@ -27,10 +27,11 @@ Worker, Node, Bun, browser). packages/shared = zod contracts.
 ## Deployment
 Five topologies (`docs/23-deployment.md` + `deploy/`): **0** Bun single-binary desktop · **1** Pi at
 home (Cloudflare Tunnel) · **2** OCI all-in-one VM (Caddy) · **3** OCI core + Cloudflare CDN · **4** OCI
-ingest + CF Workers/D1/R2. **Tri-runtime:** Node+SQLite (1–3) · CF Worker+D1 (4) · Bun+`bun:sqlite` (0,
-adopted-but-unfinished — adapter + a Bun conformance lane still to do). RF ingest is ALWAYS
-operator-local (local `apps/ingest` *or* browser Web Serial/BLE). Every instance MUST expose the ADR-3
-Source link + back up its DB. `deploy/` scaffolding is validate-at-deploy (not yet CI-exercised).
+ingest + CF Workers/D1/R2. **Tri-runtime, all CI-conformance-green:** Node+SQLite (1–3, `servers/node`)
+· CF Worker+D1 (4, `workers/gateway`) · Bun+`bun:sqlite` (0, `servers/bun` — smoke+geofence pass under
+Bun). RF ingest is ALWAYS operator-local (local `apps/ingest` *or* browser Web Serial/BLE). Every
+instance MUST expose the ADR-3 Source link + back up its DB. `deploy/` scaffolding is
+validate-at-deploy (not yet CI-exercised); `bun --compile` desktop packaging still to do.
 
 ## Verification (the core)
 Trust follows corroboration, not transport:

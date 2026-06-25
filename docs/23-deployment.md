@@ -5,8 +5,9 @@
 > `aprscaching.example.org` below is the **self-hoster placeholder** — substitute your own domain.
 > RF-ingest locality is a loaded rule (`.claude/rules/ingest-locality.md`). Status: the `deploy/`
 > scaffolding is **validate-at-deploy** (not yet exercised in CI); the **Bun runtime (Topology 0) is
-> adopted but unfinished** — its `bun:sqlite` adapter must be matched to our DB interface and a Bun
-> lane added to conformance (→ tri-runtime).
+> live** — `servers/bun/` runs the gateway on Bun + `bun:sqlite` and passes the smoke + geofence
+> conformance suites in CI (tri-runtime). The single-binary `bun --compile` packaging
+> (`deploy/desktop/`) is the remaining desktop-build piece.
 
 aprscaching is **host-agnostic by design** — the tri-runtime build (`servers/node` on Node+SQLite,
 `workers/gateway` on Cloudflare Worker+D1, and a **Bun single-binary** desktop via `bun:sqlite`) plus

@@ -71,3 +71,22 @@ jobs:
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
             pnpm --filter @aprsweb/node-gateway start &
           PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
+
+  conformance-bun:
+    name: conformance (Bun + bun:sqlite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+      - run: pnpm install --frozen-lockfile
+      - name: start bun-gateway + smoke
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          DB_PATH="$RUNNER_TEMP/bun.db" PORT=8787 INSTANCE=ci.bun FED_PRIVATE_KEY="$KEY" \
+            bun run servers/bun/server.ts &
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
