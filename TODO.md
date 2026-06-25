@@ -16,6 +16,12 @@ Tracked items intentionally postponed. Each notes *why* and a sketch of *how*.
   design-system extraction. Pure hygiene; do as an isolated pass to avoid a risky big-bang move.
 
 ## RF / protocol roadmap (proposed — building blocks already exist)
+> **Modes & transports reference backlog:** see [`docs/08-rf-modes-backlog.md`](docs/08-rf-modes-backlog.md)
+> — a catalogue of amateur-radio modes/transports (AX.25/FX.25/IL2P, LoRa-APRS, Meshtastic, MeshCore,
+> Reticulum, the HF digital suite, open digital voice, …) with status (`core`/`eval`/`ref`), canonical
+> upstreams, and trust-model relevance. Highest read priorities: **BL-18 Reticulum** (crypto-identity /
+> unforgeable-ack overlaps the verification engine) and **BL-02/BL-21 spec hygiene** (APRS101 →
+> `aprsspec`/APRS12c, live `aprs-deviceid` feeds, digipeater/IGate docs).
 - [x] **APRS IGate** (bidirectional RF↔APRS-IS, on the ingest box). RX-IGate relays KISS-heard RF
   frames to APRS-IS with a `qAR` construct; TX-IGate gates IS messages to RF for stations heard
   locally (TTL), honouring NOGATE/RFONLY/TCPIP + third-party + bare-ack rules. Pure gating in
