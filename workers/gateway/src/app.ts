@@ -18,6 +18,7 @@ import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleF
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js";
 import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
+import { handleSpots } from "./spots.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -78,6 +79,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/feeds/leaderboard.xml" && m === "GET") return handleLeaderboardFeed(req, env);
   const userFeed = /^\/feeds\/u\/([A-Za-z0-9-]+)\.xml$/.exec(p);
   if (userFeed && m === "GET") return handleUserFeed(req, env, userFeed[1]!);
+
+  // live activity spots (docs/20 S1) — read-only aggregation, edge/TTL-cached, off by default
+  if (p === "/api/spots" && m === "GET") return handleSpots(req, env);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

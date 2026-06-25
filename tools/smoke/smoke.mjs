@@ -437,5 +437,9 @@ ok("leaderboard RSS is a valid channel", lbFeed.body.includes("<rss") && lbFeed.
 const userFeed = await text("/feeds/u/OE8APR.xml");
 ok("user RSS feed renders for a callsign", userFeed.body.includes("<rss") && userFeed.body.includes("OE8APR"), `${userFeed.status}`);
 
+// ---- live activity spots (docs/20 S1): read-only, off by default, well-formed empty payload ----
+const spots = await call("GET", "/api/spots?bbox=14,46,16,48&bands=20m");
+ok("/api/spots responds with the spots envelope (disabled by default → empty)", spots.status === 200 && spots.data?.enabled === false && Array.isArray(spots.data?.spots) && spots.data.spots.length === 0, JSON.stringify(spots.data));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

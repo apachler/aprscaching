@@ -42,6 +42,12 @@ export interface Env {
   // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
   BBS_CALL?: string;        // e.g. "OE8APR-5"; defaults to "APRSCG"
 
+  // ---- live activity spots (docs/20 S1) — read-only aggregation, off unless explicitly enabled ----
+  SPOTS_ENABLED?: string;   // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)
+  SPOTS_SOURCES?: string;   // optional comma-separated allowlist of sources (else all built-in: pota…)
+  SPOTS_TTL_SEC?: string;   // aggregation cache TTL seconds (default 60; spots are ephemeral)
+  SPOTS_POTA_URL?: string;  // override the POTA activator-spots endpoint
+
   // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string;         // app origin for magic-link redirects, e.g. "https://aprscaching.com"
   RP_ID?: string;           // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
