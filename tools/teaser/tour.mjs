@@ -1,6 +1,11 @@
 // Full UI tour: drive the live app through a sane step-by-step journey at desktop / tablet / mobile,
 // screenshotting every page + dialog. Frames are numbered in journey order for the teaser video.
 // Desktop (≥1024) navigates via the NavRail (.rail); tablet/mobile via the top-bar nav / bottom TabBar.
+//
+// Self-maintaining: the interaction-gated DIALOGS (landing, sign-in, filter, cache detail, hide) are
+// scripted, but the DESTINATIONS are discovered at runtime — desktop enumerates the NavRail and
+// tablet/mobile enumerate the Profile → Advanced tools — so a newly added top-level page is captured
+// without editing this file. Only a brand-new interaction dialog needs a new step(...).
 import { chromium } from "playwright";
 import fs from "node:fs";
 
@@ -83,11 +88,6 @@ async function clickCache(page, match) {
   await page.waitForSelector(".panel", { timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(700);
 }
-// open a destination: desktop via the rail (title=), else the top-bar/tab-bar, else Profile→Advanced.
-async function openDest(page, railTitle, fallbacks = []) {
-  if (await clickAny(page, [`.rail button[title='${railTitle}']`])) return true;
-  return clickAny(page, fallbacks);
-}
 async function openProfileAdvanced(page, btnText) {
   if (!(await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]))) return false;
   await page.waitForSelector(".panel .group", { timeout: 6000 }).catch(() => {});
@@ -97,6 +97,31 @@ async function openProfileAdvanced(page, btnText) {
 }
 async function step(name, fn) {
   try { await fn(); } catch (e) { console.log("   ! skip", name, "-", String(e.message).split("\n")[0]); }
+}
+
+// Friendlier captions for the terse rail/tab titles; unknown titles fall back to themselves.
+const LABELS = {
+  Map: "Live cache map", Nearby: "Nearby caches", Activity: "Activity feed", Ranks: "Leaderboard",
+  Bench: "Workbench — APRS toolset", BBS: "BBS — store & forward mail", You: "Profile", Setup: "Settings",
+};
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "view";
+
+// Enumerate the tools revealed under Profile → Advanced — the small-viewport home for Workbench/BBS/
+// Settings and any tool added later — so they're captured without being listed here. Returns
+// { full: button text incl. glyph, name: slug, label: caption } for each emoji/glyph-prefixed tool.
+async function advancedTools(page) {
+  await closeAll(page);
+  if (!(await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]))) return [];
+  await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+  await clickAny(page, [".group-toggle:has-text('Advanced')"]);
+  await page.waitForTimeout(300);
+  const labels = await page.$$eval(".panel button", (els) =>
+    els.map((e) => (e.textContent || "").trim()).filter((t) => t && /^[^\w\s]/.test(t) && t.length <= 28)
+  ).catch(() => []);
+  const seen = new Set();
+  return labels.filter((t) => !seen.has(t) && seen.add(t)).map((t) => ({
+    full: t, name: slug(t), label: t.replace(/^[^\w]+\s*/, "") || t,
+  }));
 }
 
 for (const v of VIEWS) {
@@ -154,64 +179,75 @@ for (const v of VIEWS) {
     await shot(page, v.id, "hide", "Hide a cache");
   });
 
-  await step("nearby", async () => {
-    await closeAll(page);
-    await openDest(page, "Nearby", [".nav-desktop button:has-text('Nearby')", ".tabbar button:has-text('Nearby')"]);
-    await page.waitForSelector(".panel", { timeout: 6000 });
-    await shot(page, v.id, "nearby", "Nearby caches");
-  });
+  // --- destinations: auto-discovered, so new pages are captured without editing this script ---
+  // Desktop exposes the canonical, COMPLETE destination set in the NavRail, so we enumerate it at
+  // runtime — a new rail page is captured automatically. Tablet/mobile deliberately keep a minimal
+  // primary nav (Nearby/Activity/Profile) and funnel the rest behind Profile → Advanced, so there
+  // we capture the primary trio, the leaderboard (via the Activity panel link), and every tool
+  // discovered under the Advanced disclosure.
+  // NB: the rail exists in the DOM at every viewport (CSS display:none below 1024px), so gate on
+  // VISIBILITY — $$eval would otherwise return the hidden rail titles on tablet/mobile and wrongly
+  // take the desktop branch.
+  const railVisible = await page.locator(".rail").first().isVisible().catch(() => false);
+  const rail = railVisible
+    ? await page.$$eval(".rail button[title]", (els) => els.map((e) => e.getAttribute("title")).filter(Boolean)).catch(() => [])
+    : [];
 
-  await step("activity", async () => {
-    await closeAll(page);
-    await openDest(page, "Activity", [".nav-desktop button:has-text('Activity')", ".tabbar button:has-text('Activity')"]);
-    await page.waitForSelector(".panel", { timeout: 6000 });
-    await page.waitForTimeout(400);
-    await shot(page, v.id, "activity", "Activity feed");
-  });
-
-  await step("leaderboard", async () => {
-    await closeAll(page);
-    if (!(await openDest(page, "Ranks", []))) {
-      // tablet/mobile: open Activity, then the "full leaderboard →" link
-      await openDest(page, "Activity", [".nav-desktop button:has-text('Activity')", ".tabbar button:has-text('Activity')"]);
-      await page.waitForSelector(".panel", { timeout: 6000 });
-      await clickAny(page, [".panel button:has-text('full leaderboard')"]);
+  if (rail.length) {
+    for (const title of rail.filter((t) => !/^map$/i.test(t))) {
+      await step(title, async () => {
+        await closeAll(page);
+        if (!(await clickAny(page, [`.rail button[title='${title}']`]))) throw new Error("rail item not found");
+        await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(450);
+        await shot(page, v.id, slug(title), LABELS[title] || title);
+      });
     }
-    await page.waitForSelector(".panel .board, .panel .logs, .panel table", { timeout: 6000 }).catch(() => {});
-    await page.waitForTimeout(500);
-    await shot(page, v.id, "leaderboard", "Leaderboard");
-  });
+  } else {
+    for (const t of ["Nearby", "Activity"]) {
+      await step(t, async () => {
+        await closeAll(page);
+        await clickAny(page, [`.nav-desktop button:has-text('${t}')`, `.tabbar button:has-text('${t}')`]);
+        await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(400);
+        await shot(page, v.id, slug(t), LABELS[t]);
+      });
+    }
+    await step("leaderboard", async () => {
+      await closeAll(page);
+      await clickAny(page, [".nav-desktop button:has-text('Activity')", ".tabbar button:has-text('Activity')"]);
+      await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+      await clickAny(page, [".panel button:has-text('full leaderboard')"]);
+      await page.waitForSelector(".panel .board, .panel .logs, .panel table", { timeout: 6000 }).catch(() => {});
+      await page.waitForTimeout(450);
+      await shot(page, v.id, "leaderboard", "Leaderboard");
+    });
+    await step("profile", async () => {
+      await closeAll(page);
+      await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]);
+      await page.waitForSelector(".panel .group", { timeout: 6000 }).catch(() => {});
+      await page.waitForTimeout(400);
+      await shot(page, v.id, "profile", "Profile");
+    });
+    for (const tool of await advancedTools(page)) {
+      await step(tool.name, async () => {
+        await closeAll(page);
+        if (!(await openProfileAdvanced(page, tool.full))) throw new Error("advanced tool not found");
+        await page.waitForSelector(".panel .group, .panel h2, .panel", { timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(450);
+        await shot(page, v.id, tool.name, tool.label);
+      });
+    }
+  }
 
-  await step("profile", async () => {
-    await closeAll(page);
-    await openDest(page, "You", ["button[title^='Profile']", ".tabbar button:has-text('You')"]);
-    await page.waitForSelector(".panel .group", { timeout: 6000 });
+  // Site map page — reached via the ?view= deep-link (dogfooding the sitemap tooling). Captured on
+  // every viewport regardless of where it sits in nav.
+  await step("sitemap", async () => {
+    await page.goto(`${BASE}/?view=sitemap#11.5/47.078/15.43`, { waitUntil: "load" });
+    await ready(page);
+    await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
     await page.waitForTimeout(400);
-    await shot(page, v.id, "profile", "Profile");
-  });
-
-  await step("workbench", async () => {
-    await closeAll(page);
-    if (!(await openDest(page, "Bench", [])) ) await openProfileAdvanced(page, "📡 Workbench");
-    await page.waitForSelector(".panel .group, .panel h2", { timeout: 6000 });
-    await page.waitForTimeout(500);
-    await shot(page, v.id, "workbench", "Workbench — APRS toolset");
-  });
-
-  await step("bbs", async () => {
-    await closeAll(page);
-    if (!(await openDest(page, "BBS", [])) ) await openProfileAdvanced(page, "✉ BBS");
-    await page.waitForSelector(".panel", { timeout: 6000 });
-    await page.waitForTimeout(500);
-    await shot(page, v.id, "bbs", "BBS — store & forward mail");
-  });
-
-  await step("settings", async () => {
-    await closeAll(page);
-    if (!(await openDest(page, "Setup", [])) ) await openProfileAdvanced(page, "⚙ Settings");
-    await page.waitForSelector(".panel", { timeout: 6000 });
-    await page.waitForTimeout(500);
-    await shot(page, v.id, "settings", "Settings");
+    await shot(page, v.id, "sitemap", "Site map");
   });
 
   await ctx.close();

@@ -52,12 +52,26 @@ One command, hermetic, against a fresh temp SQLite DB:
 | `run-views.sh` | Re-run just the tour (all viewports) against already-running servers. |
 | `diag.mjs` | Minimal load/console diagnostic for one viewport (debugging). |
 
+### What's automatic vs. maintained
+
+- **Page appearance & content** — automatic. Every shot is taken against the freshly-built live app,
+  so styling, layout, copy, new fields, new badges, etc. show up next run with no tooling change.
+  Data-driven content follows `seed.mjs`.
+- **The set of top-level pages** — **auto-discovered.** Desktop enumerates the `NavRail` at runtime;
+  tablet/mobile enumerate the `Profile → Advanced` tools (their deliberate home for extra pages). A
+  newly added destination is captured **without editing the tour**.
+- **Interaction-gated dialogs** (filter, cache detail, hide-a-cache) and the journey *order* — these
+  stay scripted as `step(...)` calls. Only a brand-new *dialog* needs a new `step`.
+- **Navigation contract** — discovery keys off the rail `button[title]`, the `.nav-desktop` / `.tabbar`
+  primary buttons, and emoji/glyph-prefixed buttons under the Advanced disclosure. Rename those
+  patterns and the matching step skips (logged), so the contract is the only thing to keep in sync.
+
 ### Notes
 
 - Readiness keys off the MapLibre canvas paint (`.maplibregl-canvas`), not pins — reliable
   regardless of where caches sit in the viewport.
-- Desktop navigates via the `NavRail` (`.rail`); tablet/mobile via the top-bar / bottom `TabBar`.
-  Add a `step(...)` in `tour.mjs` to capture a new surface.
+- Breakpoints: `NavRail` ≥1024px (desktop) · `.topbar .nav-desktop` 681–1023px (tablet) · `.tabbar`
+  ≤680px (mobile).
 - **Do not** `pkill` on the chrome path between viewports — that pattern also matches the
   orchestrator's own command line and self-kills the run. `tour.mjs` closes its own browser.
 
