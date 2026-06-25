@@ -7,10 +7,10 @@ import {
 import { Panel, Group, Row, Advanced } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 
-type Id = { active: string; list: string[]; add: (c: string) => void; setActive: (c: string) => void; remove: (c: string) => void };
+type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
-/** Settings — account/callsigns, locale/units, GDPR data tools, and credits. Grouped + searchable. */
-export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; identity: Id; onClose: () => void }) {
+/** Settings — account, locale/units, GDPR data tools, and credits. Grouped + searchable. */
+export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; session: Sess; onSignIn: () => void; onClose: () => void }) {
   const s = props.settings;
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
@@ -46,8 +46,8 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
         <input value={q} placeholder="Search settings…" onChange={(e) => setQ(e.target.value)} aria-label="Search settings" />
       </label>
 
-      {match("Account callsign callsigns identity verify SSID licence sign in") && (
-        <AccountSettings identity={props.identity} />
+      {match("Account callsign callsigns identity verify SSID licence sign in passkey email") && (
+        <AccountSettings session={props.session} onSignIn={props.onSignIn} />
       )}
 
       {match("Display appearance theme units measurement") && (

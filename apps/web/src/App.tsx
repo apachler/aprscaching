@@ -16,8 +16,8 @@ import {
 } from "./format.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
-import { useIdentity, baseCall } from "./identity/useIdentity.js";
-import { getVerifyStatus } from "./api.js";
+import { useSession } from "./identity/useSession.js";
+import { SignIn } from "./identity/SignIn.js";
 import { maidenhead, gridCenter } from "./map/geo.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
@@ -49,15 +49,10 @@ export function App() {
   const modeRef = useRef<Mode>("view");
   const debounce = useRef<ReturnType<typeof setTimeout>>();
 
-  const identity = useIdentity();
-  const callsign = identity.active;
-  const [verified, setVerified] = useState(false);
-  useEffect(() => {
-    if (baseCall(callsign).length < 3) { setVerified(false); return; }
-    let live = true;
-    getVerifyStatus(baseCall(callsign)).then((r) => { if (live) setVerified(r.verified); }).catch(() => {});
-    return () => { live = false; };
-  }, [callsign]);
+  const session = useSession();
+  const callsign = session.callsign;
+  const verified = session.verified;
+  const [showSignIn, setShowSignIn] = useState(false);
   const [caches, setCaches] = useState<MapCache[]>([]);
   const [mode, setMode] = useState<Mode>("view");
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
@@ -104,7 +99,7 @@ export function App() {
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
     setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
-    setShowActivity(false); setShowProfile(false); setShowSettings(false);
+    setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
@@ -344,7 +339,7 @@ export function App() {
     <FormatContext.Provider value={fmt}>
     <ToastProvider>
     <div className="app">
-      <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => setShowSettings(true))} mode={mode}
+      <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => (session.signedIn ? setShowSettings(true) : setShowSignIn(true)))} mode={mode}
               onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
               onFilters={() => openOnly(() => setShowFilter(true))}
               filtered={filters.types.length > 0 || filters.q.length > 0}
@@ -399,8 +394,12 @@ export function App() {
         {showMail && mode === "view" && (
           <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
         )}
+        {showSignIn && (
+          <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />
+        )}
         {showSettings && (
-          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} identity={identity} onClose={() => setShowSettings(false)} />
+          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign}
+                         session={session} onSignIn={() => openOnly(() => setShowSignIn(true))} onClose={() => setShowSettings(false)} />
         )}
 
         <div className="mapwrap">
