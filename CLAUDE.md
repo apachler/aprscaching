@@ -14,8 +14,11 @@ from OPEN specs (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). Never copy 
 (KN4MKB) closed-source code/assets.
 
 ## Stack
-pnpm monorepo. apps/web = React+MapLibre → Cloudflare Pages (aprscaching.com).
-workers/gateway = Worker + Durable Objects + D1 + R2 (api.aprscaching.com).
+pnpm monorepo. apps/web = React+MapLibre → Cloudflare Pages. workers/gateway = Worker + Durable
+Objects + D1 + R2. **Canonical host = `aprscaching.net`** (the first network peer + marketing landing
++ platform); `aprscaching.com` 301-redirects to `.net` (pre-auth, edge). `INSTANCE`/`APP_URL`/`RP_ID`
+= `.net`; API host `api.aprscaching.net`. WebAuthn `rpId` binds to one domain → `.com` is a pure
+redirect, never a sign-in origin (see `docs/18`).
 apps/ingest = always-on APRS-IS forwarder (Fly/Railway/Pi). packages/aprs = pure parser
 (runs in Worker, Node, browser). packages/shared = zod contracts.
 
@@ -70,6 +73,12 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;
   M5 operated SSID stations (needs `account_stations`). One small `accounts` migration; all inside
   the existing GDPR export/erase.
+- Landing & onboarding (mechanics) — `docs/18-landing-and-onboarding.md`: marketing landing + the
+  signed-out flow. **Mechanics only — content (copy, tour steps) deferred while the platform churns.**
+  Signed-in skips the landing (full mode); signed-out sees landing (Register/Login/Explore); Explore →
+  read-only platform (already open-browse) + an accessible, reduced-motion, config-driven quick-tour
+  framework with placeholder steps. `.com`→`.net` pre-auth redirect; rpId binds to `.net` only.
+  L1 domain/redirect · L2 landing gate + CTAs · L3 Explore→read-only · L4 tour framework.
 - Weather stations — `docs/17-weather-stations.md`: APRS weather is first-class and the RX side is
   built (`decode.ts` wx parse → `sensor_readings`; shown on station page). Adds user-origination of
   their own PWS: W1 direct platform ingest (Ecowitt / WU-Rapidfire → `-13` weather SSID, no licence) ·
