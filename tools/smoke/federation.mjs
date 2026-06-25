@@ -376,6 +376,15 @@ ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.st
 const mpeers = await call(SUB, "GET", "/federation/peers");
 ok("subscriber moves_cursor advanced", (mpeers.data?.peers ?? []).some((p) => p.instance === pubInstance && p.moves_cursor > 0), JSON.stringify(mpeers.data));
 
+// ---- F7/T4.3: federation observability ----
+const hpeers = await call(SUB, "GET", "/federation/peers");
+const pubPeer = (hpeers.data?.peers ?? []).find((p) => p.instance === pubInstance);
+ok("peer health metrics tracked (health ok, sync_ok>0, mirrored_total>0)",
+  pubPeer?.health === "ok" && pubPeer?.sync_ok > 0 && pubPeer?.mirrored_total > 0,
+  JSON.stringify(pubPeer && { health: pubPeer.health, sync_ok: pubPeer.sync_ok, total: pubPeer.mirrored_total }));
+ok("the last sync's per-feed breakdown is reported", pubPeer?.lastCounts && typeof pubPeer.lastCounts === "object", JSON.stringify(pubPeer?.lastCounts));
+ok("a healthy peer has last_ok set and a zero error rate", pubPeer?.last_ok != null && pubPeer?.errorRate === 0, JSON.stringify({ last_ok: pubPeer?.last_ok, errorRate: pubPeer?.errorRate }));
+
 // ---- F7/T4.1: key rotation + multi-key + revocation ----
 // The publisher is started with FED_KEY_HISTORY (an extra active key + a revoked one), so every
 // mirror assertion above already exercises multi-key verification (current key ∈ the active set).

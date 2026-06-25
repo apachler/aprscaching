@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import {
-  getPorts, getMessages, cotUrl, getStation, decodePacket,
-  type DecodedPacket, type StationDetail, type PortStat, type MessageItem,
+  getPorts, getMessages, cotUrl, getStation, decodePacket, listFederationPeers,
+  type DecodedPacket, type StationDetail, type PortStat, type MessageItem, type FedPeer,
 } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Group, Row, Badge, EmptyState, useToast } from "../ui/index.js";
@@ -18,12 +18,14 @@ export function WorkbenchPanel(props: {
   const [station, setStation] = useState<StationDetail | null>(null);
   const [ports, setPorts] = useState<PortStat[]>([]);
   const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [peers, setPeers] = useState<FedPeer[]>([]);
   const fmt = useFmt();
   const toast = useToast();
 
   useEffect(() => {
     getPorts().then((r) => setPorts(r.ports)).catch(console.error);
     getMessages().then((r) => setMessages(r.messages)).catch(console.error);
+    listFederationPeers().then((r) => setPeers(r.peers)).catch(console.error);
   }, []);
 
   const feedUrl = (() => {
@@ -120,6 +122,25 @@ export function WorkbenchPanel(props: {
               <li key={mm.id}>
                 <Badge><span className="mono">{mm.fromCall}</span></Badge>→ <span className="mono">{mm.toCall}</span> <span className="muted">· {fmt.ago(mm.ts)}</span>
                 <div className="comment">{mm.body}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Group>
+
+      <Group title="Federation" status={peers.length ? `${peers.length} peer${peers.length === 1 ? "" : "s"}` : "none"} defaultOpen={false}>
+        {peers.length === 0 ? <EmptyState>No federation peers configured.</EmptyState> : (
+          <ul className="logs">
+            {peers.map((p) => (
+              <li key={p.url}>
+                <Badge kind={p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"} title={`trust: ${p.trust}`}>{p.health}</Badge>
+                <span className="mono">{p.instance ?? p.url}</span>
+                <span className="muted"> · {p.trust}{p.signed ? " · signed" : ""}</span>
+                <div className="comment">
+                  {p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · {p.mirrored_total} mirrored
+                  {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+                </div>
+                {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
               </li>
             ))}
           </ul>

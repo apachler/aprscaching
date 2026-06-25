@@ -282,6 +282,15 @@ DNS-anchored (`TXT` at the instance domain) or a community-maintained signed lis
 ### T4.3 Federation observability
 Per-feed sync metrics (records mirrored, lag, error rates), a peer health/reputation surface in the
 operator Workbench, and structured `last_error`. Extends the existing `fed_peers.last_sync/last_error`.
+
+**Status — IMPLEMENTED** (migration `0017_fed_observability.sql` · `federation_sync.ts` metrics +
+`handleFederationPeers` health · web `WorkbenchPanel` Federation group · smoke +3 assertions). Each sync
+records `last_ok` (last success → lag = now − last_ok), `sync_ok`/`sync_err` counts, cumulative
+`mirrored_total`, and `last_counts` (the per-feed breakdown JSON). `GET /federation/peers` now derives a
+`health` (`ok | error | new | blocked`) + `errorRate` per peer so an operator scans state without doing
+the math; the **Workbench → Federation** group lists each peer with a health badge, trust, "synced N ago",
+mirrored total, error rate, and the last error. **Deferred:** the rep_confirmed/rep_failed
+auto-promotion loop — now has its measured inputs (T1.1 follow-up).
 - *Worth:* you can't operate a network you can't see; reputation (T1.1) needs measured inputs.
 
 ---
@@ -300,6 +309,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - `account_moves` + `remote_account_moves` tables + `fed_peers.moves_cursor` (T3.2 — **landed as `0016_account_moves.sql`**)
 - key rotation (T4.1) is **config-only** (`FED_KEY_HISTORY`/`FED_ROTATIONS`), no local schema — **done**;
   registry is external/signed, no local schema required
+- `fed_peers` += `last_ok, sync_ok, sync_err, mirrored_total, last_counts` (T4.3 — **landed as `0017_fed_observability.sql`**)
 
 ## API additions
 `POST /federation/notify` (T2.1, **shipped**) · `GET /federation/tombstones` (T1.3, **shipped**) · `GET /federation/account-moves` (T3.2, **shipped**) · `account-move` feed type
@@ -327,7 +337,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons) — COMPLETE:** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record **(done)** · T3.3 redaction **(done)**.
-- **F7 (governance):** T4.1 key rotation **(done)** · T4.2 instance registry · T4.3 observability.
+- **F7 (governance):** T4.1 key rotation **(done)** · T4.2 instance registry · T4.3 observability **(done)**.
 
 ## Acceptance (abbreviated, per tier)
 - **T1.1:** an unvetted/auto-discovered peer's caches are mirrored but hidden from the default map and
@@ -362,3 +372,6 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T4.1:** rotating the instance key keeps records verifiable and new records trusted; a revoked key is
   rejected (**met**: smoke runs the whole mirror suite against a publisher with a 3-key set incl. a revoked
   one; `activeFedKeys`/`verifyRotationRecord` unit-tested; `rotatekey.mjs` output verifies end-to-end).
+- **T4.3:** an operator can see each peer's health — sync success/error counts, lag, mirrored total, the
+  per-feed breakdown, and the last error (**met**: smoke asserts the metrics populate after sync; the
+  Workbench → Federation group renders them with a health badge).

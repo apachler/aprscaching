@@ -67,6 +67,18 @@ export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
 }
 
+/** A federation peer with its T4.3 health metrics (operator observability). */
+export interface FedPeer {
+  url: string; instance: string | null; signed: number; trust: "trusted" | "unvetted" | "blocked";
+  health: "ok" | "error" | "new" | "blocked"; errorRate: number;
+  last_sync: number | null; last_ok: number | null; last_error: string | null;
+  sync_ok: number; sync_err: number; mirrored_total: number;
+  lastCounts: Record<string, number> | null;
+}
+export function listFederationPeers(): Promise<{ peers: FedPeer[] }> {
+  return call(`/federation/peers`);
+}
+
 // ---- M2 audio-cache: staged multi-cache ----
 import type { CacheStage } from "@aprsweb/shared";
 export type { CacheStage };

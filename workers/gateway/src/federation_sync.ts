@@ -77,7 +77,7 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
   if (!p) return false;
   try { await syncPeer(env, p); return true; }
   catch (e) {
-    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=? WHERE url=?").bind((e as Error).message, now(), p.url).run();
+    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?").bind((e as Error).message, now(), p.url).run();
     return false;
   }
 }
@@ -93,7 +93,7 @@ export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: n
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
-      await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=? WHERE url=?").bind(msg, now(), p.url).run();
+      await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?").bind(msg, now(), p.url).run();
     }
   }
   return { peers: peers.length, caches, finds, keys, tombstones, moves, errors };
@@ -131,7 +131,12 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   const counts: Record<string, number> = {};
   for (const def of SYNC_DEFS) // iterate SYNC_DEFS to preserve the tombstones-first order
     counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKeys, def) : 0;
-  await env.DB.prepare("UPDATE fed_peers SET last_sync=?, last_error=NULL WHERE url=?").bind(now(), p.url).run();
+  // observability (T4.3): record a successful sync — time, count, cumulative total, per-feed breakdown
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  await env.DB.prepare(
+    `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
+       mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
+  ).bind(now(), now(), total, JSON.stringify(counts), p.url).run();
   return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0, moves: counts["account-move"] ?? 0 };
 }
 
@@ -285,11 +290,27 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
 
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
   await seedPeers(env);
-  const peers = (await env.DB.prepare(
+  const rows = (await env.DB.prepare(
     `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
-            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, moves_cursor, enabled, last_sync, last_error
+            rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, moves_cursor,
+            enabled, last_sync, last_ok, last_error, sync_ok, sync_err, mirrored_total, last_counts
        FROM fed_peers ORDER BY url`,
-  ).all()).results;
+  ).all<Record<string, unknown>>()).results;
+  // T4.3: derive a health signal + error rate so an operator scans state without doing the math.
+  const peers = rows.map((p) => {
+    const okN = Number(p.sync_ok ?? 0), errN = Number(p.sync_err ?? 0);
+    const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
+    const health = p.trust === "blocked" ? "blocked"
+      : !p.last_sync ? "new"
+      : lastErrored ? "error"
+      : "ok";
+    return {
+      ...p,
+      lastCounts: p.last_counts ? JSON.parse(String(p.last_counts)) : null,
+      errorRate: okN + errN > 0 ? errN / (okN + errN) : 0,
+      health,
+    };
+  });
   return json({ peers });
 }
 
