@@ -65,3 +65,16 @@ gateway (`apps/`, `workers/gateway`, `servers/node`, `db/`, `tools/`) = **AGPL-3
 reusable libraries (`packages/aprs`, `packages/shared`) = **MIT**; docs (`docs/`) = **CC-BY-SA-4.0**.
 New code inherits the licence of its unit. Keep `packages/*` MIT-clean (embeddable); never add
 AGPL-only deps there. Contributions are inbound=outbound.
+
+## Regenerating the codebase-state summary (for planning-chat context)
+On demand ("give me a state summary"), produce a ONE-SHOT markdown digest for pasting into the
+planning chat — print it in chat, do NOT commit it. Rebuild it fresh from the repo, don't trust an
+old copy. Gather: `git log --oneline -25`; `ls db/migrations` + `ls docs`; `ls workers/gateway/src`
+(+ `apps/web/src`, `packages/aprs/src`); the route table via `grep -oE 'p === "[^"]+"' workers/
+gateway/src/app.ts` plus the regex segment-routes lower in `app.ts`; `pnpm -r test` + the three
+smoke suites for green status; and skim `docs/10`/`11`/`12` Status sections. Cover: what's built
+(M0–M9 + the milestone themes), runtimes (Worker/D1 + Node/SQLite, dual-runtime CI), the trust
+model (tiers A/B/C vs account/callsign verification — keep them distinct), identity/auth state
+(passkey + email, multi base-call accounts), federation, schema (migrations 0001–latest), the API
+surface, web app structure, licensing, and the open backlog/deferred items. Keep it dense and
+current; flag what is NOT done.
