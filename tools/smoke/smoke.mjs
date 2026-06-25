@@ -417,5 +417,25 @@ ok("ack confirms delivery", (list3.data?.messages ?? []).some((mm) => mm.id === 
 const bulls = await call("GET", "/api/bbs/bulletins");
 ok("bulletin board lists the bulletin", (bulls.data?.bulletins ?? []).some((bb) => /net tonight/.test(bb.body) && bb.type === "B"), JSON.stringify(bulls.data?.bulletins?.length));
 
+// ---- sitemap + RSS feeds: machine-readable site map and feeds over the public data ----
+const text = async (path) => { const r = await fetch(BASE + path); return { status: r.status, ct: r.headers.get("content-type") ?? "", body: await r.text() }; };
+const smap = await text("/sitemap.xml");
+ok("sitemap.xml is XML with a urlset + ?view= deep-links", smap.status === 200 && /xml/.test(smap.ct) && smap.body.includes("<urlset") && smap.body.includes("?view=workbench"), `${smap.status} ${smap.ct}`);
+const smapJson = await call("GET", "/api/sitemap");
+ok("/api/sitemap lists surfaces + feeds with urls", (smapJson.data?.surfaces ?? []).length > 0 && (smapJson.data?.feeds ?? []).some((f) => f.url?.endsWith("/feeds/activity.xml")), JSON.stringify(smapJson.data?.feeds?.length));
+const robots = await text("/robots.txt");
+ok("robots.txt advertises the sitemap", robots.body.includes("Sitemap:") && robots.body.includes("/sitemap.xml"), robots.body.split("\n")[0]);
+
+const actFeed = await text("/feeds/activity.xml");
+ok("activity RSS has items for the seeded finds", /application\/rss\+xml/.test(actFeed.ct) && actFeed.body.includes("<rss") && actFeed.body.includes("<item>"), `${actFeed.status} ${actFeed.ct}`);
+const cacheFeed = await text("/feeds/caches.xml");
+ok("new-caches RSS lists a seeded cache", cacheFeed.body.includes("<rss") && /<item>/.test(cacheFeed.body), `${cacheFeed.status}`);
+const bullFeed = await text("/feeds/bulletins.xml");
+ok("bulletins RSS carries the bulletin", bullFeed.body.includes("net tonight"), `${bullFeed.status}`);
+const lbFeed = await text("/feeds/leaderboard.xml");
+ok("leaderboard RSS is a valid channel", lbFeed.body.includes("<rss") && lbFeed.body.includes("<channel>"), `${lbFeed.status}`);
+const userFeed = await text("/feeds/u/OE8APR.xml");
+ok("user RSS feed renders for a callsign", userFeed.body.includes("<rss") && userFeed.body.includes("OE8APR"), `${userFeed.status}`);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

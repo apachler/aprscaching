@@ -9,6 +9,7 @@ import {
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
 import { Landing } from "./Landing.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
+import { surfaceByView } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
@@ -30,6 +31,7 @@ import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
+import { SiteMapPanel } from "./SiteMapPanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
 import { MailPanel } from "./live/MailPanel.js";
 
@@ -90,6 +92,7 @@ export function App() {
   const [pickedStation, setPickedStation] = useState<string | null>(null);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSiteMap, setShowSiteMap] = useState(false);
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
@@ -116,9 +119,34 @@ export function App() {
   const closeAll = useCallback(() => {
     setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
     setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
+    setShowFilter(false); setShowSiteMap(false);
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
+
+  // Navigate to a surface by its manifest key (Site map rows + ?view= deep-links share this).
+  const navigate = useCallback((key: string) => {
+    const opener: Record<string, () => void> = {
+      map: () => {}, nearby: () => setShowNearby(true), filter: () => setShowFilter(true),
+      hide: () => startHide(), activity: () => setShowActivity(true), ranks: () => setShowBoard(true),
+      workbench: () => setShowWB(true), bbs: () => setShowMail(true), profile: () => setShowProfile(true),
+      settings: () => setShowSettings(true), sitemap: () => setShowSiteMap(true),
+    };
+    openOnly(() => opener[key]?.());
+  }, [openOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One-shot ?view= deep-link, used by the Site map and sitemap.xml/api consumers. The map position
+  // stays in MapLibre's #z/lat/lon hash, so this query param never collides with it.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !active) return;
+    deepLinked.current = true;
+    try {
+      const view = new URLSearchParams(window.location.search).get("view");
+      const s = view ? surfaceByView(view) : null;
+      if (s) navigate(s.key);
+    } catch { /* ignore */ }
+  }, [active, navigate]);
 
   // Explore → drop into the read-only platform for this session; run the tour once (first time).
   const onExplore = useCallback(() => {
@@ -334,7 +362,7 @@ export function App() {
   }, [selectedId]);
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || mode === "hide";
+  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || showSiteMap || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
     const t = setTimeout(() => map.current?.resize(), 60);
@@ -426,7 +454,11 @@ export function App() {
                         onWorkbench={() => openOnly(() => setShowWB(true))}
                         onMail={() => openOnly(() => setShowMail(true))}
                         onSettings={() => openOnly(() => setShowSettings(true))}
+                        onSiteMap={() => openOnly(() => setShowSiteMap(true))}
                         onClose={() => setShowProfile(false)} />
+        )}
+        {showSiteMap && mode === "view" && (
+          <SiteMapPanel callsign={callsign} onNavigate={navigate} onClose={() => setShowSiteMap(false)} />
         )}
         {showBoard && mode === "view" && (
           <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />

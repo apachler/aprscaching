@@ -267,6 +267,16 @@ button.link:hover { text-decoration: underline; }
 .logs { list-style: none; padding: 0; margin: 0; }
 .logs li { padding: 8px 0; border-top: 1px solid var(--line); }
 .logs .comment { margin-top: 2px; }
+/* Site map rows: full-width tappable rows (≥44px target), one pattern for the in-app nav + feed links */
+.sitemap-list li { padding: 0; }
+.sitemap-list .sitemap-row {
+  display: block; width: 100%; text-align: left; padding: 11px 8px; border-radius: 8px;
+  color: var(--heading); font-weight: 400; text-decoration: none; font-family: inherit;
+}
+.sitemap-list .sitemap-row:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); text-decoration: none; }
+.sitemap-list .sitemap-row:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
+.sitemap-list .sitemap-row > strong { font-weight: 700; }
+.sitemap-list .sitemap-row .comment { font-size: 13px; }
 /* status/tier chips: one derivation per state works in both themes — translucent tint of the base
    over the surface, base as text. No per-theme hex overrides to hand-maintain (css.md). */
 .badge { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;

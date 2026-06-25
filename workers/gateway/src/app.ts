@@ -16,6 +16,8 @@ import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./ca
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
+import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js";
+import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -65,6 +67,17 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // AGPL §13 source link (ADR-3) — the source this instance is running
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
   if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
+
+  // site map + RSS feeds — machine-readable map of the app + feeds for crawlers/readers/tooling
+  if (p === "/sitemap.xml" && m === "GET") return handleSitemapXml(req, env);
+  if (p === "/api/sitemap" && m === "GET") return handleSitemapJson(req, env);
+  if (p === "/robots.txt" && m === "GET") return handleRobots(req, env);
+  if (p === "/feeds/activity.xml" && m === "GET") return handleActivityFeed(req, env);
+  if (p === "/feeds/caches.xml" && m === "GET") return handleCachesFeed(req, env);
+  if (p === "/feeds/bulletins.xml" && m === "GET") return handleBulletinsFeed(req, env);
+  if (p === "/feeds/leaderboard.xml" && m === "GET") return handleLeaderboardFeed(req, env);
+  const userFeed = /^\/feeds\/u\/([A-Za-z0-9-]+)\.xml$/.exec(p);
+  if (userFeed && m === "GET") return handleUserFeed(req, env, userFeed[1]!);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);
@@ -200,6 +213,13 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 export function json(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data), {
     ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+  });
+}
+
+/** XML/RSS/text responses (sitemap, RSS feeds, robots.txt) — content-type defaults to XML. */
+export function xml(body: string, init: ResponseInit = {}): Response {
+  return new Response(body, {
+    ...init, headers: { "content-type": "application/xml; charset=utf-8", ...(init.headers ?? {}) },
   });
 }
 

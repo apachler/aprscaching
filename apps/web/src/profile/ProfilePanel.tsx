@@ -7,7 +7,7 @@ import { Panel, Group, Badge } from "../ui/index.js";
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
   callsign: string; map: maplibregl.Map | null;
-  onWorkbench: () => void; onMail: () => void; onSettings: () => void; onClose: () => void;
+  onWorkbench: () => void; onMail: () => void; onSettings: () => void; onSiteMap: () => void; onClose: () => void;
 }) {
   const fmt = useFmt();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -35,6 +35,7 @@ export function ProfilePanel(props: {
           <button onClick={props.onWorkbench}>📡 Workbench</button>
           <button onClick={props.onMail}>✉ BBS</button>
           <button onClick={props.onSettings}>⚙ Settings</button>
+          <button onClick={props.onSiteMap}>🗺 Site map</button>
         </div>
       </Group>
     </Panel>
