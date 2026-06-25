@@ -17,6 +17,7 @@ import {
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import { useCallsign } from "./identity/useCallsign.js";
+import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
 import { FilterPanel } from "./caches/FilterPanel.js";
@@ -70,6 +71,13 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
+
+  // operator 3-pane mode (≥1024px): side panels dock and the cache detail coexists with a left panel
+  const [op, setOp] = useState(() => window.matchMedia?.("(min-width: 1024px)").matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(min-width: 1024px)"); if (!mq) return;
+    const h = () => setOp(mq.matches); mq.addEventListener("change", h); return () => mq.removeEventListener("change", h);
+  }, []);
 
   // apply the field-console theme to the document root (dark default; honours OS for "auto")
   useEffect(() => {
@@ -281,6 +289,14 @@ export function App() {
     try { setDetail((await getCache(selectedId, callsignRef.current)).cache); } catch (e) { console.error(e); }
   }, [selectedId]);
 
+  // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
+  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || mode === "hide";
+  const rightOpen = (detail != null && !remote) || remote != null;
+  useEffect(() => {
+    const t = setTimeout(() => map.current?.resize(), 60);
+    return () => clearTimeout(t);
+  }, [op, leftOpen, rightOpen]);
+
   function startHide() {
     setSelectedId(null);
     setRemote(null);
@@ -310,75 +326,83 @@ export function App() {
               onNearby={() => openOnly(() => setShowNearby(true))}
               onActivity={() => openOnly(() => setShowActivity(true))}
               onProfile={() => openOnly(() => setShowProfile(true))} />
-      <div ref={mapEl} className="map" />
-      {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
+      <div className="shell">
+        <NavRail
+          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : showWB ? "workbench" : showMail ? "bbs" : showProfile ? "profile" : showSettings ? "settings" : "map"}
+          onMap={closeAll}
+          onNearby={() => openOnly(() => setShowNearby(true))}
+          onActivity={() => openOnly(() => setShowActivity(true))}
+          onRanks={() => openOnly(() => setShowBoard(true))}
+          onWorkbench={() => openOnly(() => setShowWB(true))}
+          onMail={() => openOnly(() => setShowMail(true))}
+          onProfile={() => openOnly(() => setShowProfile(true))}
+          onSettings={() => openOnly(() => setShowSettings(true))} />
 
-      {nearPrompt && mode === "view" && (
-        <div className="geo-banner">
-          <span>📍 You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
-            <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span></span>
-          <span className="spacer" />
-          <button className="primary" onClick={() => {
-            setRemote(null); setSelectedId(nearPrompt.cacheId); setNearPrompt(null);
-            map.current?.flyTo({ center: map.current.getCenter(), zoom: Math.max(map.current.getZoom(), 14) });
-          }}>Log it</button>
-          <button className="icon" onClick={() => setNearPrompt(null)}>✕</button>
+        {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
+        {mode === "hide" && (
+          <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
+        )}
+        {showNearby && mode === "view" && (
+          <NearbyPanel caches={shown} map={map.current}
+                       onPick={(id) => { if (op) { setRemote(null); setSelectedId(id); } else openOnly(() => setSelectedId(id)); }}
+                       onClose={() => setShowNearby(false)} />
+        )}
+        {showActivity && mode === "view" && (
+          <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
+        )}
+        {showFilter && mode === "view" && (
+          <FilterPanel filters={filters} setFilters={setFilters} count={shown.length} onClose={() => setShowFilter(false)} />
+        )}
+        {showProfile && mode === "view" && (
+          <ProfilePanel callsign={callsign} map={map.current}
+                        onWorkbench={() => openOnly(() => setShowWB(true))}
+                        onMail={() => openOnly(() => setShowMail(true))}
+                        onSettings={() => openOnly(() => setShowSettings(true))}
+                        onClose={() => setShowProfile(false)} />
+        )}
+        {showBoard && mode === "view" && (
+          <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
+        )}
+        {showWB && mode === "view" && (
+          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current}
+                          stationsOn={stationsOn} setStationsOn={setStationsOn}
+                          stationCount={stations.length}
+                          picked={pickedStation} onPick={setPickedStation}
+                          onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
+        )}
+        {showMail && mode === "view" && (
+          <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
+        )}
+        {showSettings && (
+          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} onClose={() => setShowSettings(false)} />
+        )}
+
+        <div className="mapwrap">
+          <div ref={mapEl} className="map" />
+          {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
+          {nearPrompt && mode === "view" && (
+            <div className="geo-banner">
+              <span>📍 You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
+                <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span></span>
+              <span className="spacer" />
+              <button className="primary" onClick={() => {
+                setRemote(null); setSelectedId(nearPrompt.cacheId); setNearPrompt(null);
+                map.current?.flyTo({ center: map.current.getCenter(), zoom: Math.max(map.current.getZoom(), 14) });
+              }}>Log it</button>
+              <button className="icon" onClick={() => setNearPrompt(null)}>✕</button>
+            </div>
+          )}
         </div>
-      )}
 
-      {mode === "hide" && (
-        <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
-      )}
-
-      {showNearby && mode === "view" && (
-        <NearbyPanel caches={shown} map={map.current}
-                     onPick={(id) => openOnly(() => setSelectedId(id))} onClose={() => setShowNearby(false)} />
-      )}
-
-      {showActivity && mode === "view" && (
-        <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
-      )}
-
-      {showFilter && mode === "view" && (
-        <FilterPanel filters={filters} setFilters={setFilters} count={shown.length} onClose={() => setShowFilter(false)} />
-      )}
-
-      {showProfile && mode === "view" && (
-        <ProfilePanel callsign={callsign} map={map.current}
-                      onWorkbench={() => openOnly(() => setShowWB(true))}
-                      onMail={() => openOnly(() => setShowMail(true))}
-                      onSettings={() => openOnly(() => setShowSettings(true))}
-                      onClose={() => setShowProfile(false)} />
-      )}
-
-      {showBoard && mode === "view" && (
-        <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
-      )}
-
-      {showWB && mode === "view" && (
-        <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current}
-                        stationsOn={stationsOn} setStationsOn={setStationsOn}
-                        stationCount={stations.length}
-                        picked={pickedStation} onPick={setPickedStation}
-                        onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
-      )}
-
-      {detail && mode === "view" && !remote && !showBoard && (
-        <DetailPanel detail={detail} callsign={callsign}
-                     onClose={() => setSelectedId(null)} onLogged={reloadDetail} />
-      )}
-
-      {remote && mode === "view" && !showBoard && (
-        <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
-      )}
-
-      {showMail && mode === "view" && (
-        <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
-      )}
-
-      {showSettings && (
-        <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} onClose={() => setShowSettings(false)} />
-      )}
+        {/* right-dock: cache detail / mirrored cache — docked right at ≥1024px (coexists with a left panel) */}
+        {detail && mode === "view" && !remote && !showBoard && (
+          <DetailPanel detail={detail} callsign={callsign}
+                       onClose={() => setSelectedId(null)} onLogged={reloadDetail} />
+        )}
+        {remote && mode === "view" && !showBoard && (
+          <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
+        )}
+      </div>
 
       {mode === "view" && (
         <TabBar
@@ -419,12 +443,14 @@ function TopBar(props: {
                onChange={(e) => props.setCallsign(e.target.value)} size={9} />
       </label>
       {props.mode === "view"
-        ? <span className="nav-desktop">
-            <button onClick={props.onNearby}>Nearby</button>
-            <button onClick={props.onActivity}>Activity</button>
-            <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
-            <button className="primary" onClick={props.onHide}>+ Hide a cache</button>
-          </span>
+        ? <>
+            <span className="nav-desktop">
+              <button onClick={props.onNearby}>Nearby</button>
+              <button onClick={props.onActivity}>Activity</button>
+              <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
+            </span>
+            <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>
+          </>
         : <button onClick={props.onCancel}>Cancel</button>}
     </header>
   );

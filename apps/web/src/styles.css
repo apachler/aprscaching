@@ -99,12 +99,18 @@ h1, h2, h3, h4, .brand { font-family: var(--font-brand); font-weight: 600; lette
 h1, h2 { font-weight: 700; }
 .mono { font-family: var(--font-mono); letter-spacing: .01em; }
 
-.app { position: relative; }
-.map { position: absolute; inset: 50px 0 0 0; }
+.app { position: relative; display: flex; flex-direction: column; }
+/* shell = the row below the top bar: [nav rail] [docked panels] [map] [detail].
+   It's flex at every size; panels float as bottom sheets / drawers by default and only become
+   in-flow docked columns in the operator breakpoint (≥1024px). */
+.shell { flex: 1; min-height: 0; position: relative; display: flex; }
+.mapwrap { flex: 1; min-width: 0; position: relative; }
+.map { position: absolute; inset: 0; }
+.rail { display: none; }   /* operator nav rail — revealed at ≥1024px */
 
 /* top bar — dark chrome with the white wordmark */
 .topbar {
-  position: absolute; inset: 0 0 auto 0; height: 50px; z-index: 5;
+  flex: 0 0 50px; z-index: 5;
   display: flex; align-items: center; gap: 10px; padding: 0 14px;
   background: var(--topbar-bg); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35);
 }
@@ -156,7 +162,7 @@ label input, label select, label textarea { margin-top: 3px; }
    (slim docked drawer vs wide tablet sheet), per css.md "responsive component layout MUST use
    container queries". The panel↔sheet swap itself is viewport-coarse, so it stays a media query. */
 .panel {
-  position: absolute; top: 62px; bottom: 12px; width: 348px; max-width: calc(100% - 24px);
+  position: absolute; top: 12px; bottom: 12px; width: 348px; max-width: calc(100% - 24px);
   z-index: 6; overflow: auto; padding: 16px;
   container: panel / inline-size;
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
@@ -169,6 +175,24 @@ label input, label select, label textarea { margin-top: 3px; }
 }
 .panel.left { left: 12px; }
 .panel.right { right: 12px; }
+
+/* ---- operator nav rail + 3-pane docking (≥1024px) — M8 ---- */
+.rail button { width: 48px; height: 48px; border: none; background: none; border-radius: 11px;
+  color: var(--muted); cursor: pointer; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; font-size: 9px; letter-spacing: .01em; }
+.rail button:hover { background: color-mix(in oklch, var(--ink) 8%, transparent); color: var(--ink); }
+.rail button.on { background: color-mix(in oklch, var(--brand) 24%, transparent); color: var(--heading); }
+.rail button:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
+.rail .rail-sp { margin-top: auto; }
+@media (min-width: 1024px) {
+  .rail { display: flex; flex: 0 0 64px; flex-direction: column; align-items: center; gap: 4px;
+    padding: 12px 0; background: var(--rail-bg); border-right: 1px solid var(--hair); z-index: 6; }
+  /* side panels become in-flow docked columns instead of floating drawers */
+  .shell > .panel { position: static; flex: 0 0 340px; width: auto; max-width: none; height: auto;
+    border: none; border-right: 1px solid var(--hair); border-radius: 0; box-shadow: none; background: var(--panel-2); }
+  /* detail/remote come after the map in DOM → dock on the right */
+  .shell > .mapwrap ~ .panel { flex-basis: 392px; border-right: none; border-left: 1px solid var(--hair); }
+}
 .panel h2 { margin: 0 0 4px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
 .panel h3 { margin: 6px 0; font-size: 17px; }
 .panel h4 { margin: 16px 0 6px; color: var(--heading); }
@@ -336,7 +360,7 @@ button.link:hover { text-decoration: underline; }
 
 /* live geofence prompt banner */
 .geo-banner {
-  position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 7;
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 7;
   display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px);
   background: var(--accent); color: var(--accent-ink); padding: 9px 12px 9px 16px; border-radius: 24px;
   box-shadow: 0 6px 20px rgba(0,0,0,.4); font-size: 14px;
@@ -409,8 +433,12 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 /* bottom tab bar — mobile-first primary navigation (hidden on desktop) */
 .tabbar { display: none; }
 .topbar .nav-desktop { display: contents; }
+/* at ≥1024px the nav rail replaces the top-bar destinations (placed after the base rule so it
+   wins on source order); the +Hide primary stays in the top bar (the rail has no Hide). */
+@media (min-width: 1024px) { .topbar .nav-desktop { display: none; } }
 @media (max-width: 680px) {
   .topbar .nav-desktop { display: none; }
+  .topbar .hide-cta { display: none; }   /* the FAB handles Hide on mobile */
   .topbar > .muted { display: none; }
   .topbar { gap: 8px; padding: 0 10px; }
   .topbar .call input { width: 80px; }
@@ -451,7 +479,7 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 
 /* first-run splash overlay */
 .splash {
-  position: absolute; inset: 50px 0 0 0; z-index: 4;
+  position: absolute; inset: 0; z-index: 4;
   display: flex; align-items: center; justify-content: center;
   background: var(--brand) url("/brand/bg.jpg") center/cover no-repeat;
 }

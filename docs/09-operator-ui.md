@@ -36,8 +36,12 @@ not a copy of the mockup's inline-styled markup. Governed by `.claude/rules/ui-u
   `TierBadge` with a square **chip** variant; add `MinTier`, `VerifyPanel`/`VerifyRow`, `Stat`,
   `DTBars` primitives. Apply to the **cache-detail** panel (the showcase) + the **mobile geofence →
   proximity card**.
-- **P2 — desktop 3-pane shell**: nav rail + persistent Nearby + Detail beside the map (container/
-  flex shell on wide viewports; collapses to today's single-overlay + sheets below the breakpoint).
+- **P2 — desktop 3-pane shell** ✅: `.app` is a flex column (top bar + `.shell`); `.shell` is a flex
+  row [nav rail · left-dock panels · `.mapwrap` · right-dock detail]. Responsive tiers: **<681px**
+  bottom sheets + tab bar (unchanged); **681–1023px** the original top-bar nav + floating right
+  drawer (unchanged); **≥1024px** the operator console — `NavRail` (Map/Nearby/Activity/Ranks/Bench/
+  BBS/You/Setup, inline-SVG) + side panels dock in-flow, the cache detail docks right and coexists
+  with a left panel. MapLibre `resize()` fires on dock open/close.
 - **P3 — Nearby cards + top bar**: cache cards (icon tile · tier dot · D/T · distance/bearing ·
   last-found), live-stations section, top-bar global search + APRS-IS-LIVE status pill.
 - **P4 — map**: coordinate/grid readout, restyled controls + Hide-a-cache FAB, Maidenhead overlay.

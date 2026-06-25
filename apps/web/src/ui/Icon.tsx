@@ -9,7 +9,7 @@ export type IconName =
   | "close" | "search" | "settings" | "map" | "bench" | "bbs" | "ranks" | "import" | "profile"
   | "hide" | "log" | "navigation" | "flag" | "summit" | "park" | "castle" | "copy" | "share"
   | "bookmark" | "locate" | "layers" | "plus" | "minus" | "check" | "check-circle" | "bell"
-  | "shield-check" | "more" | "chevron" | "alert" | "info" | "near";
+  | "shield-check" | "more" | "chevron" | "alert" | "info" | "near" | "radio";
 
 const D: Record<IconName, string> = {
   close: "M18 6 6 18 M6 6l12 12",
@@ -44,6 +44,7 @@ const D: Record<IconName, string> = {
   alert: "M12 3 2 20h20z M12 9v5 M12 17h.01",
   info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5 M12 8h.01",
   near: "M3 11l19-9-9 19-2-8-8-2z",
+  radio: "M4.9 19.1a10 10 0 0 1 0-14.2 M7.8 16.2a6 6 0 0 1 0-8.4 M16.2 7.8a6 6 0 0 1 0 8.4 M19.1 4.9a10 10 0 0 1 0 14.2 M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
 };
 
 const FILLED = new Set<IconName>(["navigation", "near"]);
