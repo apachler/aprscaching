@@ -6,38 +6,72 @@
 @font-face { font-family: "Fredoka"; src: url("/fonts/Fredoka-700.woff2") format("woff2");
   font-weight: 700; font-style: normal; font-display: swap; }
 
-/* ---- design tokens: dark field-console by default, light as an option (M7) ---- */
-:root {
-  --brand: #2D8BAB;          /* blue — chrome only */
-  --accent: #7BB912;         /* green — the one primary-action accent */
-  --accent-ink: #0e1518;     /* text on the green accent */
-  --beige: #B57D5D;
-  --bg: #16212600;           /* page (transparent; the map is the hero) */
-  --surface: #121b1f;        /* panels / sheets */
-  --surface-2: #1a262c;      /* raised: buttons, logform, chips */
-  --field-bg: #0e171b;       /* inputs */
-  --ink: #e7eef1;            /* primary text */
-  --muted: #92a7af;          /* secondary text */
-  --line: #2a383f;           /* borders */
-  --heading: #69b9d6;        /* h4 / links — a lighter teal on dark */
-  --topbar-bg: #0f1c22;      /* chrome */
-  --chip-bg: #233139;
-  --shadow: rgba(0,0,0,.55);
-  --font-brand: "Fredoka", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
-}
-:root[data-theme="light"] {
-  --bg: #ffffff00;
-  --surface: #ffffff; --surface-2: #f5f8f9; --field-bg: #ffffff;
-  --ink: #2c3133; --muted: #6c777b; --line: #e3e8ea;
-  --accent-ink: #ffffff; --heading: #246f88;
-  --topbar-bg: #2D8BAB; --chip-bg: #eef2f3; --shadow: rgba(0,0,0,.16);
+/* ---- design tokens (OKLCH) — dark field-console by default, light as an option (M7) ----
+   Per .claude/rules/css.md: theming is token-driven in an @layer, colours are OKLCH, and the
+   trust-tier / status palette derives from bases via color-mix() so brightness stays even across
+   hues (sunlight legibility). We keep an explicit [data-theme] layer (not light-dark() alone)
+   because the app exposes a Dark/Light/Auto switch the user can override — light-dark() can only
+   follow color-scheme, so the explicit override is load-bearing here. color-scheme is still set so
+   form controls / scrollbars match the active theme. */
+@layer tokens {
+  :root {
+    color-scheme: dark light;
+
+    /* brand + chrome */
+    --brand:      oklch(0.60 0.085 232);    /* blue — chrome only */
+    --accent:     oklch(0.73 0.18 128);     /* green — the one primary-action accent */
+    --accent-ink: oklch(0.20 0.012 220);    /* text on the green accent */
+    --beige:      oklch(0.62 0.065 52);
+
+    /* neutrals (dark) */
+    --bg:         oklch(0.22 0.012 220 / 0);  /* page (transparent; the map is the hero) */
+    --surface:    oklch(0.22 0.012 220);      /* panels / sheets */
+    --surface-2:  oklch(0.27 0.015 225);      /* raised: buttons, logform, chips */
+    --field-bg:   oklch(0.19 0.012 222);      /* inputs */
+    --ink:        oklch(0.94 0.006 220);      /* primary text */
+    --muted:      oklch(0.71 0.018 220);      /* secondary text */
+    --line:       oklch(0.33 0.016 222);      /* borders */
+    --heading:    oklch(0.74 0.078 228);      /* h4 / links — a lighter teal on dark */
+    --topbar-bg:  oklch(0.22 0.018 228);      /* chrome */
+    --chip-bg:    oklch(0.30 0.017 226);
+    --shadow:     oklch(0 0 0 / 0.55);
+
+    /* trust tiers + status — bases; tint via color-mix(), never hand-maintained */
+    --tier-a: oklch(0.70 0.15 145);   /* RF-corroborated  */
+    --tier-b: oklch(0.78 0.13 250);   /* app-corroborated */
+    --tier-c: oklch(0.72 0.04 250);   /* IS-only / unverified */
+    --ok:     oklch(0.74 0.17 145);
+    --warn:   oklch(0.80 0.15 85);
+    --bad:    oklch(0.66 0.19 27);
+
+    /* spacing scale (the source of truth for the layout utilities below) */
+    --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 14px;
+
+    --font-brand: "Fredoka", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:         oklch(1 0 0 / 0);
+    --surface:    oklch(1 0 0);
+    --surface-2:  oklch(0.98 0.003 220);
+    --field-bg:   oklch(1 0 0);
+    --ink:        oklch(0.33 0.006 220);
+    --muted:      oklch(0.56 0.009 220);
+    --line:       oklch(0.92 0.004 220);
+    --accent-ink: oklch(1 0 0);
+    --heading:    oklch(0.50 0.072 230);
+    --topbar-bg:  oklch(0.60 0.085 232);
+    --chip-bg:    oklch(0.96 0.004 220);
+    --shadow:     oklch(0 0 0 / 0.16);
+  }
 }
 
 * { box-sizing: border-box; }
 html, body, #root, .app { height: 100%; margin: 0; }
-body { font: 14px/1.5 system-ui, sans-serif; color: var(--ink); background: #0c1417; }
-:root[data-theme="light"] body { background: #eef3f5; }
+body { font: 14px/1.5 system-ui, sans-serif; color: var(--ink); background: oklch(0.17 0.012 220); }
+:root[data-theme="light"] body { background: oklch(0.96 0.004 220); }
 h1, h2, h3, h4, .brand { font-family: var(--font-brand); font-weight: 600; letter-spacing: .01em; }
 h1, h2 { font-weight: 700; }
 .mono { font-family: var(--font-mono); letter-spacing: .01em; }
@@ -85,12 +119,30 @@ label input, label select, label textarea { margin-top: 3px; }
 .row.end { justify-content: flex-end; margin-top: 12px; }
 .row.between { justify-content: space-between; align-items: center; }
 
-/* side panels */
+/* layout utilities — token-driven spacing so JSX carries no inline style for these (css.md) */
+.mt-1 { margin-top: var(--sp-1); } .mt-2 { margin-top: var(--sp-2); } .mt-3 { margin-top: var(--sp-3); }
+.mt-4 { margin-top: var(--sp-4); } .mt-5 { margin-top: var(--sp-5); }
+.m-0 { margin: 0; } .ml-2 { margin-left: var(--sp-2); }
+.flex-1 { flex: 1; } .row.gap-2 { gap: var(--sp-2); } .row.wrap { flex-wrap: wrap; }
+.clickable { cursor: pointer; } .fw-normal { font-weight: 400; }
+/* big one-tap primary (Log a find) + filter type chips */
+.log-primary { width: 100%; font-size: 16px; padding: 11px; }
+.chip-btn { border-radius: 14px; font-size: 13px; }
+
+/* side panels — each is a query container so its contents adapt to the slot they occupy
+   (slim docked drawer vs wide tablet sheet), per css.md "responsive component layout MUST use
+   container queries". The panel↔sheet swap itself is viewport-coarse, so it stays a media query. */
 .panel {
   position: absolute; top: 62px; bottom: 12px; width: 348px; max-width: calc(100% - 24px);
   z-index: 6; overflow: auto; padding: 16px;
+  container: panel / inline-size;
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 8px 28px var(--shadow);
+}
+/* workbench packet decoder: two field columns once the panel/sheet is wide (tablet) —
+   the slim docked drawer (<30rem) keeps the single-column default unchanged. */
+@container panel (min-width: 30rem) {
+  .decoded dl.fields { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
 }
 .panel.left { left: 12px; }
 .panel.right { right: 12px; }
@@ -99,7 +151,7 @@ label input, label select, label textarea { margin-top: 3px; }
 .panel h4 { margin: 16px 0 6px; color: var(--heading); }
 .dot { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
 
-.error { color: #ef6f63; }
+.error { color: var(--bad); }
 .ok { color: var(--accent); font-weight: 700; }
 
 /* map pins */
@@ -118,7 +170,7 @@ label input, label select, label textarea { margin-top: 3px; }
 .federated { color: var(--heading); font-weight: 700; }
 .imported { background: var(--surface-2); border-left: 3px solid var(--beige); padding: 6px 10px; border-radius: 0 6px 6px 0; font-size: 13px; }
 .imported a { color: var(--heading); }
-.warn { color: #e0a23a; font-weight: 700; }
+.warn { color: var(--warn); font-weight: 700; }
 
 /* favorite heart */
 button.heart { border: none; background: none; color: var(--muted); font-size: 15px; padding: 2px 6px; }
@@ -130,7 +182,7 @@ ol.stagelist { list-style: none; padding: 0; margin: 8px 0 0; }
 ol.stagelist li { border: 1px solid var(--line); border-radius: 9px; padding: 10px; margin-bottom: 8px; }
 ol.stagelist li.open { border-left: 3px solid var(--accent); }
 ol.stagelist li.locked { background: var(--surface-2); }
-ol.stagelist audio { display: block; }
+ol.stagelist audio { display: block; width: 100%; margin-top: var(--sp-2); }
 
 /* live station pins (workbench layer) */
 button.station-pin {
@@ -168,15 +220,15 @@ button.link:hover { text-decoration: underline; }
 .logs { list-style: none; padding: 0; margin: 0; }
 .logs li { padding: 8px 0; border-top: 1px solid var(--line); }
 .logs .comment { margin-top: 2px; }
+/* status/tier chips: one derivation per state works in both themes — translucent tint of the base
+   over the surface, base as text. No per-theme hex overrides to hand-maintain (css.md). */
 .badge { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
   padding: 1px 6px; border-radius: 10px; margin-right: 6px; background: var(--chip-bg); color: var(--muted); }
-.badge.found { background: #2c3f12; color: #b6e06a; }
-.badge.dnf { background: #4a2620; color: #e6a08e; }
-.badge.tierA { background: #123c2a; color: #66d6a2; }
-.badge.tierB { background: #123247; color: #6fc0e6; }
-.badge.tierC { background: var(--chip-bg); color: var(--muted); }
-:root[data-theme="light"] .badge.found { background: #e3f3c8; color: #4a6b0e; }
-:root[data-theme="light"] .badge.dnf { background: #fbe2dc; color: #8a3a25; }
+.badge.found { background: color-mix(in oklch, var(--ok) 20%, transparent); color: var(--ok); }
+.badge.dnf   { background: color-mix(in oklch, var(--bad) 20%, transparent); color: var(--bad); }
+.badge.tierA { background: color-mix(in oklch, var(--tier-a) 20%, transparent); color: var(--tier-a); }
+.badge.tierB { background: color-mix(in oklch, var(--tier-b) 20%, transparent); color: var(--tier-b); }
+.badge.tierC { background: color-mix(in oklch, var(--tier-c) 16%, transparent); color: var(--muted); }
 
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }
@@ -228,8 +280,8 @@ button.link:hover { text-decoration: underline; }
 .srch input { border: none; background: none; padding: 7px 0; }
 .srch input:focus { outline: none; }
 
-button.danger { color: #ef6f63; border-color: color-mix(in srgb, #ef6f63 45%, var(--line)); }
-button.danger:hover { background: color-mix(in srgb, #ef6f63 14%, transparent); }
+button.danger { color: var(--bad); border-color: color-mix(in oklch, var(--bad) 45%, var(--line)); }
+button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparent); }
 
 /* accessible switch — animate transform only (compositor-friendly) */
 .sw { width: 42px; height: 24px; flex: none; padding: 0; cursor: pointer;
@@ -272,10 +324,13 @@ button.danger:hover { background: color-mix(in srgb, #ef6f63 14%, transparent); 
   }
   .tabbar button.fab span:last-child { color: var(--accent); font-weight: 700; margin-top: 2px; }
 
-  /* panels become bottom sheets */
+  /* panels become bottom sheets — dynamic-viewport height so they clear mobile browser chrome,
+     and clear the tab bar + home-indicator via its height plus the safe-area inset (css.md). */
   .panel, .panel.left, .panel.right {
-    top: auto; bottom: 60px; left: 6px; right: 6px; width: auto; max-width: none;
-    max-height: 74vh; border-radius: 16px 16px 0 0; padding: 14px 14px 18px;
+    top: auto; bottom: calc(60px + env(safe-area-inset-bottom)); left: 6px; right: 6px;
+    width: auto; max-width: none;
+    max-height: 74vh; max-height: 74dvh;
+    border-radius: 16px 16px 0 0; padding: 14px 14px 18px;
   }
   .panel::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 3px;
     background: var(--line); margin: -4px auto 10px; }

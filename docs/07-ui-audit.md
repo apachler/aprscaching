@@ -10,8 +10,9 @@ full, tokenised, dark/light, mobile-first shell. So the audit's P0 ("establish t
 the placeholder") was **already done here** — this document re-audits the *actual* code.
 
 ## Already compliant (M1–M7)
-- **Tokens + theming** — `:root` design tokens with a `[data-theme]` dark(default)/light system; no
-  JS theme recomputation. (css.md token rule ✓; OKLCH/`light-dark()` migration still pending.)
+- **Tokens + theming** — OKLCH design tokens in `@layer tokens` with a `[data-theme]`
+  dark(default)/light system + `color-scheme`; tier/status tints derived via `color-mix()`; no JS
+  theme recomputation. (css.md token rule ✓.)
 - **App shell** — persistent map + right-drawer (desktop) / bottom tab bar + bottom sheets (mobile,
   `@media`), context-aware FAB. Progressive disclosure: the workbench/BBS live behind Profile.
 - **One primary action** — the one-tap `Log a find` state machine; DNF/note recede.
@@ -24,16 +25,17 @@ the placeholder") was **already done here** — this document re-audits the *act
 | §2 | **Settings/Workbench were flat lists** (no master toggle / collapse / status / search / reason) | **Fixed** — `ui.tsx` (`Group`/`Switch`/`Row`/`Advanced`) applied to Workbench (toggle-gated, collapsible, status at headers, reason-when-off) and Settings (grouped + search + Advanced). |
 | §3 | on/off used `<input type=checkbox>` | **Fixed** — accessible `Switch` (`role=switch`), checkboxes removed; Filters keep checkboxes correctly (multi-select). |
 | §3 | no shared primitives | **Partial** — `Switch/Group/Row/Advanced/Segmented` extracted; Button/Card/Sheet/Badge still raw element+class. |
-| css.md | **container queries** (we use `@media`) | **Pending** — migrate panel/sheet responsiveness to `@container`. |
-| css.md | **OKLCH + `light-dark()` tokens** (we use hex + `[data-theme]`) | **Pending** — token migration to `@layer tokens` per css.md. |
-| css.md | **44 inline `style={{}}`** in App.tsx | **Pending** — move tokenable values to classes. |
-| css.md | `dvh`/`svh` on sheets (we use `vh`/`%`) | **Pending**. |
+| css.md | **container queries** (we use `@media`) | **Done** — `.panel` is a named query container (`container: panel / inline-size`); the workbench decoder goes two-column via `@container panel (min-width: 30rem)`. The panel↔sheet swap stays a `@media` query (viewport-coarse, per the css.md decision table). |
+| css.md | **OKLCH tokens** (we used hex) | **Done** — tokens moved into `@layer tokens`, all values converted to OKLCH, `color-scheme` set per theme. We **keep the explicit `[data-theme]` layer** (css.md permits this) instead of `light-dark()` alone, because the app exposes a user-overridable Dark/Light/Auto switch that `light-dark()` can't honor. |
+| css.md | derive **tier/status palette** via `color-mix()` | **Done** — `--tier-a/b/c`, `--ok/--warn/--bad` OKLCH bases; badges/`.error`/`.warn`/`button.danger` derive tints via `color-mix(in oklch, …)`. One derivation per state works in both themes, so the per-theme badge hex overrides were dropped. |
+| css.md | **inline `style={{}}`** in App.tsx | **Done** — purged to token-driven utility classes (`.mt-*`, `.flex-1`, `.row.wrap`, `.clickable`, `.log-primary`, `.chip-btn`, …) backed by an `--sp-*` scale. The only inline styles left are the three data-driven cache-type glyph colours (`background: meta.color`), which are data, not tokens. |
+| css.md | `dvh`/`svh` on sheets (we used `vh`/`%`) | **Done** — mobile sheet uses `max-height: 74dvh` (with `vh` fallback) and clears the tab bar + notch via `calc(60px + env(safe-area-inset-bottom))`; `viewport-fit=cover` added to `index.html`. |
 | §3 | no `ui/` folder (everything in `App.tsx`) | **Deferred** — feature-folder refactor as an isolated pass. |
 
-## Next pass (CSS-rule compliance + primitives)
-1. **css.md migration** — `ui/tokens.css` with `@layer tokens`, OKLCH + `light-dark()`, derive
-   tier/status via `color-mix()`; switch component responsiveness to `@container`; `dvh`+safe-area on
-   sheets; purge inline styles.
-2. **Finish primitives** — Button, Card, Sheet, Badge/TierBadge, ListRow, EmptyState, Toast; reuse
+## Next pass (primitives + folder refactor)
+The css.md migration is **done** (see the table above): `@layer tokens` with OKLCH, `color-mix()`
+tier/status palette, `@container` panel responsiveness, `dvh` + safe-area sheets, inline-style purge.
+Remaining:
+1. **Finish primitives** — Button, Card, Sheet, Badge/TierBadge, ListRow, EmptyState, Toast; reuse
    everywhere (Definition-of-Done §9).
-3. **Folder refactor** — `App.tsx` → `map/ caches/ log/ live/ identity/ activity/ profile/ workbench/ ui/`.
+2. **Folder refactor** — `App.tsx` → `map/ caches/ log/ live/ identity/ activity/ profile/ workbench/ ui/`.

@@ -483,7 +483,7 @@ function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSet
               <button onClick={exportData}>Export my data</button>
               <button className="danger" onClick={deleteData}>Erase my account</button>
             </div>
-            {gdpr && <p className="muted" style={{ marginTop: 6 }}>{gdpr}</p>}
+            {gdpr && <p className="muted mt-2">{gdpr}</p>}
           </>)}
         </Group>
       )}
@@ -516,7 +516,7 @@ function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void
           <button className="icon" onClick={props.onClose}>✕</button>
         </div>
         <button onClick={() => setProfile(null)}>← leaderboard</button>
-        <p style={{ marginTop: 12 }}><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden</p>
+        <p className="mt-4"><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden</p>
         {profile.lastFind && <p className="muted">last find {fmt.date(profile.lastFind)}</p>}
         <h4>Badges</h4>
         {profile.badges.length
@@ -624,12 +624,12 @@ function WorkbenchPanel(props: {
         {station ? (
           <div className="logform">
             <div className="row between">
-              <h3 className="mono" style={{ margin: 0 }}>{station.callsign}</h3>
+              <h3 className="mono m-0">{station.callsign}</h3>
               <button className="link" onClick={() => props.onPick(null)}>clear</button>
             </div>
             <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
             {station.comment && <div className="comment">{station.comment}</div>}
-            <div className="muted" style={{ marginTop: 4 }}>
+            <div className="muted mt-1">
               {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
               {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
               {station.packets} pkts · {station.track.length} track pts
@@ -641,7 +641,7 @@ function WorkbenchPanel(props: {
                 {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
                 {station.wx.pressureHpa ?? "—"} hPa</div>
             )}
-            <div className="row end" style={{ marginTop: 8 }}><button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button></div>
+            <div className="row end mt-3"><button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button></div>
           </div>
         ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
       </Group>
@@ -654,7 +654,7 @@ function WorkbenchPanel(props: {
 
       <Group title="Packet decoder" defaultOpen={false}>
         <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
-        <div className="row between" style={{ marginTop: 6 }}>
+        <div className="row between mt-2">
           <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
           <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
         </div>
@@ -739,7 +739,7 @@ function MailPanel(props: { callsign: string; onClose: () => void }) {
   return (
     <aside className="panel right">
       <div className="row between"><h2>✉ BBS</h2><button className="icon" onClick={props.onClose}>✕</button></div>
-      <div className="row" style={{ gap: 6 }}>
+      <div className="row gap-2">
         <button className={tab === "inbox" ? "primary" : ""} onClick={() => setTab("inbox")}>Inbox</button>
         <button className={tab === "bulletins" ? "primary" : ""} onClick={() => setTab("bulletins")}>Bulletins</button>
         <button className={tab === "compose" ? "primary" : ""} onClick={() => setTab("compose")}>Compose</button>
@@ -750,7 +750,7 @@ function MailPanel(props: { callsign: string; onClose: () => void }) {
         <ul className="logs">{inbox.map((m) => (
           <li key={m.id}>
             <strong>{m.fromCall}</strong> <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
-            <span className="badge" style={{ marginLeft: 6 }}>{status(m)}</span>
+            <span className="badge ml-2">{status(m)}</span>
             <div className="comment">{m.body}</div>
           </li>
         ))}</ul>
@@ -847,9 +847,9 @@ function NearbyPanel(props: { caches: MapCache[]; map: maplibregl.Map | null; on
         {list.map((m) => {
           const meta = typeMeta(m.type);
           return (
-            <li key={m.globalId} style={{ cursor: m.id != null ? "pointer" : "default" }} onClick={() => m.id != null && props.onPick(m.id)}>
+            <li key={m.globalId} className={m.id != null ? "clickable" : ""} onClick={() => m.id != null && props.onPick(m.id)}>
               <span className="dot" style={{ background: meta.color }} />
-              <span style={{ flex: 1 }}><span className="mono">{m.code}</span> <span className="muted">{m.title}</span></span>
+              <span className="flex-1"><span className="mono">{m.code}</span> <span className="muted">{m.title}</span></span>
               <span className="mono muted">{dist(m) === Infinity ? "" : fmt.distance(dist(m))}</span>
             </li>
           );
@@ -873,10 +873,10 @@ function FilterPanel(props: { filters: { types: CacheType[]; q: string }; setFil
       <div className="badges">
         {TYPE_ORDER.map((t) => {
           const m = TYPE_META[t]; const on = filters.types.includes(t);
-          return <button key={t} className={on ? "primary" : ""} style={{ borderRadius: 14, fontSize: 13 }} onClick={() => toggle(t)}>{m.glyph} {m.label}</button>;
+          return <button key={t} className={`chip-btn${on ? " primary" : ""}`} onClick={() => toggle(t)}>{m.glyph} {m.label}</button>;
         })}
       </div>
-      <div className="row between" style={{ marginTop: 14 }}>
+      <div className="row between mt-5">
         <button className="link" onClick={() => setFilters({ types: [], q: "" })}>clear all</button>
         <span className="muted">{props.count} match{props.count === 1 ? "" : "es"}</span>
       </div>
@@ -913,7 +913,7 @@ function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void;
       <ol className="board">
         {top.map((e) => (
           <li key={e.loggerCall}><span className="rank">{e.rank}</span>
-            <span className="mono" style={{ flex: 1 }}>{e.loggerCall}</span><strong>{e.points}</strong>&nbsp;<span className="muted">pts</span></li>
+            <span className="mono flex-1">{e.loggerCall}</span><strong>{e.points}</strong>&nbsp;<span className="muted">pts</span></li>
         ))}
       </ol>
     </aside>
@@ -948,7 +948,7 @@ function ProfilePanel(props: {
 
       <Group title="Advanced — APRS workbench" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
-        <div className="row" style={{ flexWrap: "wrap" }}>
+        <div className="row wrap">
           <button onClick={props.onWorkbench}>📡 Workbench</button>
           <button onClick={props.onMail}>✉ BBS</button>
           <button onClick={props.onSettings}>⚙ Settings</button>
@@ -1138,7 +1138,7 @@ function StagesSection(props: { cacheId: number; callsign: string }) {
   const nextLocked = stages.find((s) => s.stageNo > 0 && !s.unlocked);
   return (
     <div className="stages">
-      <h4>Stages <span className="muted" style={{ fontWeight: 400 }}>· {stages.filter((s) => s.unlocked).length}/{stages.length} unlocked</span></h4>
+      <h4>Stages <span className="muted fw-normal">· {stages.filter((s) => s.unlocked).length}/{stages.length} unlocked</span></h4>
       <ol className="stagelist">
         {stages.map((s) => (
           <li key={s.stageNo} className={s.unlocked ? "open" : "locked"}>
@@ -1147,14 +1147,14 @@ function StagesSection(props: { cacheId: number; callsign: string }) {
               <span className="muted">{s.unlocked ? "✓ unlocked" : `🔒 ${s.unlock}`}</span>
             </div>
             {s.clue && <div className="comment">{s.clue}</div>}
-            {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} style={{ width: "100%", marginTop: 6 }} />}
+            {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} />}
             {s.unlocked && s.lat != null && s.lon != null && (
-              <div className="muted" style={{ marginTop: 4 }}>
+              <div className="muted mt-1">
                 📍 <span className="mono">{fmt.coord(s.lat, s.lon)}</span> · <a href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`} target="_blank" rel="noreferrer noopener">map ↗</a>
               </div>
             )}
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && (
-              <button className="primary" style={{ marginTop: 6 }} disabled={busy === s.stageNo} onClick={() => reveal(s.stageNo)}>
+              <button className="primary mt-2" disabled={busy === s.stageNo} onClick={() => reveal(s.stageNo)}>
                 {busy === s.stageNo ? "Checking…" : s.unlock === "geo" ? "I'm here — reveal" : "Reveal next stage"}
               </button>
             )}
@@ -1222,32 +1222,32 @@ function LogForm(props: { cacheId: number; cacheCode: string; callsign: string; 
       <div className="logresult">
         <div className="big">{result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
         {result.queued
-          ? <div className="muted" style={{ marginTop: 4 }}>📴 offline — will sync when you're back online</div>
+          ? <div className="muted mt-1">📴 offline — will sync when you're back online</div>
           : <div className="tier">{tierBadge(result)}</div>}
-        {result.announced && <div className="muted" style={{ marginTop: 4 }}>announced to APRS-IS</div>}
+        {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
         {result.signerKey && <div className="muted">signed with your device key ✍</div>}
         {result.logType === "found" && (noteOpen ? (
-          <div style={{ marginTop: 8 }}>
+          <div className="mt-3">
             <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
             <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post</button></div>
           </div>
-        ) : <button className="link" style={{ marginTop: 8 }} onClick={() => setNoteOpen(true)}>add a note</button>)}
-        <div style={{ marginTop: 8 }}><button className="link" onClick={() => { setResult(null); setNote(""); setNoteOpen(false); }}>log again</button></div>
+        ) : <button className="link mt-3" onClick={() => setNoteOpen(true)}>add a note</button>)}
+        <div className="mt-3"><button className="link" onClick={() => { setResult(null); setNote(""); setNoteOpen(false); }}>log again</button></div>
       </div>
     );
   }
 
   return (
     <div className="logform">
-      <button className="primary" style={{ width: "100%", fontSize: 16, padding: "11px" }} disabled={!!busy} onClick={() => doLog("found")}>
+      <button className="primary log-primary" disabled={!!busy} onClick={() => doLog("found")}>
         {busy === "found" ? "Logging…" : "✓ Log a find"}
       </button>
-      <div className="row between" style={{ marginTop: 8 }}>
+      <div className="row between mt-3">
         <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>{busy === "dnf" ? "…" : "Couldn't find it"}</button>
         <button className="link" onClick={() => setNoteOpen((v) => !v)}>Add a note</button>
       </div>
       {noteOpen && (
-        <div style={{ marginTop: 6 }}>
+        <div className="mt-2">
           <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post note</button></div>
         </div>
