@@ -24,18 +24,20 @@ the placeholder") was **already done here** — this document re-audits the *act
 |---|---|---|
 | §2 | **Settings/Workbench were flat lists** (no master toggle / collapse / status / search / reason) | **Fixed** — `ui.tsx` (`Group`/`Switch`/`Row`/`Advanced`) applied to Workbench (toggle-gated, collapsible, status at headers, reason-when-off) and Settings (grouped + search + Advanced). |
 | §3 | on/off used `<input type=checkbox>` | **Fixed** — accessible `Switch` (`role=switch`), checkboxes removed; Filters keep checkboxes correctly (multi-select). |
-| §3 | no shared primitives | **Partial** — `Switch/Group/Row/Advanced/Segmented` extracted; Button/Card/Sheet/Badge still raw element+class. |
+| §3 | no shared primitives | **Done** — `apps/web/src/ui/`: `Switch`, `Group`/`Row`/`Advanced`, `Panel` (the docked-drawer/sheet surface every overlay uses), `Button`, `Badge`/`TierBadge`, `Card`, `EmptyState`, `Toast` (provider + `useToast`). All real semantic elements; appearance token-driven. |
 | css.md | **container queries** (we use `@media`) | **Done** — `.panel` is a named query container (`container: panel / inline-size`); the workbench decoder goes two-column via `@container panel (min-width: 30rem)`. The panel↔sheet swap stays a `@media` query (viewport-coarse, per the css.md decision table). |
 | css.md | **OKLCH tokens** (we used hex) | **Done** — tokens moved into `@layer tokens`, all values converted to OKLCH, `color-scheme` set per theme. We **keep the explicit `[data-theme]` layer** (css.md permits this) instead of `light-dark()` alone, because the app exposes a user-overridable Dark/Light/Auto switch that `light-dark()` can't honor. |
 | css.md | derive **tier/status palette** via `color-mix()` | **Done** — `--tier-a/b/c`, `--ok/--warn/--bad` OKLCH bases; badges/`.error`/`.warn`/`button.danger` derive tints via `color-mix(in oklch, …)`. One derivation per state works in both themes, so the per-theme badge hex overrides were dropped. |
 | css.md | **inline `style={{}}`** in App.tsx | **Done** — purged to token-driven utility classes (`.mt-*`, `.flex-1`, `.row.wrap`, `.clickable`, `.log-primary`, `.chip-btn`, …) backed by an `--sp-*` scale. The only inline styles left are the three data-driven cache-type glyph colours (`background: meta.color`), which are data, not tokens. |
 | css.md | `dvh`/`svh` on sheets (we used `vh`/`%`) | **Done** — mobile sheet uses `max-height: 74dvh` (with `vh` fallback) and clears the tab bar + notch via `calc(60px + env(safe-area-inset-bottom))`; `viewport-fit=cover` added to `index.html`. |
-| §3 | no `ui/` folder (everything in `App.tsx`) | **Deferred** — feature-folder refactor as an isolated pass. |
+| §3 | no `ui/` folder (everything in `App.tsx`) | **Done** — `App.tsx` (was ~1260 lines) is now a ~430-line shell (map orchestration + `TopBar`/`TabBar`); every panel lives under a feature folder: `caches/`, `log/`, `live/`, `identity/`, `activity/`, `profile/`, `workbench/`, `map/`, `ui/`. |
 
-## Next pass (primitives + folder refactor)
-The css.md migration is **done** (see the table above): `@layer tokens` with OKLCH, `color-mix()`
-tier/status palette, `@container` panel responsiveness, `dvh` + safe-area sheets, inline-style purge.
-Remaining:
-1. **Finish primitives** — Button, Card, Sheet, Badge/TierBadge, ListRow, EmptyState, Toast; reuse
-   everywhere (Definition-of-Done §9).
-2. **Folder refactor** — `App.tsx` → `map/ caches/ log/ live/ identity/ activity/ profile/ workbench/ ui/`.
+## Status
+The css.md migration, the primitive set, and the feature-folder refactor are all **done** (see the
+table above). `apps/web/src` is now: a slim `App.tsx` shell + `ui/` primitives + per-feature folders
+(`caches/ log/ live/ identity/ activity/ profile/ workbench/ map/`). Panels compose from `Panel` and
+the shared primitives; the OKLCH token layer + `color-mix()` palette + `@container`/`dvh` rules back
+the styling.
+
+Open follow-ups (tracked in `TODO.md`, not UI-audit gaps): passkey/WebAuthn sign-in, PMTiles basemap
++ service worker, and the deeper workbench protocols.

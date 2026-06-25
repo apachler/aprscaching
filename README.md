@@ -253,3 +253,16 @@ follow-ups.)
 
 Minimum accepted tier is configurable (site default **B**; per-cache override). A bare IS
 packet can't reach tier B on its own — corroboration must come from the app reading.
+
+## Credits & trademarks
+
+**APRS** — the Automatic Packet Reporting System — was created by the late **Bob Bruninga, WB4APR**
+(1948–2022), whose decades of work made everything this project builds on possible. *APRS* is his
+trademark. This project is an **independent, unofficial** implementation built from open
+specifications (APRS101, APRS-IS, AX.25/KISS) and is **not affiliated with, sponsored by, or
+endorsed by** Bob Bruninga or his estate. The APRS-Caching game and this application are the
+author's (OE8APR) own work.
+
+Other attributions: maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; imported
+heritage data carries its source's own licence and disclaimer (see *Imports* above). The same
+credit appears in-app under **⚙ Settings → About & credits**.

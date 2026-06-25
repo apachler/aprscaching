@@ -1,25 +1,10 @@
 /**
- * ui.tsx — shared primitives governed by .claude/rules/ui-ux.md + css.md.
- * The settings/dense-config architecture (§2): grouped cards with a master switch, collapse,
- * status at the header, and a one-line reason when a group is unavailable. All controls are real
- * semantic elements (role=switch button, <button> disclosures) — no CSS-only widget hacks — and
- * appearance is token-driven (no inline color/spacing). Transitions animate transform/opacity only
- * and honour prefers-reduced-motion (see styles.css).
+ * Grouped, collapsible config containers — the ui-ux.md §2 "anti-big-fat-list" architecture.
+ * A Group can be toggle-gated (master switch): when off, the body collapses to a one-line reason
+ * instead of dead controls. Disclosures are real <button>s (no CSS-only widget hacks).
  */
 import { useState, type ReactNode } from "react";
-
-/** An accessible on/off switch (use this, not a checkbox, to enable a feature or group). */
-export function Switch(props: { checked: boolean; onChange?: (v: boolean) => void; disabled?: boolean; label: string }) {
-  return (
-    <button
-      type="button" role="switch" aria-checked={props.checked} aria-label={props.label}
-      className={`sw${props.checked ? " on" : ""}`} disabled={props.disabled}
-      onClick={() => !props.disabled && props.onChange?.(!props.checked)}
-    >
-      <span className="knob" aria-hidden="true" />
-    </button>
-  );
-}
+import { Switch } from "./Switch.js";
 
 /**
  * A labelled, collapsible settings group. With `master`, it's a toggle-gated subsystem: when the

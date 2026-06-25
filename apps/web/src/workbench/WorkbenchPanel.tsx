@@ -1,0 +1,143 @@
+import { useEffect, useState } from "react";
+import maplibregl from "maplibre-gl";
+import {
+  getPorts, getMessages, cotUrl, getStation, decodePacket,
+  type DecodedPacket, type StationDetail, type PortStat, type MessageItem,
+} from "../api.js";
+import { useFmt } from "../format.js";
+import { Panel, Group, Row, Badge, EmptyState, useToast } from "../ui/index.js";
+
+/** Workbench — the full APRS toolset, grouped; switch on only what you need. */
+export function WorkbenchPanel(props: {
+  onClose: () => void; map: maplibregl.Map | null;
+  stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
+  picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
+}) {
+  const [raw, setRaw] = useState("");
+  const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
+  const [station, setStation] = useState<StationDetail | null>(null);
+  const [ports, setPorts] = useState<PortStat[]>([]);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const fmt = useFmt();
+  const toast = useToast();
+
+  useEffect(() => {
+    getPorts().then((r) => setPorts(r.ports)).catch(console.error);
+    getMessages().then((r) => setMessages(r.messages)).catch(console.error);
+  }, []);
+
+  const feedUrl = (() => {
+    const b = props.map?.getBounds();
+    return b ? cotUrl([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]) : "";
+  })();
+
+  useEffect(() => {
+    if (!props.picked) { setStation(null); return; }
+    let live = true;
+    getStation(props.picked).then((r) => { if (live) setStation(r.station); }).catch(console.error);
+    return () => { live = false; };
+  }, [props.picked]);
+
+  async function decode() {
+    try { setDecoded(await decodePacket(raw.trim())); }
+    catch (e) { setDecoded({ ok: false, error: (e as Error).message }); }
+  }
+
+  const SAMPLE = "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.41N/01526.27E>088/036/A=001234Mobile";
+
+  return (
+    <Panel title="📡 Workbench" onClose={props.onClose}>
+      <p className="muted">The full APRS toolset, grouped — switch on only what you need.</p>
+
+      <Group title="Live stations" status={props.stationsOn ? `${props.stationCount} on map` : "off"}
+             master={{ on: props.stationsOn, set: props.setStationsOn }}
+             reason="Switch on to plot live APRS stations on the map.">
+        {station ? (
+          <div className="logform">
+            <div className="row between">
+              <h3 className="mono m-0">{station.callsign}</h3>
+              <button className="link" onClick={() => props.onPick(null)}>clear</button>
+            </div>
+            <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
+            {station.comment && <div className="comment">{station.comment}</div>}
+            <div className="muted mt-1">
+              {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
+              {station.altitudeM != null ? `${fmt.altitude(station.altitudeM)} · ` : ""}
+              {station.packets} pkts · {station.track.length} track pts
+            </div>
+            {station.wx && (
+              <div className="wx">
+                {station.wx.tempC != null && <>🌡 {fmt.temp(station.wx.tempC)} · </>}
+                💧 {station.wx.humidity ?? "—"}% ·{" "}
+                {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
+                {station.wx.pressureHpa ?? "—"} hPa</div>
+            )}
+            <div className="row end mt-3"><button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button></div>
+          </div>
+        ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
+      </Group>
+
+      <Group title="Transports" status={`${ports.length} port${ports.length === 1 ? "" : "s"} · 24h RX`} defaultOpen={false}>
+        {ports.length === 0 ? <EmptyState>No traffic yet.</EmptyState> : ports.map((p) => (
+          <Row key={p.port} label={<span className="mono">{p.port}</span>}><span className="muted">{fmt.num(p.rx, 0)} rx</span></Row>
+        ))}
+      </Group>
+
+      <Group title="Packet decoder" defaultOpen={false}>
+        <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
+        <div className="row between mt-2">
+          <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
+          <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
+        </div>
+        {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
+        {decoded?.ok && decoded.frame && (
+          <div className="decoded">
+            <div className="row between">
+              <strong className="mono">{decoded.frame.src}</strong>
+              <Badge kind={decoded.frame.heardVia === "rf" ? "tierA" : undefined}>{decoded.frame.heardVia}</Badge>
+            </div>
+            <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
+            <div className="kind">{String(decoded.data?.kind)}</div>
+            <dl className="fields">
+              {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
+            </dl>
+          </div>
+        )}
+      </Group>
+
+      <Group title="TAK / CoT feed" defaultOpen={false}>
+        <p className="muted">Add this as a data feed in ATAK/WinTAK to see APRS stations as CoT:</p>
+        <div className="row">
+          <input className="mono" readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
+          <button onClick={() => { navigator.clipboard?.writeText(feedUrl); toast("Feed URL copied"); }}>copy</button>
+        </div>
+      </Group>
+
+      <Group title="Messages" status={messages.length ? `${messages.length} recent` : "none"} defaultOpen={false}>
+        {messages.length === 0 ? <EmptyState>No inbound messages.</EmptyState> : (
+          <ul className="logs">
+            {messages.map((mm) => (
+              <li key={mm.id}>
+                <Badge><span className="mono">{mm.fromCall}</span></Badge>→ <span className="mono">{mm.toCall}</span> <span className="muted">· {fmt.ago(mm.ts)}</span>
+                <div className="comment">{mm.body}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Group>
+    </Panel>
+  );
+}
+
+function flatten(data: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k === "kind") continue;
+    if (v == null) continue;
+    if (typeof v === "object") {
+      if (k === "symbol" && (v as any).label) { out.symbol = `${(v as any).label} (${(v as any).table}${(v as any).code})`; continue; }
+      out[k] = JSON.stringify(v);
+    } else out[k] = String(v);
+  }
+  return out;
+}
