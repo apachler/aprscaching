@@ -133,6 +133,51 @@ export async function importActiveKeys(publicKeys: FedPublicKey[] | undefined, f
   return out;
 }
 
+// ---- signed instance registry / namespace authority (T4.2) ----
+export interface RegistryEntry { instance: string; url?: string; key?: string; operator?: string; aprsCall?: string; since?: number }
+export interface SignedRegistry { entries: RegistryEntry[]; at?: number; sig?: string; signer?: string }
+
+/** Verify a registry document's authority signature (sig over the canonical {entries,at}). Pure/testable. */
+export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: string): Promise<boolean> {
+  if (!doc?.sig || !Array.isArray(doc.entries)) return false;
+  try {
+    const k = await importVerifyKey(authorityKeyB64url);
+    const msg = new TextEncoder().encode(stableStringify({ at: doc.at ?? 0, entries: doc.entries }));
+    return crypto.subtle.verify("Ed25519", k, fromB64(doc.sig), msg);
+  } catch { return false; }
+}
+
+/** Load + verify FED_REGISTRY against FED_REGISTRY_KEY → instance→entry map (empty if absent/invalid). */
+export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
+  if (!env.FED_REGISTRY || !env.FED_REGISTRY_KEY) return new Map();
+  let doc: SignedRegistry;
+  try { doc = JSON.parse(env.FED_REGISTRY); } catch { return new Map(); }
+  if (!(await verifyRegistry(doc, env.FED_REGISTRY_KEY))) return new Map(); // reject an unsigned/forged registry
+  const m = new Map<string, RegistryEntry>();
+  for (const e of doc.entries) if (e?.instance) m.set(e.instance, e);
+  return m;
+}
+
+/** Anti-spoof (T4.2, pure): if the registry binds this instance to a key, its published keys MUST
+ *  include it; an unregistered instance (or one with no bound key) falls back to TOFU. */
+export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeyStrings: string[]): boolean {
+  if (!entry || !entry.key) return true;
+  return activeKeyStrings.includes(entry.key);
+}
+
+/** This instance's own registry self-attestation (what it publishes about itself). */
+export async function selfRegistryEntry(env: Env, instance: string): Promise<RegistryEntry> {
+  const fk = await loadKey(env);
+  return { instance, key: fk?.publicX, operator: env.FED_OPERATOR, aprsCall: env.FED_APRS_CALL };
+}
+
+/** Endpoint: this instance's verified view of the network registry + its own self-entry (transparency). */
+export async function handleFederationRegistry(req: Request, env: Env): Promise<Response> {
+  const instance = instanceOf(req, env);
+  const reg = await loadRegistry(env);
+  return json({ self: await selfRegistryEntry(env, instance), entries: [...reg.values()], verified: reg.size > 0 || !env.FED_REGISTRY });
+}
+
 /** Verify a rotation record's continuity: the new `key` is vouched for by `prevKey` (sig over {key,prevKey,at}). */
 export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> {
   if (!r?.key || !r.prevKey || !r.at || !r.sig) return false;
@@ -190,6 +235,8 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     publicKeyJwk: fk?.jwk ?? null,
     publicKeys: await instanceKeys(env),   // T4.1: current + previous keys + revocations, each {x,since?,until?,revoked?}
     rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // T4.1: continuity proofs (new key signed by old)
+    operator: env.FED_OPERATOR ?? null,    // T4.2: self-published operator + APRS service address
+    aprsCall: env.FED_APRS_CALL ?? null,
     peers,
   });
 }

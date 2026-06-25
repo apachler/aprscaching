@@ -66,13 +66,18 @@ jobs:
       - name: publisher + subscriber + federation smoke
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
+          PUBPUB=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$KEY")
           PUB2=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
           PUB3=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
           HIST="[{\"x\":\"$PUB2\",\"since\":1},{\"x\":\"$PUB3\",\"since\":1,\"revoked\":true}]"
+          REG=$(node tools/fedkey/signregistry.mjs "[{\"instance\":\"oe.pub\",\"url\":\"http://127.0.0.1:8801\",\"key\":\"$PUBPUB\",\"operator\":\"OE8APR\"}]" --raw)
+          FED_REGISTRY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$REG")
+          FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
           DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
+            FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 \
             pnpm --filter @aprsweb/node-gateway start &
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
-            FED_SUBMIT_SECRET=submitsecret \
+            FED_SUBMIT_SECRET=submitsecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
             pnpm --filter @aprsweb/node-gateway start &
           PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
 

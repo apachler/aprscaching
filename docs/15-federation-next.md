@@ -284,6 +284,19 @@ The **`aprsCall`** binding (the peer's `<licensedCall>-<SERVICE_SSID>` APRS-IS s
 `docs/19`) is what makes a peer directly addressable *as a network node* — so the platform/any peer
 can resolve and message it on APRS. Opt-in; instances can still peer directly without it. Could be
 DNS-anchored (`TXT` at the instance domain) or a community-maintained signed list.
+
+**Status — IMPLEMENTED** (`federation.ts` registry verify/enforce · `tools/fedkey/signregistry.mjs` ·
+`test/registry.test.ts` · smoke +2; no migration — registry lives in config). A registry **authority**
+signs a doc `{entries:[{instance,url?,key?,operator?,aprsCall?}],at,sig}`; consumers set `FED_REGISTRY` +
+the authority's `FED_REGISTRY_KEY` and `loadRegistry` parses + **verifies** it (a forged/unsigned registry
+is ignored). **Anti-spoof enforcement:** in `syncPeer`, if the registry binds the peer's instance to a key,
+the peer's published active keys MUST include it — else the sync throws (`registryKeyAllowed`), so nobody
+can impersonate a known instance id; an unregistered instance falls back to TOFU. The registry also **seeds
+discovery** (entries → `unvetted` peers, `added_via='registry'`, carrying the bound key). Instances
+self-publish `operator` + `aprsCall` in `/.well-known`; `GET /federation/registry` exposes the verified view
++ self-entry. `signregistry.mjs` signs a registry (fresh or reused authority key) in one step. `verifyRegistry`
++ `registryKeyAllowed` are pure + unit-tested. **Deferred:** the `aprsCall`-driven APRS addressing itself
+(ties to `docs/19`) and a DNS-`TXT` anchor as an alternative source.
 - *Worth:* as the network grows, namespaced ids (`instance:cache:N`) must not collide and `signer` names
   must not be forgeable.
 
@@ -316,7 +329,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - `caches` += `fed_scope` (T3.3 — **landed as `0015_fed_scope.sql`**)
 - `account_moves` + `remote_account_moves` tables + `fed_peers.moves_cursor` (T3.2 — **landed as `0016_account_moves.sql`**)
 - key rotation (T4.1) is **config-only** (`FED_KEY_HISTORY`/`FED_ROTATIONS`), no local schema — **done**;
-  registry is external/signed, no local schema required
+  registry (T4.2) is external/signed config (`FED_REGISTRY`/`FED_REGISTRY_KEY`), no local schema — **done**
 - `fed_peers` += `last_ok, sync_ok, sync_err, mirrored_total, last_counts` (T4.3 — **landed as `0017_fed_observability.sql`**)
 
 ## API additions
@@ -345,7 +358,7 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **F5 (reach):** T2.1 gossip ping **(done)** · T2.2 generalized envelope/capability negotiation **(done)** · T2.3 NAT/firewall **(push-to-hub done; rendezvous relay deferred)**
   join (tunnel today → push-to-hub interim → rendezvous relay).
 - **F6 (commons) — COMPLETE:** T3.1 federated catalog in API+map **(done)** · T3.2 account-move record **(done)** · T3.3 redaction **(done)**.
-- **F7 (governance):** T4.1 key rotation **(done)** · T4.2 instance registry · T4.3 observability **(done)**.
+- **F7 (governance) — COMPLETE:** T4.1 key rotation **(done)** · T4.2 instance registry **(done)** · T4.3 observability **(done)**.
 
 ## Acceptance (abbreviated, per tier)
 - **T1.1:** an unvetted/auto-discovered peer's caches are mirrored but hidden from the default map and
@@ -380,6 +393,9 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
 - **T4.1:** rotating the instance key keeps records verifiable and new records trusted; a revoked key is
   rejected (**met**: smoke runs the whole mirror suite against a publisher with a 3-key set incl. a revoked
   one; `activeFedKeys`/`verifyRotationRecord` unit-tested; `rotatekey.mjs` output verifies end-to-end).
+- **T4.2:** a peer can't impersonate a registered instance id — a signed registry binds instance→key and
+  the consumer rejects a mismatch (**met**: the whole mirror suite runs under a registry binding the
+  publisher's real key; `verifyRegistry`/`registryKeyAllowed` unit-test the verify + the impostor reject).
 - **T4.3:** an operator can see each peer's health — sync success/error counts, lag, mirrored total, the
   per-feed breakdown, and the last error (**met**: smoke asserts the metrics populate after sync; the
   Workbench → Federation group renders them with a health badge).

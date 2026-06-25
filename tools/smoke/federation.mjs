@@ -397,6 +397,18 @@ ok("well-known publishes a publicKeys[] including the current signing key",
 ok("publicKeys carries an extra active key (multi-key) and a revoked one",
   pks.length >= 3 && pks.some((k) => k.revoked === true), JSON.stringify(pks.map((k) => [k.x?.slice(0, 6), !!k.revoked])));
 
+// ---- F7/T4.2: signed instance registry / namespace authority ----
+// The subscriber is started with a signed FED_REGISTRY binding oe.pub → the publisher's real key, so
+// every mirror assertion above already passed the anti-spoof check (the published key matched the
+// registry). A mismatched key would have thrown and blocked the sync (unit-tested separately).
+const regResp = await call(SUB, "GET", "/federation/registry");
+ok("the signed registry is loaded + verified, binding the publisher instance",
+  regResp.data?.verified === true && (regResp.data?.entries ?? []).some((e) => e.instance === pubInstance && e.key),
+  JSON.stringify(regResp.data?.entries));
+ok("an instance self-publishes its operator + APRS service address",
+  wkk.data?.operator === "OE8APR" && wkk.data?.aprsCall === "OE8APR-12",
+  JSON.stringify({ operator: wkk.data?.operator, aprsCall: wkk.data?.aprsCall }));
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

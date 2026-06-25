@@ -13,6 +13,11 @@ export interface Env {
   FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed
   FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations (T4.1)
   FED_ROTATIONS?: string;   // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old (T4.1)
+  // ---- signed instance registry / namespace authority (T4.2) — all optional ----
+  FED_REGISTRY?: string;     // signed registry doc {entries:[{instance,url?,key?,operator?,aprsCall?}],at,sig,signer}
+  FED_REGISTRY_KEY?: string; // the registry authority's Ed25519 public key (base64url) used to verify FED_REGISTRY
+  FED_OPERATOR?: string;     // this instance's operator label, self-published in /.well-known
+  FED_APRS_CALL?: string;    // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)

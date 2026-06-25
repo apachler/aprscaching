@@ -14,7 +14,7 @@ import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleL
 import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
-import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys } from "./federation.js";
+import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
@@ -83,6 +83,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // T2.1 gossip push-to-pull
   if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // T2.3 push-to-hub (NAT/firewall peers)
   if (p === "/federation/account-moves" && m === "GET") return handleFederationAccountMoves(req, env); // T3.2 account-move feed
+  if (p === "/federation/registry" && m === "GET") return handleFederationRegistry(req, env); // T4.2 signed instance registry
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);

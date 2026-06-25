@@ -9,8 +9,8 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import {
-  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, type FedPublicKey,
-  buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
+  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, activeFedKeys, type FedPublicKey,
+  loadRegistry, registryKeyAllowed, buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 
@@ -52,6 +52,15 @@ async function seedPeers(env: Env): Promise<void> {
          trust       = CASE WHEN fed_peers.trust = 'blocked' THEN 'blocked' ELSE 'trusted' END,
          approved_at = COALESCE(fed_peers.approved_at, excluded.approved_at)`,
     ).bind(url, now()).run();
+  }
+  // registry discovery (T4.2): seed peers from the verified signed registry as `unvetted` (operator
+  // promotes). Carries the registry-bound key + instance so the anti-spoof check has them. No-op
+  // unless FED_REGISTRY is configured + valid. INSERT OR IGNORE never downgrades a known peer.
+  for (const e of (await loadRegistry(env)).values()) {
+    const u = e.url?.trim().replace(/\/+$/, "");
+    if (u && e.instance !== ours(env))
+      await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')")
+        .bind(u, e.instance, e.key ?? null).run();
   }
 }
 
@@ -118,6 +127,13 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
 
   // never mirror ourselves
   if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0 };
+
+  // T4.2 anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
+  // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
+  const activeStrings = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
+  const registryEntry = (await loadRegistry(env)).get(wk.instance);
+  if (!registryKeyAllowed(registryEntry, activeStrings))
+    throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
 
   // T4.1: verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
   // can rotate its key without breaking federation, and a revoked/leaked key is rejected. Falls back to
