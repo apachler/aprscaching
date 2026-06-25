@@ -168,3 +168,9 @@ Cloudflare. **Federated deletes (ADR-5):** account/find deletion emits an Ed2551
 served at `GET /federation/tombstones`; peers verify it and purge mirrored copies on sync, so GDPR
 deletes propagate. Tombstones carry only signed global ids + timestamp (no PII). New `tombstones`
 table + a federation migration; full spec in `docs/14`.
+
+**Next level (F4–F7).** The roadmap that takes this beyond F0–F3 — peer **trust tiers + quarantine**
+and corroboration **quorum** (resolving #2/#3/#4 above), gossip push-to-pull, a generalized signed-feed
+envelope, a federated catalog in the read API/map, account-move records, owner field redaction, and key
+rotation / instance registry / observability — is specced in **`docs/15-federation-next.md`**. F4 (trust)
+is launch-gating before federation is opened to untrusted peers.

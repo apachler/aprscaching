@@ -70,6 +70,13 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;
   M5 operated SSID stations (needs `account_stations`). One small `accounts` migration; all inside
   the existing GDPR export/erase.
+- Federation next level (F4–F7) — `docs/15-federation-next.md`: takes live federation (F0–F3) further.
+  F4 trust (**launch-gating** before opening the network): peer trust tiers + quarantine, corroboration
+  **quorum** + hardening (parallel, grid/time-bucket privacy, rate-limit), ADR-5 tombstones. F5 reach:
+  gossip ping (push-to-pull), generalized signed-feed envelope + capability negotiation. F6 commons:
+  federated catalog in read API + map, account-move as a signed record (pairs ADR-2), owner field
+  redaction (`fed_scope`, no hint on the wire). F7 governance: key rotation/multi-key, signed instance
+  registry (namespace authority), observability. Resolves docs/06 #2/#3/#4. New migrations after `0012`.
 
 ## Licensing
 Monorepo licensed by unit (see `LICENSE`, per-package `LICENSE`, README "License"): hosted app &

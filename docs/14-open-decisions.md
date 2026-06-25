@@ -146,4 +146,5 @@ carrying **no PII**.
 - **ADR-1 / ADR-2** reflected in `docs/10` (identity & community).
 - **ADR-4a / ADR-4b** reflected in `docs/11` (API access model + push/email-fallback).
 - **migration 0012 + recognition-only + attribution** reflected in `docs/12`.
-- **ADR-3 / ADR-5** specced here; ADR-5 extends the federation model in `docs/06`.
+- **ADR-3 / ADR-5** specced here; ADR-5 extends the federation model in `docs/06` and joins the
+  federation feed family in the next-level roadmap (`docs/15-federation-next.md`, T1.3).
