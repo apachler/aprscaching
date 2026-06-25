@@ -68,7 +68,14 @@ over-APRS path stays open via the ingest secret; and the active callsign can be 
 the session and resetting verification to pending). Deferred extensions: **multiple verified base
 calls per account** (`account_callsigns`/`account_stations`); reconciling the **callsign-reassignment**
 edge (a callsign later re-licensed to a different person still shows the prior holder's finds, since
-history is per-callsign string); and gating **leaderboard credit** on verification.
+history is per-callsign string).
+
+**Leaderboard credit now gates on control-verification.** Competitive standings only count finds
+whose `logger_call` is control-verified (APRS message-challenge / LoTW) — an unverified callsign
+earns no leaderboard points, closing the anti-gaming gap. Personal profiles and badges still show
+all of a caller's finds (your own record is yours regardless of verification); only the public
+ranking is gated. Smoke covers it: an unverified `DL1ABC` is absent from the board, then verifies
+via the real APRS challenge (start → read the outbox code → confirm) and ranks.
 
 ## Sequencing (each step independently committable + CI-green)
 - **S1 — schema + email/session backend** (additive; nothing gated yet): migration `0010` adds

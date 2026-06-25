@@ -204,8 +204,21 @@ const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1
 ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
 
 // ---- M4: community / gamification ----
+// leaderboard credit now requires a control-verified callsign — an unverified logger is excluded
+const lbPre = await call("GET", "/api/leaderboard?metric=finds");
+ok("unverified callsign earns no leaderboard credit", !(lbPre.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC"), JSON.stringify(lbPre.data));
+// control-verify DL1ABC the real way: start the APRS challenge, read the code off the outbox, confirm
+async function verifyCallsign(cs) {
+  await call("POST", "/verify/aprs/start", { callsign: cs });
+  const ob = await call("GET", "/outbox");
+  const m = (ob.data?.items ?? []).find((it) => (it.payload || "").includes(cs) && /code\s+\d{6}/.test(it.payload || ""));
+  const code = m && (m.payload.match(/code\s+(\d{6})/) || [])[1];
+  const conf = await call("POST", "/verify/aprs/confirm", { callsign: cs, code });
+  return conf.data?.verified === true;
+}
+ok("APRS message-challenge verifies the callsign (start → read code → confirm)", await verifyCallsign("DL1ABC"));
 const lb = await call("GET", "/api/leaderboard?metric=finds");
-ok("leaderboard ranks loggers", (lb.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC" && e.finds >= 1), JSON.stringify(lb.data));
+ok("a verified callsign now ranks on the leaderboard", (lb.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC" && e.finds >= 1), JSON.stringify(lb.data));
 const prof = await call("GET", "/api/profile/DL1ABC");
 ok("profile shows verified finds + points", (prof.data?.finds ?? 0) >= 1 && (prof.data?.points ?? 0) > 0, JSON.stringify(prof.data));
 ok("profile awards a find badge", (prof.data?.badges ?? []).some((b) => b.badge === "first-find"), JSON.stringify(prof.data?.badges));

@@ -11,6 +11,9 @@ const DAY = 86400;
 
 // per distinct found cache: trust-tier base + difficulty + terrain (best find wins)
 const POINTS = "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
+// competitive credit requires proven control of the callsign (anti-gaming): the logger's callsign
+// must be control-verified (APRS message-challenge / LoTW). Personal profiles still show all finds.
+const VERIFIED_LOGGER = "AND l.logger_call IN (SELECT callsign FROM callsign_verifications WHERE status='verified')";
 
 function periodStart(period: string | null): number {
   if (period === "month") return now() - 30 * DAY;
@@ -38,7 +41,7 @@ export async function handleLeaderboard(req: Request, env: Env): Promise<Respons
     `SELECT logger_call AS loggerCall, SUM(pts) AS points, COUNT(*) AS finds FROM (
        SELECT l.logger_call, l.cache_id, MAX(${POINTS}) AS pts
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.log_type='found' AND l.verified=1 AND l.ts >= ?${bb.sql}
+       WHERE l.log_type='found' AND l.verified=1 AND l.ts >= ? ${VERIFIED_LOGGER}${bb.sql}
        GROUP BY l.logger_call, l.cache_id
      ) GROUP BY logger_call ORDER BY ${metric === "finds" ? "finds" : "points"} DESC, finds DESC LIMIT ?`,
   ).bind(since, ...bb.binds, limit).all<{ loggerCall: string; points: number; finds: number }>()).results;
