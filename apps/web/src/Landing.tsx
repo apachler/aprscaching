@@ -12,7 +12,7 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
       <div className="landing-inner">
         <img className="landing-logo" src={ASSET.wordmark} alt="APRScaching" />
         {/* HERO copy + feature/how-it-works/screenshot sections are deferred — see docs/18 */}
-        <p className="landing-sub">APRS-Caching, verified over the air.</p>
+        <p className="landing-sub">APRScaching, verified over the air.</p>
         <div className="landing-cta">
           <button className="primary" onClick={props.onRegister}>Register</button>
           <button onClick={props.onLogin}>Log in</button>

@@ -1,7 +1,7 @@
 {
   "name": "APRScaching",
   "short_name": "APRScaching",
-  "description": "Find caches, verified over the air — an APRS-Caching workbench.",
+  "description": "Find caches, verified over the air — an APRScaching workbench.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

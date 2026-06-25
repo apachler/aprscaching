@@ -1,10 +1,18 @@
 # Landing page & unauthenticated onboarding flow (mechanics)
 
-Status: **Backlog spec — mechanics only.** The marketing **content** (landing copy, feature list,
-screenshots, the quick-tour step text/targets) is **explicitly deferred**: the platform is in active
-development and writing copy now would churn. This doc specs the *plumbing* — domains, the landing
-gate, the read-only entry, and the tour framework — so the content can be dropped in later without
-rework. Build against `.claude/rules/{ui-ux,css}.md`.
+Status: **Mechanics IMPLEMENTED (L2–L4); L1 deployment pending. Content deferred.** The marketing
+**content** (landing copy, feature list, screenshots, the quick-tour step text/targets) is
+**explicitly deferred**: the platform is in active development and writing copy now would churn. This
+doc specs the *plumbing* — domains, the landing gate, the read-only entry, and the tour framework —
+so the content can be dropped in later without rework. Build against `.claude/rules/{ui-ux,css}.md`.
+
+> **Done (web, mechanics):** `apps/web/src/Landing.tsx` (brand-hero gate with Register/Login/Explore),
+> the landing gate + per-session Explore intent + signed-out→read-only + sign-out-returns-to-landing
+> in `App.tsx` (map init + live WebSocket now defer until the app is active), and `ui/Tour.tsx` (an
+> accessible, reduced-motion, config-driven quick-tour with a remembered "seen" flag and one
+> placeholder step). Verified by Playwright (landing desktop+mobile, Explore→read-only, tour card).
+> **Pending:** L1 — the `.com`→`.net` edge 301 + `.net` `INSTANCE`/`APP_URL`/`RP_ID`/API-host config
+> (deployment/DNS, not app code). **Deferred:** all landing copy + real tour steps.
 
 ## Deployment / domain (decided)
 - **`aprscaching.net` is canonical** — it hosts the **first network peer** *and* the marketing
@@ -74,14 +82,15 @@ A reusable, **accessible** coach-mark/tour driven by a **steps config** (empty/p
 - cost: read-only browse already runs against the open endpoints; the landing adds no backend.
 
 ## Milestones
-- **L1 — domain/redirect infra:** `.com` → `.net` edge 301 (pre-auth); `INSTANCE`/`APP_URL`/`RP_ID`/
-  API host set to `.net`; ADR-3 source link host.
-- **L2 — landing gate + CTAs:** signed-in skips landing entirely; signed-out sees landing; Register/
-  Login wired to the existing identity flow; signed-out gated actions route to sign-in.
-- **L3 — Explore → read-only entry:** Explore dismisses the landing, sets the session explore intent,
-  reveals the read-only platform; deep links bypass the landing.
-- **L4 — tour framework:** accessible, reduced-motion, remembered, config-driven, with a placeholder
-  step.
+- **L1 — domain/redirect infra (PENDING — deployment):** `.com` → `.net` edge 301 (pre-auth);
+  `INSTANCE`/`APP_URL`/`RP_ID`/API host set to `.net`; ADR-3 source link host. Not app code.
+- **L2 — landing gate + CTAs (DONE):** signed-in skips landing entirely; signed-out sees landing;
+  Register/Login wired to the existing `SignIn`; signed-out gated actions route to sign-in.
+- **L3 — Explore → read-only entry (DONE):** Explore dismisses the landing, sets the per-session
+  explore intent, reveals the read-only platform; sign-out returns to the landing. (Deep-link bypass
+  is the remaining nicety — currently a fresh visit shows the landing until Explore/sign-in.)
+- **L4 — tour framework (DONE):** accessible, reduced-motion, remembered, config-driven, with a
+  placeholder step; runs once on first Explore.
 - **Deferred (content track, not now):** landing copy + feature list + screenshots; the tour step
   content + DOM targets + the signed-out/signed-in capability descriptions.
 

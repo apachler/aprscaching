@@ -1,6 +1,6 @@
 # Amateur Radio Modes & Transports — Backlog
 
-> Reference backlog for the APRS workbench / APRS Caching platform.
+> Reference backlog for the APRS workbench / APRScaching platform.
 > Each item is a discrete mode or transport with a brief, current state, and the **canonical upstream** (repo root / project page) so links always resolve to the latest release rather than a pinned version.
 >
 > **Last verified:** 2026-06-25
@@ -35,7 +35,7 @@
 - **Symbols:** `APRS-Symbols.pdf` in `wb2osz/aprsspec` — current icon table + on-air encoding for the live map.
 - **APRS-IS:** http://www.aprs-is.net/ (server protocol, q-constructs, filters)
 - **Authentication (open topic):** APRS has **no built-in auth** → inherently spoofable, which validates the Tier-C treatment of IS-only packets. KA2DDO proposal (digital signatures / challenge-response / tokens): https://www.ka2ddo.org/ka2ddo/ARETF-APRS-Authentication.txt · overview https://how.aprs.works/aprs-message-authentication/. **Design note:** even a future *signed* announce packet must stay out of corroboration for its own log (no-circular-corroboration). Track so the WebAuthn identity layer complements any emerging on-air standard.
-- **Relevance:** First-class. The trust-model spine of APRS Caching.
+- **Relevance:** First-class. The trust-model spine of APRScaching.
 
 ### [ ] BL-03 — Dire Wolf (software TNC) `app` `core`
 - **Brief:** The de-facto software modem/TNC: AFSK 1200/9600, KISS + AGWPE interfaces, IGate + digipeater. Also an **APRStt gateway** (see BL-20) and implements **FX.25 + IL2P** FEC (see BL-01).

@@ -1,4 +1,4 @@
-# Open-source & the federated APRS Caching network — proposal
+# Open-source & the federated APRScaching network — proposal
 
 **Goal.** Open the source so any ham or club can self-host, *and* make them want to plug into
 **one shared network** rather than spin up isolated islands. The model to copy is **iNaturalist**

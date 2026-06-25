@@ -1,5 +1,5 @@
 -- aprscaching.com — D1 schema (SQLite)
--- Greenfield. APRS Caching is the core; positions power presence verification.
+-- Greenfield. APRScaching is the core; positions power presence verification.
 
 ------------------------------------------------------------------- IDENTITY
 CREATE TABLE accounts (

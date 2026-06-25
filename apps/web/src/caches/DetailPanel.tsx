@@ -42,7 +42,7 @@ export function DetailPanel(props: {
       actions={<button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>{fav.on ? "♥" : "♡"} {fav.count}</button>}>
       <div className="detail-meta">
         <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>{meta.glyph} {meta.label}</span>
-        <span className="srcchip">{c.source === "native" ? "APRS-Caching" : `imported · ${c.sourceName ?? c.source}`}</span>
+        <span className="srcchip">{c.source === "native" ? "APRScaching" : `imported · ${c.sourceName ?? c.source}`}</span>
         <span className="dataval">{c.code}</span>
       </div>
       <p className="muted mt-1">by <span className="mono">{c.ownerCall}</span></p>

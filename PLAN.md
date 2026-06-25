@@ -1,7 +1,7 @@
 # aprscaching.com — Reborn: Product & Implementation Plan
 
-A modern, **APRS-Caching-first** web workbench — the rebirth of the original APRS Caching
-(OE8APR, 2016). APRS Caching is the **product**; a full APRS workbench (live map,
+A modern, **APRScaching-first** web workbench — the rebirth of the original APRScaching
+(OE8APR, 2016). APRScaching is the **product**; a full APRS workbench (live map,
 multi-transport, messaging, RF tooling — APRStac-class capabilities) is the **platform** it
 runs on. Hosted on **aprscaching.com**.
 
@@ -10,7 +10,7 @@ free SSL) · Workers + Durable Objects (real-time) · D1 + R2 · one tiny always
 (Fly/Railway, or self-hosted on a Pi). Headroom (Tier C ~$25–40/mo: Neon/PostGIS, redundant
 ingest, DO sharding) noted in §8.
 
-> **IP note:** APRS Caching is the author's own work — build it freely. The *workbench*
+> **IP note:** APRScaching is the author's own work — build it freely. The *workbench*
 > capabilities are reimplemented from open specs (APRS101, APRS-IS, AX.25/KISS, Meshtastic,
 > TAK/CoT) and must stay independent of APRStac's (KN4MKB's) closed-source code/assets.
 
@@ -193,7 +193,7 @@ Registration requires a valid callsign (as the original did). Verify control of 
 - **SOTA** summits via the SOTA API (`type=sota`) — the current site already surfaces these.
 - **POTA** parks (`type=pota`) — natural extension.
 - **GPX export/import** — load caches into handhelds; import external lists.
-- **Legacy migration** — an importer for the original APRS Caching dataset (caches,
+- **Legacy migration** — an importer for the original APRScaching dataset (caches,
   logs, accounts) to preserve cache codes and find history. *Needs the legacy DB — see questions.*
 
 ---
@@ -206,7 +206,7 @@ pure parser · port/packet-bus · APRS-IS ingest (filtered, batched) · Worker `
 region DO · live map.
 **Done when:** real APRS-IS stations render live; positions persist to `positions`.
 
-### M1 — APRS Caching core (first-class)
+### M1 — APRScaching core (first-class)
 Cache model + `cache_rtree` · cache map layer (primary markers by type/D/T) · cache detail +
 logbook · owner "hide a cache" CRUD · manual logging (found/DNF/note) · callsign accounts +
 verification (§5).
@@ -265,7 +265,7 @@ follows local rules (e.g. FCC Part 97). Keep TX off by default and gated.
 
 ## 10. Decisions that shape the build (please steer)
 
-1. **Legacy data** — do you still have the original APRS Caching database to migrate
+1. **Legacy data** — do you still have the original APRScaching database to migrate
    (caches, logs, accounts)? This decides whether M3 preserves continuity (codes + find history).
 2. **Verification strictness** — default policy: do *only* high-trust (RF-corroborated) finds count
    for leaderboards, or do IS-only finds count as "unverified"?

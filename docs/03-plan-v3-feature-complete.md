@@ -253,7 +253,7 @@ Acceptance criteria are the definition of done. Drive Claude Code one milestone 
 ### M6 — Headroom / later (Tier C)
 - AFSK-in-browser modem (Web Audio) · HF ports (JS8/PSK31/FT8) · BBS↔BBS mail forwarding (NET/ROM)
   · APRS-over-Meshtastic connected modes · Neon/PostGIS migration · multi-region DO sharding +
-  redundant ingest · *(optional)* APRS-Caching-style presence-verified check-ins (see §10).
+  redundant ingest · *(optional)* APRScaching-style presence-verified check-ins (see §10).
 
 ---
 
@@ -291,8 +291,8 @@ filter feed server-side; persist selectively; batch ingest POSTs; DO Hibernation
 
 ---
 
-## 10. Optional later integration — APRS Caching (researched)
-APRS Caching (aprscaching.com, by OE8APR) is a geocaching variant where a find is
+## 10. Optional later integration — APRScaching (researched)
+APRScaching (aprscaching.com, by OE8APR) is a geocaching variant where a find is
 logged via APRS, so the logger's beaconed position *verifies presence* at the cache. Because
 APRSWeb already ingests and stores positions, a presence-verified "check-in / cache log" feature
 would be a natural **M6** add-on (match a user's APRS position to a target coordinate within a

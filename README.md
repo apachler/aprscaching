@@ -1,6 +1,6 @@
 # aprscaching.com — reborn
 
-An APRS-Caching-first web workbench. **M0→M6 are implemented:** the caching core +
+An APRScaching-first web workbench. **M0→M6 are implemented:** the caching core +
 verification engine, real-time geofencing, heritage imports, community/gamification, the APRS
 workbench (full decoder, live station registry, packet inspector), and interop (CoT/TAK bridge,
 multi-transport ingest, messaging), plus an open **federation** layer and a portable Node/SQLite
@@ -156,7 +156,7 @@ attribute appropriately. (See `docs/` and the source disclaimers shown in-app.)
 
 ## Workbench (M5) — APRS depth
 
-APRS Caching rides on a real APRS workbench. The `@aprsweb/aprs` decoder turns raw frames into
+APRScaching rides on a real APRS workbench. The `@aprsweb/aprs` decoder turns raw frames into
 typed data — uncompressed / **base-91 compressed** / **MIC-E** positions (course, speed, altitude,
 ambiguity), **objects/items**, **messages** (incl. acks & bulletins), **status**, **weather**, and
 **telemetry**, each resolved to a symbol label + category. Ingested packets enrich a live **station
@@ -260,7 +260,7 @@ packet can't reach tier B on its own — corroboration must come from the app re
 (1948–2022), whose decades of work made everything this project builds on possible. *APRS* is his
 trademark. This project is an **independent, unofficial** implementation built from open
 specifications (APRS101, APRS-IS, AX.25/KISS) and is **not affiliated with, sponsored by, or
-endorsed by** Bob Bruninga or his estate. The APRS-Caching game and this application are the
+endorsed by** Bob Bruninga or his estate. The APRScaching game and this application are the
 author's (OE8APR) own work.
 
 Other attributions: maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; imported

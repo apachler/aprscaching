@@ -5,11 +5,11 @@
 @.claude/rules/css.md
 
 ## What this is
-APRS-Caching-first web workbench. APRS Caching is the product; a full APRS workbench is the
+APRScaching-first web workbench. APRScaching is the product; a full APRS workbench is the
 platform. Greenfield (no legacy migration). Author/owner: OE8APR.
 
 ## IP
-APRS Caching is the author's own work — build freely. Workbench capabilities are reimplemented
+APRScaching is the author's own work — build freely. Workbench capabilities are reimplemented
 from OPEN specs (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). Never copy APRStac's
 (KN4MKB) closed-source code/assets.
 
@@ -78,7 +78,8 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   Signed-in skips the landing (full mode); signed-out sees landing (Register/Login/Explore); Explore →
   read-only platform (already open-browse) + an accessible, reduced-motion, config-driven quick-tour
   framework with placeholder steps. `.com`→`.net` pre-auth redirect; rpId binds to `.net` only.
-  L1 domain/redirect · L2 landing gate + CTAs · L3 Explore→read-only · L4 tour framework.
+  **L2–L4 mechanics IMPLEMENTED** (Landing.tsx · App.tsx gate · ui/Tour.tsx); **L1 domain/redirect
+  PENDING** (deployment); landing copy + real tour steps still deferred.
 - Weather stations — `docs/17-weather-stations.md`: APRS weather is first-class and the RX side is
   built (`decode.ts` wx parse → `sensor_readings`; shown on station page). Adds user-origination of
   their own PWS: W1 direct platform ingest (Ecowitt / WU-Rapidfire → `-13` weather SSID, no licence) ·

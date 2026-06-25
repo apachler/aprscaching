@@ -91,13 +91,13 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
 
       {match("About credits attribution Bruninga WB4APR APRS trademark licence open source") && (
         <Group title="About & credits" defaultOpen={false}>
-          <p className="muted">APRScaching is an APRS-Caching-first web workbench by <span className="mono">OE8APR</span>.</p>
+          <p className="muted">APRScaching is a caching-first web workbench by <span className="mono">OE8APR</span>.</p>
           <p className="muted">APRS — the Automatic Packet Reporting System — was created by the late
             {" "}<strong>Bob Bruninga, WB4APR</strong> (1948–2022). “APRS” is his trademark. This is an
             independent, unofficial implementation built from open specifications (APRS101, APRS-IS) and
             is not affiliated with, sponsored by, or endorsed by him or his estate.</p>
           <p className="muted">Maps © OpenStreetMap contributors, rendered with MapLibre. Built on open
-            source; the APRS-Caching game and this app are the author’s own work.</p>
+            source; the APRScaching game and this app are the author’s own work.</p>
         </Group>
       )}
     </Panel>

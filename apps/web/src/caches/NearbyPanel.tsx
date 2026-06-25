@@ -42,7 +42,7 @@ export function NearbyPanel(props: {
             {caches.map((m) => {
               const meta = typeMeta(m.type);
               const d = dist(m);
-              const src = m.source === "native" ? "APRS-Caching" : (m.sourceName ?? m.source);
+              const src = m.source === "native" ? "APRScaching" : (m.sourceName ?? m.source);
               return (
                 <li key={m.globalId}>
                   <button className={`ccard${m.id === props.selectedId ? " active" : ""}`} disabled={m.id == null}

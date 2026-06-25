@@ -1,11 +1,11 @@
 # aprscaching.com — reborn · project bundle
 
-Everything for the APRS-Caching-first web workbench, by OE8APR. Greenfield.
+Everything for the APRScaching-first web workbench, by OE8APR. Greenfield.
 
 ## Start here
 - `README.md`      — what the scaffold is + quick start (pnpm install, wrangler, ingest)
 - `CLAUDE.md`      — conventions for Claude Code (open `claude` here, then "implement M1")
-- `PLAN.md`        — the committed product plan (APRS Caching first; Tier B stack)
+- `PLAN.md`        — the committed product plan (APRScaching first; Tier B stack)
 - `AUTH_AND_ANNOUNCE.md` — auth (passkey + callsign badge) and APRS-IS announce design
 
 ## Code (M0 scaffold — runs/extends from here)

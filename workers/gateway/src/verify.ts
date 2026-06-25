@@ -1,5 +1,5 @@
 /**
- * verify.ts — APRS Caching presence-verification engine.
+ * verify.ts — APRScaching presence-verification engine.
  *
  * Trust tiers (trust follows corroboration, not transport):
  *   A  RF-corroborated : position heard on RF (qAR), gated by an IGate that is NOT
