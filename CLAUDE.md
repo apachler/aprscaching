@@ -43,3 +43,17 @@ pnpm --filter @aprsweb/web dev
 ## Build order
 M0 spine (this scaffold) → M1 caching core → M2 verification+geofencing → M3 import/heritage
 → M4 community/gamify → M5 workbench depth → M6 headroom.
+
+Two backlog tracks fold into the milestones above (build each feature against its doc; both MUST
+hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-motion, the cost model):
+- Adopted map & UX features — `docs/11-adopted-map-features.md`:
+  M1 vector basemap + layer switcher · save/share view (URL state) · favorites + basic search;
+  M2 topo/satellite layers · ruler+navigate · range rings + grid/MGRS · cache page (finds-over-time)
+  · enriched search; M3 track history by date · time-replay · GPX/KML export · public read API;
+  M4 deep-link/embeddable widget + QR · push alerts (nearby/new-cache/DNF) · API keys;
+  M5 station telemetry/weather graphs · raw packet view (workbench).
+- Sustainability & supporter donations — `docs/12-sustainability-donations.md` (free-in-full,
+  recognition-only, never feature-gating): Now (no code) donation links + transparency page + the
+  open-source LICENSE that unlocks the ARDC grant; M4 supporter badge + hide-nag + `/support`
+  ledger; M5 peer cost-reimbursement (Open Collective). Monetization schema lands as a new migration
+  (next free number), not the `0003` the doc names retrospectively.
