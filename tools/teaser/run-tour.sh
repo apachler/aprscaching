@@ -13,7 +13,7 @@ for c in /opt/pw-browsers/chromium-*/chrome-linux/chrome /opt/pw-browsers/chromi
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/manifest.json 2>/dev/null || true
 
-cleanup() { for p in ${API_PID:-} ${WEB_PID:-}; do kill -9 "-$p" 2>/dev/null || true; done; pkill -9 -f "tsx src/server.ts" 2>/dev/null || true; pkill -9 -f "vite preview" 2>/dev/null || true; }
+cleanup() { for p in ${API_PID:-} ${WEB_PID:-}; do kill -9 "-$p" 2>/dev/null || true; done; pkill -9 -f "src/server.ts" 2>/dev/null || true; pkill -9 -f "vite preview" 2>/dev/null || true; }
 trap cleanup EXIT
 wait_url() { for _ in $(seq 1 60); do curl -sf "$1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
 
@@ -21,7 +21,7 @@ echo "==> build web (offline grid basemap, api -> :$PORT_API)"
 ( cd "$ROOT" && VITE_BASEMAP=offline VITE_API_BASE="http://127.0.0.1:$PORT_API" pnpm --filter @aprsweb/web build ) >/dev/null
 
 echo "==> start Node gateway on :$PORT_API"
-pkill -9 -f "tsx src/server.ts" 2>/dev/null || true; sleep 1
+pkill -9 -f "src/server.ts" 2>/dev/null || true; sleep 1
 setsid bash -c "DB_PATH='$DB' PORT=$PORT_API INSTANCE=oe.teaser FED_PRIVATE_KEY='' exec pnpm --filter @aprsweb/node-gateway start" >"$OUT/api.log" 2>&1 &
 API_PID=$!
 wait_url "http://127.0.0.1:$PORT_API/health" || { echo "gateway did not start"; tail "$OUT/api.log"; exit 1; }
