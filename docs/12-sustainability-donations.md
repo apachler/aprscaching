@@ -160,12 +160,15 @@ attaches to *internet infrastructure*, not amateur-radio operation.
 
 ---
 
-## 7. Schema (migration `0003_monetization.sql`)
+## 7. Schema (migration `0012_monetization.sql`)
 
-Reused as-is, reframed: `accounts.tier` = recognition level (free|supporter); `entitlements` holds
-**recognition** keys only (badge, hide_nag) — not functional limits; `peers` + `peer_metrics`
-drive corroborated eligibility; `payouts` records **cost reimbursements**; `ledger` is the public
-transparency record.
+> Migration number pinned to **`0012`** (`docs/14`); the doc's earlier `0003` label was retrospective.
+> It lands as a new migration after `0011_account_callsigns`, never renumbering existing ones.
+
+`accounts.tier` = recognition level (free|supporter); `entitlements` holds **recognition** keys only
+(badge, hide_nag) — **never functional limits** (core handlers must not read it to restrict anything,
+and `api_keys` from `docs/11` are free/recognition too); `peers` + `peer_metrics` drive corroborated
+eligibility; `payouts` records **cost reimbursements**; `ledger` is the public transparency record.
 
 ---
 

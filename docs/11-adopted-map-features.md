@@ -34,8 +34,11 @@ protect the cost model.
 | **GPX/KML export + public API** | GPX export of caches (for GPS devices) + KML of tracks; a public **read API** (caches in bbox, cache detail, station track) à la the aprs.fi API. | edge (Worker endpoints generate GPX/KML/JSON; rate-limited + keys) | GPX M3 · API M3–M4 |
 | **Proximity / new-cache-nearby alerts** | In-field geofence prompt already exists (M2). Add **background** alerts: "new cache published near you," "a cache you watch had a find/DNF." | web (Service Worker + Push API) · edge (DO/cron dispatch) | M4 |
 | **Favorites + search-as-you-type** | Favorite/watch caches; unified autocomplete over **cache code/name + callsign + address/locator**, with recent searches. | web (search UI) · edge (search endpoint; D1 FTS5 + geocoder for addresses) | favorites/search M1 · enrich M2 |
-**Push note:** Web Push works cross-platform incl. recent iOS (installed PWA) — gate behind
-permission, fall back to in-app. Don't block the field geofence prompt on push being granted.
+**Push note (decided — `docs/14` ADR-4b):** push is **permission- and PWA-install-gated** (iOS needs
+an installed PWA). Non-push users get **in-app alerts + an email digest** — the iOS/no-push fallback
+is mandatory, not optional. Push **never** blocks the in-field geofence prompt. Coalesce/throttle and
+offer per-topic subscribe/unsubscribe (nearby / new-cache / DNF). Backed by `push_subs` + an
+email-digest job.
 ---
 ## 4. Synergies with our trust model (why these matter beyond parity)
 - **Replay + path/IGate data = corroboration, visualized.** The same history that powers replay
@@ -84,7 +87,11 @@ GET /api/station/:call.kml                  track as KML
 GET /v/:slug                               resolve a saved/shared map view
 GET /embed?cache=:code | ?bbox=             embeddable map (iframe)
 ```
-Anonymous = low rate; `api_keys` = higher. CORS for embeds; CSP-friendly.
+**Access model (decided — `docs/14` ADR-4a):** read-only and **free**. Anonymous access is
+**rate-limited per IP**; **free `api_keys` raise the limits** (recognition model — keys are free,
+never paywalled). Cap bbox size, paginate, edge-cache bbox/detail responses, enforce read-only, and
+keep CORS open for embeds (CSP-friendly). This honors the cost rules and the ad-free /
+recognition-only stance.
 ---
 ## 7. Rule compliance (do not regress)
 - **ui-ux.md:** every adopted feature adds surface area — so each MUST follow progressive

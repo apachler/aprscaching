@@ -80,12 +80,20 @@ held calls with per-call verify / set-active and an "Add a callsign" disclosure.
 hold → verify → switch-away → switch-back-preserves-verification, add, and the
 held-by-another-account guards on both runtimes.
 
-Deferred extensions: **SSID station registry** (`account_stations` — the per-SSID picker; base-call
-verification already covers all SSIDs, this is operating-station UX only); **account-level credit
-aggregation** (today the leaderboard credits per base call — a person holding two base calls shows as
-two rows; joining credit through `account_callsigns` to one account is a later refinement); and
-reconciling the **callsign-reassignment** edge (a callsign later re-licensed to a different person
-still shows the prior holder's finds, since history is per-callsign string).
+Decided (`docs/14`, ADR-1/ADR-2):
+- **Leaderboard credit (ADR-1):** leaderboards **rank by callsign**; a person's **own profile sums**
+  all their verified held calls (aggregate over `account_callsigns`). A find is credited **once** to
+  the logging call (control-verification-gated, as today) — no double-counting, no schema change. An
+  optional future "show as one operator" de-duped board may follow.
+- **Callsign reassignment (ADR-2):** authorship belongs to the **account, not the call string**. A
+  reassigned call starts fresh for the new holder; the prior holder keeps their finds, shown under
+  the call **as held at the time**. Attribute finds by `(account_id, callsign, timestamp)` and
+  resolve display via `callsign_history` time windows — **never join on the bare call string**.
+  Every find-writing path must stamp `account_id`; per-account Ed25519 signing already makes
+  authorship provable across reassignment.
+
+Still deferred: **SSID station registry** (`account_stations` — the per-SSID picker; base-call
+verification already covers all SSIDs, this is operating-station UX only).
 
 **Leaderboard credit now gates on control-verification.** Competitive standings only count finds
 whose `logger_call` is control-verified (APRS message-challenge / LoTW) — an unverified callsign

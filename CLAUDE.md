@@ -44,7 +44,14 @@ pnpm --filter @aprsweb/web dev
 M0 spine (this scaffold) → M1 caching core → M2 verification+geofencing → M3 import/heritage
 → M4 community/gamify → M5 workbench depth → M6 headroom.
 
-Two backlog tracks fold into the milestones above (build each feature against its doc; both MUST
+Cross-cutting decisions are recorded in `docs/14-open-decisions.md` (ADR set, ACCEPTED): leaderboard
+ranks by callsign + profile aggregates per person (ADR-1); find authorship follows `account_id`, never
+the bare call string (ADR-2); a visible "Source" link + `/.well-known/source` is **launch-blocking**
+before first public deploy (ADR-3, AGPL §13); read API is free with per-IP limits + free keys (ADR-4a);
+push is permission/PWA-gated with a mandatory email-digest fallback (ADR-4b); GDPR deletes propagate via
+signed federation tombstones (ADR-5).
+
+Backlog tracks fold into the milestones above (build each feature against its doc; all MUST
 hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-motion, the cost model):
 - Adopted map & UX features — `docs/11-adopted-map-features.md`:
   M1 vector basemap + layer switcher · save/share view (URL state) · favorites + basic search;
@@ -56,8 +63,8 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   recognition-only, never feature-gating): Now (no code) donation links + transparency page (the
   open-source LICENSE that unlocks the ARDC grant is **done** — AGPL-3.0 app/gateway · MIT libraries
   · CC-BY-SA-4.0 docs); M4 supporter badge + hide-nag + `/support` ledger; M5 peer cost-reimbursement
-  (Open Collective). Monetization schema lands as a new migration (next free number), not the `0003`
-  the doc names retrospectively.
+  (Open Collective). Monetization schema lands as migration **`0012`** (`docs/14`), not the `0003`
+  the doc names retrospectively; `entitlements`/`api_keys` are recognition-only, never feature gates.
 - Profiles — `docs/13-profiles.md`: a thin, opt-in ham profile (display name, locator, avatar, bio,
   links, operated SSIDs, opt-in public contact) — borrow QRZ's self-curated profile, reject its
   name/address directory data (off-mission + DSGVO). M4 basic profile + Settings→Profile group;

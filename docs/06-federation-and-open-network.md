@@ -160,3 +160,11 @@ should land early — it's the single biggest lever on how many people actually 
 4. **Position privacy** — what corroboration evidence may cross instances, and for how long?
 5. **Reference runtime** — commit to the Node/SQLite self-host target now (recommended), or stay
    Cloudflare-only for v1 and portability later?
+
+**Resolved (see `docs/14-open-decisions.md`):** (1) **License decided** — AGPL-3.0-or-later for the
+app/gateway, MIT for `packages/*` libs, CC-BY-SA-4.0 for docs (`LICENSE` files in repo). (5)
+**Reference runtime committed** — Node/SQLite self-host is implemented and CI-proven alongside
+Cloudflare. **Federated deletes (ADR-5):** account/find deletion emits an Ed25519-**signed tombstone**
+served at `GET /federation/tombstones`; peers verify it and purge mirrored copies on sync, so GDPR
+deletes propagate. Tombstones carry only signed global ids + timestamp (no PII). New `tombstones`
+table + a federation migration; full spec in `docs/14`.
