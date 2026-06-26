@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cachesToGpx, cachesToKml, findsToAdif, type ExpCache, type ExpFind } from "../src/exports.js";
+import { cachesToGpx, cachesToKml, findsToAdif, trackToKml, type ExpCache, type ExpFind } from "../src/exports.js";
 
 const cache: ExpCache = { code: "AC-0001", title: "Schlossberg Clock Tower", type: "single", difficulty: 1.5, terrain: 2, lat: 47.0735, lon: 15.4378, ownerCall: "OE8APR" };
 
@@ -40,6 +40,16 @@ describe("read-API exports (docs/11 M3)", () => {
     expect(adif).toContain("<SIG:11>APRSCACHING");
     expect(adif).toContain("<SIG_INFO:7>AC-0001");
     expect(adif).toContain("<EOR>");
+  });
+
+  it("trackToKml emits a LineString of lon,lat,0 coordinates in order", () => {
+    const kml = trackToKml("OE8XYZ-9", [
+      { lat: 47.07, lon: 15.43, ts: 100, heardVia: "rf" },
+      { lat: 47.08, lon: 15.44, ts: 200, heardVia: "aprs_is" },
+    ]);
+    expect(kml).toContain("<LineString>");
+    expect(kml).toContain("<coordinates>15.43,47.07,0 15.44,47.08,0</coordinates>");
+    expect(kml).toContain("<name>OE8XYZ-9</name>");
   });
 
   it("findsToAdif handles unicode comments without breaking field lengths", () => {

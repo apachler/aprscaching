@@ -22,9 +22,9 @@ import { json } from "./app.js";
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile } from "./community.js";
-import { handleStations } from "./workbench.js";
+import { handleStations, handleStation } from "./workbench.js";
 import { handleSpots } from "./spots.js";
-import { handleCachesGpx, handleCachesKml, handleCacheGpx, handleFindsAdif } from "./exports.js";
+import { handleCachesGpx, handleCachesKml, handleCacheGpx, handleFindsAdif, handleStationTrack, handleStationKml } from "./exports.js";
 
 const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
 const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
@@ -43,6 +43,9 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/leaderboard?metric=finds|points", desc: "top finders" },
   { method: "GET", path: "/api/v1/profile/:call", desc: "a callsign's public profile" },
   { method: "GET", path: "/api/v1/stations?bbox=", desc: "live APRS stations" },
+  { method: "GET", path: "/api/v1/station/:call", desc: "one station's latest info" },
+  { method: "GET", path: "/api/v1/station/:call/track?from=&to=", desc: "position history (JSON)" },
+  { method: "GET", path: "/api/v1/station/:call.kml", desc: "position history as a KML track" },
   { method: "GET", path: "/api/v1/spots?bbox=", desc: "live activity spots" },
   { method: "POST", path: "/api/v1/keys", desc: "issue a free API key" },
 ];
@@ -147,6 +150,12 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (rest === "/leaderboard") return handleLeaderboard(req, env);
   if (rest === "/stations") return bboxTooLarge(req, env) ?? handleStations(req, env);
   if (rest === "/spots") return bboxTooLarge(req, env) ?? handleSpots(req, env);
+  const stTrack = /^\/station\/([A-Za-z0-9-]+)\/track$/.exec(rest);
+  if (stTrack) return handleStationTrack(req, env, stTrack[1]!.toUpperCase());
+  const stKml = /^\/station\/([A-Za-z0-9-]+)\.kml$/.exec(rest);
+  if (stKml) return handleStationKml(req, env, stKml[1]!.toUpperCase());
+  const stInfo = /^\/station\/([A-Za-z0-9-]+)$/.exec(rest);
+  if (stInfo) return handleStation(req, env, stInfo[1]!.toUpperCase());
   const profM = /^\/profile\/([A-Za-z0-9-]+)$/.exec(rest);
   if (profM) return handleProfile(req, env, profM[1]!.toUpperCase());
 

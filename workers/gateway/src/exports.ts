@@ -86,6 +86,47 @@ export async function handleCacheGpx(req: Request, env: Env, code: string): Prom
   if (!c) return new Response(JSON.stringify({ error: "cache not found" }), { status: 404, headers: { "content-type": "application/json" } });
   return download(cachesToGpx([c]), "application/gpx+xml", `${code}.gpx`);
 }
+// ---- station tracks (docs/11 §6): position history as JSON + KML LineString ----
+interface TrackPt { lat: number; lon: number; ts: number; heardVia: string }
+
+async function stationTrack(env: Env, call: string, from: number, until: number): Promise<TrackPt[]> {
+  return (await env.DB.prepare(
+    `SELECT lat, lon, ts, heard_via AS heardVia FROM positions
+       WHERE callsign = ? AND ts BETWEEN ? AND ? ORDER BY ts ASC LIMIT 5000`,
+  ).bind(call, from, until).all<TrackPt>()).results;
+}
+
+function trackWindow(req: Request): { from: number; until: number } {
+  const u = new URL(req.url);
+  const now = Math.floor(Date.now() / 1000);
+  const until = Number(u.searchParams.get("to")) || now;
+  let from = Number(u.searchParams.get("from")) || until - 24 * 3600;
+  if (until - from > 31 * 24 * 3600) from = until - 31 * 24 * 3600; // cap span at 31 days
+  return { from, until };
+}
+
+export async function handleStationTrack(req: Request, env: Env, call: string): Promise<Response> {
+  const { from, until } = trackWindow(req);
+  const pts = await stationTrack(env, call, from, until);
+  return new Response(JSON.stringify({ callsign: call, from, until, count: pts.length, positions: pts }),
+    { headers: { "content-type": "application/json" } });
+}
+
+export function trackToKml(call: string, pts: TrackPt[]): string {
+  const coords = pts.map((p) => `${p.lon},${p.lat},0`).join(" ");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>${xmlEscape(call)} track</name>\n` +
+    `    <Placemark>\n      <name>${xmlEscape(call)}</name>\n` +
+    `      <LineString>\n        <tessellate>1</tessellate>\n        <coordinates>${coords}</coordinates>\n      </LineString>\n` +
+    `    </Placemark>\n  </Document>\n</kml>\n`;
+}
+
+export async function handleStationKml(req: Request, env: Env, call: string): Promise<Response> {
+  const { from, until } = trackWindow(req);
+  const pts = await stationTrack(env, call, from, until);
+  return download(trackToKml(call, pts), "application/vnd.google-earth.kml+xml", `${call}-track.kml`);
+}
+
 export async function handleFindsAdif(req: Request, env: Env, call: string): Promise<Response> {
   const finds = (await env.DB.prepare(
     `SELECT c.code, c.title, c.owner_call AS ownerCall, c.station_call AS stationCall, l.ts

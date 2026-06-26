@@ -20,6 +20,7 @@ import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js"
 import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
+import { handleEmbed, handleQr } from "./embed.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -86,6 +87,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // public read API (docs/11 §6, ADR-4a) — versioned, rate-limited, free keys; read-only
   if (p === "/api/v1" || p.startsWith("/api/v1/")) return handleApiV1(req, env, p.slice("/api/v1".length));
+
+  // embeddable map widget + QR (docs/11 M4) — public, CORS-open, read-only
+  if (p === "/embed/qr.svg" && m === "GET") return handleQr(req, env);
+  if (p === "/embed" && m === "GET") return handleEmbed(req, env);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

@@ -467,5 +467,15 @@ ok("GET /api/v1/caches/:code.gpx exports a single cache", gpx1.status === 200 &&
 const adif = await text("/api/v1/profile/OE8APR.adif");
 ok("GET /api/v1/profile/:call.adif exports ADIF", adif.status === 200 && /ADIF_VER/.test(adif.body) && adif.body.includes("<EOH>"), `${adif.status} ${adif.ct}`);
 
+// station tracks + embed widget + QR (docs/11 M4)
+const track = await call("GET", "/api/v1/station/OE7BBS/track");
+ok("GET /api/v1/station/:call/track returns position history", track.status === 200 && Array.isArray(track.data?.positions), JSON.stringify({ count: track.data?.count }));
+const tkml = await text("/api/v1/station/OE7BBS.kml");
+ok("GET /api/v1/station/:call.kml returns a KML track", tkml.status === 200 && /kml/.test(tkml.ct) && tkml.body.includes("<LineString>"), `${tkml.status} ${tkml.ct}`);
+const embed = await text("/embed?cache=" + (v1code || "AC-0001"));
+ok("GET /embed serves an HTML map widget", embed.status === 200 && /text\/html/.test(embed.ct) && embed.body.includes("maplibre-gl"), `${embed.status} ${embed.ct}`);
+const qr = await text("/embed/qr.svg?cache=" + (v1code || "AC-0001"));
+ok("GET /embed/qr.svg returns an SVG QR", qr.status === 200 && /svg\+xml/.test(qr.ct) && qr.body.startsWith("<svg"), `${qr.status} ${qr.ct}`);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
