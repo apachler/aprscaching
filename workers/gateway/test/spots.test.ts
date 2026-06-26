@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { bandForHz, freqToHz, dedupeSpots, filterSpots, type Spot } from "@aprsweb/shared";
-import { normalizePota, normalizeGma, normalizeSota, handleSpots, _resetSpotsCache, _resetSotaSummits } from "../src/spots.js";
+import { bandForHz, freqToHz, gridToLatLon, dedupeSpots, filterSpots, type Spot } from "@aprsweb/shared";
+import { normalizePota, normalizeGma, normalizeSota, normalizePsk, normalizeDxCluster, normalizeRbn, handleSpots, _resetSpotsCache, _resetSotaSummits } from "../src/spots.js";
 import type { Env } from "../src/env.js";
 
 const spot = (p: Partial<Spot>): Spot => ({ id: "x", source: "pota", callsign: "OE8APR", lat: 47, lon: 15, spottedAt: 100, ...p });
@@ -78,6 +78,37 @@ describe("spots — SOTA normalizer + summit resolution (S3)", () => {
       expect(out[0]).toMatchObject({ ref: "OE/OO-001", lat: 48.1, lon: 14.0, name: "Test Summit" });
       expect(calls).toBe(1); // second spot hits the per-summit cache
     } finally { globalThis.fetch = orig; }
+  });
+});
+
+describe("spots — reception networks (S3): grid + PSK/DX/RBN", () => {
+  it("gridToLatLon returns the square centre and rejects junk", () => {
+    expect(gridToLatLon("JN88")).toEqual({ lat: 48.5, lon: 17 });
+    expect(gridToLatLon("jn77")).toEqual({ lat: 47.5, lon: 15 });
+    expect(gridToLatLon("ZZ99")).toBeNull();
+    expect(gridToLatLon("")).toBeNull();
+    const sub = gridToLatLon("JN88ec")!;
+    expect(sub.lat).toBeGreaterThan(48); expect(sub.lat).toBeLessThan(49);
+  });
+
+  it("normalizePsk maps the sender locator to coordinates, drops gridless reports", () => {
+    const out = normalizePsk({ receptionReport: [
+      { senderCallsign: "oe8apr", senderLocator: "JN77", frequency: "14074000", mode: "FT8", flowStartSeconds: 1717236000 },
+      { senderCallsign: "NOGRID", frequency: "7074000", mode: "FT8" },
+    ] });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ source: "pskreporter", callsign: "OE8APR", band: "20m", mode: "FT8", lat: 47.5, lon: 15 });
+  });
+
+  it("normalizeDxCluster / normalizeRbn map only when a grid is present", () => {
+    const dx = normalizeDxCluster([
+      { dx: "DL1ABC", frequency: "14250", grid: "JO31", time: 1717236000, comment: "up 2" },
+      { dx: "NOLOC", frequency: "7032" },
+    ]);
+    expect(dx).toHaveLength(1);
+    expect(dx[0]).toMatchObject({ source: "dxcluster", callsign: "DL1ABC", band: "20m" });
+    const rbn = normalizeRbn([{ dx: "OE8APR", freq: "7030", grid: "JN77", snr: "25", mode: "CW" }]);
+    expect(rbn[0]).toMatchObject({ source: "rbn", callsign: "OE8APR", band: "40m", comment: "RBN 25 dB" });
   });
 });
 

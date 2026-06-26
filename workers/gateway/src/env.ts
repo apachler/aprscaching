@@ -56,6 +56,9 @@ export interface Env {
   SPOTS_SOTA_URL?: string;  // override the SOTA spots endpoint
   SPOTS_SOTA_SUMMITS_URL?: string; // SOTA summit-detail base (for coord resolution; default api-db2)
   SPOTS_GMA_URL?: string;   // override the GMA/WWBOTA (cqgma.org) spots endpoint
+  SPOTS_PSK_URL?: string;   // PSKReporter reception-report JSON endpoint (reception net; off unless set)
+  SPOTS_DXCLUSTER_URL?: string; // DX-cluster JSON endpoint (off unless set; mappable only with a grid)
+  SPOTS_RBN_URL?: string;   // RBN reception JSON endpoint (off unless set; mappable only with a grid)
 
   // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string;         // app origin for magic-link redirects, e.g. "https://aprscaching.com"

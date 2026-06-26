@@ -41,6 +41,19 @@ const BANDS: ReadonlyArray<[number, number, string]> = [
   [1_240_000_000, 1_300_000_000, "23cm"],
 ];
 
+/** Maidenhead grid locator → lat/lon (centre of the square/subsquare). Accepts 4- or 6-char grids. */
+export function gridToLatLon(grid: string | undefined | null): { lat: number; lon: number } | null {
+  const g = String(grid ?? "").trim().toUpperCase();
+  if (!/^[A-R]{2}[0-9]{2}([A-X]{2})?$/.test(g)) return null;
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180 + (g.charCodeAt(2) - 48) * 2;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90 + (g.charCodeAt(3) - 48) * 1;
+  if (g.length >= 6) {
+    lon += (g.charCodeAt(4) - 65) * (2 / 24) + (2 / 24) / 2;
+    lat += (g.charCodeAt(5) - 65) * (1 / 24) + (1 / 24) / 2;
+  } else { lon += 1; lat += 0.5; } // centre of the 2°×1° square
+  return { lat, lon };
+}
+
 /** Band label for a dial frequency in Hz (undefined if outside the plan or absent). */
 export function bandForHz(hz?: number): string | undefined {
   if (!hz || !Number.isFinite(hz)) return undefined;

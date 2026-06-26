@@ -9,7 +9,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { type Spot, type SpotSource, bandForHz, freqToHz, dedupeSpots, filterSpots } from "@aprsweb/shared";
+import { type Spot, type SpotSource, bandForHz, freqToHz, gridToLatLon, dedupeSpots, filterSpots } from "@aprsweb/shared";
 
 const truthy = (v?: string) => v === "1" || v === "true" || v === "yes";
 
@@ -125,18 +125,65 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
 /** Test seam: clear the cached SOTA summit coordinates. */
 export function _resetSotaSummits(): void { sotaSummits.clear(); }
 
+// ---- reception networks (docs/20 S3): "who heard whom". Mappable only with a grid/coords; a station
+// without a locatable position is dropped (we don't carry a callsign→geo table). These never touch the
+// A/B/C find tiers — they're a separate live-activity layer.
+const recvSpot = (src: SpotSource, r: Record<string, unknown>, callKeys: string[], extra: Partial<Spot>): Spot | null => {
+  const callsign = String(pick(r, ...callKeys) ?? "").toUpperCase();
+  if (!callsign) return null;
+  let lat = num(pick(r, "latitude", "lat")), lon = num(pick(r, "longitude", "lon"));
+  if (lat == null || lon == null) { const g = gridToLatLon(pick(r, "grid", "locator", "gridsquare", "senderLocator", "dxGrid") as string); if (!g) return null; lat = g.lat; lon = g.lon; }
+  const freqHz = freqToHz(pick(r, "frequency", "freq", "freqHz") as string | number | undefined);
+  return {
+    id: `${src}:${pick(r, "id") ?? `${callsign}:${freqHz ?? ""}`}`, source: src, callsign,
+    ref: (pick(r, "ref", "grid", "locator", "senderLocator") as string) || undefined,
+    lat, lon, freqHz, band: bandForHz(freqHz),
+    mode: (pick(r, "mode") as string)?.toUpperCase() || undefined,
+    spottedAt: toUnix(pick(r, "flowStartSeconds", "timeStamp", "time", "date", "spotTime")),
+    ...extra,
+  };
+};
+
+/** PSKReporter — reception reports carrying the sender's grid locator (the mappable reception source). */
+export function normalizePsk(raw: unknown): Spot[] {
+  const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { receptionReport?: unknown[] })?.receptionReport) ? (raw as { receptionReport: unknown[] }).receptionReport : [];
+  return (arr as Record<string, unknown>[])
+    .map((r) => recvSpot("pskreporter", r, ["senderCallsign", "callsign", "call"], { comment: "heard via PSKReporter" }))
+    .filter((s): s is Spot => s != null);
+}
+
+/** DX-cluster — spotter/dx spots; mapped only when the feed carries a grid/coords for the DX station. */
+export function normalizeDxCluster(raw: unknown): Spot[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Record<string, unknown>[])
+    .map((r) => recvSpot("dxcluster", r, ["dx", "spotted", "call", "callsign"], { comment: (pick(r, "comment", "info", "text") as string) || "DX spot" }))
+    .filter((s): s is Spot => s != null);
+}
+
+/** RBN — skimmer reception reports; mapped only when a grid/coords is present. */
+export function normalizeRbn(raw: unknown): Spot[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Record<string, unknown>[])
+    .map((r) => recvSpot("rbn", r, ["dx", "call", "callsign"], { comment: (pick(r, "snr", "db") != null ? `RBN ${pick(r, "snr", "db")} dB` : "RBN spot") }))
+    .filter((s): s is Spot => s != null);
+}
+
 const SOURCES: SourceDef[] = [
   { source: "pota", url: (env) => env.SPOTS_POTA_URL || "https://api.pota.app/spot/activator", normalize: normalizePota },
   { source: "sota", url: (env) => env.SPOTS_SOTA_URL || "https://api2.sota.org.uk/api/spots/50/all", normalize: normalizeSota },
   { source: "gma", url: (env) => env.SPOTS_GMA_URL || "https://www.cqgma.org/api/spots/25/", normalize: normalizeGma },
-  // further: WWBOTA (own API), DX-cluster, RBN/PSKReporter (reception networks).
+  // reception networks (mappable only with a grid/coords); enable explicitly via SPOTS_SOURCES.
+  { source: "pskreporter", url: (env) => env.SPOTS_PSK_URL || "", normalize: normalizePsk },
+  { source: "dxcluster", url: (env) => env.SPOTS_DXCLUSTER_URL || "", normalize: normalizeDxCluster },
+  { source: "rbn", url: (env) => env.SPOTS_RBN_URL || "", normalize: normalizeRbn },
 ];
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */
 function enabledSources(env: Env): SourceDef[] {
   if (!truthy(env.SPOTS_ENABLED)) return [];
   const only = (env.SPOTS_SOURCES || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return only.length ? SOURCES.filter((s) => only.includes(s.source)) : SOURCES;
+  const chosen = only.length ? SOURCES.filter((s) => only.includes(s.source)) : SOURCES;
+  return chosen.filter((s) => s.url(env)); // skip sources with no endpoint configured (e.g. reception nets)
 }
 
 let cache: { at: number; spots: Spot[] } | null = null;
