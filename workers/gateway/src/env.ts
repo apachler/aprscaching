@@ -42,6 +42,12 @@ export interface Env {
   // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
   BBS_CALL?: string;        // e.g. "OE8APR-5"; defaults to "APRSCG"
 
+  // ---- public read API (docs/11 §6, ADR-4a) — free, per-IP rate-limited; free keys raise the cap ----
+  API_RATE_WINDOW_SEC?: string; // rate-limit window seconds (default 60)
+  API_RATE_ANON?: string;       // anonymous requests/window (default 60)
+  API_RATE_KEYED?: string;      // with a free key: requests/window (default 600)
+  API_MAX_BBOX_DEG?: string;    // max bbox side in degrees for /api/v1 reads (default 20)
+
   // ---- live activity spots (docs/20 S1) — read-only aggregation, off unless explicitly enabled ----
   SPOTS_ENABLED?: string;   // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)
   SPOTS_SOURCES?: string;   // optional comma-separated allowlist of sources (else all built-in: pota…)

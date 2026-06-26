@@ -441,5 +441,21 @@ ok("user RSS feed renders for a callsign", userFeed.body.includes("<rss") && use
 const spots = await call("GET", "/api/spots?bbox=14,46,16,48&bands=20m");
 ok("/api/spots responds with the spots envelope (disabled by default → empty)", spots.status === 200 && spots.data?.enabled === false && Array.isArray(spots.data?.spots) && spots.data.spots.length === 0, JSON.stringify(spots.data));
 
+// ---- public read API (docs/11 §6, ADR-4a): versioned, rate-limited, free keys, read-only ----
+const apiIdx = await call("GET", "/api/v1");
+ok("/api/v1 index lists version + limits + endpoints", apiIdx.status === 200 && apiIdx.data?.version === "v1" && apiIdx.data?.rateLimits?.with_key > apiIdx.data?.rateLimits?.anonymous && Array.isArray(apiIdx.data?.endpoints), JSON.stringify(apiIdx.data?.rateLimits));
+const apiKeyRes = await call("POST", "/api/v1/keys", { label: "smoke" });
+const apiKey = apiKeyRes.data?.key;
+ok("POST /api/v1/keys issues a free key", apiKeyRes.status === 201 && typeof apiKey === "string" && apiKey.startsWith("acg_"), JSON.stringify(apiKeyRes.data));
+const v1caches = await call("GET", "/api/v1/caches?bbox=-180,-90,180,90", undefined, { authorization: "Bearer " + apiKey });
+ok("GET /api/v1/caches (keyed) returns seeded caches", v1caches.status === 200 && (v1caches.data?.caches ?? []).length > 0, JSON.stringify(v1caches.data?.caches?.length));
+const v1code = (v1caches.data?.caches ?? [])[0]?.code;
+const v1detail = v1code ? await call("GET", "/api/v1/caches/" + v1code) : { status: 0, data: {} };
+ok("GET /api/v1/caches/:code returns cache detail", v1detail.status === 200 && v1detail.data?.cache?.code === v1code, JSON.stringify({ v1code, got: v1detail.data?.cache?.code }));
+const v1big = await call("GET", "/api/v1/caches?bbox=-60,-60,60,60");
+ok("GET /api/v1 caps an oversized bbox (400)", v1big.status === 400, JSON.stringify(v1big.data));
+const v1write = await call("POST", "/api/v1/caches", {});
+ok("/api/v1 is read-only (write → 405)", v1write.status === 405, String(v1write.status));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

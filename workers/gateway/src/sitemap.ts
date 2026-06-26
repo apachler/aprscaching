@@ -51,6 +51,7 @@ export function handleSitemapJson(_req: Request, env: Env): Response {
     app: base,
     surfaces: SURFACES.map((s) => ({ ...s, url: surfaceUrl(env, s.view) })),
     feeds: FEEDS.map((f) => ({ ...f, url: `${base}${f.path}` })),
+    readApi: { version: "v1", path: "/api/v1", access: "free, rate-limited (ADR-4a)" },
   });
 }
 

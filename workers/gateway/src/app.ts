@@ -19,6 +19,7 @@ import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js";
 import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
 import { handleSpots } from "./spots.js";
+import { handleApiV1 } from "./readapi.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -82,6 +83,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // live activity spots (docs/20 S1) — read-only aggregation, edge/TTL-cached, off by default
   if (p === "/api/spots" && m === "GET") return handleSpots(req, env);
+
+  // public read API (docs/11 §6, ADR-4a) — versioned, rate-limited, free keys; read-only
+  if (p === "/api/v1" || p.startsWith("/api/v1/")) return handleApiV1(req, env, p.slice("/api/v1".length));
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);
