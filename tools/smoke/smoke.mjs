@@ -447,7 +447,7 @@ ok("/api/v1 index lists version + limits + endpoints", apiIdx.status === 200 && 
 const apiKeyRes = await call("POST", "/api/v1/keys", { label: "smoke" });
 const apiKey = apiKeyRes.data?.key;
 ok("POST /api/v1/keys issues a free key", apiKeyRes.status === 201 && typeof apiKey === "string" && apiKey.startsWith("acg_"), JSON.stringify(apiKeyRes.data));
-const v1caches = await call("GET", "/api/v1/caches?bbox=-180,-90,180,90", undefined, { authorization: "Bearer " + apiKey });
+const v1caches = await call("GET", "/api/v1/caches?bbox=14,46,16,48", undefined, { authorization: "Bearer " + apiKey });
 ok("GET /api/v1/caches (keyed) returns seeded caches", v1caches.status === 200 && (v1caches.data?.caches ?? []).length > 0, JSON.stringify(v1caches.data?.caches?.length));
 const v1code = (v1caches.data?.caches ?? [])[0]?.code;
 const v1detail = v1code ? await call("GET", "/api/v1/caches/" + v1code) : { status: 0, data: {} };
@@ -458,9 +458,9 @@ const v1write = await call("POST", "/api/v1/caches", {});
 ok("/api/v1 is read-only (write → 405)", v1write.status === 405, String(v1write.status));
 
 // read-API exports (docs/11 §6): GPX / KML / ADIF
-const gpx = await text("/api/v1/caches.gpx?bbox=-180,-90,180,90");
+const gpx = await text("/api/v1/caches.gpx?bbox=14,46,16,48");
 ok("GET /api/v1/caches.gpx exports GPX waypoints", gpx.status === 200 && /gpx\+xml/.test(gpx.ct) && gpx.body.includes("<wpt lat="), `${gpx.status} ${gpx.ct}`);
-const kml = await text("/api/v1/caches.kml?bbox=-180,-90,180,90");
+const kml = await text("/api/v1/caches.kml?bbox=14,46,16,48");
 ok("GET /api/v1/caches.kml exports KML placemarks", kml.status === 200 && /kml/.test(kml.ct) && kml.body.includes("<Placemark>"), `${kml.status} ${kml.ct}`);
 const gpx1 = v1code ? await text("/api/v1/caches/" + v1code + ".gpx") : { status: 0, body: "" };
 ok("GET /api/v1/caches/:code.gpx exports a single cache", gpx1.status === 200 && gpx1.body.includes(`<name>${v1code}</name>`), `${gpx1.status}`);
