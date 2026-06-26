@@ -24,6 +24,7 @@ import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile } from "./community.js";
 import { handleStations } from "./workbench.js";
 import { handleSpots } from "./spots.js";
+import { handleCachesGpx, handleCachesKml, handleCacheGpx, handleFindsAdif } from "./exports.js";
 
 const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
 const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
@@ -34,6 +35,10 @@ const now = () => Math.floor(Date.now() / 1000);
 const ENDPOINTS = [
   { method: "GET", path: "/api/v1/caches?bbox=minLon,minLat,maxLon,maxLat", desc: "caches in a bbox (capped)" },
   { method: "GET", path: "/api/v1/caches/:code", desc: "cache detail + logbook" },
+  { method: "GET", path: "/api/v1/caches.gpx?bbox=", desc: "caches as GPX (GPS devices)" },
+  { method: "GET", path: "/api/v1/caches.kml?bbox=", desc: "caches as KML (Google Earth)" },
+  { method: "GET", path: "/api/v1/caches/:code.gpx", desc: "single cache as GPX" },
+  { method: "GET", path: "/api/v1/profile/:call.adif", desc: "a callsign's finds as ADIF (logbooks)" },
   { method: "GET", path: "/api/v1/activity", desc: "recent finds, hides and DNFs" },
   { method: "GET", path: "/api/v1/leaderboard?metric=finds|points", desc: "top finders" },
   { method: "GET", path: "/api/v1/profile/:call", desc: "a callsign's public profile" },
@@ -122,6 +127,14 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (m !== "GET") return json({ error: "read-only API" }, { status: 405 });
   const g = await gate(req, env);
   if (g instanceof Response) return g;
+
+  // exports (docs/11 §6) — GPX / KML / ADIF
+  if (rest === "/caches.gpx") return bboxTooLarge(req, env) ?? handleCachesGpx(req, env);
+  if (rest === "/caches.kml") return bboxTooLarge(req, env) ?? handleCachesKml(req, env);
+  const gpxCode = /^\/caches\/([A-Za-z0-9-]+)\.gpx$/.exec(rest);
+  if (gpxCode) return handleCacheGpx(req, env, gpxCode[1]!.toUpperCase());
+  const adifCall = /^\/profile\/([A-Za-z0-9-]+)\.adif$/.exec(rest);
+  if (adifCall) return handleFindsAdif(req, env, adifCall[1]!.toUpperCase());
 
   if (rest === "/caches") return bboxTooLarge(req, env) ?? handleCachesInBBox(req, env);
   const codeM = /^\/caches\/([A-Za-z0-9-]+)$/.exec(rest);

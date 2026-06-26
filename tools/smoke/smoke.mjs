@@ -457,5 +457,15 @@ ok("GET /api/v1 caps an oversized bbox (400)", v1big.status === 400, JSON.string
 const v1write = await call("POST", "/api/v1/caches", {});
 ok("/api/v1 is read-only (write → 405)", v1write.status === 405, String(v1write.status));
 
+// read-API exports (docs/11 §6): GPX / KML / ADIF
+const gpx = await text("/api/v1/caches.gpx?bbox=-180,-90,180,90");
+ok("GET /api/v1/caches.gpx exports GPX waypoints", gpx.status === 200 && /gpx\+xml/.test(gpx.ct) && gpx.body.includes("<wpt lat="), `${gpx.status} ${gpx.ct}`);
+const kml = await text("/api/v1/caches.kml?bbox=-180,-90,180,90");
+ok("GET /api/v1/caches.kml exports KML placemarks", kml.status === 200 && /kml/.test(kml.ct) && kml.body.includes("<Placemark>"), `${kml.status} ${kml.ct}`);
+const gpx1 = v1code ? await text("/api/v1/caches/" + v1code + ".gpx") : { status: 0, body: "" };
+ok("GET /api/v1/caches/:code.gpx exports a single cache", gpx1.status === 200 && gpx1.body.includes(`<name>${v1code}</name>`), `${gpx1.status}`);
+const adif = await text("/api/v1/profile/OE8APR.adif");
+ok("GET /api/v1/profile/:call.adif exports ADIF", adif.status === 200 && /ADIF_VER/.test(adif.body) && adif.body.includes("<EOH>"), `${adif.status} ${adif.ct}`);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
