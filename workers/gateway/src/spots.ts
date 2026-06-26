@@ -14,7 +14,7 @@ import { type Spot, type SpotSource, bandForHz, freqToHz, dedupeSpots, filterSpo
 const truthy = (v?: string) => v === "1" || v === "true" || v === "yes";
 
 /** A normalizer turns one source's raw JSON into Spots (coords required; spots without lat/lon dropped). */
-interface SourceDef { source: SpotSource; url: (env: Env) => string; normalize: (raw: unknown) => Spot[] }
+interface SourceDef { source: SpotSource; url: (env: Env) => string; normalize: (raw: unknown, env: Env) => Spot[] | Promise<Spot[]> }
 
 const num = (v: unknown): number | undefined => {
   const n = typeof v === "number" ? v : parseFloat(String(v));
@@ -53,9 +53,83 @@ export function normalizePota(raw: unknown): Spot[] {
   return out;
 }
 
+/** GMA / WWBOTA (cqgma.org) — `{ RCD: [...] }` (or a bare array) of spots that carry coordinates. */
+export function normalizeGma(raw: unknown): Spot[] {
+  const arr = Array.isArray(raw) ? raw : Array.isArray((raw as { RCD?: unknown[] })?.RCD) ? (raw as { RCD: unknown[] }).RCD : [];
+  const out: Spot[] = [];
+  for (const r of arr as Record<string, unknown>[]) {
+    const lat = num(pick(r, "LAT", "latitude", "lat")), lon = num(pick(r, "LON", "longitude", "lon"));
+    const callsign = String(pick(r, "ACTIVATOR", "CALL", "callsign", "activator") ?? "").toUpperCase();
+    if (lat == null || lon == null || !callsign) continue;
+    const freqHz = freqToHz(pick(r, "QRG", "FREQUENCY", "frequency", "freq") as string | number | undefined);
+    // GMA carries DATE ("2024-06-01") + TIME ("1200"/"12:00") separately
+    const dateRaw = pick(r, "DATE", "date"), timeRaw = String(pick(r, "TIME", "time") ?? "").replace(/:/g, "");
+    const when = dateRaw ? `${dateRaw}T${timeRaw.padEnd(4, "0").slice(0, 2)}:${timeRaw.padEnd(4, "0").slice(2, 4)}:00Z` : pick(r, "spotTime", "timestamp");
+    out.push({
+      id: `gma:${pick(r, "ID", "id") ?? `${callsign}:${pick(r, "REF", "ref") ?? ""}`}`,
+      source: "gma", callsign,
+      ref: (pick(r, "REF", "ref", "reference") as string) || undefined,
+      name: (pick(r, "NAME", "name") as string) || undefined,
+      lat, lon, freqHz, band: bandForHz(freqHz),
+      mode: (pick(r, "MODE", "mode") as string)?.toUpperCase() || undefined,
+      comment: (pick(r, "TEXT", "comment", "comments") as string) || undefined,
+      spottedAt: toUnix(when),
+    });
+  }
+  return out;
+}
+
+// SOTA spots carry a summit code but no coordinates → resolve via the summits API, cached per code.
+const sotaSummits = new Map<string, { lat: number; lon: number; name?: string }>();
+async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: number; name?: string } | null> {
+  if (sotaSummits.has(code)) return sotaSummits.get(code)!;
+  try {
+    const base = env.SPOTS_SOTA_SUMMITS_URL || "https://api-db2.sota.org.uk/api/summits/";
+    const res = await fetch(`${base}${encodeURIComponent(code)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const d = (await res.json()) as Record<string, unknown>;
+    const lat = num(pick(d, "latitude", "lat")), lon = num(pick(d, "longitude", "lon"));
+    if (lat == null || lon == null) return null;
+    const v = { lat, lon, name: (pick(d, "name", "summitName") as string) || undefined };
+    sotaSummits.set(code, v);
+    return v;
+  } catch { return null; }
+}
+
+/** SOTA — api2.sota.org.uk/api/spots: array; coords resolved from the summit code. */
+export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
+  if (!Array.isArray(raw)) return [];
+  const out: Spot[] = [];
+  for (const r of raw as Record<string, unknown>[]) {
+    const callsign = String(pick(r, "activatorCallsign", "callsign", "activator") ?? "").toUpperCase();
+    const summit = String(pick(r, "summitCode", "summit") ?? "");
+    const assoc = String(pick(r, "associationCode", "association") ?? "");
+    const ref = summit.includes("/") || !assoc ? summit : `${assoc}/${summit}`;
+    if (!callsign || !ref) continue;
+    // prefer inline coords if the feed provides them, else resolve from the summit code
+    let lat = num(pick(r, "latitude", "lat")), lon = num(pick(r, "longitude", "lon"));
+    let name = (pick(r, "summitName", "name") as string) || undefined;
+    if (lat == null || lon == null) { const c = await sotaCoords(env, ref); if (!c) continue; lat = c.lat; lon = c.lon; name = name || c.name; }
+    const freqHz = freqToHz(pick(r, "frequency", "freq") as string | number | undefined);
+    out.push({
+      id: `sota:${pick(r, "id") ?? `${callsign}:${ref}`}`,
+      source: "sota", callsign, ref, name, lat, lon, freqHz, band: bandForHz(freqHz),
+      mode: (pick(r, "mode") as string)?.toUpperCase() || undefined,
+      comment: (pick(r, "comment", "comments") as string) || undefined,
+      spottedAt: toUnix(pick(r, "timeStamp", "timestamp", "time", "spotTime")),
+    });
+  }
+  return out;
+}
+
+/** Test seam: clear the cached SOTA summit coordinates. */
+export function _resetSotaSummits(): void { sotaSummits.clear(); }
+
 const SOURCES: SourceDef[] = [
   { source: "pota", url: (env) => env.SPOTS_POTA_URL || "https://api.pota.app/spot/activator", normalize: normalizePota },
-  // S3: SOTA (needs summit→coord resolution), GMA/WWBOTA (cqgma.org), DX-cluster, RBN/PSKReporter.
+  { source: "sota", url: (env) => env.SPOTS_SOTA_URL || "https://api2.sota.org.uk/api/spots/50/all", normalize: normalizeSota },
+  { source: "gma", url: (env) => env.SPOTS_GMA_URL || "https://www.cqgma.org/api/spots/25/", normalize: normalizeGma },
+  // further: WWBOTA (own API), DX-cluster, RBN/PSKReporter (reception networks).
 ];
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */
@@ -71,7 +145,7 @@ async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
   try {
     const res = await fetch(def.url(env), { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
-    return def.normalize(await res.json());
+    return await def.normalize(await res.json(), env);
   } catch { return []; } // a down source must never break the others
 }
 

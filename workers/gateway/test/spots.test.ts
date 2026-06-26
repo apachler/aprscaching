@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { bandForHz, freqToHz, dedupeSpots, filterSpots, type Spot } from "@aprsweb/shared";
-import { normalizePota, handleSpots, _resetSpotsCache } from "../src/spots.js";
+import { normalizePota, normalizeGma, normalizeSota, handleSpots, _resetSpotsCache, _resetSotaSummits } from "../src/spots.js";
 import type { Env } from "../src/env.js";
 
 const spot = (p: Partial<Spot>): Spot => ({ id: "x", source: "pota", callsign: "OE8APR", lat: 47, lon: 15, spottedAt: 100, ...p });
@@ -38,6 +38,46 @@ describe("spots — POTA normalizer (S1)", () => {
     expect(normalizePota(null)).toEqual([]);
     expect(normalizePota({})).toEqual([]);
     expect(normalizePota([{ activator: "NOLAT" }])).toEqual([]);
+  });
+});
+
+describe("spots — GMA normalizer (S3)", () => {
+  it("reads the cqgma RCD envelope, derives band, drops coordless spots", () => {
+    const raw = { RCD: [
+      { ID: "1", DATE: "2024-06-01", TIME: "1230", ACTIVATOR: "oe6sota", NAME: "Schöckl", REF: "BOTA-1", QRG: "14285", MODE: "ssb", LAT: "47.198", LON: "15.466" },
+      { ID: "2", ACTIVATOR: "NOCOORD", QRG: "7032", MODE: "CW" },
+    ] };
+    const out = normalizeGma(raw);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ source: "gma", callsign: "OE6SOTA", ref: "BOTA-1", band: "20m", mode: "SSB", lat: 47.198, lon: 15.466 });
+  });
+});
+
+describe("spots — SOTA normalizer + summit resolution (S3)", () => {
+  it("builds the ref from association+summit and uses inline coords when present (no fetch)", async () => {
+    _resetSotaSummits();
+    const raw = [{ id: 5, activatorCallsign: "oe6sota", associationCode: "OE", summitCode: "ST-027", frequency: "14.285", mode: "ssb", latitude: 47.198, longitude: 15.466, timeStamp: "2024-06-01T12:30:00Z" }];
+    const out = await normalizeSota(raw, {} as Env);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ source: "sota", callsign: "OE6SOTA", ref: "OE/ST-027", band: "20m", lat: 47.198 });
+  });
+
+  it("resolves missing coordinates from the summit API (cached)", async () => {
+    _resetSotaSummits();
+    const orig = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ latitude: 48.1, longitude: 14.0, name: "Test Summit" }), { headers: { "content-type": "application/json" } }); }) as typeof fetch;
+    try {
+      const raw = [
+        { id: 6, activatorCallsign: "OE5XYZ", associationCode: "OE", summitCode: "OO-001", frequency: "7032", mode: "CW", timeStamp: "2024-06-01T08:00:00Z" },
+        { id: 7, activatorCallsign: "OE5ABC", associationCode: "OE", summitCode: "OO-001", frequency: "10120", mode: "CW", timeStamp: "2024-06-01T08:05:00Z" },
+      ];
+      const env = { SPOTS_SOTA_SUMMITS_URL: "http://stub/summits/" } as unknown as Env;
+      const out = await normalizeSota(raw, env);
+      expect(out).toHaveLength(2);
+      expect(out[0]).toMatchObject({ ref: "OE/OO-001", lat: 48.1, lon: 14.0, name: "Test Summit" });
+      expect(calls).toBe(1); // second spot hits the per-summit cache
+    } finally { globalThis.fetch = orig; }
   });
 });
 

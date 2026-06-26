@@ -53,6 +53,9 @@ export interface Env {
   SPOTS_SOURCES?: string;   // optional comma-separated allowlist of sources (else all built-in: pota…)
   SPOTS_TTL_SEC?: string;   // aggregation cache TTL seconds (default 60; spots are ephemeral)
   SPOTS_POTA_URL?: string;  // override the POTA activator-spots endpoint
+  SPOTS_SOTA_URL?: string;  // override the SOTA spots endpoint
+  SPOTS_SOTA_SUMMITS_URL?: string; // SOTA summit-detail base (for coord resolution; default api-db2)
+  SPOTS_GMA_URL?: string;   // override the GMA/WWBOTA (cqgma.org) spots endpoint
 
   // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string;         // app origin for magic-link redirects, e.g. "https://aprscaching.com"
