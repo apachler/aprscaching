@@ -12,6 +12,7 @@ import type { GeofencePrompt } from "@aprsweb/shared";
 import { surfaceByView } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
 import { roleMeta } from "./stationRoles.js";
+import { aprsGlyph } from "./aprsGlyph.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
 import {
@@ -379,15 +380,18 @@ export function App() {
       }
       const el = mk.getElement();
       const role = roleMeta(s.roles);
-      el.title = `${s.callsign}${role ? ` · ${role.label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
+      // Glyph precedence: station role → the station's own APRS symbol → moving/idle dot.
+      const aprs = role ? null : aprsGlyph(s.symbol);
+      const label = role ? role.label : aprs?.label;
+      el.title = `${s.callsign}${label ? ` · ${label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
       el.classList.toggle("role", !!role);
       el.style.background = role ? role.color : "";
       el.style.color = role ? "#0d141a" : "";
       const moving = s.course != null && !!s.speedKn;
       const span = el.querySelector("span") as HTMLElement;
-      // An operated station shows its role glyph; a plain heard station shows the moving/idle dot.
-      span.textContent = role ? role.glyph : moving ? "➤" : "•";
-      span.style.transform = !role && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
+      span.textContent = role ? role.glyph : aprs ? aprs.glyph : moving ? "➤" : "•";
+      // only the bare directional dot rotates with course; a concrete symbol glyph stays upright
+      span.style.transform = !role && !aprs && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
     }
     for (const [cs, mk] of stationMarkers.current) {
       if (!seen.has(cs)) { mk.remove(); stationMarkers.current.delete(cs); }

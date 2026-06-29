@@ -29,6 +29,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aprsweb/aprs':
+        specifier: workspace:*
+        version: link:../../packages/aprs
       '@aprsweb/shared':
         specifier: workspace:*
         version: link:../../packages/shared
