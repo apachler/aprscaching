@@ -21,6 +21,7 @@ import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeader
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
+import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -91,6 +92,16 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // embeddable map widget + QR (docs/11 M4) — public, CORS-open, read-only
   if (p === "/embed/qr.svg" && m === "GET") return handleQr(req, env);
   if (p === "/embed" && m === "GET") return handleEmbed(req, env);
+
+  // remote control of the operator's own ingest box (docs/20 §2, R1) — gateway-as-relay
+  const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log)$/.exec(p);
+  if (box) {
+    const [boxId, op] = [box[1]!, box[2]!];
+    if (op === "command" && m === "POST") return handleBoxEnqueue(req, env, boxId);
+    if (op === "commands" && m === "GET") return handleBoxPoll(req, env, boxId);
+    if (op === "commands/ack" && m === "POST") return handleBoxAck(req, env, boxId);
+    if (op === "log" && m === "GET") return handleBoxLog(req, env, boxId);
+  }
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

@@ -477,5 +477,24 @@ ok("GET /embed serves an HTML map widget", embed.status === 200 && /text\/html/.
 const qr = await text("/embed/qr.svg?cache=" + (v1code || "AC-0001"));
 ok("GET /embed/qr.svg returns an SVG QR", qr.status === 200 && /svg\+xml/.test(qr.ct) && qr.body.startsWith("<svg"), `${qr.status} ${qr.ct}`);
 
+// remote station control (docs/20 R1): the box command channel
+const boxRx = await call("POST", "/api/box/smoke-box/command", { kind: "status" });
+ok("POST /api/box/:id/command enqueues a read command", boxRx.status === 201 && boxRx.data?.status === "queued", JSON.stringify(boxRx.data));
+const boxTxUnver = await call("POST", "/api/box/smoke-box/command", { kind: "beacon", callsign: "OE5XYZ", payload: { lat: 47, lon: 15 } });
+ok("a TX command for an unverified callsign is blocked (403)", boxTxUnver.status === 403, String(boxTxUnver.status));
+await verifyCallsign("OE7BOX"); // control-verify a fresh call (DL1ABC was GDPR-erased earlier)
+const boxTx = await call("POST", "/api/box/smoke-box/command", { kind: "message", callsign: "OE7BOX", payload: { to: "OE3ABC", text: "hi" } });
+ok("a TX command for a verified callsign is queued (control-verified)", boxTx.status === 201 && boxTx.data?.tx === true, JSON.stringify(boxTx.data));
+const boxPoll = await call("GET", "/api/box/smoke-box/commands");
+ok("the box leases its queued commands (secret)", boxPoll.status === 200 && (boxPoll.data?.commands ?? []).length >= 2, JSON.stringify((boxPoll.data?.commands ?? []).map((c) => c.kind)));
+const boxPoll2 = await call("GET", "/api/box/smoke-box/commands");
+ok("leased commands are not re-delivered", (boxPoll2.data?.commands ?? []).length === 0, JSON.stringify(boxPoll2.data?.commands?.length));
+const boxNoSecret = await fetch(`${BASE}/api/box/smoke-box/commands`);
+ok("box poll without the secret is rejected (401)", boxNoSecret.status === 401, String(boxNoSecret.status));
+const boxAck = await call("POST", "/api/box/smoke-box/commands/ack", { id: (boxPoll.data?.commands ?? [])[0]?.id, status: "done", result: "ok" });
+ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, JSON.stringify(boxAck.data));
+const boxLog = await call("GET", "/api/box/smoke-box/log");
+ok("the operator sees the box command log", boxLog.status === 200 && (boxLog.data?.commands ?? []).some((c) => c.status === "done"), JSON.stringify((boxLog.data?.commands ?? []).map((c) => `${c.kind}:${c.status}`)));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
