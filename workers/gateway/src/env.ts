@@ -66,6 +66,11 @@ export interface Env {
   EMAIL_FROM?: string;      // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string;   // Resend-style API key; absent => dev mode (no real send)
 
+  // ---- push notifications (ADR-4b) — web push is off unless VAPID keys are set; email digest needs EMAIL_* ----
+  VAPID_PUBLIC?: string;    // VAPID public key (base64url, uncompressed P-256 point)
+  VAPID_PRIVATE?: string;   // VAPID private key 'd' (base64url)
+  VAPID_SUBJECT?: string;   // contact for the push service, e.g. "mailto:admin@aprscaching.net"
+
   // ---- AGPL §13 source link (ADR-3) — the running instance's published source ----
   SOURCE_REPO?: string;     // repo URL; absent => upstream default. Self-hosters who MODIFY code MUST set this to their fork.
   SOURCE_COMMIT?: string;   // commit (or tag) the instance is running; host-resolved at build/start

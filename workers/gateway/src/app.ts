@@ -24,6 +24,7 @@ import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
+import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -62,6 +63,8 @@ export async function runScheduled(env: Env): Promise<void> {
   try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
   // push-to-hub (T2.3): a NAT'd spoke contributes its records to a reachable hub (no-op unless configured)
   try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
+  // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
+  try { await runDigests(env); } catch (e) { console.error("digests:", (e as Error).message); }
 }
 
 export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
@@ -102,6 +105,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (viewDel && m === "DELETE") return handleViewDelete(req, env, viewDel[1]!);
   const viewGet = /^\/v\/([a-z0-9]+)$/.exec(p);
   if (viewGet && m === "GET") return handleViewResolve(req, env, viewGet[1]!);
+
+  // push + email-digest delivery (ADR-4b) — subscriptions + prefs; in-app W1 alerts are the source
+  if (p === "/api/push/key" && m === "GET") return handlePushKey(req, env);
+  if (p === "/api/push/subscribe" && m === "POST") return handlePushSubscribe(req, env);
+  if (p === "/api/push/unsubscribe" && m === "POST") return handlePushUnsubscribe(req, env);
+  if (p === "/api/notify/prefs" && (m === "GET" || m === "POST")) return handleNotifyPrefs(req, env);
 
   // watchlist + alerts (docs/20 §4, W1) — session-scoped, per account
   if (p === "/api/watch" && m === "GET") return handleWatchList(req, env);

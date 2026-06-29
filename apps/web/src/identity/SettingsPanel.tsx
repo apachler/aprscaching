@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { getInstance, getSource, sourceLinkUrl, exportAccount, deleteAccount, type SourceInfo } from "../api.js";
+import { getInstance, getSource, sourceLinkUrl, exportAccount, deleteAccount, getNotifyPrefs, setNotifyPrefs, type SourceInfo } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import {
   useFmt, browserLocale, browserTimeZone, type LocaleSettings,
 } from "../format.js";
-import { Panel, Group, Row, Advanced } from "../ui/index.js";
+import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
@@ -14,6 +14,8 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
   const s = props.settings;
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean } | null>(null);
+  useEffect(() => { if (props.session.signedIn) getNotifyPrefs().then(setPrefs).catch(() => {}); }, [props.session.signedIn]);
 
   async function exportData() {
     setGdpr("Preparing your export…");
@@ -62,6 +64,19 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
               <button key={u} className={s.units === u ? "on" : ""} onClick={() => props.onApply({ ...s, units: u })}>{u}</button>
             ))}</div>
           </Row>
+        </Group>
+      )}
+
+      {props.session.signedIn && match("notifications alerts email digest push watchlist") && (
+        <Group title="Notifications" defaultOpen={false}>
+          <Row label="Email digest" help={prefs?.hasEmail ? "Batched watchlist alerts, emailed to you" : "Add an email to your account to receive a digest"}>
+            <Switch label="Email digest" checked={!!prefs?.digest} disabled={!prefs?.hasEmail}
+                    onChange={(v) => { setNotifyPrefs(v).then(() => setPrefs((p) => (p ? { ...p, digest: v } : p))).catch(() => {}); }} />
+          </Row>
+          <p className="muted">
+            {prefs?.pushConfigured ? "Browser push is available on this instance." : "Browser push isn't enabled on this instance yet."}
+            {" "}In-app watchlist alerts are always on.
+          </p>
         </Group>
       )}
 

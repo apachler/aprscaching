@@ -13,6 +13,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionCallsign } from "./auth.js";
+import { pushAlert } from "./notify.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const base = (c: string) => c.toUpperCase().split("-")[0]!;
@@ -96,9 +97,10 @@ export async function recordWatchHeard(env: Env, heard: { src: string; lat: numb
          ORDER BY (lat-?)*(lat-?)+(lon-?)*(lon-?) LIMIT 1`,
     ).bind(p.lat - NEAR_CACHE_DEG, p.lat + NEAR_CACHE_DEG, p.lon - NEAR_CACHE_DEG, p.lon + NEAR_CACHE_DEG, p.lat, p.lat, p.lon, p.lon)
       .first<{ id: number; code: string; title: string }>();
+    const detail = cache ? `${w.callsign} heard near ${cache.code} — ${cache.title}` : `${w.callsign} heard on the network`;
     await env.DB.prepare("INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)")
-      .bind(w.acct, w.callsign, cache ? "near_cache" : "heard",
-        cache ? `${w.callsign} heard near ${cache.code} — ${cache.title}` : `${w.callsign} heard on the network`,
-        cache?.id ?? null, p.lat, p.lon, t).run();
+      .bind(w.acct, w.callsign, cache ? "near_cache" : "heard", detail, cache?.id ?? null, p.lat, p.lon, t).run();
+    // ADR-4b: best-effort web push now; the email digest batches the rest on a schedule
+    try { await pushAlert(env, w.acct); } catch { /* best-effort */ }
   }
 }

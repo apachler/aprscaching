@@ -525,5 +525,14 @@ const vList = await (await fetch(`${BASE}/api/views`, { headers: { cookie: vcook
 ok("GET /api/views lists my saved views", (vList.views ?? []).some((v) => v.slug === vSlug));
 ok("GET /v/:slug 404s for an unknown slug", (await call("GET", "/v/zzzz9999")).status === 404);
 
+// push + email-digest delivery (ADR-4b) — uses the OE9WL session from the watchlist block
+ok("GET /api/push/key returns the VAPID key (null unless configured)", (await call("GET", "/api/push/key")).status === 200);
+const pSub = await fetch(`${BASE}/api/push/subscribe`, { method: "POST", headers: { "content-type": "application/json", cookie: wcookie }, body: JSON.stringify({ endpoint: "https://push.test/abc", keys: { p256dh: "x", auth: "y" } }) });
+ok("POST /api/push/subscribe stores a subscription", pSub.status === 201, String(pSub.status));
+ok("push subscribe requires a session (401)", (await fetch(`${BASE}/api/push/subscribe`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: "x" }) })).status === 401);
+ok("GET /api/notify/prefs reports the digest opt-in (default on)", (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === true);
+await fetch(`${BASE}/api/notify/prefs`, { method: "POST", headers: { "content-type": "application/json", cookie: wcookie }, body: JSON.stringify({ digest: false }) });
+ok("POST /api/notify/prefs toggles the email digest off", (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === false);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

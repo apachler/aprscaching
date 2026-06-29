@@ -110,6 +110,10 @@ export function saveView(state: MapViewState, name?: string): Promise<{ slug: st
 export function resolveView(slug: string): Promise<{ slug: string; name: string | null; ownerCall: string; createdAt: number; state: MapViewState }> {
   return call(`/v/${encodeURIComponent(slug)}`);
 }
+
+// ---- notification prefs (ADR-4b) ----
+export function getNotifyPrefs(): Promise<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean }> { return call(`/api/notify/prefs`); }
+export function setNotifyPrefs(digest: boolean): Promise<{ digest: boolean }> { return call(`/api/notify/prefs`, { method: "POST", body: JSON.stringify({ digest }) }); }
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

@@ -95,7 +95,7 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
 }
 
 /** Pluggable sender. Resend-compatible JSON API; returns false (dev mode) when unconfigured. */
-async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
+export async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return false;
   try {
     const res = await fetch("https://api.resend.com/emails", {
