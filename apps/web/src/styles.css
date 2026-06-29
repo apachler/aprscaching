@@ -158,6 +158,12 @@ label input, label select, label textarea { margin-top: 3px; }
 .spot-filters { margin-top: 8px; display: grid; gap: 8px; }
 .spot-filters .filter-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .spot-filters .filter-label { font-size: 12px; text-transform: uppercase; color: var(--muted); min-width: 3.5rem; }
+/* opt-in ham profile card (docs/13) */
+.profile-card { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+.profile-avatar { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; background: var(--surface-2); }
+.profile-card .profile-name { font-weight: 700; color: var(--heading); font-size: 16px; }
+.profile-card .profile-bio { margin: 6px 0 4px; }
+.profile-card .profile-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
 .clickable { cursor: pointer; } .fw-normal { font-weight: 400; }
 /* big one-tap primary (Log a find) + filter type chips */
 .log-primary { width: 100%; font-size: 16px; padding: 11px; }

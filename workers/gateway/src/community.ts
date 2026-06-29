@@ -70,7 +70,25 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     "SELECT COUNT(*) AS n FROM caches WHERE owner_call=? AND source='native' AND status!='archived'",
   ).bind(cs).first<{ n: number }>();
   const badges = (await env.DB.prepare("SELECT badge, earned_at AS earnedAt FROM achievements WHERE callsign=? ORDER BY earned_at").bind(cs).all<{ badge: string; earnedAt: number }>()).results;
-  const acct = await env.DB.prepare("SELECT verified FROM accounts WHERE callsign=?").bind(cs).first<{ verified: number }>();
+  const acct = await env.DB.prepare(
+    `SELECT verified, display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl,
+            bio, links, public_contact AS publicContact, profile_public AS profilePublic
+       FROM accounts WHERE callsign=?`,
+  ).bind(cs).first<{ verified: number; displayName: string | null; homeGrid: string | null; avatarUrl: string | null; bio: string | null; links: string | null; publicContact: string | null; profilePublic: number }>();
+
+  // opt-in profile (docs/13): surfaced only when the master switch is on; empty fields omitted
+  let profile: Record<string, unknown> | undefined;
+  if (acct && (acct.profilePublic ?? 1) === 1) {
+    const links = acct.links ? (JSON.parse(acct.links) as unknown[]) : [];
+    const p: Record<string, unknown> = {};
+    if (acct.displayName) p.displayName = acct.displayName;
+    if (acct.homeGrid) p.homeGrid = acct.homeGrid;
+    if (acct.avatarUrl) p.avatarUrl = acct.avatarUrl;
+    if (acct.bio) p.bio = acct.bio;
+    if (links.length) p.links = links;
+    if (acct.publicContact) p.publicContact = acct.publicContact;
+    if (Object.keys(p).length) profile = p;
+  }
 
   return json({
     callsign: cs,
@@ -81,6 +99,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     byTier: Object.fromEntries(byTier.map((r) => [r.tier ?? "?", r.n])),
     byType: Object.fromEntries(byType.map((r) => [r.type, r.n])),
     badges,
+    ...(profile ? { profile } : {}),
   });
 }
 

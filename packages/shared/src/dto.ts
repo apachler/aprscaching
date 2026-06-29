@@ -192,10 +192,15 @@ export interface CacheStage {
 // ---- M4 community response shapes ----
 export interface LeaderboardEntry { rank: number; loggerCall: string; finds: number; points: number }
 export interface Badge { badge: string; earnedAt: number }
+export interface ProfileCard {
+  displayName?: string; homeGrid?: string; avatarUrl?: string; bio?: string;
+  links?: { label: string; url: string }[]; publicContact?: string;
+}
 export interface Profile {
   callsign: string; accountVerified: boolean;
   finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
   byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];
+  profile?: ProfileCard; // opt-in self-curated card (docs/13)
 }
 export interface ActivityItem {
   id: number; loggerCall: string; ts: number; logType: string; verified: boolean; tier: string | null;

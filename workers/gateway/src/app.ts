@@ -12,6 +12,7 @@ import {
 import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleListCallsigns, handleAddCallsign,
   handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
+import { handleProfileUpdate } from "./profile.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
@@ -186,6 +187,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/email/verify" && (m === "POST" || m === "GET")) return handleEmailVerify(req, env);
   if (p === "/auth/session" && m === "GET") return handleSession(req, env);
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
+  if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
   if (p === "/auth/callsigns" && m === "GET") return handleListCallsigns(req, env);
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
   if (p === "/auth/logout" && m === "POST") return handleLogout();

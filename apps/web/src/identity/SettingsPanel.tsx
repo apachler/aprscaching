@@ -7,6 +7,7 @@ import {
 import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
+import { ProfileEditor } from "../profile/ProfileEditor.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
@@ -74,6 +75,12 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
               <button key={u} className={s.units === u ? "on" : ""} onClick={() => props.onApply({ ...s, units: u })}>{u}</button>
             ))}</div>
           </Row>
+        </Group>
+      )}
+
+      {props.session.signedIn && match("profile display name locator grid bio links avatar contact public") && (
+        <Group title="Profile" defaultOpen={false}>
+          <ProfileEditor callsign={props.callsign} />
         </Group>
       )}
 

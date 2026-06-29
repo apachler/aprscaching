@@ -534,5 +534,18 @@ ok("GET /api/notify/prefs reports the digest opt-in (default on)", (await (await
 await fetch(`${BASE}/api/notify/prefs`, { method: "POST", headers: { "content-type": "application/json", cookie: wcookie }, body: JSON.stringify({ digest: false }) });
 ok("POST /api/notify/prefs toggles the email digest off", (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === false);
 
+// editable ham profile (docs/13)
+const prStart = await call("POST", "/auth/email/start", { email: `p${now()}@example.com`, callsign: "OE9PROF" });
+const prVer = await fetch(`${BASE}/auth/email/verify?token=${prStart.data?.devToken}`, { headers: { accept: "application/json" } });
+const prcookie = (prVer.headers.get("set-cookie") ?? "").split(";")[0];
+ok("profile update requires a session (401)", (await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bio: "x" }) })).status === 401);
+const prUp = await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ displayName: "Andreas", homeGrid: "JN77", bio: "<i>QRP</i> op", links: [{ label: "QRZ", url: "https://qrz.com/db/OE9PROF" }], profilePublic: true }) });
+ok("POST /auth/profile updates the profile (sanitised)", prUp.status === 200 && (await prUp.json()).profile?.bio === "QRP op", String(prUp.status));
+const prGet = await call("GET", "/api/profile/OE9PROF");
+ok("GET /api/profile surfaces the public profile", prGet.data?.profile?.displayName === "Andreas" && prGet.data?.profile?.homeGrid === "JN77", JSON.stringify(prGet.data?.profile));
+ok("invalid Maidenhead locator rejected (400)", (await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ homeGrid: "ZZ99" }) })).status === 400);
+await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ profilePublic: false }) });
+ok("profile hidden when profile_public is off", (await call("GET", "/api/profile/OE9PROF")).data?.profile === undefined);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

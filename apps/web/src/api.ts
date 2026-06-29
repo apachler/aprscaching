@@ -34,6 +34,10 @@ export function getCache(id: number, callsign?: string): Promise<{ cache: CacheD
 export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<{ leaderboard: LeaderboardEntry[] }> {
   return call(`/api/leaderboard?metric=${metric}&bbox=${bbox.join(",")}`);
 }
+export interface ProfileEdit { displayName?: string; homeGrid?: string; avatarUrl?: string; bio?: string; links?: { label: string; url: string }[]; publicContact?: string; profilePublic?: boolean }
+export function updateProfile(p: ProfileEdit): Promise<{ ok: boolean }> {
+  return call(`/auth/profile`, { method: "POST", body: JSON.stringify(p) });
+}
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }

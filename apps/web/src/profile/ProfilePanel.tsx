@@ -18,6 +18,22 @@ export function ProfilePanel(props: {
   return (
     <Panel onClose={props.onClose} title={<>👤 <span className="mono">{props.callsign || "Profile"}</span></>}>
       {props.callsign.length < 3 ? <p className="muted">Set your callsign in the top bar to claim your finds.</p> : (<>
+        {profile?.profile && (
+          <div className="profile-card">
+            {profile.profile.avatarUrl && <img className="profile-avatar" src={profile.profile.avatarUrl} alt="" />}
+            <div className="profile-card-body">
+              {profile.profile.displayName && <div className="profile-name">{profile.profile.displayName}</div>}
+              {profile.profile.homeGrid && <span className="muted mono">{profile.profile.homeGrid}</span>}
+              {profile.profile.bio && <p className="profile-bio">{profile.profile.bio}</p>}
+              {profile.profile.links && profile.profile.links.length > 0 && (
+                <div className="profile-links">{profile.profile.links.map((l) => (
+                  <a key={l.url} href={l.url} target="_blank" rel="noreferrer noopener nofollow">{l.label}</a>
+                ))}</div>
+              )}
+              {profile.profile.publicContact && <a className="link" href={`mailto:${profile.profile.publicContact}`}>{profile.profile.publicContact}</a>}
+            </div>
+          </div>
+        )}
         <p><Badge kind="tierC">unverified account</Badge> <button className="link" title="Send an APRS message-challenge to your callsign (coming in the identity pass)">verify callsign</button></p>
         {profile && <p><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · <strong>{profile.hides}</strong> hidden
           {profile.lastFind && <span className="muted"> · last find {fmt.date(profile.lastFind)}</span>}</p>}
