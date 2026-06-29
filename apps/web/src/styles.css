@@ -484,6 +484,11 @@ button.link:hover { text-decoration: underline; }
 .iconbtn:hover { color: var(--ink); }
 .iconbtn:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
 
+/* a read-only value paired with a copy button (PWS URLs, share links) */
+.copyrow { display: flex; gap: 6px; align-items: stretch; }
+.copyrow input { flex: 1; min-width: 0; }
+.copyrow .iconbtn { padding: 0 8px; align-items: center; border: 1px solid var(--line); border-radius: 6px; }
+
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }
 .logresult .big { font-family: var(--font-brand); font-weight: 700; font-size: 19px; }

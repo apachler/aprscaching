@@ -125,6 +125,16 @@ export function subscribePush(sub: { endpoint?: string; keys?: { p256dh?: string
 export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
   return call(`/api/push/unsubscribe`, { method: "POST", body: JSON.stringify({ endpoint }) });
 }
+// ---- weather user-origination: a personal weather station (docs/17 W1) ----
+export interface WxKeyInfo {
+  callsign: string; station: string; key: string | null; lastSeen: number | null;
+  ecowittPath: string | null; wuUrl: string | null;
+}
+/** Read the caller's PWS push key + ready-to-paste station URLs (null key until issued). */
+export function getWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`); }
+/** (Re)issue the PWS push key — invalidates any previous one. */
+export function issueWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`, { method: "POST" }); }
+
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

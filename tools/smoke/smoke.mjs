@@ -547,5 +547,15 @@ ok("invalid Maidenhead locator rejected (400)", (await fetch(`${BASE}/auth/profi
 await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ profilePublic: false }) });
 ok("profile hidden when profile_public is off", (await call("GET", "/api/profile/OE9PROF")).data?.profile === undefined);
 
+// weather user-origination (docs/17 W1) — set a home grid so the -13 station is placed on the map
+await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ displayName: "Andreas", homeGrid: "JN77" }) });
+const wxKey = await (await fetch(`${BASE}/api/wx/key`, { method: "POST", headers: { cookie: prcookie } })).json();
+ok("POST /api/wx/key issues a PWS key + -13 station", /^wx_/.test(wxKey.key ?? "") && wxKey.station === "OE9PROF-13", JSON.stringify({ key: (wxKey.key ?? "").slice(0, 6), station: wxKey.station }));
+ok("wx submit with a bad key is rejected (401)", (await call("GET", "/api/wx/submit?key=nope&tempf=70")).status === 401);
+const wxSub = await fetch(`${BASE}/api/wx/submit?key=${wxKey.key}&tempf=68&humidity=55&baromrelin=29.92&windspeedmph=10&winddir=180&solarradiation=500&stationtype=EasyWeather`);
+ok("wx submit (Ecowitt) stores a reading", wxSub.status === 200 && (await wxSub.text()).includes("success"));
+const wxStation = await call("GET", "/api/stations/OE9PROF-13");
+ok("the -13 weather station carries the pushed reading", wxStation.data?.station?.wx && Math.abs((wxStation.data.station.wx.tempC ?? 0) - 20) < 1, JSON.stringify(wxStation.data?.station?.wx));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

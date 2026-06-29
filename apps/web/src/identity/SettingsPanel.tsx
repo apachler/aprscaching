@@ -8,6 +8,7 @@ import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
 import { ProfileEditor } from "../profile/ProfileEditor.js";
+import { WeatherStation } from "../profile/WeatherStation.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
@@ -81,6 +82,12 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
       {props.session.signedIn && match("profile display name locator grid bio links avatar contact public") && (
         <Group title="Profile" defaultOpen={false}>
           <ProfileEditor callsign={props.callsign} />
+        </Group>
+      )}
+
+      {props.session.signedIn && match("weather station PWS Ecowitt Weather Underground WU temperature wind rain sensor") && (
+        <Group title="Weather station" status="PWS" defaultOpen={false}>
+          <WeatherStation callsign={props.callsign} />
         </Group>
       )}
 

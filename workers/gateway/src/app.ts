@@ -13,6 +13,7 @@ import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleL
   handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { handleProfileUpdate } from "./profile.js";
+import { handleWxSubmit, handleWxKey } from "./wx.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
@@ -188,6 +189,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/session" && m === "GET") return handleSession(req, env);
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
+
+  // weather user-origination (docs/17 W1) — PWS push (Ecowitt / WU) under <call>-13
+  if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST")) return handleWxSubmit(req, env);
+  if (p === "/api/wx/key" && (m === "GET" || m === "POST")) return handleWxKey(req, env);
   if (p === "/auth/callsigns" && m === "GET") return handleListCallsigns(req, env);
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
   if (p === "/auth/logout" && m === "POST") return handleLogout();
