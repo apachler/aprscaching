@@ -155,6 +155,9 @@ label input, label select, label textarea { margin-top: 3px; }
 .flex-1 { flex: 1; } .row.gap-2 { gap: var(--sp-2); } .row.wrap { flex-wrap: wrap; }
 .field-sm { max-width: 8rem; }
 .logs li.unseen { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; }
+.spot-filters { margin-top: 8px; display: grid; gap: 8px; }
+.spot-filters .filter-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.spot-filters .filter-label { font-size: 12px; text-transform: uppercase; color: var(--muted); min-width: 3.5rem; }
 .clickable { cursor: pointer; } .fw-normal { font-weight: 400; }
 /* big one-tap primary (Log a find) + filter type chips */
 .log-primary { width: 100%; font-size: 16px; padding: 11px; }

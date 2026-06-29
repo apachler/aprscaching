@@ -97,6 +97,9 @@ export function App() {
   const [pickedSpot, setPickedSpot] = useState<Spot | null>(null);
   const spotsOnRef = useRef(spotsOn);
   useEffect(() => { spotsOnRef.current = spotsOn; }, [spotsOn]);
+  const [spotFilters, setSpotFilters] = useState<{ bands: string[]; modes: string[]; sources: string[] }>({ bands: [], modes: [], sources: [] });
+  const spotFiltersRef = useRef(spotFilters);
+  useEffect(() => { spotFiltersRef.current = spotFilters; }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showSiteMap, setShowSiteMap] = useState(false);
@@ -206,7 +209,7 @@ export function App() {
       try { setStations((await getStations(bbox)).stations); } catch (e) { console.error(e); }
     }
     if (spotsOnRef.current) {
-      try { setSpots((await getSpots(bbox)).spots); } catch (e) { console.error(e); }
+      try { setSpots((await getSpots(bbox, spotFiltersRef.current)).spots); } catch (e) { console.error(e); }
     }
   }, [subscribeLive]);
 
@@ -365,6 +368,9 @@ export function App() {
     else { for (const [, mk] of spotMarkers.current) mk.remove(); spotMarkers.current.clear(); setSpots([]); setPickedSpot(null); }
   }, [spotsOn, refresh]);
 
+  // re-query spots when the band/mode/source filters change (while the layer is on)
+  useEffect(() => { if (spotsOn) refresh(); }, [spotFilters]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const m = map.current; if (!m) return;
     if (!spotsOn) return;
@@ -489,7 +495,8 @@ export function App() {
         {showFilter && mode === "view" && (
           <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}
             includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted}
-            spotsOn={spotsOn} setSpotsOn={setSpotsOn} onClose={() => setShowFilter(false)} />
+            spotsOn={spotsOn} setSpotsOn={setSpotsOn} spotFilters={spotFilters} setSpotFilters={setSpotFilters}
+            onClose={() => setShowFilter(false)} />
         )}
         {showProfile && mode === "view" && (
           <ProfilePanel callsign={callsign} map={map.current}
