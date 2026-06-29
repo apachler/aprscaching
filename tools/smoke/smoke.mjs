@@ -568,9 +568,15 @@ ok("the -13 weather station carries the pushed reading", wxStation.data?.station
 ok("my-stations list requires a session (401)", (await call("GET", "/api/my/stations")).status === 401);
 const stBad = await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "not valid!" }) });
 ok("creating a station with a bad callsign is rejected (400)", stBad.status === 400);
+ok("a station needs a location at creation (400)", (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "OE9PROF-5", roles: ["node"] }) })).status === 400);
 const stMk = await (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "OE9PROF-2", lat: 47.62, lon: 15.79, description: "Stuhleck digi", roles: ["digipeater", "igate"] }) })).json();
-ok("POST /api/my/stations creates a station at explicit coords", stMk.station?.callsign === "OE9PROF-2" && stMk.station?.lat === 47.62 && stMk.station?.roles.includes("digipeater"), JSON.stringify(stMk.station));
-ok("registering a callsign the account does not hold is forbidden (403)", (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "DL9XXX-7" }) })).status === 403);
+ok("POST /api/my/stations creates a station at explicit coords + role symbol on the map", stMk.station?.callsign === "OE9PROF-2" && stMk.station?.lat === 47.62 && stMk.station?.roles.includes("digipeater"), JSON.stringify(stMk.station));
+const stOnMap = await call("GET", "/api/stations/OE9PROF-2");
+ok("the new station shows on the map with its roles", (stOnMap.data?.station?.roles ?? []).includes("digipeater") && stOnMap.data?.station?.symbol === "#", JSON.stringify({ roles: stOnMap.data?.station?.roles, sym: stOnMap.data?.station?.symbol }));
+ok("a station callsign need NOT be the operator's own (with a location)", (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "DL9XXX-7", lat: 50.1, lon: 8.6, roles: ["igate"] }) })).status === 201);
+// adopt a station already heard on the map (no coords given → inherit OE1WX's fix)
+const adopt = await (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "OE1WX", roles: ["digipeater"] }) })).json();
+ok("adopt a heard station with no coords inherits its location", adopt.station?.callsign === "OE1WX" && adopt.station?.lat != null && adopt.station?.lon != null, JSON.stringify(adopt.station));
 const stWxNo = await fetch(`${BASE}/api/my/stations/${stMk.station.id}/wx-key`, { method: "POST", headers: { cookie: prcookie } });
 ok("a weather key needs the weather role first (400)", stWxNo.status === 400);
 await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "PATCH", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ roles: ["digipeater", "igate", "weather"] }) });

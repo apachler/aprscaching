@@ -79,6 +79,12 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(p.src, fix.lat, fix.lon, p.ts, fix.symbol ?? null, fix.course ?? null,
         fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, p.igateCall ?? null),
     );
+    // Keep a registered operated-station's location live: if this callsign is in someone's registry,
+    // an APRS position fix updates its stored coordinates (docs/13 — "updated via APRS if heard").
+    stmts.push(
+      env.DB.prepare("UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ?")
+        .bind(fix.lat, fix.lon, p.ts, p.src),
+    );
   }
   // M6: per-transport RX counters, bucketed by hour (port_stats)
   const bucket = Math.floor((maxTs || Math.floor(Date.now() / 1000)) / 3600) * 3600;

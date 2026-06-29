@@ -33,7 +33,14 @@ function bbox(u: URL): { sql: string; binds: number[] } {
   const p = b.split(",").map(Number);
   if (p.length < 4 || p.some(Number.isNaN)) return { sql: "", binds: [] };
   const [minLon, minLat, maxLon, maxLat] = p as [number, number, number, number];
-  return { sql: " AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?", binds: [minLat, maxLat, minLon, maxLon] };
+  return { sql: " AND s.lat BETWEEN ? AND ? AND s.lon BETWEEN ? AND ?", binds: [minLat, maxLat, minLon, maxLon] };
+}
+
+/** Split a stored roles csv into the typed array, dropping blanks/unknowns. */
+function rolesArr(csv: string | null): string[] | undefined {
+  if (!csv) return undefined;
+  const arr = csv.split(",").map((s) => s.trim()).filter(Boolean);
+  return arr.length ? arr : undefined;
 }
 
 export async function handleStations(req: Request, env: Env): Promise<Response> {
@@ -42,12 +49,13 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 500) || 500, 1), 2000);
   const bb = bbox(u);
   const rows = (await env.DB.prepare(
-    `SELECT callsign, lat, lon, symbol, course, speed_kn AS speedKn, altitude_m AS altitudeM,
-            comment, last_seen AS lastSeen
-       FROM stations WHERE lat IS NOT NULL AND last_seen >= ?${bb.sql}
-      ORDER BY last_seen DESC LIMIT ?`,
-  ).bind(now() - maxAge, ...bb.binds, limit).all()).results;
-  return json({ stations: rows });
+    `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
+            s.comment, s.last_seen AS lastSeen, a.roles AS roles
+       FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign
+      WHERE s.lat IS NOT NULL AND s.last_seen >= ?${bb.sql}
+      ORDER BY s.last_seen DESC LIMIT ?`,
+  ).bind(now() - maxAge, ...bb.binds, limit).all<{ roles: string | null }>()).results;
+  return json({ stations: rows.map((r) => ({ ...r, roles: rolesArr(r.roles) })) });
 }
 
 // ------------------------------------------------------------- transports (ports)
@@ -80,10 +88,12 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
 export async function handleStation(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(
-    `SELECT callsign, lat, lon, symbol, course, speed_kn AS speedKn, altitude_m AS altitudeM,
-            comment, last_seen AS lastSeen FROM stations WHERE callsign = ?`,
-  ).bind(cs).first();
+    `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
+            s.comment, s.last_seen AS lastSeen, a.roles AS roles
+       FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
+  ).bind(cs).first<{ roles: string | null }>();
   if (!st) return json({ error: "unknown station" }, { status: 404 });
+  const stRoles = rolesArr(st.roles);
 
   const track = (await env.DB.prepare(
     "SELECT ts, lat, lon, heard_via AS heardVia FROM positions WHERE callsign = ? ORDER BY ts DESC LIMIT 50",
@@ -95,5 +105,5 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   ).bind(cs).first();
   const pc = await env.DB.prepare("SELECT COUNT(*) AS n FROM positions WHERE callsign = ?").bind(cs).first<{ n: number }>();
 
-  return json({ station: { ...st, track, wx: wx ?? null, packets: pc?.n ?? 0 } });
+  return json({ station: { ...st, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0 } });
 }

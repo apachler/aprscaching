@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import {
-  getPorts, getMessages, cotUrl, getStation, decodePacket, listFederationPeers,
+  getPorts, getMessages, cotUrl, getStation, decodePacket, listFederationPeers, createStation,
   type DecodedPacket, type StationDetail, type PortStat, type FedPeer,
 } from "../api.js";
+import { ROLE_META } from "../stationRoles.js";
+import type { StationRole } from "@aprsweb/shared";
 import { useFmt } from "../format.js";
 import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
 import { RemoteControl } from "./RemoteControl.js";
@@ -62,6 +64,7 @@ export function WorkbenchPanel(props: {
               <button className="link" onClick={() => props.onPick(null)}>clear</button>
             </div>
             <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
+            {station.roles?.length ? <div className="badges mt-1">{station.roles.map((r) => <Badge key={r}>{ROLE_META[r as StationRole]?.label ?? r}</Badge>)}</div> : null}
             {station.comment && <div className="comment">{station.comment}</div>}
             <div className="muted mt-1">
               {station.speedKn != null && station.speedKn > 0 ? `${fmt.speed(station.speedKn)} @ ${station.course ?? 0}° · ` : ""}
@@ -75,7 +78,15 @@ export function WorkbenchPanel(props: {
                 {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
                 {station.wx.pressureHpa ?? "—"} hPa</div>
             )}
-            <div className="row end mt-3"><button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button></div>
+            <div className="row between mt-3">
+              {props.callsign.length >= 3
+                ? <button onClick={async () => {
+                    try { await createStation({ callsign: station.callsign }); toast(`${station.callsign} added to your stations`); }
+                    catch (e) { toast((e as Error).message); }
+                  }}>+ add to my stations</button>
+                : <span />}
+              <button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button>
+            </div>
           </div>
         ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
       </Group>

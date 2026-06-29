@@ -11,6 +11,7 @@ import { Landing } from "./Landing.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { surfaceByView } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
+import { roleMeta } from "./stationRoles.js";
 import { ASSET } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
 import {
@@ -377,11 +378,16 @@ export function App() {
         mk.setLngLat([s.lon, s.lat]);
       }
       const el = mk.getElement();
-      el.title = `${s.callsign}${s.comment ? ` — ${s.comment}` : ""}`;
+      const role = roleMeta(s.roles);
+      el.title = `${s.callsign}${role ? ` · ${role.label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
+      el.classList.toggle("role", !!role);
+      el.style.background = role ? role.color : "";
+      el.style.color = role ? "#0d141a" : "";
       const moving = s.course != null && !!s.speedKn;
       const span = el.querySelector("span") as HTMLElement;
-      span.textContent = moving ? "➤" : "•";
-      span.style.transform = moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
+      // An operated station shows its role glyph; a plain heard station shows the moving/idle dot.
+      span.textContent = role ? role.glyph : moving ? "➤" : "•";
+      span.style.transform = !role && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
     }
     for (const [cs, mk] of stationMarkers.current) {
       if (!seen.has(cs)) { mk.remove(); stationMarkers.current.delete(cs); }

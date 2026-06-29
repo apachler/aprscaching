@@ -249,6 +249,8 @@ button.station-pin {
   display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.45);
 }
 button.station-pin > span { display: block; }
+/* operated stations carry a role glyph + brand colour (set inline); a touch larger + bolder to read */
+button.station-pin.role { width: 22px; height: 22px; font-size: 13px; font-weight: 700; }
 
 /* live activity spots (docs/20 S2) — distinct amber marker + a tap card; cache "being activated now" */
 button.spot-pin {

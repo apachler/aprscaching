@@ -214,6 +214,7 @@ export interface StationSummary {
   callsign: string; lat: number; lon: number; symbol: string | null;
   course: number | null; speedKn: number | null; altitudeM: number | null;
   comment: string | null; lastSeen: number;
+  roles?: StationRole[];   // operated-station roles, when this callsign is in the registry (docs/13)
 }
 export interface StationTrackPoint { ts: number; lat: number; lon: number; heardVia: string }
 export interface WxReading {

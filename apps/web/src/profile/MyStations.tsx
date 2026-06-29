@@ -32,7 +32,8 @@ export function MyStations(props: { callsign: string }) {
     <>
       <p className="muted">Your operated stations — a home weather PWS, a remote digipeater/igate/node on a
         mountain. Each has its own callsign, location and roles; weather-capable stations get a push key.
-        You can only register stations under a callsign your account holds.</p>
+        The callsign need not be your own (clubs, inherited infrastructure). Set a location, or leave it
+        blank to adopt a station already heard on the map — and tap any station pin to add it directly.</p>
 
       {stations.items.length === 0
         ? <EmptyState>No stations yet — add your first below.</EmptyState>
