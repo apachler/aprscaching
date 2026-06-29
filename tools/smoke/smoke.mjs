@@ -564,5 +564,22 @@ ok("wx submit (Ecowitt) stores a reading", wxSub.status === 200 && (await wxSub.
 const wxStation = await call("GET", "/api/stations/OE9PROF-13");
 ok("the -13 weather station carries the pushed reading", wxStation.data?.station?.wx && Math.abs((wxStation.data.station.wx.tempC ?? 0) - 20) < 1, JSON.stringify(wxStation.data?.station?.wx));
 
+// operated-stations registry (docs/13 M5) — manage multiple own stations with explicit locations
+ok("my-stations list requires a session (401)", (await call("GET", "/api/my/stations")).status === 401);
+const stBad = await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "not valid!" }) });
+ok("creating a station with a bad callsign is rejected (400)", stBad.status === 400);
+const stMk = await (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "OE9PROF-2", lat: 47.62, lon: 15.79, description: "Stuhleck digi", roles: ["digipeater", "igate"] }) })).json();
+ok("POST /api/my/stations creates a station at explicit coords", stMk.station?.callsign === "OE9PROF-2" && stMk.station?.lat === 47.62 && stMk.station?.roles.includes("digipeater"), JSON.stringify(stMk.station));
+ok("registering a callsign the account does not hold is forbidden (403)", (await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "DL9XXX-7" }) })).status === 403);
+const stWxNo = await fetch(`${BASE}/api/my/stations/${stMk.station.id}/wx-key`, { method: "POST", headers: { cookie: prcookie } });
+ok("a weather key needs the weather role first (400)", stWxNo.status === 400);
+await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "PATCH", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ roles: ["digipeater", "igate", "weather"] }) });
+const stWx = await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}/wx-key`, { method: "POST", headers: { cookie: prcookie } })).json();
+ok("a weather-capable station issues its own PWS key + URLs", /^wx_/.test(stWx.key ?? "") && (stWx.wuUrl ?? "").includes("ID=OE9PROF-2"), JSON.stringify({ key: (stWx.key ?? "").slice(0, 6) }));
+await fetch(`${BASE}/api/wx/submit?key=${stWx.key}&tempf=41&humidity=70&stationtype=EasyWeather`);
+const stDet = await call("GET", "/api/stations/OE9PROF-2");
+ok("the remote station's reading lands at ITS coords (not the home grid)", stDet.data?.station?.wx && Math.abs((stDet.data.station.lat ?? 0) - 47.62) < 0.01 && Math.abs((stDet.data.station.wx.tempC ?? 0) - 5) < 0.5, JSON.stringify({ lat: stDet.data?.station?.lat, wx: stDet.data?.station?.wx }));
+ok("DELETE /api/my/stations/:id removes it", (await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "DELETE", headers: { cookie: prcookie } })).json()).ok === true);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

@@ -151,6 +151,26 @@ export function getWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`); }
 /** (Re)issue the PWS push key — invalidates any previous one. */
 export function issueWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`, { method: "POST" }); }
 
+// ---- operated-stations registry: manage your own stations (docs/13 M5) ----
+import type { OperatedStation, StationRole, StationWxKey } from "@aprsweb/shared";
+export type { OperatedStation, StationRole, StationWxKey };
+export interface StationInput { callsign?: string; lat?: number | null; lon?: number | null; symbol?: string | null; description?: string | null; roles?: StationRole[] }
+export function listMyStations(cursor?: string | null, limit = 50): Promise<{ stations: OperatedStation[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) }); if (cursor) q.set("cursor", cursor);
+  return call(`/api/my/stations?${q.toString()}`);
+}
+export function createStation(s: StationInput): Promise<{ station: OperatedStation }> {
+  return call(`/api/my/stations`, { method: "POST", body: JSON.stringify(s) });
+}
+export function updateStation(id: number, s: StationInput): Promise<{ station: OperatedStation }> {
+  return call(`/api/my/stations/${id}`, { method: "PATCH", body: JSON.stringify(s) });
+}
+export function deleteStation(id: number): Promise<{ ok: boolean }> {
+  return call(`/api/my/stations/${id}`, { method: "DELETE" });
+}
+export function getStationWxKey(id: number): Promise<StationWxKey> { return call(`/api/my/stations/${id}/wx-key`); }
+export function issueStationWxKey(id: number): Promise<StationWxKey> { return call(`/api/my/stations/${id}/wx-key`, { method: "POST" }); }
+
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

@@ -225,6 +225,27 @@ export interface StationDetail extends StationSummary {
   wx: WxReading | null;
   packets: number;
 }
+
+// ---- operated-stations registry (docs/13 M5 + docs/17): the operator's own stations ----
+/** The roles a user's operated station can carry. Weather is one capability; the rest are RF infra. */
+export const STATION_ROLES = ["weather", "digipeater", "igate", "node", "relay"] as const;
+export type StationRole = (typeof STATION_ROLES)[number];
+/** A weather-capable station's PWS push key + ready-to-paste ingest URLs (null until issued). */
+export interface StationWxKey {
+  key: string | null; lastSeen: number | null; ecowittPath: string | null; wuUrl: string | null;
+}
+export interface OperatedStation {
+  id: number;
+  callsign: string;                 // full callsign incl. SSID
+  lat: number | null;
+  lon: number | null;
+  symbol: string | null;
+  description: string | null;
+  roles: StationRole[];
+  createdAt: number;
+  updatedAt: number;
+  wx?: StationWxKey;                 // present only on weather-capable stations
+}
 /** Result of POST /api/decode — the parsed frame plus the typed APRS data. */
 export interface DecodedPacket {
   ok: boolean;

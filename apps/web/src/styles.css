@@ -494,6 +494,21 @@ button.link:hover { text-decoration: underline; }
 .copyrow input { flex: 1; min-width: 0; }
 .copyrow .iconbtn { padding: 0 8px; align-items: center; border: 1px solid var(--line); border-radius: 6px; }
 
+/* operated-stations registry (Settings → My stations) */
+.station-card { border: 1px solid var(--line); border-radius: 10px; margin: 8px 0; overflow: hidden; }
+.station-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; background: none;
+  border: none; cursor: pointer; text-align: left; color: inherit; }
+.station-head:hover { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.station-head:focus-visible { outline: 2px solid var(--heading); outline-offset: -2px; }
+.station-call { font-weight: 600; }
+.station-head .badges { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+.station-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); }
+.station-body fieldset.roles { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 10px; }
+.station-body fieldset.roles legend { padding: 0 4px; color: var(--muted); font-size: 12px; }
+.role-check { display: inline-flex; align-items: center; gap: 5px; }
+.wx-key { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; }
+.wx-key h5 { margin: 0 0 6px; }
+
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }
 .logresult .big { font-family: var(--font-brand); font-weight: 700; font-size: 19px; }

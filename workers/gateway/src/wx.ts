@@ -62,19 +62,32 @@ async function readParams(req: Request): Promise<(k: string) => string | undefin
   return (k) => map.get(k.toLowerCase());
 }
 
-/** GET/POST /api/wx/submit (+ /updateweatherstation) — store a PWS reading under <call>-13. */
+/** GET/POST /api/wx/submit (+ /updateweatherstation) — store a PWS reading under its station. */
 export async function handleWxSubmit(req: Request, env: Env): Promise<Response> {
   const get = await readParams(req);
   const key = get("key") ?? get("password");  // our key, or WU's PASSWORD field
   if (!key) return new Response("missing key", { status: 401 });
-  const row = await env.DB.prepare("SELECT callsign FROM wx_keys WHERE key = ?").bind(key).first<{ callsign: string }>();
+  const row = await env.DB.prepare("SELECT callsign, station_id AS stationId FROM wx_keys WHERE key = ?").bind(key).first<{ callsign: string; stationId: number | null }>();
   if (!row) return new Response("unknown key", { status: 401 });
 
   const wx = parseWx(get);
   if (wx.temp_c == null && wx.humidity == null && wx.pressure_hpa == null && wx.wind_kn == null && wx.rain_mm == null)
     return new Response("no recognised weather fields", { status: 400 });
 
-  const station = `${row.callsign.toUpperCase()}-13`;
+  // Resolve where this reading lands + how to place it on the map. A key bound to a registry station
+  // (docs/13) uses that station's callsign + EXPLICIT coordinates (so a remote mountain PWS sits at
+  // its real location); a legacy key falls back to the operator's <call>-13 home PWS placed from
+  // their home grid.
+  let station = `${row.callsign.toUpperCase()}-13`;
+  let place: { lat: number; lon: number } | null = null;
+  if (row.stationId != null) {
+    const s = await env.DB.prepare("SELECT callsign, lat, lon FROM account_stations WHERE id = ?").bind(row.stationId).first<{ callsign: string; lat: number | null; lon: number | null }>();
+    if (s) { station = s.callsign.toUpperCase(); place = s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : null; }
+  } else {
+    const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?").bind(row.callsign.toUpperCase()).first<{ homeGrid: string | null }>();
+    place = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
+  }
+
   const ts = (() => { const d = get("dateutc"); if (d && d !== "now") { const t = Date.parse(d.replace(" ", "T") + "Z"); if (Number.isFinite(t)) return Math.floor(t / 1000); } return now(); })();
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
   await env.DB.prepare(
@@ -83,39 +96,45 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
   ).bind(station, ts, wx.temp_c ?? null, wx.humidity ?? null, wx.pressure_hpa ?? null, wx.wind_dir ?? null, wx.wind_kn ?? null, wx.gust_kn ?? null, wx.rain_mm ?? null, wx.rain_24h_mm ?? null, wx.luminosity_wm2 ?? null, source).run();
   await env.DB.prepare("UPDATE wx_keys SET last_seen = ? WHERE key = ?").bind(now(), key).run();
 
-  // place the weather station on the map from the operator's home grid (so the reading is visible).
-  const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?").bind(row.callsign.toUpperCase()).first<{ homeGrid: string | null }>();
-  const ll = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
-  if (ll) {
+  if (place) {
     await env.DB.prepare(
       `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, source_call) VALUES (?,?,?,?, '_', ?)
        ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen, symbol='_'`,
-    ).bind(station, ll.lat, ll.lon, ts, station).run();
+    ).bind(station, place.lat, place.lon, ts, station).run();
   }
   return new Response("success\n", { headers: { "content-type": "text/plain" } }); // WU expects this body
 }
 
-function makeKey(): string {
+/** Generate a PWS push key. Shared by the legacy home-PWS endpoint and per-station keys (docs/13). */
+export function makeWxKey(): string {
   const b = new Uint8Array(12); crypto.getRandomValues(b);
   return "wx_" + [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-/** GET/POST /api/wx/key — read or (re)issue the caller's PWS push key + ready-to-paste URLs. */
+/** Ready-to-paste ingest URLs for a station's PWS key (Ecowitt customized path + WU Rapidfire). */
+export function wxUrls(origin: string, station: string, key: string): { ecowittPath: string; wuUrl: string } {
+  return {
+    ecowittPath: `${origin}/api/wx/submit?key=${key}`,
+    wuUrl: `${origin}/api/wx/updateweatherstation?ID=${encodeURIComponent(station)}&PASSWORD=${key}`,
+  };
+}
+
+/** GET/POST /api/wx/key — read or (re)issue the caller's legacy home (<call>-13) PWS push key + URLs. */
 export async function handleWxKey(req: Request, env: Env): Promise<Response> {
   const cs = await sessionCallsign(req, env);
   if (!cs) return json({ error: "sign in to set up a weather station" }, { status: 401 });
   const base = cs.toUpperCase().split("-")[0]!;
+  const station = `${base}-13`;
   if (req.method === "POST") {
-    await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ?").bind(base).run();
-    const key = makeKey();
+    await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
-      .bind(key, base, await sessionAccountId(req, env), now()).run();
+      .bind(makeWxKey(), base, await sessionAccountId(req, env), now()).run();
   }
-  const row = await env.DB.prepare("SELECT key, last_seen AS lastSeen FROM wx_keys WHERE callsign = ?").bind(base).first<{ key: string; lastSeen: number | null }>();
+  const row = await env.DB.prepare("SELECT key, last_seen AS lastSeen FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string; lastSeen: number | null }>();
   const origin = new URL(req.url).origin;
+  const urls = row ? wxUrls(origin, station, row.key) : null;
   return json({
-    callsign: base, station: `${base}-13`, key: row?.key ?? null, lastSeen: row?.lastSeen ?? null,
-    ecowittPath: row ? `${origin}/api/wx/submit?key=${row.key}` : null,
-    wuUrl: row ? `${origin}/api/wx/updateweatherstation?ID=${base}-13&PASSWORD=${row.key}` : null,
+    callsign: base, station, key: row?.key ?? null, lastSeen: row?.lastSeen ?? null,
+    ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null,
   });
 }
