@@ -6,6 +6,7 @@ import {
 } from "../format.js";
 import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
+import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
@@ -15,7 +16,16 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean } | null>(null);
-  useEffect(() => { if (props.session.signedIn) getNotifyPrefs().then(setPrefs).catch(() => {}); }, [props.session.signedIn]);
+  const [pushState, setPushState] = useState<"loading" | "unsupported" | "off" | "on" | "denied" | "error" | "unconfigured">("loading");
+  useEffect(() => {
+    if (!props.session.signedIn) return;
+    getNotifyPrefs().then(setPrefs).catch(() => {});
+    (async () => { setPushState(!pushSupported() ? "unsupported" : (await pushSubscribed()) ? "on" : "off"); })();
+  }, [props.session.signedIn]);
+  async function togglePush() {
+    if (pushState === "on") { await disablePush(); setPushState("off"); }
+    else { setPushState("loading"); setPushState(await enablePush()); }
+  }
 
   async function exportData() {
     setGdpr("Preparing your export…");
@@ -73,10 +83,16 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
             <Switch label="Email digest" checked={!!prefs?.digest} disabled={!prefs?.hasEmail}
                     onChange={(v) => { setNotifyPrefs(v).then(() => setPrefs((p) => (p ? { ...p, digest: v } : p))).catch(() => {}); }} />
           </Row>
-          <p className="muted">
-            {prefs?.pushConfigured ? "Browser push is available on this instance." : "Browser push isn't enabled on this instance yet."}
-            {" "}In-app watchlist alerts are always on.
-          </p>
+          <Row label="Browser push" help="A notification when a watched callsign is active">
+            {!prefs?.pushConfigured
+              ? <span className="muted">Not enabled on this instance</span>
+              : pushState === "unsupported"
+                ? <span className="muted">Not supported in this browser</span>
+                : <button onClick={togglePush} disabled={pushState === "loading"}>{pushState === "on" ? "Disable" : "Enable"}</button>}
+          </Row>
+          {pushState === "denied" && <p className="muted error">Notifications are blocked — allow them in your browser settings, then try again.</p>}
+          {pushState === "error" && <p className="muted error">Could not enable push. On iPhone, install the app to your home screen first.</p>}
+          <p className="muted">In-app watchlist alerts are always on.</p>
         </Group>
       )}
 

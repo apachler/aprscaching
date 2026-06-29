@@ -111,9 +111,16 @@ export function resolveView(slug: string): Promise<{ slug: string; name: string 
   return call(`/v/${encodeURIComponent(slug)}`);
 }
 
-// ---- notification prefs (ADR-4b) ----
+// ---- notification prefs + push subscription (ADR-4b) ----
 export function getNotifyPrefs(): Promise<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean }> { return call(`/api/notify/prefs`); }
 export function setNotifyPrefs(digest: boolean): Promise<{ digest: boolean }> { return call(`/api/notify/prefs`, { method: "POST", body: JSON.stringify({ digest }) }); }
+export function getPushKey(): Promise<{ key: string | null }> { return call(`/api/push/key`); }
+export function subscribePush(sub: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }): Promise<{ ok: boolean }> {
+  return call(`/api/push/subscribe`, { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint, keys: sub.keys, topics: ["watch"] }) });
+}
+export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
+  return call(`/api/push/unsubscribe`, { method: "POST", body: JSON.stringify({ endpoint }) });
+}
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
