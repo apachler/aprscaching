@@ -22,6 +22,7 @@ import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
+import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -92,6 +93,14 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // embeddable map widget + QR (docs/11 M4) — public, CORS-open, read-only
   if (p === "/embed/qr.svg" && m === "GET") return handleQr(req, env);
   if (p === "/embed" && m === "GET") return handleEmbed(req, env);
+
+  // watchlist + alerts (docs/20 §4, W1) — session-scoped, per account
+  if (p === "/api/watch" && m === "GET") return handleWatchList(req, env);
+  if (p === "/api/watch" && m === "POST") return handleWatchAdd(req, env);
+  if (p === "/api/watch/alerts" && m === "GET") return handleWatchAlerts(req, env);
+  if (p === "/api/watch/seen" && m === "POST") return handleWatchSeen(req, env);
+  const watchDel = /^\/api\/watch\/([A-Za-z0-9-]+)$/.exec(p);
+  if (watchDel && m === "DELETE") return handleWatchRemove(req, env, watchDel[1]!);
 
   // remote control of the operator's own ingest box (docs/20 §2, R1) — gateway-as-relay
   const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log)$/.exec(p);

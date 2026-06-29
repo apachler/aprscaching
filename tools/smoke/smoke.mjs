@@ -496,5 +496,20 @@ ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, 
 const boxLog = await call("GET", "/api/box/smoke-box/log");
 ok("the operator sees the box command log", boxLog.status === 200 && (boxLog.data?.commands ?? []).some((c) => c.status === "done"), JSON.stringify((boxLog.data?.commands ?? []).map((c) => `${c.kind}:${c.status}`)));
 
+// watchlist + alerts (docs/20 W1) — fresh session, watch a call, hear it near the smoke cache
+const wStart = await call("POST", "/auth/email/start", { email: `w${now()}@example.com`, callsign: "OE9WL" });
+const wVer = await fetch(`${BASE}/auth/email/verify?token=${wStart.data?.devToken}`, { headers: { accept: "application/json" } });
+const wcookie = (wVer.headers.get("set-cookie") ?? "").split(";")[0];
+ok("watchlist requires a session (401)", (await fetch(`${BASE}/api/watch`)).status === 401);
+const wAdd = await fetch(`${BASE}/api/watch`, { method: "POST", headers: { "content-type": "application/json", cookie: wcookie }, body: JSON.stringify({ callsign: "OE9WX-7" }) });
+ok("POST /api/watch adds the base callsign", wAdd.status === 201 && (await wAdd.json()).callsign === "OE9WX", String(wAdd.status));
+const wList = await (await fetch(`${BASE}/api/watch`, { headers: { cookie: wcookie } })).json();
+ok("GET /api/watch lists the watched call", (wList.watching ?? []).some((w) => w.callsign === "OE9WX"), JSON.stringify(wList));
+await call("POST", "/ingest", { packets: [{ src: "OE9WX-7", path: ["WIDE1-1", "qAR", "OE8X"], payload: "=4704.41N/01526.27E>", kind: "position", parsed: { lat: 47.0735, lon: 15.4378, symbol: ">" }, heardVia: "rf", igateCall: "OE8X", port: "aprs-is", ts: now() }] }, { "x-ingest-secret": SECRET });
+const wAlerts = await (await fetch(`${BASE}/api/watch/alerts`, { headers: { cookie: wcookie } })).json();
+ok("a watched callsign heard near a cache raises an alert", (wAlerts.alerts ?? []).some((a) => a.callsign === "OE9WX" && (a.kind === "near_cache" || a.kind === "heard")), JSON.stringify((wAlerts.alerts ?? []).map((a) => `${a.callsign}:${a.kind}`)));
+ok("mark alerts seen", (await (await fetch(`${BASE}/api/watch/seen`, { method: "POST", headers: { cookie: wcookie } })).json()).ok === true);
+ok("DELETE /api/watch/:call removes it", (await (await fetch(`${BASE}/api/watch/OE9WX`, { method: "DELETE", headers: { cookie: wcookie } })).json()).ok === true);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

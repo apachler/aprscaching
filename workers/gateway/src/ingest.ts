@@ -5,6 +5,7 @@ import { IngestBatch } from "@aprsweb/shared";
 import { decodeAprs } from "@aprsweb/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { deliverHeld, bbsOnAck } from "./bbs.js";
+import { recordWatchHeard } from "./watch.js";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }):
@@ -95,6 +96,10 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   for (const a of ackedBy) await bbsOnAck(env, a.from, a.lineNo);
   const heardCalls = new Set(positions.map((p) => p.src.toUpperCase()));
   for (const cs of heardCalls) await deliverHeld(env, cs);
+
+  // W1: raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)
+  try { await recordWatchHeard(env, positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon }))); }
+  catch (e) { console.error("watch alerts:", (e as Error).message); }
 
   // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];
