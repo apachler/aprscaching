@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import {
   getPorts, getMessages, cotUrl, getStation, decodePacket, listFederationPeers,
-  type DecodedPacket, type StationDetail, type PortStat, type MessageItem, type FedPeer,
+  type DecodedPacket, type StationDetail, type PortStat, type FedPeer,
 } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Row, Badge, EmptyState, useToast } from "../ui/index.js";
+import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
 import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 
@@ -19,14 +19,13 @@ export function WorkbenchPanel(props: {
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
   const [station, setStation] = useState<StationDetail | null>(null);
   const [ports, setPorts] = useState<PortStat[]>([]);
-  const [messages, setMessages] = useState<MessageItem[]>([]);
   const [peers, setPeers] = useState<FedPeer[]>([]);
   const fmt = useFmt();
   const toast = useToast();
+  const messages = usePaged((cursor) => getMessages(false, cursor).then((r) => ({ items: r.messages, nextCursor: r.nextCursor, hasMore: r.hasMore })), []);
 
   useEffect(() => {
     getPorts().then((r) => setPorts(r.ports)).catch(console.error);
-    getMessages().then((r) => setMessages(r.messages)).catch(console.error);
     listFederationPeers().then((r) => setPeers(r.peers)).catch(console.error);
   }, []);
 
@@ -117,10 +116,10 @@ export function WorkbenchPanel(props: {
         </div>
       </Group>
 
-      <Group title="Messages" status={messages.length ? `${messages.length} recent` : "none"} defaultOpen={false}>
-        {messages.length === 0 ? <EmptyState>No inbound messages.</EmptyState> : (
+      <Group title="Messages" status={messages.items.length ? `${messages.items.length}${messages.hasMore ? "+" : ""} recent` : "none"} defaultOpen={false}>
+        {messages.items.length === 0 ? <EmptyState>No inbound messages.</EmptyState> : (
           <ul className="logs">
-            {messages.map((mm) => (
+            {messages.items.map((mm) => (
               <li key={mm.id}>
                 <Badge><span className="mono">{mm.fromCall}</span></Badge>→ <span className="mono">{mm.toCall}</span> <span className="muted">· {fmt.ago(mm.ts)}</span>
                 <div className="comment">{mm.body}</div>
@@ -128,6 +127,7 @@ export function WorkbenchPanel(props: {
             ))}
           </ul>
         )}
+        <LoadMore hasMore={messages.hasMore} loading={messages.loading} onClick={messages.loadMore} />
       </Group>
 
       <Group title="Federation" status={peers.length ? `${peers.length} peer${peers.length === 1 ? "" : "s"}` : "none"} defaultOpen={false}>

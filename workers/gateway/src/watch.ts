@@ -14,6 +14,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionCallsign } from "./auth.js";
 import { pushAlert } from "./notify.js";
+import { parsePage, keyset, paginate } from "./paging.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const base = (c: string) => c.toUpperCase().split("-")[0]!;
@@ -58,10 +59,14 @@ export async function handleWatchRemove(req: Request, env: Env, callsign: string
 export async function handleWatchAlerts(req: Request, env: Env): Promise<Response> {
   const acct = await sessionAccountId(req, env);
   if (!acct) return json({ error: "sign in to see your alerts" }, { status: 401 });
+  const pg = parsePage(new URL(req.url), 50, 200);
+  const ks = keyset(pg.cursor, "ts", "id");
   const rows = (await env.DB.prepare(
-    "SELECT id, callsign, kind, detail, cache_id AS cacheId, lat, lon, ts, seen FROM watch_alerts WHERE account_id = ? ORDER BY ts DESC LIMIT 100",
-  ).bind(acct).all<{ seen: number }>()).results.map((r) => ({ ...r, seen: r.seen === 1 }));
-  return json({ alerts: rows });
+    `SELECT id, callsign, kind, detail, cache_id AS cacheId, lat, lon, ts, seen FROM watch_alerts
+       WHERE account_id = ?${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
+  ).bind(acct, ...ks.binds, pg.limit + 1).all<{ id: number; ts: number; seen: number }>()).results;
+  const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
+  return json({ alerts: page.items.map((r) => ({ ...r, seen: r.seen === 1 })), nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
 export async function handleWatchSeen(req: Request, env: Env): Promise<Response> {

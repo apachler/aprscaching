@@ -6,6 +6,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprsweb/aprs";
+import { parsePage, keyset, paginate } from "./paging.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -62,16 +63,18 @@ export async function handlePorts(_req: Request, env: Env): Promise<Response> {
 // ------------------------------------------------------------- messages (RX)
 export async function handleMessages(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 50) || 50, 1), 200);
+  const pg = parsePage(u, 50, 200);
   const to = u.searchParams.get("to");
   const bulletins = u.searchParams.get("bulletins") === "1";
-  let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages";
+  let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
-  if (to) { sql += " WHERE to_call = ?"; binds.push(to.toUpperCase()); }
-  else if (bulletins) { sql += " WHERE to_call LIKE 'BLN%' OR to_call LIKE 'NWS%' OR to_call LIKE 'SKY%'"; }
-  sql += " ORDER BY ts DESC LIMIT ?"; binds.push(limit);
-  const rows = (await env.DB.prepare(sql).bind(...binds).all()).results;
-  return json({ messages: rows });
+  if (to) { sql += " AND to_call = ?"; binds.push(to.toUpperCase()); }
+  else if (bulletins) { sql += " AND (to_call LIKE 'BLN%' OR to_call LIKE 'NWS%' OR to_call LIKE 'SKY%')"; }
+  const ks = keyset(pg.cursor, "ts", "id");
+  sql += `${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`; binds.push(...ks.binds, pg.limit + 1);
+  const rows = (await env.DB.prepare(sql).bind(...binds).all()).results as any[];
+  const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
+  return json({ messages: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
 export async function handleStation(req: Request, env: Env, callsign: string): Promise<Response> {

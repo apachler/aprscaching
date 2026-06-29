@@ -166,7 +166,9 @@ export interface CacheDetail extends CacheSummary {
   createdAt: number;
   updatedAt: number;
   finds: number;       // count of verified found logs
-  logs: CacheLogEntry[];
+  logs: CacheLogEntry[];           // first keyset page, newest first
+  logsCursor?: string | null;      // cursor for the next logbook page (docs/11), null if none
+  logsHasMore?: boolean;           // true when older logs exist beyond the embedded page
   // M4 community
   favorites: number;
   favorited: boolean;

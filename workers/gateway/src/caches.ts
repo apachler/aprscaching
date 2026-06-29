@@ -6,6 +6,7 @@ import {
 } from "@aprsweb/shared";
 import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
+import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
@@ -131,12 +132,21 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
 }
 
 // ---------------------------------------------------------------- detail + logbook
+const LOGBOOK_PAGE = 50;
+
+/** Fetch one keyset page of a cache's logbook, newest first. */
+async function logbookPage(env: Env, id: number, cursor: Cursor | null, limit: number) {
+  const ks = keyset(cursor, "ts", "id");
+  const rows = (await env.DB.prepare(
+    `SELECT * FROM cache_logs WHERE cache_id = ?${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`,
+  ).bind(id, ...ks.binds, limit + 1).all<LogDbRow>()).results;
+  return paginate(rows, limit, (r) => ({ primary: r.ts, id: r.id }));
+}
+
 export async function handleCacheDetail(req: Request, env: Env, id: number): Promise<Response> {
   const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   if (!row) return json({ error: "no such cache" }, { status: 404 });
-  const logs = await env.DB.prepare(
-    "SELECT * FROM cache_logs WHERE cache_id = ? ORDER BY ts DESC LIMIT 50",
-  ).bind(id).all<LogDbRow>();
+  const logs = await logbookPage(env, id, null, LOGBOOK_PAGE);
   const finds = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ? AND log_type = 'found' AND verified = 1",
   ).bind(id).first<{ n: number }>();
@@ -149,12 +159,20 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     hint: row.hint, description: row.description, externalId: row.external_id,
     createdAt: row.created_at, updatedAt: row.updated_at,
     finds: finds?.n ?? 0,
-    logs: logs.results.map(toLogEntry),
+    logs: logs.items.map(toLogEntry),
+    logsCursor: logs.nextCursor, logsHasMore: logs.hasMore,
     favorites: fav.favorites, favorited: fav.favorited,
     needsMaintenance: health.needsMaintenance, dnfStreak: health.dnfStreak, lastFound: health.lastFound,
     stageCount: stages,
   };
   return json({ cache: detail });
+}
+
+/** GET /api/caches/:id/logs — paginated logbook ("Load more" past the first page in the detail). */
+export async function handleCacheLogs(req: Request, env: Env, id: number): Promise<Response> {
+  const pg = parsePage(new URL(req.url), LOGBOOK_PAGE, 200);
+  const page = await logbookPage(env, id, pg.cursor, pg.limit);
+  return json({ logs: page.items.map(toLogEntry), nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
 // ---------------------------------------------------------------- create ("hide a cache")

@@ -1,10 +1,10 @@
 import type {
-  CacheSummary, CacheDetail, CreateCacheRequest, UpdateCacheRequest,
+  CacheSummary, CacheDetail, CacheLogEntry, CreateCacheRequest, UpdateCacheRequest,
   MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile,
   StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot,
 } from "@aprsweb/shared";
 
-export type { CacheSummary, CacheDetail, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot };
+export type { CacheSummary, CacheDetail, CacheLogEntry, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot };
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -41,10 +41,20 @@ export function updateProfile(p: ProfileEdit): Promise<{ ok: boolean }> {
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }
-import type { ActivityItem } from "@aprsweb/shared";
+import type { ActivityItem, PageInfo } from "@aprsweb/shared";
 export type { ActivityItem };
-export function getActivity(bbox?: BBox): Promise<{ activity: ActivityItem[] }> {
-  return call(`/api/activity?limit=30${bbox ? `&bbox=${bbox.join(",")}` : ""}`);
+/** Keyset-paginated recent finds (docs/11). Pass nextCursor back as `cursor` for older pages. */
+export function getActivity(bbox?: BBox, cursor?: string | null, limit = 30): Promise<{ activity: ActivityItem[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (bbox) q.set("bbox", bbox.join(","));
+  if (cursor) q.set("cursor", cursor);
+  return call(`/api/activity?${q.toString()}`);
+}
+/** Paginated logbook for a cache (older entries past the embedded first page). */
+export function getCacheLogs(id: number, cursor?: string | null, limit = 50): Promise<{ logs: CacheLogEntry[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (cursor) q.set("cursor", cursor);
+  return call(`/api/caches/${id}/logs?${q.toString()}`);
 }
 export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
@@ -73,8 +83,11 @@ export function decodePacket(raw: string): Promise<DecodedPacket> {
 export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
   return call(`/api/ports`);
 }
-export function getMessages(bulletins = false): Promise<{ messages: MessageItem[] }> {
-  return call(`/api/messages?limit=30${bulletins ? "&bulletins=1" : ""}`);
+export function getMessages(bulletins = false, cursor?: string | null, limit = 30): Promise<{ messages: MessageItem[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (bulletins) q.set("bulletins", "1");
+  if (cursor) q.set("cursor", cursor);
+  return call(`/api/messages?${q.toString()}`);
 }
 
 // ---- remote control of your own ingest box (docs/20 R2) ----
@@ -97,7 +110,10 @@ export interface WatchAlert { id: number; callsign: string; kind: "heard" | "nea
 export function listWatch(): Promise<{ watching: WatchEntry[]; unseen: number }> { return call(`/api/watch`); }
 export function addWatch(callsign: string): Promise<{ ok: boolean; callsign: string }> { return call(`/api/watch`, { method: "POST", body: JSON.stringify({ callsign }) }); }
 export function removeWatch(callsign: string): Promise<{ ok: boolean }> { return call(`/api/watch/${encodeURIComponent(callsign)}`, { method: "DELETE" }); }
-export function getWatchAlerts(): Promise<{ alerts: WatchAlert[] }> { return call(`/api/watch/alerts`); }
+export function getWatchAlerts(cursor?: string | null, limit = 50): Promise<{ alerts: WatchAlert[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) }); if (cursor) q.set("cursor", cursor);
+  return call(`/api/watch/alerts?${q.toString()}`);
+}
 export function markWatchSeen(): Promise<{ ok: boolean }> { return call(`/api/watch/seen`, { method: "POST" }); }
 
 // ---- save / share map views (docs/11 M1) ----

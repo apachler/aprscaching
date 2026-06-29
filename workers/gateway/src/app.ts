@@ -7,7 +7,7 @@ import type { Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { handleIngest } from "./ingest.js";
 import {
-  handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleUpdateCache,
+  handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleCacheLogs, handleUpdateCache,
 } from "./caches.js";
 import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleListCallsigns, handleAddCallsign,
   handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
@@ -251,6 +251,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     const id = Number(cacheMatch[1]);
     const sub = cacheMatch[2];
     if (sub === "/logs" && m === "POST") return handleLog(req, env, id);
+    if (sub === "/logs" && m === "GET") return handleCacheLogs(req, env, id);
     if (sub === "/favorite" && m === "POST") return handleFavorite(req, env, id);
     if (sub === "/watch" && m === "POST") return handleWatch(req, env, id);
     if (!sub && m === "GET") return handleCacheDetail(req, env, id);

@@ -5,6 +5,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { parsePage, keyset, paginate } from "./paging.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const DAY = 86400;
@@ -107,14 +108,16 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
 export async function handleActivity(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const bb = bboxClause(u);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 50) || 50, 1), 200);
+  const pg = parsePage(u, 50, 200);
+  const ks = keyset(pg.cursor, "l.ts", "l.id");
   const rows = (await env.DB.prepare(
     `SELECT l.id, l.logger_call AS loggerCall, l.ts, l.log_type AS logType, l.verified, l.tier,
             c.id AS cacheId, c.code AS cacheCode, c.title AS cacheTitle
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE 1=1${bb.sql} ORDER BY l.ts DESC LIMIT ?`,
-  ).bind(...bb.binds, limit).all()).results;
-  return json({ activity: rows.map((r: any) => ({ ...r, verified: r.verified === 1 })) });
+       WHERE 1=1${bb.sql}${ks.sql} ORDER BY l.ts DESC, l.id DESC LIMIT ?`,
+  ).bind(...bb.binds, ...ks.binds, pg.limit + 1).all()).results as any[];
+  const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
+  return json({ activity: page.items.map((r: any) => ({ ...r, verified: r.verified === 1 })), nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
 // ---------------------------------------------------------------- favorites / watches

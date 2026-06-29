@@ -6,6 +6,8 @@ export { Button } from "./Button.js";
 export { Badge, TierBadge } from "./Badge.js";
 export { Card } from "./Card.js";
 export { EmptyState } from "./EmptyState.js";
+export { LoadMore } from "./LoadMore.js";
+export { usePaged, type PageResult } from "./usePaged.js";
 export { ToastProvider, useToast } from "./Toast.js";
 export { Icon, type IconName } from "./Icon.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";

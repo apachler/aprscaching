@@ -484,6 +484,11 @@ button.link:hover { text-decoration: underline; }
 .iconbtn:hover { color: var(--ink); }
 .iconbtn:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
 
+/* keyset "Load more" control (docs/11) — centered, recedes; the list bottoms out cleanly when hidden */
+.loadmore { display: flex; justify-content: center; padding: 8px 0 2px; }
+.loadmore button { min-height: 36px; }
+.loadmore button[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+
 /* a read-only value paired with a copy button (PWS URLs, share links) */
 .copyrow { display: flex; gap: 6px; align-items: stretch; }
 .copyrow input { flex: 1; min-width: 0; }

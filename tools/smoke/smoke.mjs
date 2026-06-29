@@ -190,6 +190,13 @@ ok("detail: 2 verified finds", detail.data?.cache?.finds === 2, JSON.stringify(d
 ok("detail: logbook has 3 entries", (detail.data?.cache?.logs ?? []).length === 3,
   `len=${(detail.data?.cache?.logs ?? []).length}`);
 
+// keyset pagination (docs/11): page the logbook 2 at a time and follow the cursor with no overlap
+const lp1 = await call("GET", `/api/caches/${id}/logs?limit=2`);
+ok("logbook page 1 returns 2 + a nextCursor", (lp1.data?.logs ?? []).length === 2 && lp1.data?.hasMore === true && !!lp1.data?.nextCursor, JSON.stringify({ n: lp1.data?.logs?.length, more: lp1.data?.hasMore }));
+const lp2 = await call("GET", `/api/caches/${id}/logs?limit=2&cursor=${encodeURIComponent(lp1.data.nextCursor)}`);
+const ids1 = new Set((lp1.data?.logs ?? []).map((l) => l.id));
+ok("logbook page 2 continues with no overlap", (lp2.data?.logs ?? []).length === 1 && lp2.data?.hasMore === false && !(lp2.data?.logs ?? []).some((l) => ids1.has(l.id)), JSON.stringify({ n: lp2.data?.logs?.length, more: lp2.data?.hasMore }));
+
 // ---- federation (F1): discovery + signed, mirrorable feeds ----
 const wk = await call("GET", "/.well-known/aprscaching");
 ok("well-known descriptor", (wk.data?.protocol ?? "").startsWith("aprscaching-federation"), JSON.stringify(wk.data));

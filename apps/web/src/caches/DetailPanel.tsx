@@ -1,10 +1,10 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { toggleFavorite, type CacheDetail, type Spot } from "../api.js";
+import { toggleFavorite, getCacheLogs, type CacheDetail, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";
 import { typeMeta } from "../cacheTypes.js";
 import { useFmt } from "../format.js";
 import { maidenhead } from "../map/geo.js";
-import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, useToast, type Tier } from "../ui/index.js";
+import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, LoadMore, useToast, type Tier } from "../ui/index.js";
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 
@@ -24,6 +24,19 @@ export function DetailPanel(props: {
   const toast = useToast();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
+  // logbook paging: detail embeds the first page; older entries load on demand (docs/11)
+  const [moreLogs, setMoreLogs] = useState<CacheLogEntry[]>([]);
+  const [logCursor, setLogCursor] = useState<string | null>(c.logsCursor ?? null);
+  const [logsMore, setLogsMore] = useState<boolean>(!!c.logsHasMore);
+  const [logsLoading, setLogsLoading] = useState(false);
+  useEffect(() => { setMoreLogs([]); setLogCursor(c.logsCursor ?? null); setLogsMore(!!c.logsHasMore); }, [c.id, c.logsCursor, c.logsHasMore]);
+  async function loadMoreLogs() {
+    if (!logCursor || logsLoading) return;
+    setLogsLoading(true);
+    try { const r = await getCacheLogs(c.id, logCursor); setMoreLogs((m) => [...m, ...r.logs]); setLogCursor(r.nextCursor); setLogsMore(r.hasMore); }
+    catch (e) { toast((e as Error).message); }
+    finally { setLogsLoading(false); }
+  }
   async function toggleFav() {
     if (props.callsign.length < 3) return;
     const want = !fav.on;
@@ -91,7 +104,8 @@ export function DetailPanel(props: {
         <span className="ulabel">{c.finds} finds</span>
       </div>
       {c.logs.length === 0 && <p className="muted">No logs yet — be the first to find it.</p>}
-      {c.logs.map((l) => <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />)}
+      {[...c.logs, ...moreLogs].map((l) => <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />)}
+      <LoadMore hasMore={logsMore} loading={logsLoading} onClick={loadMoreLogs} />
     </Panel>
   );
 }
