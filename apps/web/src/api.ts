@@ -86,6 +86,15 @@ export function enqueueBoxCommand(boxId: string, cmd: { kind: string; payload?: 
 export function getBoxLog(boxId: string): Promise<{ boxId: string; commands: BoxCommand[] }> {
   return call(`/api/box/${encodeURIComponent(boxId)}/log`);
 }
+
+// ---- watchlist + alerts (docs/20 W1) ----
+export interface WatchEntry { callsign: string; addedAt: number; }
+export interface WatchAlert { id: number; callsign: string; kind: "heard" | "near_cache"; detail?: string; cacheId?: number | null; lat?: number | null; lon?: number | null; ts: number; seen: boolean; }
+export function listWatch(): Promise<{ watching: WatchEntry[]; unseen: number }> { return call(`/api/watch`); }
+export function addWatch(callsign: string): Promise<{ ok: boolean; callsign: string }> { return call(`/api/watch`, { method: "POST", body: JSON.stringify({ callsign }) }); }
+export function removeWatch(callsign: string): Promise<{ ok: boolean }> { return call(`/api/watch/${encodeURIComponent(callsign)}`, { method: "DELETE" }); }
+export function getWatchAlerts(): Promise<{ alerts: WatchAlert[] }> { return call(`/api/watch/alerts`); }
+export function markWatchSeen(): Promise<{ ok: boolean }> { return call(`/api/watch/seen`, { method: "POST" }); }
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
