@@ -506,7 +506,7 @@ export function App() {
           <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
         )}
         {showWB && mode === "view" && (
-          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current}
+          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current} callsign={callsign} verified={verified}
                           stationsOn={stationsOn} setStationsOn={setStationsOn}
                           stationCount={stations.length}
                           picked={pickedStation} onPick={setPickedStation}

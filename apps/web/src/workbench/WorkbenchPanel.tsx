@@ -6,10 +6,11 @@ import {
 } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Group, Row, Badge, EmptyState, useToast } from "../ui/index.js";
+import { RemoteControl } from "./RemoteControl.js";
 
 /** Workbench — the full APRS toolset, grouped; switch on only what you need. */
 export function WorkbenchPanel(props: {
-  onClose: () => void; map: maplibregl.Map | null;
+  onClose: () => void; map: maplibregl.Map | null; callsign: string; verified: boolean;
   stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
   picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
 }) {
@@ -146,6 +147,10 @@ export function WorkbenchPanel(props: {
             ))}
           </ul>
         )}
+      </Group>
+
+      <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={false}>
+        <RemoteControl callsign={props.callsign} verified={props.verified} map={props.map} />
       </Group>
     </Panel>
   );

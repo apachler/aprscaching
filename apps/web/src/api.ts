@@ -72,6 +72,20 @@ export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
 export function getMessages(bulletins = false): Promise<{ messages: MessageItem[] }> {
   return call(`/api/messages?limit=30${bulletins ? "&bulletins=1" : ""}`);
 }
+
+// ---- remote control of your own ingest box (docs/20 R2) ----
+export interface BoxCommand {
+  id: number; callsign?: string; kind: string; payload?: unknown;
+  status: "queued" | "sent" | "done" | "failed"; result?: string;
+  createdAt: number; sentAt?: number | null; ackedAt?: number | null;
+}
+export function enqueueBoxCommand(boxId: string, cmd: { kind: string; payload?: unknown; callsign?: string }):
+  Promise<{ id: number; boxId: string; kind: string; callsign: string; status: string; tx: boolean }> {
+  return call(`/api/box/${encodeURIComponent(boxId)}/command`, { method: "POST", body: JSON.stringify(cmd) });
+}
+export function getBoxLog(boxId: string): Promise<{ boxId: string; commands: BoxCommand[] }> {
+  return call(`/api/box/${encodeURIComponent(boxId)}/log`);
+}
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
