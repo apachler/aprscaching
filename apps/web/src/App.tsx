@@ -3,8 +3,8 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, getStations, getSpots, API_BASE, flushLogQueue, queuedLogCount,
-  type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot,
+  listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount,
+  type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot, type MapViewState,
 } from "./api.js";
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
 import { Landing } from "./Landing.js";
@@ -157,6 +157,32 @@ export function App() {
       if (s) navigate(s.key);
     } catch { /* ignore */ }
   }, [active, navigate]);
+
+  // capture / restore a shareable map view (docs/11 M1)
+  const getViewState = useCallback((): MapViewState => {
+    const c = map.current?.getCenter();
+    return {
+      center: c ? [c.lng, c.lat] : undefined, zoom: map.current?.getZoom(),
+      layers: { spots: spotsOn, stations: stationsOn },
+      filters, spotFilters, selected: selectedId,
+    };
+  }, [spotsOn, stationsOn, filters, spotFilters, selectedId]);
+  const applyView = useCallback((s: MapViewState) => {
+    if (s.center && s.zoom != null) map.current?.flyTo({ center: s.center, zoom: s.zoom });
+    if (s.layers) { setSpotsOn(!!s.layers.spots); setStationsOn(!!s.layers.stations); }
+    if (s.filters) setFilters(s.filters as typeof filters);
+    if (s.spotFilters) setSpotFilters(s.spotFilters);
+    if (s.selected != null) openOnly(() => setSelectedId(s.selected!));
+  }, [openOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  const viewLinked = useRef(false);
+  useEffect(() => {
+    if (viewLinked.current || !active || !ready) return;
+    viewLinked.current = true;
+    try {
+      const slug = new URLSearchParams(window.location.search).get("v");
+      if (slug) resolveView(slug).then((r) => applyView(r.state)).catch(() => {});
+    } catch { /* ignore */ }
+  }, [active, ready, applyView]);
 
   // Explore → drop into the read-only platform for this session; run the tour once (first time).
   const onExplore = useCallback(() => {
@@ -496,7 +522,7 @@ export function App() {
           <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}
             includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted}
             spotsOn={spotsOn} setSpotsOn={setSpotsOn} spotFilters={spotFilters} setSpotFilters={setSpotFilters}
-            onClose={() => setShowFilter(false)} />
+            getViewState={getViewState} onClose={() => setShowFilter(false)} />
         )}
         {showProfile && mode === "view" && (
           <ProfilePanel callsign={callsign} map={map.current}

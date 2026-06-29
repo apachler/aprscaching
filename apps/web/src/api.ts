@@ -95,6 +95,21 @@ export function addWatch(callsign: string): Promise<{ ok: boolean; callsign: str
 export function removeWatch(callsign: string): Promise<{ ok: boolean }> { return call(`/api/watch/${encodeURIComponent(callsign)}`, { method: "DELETE" }); }
 export function getWatchAlerts(): Promise<{ alerts: WatchAlert[] }> { return call(`/api/watch/alerts`); }
 export function markWatchSeen(): Promise<{ ok: boolean }> { return call(`/api/watch/seen`, { method: "POST" }); }
+
+// ---- save / share map views (docs/11 M1) ----
+export interface MapViewState {
+  center?: [number, number]; zoom?: number;
+  layers?: { spots?: boolean; stations?: boolean };
+  filters?: { types: string[]; q: string };
+  spotFilters?: { bands: string[]; modes: string[]; sources: string[] };
+  selected?: number | null;
+}
+export function saveView(state: MapViewState, name?: string): Promise<{ slug: string; public: boolean }> {
+  return call(`/api/views`, { method: "POST", body: JSON.stringify({ state, name }) });
+}
+export function resolveView(slug: string): Promise<{ slug: string; name: string | null; ownerCall: string; createdAt: number; state: MapViewState }> {
+  return call(`/v/${encodeURIComponent(slug)}`);
+}
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

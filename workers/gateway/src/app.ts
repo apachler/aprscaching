@@ -23,6 +23,7 @@ import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
+import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -93,6 +94,14 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // embeddable map widget + QR (docs/11 M4) — public, CORS-open, read-only
   if (p === "/embed/qr.svg" && m === "GET") return handleQr(req, env);
   if (p === "/embed" && m === "GET") return handleEmbed(req, env);
+
+  // save / share map views (docs/11 M1)
+  if (p === "/api/views" && m === "POST") return handleViewCreate(req, env);
+  if (p === "/api/views" && m === "GET") return handleViewList(req, env);
+  const viewDel = /^\/api\/views\/([a-z0-9]+)$/.exec(p);
+  if (viewDel && m === "DELETE") return handleViewDelete(req, env, viewDel[1]!);
+  const viewGet = /^\/v\/([a-z0-9]+)$/.exec(p);
+  if (viewGet && m === "GET") return handleViewResolve(req, env, viewGet[1]!);
 
   // watchlist + alerts (docs/20 §4, W1) — session-scoped, per account
   if (p === "/api/watch" && m === "GET") return handleWatchList(req, env);

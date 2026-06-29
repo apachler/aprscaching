@@ -1,6 +1,7 @@
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
-import { Panel } from "../ui/index.js";
+import { Panel, useToast } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
+import { saveView, type MapViewState } from "../api.js";
 import type { CacheType } from "@aprsweb/shared";
 
 export interface SpotFilters { bands: string[]; modes: string[]; sources: string[] }
@@ -14,9 +15,19 @@ export function FilterPanel(props: {
   includeUnvetted: boolean; setIncludeUnvetted: (v: boolean) => void;
   spotsOn: boolean; setSpotsOn: (v: boolean) => void;
   spotFilters: SpotFilters; setSpotFilters: (f: SpotFilters) => void;
+  getViewState: () => MapViewState;
   count: number; onClose: () => void;
 }) {
   const { filters, setFilters } = props;
+  const toast = useToast();
+  async function share() {
+    try {
+      const { slug } = await saveView(props.getViewState());
+      const url = `${window.location.origin}/?v=${slug}`;
+      await navigator.clipboard?.writeText(url).catch(() => {});
+      toast("Share link copied");
+    } catch (e) { toast((e as Error).message); }
+  }
   const toggle = (t: CacheType) => setFilters({ ...filters, types: filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t] });
   const toggleSpot = (key: keyof SpotFilters, v: string) => {
     const cur = props.spotFilters[key];
@@ -64,6 +75,11 @@ export function FilterPanel(props: {
             ))}</div></div>
         </div>
       )}
+      <h4>Share</h4>
+      <div className="row between">
+        <span className="muted">Save this map view (centre, layers, filters) as a link.</span>
+        <button onClick={share}>🔗 Share this view</button>
+      </div>
       <div className="row between mt-5">
         <button className="link" onClick={() => setFilters({ types: [], q: "" })}>clear all</button>
         <span className="muted">{props.count} match{props.count === 1 ? "" : "es"}</span>

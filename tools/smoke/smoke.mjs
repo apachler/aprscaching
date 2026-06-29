@@ -511,5 +511,19 @@ ok("a watched callsign heard near a cache raises an alert", (wAlerts.alerts ?? [
 ok("mark alerts seen", (await (await fetch(`${BASE}/api/watch/seen`, { method: "POST", headers: { cookie: wcookie } })).json()).ok === true);
 ok("DELETE /api/watch/:call removes it", (await (await fetch(`${BASE}/api/watch/OE9WX`, { method: "DELETE", headers: { cookie: wcookie } })).json()).ok === true);
 
+// save / share map views (docs/11 M1)
+const vStart = await call("POST", "/auth/email/start", { email: `v${now()}@example.com`, callsign: "OE9VW" });
+const vVer = await fetch(`${BASE}/auth/email/verify?token=${vStart.data?.devToken}`, { headers: { accept: "application/json" } });
+const vcookie = (vVer.headers.get("set-cookie") ?? "").split(";")[0];
+ok("save view requires a session (401)", (await fetch(`${BASE}/api/views`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state: { zoom: 11 } }) })).status === 401);
+const vCreate = await fetch(`${BASE}/api/views`, { method: "POST", headers: { "content-type": "application/json", cookie: vcookie }, body: JSON.stringify({ name: "Graz", state: { center: [15.43, 47.07], zoom: 12, layers: { spots: true } } }) });
+const vSlug = (await vCreate.json()).slug;
+ok("POST /api/views saves a view + returns a slug", vCreate.status === 201 && typeof vSlug === "string" && vSlug.length > 0, String(vCreate.status));
+const vResolve = await call("GET", "/v/" + vSlug);
+ok("GET /v/:slug resolves a public view", vResolve.status === 200 && vResolve.data?.state?.zoom === 12 && vResolve.data?.ownerCall === "OE9VW", JSON.stringify(vResolve.data));
+const vList = await (await fetch(`${BASE}/api/views`, { headers: { cookie: vcookie } })).json();
+ok("GET /api/views lists my saved views", (vList.views ?? []).some((v) => v.slug === vSlug));
+ok("GET /v/:slug 404s for an unknown slug", (await call("GET", "/v/zzzz9999")).status === 404);
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
