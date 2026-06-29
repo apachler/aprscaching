@@ -5,6 +5,7 @@ import {
   type CacheSummary, type CacheDetail, type CacheLogEntry, type MapCache,
 } from "@aprsweb/shared";
 import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
+import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
@@ -302,8 +303,16 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     cacheStationPositions = cs.results;
   }
 
+  // Provenance seam (docs/22): stamp each fix with firstPartyAttested at the boundary so the verify
+  // engine branches on attestation alone, never on transport. FIRST_PARTY_SITES narrows attestation.
+  const attestedSites = parseAttestedSites((env as { FIRST_PARTY_SITES?: string }).FIRST_PARTY_SITES);
+  const attest = (rows: PositionRow[]): PositionRow[] =>
+    rows.map((p) => ({ ...p, firstPartyAttested: provenanceOf(p, attestedSites).firstPartyAttested }));
+
   const result = verifyFind(cache, appGeo, {
-    loggerPositions: lp.results, cacheStationPositions, loggerOwnIgates: new Set(),
+    loggerPositions: attest(lp.results),
+    cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
+    loggerOwnIgates: new Set(),
   });
 
   // F3: if we couldn't reach Tier A locally, ask peers whether the logger was independently

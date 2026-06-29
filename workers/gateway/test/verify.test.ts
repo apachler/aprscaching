@@ -12,7 +12,10 @@ const NEAR = { lat: 47.071, lon: 15.42 };
 const FAR = { lat: 48.07, lon: 15.42 };
 
 function pos(p: Partial<PositionRow> & Pick<PositionRow, "lat" | "lon" | "heard_via">): PositionRow {
-  return { id: 10, callsign: "OE8APR-9", ts: 1000, igate_call: null, ...p };
+  const merged = { id: 10, callsign: "OE8APR-9", ts: 1000, igate_call: null, ...p };
+  // Mirror the boundary's provenance stamp (provenance.ts): an RF fix with a gating site is
+  // first-party attested. Explicit firstPartyAttested on the input still wins.
+  return { firstPartyAttested: merged.heard_via === "rf" && !!merged.igate_call, ...merged };
 }
 
 describe("verifyFind — tier A (RF, independently gated)", () => {
@@ -88,6 +91,27 @@ describe("verifyFind — tier C (IS-only) and policy", () => {
       loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is" })],
     }, lenient);
     expect(r).toMatchObject({ verified: true, tier: "C" });
+  });
+});
+
+describe("verifyFind — provenance seam: transport ≠ trust (docs/22)", () => {
+  it("an RF-ish fix that is NOT first-party attested stays tier C even within radius", () => {
+    // e.g. an AXIP/HAMNET-tunnelled frame: looks 'rf' but no site we attest → no Tier-A uplift.
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", firstPartyAttested: false })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).toBe("C");
+    expect(r.verified).toBe(false);
+  });
+
+  it("grants tier A on the attestation flag alone, independent of the transport label", () => {
+    // The flag is what counts; the heard_via label here is deliberately not 'rf'.
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is", igate_call: "OE8XXX", firstPartyAttested: true, id: 99 })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A", method: "aprs_rf", matchedPositionId: 99 });
   });
 });
 

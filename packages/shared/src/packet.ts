@@ -22,3 +22,32 @@ export type Packet = z.infer<typeof Packet>;
 
 export const IngestBatch = z.object({ packets: z.array(Packet) });
 export type IngestBatch = z.infer<typeof IngestBatch>;
+
+/**
+ * Provenance — the transport-vs-trust seam (docs/22).
+ *
+ * The wire a packet arrives on is NOT proof it touched RF. APRS-IS, an AXIP/AXUDP
+ * tunnel and a HAMNET-bridged KISS link are all just transports; none of them, on
+ * their own, corroborate presence. Only a receiving site WE operate and can attest
+ * for yields Tier-A uplift. So the verification engine MUST branch on
+ * `firstPartyAttested` alone — never on `transport`. The enum keeps the deferred
+ * RF / AXIP / HAMNET tracks pluggable without re-touching the trust engine.
+ */
+export const Transport = z.enum([
+  "aprs-is",        // APRS-IS firehose (the only wired transport today)
+  "app",            // first-party in-app device geolocation (the Tier-B path)
+  "axudp",          // AX.25 over UDP (BPQ node mesh) — reserved, listener stubbed off
+  "axip",           // AX.25 over IP — reserved
+  "hamnet-kiss",    // KISS-over-IP from a HAMNET site — reserved
+  "first-party-rf", // a receiver we operate + attest — the only Tier-A origin
+]);
+export type Transport = z.infer<typeof Transport>;
+
+export const Provenance = z.object({
+  transport: Transport,
+  qConstruct: z.string().optional(),       // APRS-IS path token (qAR ≈ RF-originated)
+  firstPartyAttested: z.boolean(),         // heard at a site we operate + attest — the ONLY Tier-A gate
+  siteId: z.string().optional(),           // the attesting receiver/IGate id
+  heardAt: z.number().optional(),          // unix seconds the site heard it
+});
+export type Provenance = z.infer<typeof Provenance>;

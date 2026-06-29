@@ -18,6 +18,8 @@ export interface Env {
   FED_REGISTRY_KEY?: string; // the registry authority's Ed25519 public key (base64url) used to verify FED_REGISTRY
   FED_OPERATOR?: string;     // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string;    // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
+  FED_AMATEUR_ENDPOINT?: string; // reserved (docs/22): optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral
+  FIRST_PARTY_SITES?: string;    // provenance seam (docs/22): allowlist of IGate/site calls we operate + attest → Tier-A origin
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)

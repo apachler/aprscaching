@@ -61,6 +61,12 @@ if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: Number(env.MESH_PORT ?? 1883) }, enqueue).start();
   console.log("[mesh] enabled");
 }
+// AXUDP tunnel (docs/22 reserved seam) — opt-in; tunnelled frames stay Tier C, never first-party RF.
+if (env.AXUDP_PORT) {
+  const { AxudpListener } = await import("./axudp.js");
+  new AxudpListener({ port: Number(env.AXUDP_PORT), bind: env.AXUDP_BIND }, enqueue).start();
+  console.log("[axudp] enabled");
+}
 
 aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));
 aprs.on("down", () => console.log("[aprs-is] disconnected, retrying..."));

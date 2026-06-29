@@ -134,7 +134,15 @@ export async function importActiveKeys(publicKeys: FedPublicKey[] | undefined, f
 }
 
 // ---- signed instance registry / namespace authority (T4.2) ----
-export interface RegistryEntry { instance: string; url?: string; key?: string; operator?: string; aprsCall?: string; since?: number }
+export interface RegistryEntry {
+  instance: string; url?: string; key?: string; operator?: string; aprsCall?: string; since?: number;
+  /**
+   * Reserved seam (docs/22): an optional 44net / HAMNET address or ampr.org hostname for this node,
+   * so a peer can be reached over amateur space without coupling the serverless front-end to any IP
+   * space. Trust-neutral — reachability/addressing only, never a trust uplift.
+   */
+  amateurEndpoint?: string;
+}
 export interface SignedRegistry { entries: RegistryEntry[]; at?: number; sig?: string; signer?: string }
 
 /** Verify a registry document's authority signature (sig over the canonical {entries,at}). Pure/testable. */
@@ -168,7 +176,8 @@ export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeySt
 /** This instance's own registry self-attestation (what it publishes about itself). */
 export async function selfRegistryEntry(env: Env, instance: string): Promise<RegistryEntry> {
   const fk = await loadKey(env);
-  return { instance, key: fk?.publicX, operator: env.FED_OPERATOR, aprsCall: env.FED_APRS_CALL };
+  return { instance, key: fk?.publicX, operator: env.FED_OPERATOR, aprsCall: env.FED_APRS_CALL,
+    ...(env.FED_AMATEUR_ENDPOINT ? { amateurEndpoint: env.FED_AMATEUR_ENDPOINT } : {}) };
 }
 
 /** Endpoint: this instance's verified view of the network registry + its own self-entry (transparency). */
