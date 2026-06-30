@@ -253,6 +253,7 @@ export type StationRole = (typeof STATION_ROLES)[number];
 /** A weather-capable station's PWS push key + ready-to-paste ingest URLs (null until issued). */
 export interface StationWxKey {
   key: string | null; lastSeen: number | null; ecowittPath: string | null; wuUrl: string | null;
+  txIs?: boolean; txCwop?: boolean; verified?: boolean;   // W2/W3 TX opt-in + control-verified gate
 }
 export interface OperatedStation {
   id: number;

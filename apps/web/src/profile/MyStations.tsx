@@ -6,6 +6,7 @@ import {
 } from "../api.js";
 import { useFmt } from "../format.js";
 import { Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
+import { WxTxToggles } from "./WxTxToggles.js";
 
 const ROLE_LABEL: Record<StationRole, string> = {
   weather: "Weather", digipeater: "Digipeater", igate: "IGate", node: "Node", relay: "Relay",
@@ -162,6 +163,8 @@ function StationWxKeyPanel(props: { stationId: number }) {
             <span className="copyrow"><input className="mono" readOnly value={info.wuUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
               <button className="iconbtn" aria-label="Copy Weather Underground URL" onClick={() => copy(info.wuUrl ?? "", "WU URL")}>copy</button></span></label>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
+          <h5 className="mt-2">Transmit (optional)</h5>
+          <WxTxToggles stationId={props.stationId} txIs={info.txIs} txCwop={info.txCwop} verified={info.verified} />
           <div className="row end"><button onClick={issue} disabled={busy}>Re-issue key</button></div>
         </>
       )}

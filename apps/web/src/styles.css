@@ -590,6 +590,8 @@ button.link:hover { text-decoration: underline; }
 .role-check { display: inline-flex; align-items: center; gap: 5px; }
 .wx-key { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; }
 .wx-key h5 { margin: 0 0 6px; }
+.wx-tx { display: grid; gap: 8px; }
+.wx-tx .row.between { align-items: center; gap: 12px; }
 
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }

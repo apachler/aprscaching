@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getWxKey, issueWxKey, type WxKeyInfo } from "../api.js";
 import { useFmt } from "../format.js";
 import { useToast } from "../ui/index.js";
+import { WxTxToggles } from "./WxTxToggles.js";
 
 /**
  * Settings → Weather station (PWS): user-origination of their own weather (docs/17 W1). Issues a
@@ -54,6 +55,9 @@ export function WeatherStation(props: { callsign: string }) {
             </span>
           </label>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
+          <h5 className="mt-2">Transmit (optional)</h5>
+          <p className="muted fine">Platform ingest above needs no licence. Transmitting to APRS-IS or CWOP does — it's gated on a verified callsign and off by default.</p>
+          <WxTxToggles txIs={info.txIs} txCwop={info.txCwop} verified={info.verified} />
           <div className="row end mt-2"><button onClick={issue} disabled={busy}>Re-issue key</button></div>
         </>
       )}

@@ -165,11 +165,17 @@ export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
 export interface WxKeyInfo {
   callsign: string; station: string; key: string | null; lastSeen: number | null;
   ecowittPath: string | null; wuUrl: string | null;
+  txIs?: boolean; txCwop?: boolean; verified?: boolean;   // W2/W3 TX opt-in + control-verified gate
 }
 /** Read the caller's PWS push key + ready-to-paste station URLs (null key until issued). */
 export function getWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`); }
 /** (Re)issue the PWS push key — invalidates any previous one. */
 export function issueWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`, { method: "POST" }); }
+export interface WxTxState { txIs: boolean; txCwop: boolean; verified: boolean }
+/** Toggle APRS-IS beacon (W2) / CWOP relay (W3) for the home or a registry-station PWS (docs/17). */
+export function setWxTx(body: { stationId?: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
+  return call(`/api/wx/tx`, { method: "POST", body: JSON.stringify(body) });
+}
 
 // ---- operated-stations registry: manage your own stations (docs/13 M5) ----
 import type { OperatedStation, StationRole, StationWxKey } from "@aprsweb/shared";

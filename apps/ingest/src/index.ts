@@ -111,18 +111,27 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
     servicePass: env.APRSIS_SERVICE_PASS,
   });
   uplink.start();
+  // W3: an optional separate uplink to CWOP (feeds NOAA). Items with target='cwop' go here; when no
+  // CWOP server is configured we fall back to standard APRS-IS, which also reaches CWOP-registered IDs.
+  const cwop = env.CWOP_HOST
+    ? new AprsUplink({ host: env.CWOP_HOST, port: Number(env.CWOP_PORT ?? 14580), serviceCall: SERVICE_CALL, servicePass: env.APRSIS_SERVICE_PASS })
+    : null;
+  cwop?.start();
   const base = INGEST_URL.replace(/\/ingest$/, "");
   setInterval(async () => {
     try {
       const r = await fetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
       const { items } = await r.json() as { items: any[] };
       const sent: number[] = [];
-      for (const it of items ?? []) if (uplink.publish(it)) sent.push(it.id);
+      for (const it of items ?? []) {
+        const link = it.target === "cwop" && cwop ? cwop : uplink;   // W3 → CWOP, else standard APRS-IS
+        if (link.publish(it)) sent.push(it.id);
+      }
       if (sent.length) await fetch(`${base}/outbox/ack`, {
         method: "POST", headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
         body: JSON.stringify({ ids: sent }),
       });
     } catch { /* retry next tick */ }
   }, 4000);
-  console.log("[uplink] announce publisher active");
+  console.log("[uplink] announce + weather publisher active");
 }

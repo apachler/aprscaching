@@ -14,6 +14,10 @@ import { json } from "./app.js";
 import { sessionCallsign } from "./auth.js";
 import { sessionAccountId } from "./watch.js";
 import { gridToLatLon } from "@aprsweb/shared";
+import { encodeAprsWeather, type WxEncodeFields } from "@aprsweb/aprs";
+import { isCallsignVerified } from "./callsign.js";
+
+const WX_BEACON_MIN_SEC = 300; // throttle WX beacons to ≤ once / 5 min (cost + APRS etiquette)
 
 const now = () => Math.floor(Date.now() / 1000);
 const num = (v: string | undefined): number | undefined => { if (v == null || v === "") return undefined; const n = parseFloat(v); return Number.isFinite(n) ? n : undefined; };
@@ -102,7 +106,50 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
        ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen, symbol='_'`,
     ).bind(station, place.lat, place.lon, ts, station).run();
   }
+
+  // W2/W3: if this PWS opted into TX (and its callsign is control-verified), enqueue an APRS WX
+  // beacon — to standard APRS-IS and/or to CWOP/NOAA — throttled. Never blocks the ingest ack.
+  await maybeBeaconWx(env, { key, station, baseCall: row.callsign.toUpperCase().split("-")[0]!, place, wx });
+
   return new Response("success\n", { headers: { "content-type": "text/plain" } }); // WU expects this body
+}
+
+/** Map a stored metric reading to the encoder's wire-unit input. */
+function toWxFields(wx: WxReading): WxEncodeFields {
+  return {
+    tempC: wx.temp_c, humidity: wx.humidity, pressureHpa: wx.pressure_hpa,
+    windDirDeg: wx.wind_dir, windKn: wx.wind_kn, gustKn: wx.gust_kn,
+    rainMm: wx.rain_mm, rain24hMm: wx.rain_24h_mm, luminosityWm2: wx.luminosity_wm2,
+  };
+}
+
+/**
+ * Queue a WX beacon for a verified, opted-in PWS (docs/17 W2/W3). Gated like H5: TX is off by
+ * default; both the verified-callsign check and the per-station opt-in must pass. A WX report needs
+ * a position, so a station with no coordinates is skipped. Throttled to WX_BEACON_MIN_SEC.
+ */
+async function maybeBeaconWx(
+  env: Env,
+  o: { key: string; station: string; baseCall: string; place: { lat: number; lon: number } | null; wx: WxReading },
+): Promise<void> {
+  const k = await env.DB.prepare("SELECT tx_is AS txIs, tx_cwop AS txCwop, last_beacon AS lastBeacon FROM wx_keys WHERE key = ?")
+    .bind(o.key).first<{ txIs: number; txCwop: number; lastBeacon: number | null }>();
+  if (!k || (!k.txIs && !k.txCwop)) return;
+  if (!o.place) return;                                            // a WX report must carry a position
+  if (now() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return;     // throttle
+  if (!(await isCallsignVerified(env, o.baseCall))) return;        // control-verified gate (W2/W3)
+
+  const info = encodeAprsWeather(o.place.lat, o.place.lon, toWxFields(o.wx));
+  const ts = now();
+  const targets: string[] = [];
+  if (k.txIs) targets.push("is");
+  if (k.txCwop) targets.push("cwop");
+  for (const target of targets) {
+    await env.DB.prepare(
+      "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload, target) VALUES (?,?,?, 'wx', ?, ?)",
+    ).bind(ts, o.station, "APZACG", info, target).run();
+  }
+  await env.DB.prepare("UPDATE wx_keys SET last_beacon = ? WHERE key = ?").bind(ts, o.key).run();
 }
 
 /** Generate a PWS push key. Shared by the legacy home-PWS endpoint and per-station keys (docs/13). */
@@ -130,11 +177,45 @@ export async function handleWxKey(req: Request, env: Env): Promise<Response> {
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
       .bind(makeWxKey(), base, await sessionAccountId(req, env), now()).run();
   }
-  const row = await env.DB.prepare("SELECT key, last_seen AS lastSeen FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string; lastSeen: number | null }>();
+  const row = await env.DB.prepare("SELECT key, last_seen AS lastSeen, tx_is AS txIs, tx_cwop AS txCwop FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string; lastSeen: number | null; txIs: number; txCwop: number }>();
   const origin = new URL(req.url).origin;
   const urls = row ? wxUrls(origin, station, row.key) : null;
   return json({
     callsign: base, station, key: row?.key ?? null, lastSeen: row?.lastSeen ?? null,
     ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null,
+    txIs: !!row?.txIs, txCwop: !!row?.txCwop, verified: await isCallsignVerified(env, base),
   });
+}
+
+/**
+ * POST /api/wx/tx — toggle a PWS's APRS-IS beacon (W2) and/or CWOP relay (W3). Gated: requires a
+ * signed-in session AND a control-verified callsign to ENABLE either (TX is off by default, H5
+ * parity). `stationId` targets a registry station's key; omitted targets the home <call>-13 key.
+ */
+export async function handleWxTx(req: Request, env: Env): Promise<Response> {
+  const cs = await sessionCallsign(req, env);
+  if (!cs) return json({ error: "sign in to manage weather TX" }, { status: 401 });
+  const base = cs.toUpperCase().split("-")[0]!;
+  const body = (await req.json().catch(() => ({}))) as { stationId?: number; txIs?: boolean; txCwop?: boolean };
+  const txIs = !!body.txIs, txCwop = !!body.txCwop;
+
+  const verified = await isCallsignVerified(env, base);
+  if ((txIs || txCwop) && !verified)
+    return json({ error: "verify your callsign to transmit weather", verified: false }, { status: 403 });
+
+  // locate the caller's key row (home, or an owned registry station)
+  let row: { key: string } | null;
+  if (body.stationId != null) {
+    const acct = await sessionAccountId(req, env);
+    row = await env.DB.prepare(
+      `SELECT wk.key AS key FROM wx_keys wk JOIN account_stations s ON s.id = wk.station_id
+        WHERE wk.station_id = ? AND s.account_id = ?`,
+    ).bind(body.stationId, acct).first<{ key: string }>();
+  } else {
+    row = await env.DB.prepare("SELECT key FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string }>();
+  }
+  if (!row) return json({ error: "enable the weather station first" }, { status: 400 });
+
+  await env.DB.prepare("UPDATE wx_keys SET tx_is = ?, tx_cwop = ? WHERE key = ?").bind(txIs ? 1 : 0, txCwop ? 1 : 0, row.key).run();
+  return json({ txIs, txCwop, verified });
 }

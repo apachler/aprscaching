@@ -14,7 +14,7 @@ import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleL
   handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { handleProfileUpdate } from "./profile.js";
-import { handleWxSubmit, handleWxKey } from "./wx.js";
+import { handleWxSubmit, handleWxKey, handleWxTx } from "./wx.js";
 import { handleMyStations, handleMyStation, handleStationWxKey, handleStationToCache, handleMeCache } from "./stations_mine.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
@@ -203,6 +203,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // weather user-origination (docs/17 W1) — PWS push (Ecowitt / WU) under <call>-13
   if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST")) return handleWxSubmit(req, env);
   if (p === "/api/wx/key" && (m === "GET" || m === "POST")) return handleWxKey(req, env);
+  if (p === "/api/wx/tx" && m === "POST") return handleWxTx(req, env);
 
   // operated-stations registry (docs/13 M5) — manage your own stations (PWS / digi / igate / node)
   if (p === "/api/my/stations" && (m === "GET" || m === "POST")) return handleMyStations(req, env);

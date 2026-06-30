@@ -17,6 +17,7 @@ import { sessionAccountId } from "./watch.js";
 import { sessionCallsign } from "./auth.js";
 import { sanitizeBio } from "./profile.js";
 import { makeWxKey, wxUrls } from "./wx.js";
+import { isCallsignVerified } from "./callsign.js";
 import { handleCreateCache } from "./caches.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { gridToLatLon, STATION_ROLES, type StationRole, type OperatedStation } from "@aprsweb/shared";
@@ -181,9 +182,13 @@ export async function handleStationWxKey(req: Request, env: Env, id: number): Pr
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, station_id, created_at) VALUES (?,?,?,?,?)")
       .bind(makeWxKey(), base, acct, id, now()).run();
   }
-  const key = await env.DB.prepare("SELECT key, last_seen AS lastSeen FROM wx_keys WHERE station_id = ?").bind(id).first<{ key: string; lastSeen: number | null }>();
+  const key = await env.DB.prepare("SELECT key, last_seen AS lastSeen, tx_is AS txIs, tx_cwop AS txCwop FROM wx_keys WHERE station_id = ?").bind(id).first<{ key: string; lastSeen: number | null; txIs: number; txCwop: number }>();
   const urls = key ? wxUrls(new URL(req.url).origin, row.callsign, key.key) : null;
-  return json({ key: key?.key ?? null, lastSeen: key?.lastSeen ?? null, ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null });
+  return json({
+    key: key?.key ?? null, lastSeen: key?.lastSeen ?? null,
+    ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null,
+    txIs: !!key?.txIs, txCwop: !!key?.txCwop, verified: await isCallsignVerified(env, base),
+  });
 }
 
 /** Delegate to the canonical create path, preserving the caller's session so actor() owns the cache. */
