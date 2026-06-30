@@ -7,6 +7,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "check": "tools/dev/check.sh",
+    "smoke": "tools/dev/smoke.sh",
+    "verify": "tools/dev/verify.sh",
     "dev:web": "pnpm --filter @aprsweb/web dev",
     "dev:gateway": "pnpm --filter @aprsweb/gateway dev",
     "dev:ingest": "pnpm --filter @aprsweb/ingest dev"

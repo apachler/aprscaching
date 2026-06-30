@@ -40,7 +40,7 @@ import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
-import { MailPanel } from "./live/MailPanel.js";
+import { BbsPanel } from "./live/BbsPanel.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // keyless online basemap by default; `VITE_BASEMAP=offline` uses the self-contained grid.
@@ -580,7 +580,7 @@ export function App() {
                           onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
         )}
         {showMail && mode === "view" && (
-          <MailPanel callsign={callsign} onClose={() => setShowMail(false)} />
+          <BbsPanel callsign={callsign} onClose={() => setShowMail(false)} />
         )}
         {showSignIn && (
           <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />

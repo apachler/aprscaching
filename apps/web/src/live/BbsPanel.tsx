@@ -5,8 +5,8 @@ import { Panel, Badge, EmptyState } from "../ui/index.js";
 
 type Tab = "inbox" | "sent" | "bulletins" | "compose";
 
-/** BBS — store-and-forward APRS mail + (network-federated) bulletins. */
-export function MailPanel(props: { callsign: string; onClose: () => void }) {
+/** BBS — store-and-forward APRS mail + (network-federated) bulletins + connected-mode threads. */
+export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   const fmt = useFmt();
   const signedIn = props.callsign.length >= 3;
   const [tab, setTab] = useState<Tab>("inbox");
