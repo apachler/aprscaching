@@ -34,7 +34,7 @@ import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
-import { handleLeaderboard, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
+import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
 import { handleDecode, handleStations, handleStation, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
@@ -222,6 +222,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // community / gamification (M4)
   if (p === "/api/leaderboard" && m === "GET") return handleLeaderboard(req, env);
+  if (p === "/api/corroborators" && m === "GET") return handleCorroborators(req, env);
   if (p === "/api/activity" && m === "GET") return handleActivity(req, env);
   const profileMatch = /^\/api\/profile\/([A-Za-z0-9-]+)$/.exec(p);
   if (profileMatch && m === "GET") return handleProfile(req, env, profileMatch[1]!);

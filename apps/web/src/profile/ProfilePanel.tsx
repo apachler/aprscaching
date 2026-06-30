@@ -37,6 +37,10 @@ export function ProfilePanel(props: {
         <p><Badge kind="tierC">unverified account</Badge> <button className="link" title="Send an APRS message-challenge to your callsign (coming in the identity pass)">verify callsign</button></p>
         {profile && <p><strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · <strong>{profile.hides}</strong> hidden
           {profile.lastFind && <span className="muted"> · last find {fmt.date(profile.lastFind)}</span>}</p>}
+        {profile && (profile.corroborations ?? 0) > 0 && (
+          <p title="Tier-A finds your IGate(s) helped verify">
+            <Badge kind="tierA">⇅ Infrastructure</Badge> <strong>{profile.corroborations}</strong> finds corroborated</p>
+        )}
         {profile && profile.badges.length > 0 && (
           <div className="badges">{profile.badges.map((b) => <span key={b.badge} className="award">{b.badge}</span>)}</div>
         )}

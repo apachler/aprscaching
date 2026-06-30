@@ -70,6 +70,11 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   const hides = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM caches WHERE owner_call=? AND source='native' AND status!='archived'",
   ).bind(cs).first<{ n: number }>();
+  // "Infrastructure" contribution: Tier-A finds this operator's IGate(s) helped corroborate (docs/13).
+  const corr = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM cache_logs l JOIN positions p ON p.id = l.matched_position_id
+      WHERE l.tier='A' AND l.verified=1 AND (p.igate_call = ? OR p.igate_call LIKE ?)`,
+  ).bind(cs, `${cs}-%`).first<{ n: number }>();
   const badges = (await env.DB.prepare("SELECT badge, earned_at AS earnedAt FROM achievements WHERE callsign=? ORDER BY earned_at").bind(cs).all<{ badge: string; earnedAt: number }>()).results;
   const acct = await env.DB.prepare(
     `SELECT verified, display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl,
@@ -97,11 +102,30 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     finds: stat?.finds ?? 0, points: Math.round(stat?.points ?? 0),
     firstFind: stat?.firstFind ?? null, lastFind: stat?.lastFind ?? null,
     hides: hides?.n ?? 0,
+    corroborations: corr?.n ?? 0,
     byTier: Object.fromEntries(byTier.map((r) => [r.tier ?? "?", r.n])),
     byType: Object.fromEntries(byType.map((r) => [r.type, r.n])),
     badges,
     ...(profile ? { profile } : {}),
   });
+}
+
+// ---------------------------------------------------------------- corroborator leaderboard (docs/13)
+// Rank the IGates that helped verify finds to Tier A — the gating IGate on each verified RF find.
+// Running infrastructure becomes a visible contribution to the commons.
+export async function handleCorroborators(req: Request, env: Env): Promise<Response> {
+  const u = new URL(req.url);
+  const since = periodStart(u.searchParams.get("period"));
+  const bb = bboxClause(u);
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 50) || 50, 1), 200);
+  const rows = (await env.DB.prepare(
+    `SELECT p.igate_call AS igate, COUNT(*) AS corroborations
+       FROM cache_logs l JOIN positions p ON p.id = l.matched_position_id
+            JOIN caches c ON c.id = l.cache_id
+      WHERE l.tier='A' AND l.verified=1 AND p.igate_call IS NOT NULL AND l.ts >= ?${bb.sql}
+      GROUP BY p.igate_call ORDER BY corroborations DESC, igate ASC LIMIT ?`,
+  ).bind(since, ...bb.binds, limit).all<{ igate: string; corroborations: number }>()).results;
+  return json({ period: u.searchParams.get("period") ?? "all", corroborators: rows.map((r, i) => ({ rank: i + 1, ...r })) });
 }
 
 // ---------------------------------------------------------------- activity feed

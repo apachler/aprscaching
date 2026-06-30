@@ -201,9 +201,13 @@ export interface ProfileCard {
 export interface Profile {
   callsign: string; accountVerified: boolean;
   finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
+  corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify (docs/13)
   byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];
   profile?: ProfileCard; // opt-in self-curated card (docs/13)
 }
+
+/** A row in the corroborator leaderboard — an IGate ranked by Tier-A finds it helped verify. */
+export interface Corroborator { rank: number; igate: string; corroborations: number }
 export interface ActivityItem {
   id: number; loggerCall: string; ts: number; logType: string; verified: boolean; tier: string | null;
   cacheId: number; cacheCode: string; cacheTitle: string;

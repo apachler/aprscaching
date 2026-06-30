@@ -592,5 +592,11 @@ const meC = await (await fetch(`${BASE}/api/me/cache`, { method: "POST", headers
 ok("become a cache → a living cache that follows your beacon", meC.cache?.type === "aprs_living" && (meC.cache?.stationCall ?? "").startsWith("OE9PROF"), JSON.stringify(meC.cache));
 ok("DELETE /api/my/stations/:id removes it", (await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "DELETE", headers: { cookie: prcookie } })).json()).ok === true);
 
+// corroborator leaderboard (docs/13): the IGate (OE8XXX) that gated the Tier-A find earlier ranks
+const board = await call("GET", "/api/corroborators");
+ok("corroborator board ranks the gating IGate", (board.data?.corroborators ?? []).some((c) => c.igate === "OE8XXX" && c.corroborations >= 1), JSON.stringify(board.data?.corroborators));
+const igProf = await call("GET", "/api/profile/OE8XXX");
+ok("an operator's profile shows its Infrastructure corroborations", (igProf.data?.corroborations ?? 0) >= 1, JSON.stringify(igProf.data?.corroborations));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
