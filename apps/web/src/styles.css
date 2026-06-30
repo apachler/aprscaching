@@ -466,7 +466,7 @@ button.link:hover { text-decoration: underline; }
   display: flex; gap: 8px; align-items: center; backdrop-filter: blur(6px); }
 
 /* ---- top-bar global search (M8 P3) + enriched suggest (docs/11 M2) ---- */
-.topsearch-wrap { display: none; position: relative; flex: 1; max-width: 420px; }
+.topsearch-wrap { display: none; position: relative; flex: 2 1 0; max-width: 420px; }
 @media (min-width: 768px) { .topsearch-wrap { display: block; } }
 .topsearch { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: rgba(255,255,255,.6); }
