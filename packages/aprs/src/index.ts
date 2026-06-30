@@ -7,6 +7,7 @@ export * from "./mgrs.js";
 export * from "./sun.js";
 export * from "./ultimeter.js";
 export * from "./afsk.js";
+export * from "./cat.js";
 export * from "./symbols.js";
 export * from "./compressed.js";
 export * from "./mice.js";

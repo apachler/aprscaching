@@ -596,6 +596,12 @@ button.link:hover { text-decoration: underline; }
 .serial-wx .row { align-items: center; gap: 10px; }
 .serial-live { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px; border: 1px solid var(--hair);
   border-radius: 8px; background: color-mix(in oklch, var(--surface) 60%, transparent); font-size: 12.5px; }
+.rigctl { display: grid; gap: 8px; }
+.rigctl .row { align-items: center; gap: 10px; }
+.rigctl input, .rigctl select { min-height: 32px; }
+.spot-tune { margin-top: 8px; width: 100%; min-height: 38px; border: 1px solid var(--accent); border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; cursor: pointer; }
+.spot-tune:hover { background: color-mix(in oklch, var(--accent) 26%, transparent); }
 
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }

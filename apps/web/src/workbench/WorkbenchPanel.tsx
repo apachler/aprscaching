@@ -12,6 +12,7 @@ import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
 import { TrackReplay } from "./TrackReplay.js";
+import { RigControl } from "./RigControl.js";
 
 /** Workbench — the full APRS toolset, grouped; switch on only what you need. */
 export function WorkbenchPanel(props: {
@@ -170,6 +171,11 @@ export function WorkbenchPanel(props: {
 
       <Group title="RF (browser)" status="Web Serial · BLE" defaultOpen={false}>
         <RfBrowser callsign={props.callsign} verified={props.verified} />
+      </Group>
+
+      <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={false}>
+        <p className="muted">Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).</p>
+        <RigControl />
       </Group>
 
       <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={false}>

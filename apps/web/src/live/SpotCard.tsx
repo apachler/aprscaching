@@ -1,6 +1,7 @@
 import type { Spot } from "../api.js";
 import { useFmt } from "../format.js";
-import { Badge } from "../ui/index.js";
+import { Badge, useToast } from "../ui/index.js";
+import { cat, useCatConnected } from "../rf/cat.js";
 
 /**
  * SpotCard — the detail for a tapped live activity spot (docs/20 S2). A lightweight floating card
@@ -8,8 +9,14 @@ import { Badge } from "../ui/index.js";
  */
 export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?: () => void }) {
   const fmt = useFmt();
+  const toast = useToast();
+  const rigOn = useCatConnected();
   const s = props.spot;
   const freqMHz = s.freqHz ? (s.freqHz / 1e6).toFixed(3) : null;
+  async function tune() {
+    try { await cat.tune(s.freqHz!, s.mode); toast(`Tuned to ${freqMHz} MHz`); }
+    catch (e) { toast((e as Error).message); }
+  }
   return (
     <div className="spot-card" role="dialog" aria-label={`Spot ${s.callsign}`}>
       <div className="spot-card-h">
@@ -26,6 +33,9 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
         <span className="muted">· spotted {fmt.ago(s.spottedAt)}</span>
       </div>
       {s.comment && <p className="spot-comment muted">{s.comment}</p>}
+      {rigOn && s.freqHz != null && (
+        <button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot">📻 Tune rig to {freqMHz} MHz{s.mode ? ` ${s.mode}` : ""}</button>
+      )}
       {props.onViewCache && (
         <button className="primary spot-cta" onClick={props.onViewCache}>This cache is being activated — open it →</button>
       )}
