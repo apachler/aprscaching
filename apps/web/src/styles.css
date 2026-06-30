@@ -312,6 +312,40 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .decoded dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; word-break: break-word; }
 .wx { margin-top: 6px; font-size: 13px; }
 
+/* packet terminal (docs/25 P1) — built token-driven for the Stage-3 Cogmind flip */
+.packet-term { display: grid; gap: 8px; }
+.pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.pt-tab { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px 6px 0 0; background: var(--surface-2); cursor: pointer; }
+.pt-tab.on { border-bottom-color: transparent; background: var(--surface); font-weight: 600; }
+.pt-tab .pt-state { color: var(--muted); text-transform: uppercase; }
+.pt-tab .pt-x { margin-left: 6px; color: var(--muted); }
+.pt-window { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.pt-out { margin: 0; padding: 8px; min-height: 120px; max-height: 260px; overflow-y: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+.pt-line.tx { color: var(--accent); }
+.pt-line.sys { color: var(--muted); font-style: italic; }
+.pt-status { padding: 4px 8px; border-top: 1px solid var(--hair); background: var(--surface-2); font-size: 11.5px; color: var(--muted); }
+.pt-cmd { padding: 6px 8px; }
+.pt-cmd input { flex: 1; min-width: 0; }
+.pt-macros { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 8px; }
+.pt-macro { font-size: 11.5px; padding: 2px 7px; }
+.pt-mon-out { margin: 6px 0 0; padding: 8px; max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.4; background: var(--surface-2); border-radius: 8px; }
+.pt-mon-tag { font-weight: 700; }
+.pt-ctext input { width: 100%; margin-top: 6px; }
+
+/* ANSI 16-colour palette (BBS output) — modern theme; the Cogmind theme remaps these tokens */
+:root {
+  --ansi-0: #2b2b2b; --ansi-1: #c0392b; --ansi-2: #27ae60; --ansi-3: #b8860b;
+  --ansi-4: #2e6fb8; --ansi-5: #8e44ad; --ansi-6: #1696a3; --ansi-7: #bdc3c7;
+  --ansi-8: #5a5a5a; --ansi-9: #e74c3c; --ansi-10: #2ecc71; --ansi-11: #f1c40f;
+  --ansi-12: #5dade2; --ansi-13: #af7ac5; --ansi-14: #48c9b0; --ansi-15: #ffffff;
+  /* NAMES.GP station-type colours */
+  --st-bbs: var(--ansi-11); --st-node: var(--ansi-12); --st-digi: var(--ansi-10); --st-dx: var(--ansi-13);
+  --st-wx: var(--ansi-14); --st-igate: var(--ansi-6); --st-service: var(--accent); --st-cacher: var(--tier-a, #3c6);
+  --st-beacon: var(--ansi-7); --st-user: var(--muted);
+}
+.pt-tab.st-bbs { border-top: 2px solid var(--st-bbs); } .pt-tab.st-node { border-top: 2px solid var(--st-node); }
+.pt-tab.st-digi { border-top: 2px solid var(--st-digi); } .pt-tab.st-service { border-top: 2px solid var(--st-service); }
+
 /* station telemetry/weather graphs (workbench, lazy uPlot) */
 .station-graphs { margin-top: 8px; }
 .graph-host { display: grid; gap: 10px; margin-top: 8px; }
