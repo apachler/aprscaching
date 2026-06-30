@@ -474,6 +474,9 @@ const gpx1 = v1code ? await text("/api/v1/caches/" + v1code + ".gpx") : { status
 ok("GET /api/v1/caches/:code.gpx exports a single cache", gpx1.status === 200 && gpx1.body.includes(`<name>${v1code}</name>`), `${gpx1.status}`);
 const adif = await text("/api/v1/profile/OE8APR.adif");
 ok("GET /api/v1/profile/:call.adif exports ADIF", adif.status === 200 && /ADIF_VER/.test(adif.body) && adif.body.includes("<EOH>"), `${adif.status} ${adif.ct}`);
+const v1corr = await call("GET", "/api/v1/corroborators");
+ok("GET /api/v1/corroborators ranks the gating IGate", v1corr.status === 200 && (v1corr.data?.corroborators ?? []).some((c) => c.igate === "OE8XXX"), JSON.stringify(v1corr.data?.corroborators));
+ok("GET /api/v1 index lists corroborators", (apiIdx.data?.endpoints ?? []).some((e) => e.path.startsWith("/api/v1/corroborators")), "index missing corroborators");
 
 // station tracks + embed widget + QR (docs/11 M4)
 const track = await call("GET", "/api/v1/station/OE7BBS/track");

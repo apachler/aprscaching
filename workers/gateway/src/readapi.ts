@@ -11,6 +11,7 @@
  *   GET  /api/v1/caches/:code         cache detail + logbook
  *   GET  /api/v1/activity             recent finds/hides/DNFs
  *   GET  /api/v1/leaderboard?metric=  top finders
+ *   GET  /api/v1/corroborators        top IGates by Tier-A finds they helped verify
  *   GET  /api/v1/profile/:call        a callsign's public profile
  *   GET  /api/v1/stations?bbox=       live stations
  *   GET  /api/v1/spots?bbox=          live activity spots
@@ -21,7 +22,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { clientIp, rateLimited } from "./corroborate_privacy.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
-import { handleLeaderboard, handleActivity, handleProfile } from "./community.js";
+import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./workbench.js";
 import { handleSpots } from "./spots.js";
 import { handleCachesGpx, handleCachesKml, handleCacheGpx, handleFindsAdif, handleStationTrack, handleStationKml } from "./exports.js";
@@ -41,6 +42,7 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/profile/:call.adif", desc: "a callsign's finds as ADIF (logbooks)" },
   { method: "GET", path: "/api/v1/activity", desc: "recent finds, hides and DNFs" },
   { method: "GET", path: "/api/v1/leaderboard?metric=finds|points", desc: "top finders" },
+  { method: "GET", path: "/api/v1/corroborators?bbox=&period=", desc: "top IGates by Tier-A finds they helped verify" },
   { method: "GET", path: "/api/v1/profile/:call", desc: "a callsign's public profile" },
   { method: "GET", path: "/api/v1/stations?bbox=", desc: "live APRS stations" },
   { method: "GET", path: "/api/v1/station/:call", desc: "one station's latest info" },
@@ -149,6 +151,7 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   }
   if (rest === "/activity") return handleActivity(req, env);
   if (rest === "/leaderboard") return handleLeaderboard(req, env);
+  if (rest === "/corroborators") return handleCorroborators(req, env);
   if (rest === "/stations") return bboxTooLarge(req, env) ?? handleStations(req, env);
   if (rest === "/spots") return bboxTooLarge(req, env) ?? handleSpots(req, env);
   const stTrack = /^\/station\/([A-Za-z0-9-]+)\/track$/.exec(rest);
