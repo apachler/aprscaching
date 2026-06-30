@@ -551,6 +551,15 @@ button.link:hover { text-decoration: underline; }
   font-family: var(--font-mono); font-size: 12.5px; line-height: 1.3; }
 .coordblock-g .k { color: var(--muted); }
 .coordblock-g .v { color: var(--ink-2); }
+/* navigate-to-cache (field hand-off + bearing) */
+.navcache { border-top: 1px solid var(--hair); padding: 10px 13px; }
+.navcache-btn { display: inline-flex; align-items: center; gap: 6px; }
+.navcache-body { margin-top: 10px; display: grid; gap: 8px; }
+.navcache-links { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; }
+.navcache-bearing { font-size: 13px; }
+.navcache-bearing p { margin: 0; }
+.navcache-arrow { display: inline-block; }
+@media (prefers-reduced-motion: no-preference) { .navcache-arrow { transition: transform .2s ease; } }
 .iconbtn { border: none; background: none; color: var(--muted); cursor: pointer; padding: 2px;
   display: inline-flex; border-radius: 6px; }
 .iconbtn:hover { color: var(--ink); }

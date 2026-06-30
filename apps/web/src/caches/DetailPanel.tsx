@@ -7,6 +7,7 @@ import { maidenhead } from "../map/geo.js";
 import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, LoadMore, useToast, type Tier } from "../ui/index.js";
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
+import { NavigateCache } from "./NavigateCache.js";
 
 const TIER_DESC: Record<Tier, string> = {
   A: "RF-corroborated — heard on RF via an independent IGate.",
@@ -83,6 +84,7 @@ export function DetailPanel(props: {
             <span className="k">LAT/LON</span><span className="v">{c.lat!.toFixed(4)}° · {c.lon!.toFixed(4)}°</span>
             <span className="k">GRID</span><span className="v">{grid}</span>
           </div>
+          <NavigateCache lat={c.lat!} lon={c.lon!} title={c.title} />
         </div>
       )}
 

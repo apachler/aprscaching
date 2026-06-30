@@ -10,13 +10,16 @@ export function maidenhead(lat: number, lon: number): string {
 }
 
 const OCTANT = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-/** Compass octant (N/NE/…/NW) of point B as seen from point A. */
-export function bearing8(aLat: number, aLon: number, bLat: number, bLon: number): string {
+/** Initial great-circle bearing in degrees (0–360) of point B as seen from point A. */
+export function bearingDeg(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const d = Math.PI / 180;
   const y = Math.sin((bLon - aLon) * d) * Math.cos(bLat * d);
   const x = Math.cos(aLat * d) * Math.sin(bLat * d) - Math.sin(aLat * d) * Math.cos(bLat * d) * Math.cos((bLon - aLon) * d);
-  const brng = (Math.atan2(y, x) / d + 360) % 360;
-  return OCTANT[Math.round(brng / 45) % 8]!;
+  return (Math.atan2(y, x) / d + 360) % 360;
+}
+/** Compass octant (N/NE/…/NW) of point B as seen from point A. */
+export function bearing8(aLat: number, aLon: number, bLat: number, bLon: number): string {
+  return OCTANT[Math.round(bearingDeg(aLat, aLon, bLat, bLon) / 45) % 8]!;
 }
 
 /** Inverse of maidenhead(): centre lat/lon of a 4- or 6-char locator, or null if malformed. */
