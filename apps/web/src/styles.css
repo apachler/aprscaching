@@ -592,6 +592,10 @@ button.link:hover { text-decoration: underline; }
 .wx-key h5 { margin: 0 0 6px; }
 .wx-tx { display: grid; gap: 8px; }
 .wx-tx .row.between { align-items: center; gap: 12px; }
+.serial-wx { display: grid; gap: 8px; }
+.serial-wx .row { align-items: center; gap: 10px; }
+.serial-live { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px; border: 1px solid var(--hair);
+  border-radius: 8px; background: color-mix(in oklch, var(--surface) 60%, transparent); font-size: 12.5px; }
 
 /* one-tap log result card */
 .logresult { border: 1px solid var(--line); border-radius: 11px; padding: 14px; margin: 12px 0; background: var(--surface-2); text-align: center; }

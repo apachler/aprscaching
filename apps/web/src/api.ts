@@ -171,6 +171,24 @@ export interface WxKeyInfo {
 export function getWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`); }
 /** (Re)issue the PWS push key — invalidates any previous one. */
 export function issueWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`, { method: "POST" }); }
+/** Submit one in-browser-decoded PWS reading (docs/17 W4) to the W1 ingest, using the caller's key.
+ *  Metric → the imperial query params parseWx already understands, so it reuses the whole W1 path. */
+export function submitWxReading(
+  key: string,
+  r: { tempC?: number; humidity?: number; pressureHpa?: number; windDirDeg?: number; windKn?: number; rainTodayMm?: number },
+): Promise<void> {
+  const q = new URLSearchParams({ key });
+  const set = (k: string, v: number, dp: number) => q.set(k, v.toFixed(dp));
+  if (r.tempC != null) set("tempf", r.tempC * 9 / 5 + 32, 1);
+  if (r.humidity != null) set("humidity", r.humidity, 0);
+  if (r.pressureHpa != null) set("baromin", r.pressureHpa / 33.8638867, 2);
+  if (r.windDirDeg != null) set("winddir", r.windDirDeg, 0);
+  if (r.windKn != null) set("windspeedmph", r.windKn * 1.15078, 1);
+  if (r.rainTodayMm != null) set("dailyrainin", r.rainTodayMm / 25.4, 2);
+  return fetch(`${API_BASE}/api/wx/submit?${q.toString()}`, { credentials: "include" })
+    .then((res) => { if (!res.ok) throw new Error(`submit failed (${res.status})`); });
+}
+
 export interface WxTxState { txIs: boolean; txCwop: boolean; verified: boolean }
 /** Toggle APRS-IS beacon (W2) / CWOP relay (W3) for the home or a registry-station PWS (docs/17). */
 export function setWxTx(body: { stationId?: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
