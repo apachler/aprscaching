@@ -312,8 +312,9 @@ export interface MessageItem { id: number; ts: number; fromCall: string; toCall:
 
 // ---- BBS store-and-forward ----
 export interface BbsMessage {
-  id: number; bid: string | null; type: "P" | "B"; fromCall: string; toCall: string;
+  id: number; bid: string | null; type: "P" | "B" | "T"; fromCall: string; toCall: string;
   subject: string | null; body: string; postedAt: number; origin: string; readAt: number | null;
+  replyTo?: number | null; threadId?: number | null;   // FBB thread tree (P2)
   // personal-message delivery state (present on inbox listings):
   delivery?: "held" | "sent" | "acked" | "expired"; lineNo?: number | null; attempts?: number; ackedAt?: number | null;
 }

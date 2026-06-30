@@ -14,6 +14,8 @@ export function MailPanel(props: { callsign: string; onClose: () => void }) {
   const [sent, setSent] = useState<BbsMessage[]>([]);
   const [bulletins, setBulletins] = useState<BbsMessage[]>([]);
   const [to, setTo] = useState(""); const [subject, setSubject] = useState(""); const [body, setBody] = useState("");
+  const [type, setType] = useState<"P" | "B" | "T">("P");
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -37,15 +39,16 @@ export function MailPanel(props: { callsign: string; onClose: () => void }) {
   function reply(m: BbsMessage) {
     setTo(m.fromCall);
     setSubject(m.subject ? (/^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`) : "");
+    setType(m.type === "B" ? "B" : "P"); setReplyTo(m.id);  // thread the reply (SR)
     setTab("compose"); setMsg(null);
   }
 
   async function send() {
     if (!to.trim() || !body.trim() || !signedIn) { setMsg("Set your callsign, a recipient and a message."); return; }
     try {
-      const r = await postBbsMessage({ fromCall: props.callsign, toCall: to.trim().toUpperCase(), subject: subject.trim() || undefined, body: body.trim() });
-      setMsg(r.type === "B" ? "Bulletin posted to the network." : "Held — it'll be delivered when the station is next heard.");
-      setBody(""); setTo(""); setSubject(""); load();
+      const r = await postBbsMessage({ fromCall: props.callsign, toCall: to.trim().toUpperCase(), subject: subject.trim() || undefined, body: body.trim(), type, replyTo: replyTo ?? undefined });
+      setMsg(r.type === "B" ? "Bulletin posted to the network." : r.type === "T" ? "Traffic stored." : "Held — it'll be delivered when the station is next heard.");
+      setBody(""); setTo(""); setSubject(""); setReplyTo(null); setType("P"); load();
       setTab(r.type === "B" ? "bulletins" : "sent");
     } catch (e) { setMsg((e as Error).message); }
   }
@@ -103,6 +106,14 @@ export function MailPanel(props: { callsign: string; onClose: () => void }) {
       ))}
 
       {tab === "compose" && (<>
+        {replyTo != null && <p className="muted">↳ reply to message #{replyTo} (threaded)</p>}
+        <label>Type
+          <select value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
+            <option value="P">Personal</option>
+            <option value="B">Bulletin</option>
+            <option value="T">Traffic (NTS)</option>
+          </select>
+        </label>
         <label>To <span className="muted">(callsign, or ALL/BLN… for a bulletin)</span>
           <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="OE8APR" /></label>
         <label>Subject <span className="muted">(optional)</span>

@@ -42,7 +42,7 @@ import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia, handleListCacheMedia, handleAddCacheMedia, handleDeleteCacheMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
-import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, BULLETIN_FEED } from "./bbs.js";
+import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, BULLETIN_FEED } from "./bbs.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -261,6 +261,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/bbs/bulletins" && m === "GET") return handleBbsBulletins(req, env);
   const bbsReadMatch = /^\/api\/bbs\/messages\/(\d+)\/read$/.exec(p);
   if (bbsReadMatch && m === "POST") return handleBbsRead(req, env, Number(bbsReadMatch[1]));
+  const bbsThreadMatch = /^\/api\/bbs\/thread\/(\d+)$/.exec(p);
+  if (bbsThreadMatch && m === "GET") return handleBbsThread(req, env, Number(bbsThreadMatch[1]));
 
   // workbench interop + transports (M6)
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));

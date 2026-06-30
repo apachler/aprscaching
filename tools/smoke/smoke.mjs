@@ -516,6 +516,16 @@ const msgId = bbsP.data?.id;
 const bbsB = await call("POST", "/api/bbs/messages", { fromCall: "OE8APR", toCall: "ALL", body: "net tonight 8pm local" });
 ok("BBS accepts a bulletin", bbsB.data?.type === "B", JSON.stringify(bbsB.data));
 
+// P2: FBB thread tree + typing + SR (reply chains into a thread; T traffic typing)
+ok("a root personal message threads to itself", bbsP.data?.threadId === msgId, JSON.stringify({ threadId: bbsP.data?.threadId, msgId }));
+const bbsReply = await call("POST", "/api/bbs/messages", { fromCall: "OE7BBS", toCall: "OE8APR", subject: "Re: meet", body: "ok see you there", replyTo: msgId });
+ok("SR reply inherits the parent's thread root", bbsReply.data?.replyTo === msgId && bbsReply.data?.threadId === msgId, JSON.stringify(bbsReply.data));
+const thread = await call("GET", `/api/bbs/thread/${msgId}`);
+ok("thread view returns root + reply oldest-first", thread.data?.threadId === msgId && (thread.data?.messages ?? []).length >= 2
+  && thread.data.messages[0].id === msgId && thread.data.messages.some((m) => m.replyTo === msgId), JSON.stringify(thread.data?.messages?.map((m) => ({ id: m.id, replyTo: m.replyTo }))));
+const bbsT = await call("POST", "/api/bbs/messages", { fromCall: "OE8APR", toCall: "OE3XYZ", type: "T", body: "QTC 1 msg" });
+ok("BBS accepts NTS traffic (type T)", bbsT.data?.type === "T", JSON.stringify(bbsT.data));
+
 const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
 ok("personal mail starts held", (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "held"), JSON.stringify(list1.data?.messages?.[0]));
 

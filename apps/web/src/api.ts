@@ -362,8 +362,12 @@ export function getBbsInbox(callsign: string): Promise<{ messages: BbsMessage[] 
 export function getBulletins(): Promise<{ bulletins: BbsMessage[] }> {
   return call(`/api/bbs/bulletins`);
 }
-export function postBbsMessage(body: { fromCall: string; toCall: string; subject?: string; body: string }): Promise<{ ok: boolean; id: number; type: string }> {
+export function postBbsMessage(body: { fromCall: string; toCall: string; subject?: string; body: string; type?: "P" | "B" | "T"; replyTo?: number }): Promise<{ ok: boolean; id: number; type: string; threadId?: number }> {
   return call(`/api/bbs/messages`, { method: "POST", body: JSON.stringify(body) });
+}
+/** A BBS conversation (root + replies), oldest first (P2 thread tree). */
+export function getBbsThread(id: number): Promise<{ threadId: number; messages: BbsMessage[] }> {
+  return call(`/api/bbs/thread/${id}`);
 }
 /** Personal mail you SENT, with its store-and-forward delivery state (docs/17 BBS). */
 export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {

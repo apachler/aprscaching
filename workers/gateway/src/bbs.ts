@@ -20,27 +20,45 @@ const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).
 
 // ---------------------------------------------------------------- post
 export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as { fromCall?: string; toCall?: string; type?: string; subject?: string; body?: string; lifetimeSec?: number };
+  const b = (await req.json().catch(() => ({}))) as { fromCall?: string; toCall?: string; type?: string; subject?: string; body?: string; lifetimeSec?: number; replyTo?: number };
   if (!b.fromCall || !b.toCall || !b.body) return json({ error: "fromCall, toCall, body required" }, { status: 400 });
   const from = b.fromCall.toUpperCase(), to = b.toCall.toUpperCase();
-  const type = b.type === "B" || b.type === "P" ? b.type : (BULLETIN_TO.test(to) ? "B" : "P");
+  const type = (b.type === "B" || b.type === "P" || b.type === "T") ? b.type : (BULLETIN_TO.test(to) ? "B" : "P");
   const posted = now();
   const expires = b.lifetimeSec ? posted + b.lifetimeSec : (type === "B" ? posted + 30 * 86400 : null);
 
+  // SR (reply): inherit the parent's conversation root so replies chain into a thread
+  let replyTo: number | null = null, threadRoot: number | null = null;
+  if (b.replyTo) {
+    const parent = await env.DB.prepare("SELECT id, thread_id FROM bbs_messages WHERE id=?").bind(b.replyTo).first<{ id: number; thread_id: number | null }>();
+    if (parent) { replyTo = parent.id; threadRoot = parent.thread_id ?? parent.id; }
+  }
+
   const res = await env.DB.prepare(
-    "INSERT INTO bbs_messages (type, from_call, to_call, subject, body, posted_at, expires_at, origin) VALUES (?,?,?,?,?,?,?, 'local')",
-  ).bind(type, from, to, b.subject ?? null, b.body, posted, expires).run();
-  const id = res.meta.last_row_id;
+    "INSERT INTO bbs_messages (type, from_call, to_call, subject, body, posted_at, expires_at, origin, reply_to) VALUES (?,?,?,?,?,?,?, 'local', ?)",
+  ).bind(type, from, to, b.subject ?? null, b.body, posted, expires, replyTo).run();
+  const id = Number(res.meta.last_row_id);
   const bid = `${id}_${instanceOf(env, req)}`;
-  await env.DB.prepare("UPDATE bbs_messages SET bid=? WHERE id=?").bind(bid, id).run();
+  // a root message threads to itself; a reply keeps the parent's root
+  await env.DB.prepare("UPDATE bbs_messages SET bid=?, thread_id=? WHERE id=?").bind(bid, threadRoot ?? id, id).run();
   if (type === "P") await env.DB.prepare("INSERT INTO bbs_delivery (msg_id, to_call, status) VALUES (?,?, 'held')").bind(id, to).run();
 
-  return json({ ok: true, id, bid, type }, { status: 201 });
+  return json({ ok: true, id, bid, type, threadId: threadRoot ?? id, replyTo }, { status: 201 });
+}
+
+/** GET /api/bbs/thread/:id — a conversation (root + all replies), oldest first. */
+export async function handleBbsThread(req: Request, env: Env, id: number): Promise<Response> {
+  const root = await env.DB.prepare("SELECT thread_id FROM bbs_messages WHERE id=?").bind(id).first<{ thread_id: number | null }>();
+  const threadId = root?.thread_id ?? id;
+  const msgs = (await env.DB.prepare(
+    "SELECT * FROM bbs_messages WHERE thread_id=? OR id=? ORDER BY posted_at ASC LIMIT 200",
+  ).bind(threadId, threadId).all()).results;
+  return json({ threadId, messages: msgs.map(row) });
 }
 
 // ---------------------------------------------------------------- read views
 function row(m: any) {
-  return { id: m.id, bid: m.bid, type: m.type, fromCall: m.from_call, toCall: m.to_call, subject: m.subject, body: m.body, postedAt: m.posted_at, origin: m.origin, readAt: m.read_at };
+  return { id: m.id, bid: m.bid, type: m.type, fromCall: m.from_call, toCall: m.to_call, subject: m.subject, body: m.body, postedAt: m.posted_at, origin: m.origin, readAt: m.read_at, replyTo: m.reply_to ?? null, threadId: m.thread_id ?? null };
 }
 export async function handleBbsList(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
