@@ -237,6 +237,7 @@ button.heart.on { color: #e8556a; }
 
 /* audio-cache stages */
 .stages { margin: 12px 0; }
+.nfc-unlock input { flex: 1; min-width: 0; }
 ol.stagelist { list-style: none; padding: 0; margin: 8px 0 0; }
 ol.stagelist li { border: 1px solid var(--line); border-radius: 9px; padding: 10px; margin-bottom: 8px; }
 ol.stagelist li.open { border-left: 3px solid var(--accent); }

@@ -427,6 +427,25 @@ ok("open final stage unlocks after reaching stage 1", unlock2.data?.unlocked ===
 const mdetail = await call("GET", `/api/caches/${mid}`);
 ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
 
+// F-2: NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
+const nfcCache = await call("POST", "/api/caches", { title: "Tag Hunt", type: "two_stage", lat: 47.20, lon: 15.60, ownerCall: "OE8APR" });
+const nid = nfcCache.data?.cache?.id;
+await call("POST", `/api/caches/${nid}/stages`, {
+  ownerCall: "OE8APR",
+  stages: [
+    { stageNo: 0, lat: 47.20, lon: 15.60, radiusM: 60 },
+    { stageNo: 1, unlock: "nfc", secret: "TAG-7F3A", clue: "tap the tag at the trailhead", lat: 47.21, lon: 15.61 },
+  ],
+});
+const nfcView = await call("GET", `/api/caches/${nid}/stages?callsign=DL1ABC`);
+ok("nfc stage never exposes its secret", (nfcView.data?.stages ?? []).every((s) => !("unlockSecret" in s) && !("secret" in s)), JSON.stringify(nfcView.data?.stages?.[1]));
+const nfcNoCode = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC" });
+ok("nfc unlock without a code -> 403", nfcNoCode.status === 403 && nfcNoCode.data?.reason === "no_code", JSON.stringify(nfcNoCode.data));
+const nfcBad = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC", code: "WRONG" });
+ok("nfc unlock with the wrong code -> 403 bad_code", nfcBad.status === 403 && nfcBad.data?.reason === "bad_code", JSON.stringify(nfcBad.data));
+const nfcOk = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL1ABC", code: "tag-7f3a" });
+ok("nfc unlock with the right code (case-insensitive) reveals coords", nfcOk.data?.unlocked === true && Math.abs((nfcOk.data?.lat ?? 0) - 47.21) < 0.001, JSON.stringify(nfcOk.data));
+
 // ---- account data lifecycle: GDPR export/erasure + portability (signed by a registered key) ----
 const accMsg = (action, cs, at) => stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: wk.data?.instance, at });
 const signAct = async (action, cs, at) => b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(accMsg(action, cs, at))));

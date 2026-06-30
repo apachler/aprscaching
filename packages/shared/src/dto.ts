@@ -210,7 +210,7 @@ export interface CacheDetail extends CacheSummary {
 // ---- M2 audio-cache: staged multi-cache ----
 export interface CacheStage {
   stageNo: number;
-  unlock: "geo" | "audio" | "open";
+  unlock: "geo" | "audio" | "open" | "nfc";
   clue: string | null;
   mediaUrl: string | null;
   radiusM: number;

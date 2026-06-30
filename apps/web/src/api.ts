@@ -317,10 +317,10 @@ export type { CacheStage };
 export function getStages(cacheId: number, callsign?: string): Promise<{ stages: CacheStage[] }> {
   return call(`/api/caches/${cacheId}/stages${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
 }
-export function unlockStage(cacheId: number, stageNo: number, callsign: string, appGeo?: AppGeo): Promise<{ unlocked: boolean; lat?: number; lon?: number; reason?: string; distanceM?: number }> {
-  return call(`/api/caches/${cacheId}/stages/${stageNo}/unlock`, { method: "POST", body: JSON.stringify({ callsign, appGeo }) });
+export function unlockStage(cacheId: number, stageNo: number, callsign: string, appGeo?: AppGeo, code?: string): Promise<{ unlocked: boolean; lat?: number; lon?: number; reason?: string; distanceM?: number }> {
+  return call(`/api/caches/${cacheId}/stages/${stageNo}/unlock`, { method: "POST", body: JSON.stringify({ callsign, appGeo, code }) });
 }
-export function setStages(cacheId: number, ownerCall: string, stages: Array<Partial<CacheStage> & { stageNo: number }>): Promise<{ ok: boolean }> {
+export function setStages(cacheId: number, ownerCall: string, stages: Array<Partial<CacheStage> & { stageNo: number; secret?: string }>): Promise<{ ok: boolean }> {
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
 /** Absolute URL for a media clue path returned by the API. */

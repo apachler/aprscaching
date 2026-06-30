@@ -11,7 +11,10 @@ import { haversineMeters } from "@aprsweb/aprs";
 
 const now = () => Math.floor(Date.now() / 1000);
 
-interface StageRow { stage_no: number; unlock: string; clue: string | null; media_key: string | null; lat: number | null; lon: number | null; radius_m: number }
+interface StageRow { stage_no: number; unlock: string; clue: string | null; media_key: string | null; lat: number | null; lon: number | null; radius_m: number; unlock_secret: string | null }
+
+/** Normalise an NFC/manual unlock code for comparison (trim + casefold; tag serials/text vary in case). */
+const normCode = (s: string) => s.trim().toLowerCase();
 
 async function ownerOf(env: Env, cacheId: number): Promise<string | null> {
   const r = await env.DB.prepare("SELECT owner_call FROM caches WHERE id=? AND source='native'").bind(cacheId).first<{ owner_call: string }>();
@@ -24,7 +27,7 @@ async function unlockedSet(env: Env, cacheId: number, callsign: string): Promise
 
 // ---- owner: set the stage list (replaces existing) ----
 export async function handleSetStages(req: Request, env: Env, cacheId: number): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as { ownerCall?: string; stages?: Array<{ stageNo: number; unlock?: string; clue?: string; lat?: number; lon?: number; radiusM?: number }> };
+  const b = (await req.json().catch(() => ({}))) as { ownerCall?: string; stages?: Array<{ stageNo: number; unlock?: string; clue?: string; lat?: number; lon?: number; radiusM?: number; secret?: string }> };
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   const who = await actor(req, env, b.ownerCall);
@@ -33,10 +36,12 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
 
   const stmts = [env.DB.prepare("DELETE FROM cache_stages WHERE cache_id=?").bind(cacheId)];
   for (const s of b.stages) {
-    const unlock = ["geo", "audio", "open"].includes(s.unlock ?? "") ? s.unlock : "geo";
+    const unlock = ["geo", "audio", "open", "nfc"].includes(s.unlock ?? "") ? s.unlock : "geo";
+    // for an nfc stage the secret (tag text/serial) is required so it can actually be unlocked
+    const secret = unlock === "nfc" ? (s.secret?.trim() || null) : null;
     stmts.push(env.DB.prepare(
-      "INSERT INTO cache_stages (cache_id, stage_no, unlock, clue, lat, lon, radius_m) VALUES (?,?,?,?,?,?,?)",
-    ).bind(cacheId, s.stageNo, unlock, s.clue ?? null, s.lat ?? null, s.lon ?? null, Math.round(s.radiusM ?? 60)));
+      "INSERT INTO cache_stages (cache_id, stage_no, unlock, clue, lat, lon, radius_m, unlock_secret) VALUES (?,?,?,?,?,?,?,?)",
+    ).bind(cacheId, s.stageNo, unlock, s.clue ?? null, s.lat ?? null, s.lon ?? null, Math.round(s.radiusM ?? 60), secret));
   }
   await env.DB.batch(stmts);
   return json({ ok: true, stages: b.stages.length });
@@ -91,7 +96,7 @@ export async function handleGetStages(req: Request, env: Env, cacheId: number): 
 
 // ---- unlock a stage: reveal its coords once the prerequisite is met ----
 export async function handleUnlockStage(req: Request, env: Env, cacheId: number, stageNo: number): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as { callsign?: string; appGeo?: { lat: number; lon: number } };
+  const b = (await req.json().catch(() => ({}))) as { callsign?: string; appGeo?: { lat: number; lon: number }; code?: string };
   if (!b.callsign) return json({ error: "callsign required" }, { status: 400 });
   const cs = b.callsign.toUpperCase();
   if (stageNo <= 0) return json({ error: "stage 0 is the public start" }, { status: 400 });
@@ -111,6 +116,12 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
     if (prev.lat == null || prev.lon == null) return json({ error: "previous stage has no coordinates" }, { status: 409 });
     const d = haversineMeters(b.appGeo.lat, b.appGeo.lon, prev.lat, prev.lon);
     if (d > prev.radius_m) return json({ unlocked: false, reason: "too_far", distanceM: Math.round(d), radiusM: prev.radius_m }, { status: 403 });
+  }
+  // nfc gate: present the tag's secret (scanned via WebNFC or typed as the manual-code fallback)
+  if (stage.unlock === "nfc") {
+    if (!stage.unlock_secret) return json({ error: "this NFC stage has no tag configured", reason: "no_tag" }, { status: 409 });
+    if (!b.code) return json({ error: "scan the NFC tag or enter its code", reason: "no_code" }, { status: 403 });
+    if (normCode(b.code) !== normCode(stage.unlock_secret)) return json({ unlocked: false, reason: "bad_code" }, { status: 403 });
   }
   // 'audio'/'open' unlock on request (the audio clue is an advisory gate)
 
