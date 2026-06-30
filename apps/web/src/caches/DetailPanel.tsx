@@ -45,7 +45,7 @@ export function DetailPanel(props: {
     try { const r = await toggleFavorite(c.id, props.callsign, want); setFav(r); } catch { setFav({ on: c.favorited, count: c.favorites }); }
   }
   const minTier: Tier = c.minTrust ?? "B"; // site default is B (CLAUDE.md)
-  const grid = c.lat != null && c.lon != null ? maidenhead(c.lat, c.lon) : null;
+  const grid = c.lat != null && c.lon != null ? maidenhead(c.lat, c.lon, 10) : null;
   function copyCoords() {
     if (c.lat == null || c.lon == null) return;
     navigator.clipboard?.writeText(`${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);

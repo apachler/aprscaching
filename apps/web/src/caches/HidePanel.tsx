@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
+import { maidenhead } from "../map/geo.js";
 import { Panel } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprsweb/shared";
 
@@ -50,7 +51,7 @@ export function HidePanel(props: {
     <Panel side="left" title="Hide a cache">
       <p className="muted">
         {props.draft
-          ? <>Pin at <code>{props.draft.lat.toFixed(5)}, {props.draft.lon.toFixed(5)}</code> — drag to adjust.</>
+          ? <>Pin at <code>{props.draft.lat.toFixed(5)}, {props.draft.lon.toFixed(5)}</code> · grid <code>{maidenhead(props.draft.lat, props.draft.lon, 10)}</code> — drag to adjust.</>
           : <>Click the map to drop the cache location.</>}
       </p>
       <label>Title<input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
