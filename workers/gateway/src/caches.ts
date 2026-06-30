@@ -10,7 +10,7 @@ import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
-import { queryPeerCorroboration } from "./corroborate.js";
+import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo } from "./community.js";
@@ -340,6 +340,13 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     loggerOwnIgates: new Set(),
   });
 
+  // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the
+  // corroborator board. A peer-corroborated find's IGate is captured below (cross-instance credit).
+  let peerIgate: string | null = null;
+  const matchedIgate = result.matchedPositionId != null
+    ? (lp.results.find((p) => p.id === result.matchedPositionId)?.igate_call ?? null)
+    : null;
+
   // F3: if we couldn't reach Tier A locally, ask peers whether the logger was independently
   // heard on RF near the cache (cross-instance corroboration). A hit upgrades the find to Tier A.
   let corroboratedBy: string | null = null;
@@ -356,15 +363,21 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       result.distanceM = ev.distanceM;
       result.matchedPositionId = undefined;
       result.reason = undefined;
+      peerIgate = ev.igateCall ?? null;  // present only when the peer opted into FED_REVEAL_IGATE
     }
   }
 
+  // Credit the corroborating IGate (local or cross-instance) on this verified find.
+  const corrIgate = result.verified && result.tier === "A"
+    ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
+    : null;
+
   await env.DB.prepare(
-    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, signer_key, author_sig, signed_at)
-     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
+     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?)`,
   ).bind(cacheId, loggerCall, now, result.verified ? 1 : 0, result.tier, result.method,
          result.matchedPositionId ?? null, result.distanceM ?? null, comment ?? null, corroboratedBy,
-         signerKey, authorSig, signedAt).run();
+         corrIgate, signerKey, authorSig, signedAt).run();
 
   // M4: award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);

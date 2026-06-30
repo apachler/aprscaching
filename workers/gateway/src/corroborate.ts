@@ -31,6 +31,18 @@ export interface CorroborationQuery {
 /** Base callsign without SSID, for the independence check (IGate must not be the logger). */
 function baseCall(c: string): string { return c.split("-")[0]!.toUpperCase(); }
 
+/**
+ * Which IGate (if any) to credit for a Tier-A find (docs/13 corroborator board). For a locally
+ * verified find it's the gating IGate of the matched RF position; for a peer-corroborated find it's
+ * the peer's revealed IGate (only present when both peers opt into FED_REVEAL_IGATE) — that's the
+ * cross-instance credit. Never the logger's own call (no self-credit). Pure / testable.
+ */
+export function corroboratorIgate(opts: { method: string; matchedIgate?: string | null; peerIgate?: string | null; loggerCall: string }): string | null {
+  const ig = (opts.method === "aprs_rf_peer" ? opts.peerIgate : opts.matchedIgate) ?? null;
+  if (!ig) return null;
+  return baseCall(ig) === baseCall(opts.loggerCall) ? null : ig.toUpperCase();
+}
+
 /** Search THIS instance's RF positions for an independent corroboration. Returns evidence or null. */
 async function localCorroboration(
   env: Env, q: CorroborationQuery, excludeIgates: Set<string>,
