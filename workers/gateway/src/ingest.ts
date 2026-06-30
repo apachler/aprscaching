@@ -7,6 +7,7 @@ import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js"
 import { deliverHeld, bbsOnAck } from "./bbs.js";
 import { recordWatchHeard } from "./watch.js";
 import { recordRendezvous } from "./rendezvous.js";
+import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
 import { rateLimited } from "./corroborate_privacy.js";
 
@@ -135,6 +136,10 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // F-4: record living-cache rendezvous for any opted-in living cache just heard (best-effort)
   try { await recordRendezvous(env, positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon }))); }
   catch (e) { console.error("rendezvous:", (e as Error).message); }
+
+  // P4: per-port MHeard for the NET/ROM node (best-effort)
+  try { await recordMheard(env, body.data.packets.map((p) => ({ src: p.src, port: p.port }))); }
+  catch (e) { console.error("mheard:", (e as Error).message); }
 
   // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];

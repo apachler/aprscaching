@@ -44,6 +44,7 @@ import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, 
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
 import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, BULLETIN_FEED } from "./bbs.js";
 import { handleBbsRoute, handleWhitePages, handleForwardRules, handleForwardRuleDelete } from "./forward.js";
+import { handleNodeNodes, handleNodeMheard } from "./node.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -270,6 +271,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/bbs/forward" && (m === "GET" || m === "POST")) return handleForwardRules(req, env);
   const fwdDel = /^\/api\/bbs\/forward\/(\d+)$/.exec(p);
   if (fwdDel && m === "DELETE") return handleForwardRuleDelete(req, env, Number(fwdDel[1]));
+  // P4 NET/ROM node: NODES table + MHeard + sysop admin
+  if (p === "/api/node/nodes" && (m === "GET" || m === "POST")) return handleNodeNodes(req, env);
+  if (p === "/api/node/mheard" && m === "GET") return handleNodeMheard(req, env);
 
   // workbench interop + transports (M6)
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));

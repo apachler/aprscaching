@@ -12,6 +12,7 @@ import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
 import { PacketTerminal } from "../packet/PacketTerminal.js";
+import { NodePanel } from "./NodePanel.js";
 import { TrackReplay } from "./TrackReplay.js";
 import { StationGraphs } from "./StationGraphs.js";
 import { StationPackets } from "./StationPackets.js";
@@ -181,6 +182,7 @@ export function WorkbenchPanel(props: {
       <Group title="Packet terminal" status="connected-mode · multi-channel" defaultOpen={false}>
         <p className="muted">A Graphic-Packet-style multi-channel connected-mode terminal over a KISS TNC (Web Serial). Connect to a BBS or node and drive it.</p>
         <PacketTerminal callsign={props.callsign} />
+        <NodePanel />
       </Group>
 
       <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={false}>

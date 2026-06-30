@@ -369,6 +369,11 @@ export function postBbsMessage(body: { fromCall: string; toCall: string; subject
 export function getBbsThread(id: number): Promise<{ threadId: number; messages: BbsMessage[] }> {
   return call(`/api/bbs/thread/${id}`);
 }
+// ---- NET/ROM node read surface (docs/25 P4) ----
+export interface NodeRouteRow { dest: string; alias: string; neighbor: string; quality: number; port: string | null }
+export interface MheardRow { callsign: string; port: string; lastHeard: number; count: number }
+export function getNodes(): Promise<{ nodes: NodeRouteRow[] }> { return call(`/api/node/nodes`); }
+export function getMheard(limit = 50): Promise<{ mheard: MheardRow[] }> { return call(`/api/node/mheard?limit=${limit}`); }
 /** Personal mail you SENT, with its store-and-forward delivery state (docs/17 BBS). */
 export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {
   return call(`/api/bbs/sent?from=${encodeURIComponent(callsign)}`);

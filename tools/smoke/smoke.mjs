@@ -538,6 +538,14 @@ ok("White Pages stores a home BBS (with its H-route)", wpSet.data?.ok === true &
 const wpRoute = await call("GET", "/api/bbs/route?to=OE8APR");
 ok("a bare callsign is steered via White Pages then routed", /OE8XBM/.test(wpRoute.data?.addr ?? "") && wpRoute.data?.partner?.partner === "rf-oe", JSON.stringify(wpRoute.data));
 
+// P4: NET/ROM node — MHeard populated from ingest + sysop NODES table
+const mheard = await call("GET", "/api/node/mheard");
+ok("node MHeard lists stations heard via ingest", (mheard.data?.mheard ?? []).some((x) => x.callsign === "OE1MOB-9" && x.port === "aprs-is"), JSON.stringify(mheard.data?.mheard?.slice(0, 3)));
+const addNode = await call("POST", "/api/node/nodes", { dest: "OE8XBM-7", alias: "GRAZ", neighbor: "OE8REL-7", quality: 200, port: "kiss-tnc" });
+ok("sysop adds a NET/ROM node route", addNode.status === 201 && addNode.data?.dest === "OE8XBM-7", JSON.stringify(addNode.data));
+const nodes = await call("GET", "/api/node/nodes");
+ok("NODES table lists the route", (nodes.data?.nodes ?? []).some((n) => n.alias === "GRAZ" && n.neighbor === "OE8REL-7"), JSON.stringify(nodes.data?.nodes));
+
 const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
 ok("personal mail starts held", (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "held"), JSON.stringify(list1.data?.messages?.[0]));
 
