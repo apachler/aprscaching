@@ -76,6 +76,19 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.43)
 
+  packages/packet:
+    dependencies:
+      '@aprsweb/aprs':
+        specifier: workspace:*
+        version: link:../aprs
+      '@aprsweb/ax25':
+        specifier: workspace:*
+        version: link:../ax25
+    devDependencies:
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.43)
+
   packages/shared:
     dependencies:
       zod:
