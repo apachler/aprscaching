@@ -55,7 +55,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
         ? <EmptyState>No alerts yet.</EmptyState>
         : <ul className="logs">{alerts.items.map((a) => (
             <li key={a.id} className={a.seen ? "" : "unseen"}>
-              <Badge kind={a.kind === "cache_found" ? "tierB" : a.kind === "near_cache" ? "tierA" : "tierC"}>{a.kind === "cache_found" ? "found your cache" : a.kind === "near_cache" ? "near cache" : "heard"}</Badge>
+              <Badge kind={a.kind === "corroborated" || a.kind === "near_cache" ? "tierA" : a.kind === "cache_found" ? "tierB" : "tierC"}>{a.kind === "corroborated" ? "you corroborated" : a.kind === "cache_found" ? "found your cache" : a.kind === "near_cache" ? "near cache" : "heard"}</Badge>
               <strong className="mono"> {a.callsign}</strong>
               <span className="muted"> · {fmt.ago(a.ts)}</span>
               {a.detail && <div className="comment">{a.detail}</div>}

@@ -397,6 +397,20 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     }
   }
 
+  // Infrastructure loop (docs/13): tell the operator whose IGate corroborated this find — their
+  // station made the Tier-A verification possible. Closes the corroborator-credit loop.
+  if (corrIgate) {
+    const igAcct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
+      .bind(baseCall(corrIgate)).first<{ account_id: string }>();
+    if (igAcct?.account_id) {
+      const detail = `Your station ${corrIgate} corroborated ${loggerCall}'s find of ${cache.code} (Tier ${result.tier})`;
+      await env.DB.prepare(
+        "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
+      ).bind(igAcct.account_id, corrIgate, "corroborated", detail, cacheId, cache.lat ?? null, cache.lon ?? null, now).run();
+      await pushAlert(env, igAcct.account_id);
+    }
+  }
+
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
 
