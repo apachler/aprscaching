@@ -20,5 +20,10 @@ export function makeFsMedia(root: string): MediaStore {
       const contentType = fs.existsSync(file + ".ct") ? fs.readFileSync(file + ".ct", "utf8") : "application/octet-stream";
       return { bytes, contentType };
     },
+    async delete(key) {
+      const file = safe(key);
+      fs.rmSync(file, { force: true });
+      fs.rmSync(file + ".ct", { force: true });
+    },
   };
 }

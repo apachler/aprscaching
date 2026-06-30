@@ -238,6 +238,15 @@ button.heart.on { color: #e8556a; }
 /* audio-cache stages */
 .stages { margin: 12px 0; }
 .nfc-unlock input { flex: 1; min-width: 0; }
+/* cache media gallery */
+.cache-media { margin: 12px 0; }
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 6px; }
+.media-item { position: relative; margin: 0; }
+.media-item img { width: 100%; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.media-item audio { width: 100%; }
+.media-file { display: inline-block; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.media-del { position: absolute; top: 4px; right: 4px; border: none; border-radius: 50%; width: 22px; height: 22px;
+  background: color-mix(in oklch, var(--bad) 80%, black); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
 ol.stagelist { list-style: none; padding: 0; margin: 8px 0 0; }
 ol.stagelist li { border: 1px solid var(--line); border-radius: 9px; padding: 10px; margin-bottom: 8px; }
 ol.stagelist li.open { border-left: 3px solid var(--accent); }

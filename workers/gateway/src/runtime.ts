@@ -37,6 +37,7 @@ export interface ObjectStore {
 export interface MediaStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<{ bytes: Uint8Array; contentType: string } | null>;
+  delete?(key: string): Promise<void>;
 }
 
 /** Region-room namespace (Durable Object on CF; an in-memory room registry on Node). */

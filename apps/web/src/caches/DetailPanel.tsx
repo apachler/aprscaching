@@ -8,6 +8,7 @@ import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, LoadMore, useToast
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
+import { CacheMedia } from "./CacheMedia.js";
 
 const TIER_DESC: Record<Tier, string> = {
   A: "RF-corroborated — heard on RF via an independent IGate.",
@@ -109,6 +110,8 @@ export function DetailPanel(props: {
         {c.needsMaintenance && <span className="warn"> · ⚠ needs maintenance</span>}</p>
       {c.description && <p className="desc">{c.description}</p>}
       {c.hint && <details><summary>Hint</summary><p>{c.hint}</p></details>}
+
+      <CacheMedia cacheId={c.id} isOwner={props.callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
 
       {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={props.callsign} />}
 

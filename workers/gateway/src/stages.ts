@@ -129,6 +129,65 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   return json({ unlocked: true, stageNo, lat: stage.lat, lon: stage.lon, clue: stage.clue, mediaUrl: stage.media_key ? `/api/media/${stage.media_key}` : null });
 }
 
+// ---- cache media gallery (F-3): owner-managed images/audio/files on a cache ----
+const MEDIA_LIMIT = 10_000_000; // 10 MB per item
+function mediaKind(ct: string): "image" | "audio" | "file" {
+  if (/^image\//.test(ct)) return "image";
+  if (/^audio\//.test(ct)) return "audio";
+  return "file";
+}
+
+/** List a cache's media (public — attachments are meant to be seen/heard). */
+export async function handleListCacheMedia(req: Request, env: Env, cacheId: number): Promise<Response> {
+  const rows = (await env.DB.prepare(
+    "SELECT id, media_key, kind, content_type, title, bytes, created_at FROM cache_media WHERE cache_id=? ORDER BY created_at",
+  ).bind(cacheId).all<{ id: number; media_key: string; kind: string; content_type: string; title: string | null; bytes: number; created_at: number }>()).results;
+  return json({
+    media: rows.map((r) => ({
+      id: r.id, kind: r.kind, contentType: r.content_type, title: r.title,
+      url: `/api/media/${r.media_key}`, bytes: r.bytes, createdAt: r.created_at,
+    })),
+  });
+}
+
+/** Owner uploads a media item (raw body; ?title= optional). */
+export async function handleAddCacheMedia(req: Request, env: Env, cacheId: number): Promise<Response> {
+  if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
+  const owner = await ownerOf(env, cacheId);
+  if (!owner) return json({ error: "unknown cache" }, { status: 404 });
+  const who = await actor(req, env, req.headers.get("x-owner-call") ?? undefined);
+  if (!who || who !== owner) return json({ error: "only the owner may add media" }, { status: 403 });
+
+  const ct = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim();
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (!bytes.length || bytes.length > MEDIA_LIMIT) return json({ error: `empty or >${MEDIA_LIMIT / 1_000_000}MB` }, { status: 413 });
+  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_media WHERE cache_id=?").bind(cacheId).first<{ n: number }>();
+  if ((count?.n ?? 0) >= 20) return json({ error: "media limit reached (20 per cache)" }, { status: 409 });
+
+  const kind = mediaKind(ct);
+  const ext = ct.split("/")[1] ?? "bin";
+  const key = `cache/${cacheId}/media/${crypto.randomUUID()}.${ext}`;
+  const title = new URL(req.url).searchParams.get("title")?.slice(0, 120) ?? null;
+  await env.MEDIA.put(key, bytes, ct);
+  const ins = await env.DB.prepare(
+    "INSERT INTO cache_media (cache_id, media_key, kind, content_type, title, bytes, created_at) VALUES (?,?,?,?,?,?,?)",
+  ).bind(cacheId, key, kind, ct, title, bytes.length, now()).run();
+  return json({ item: { id: Number(ins.meta.last_row_id), kind, contentType: ct, title, url: `/api/media/${key}`, bytes: bytes.length } }, { status: 201 });
+}
+
+/** Owner deletes a media item (removes the row + best-effort the stored object). */
+export async function handleDeleteCacheMedia(req: Request, env: Env, cacheId: number, mediaId: number): Promise<Response> {
+  const owner = await ownerOf(env, cacheId);
+  if (!owner) return json({ error: "unknown cache" }, { status: 404 });
+  const who = await actor(req, env, req.headers.get("x-owner-call") ?? undefined);
+  if (!who || who !== owner) return json({ error: "only the owner may delete media" }, { status: 403 });
+  const row = await env.DB.prepare("SELECT media_key FROM cache_media WHERE id=? AND cache_id=?").bind(mediaId, cacheId).first<{ media_key: string }>();
+  if (!row) return json({ error: "no such media" }, { status: 404 });
+  await env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(mediaId).run();
+  try { await env.MEDIA?.delete?.(row.media_key); } catch { /* best-effort; row gone either way */ }
+  return json({ ok: true });
+}
+
 /** Count stages for a cache (so the detail endpoint can flag multi-stage caches). */
 export async function stageCount(env: Env, cacheId: number): Promise<number> {
   const r = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_stages WHERE cache_id=?").bind(cacheId).first<{ n: number }>();

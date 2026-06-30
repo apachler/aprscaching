@@ -427,6 +427,22 @@ ok("open final stage unlocks after reaching stage 1", unlock2.data?.unlocked ===
 const mdetail = await call("GET", `/api/caches/${mid}`);
 ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
 
+// F-3: cache media gallery — owner uploads an image, it lists + serves, non-owner can't delete, owner can
+const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+const addMedia = await fetch(`${BASE}/api/caches/${mid}/media?title=Hint%20photo`, {
+  method: "POST", headers: { "content-type": "image/png", "x-owner-call": "OE8APR", "x-ingest-secret": SECRET }, body: pngBytes,
+});
+const addJson = await addMedia.json().catch(() => ({}));
+ok("owner adds cache media (image)", addMedia.status === 201 && addJson.item?.kind === "image" && typeof addJson.item?.url === "string", JSON.stringify(addJson));
+const mediaList = await call("GET", `/api/caches/${mid}/media`);
+ok("cache media lists the item", (mediaList.data?.media ?? []).some((x) => x.id === addJson.item?.id && x.kind === "image"), JSON.stringify(mediaList.data?.media));
+const servedMedia = await fetch(`${BASE}${addJson.item?.url}`);
+ok("cache media is served back", servedMedia.status === 200 && (servedMedia.headers.get("content-type") || "").includes("image/"), `status=${servedMedia.status}`);
+const delNonOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, { method: "DELETE", headers: { "x-owner-call": "DL9NO", "x-ingest-secret": SECRET } });
+ok("non-owner cannot delete cache media -> 403", delNonOwner.status === 403, `status=${delNonOwner.status}`);
+const delOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, { method: "DELETE", headers: { "x-owner-call": "OE8APR", "x-ingest-secret": SECRET } });
+ok("owner deletes cache media", delOwner.status === 200, `status=${delOwner.status}`);
+
 // F-2: NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
 const nfcCache = await call("POST", "/api/caches", { title: "Tag Hunt", type: "two_stage", lat: 47.20, lon: 15.60, ownerCall: "OE8APR" });
 const nid = nfcCache.data?.cache?.id;

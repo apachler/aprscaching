@@ -326,6 +326,26 @@ export function setStages(cacheId: number, ownerCall: string, stages: Array<Part
 /** Absolute URL for a media clue path returned by the API. */
 export const mediaUrl = (path: string): string => API_BASE + path;
 
+// ---- cache media gallery (docs/26 F-3): owner-managed photos/audio/files on a cache ----
+export interface CacheMediaItem { id: number; kind: "image" | "audio" | "file"; contentType: string; title: string | null; url: string; bytes: number; createdAt?: number }
+export function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
+  return call(`/api/caches/${cacheId}/media`);
+}
+/** Upload a media item (raw body) — authorised by the signed-in owner session. */
+export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
+  const q = title ? `?title=${encodeURIComponent(title)}` : "";
+  const res = await fetch(`${API_BASE}/api/caches/${cacheId}/media${q}`, {
+    method: "POST", credentials: "include",
+    headers: { "content-type": file.type || "application/octet-stream" }, body: file,
+  });
+  const body = (await res.json().catch(() => ({}))) as { item?: CacheMediaItem; error?: string };
+  if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+  return body as { item: CacheMediaItem };
+}
+export function deleteCacheMedia(cacheId: number, mediaId: number): Promise<{ ok: boolean }> {
+  return call(`/api/caches/${cacheId}/media/${mediaId}`, { method: "DELETE" });
+}
+
 // ---- per-cache share funnel (docs/11 M4): print a QR on your station so visitors can find it ----
 /** The public deep-link a QR encodes (opens the cache in the app — the current origin). */
 export const cacheShareUrl = (code: string): string =>

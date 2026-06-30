@@ -14,6 +14,7 @@ function adaptR2(bucket: any): MediaStore | undefined {
       if (!o) return null;
       return { bytes: new Uint8Array(await o.arrayBuffer()), contentType: o.httpMetadata?.contentType ?? "application/octet-stream" };
     },
+    delete: (key) => bucket.delete(key).then(() => undefined),
   };
 }
 

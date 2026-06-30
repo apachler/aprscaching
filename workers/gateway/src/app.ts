@@ -40,7 +40,7 @@ import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, 
 import { handleDecode, handleStations, handleStation, handleStationSeries, handleStationPackets, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
-import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
+import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia, handleListCacheMedia, handleAddCacheMedia, handleDeleteCacheMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
 import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, BULLETIN_FEED } from "./bbs.js";
 export { syncAllPeers } from "./federation_sync.js";
@@ -269,6 +269,15 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // audio-cache: stages + media (M2)
   if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));
+  // cache media gallery (F-3): list (public) · add/delete (owner)
+  const cacheMediaMatch = /^\/api\/caches\/(\d+)\/media$/.exec(p);
+  if (cacheMediaMatch) {
+    const id = Number(cacheMediaMatch[1]);
+    if (m === "GET") return handleListCacheMedia(req, env, id);
+    if (m === "POST") return handleAddCacheMedia(req, env, id);
+  }
+  const cacheMediaDel = /^\/api\/caches\/(\d+)\/media\/(\d+)$/.exec(p);
+  if (cacheMediaDel && m === "DELETE") return handleDeleteCacheMedia(req, env, Number(cacheMediaDel[1]), Number(cacheMediaDel[2]));
   const stagesMatch = /^\/api\/caches\/(\d+)\/stages$/.exec(p);
   if (stagesMatch) {
     const id = Number(stagesMatch[1]);
