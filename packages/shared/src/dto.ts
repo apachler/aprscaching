@@ -35,6 +35,9 @@ export const AppGeo = z.object({
 export type AppGeo = z.infer<typeof AppGeo>;
 
 /** Owner "hide a cache" — create a native cache. Owner taken from session, else `ownerCall`. */
+/** Free-form cache tags: up to 12, each a short trimmed token (deduped + lowercased by the gateway). */
+export const CacheTags = z.array(z.string().trim().min(1).max(24)).max(12);
+
 export const CreateCacheRequest = z.object({
   title: z.string().trim().min(1).max(120),
   type: CacheType.default("single"),
@@ -49,6 +52,9 @@ export const CreateCacheRequest = z.object({
   minTrust: MinTrust.optional(),
   fedScope: FedScope.default("public"),        // how far this cache federates (T3.3)
   code: z.string().trim().max(32).optional(),  // explicit code (imports); else AC-#### is minted
+  driveIn: z.boolean().optional(),             // car-accessible cache (original APRSCaching "Drive-In")
+  country: z.string().trim().max(56).optional(),
+  tags: CacheTags.optional(),
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
@@ -67,6 +73,9 @@ export const UpdateCacheRequest = z.object({
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
   fedScope: FedScope.optional(),               // change federation scope (T3.3)
+  driveIn: z.boolean().optional(),
+  country: z.string().trim().max(56).optional(),
+  tags: CacheTags.optional(),
 });
 export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
@@ -121,6 +130,9 @@ export interface CacheSummary {
   sourceUrl: string | null;    // deep link to the source page
   minTrust: "A" | "B" | null;
   fedScope: FedScope;          // owner's federation scope (T3.3)
+  driveIn: boolean;            // car-accessible (original APRSCaching "Drive-In")
+  country: string | null;      // ISO code or short name (owner-set)
+  tags: string[];              // free-form tags
 }
 
 /** A cache as it appears on the map — native or mirrored from a federation peer (F2). */

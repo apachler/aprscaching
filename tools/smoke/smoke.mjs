@@ -75,6 +75,19 @@ const vCache = await call("POST", "/api/caches", {
 ok("create accepts the virtual cache type", vCache.status === 201 && vCache.data?.cache?.type === "virtual",
   `status=${vCache.status} ${JSON.stringify(vCache.data?.cache)}`);
 
+// F-8: drive-in flag + country + tags (deduped/lowercased), round-tripped through create + detail
+const metaCache = await call("POST", "/api/caches", {
+  title: "Drive-In Lookout", type: "single", lat: 47.09, lon: 15.45, ownerCall: "OE8APR",
+  driveIn: true, country: "AT", tags: ["Scenic", "scenic", "QRP"],
+});
+ok("create stores drive-in + country + deduped tags",
+  metaCache.status === 201 && metaCache.data?.cache?.driveIn === true && metaCache.data?.cache?.country === "AT"
+    && Array.isArray(metaCache.data?.cache?.tags) && metaCache.data.cache.tags.join(",") === "scenic,qrp",
+  JSON.stringify(metaCache.data?.cache));
+const metaDetail = await call("GET", `/api/caches/${metaCache.data?.cache?.id}`);
+ok("cache detail carries drive-in + tags", metaDetail.data?.cache?.driveIn === true && (metaDetail.data?.cache?.tags ?? []).includes("scenic"),
+  JSON.stringify(metaDetail.data?.cache?.tags));
+
 // list in bbox
 const list = await call("GET", "/api/caches?bbox=15,46,16,48");
 ok("list includes the new cache", (list.data?.caches ?? []).some((c) => c.id === id));

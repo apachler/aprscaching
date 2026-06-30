@@ -313,6 +313,10 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 button.link { border: none; background: none; color: var(--heading); font-weight: 700; padding: 0; cursor: pointer; }
 button.link:hover { text-decoration: underline; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; font-size: 12px; color: var(--ink-2); background: color-mix(in oklch, var(--surface-2) 50%, transparent); }
+.cache-tags { margin: 6px 0 2px; }
+.inline-check { align-items: center; gap: 8px; font-weight: 500; }
+.inline-check input { width: auto; }
 .award { background: #3a3413; color: #f0d96a; border: 1px solid #5a5320; border-radius: 12px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
 :root[data-theme="light"] .award { background: #fff5d6; color: #7a5b00; border-color: #f0e0a8; }
 

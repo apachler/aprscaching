@@ -23,6 +23,7 @@ interface CacheDbRow {
   station_call: string | null; source: string; external_id: string | null;
   hint: string | null; description: string | null; min_trust: string | null;
   source_url: string | null; source_name: string | null; fed_scope: string;
+  drive_in: number | null; country: string | null; tags: string | null;
   created_at: number; updated_at: number;
 }
 interface LogDbRow {
@@ -41,7 +42,22 @@ function toSummary(r: CacheDbRow): CacheSummary {
     sourceName: r.source_name, sourceUrl: r.source_url,
     minTrust: (r.min_trust as "A" | "B" | null) ?? null,
     fedScope: (r.fed_scope as CacheSummary["fedScope"]) ?? "public",
+    driveIn: !!r.drive_in,
+    country: r.country ?? null,
+    tags: splitTags(r.tags),
   };
+}
+
+/** Stored tags are a comma-joined string; expose as an array (empty when null). */
+function splitTags(csv: string | null): string[] {
+  return csv ? csv.split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+/** Normalise request tags → a comma-joined, deduped, lowercased string (or null). */
+function joinTags(tags: string[] | undefined): string | null {
+  if (!tags?.length) return null;
+  const seen = new Set<string>();
+  for (const t of tags) { const v = t.trim().toLowerCase(); if (v) seen.add(v); }
+  return seen.size ? [...seen].slice(0, 12).join(",") : null;
 }
 function toLogEntry(r: LogDbRow): CacheLogEntry {
   return {
@@ -197,11 +213,13 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
     const ins = await env.DB.prepare(
       `INSERT INTO caches
          (code, owner_call, title, type, status, difficulty, terrain, lat, lon,
-          station_call, source, hint, description, min_trust, fed_scope, created_at, updated_at)
-       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?)`,
+          station_call, source, hint, description, min_trust, fed_scope,
+          drive_in, country, tags, created_at, updated_at)
+       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?,?, ?,?)`,
     ).bind(
       tmpCode, owner, b.title, b.type, b.difficulty, b.terrain, b.lat, b.lon,
-      b.stationCall ?? null, b.hint ?? null, b.description ?? null, b.minTrust ?? null, b.fedScope, now, now,
+      b.stationCall ?? null, b.hint ?? null, b.description ?? null, b.minTrust ?? null, b.fedScope,
+      b.driveIn ? 1 : 0, b.country ?? null, joinTags(b.tags), now, now,
     ).run();
     const id = Number(ins.meta.last_row_id);
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
@@ -243,13 +261,18 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     description: b.description ?? existing.description,
     min_trust: b.minTrust ?? existing.min_trust,
     fed_scope: b.fedScope ?? existing.fed_scope,
+    drive_in: b.driveIn === undefined ? existing.drive_in : (b.driveIn ? 1 : 0),
+    country: b.country ?? existing.country,
+    tags: b.tags === undefined ? existing.tags : joinTags(b.tags),
   };
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
-       station_call=?, hint=?, description=?, min_trust=?, fed_scope=?, updated_at=? WHERE id=?`,
+       station_call=?, hint=?, description=?, min_trust=?, fed_scope=?,
+       drive_in=?, country=?, tags=?, updated_at=? WHERE id=?`,
   ).bind(m.title, m.type, m.status, m.difficulty, m.terrain, m.lat, m.lon,
-         m.station_call, m.hint, m.description, m.min_trust, m.fed_scope, now, id).run();
+         m.station_call, m.hint, m.description, m.min_trust, m.fed_scope,
+         m.drive_in, m.country, m.tags, now, id).run();
   // T3.3: turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
   // tombstone so they purge it (a public→unlisted change re-propagates the redacted version via the
   // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.

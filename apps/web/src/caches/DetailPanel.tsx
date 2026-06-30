@@ -67,6 +67,14 @@ export function DetailPanel(props: {
       </div>
       <p className="muted mt-1">by <span className="mono">{c.ownerCall}</span></p>
 
+      {(c.driveIn || c.country || c.tags.length > 0) && (
+        <div className="badges cache-tags">
+          {c.driveIn && <span className="chip">🚗 Drive-in</span>}
+          {c.country && <span className="chip">{c.country}</span>}
+          {c.tags.map((t) => <span key={t} className="chip">#{t}</span>)}
+        </div>
+      )}
+
       <div className="detail-stats">
         <Stat label="Difficulty"><DtBars value={c.difficulty} /><div className="mt-2">{c.difficulty.toFixed(1)} / 5</div></Stat>
         <Stat label="Terrain"><DtBars value={c.terrain} /><div className="mt-2">{c.terrain.toFixed(1)} / 5</div></Stat>

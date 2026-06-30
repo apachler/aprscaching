@@ -23,11 +23,16 @@ export function HidePanel(props: {
   const [hint, setHint] = useState("");
   const [description, setDescription] = useState("");
   const [stationCall, setStationCall] = useState("");
+  const [driveIn, setDriveIn] = useState(false);
+  const [country, setCountry] = useState("");
+  const [tags, setTags] = useState("");
   const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const ready = !!props.draft && title.trim().length > 0 && props.callsign.length >= 3;
+
+  const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 12);
 
   async function submit() {
     if (!props.draft) return;
@@ -41,6 +46,9 @@ export function HidePanel(props: {
         description: description.trim() || undefined,
         fedScope,
         stationCall: type === "aprs_living" ? (stationCall.trim().toUpperCase() || undefined) : undefined,
+        driveIn: driveIn || undefined,
+        country: country.trim() || undefined,
+        tags: tagList.length ? tagList : undefined,
       });
       props.onCreated(cache);
     } catch (e) { setErr((e as Error).message); }
@@ -76,6 +84,15 @@ export function HidePanel(props: {
       <label>Hint<input value={hint} onChange={(e) => setHint(e.target.value)} /></label>
       <label>Description
         <textarea value={description} rows={3} onChange={(e) => setDescription(e.target.value)} /></label>
+      <label className="row gap-2 inline-check">
+        <input type="checkbox" checked={driveIn} onChange={(e) => setDriveIn(e.target.checked)} />
+        Drive-in (car-accessible)
+      </label>
+      <div className="row">
+        <label>Country<input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="AT" maxLength={56} /></label>
+        <label>Tags<input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="scenic, family, qrp" /></label>
+      </div>
+      {tagList.length > 0 && <div className="badges">{tagList.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
       <h4>Federation</h4>
       <div className="badges" role="radiogroup" aria-label="Federation scope">
         {SCOPES.map((s) => (
