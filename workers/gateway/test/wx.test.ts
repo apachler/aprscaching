@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseWx } from "../src/wx.js";
+import { parseWx, wxUrls, makeWxKey } from "../src/wx.js";
 
 const bag = (o: Record<string, string>) => (k: string) => o[k.toLowerCase()];
 
@@ -29,5 +29,21 @@ describe("weather W1 — Ecowitt/WU parse (docs/17)", () => {
     expect(wx.humidity).toBe(40);
     expect(wx.temp_c).toBeUndefined();
     expect(wx.pressure_hpa).toBeUndefined();
+  });
+});
+
+describe("weather W1 — paste URLs + key format (the exact strings a PWS is pointed at)", () => {
+  it("wxUrls builds the Ecowitt path + WU-Rapidfire URL with the station id encoded", () => {
+    const u = wxUrls("https://api.aprscaching.net", "OE8APR-13", "wx_abc123");
+    expect(u.ecowittPath).toBe("https://api.aprscaching.net/api/wx/submit?key=wx_abc123");
+    expect(u.wuUrl).toBe("https://api.aprscaching.net/api/wx/updateweatherstation?ID=OE8APR-13&PASSWORD=wx_abc123");
+    // the WU ID carries a callsign-SSID; '-' is safe but the station must be URL-encoded in general
+    expect(wxUrls("https://x", "OE8/P-13", "k").wuUrl).toContain("ID=OE8%2FP-13&PASSWORD=k");
+  });
+
+  it("makeWxKey is a prefixed 24-hex token and unique per call", () => {
+    const k = makeWxKey();
+    expect(k).toMatch(/^wx_[0-9a-f]{24}$/);
+    expect(makeWxKey()).not.toBe(k);
   });
 });
