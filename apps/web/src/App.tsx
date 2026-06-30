@@ -674,7 +674,7 @@ function TopBar(props: {
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      {props.mode === "view" && <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type">⌕</button>}
+      {props.mode === "view" && <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type" aria-label="Filter caches by type"><Icon name="filter" size={16} /></button>}
       {props.mode === "view" && (
         <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
                        onPickCache={props.onPickCache} onPickStation={props.onPickStation} />

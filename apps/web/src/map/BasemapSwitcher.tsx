@@ -3,11 +3,12 @@ import type maplibregl from "maplibre-gl";
 
 /**
  * Basemap layer switcher (docs/11 M2): Vector (default) · Topo · Satellite. Raster is OPT-IN per
- * css.md — vector is the default and raster tiles load only when the operator picks them. Topo is
- * keyless OpenTopoMap; satellite is provider-configurable via VITE_SAT_TILES (Esri World Imagery is
- * the dev fallback — see docs for licensing). Both raster layers are inserted *below* the data
- * overlays (markers are DOM, always on top) and toggled by visibility, so switching is instant and
- * never re-creates the style. The choice is remembered across sessions.
+ * css.md — vector is the default and raster tiles load only when the operator picks them. Both
+ * defaults are keyless and free: Topo = OpenTopoMap, Satellite = EOX Sentinel-2 cloudless (CC-BY).
+ * A licensed high-res provider (MapTiler / Mapbox / Esri) can be dropped in via VITE_SAT_TILES +
+ * VITE_SAT_ATTRIBUTION. Both raster layers are inserted *below* the data overlays (markers are DOM,
+ * always on top) and toggled by visibility, so switching is instant and never re-creates the style.
+ * The choice is remembered across sessions.
  */
 type Base = "vector" | "topo" | "satellite";
 
@@ -17,15 +18,17 @@ const TOPO_TILES = [
   "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
 ];
 const TOPO_ATTR = "© OpenTopoMap (CC-BY-SA) · © OpenStreetMap contributors";
+// EOX Sentinel-2 cloudless — keyless, free, CC-BY 4.0 (~10 m global mosaic). Override with a licensed
+// high-res provider (MapTiler / Mapbox / Esri) via VITE_SAT_TILES + VITE_SAT_ATTRIBUTION for prod.
 const SAT_TILES = (import.meta.env.VITE_SAT_TILES as string | undefined)
-  ?? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+  ?? "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg";
 const SAT_ATTR = (import.meta.env.VITE_SAT_ATTRIBUTION as string | undefined)
-  ?? "Imagery © Esri, Maxar, Earthstar Geographics";
+  ?? "Sentinel-2 cloudless · © EOX IT Services GmbH (CC-BY-4.0) · contains modified Copernicus Sentinel data";
 
 /** Insert the two raster basemap layers once, beneath any data overlay (mt-* / spots / caches). */
 function ensureRaster(m: maplibregl.Map) {
   if (!m.getSource("bm-topo")) m.addSource("bm-topo", { type: "raster", tiles: TOPO_TILES, tileSize: 256, maxzoom: 17, attribution: TOPO_ATTR });
-  if (!m.getSource("bm-sat")) m.addSource("bm-sat", { type: "raster", tiles: [SAT_TILES], tileSize: 256, maxzoom: 19, attribution: SAT_ATTR });
+  if (!m.getSource("bm-sat")) m.addSource("bm-sat", { type: "raster", tiles: [SAT_TILES], tileSize: 256, maxzoom: 16, attribution: SAT_ATTR });
   // keep raster under our overlays — find the first overlay layer to insert before, else append on top
   const overlay = m.getStyle().layers?.find((l) => /^(mt-|spots|cache)/.test(l.id))?.id;
   if (!m.getLayer("bm-topo-l")) m.addLayer({ id: "bm-topo-l", type: "raster", source: "bm-topo", layout: { visibility: "none" } }, overlay);

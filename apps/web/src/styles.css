@@ -114,9 +114,10 @@ h1, h2 { font-weight: 700; }
   display: flex; align-items: center; gap: 10px; padding: 0 14px;
   background: var(--topbar-bg); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35);
 }
-.topbar .logo { height: 26px; display: block; }
+.topbar .logo { height: 26px; display: block; flex: none; }
 .topbar .spacer { flex: 1; }
-.topbar .muted { color: rgba(255,255,255,.72); }
+.topbar > button { flex: none; white-space: nowrap; }   /* chips never wrap or shrink; the search absorbs the squeeze */
+.topbar .muted { color: rgba(255,255,255,.72); white-space: nowrap; }
 .topbar .call { color: #fff; }
 .topbar .call input { width: 92px; background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.25);
   font-family: var(--font-mono); letter-spacing: .02em; }
@@ -494,8 +495,8 @@ button.link:hover { text-decoration: underline; }
 .search-empty { padding: 12px 10px; color: var(--ink-2); font-size: 12.5px; }
 
 /* ---- identity chip (top bar) + account callsign list (M9 Phase 1) ---- */
-.idchip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
-  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); border-radius: 8px;
+.idchip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; flex: none;
+  white-space: nowrap; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); border-radius: 8px;
   color: #fff; cursor: pointer; font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
 .idchip:hover { background: rgba(255,255,255,.18); }
 .idchip.ok { border-color: color-mix(in oklch, var(--tier-a) 60%, transparent); }
@@ -663,6 +664,9 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 /* at ≥1024px the nav rail replaces the top-bar destinations (placed after the base rule so it
    wins on source order); the +Hide primary stays in the top bar (the rail has no Hide). */
 @media (min-width: 1024px) { .topbar .nav-desktop { display: none; } }
+/* tablet (681–1023px): the row carries nav + Hide + identity, so drop the secondary "N caches in
+   view" / queued counts to give the search box usable width (they return on the roomy desktop rail). */
+@media (max-width: 1023px) { .topbar > .muted { display: none; } }
 @media (max-width: 680px) {
   .topbar .nav-desktop { display: none; }
   .topbar .hide-cta { display: none; }   /* the FAB handles Hide on mobile */
