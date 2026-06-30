@@ -70,6 +70,15 @@ if (env.AGWPE_HOST) {
   ).start();
   console.log("[agwpe] enabled");
 }
+// WA8DED host-mode TNC (docs/27 B.1) — opt-in; a TF-firmware TNC / TFPCX over TCP (serial at deploy).
+if (env.HOSTMODE_HOST) {
+  const { HostmodeTnc } = await import("./hostmode.js");
+  new HostmodeTnc(
+    { host: env.HOSTMODE_HOST, port: Number(env.HOSTMODE_PORT ?? 3694), mycall: env.HOSTMODE_MYCALL, radioPort: Number(env.HOSTMODE_RADIO_PORT ?? 0) },
+    { onPacket: enqueue },
+  ).start();
+  console.log("[hostmode] enabled");
+}
 // AXUDP tunnel (docs/22 reserved seam) — opt-in; tunnelled frames stay Tier C, never first-party RF.
 if (env.AXUDP_PORT) {
   const { AxudpListener } = await import("./axudp.js");
