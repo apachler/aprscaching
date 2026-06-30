@@ -23,6 +23,8 @@ import type { StyleSpecification } from "maplibre-gl";
 import { useSession } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
 import { maidenhead, gridCenter, haversine } from "./map/geo.js";
+import { toMgrs } from "@aprsweb/aprs";
+import { MapTools } from "./map/MapTools.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
@@ -572,8 +574,10 @@ export function App() {
             <div className="coordreadout">
               <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>
               <div><div className="crl">Grid</div><div className="crv">{maidenhead(center[0], center[1])}</div></div>
+              <div><div className="crl">MGRS</div><div className="crv">{toMgrs(center[0], center[1], 4) || "—"}</div></div>
             </div>
           )}
+          {ready && <MapTools map={map.current} />}
           {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
           {nearPrompt && mode === "view" && (
             <div className="geo-banner">

@@ -435,6 +435,22 @@ button.link:hover { text-decoration: underline; }
 .coordreadout > div + div { border-left: 1px solid var(--hair); }
 .coordreadout .crl { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .coordreadout .crv { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+/* keep the readout glanceable on narrow phones — drop MGRS so it can't collide with the tools */
+@media (max-width: 560px) { .coordreadout > div:nth-child(3) { display: none; } }
+
+/* field-navigation map tools (docs/11 M2): grid / rings / ruler toggles + readouts */
+.maptools { position: absolute; right: 12px; bottom: 12px; z-index: 5; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.maptools-bar { display: flex; gap: 1px; background: color-mix(in oklch, var(--surface) 82%, transparent);
+  border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; backdrop-filter: blur(6px); }
+.maptools-bar button { min-width: 38px; min-height: 38px; border: none; background: none; color: var(--ink-2);
+  font-size: 16px; cursor: pointer; }
+.maptools-bar button + button { border-left: 1px solid var(--hair); }
+.maptools-bar button:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); }
+.maptools-bar button.on { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--ink); }
+.maptools-bar button:focus-visible { outline: 2px solid var(--heading); outline-offset: -2px; }
+.maptools-legend { background: color-mix(in oklch, var(--surface) 88%, transparent); border: 1px solid var(--hair);
+  border-radius: 8px; padding: 5px 9px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2);
+  display: flex; gap: 8px; align-items: center; backdrop-filter: blur(6px); }
 
 /* ---- top-bar global search (M8 P3) ---- */
 .topsearch { display: none; align-items: center; gap: 8px; height: 34px; padding: 0 12px; flex: 1; max-width: 420px;

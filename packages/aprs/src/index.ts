@@ -3,6 +3,7 @@ export * from "./tnc2.js";
 export * from "./qconstruct.js";
 export * from "./position.js";
 export * from "./geo.js";
+export * from "./mgrs.js";
 export * from "./symbols.js";
 export * from "./compressed.js";
 export * from "./mice.js";
