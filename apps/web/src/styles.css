@@ -299,6 +299,13 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .decoded dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; word-break: break-word; }
 .wx { margin-top: 6px; font-size: 13px; }
 
+/* station telemetry/weather graphs (workbench, lazy uPlot) */
+.station-graphs { margin-top: 8px; }
+.graph-host { display: grid; gap: 10px; margin-top: 8px; }
+.station-graph { min-width: 0; }
+.station-graph .u-title { font-size: 12px; font-weight: 600; }
+.station-graph .u-legend { font-size: 11px; }
+
 /* leaderboard + profile */
 .board { list-style: none; padding: 0; margin: 10px 0 0; }
 .board li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }

@@ -317,6 +317,16 @@ ok("station detail carries a track", (stDetail.data?.station?.track ?? []).lengt
 const wxDetail = await call("GET", "/api/stations/OE1WX");
 ok("weather station detail carries a wx reading", wxDetail.data?.station?.wx && Math.abs((wxDetail.data?.station?.wx?.tempC ?? 0) - 25) < 1, JSON.stringify(wxDetail.data?.station?.wx));
 
+// telemetry/weather time-series for the workbench graphs (docs/26 Stage 0.1)
+const mobSeries = await call("GET", "/api/stations/OE1MOB-9/series?window=86400");
+ok("station series carries motion telemetry (speed historized on positions)",
+  mobSeries.status === 200 && (mobSeries.data?.motion ?? []).some((p) => p.speedKn != null),
+  JSON.stringify({ motion: mobSeries.data?.motion }));
+const wxSeries = await call("GET", "/api/stations/OE1WX/series?window=86400");
+ok("station series carries the weather series",
+  wxSeries.status === 200 && (wxSeries.data?.wx ?? []).some((p) => p.tempC != null),
+  JSON.stringify({ wx: wxSeries.data?.wx }));
+
 // ---- M6: interop (CoT/TAK bridge) + transports + messaging ----
 const msgIngest = await call("POST", "/ingest", {
   packets: [

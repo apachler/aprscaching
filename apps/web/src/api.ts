@@ -90,6 +90,13 @@ export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }>
 export function getStation(callsign: string): Promise<{ station: StationDetail }> {
   return call(`/api/stations/${encodeURIComponent(callsign)}`);
 }
+export interface WxPoint { ts: number; tempC: number | null; humidity: number | null; pressureHpa: number | null; windKn: number | null; gustKn: number | null; rainMm: number | null; rain24hMm: number | null }
+export interface MotionPoint { ts: number; speedKn: number | null; altitudeM: number | null; course: number | null }
+export interface StationSeries { callsign: string; windowSec: number; wx: WxPoint[]; motion: MotionPoint[] }
+/** Windowed telemetry + weather series for the workbench graphs (docs/26 Stage 0.1). */
+export function getStationSeries(callsign: string, windowSec = 86400, signal?: AbortSignal): Promise<StationSeries> {
+  return call(`/api/stations/${encodeURIComponent(callsign)}/series?window=${Math.floor(windowSec)}`, { signal });
+}
 import type { StationTrackPoint } from "@aprsweb/shared";
 export type { StationTrackPoint };
 export interface StationTrack { callsign: string; from: number; until: number; count: number; positions: StationTrackPoint[] }

@@ -37,7 +37,7 @@ import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
 import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
-import { handleDecode, handleStations, handleStation, handlePorts, handleMessages } from "./workbench.js";
+import { handleDecode, handleStations, handleStation, handleStationSeries, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
@@ -244,6 +244,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // workbench (M5): packet inspector + live station registry
   if (p === "/api/decode" && m === "POST") return handleDecode(req);
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
+  const seriesMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/series$/.exec(p);
+  if (seriesMatch && m === "GET") return handleStationSeries(req, env, seriesMatch[1]!);
   const stationMatch = /^\/api\/stations\/([A-Za-z0-9-]+)$/.exec(p);
   if (stationMatch && m === "GET") return handleStation(req, env, stationMatch[1]!);
 

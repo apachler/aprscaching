@@ -80,9 +80,10 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const src = trusted ? "firehose" : "browser-rf";
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source)
-         VALUES (?,?,?,?,?,?,?,?)`,
-      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, igate, p.path.join(","), src),
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, igate, p.path.join(","), src,
+        fix.speedKn ?? null, fix.altitudeM ?? null, fix.course ?? null),
     );
     stmts.push(
       env.DB.prepare(

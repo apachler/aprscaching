@@ -107,3 +107,33 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
 
   return json({ station: { ...st, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0 } });
 }
+
+/**
+ * Time-series for the workbench station graphs (docs/26 Stage 0.1). Two windowed series — the weather
+ * readings and the motion telemetry (speed/altitude/course, historized on positions since 0029). Both
+ * are ascending-by-ts (uPlot wants sorted x). The window is clamped so a busy station can't return an
+ * unbounded set; default 24 h.
+ */
+export async function handleStationSeries(req: Request, env: Env, callsign: string): Promise<Response> {
+  const cs = callsign.toUpperCase();
+  const u = new URL(req.url);
+  const DAY = 86_400;
+  const windowSec = Math.min(Math.max(Number(u.searchParams.get("window")) || DAY, 3_600), 31 * DAY);
+  const cap = 2_000;
+  const since = now() - windowSec;
+
+  const wx = (await env.DB.prepare(
+    `SELECT ts, temp_c AS tempC, humidity, pressure_hpa AS pressureHpa, wind_kn AS windKn,
+            gust_kn AS gustKn, rain_mm AS rainMm, rain_24h_mm AS rain24hMm
+       FROM sensor_readings WHERE station = ? AND ts >= ? ORDER BY ts DESC LIMIT ?`,
+  ).bind(cs, since, cap).all()).results.reverse();
+
+  const motion = (await env.DB.prepare(
+    `SELECT ts, speed_kn AS speedKn, altitude_m AS altitudeM, course
+       FROM positions
+      WHERE callsign = ? AND ts >= ? AND (speed_kn IS NOT NULL OR altitude_m IS NOT NULL OR course IS NOT NULL)
+      ORDER BY ts DESC LIMIT ?`,
+  ).bind(cs, since, cap).all()).results.reverse();
+
+  return json({ callsign: cs, windowSec, wx, motion });
+}
