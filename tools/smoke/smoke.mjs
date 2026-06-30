@@ -248,6 +248,18 @@ const amsg = stableStringify({ v: 1, cache: created.data?.cache?.code, instance:
 const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(amsg)));
 const signed = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
 ok("signed find accepted; signerKey echoed", signed.data?.logged === true && signed.data?.signerKey === pubRaw, JSON.stringify(signed.data));
+
+// signed browser RF ingest (docs/16 H1.5): push to a public gateway with the device key, no secret
+const sha256hex = async (s) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const rfPkts = [{ src: "OE5SIG", dst: "APRS", path: ["WIDE1-1"], payload: "!4704.41N/01526.27E>RF", kind: "position", heardVia: "rf", port: "webserial-kiss", ts: now() }];
+const iat = now();
+const idigest = await sha256hex(stableStringify(rfPkts));
+const imsg = stableStringify({ v: 1, kind: "ingest", callsign: "DL1ABC", at: iat, count: rfPkts.length, digest: idigest });
+const isig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(imsg)));
+const sIng = await fetch(`${BASE}/ingest`, { method: "POST", headers: { "content-type": "application/json", "x-acs-callsign": "DL1ABC", "x-acs-key": pubRaw, "x-acs-sig": isig, "x-acs-at": String(iat) }, body: JSON.stringify({ packets: rfPkts }) });
+ok("signed browser ingest accepted without the shared secret", sIng.status === 200, String(sIng.status));
+const noAuthIngest = await fetch(`${BASE}/ingest`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ packets: rfPkts }) });
+ok("ingest with neither secret nor signature is rejected (401)", noAuthIngest.status === 401, String(noAuthIngest.status));
 // flip the first (fully-significant) base64url char so the signature is guaranteed to differ
 const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
 const tampered = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: badSig, signedAt: at } });

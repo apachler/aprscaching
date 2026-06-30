@@ -223,6 +223,22 @@ export async function ingestPackets(packets: Packet[], secret: string, base = AP
   return res.json() as Promise<{ ok: boolean; stored: number }>;
 }
 
+/**
+ * Forward decoded RF to a PUBLIC gateway, authenticated by the operator's device-key signature
+ * (docs/16 H1.5) — no shared secret. The key must be registered to `callsign` (registerKey).
+ * Browser-heard frames are stored IGate-less and stay Tier C.
+ */
+export async function ingestSigned(packets: Packet[], callsign: string, base = API_BASE): Promise<{ ok: boolean; stored: number }> {
+  const { signIngest } = await import("./crypto.js");
+  const headers = await signIngest(callsign, packets);
+  if (!headers) throw new Error("this browser can't sign (needs Ed25519)");
+  const res = await fetch(`${base.replace(/\/+$/, "")}/ingest`, {
+    method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ packets }),
+  });
+  if (!res.ok) throw new Error(`ingest ${res.status}`);
+  return res.json() as Promise<{ ok: boolean; stored: number }>;
+}
+
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

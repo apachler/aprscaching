@@ -6,6 +6,8 @@ import { decodeAprs } from "@aprsweb/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { deliverHeld, bbsOnAck } from "./bbs.js";
 import { recordWatchHeard } from "./watch.js";
+import { verifySignedIngest } from "./keys.js";
+import { rateLimited } from "./corroborate_privacy.js";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }):
@@ -23,11 +25,20 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
 
 /** Receive batched packets from the ingest box, persist positions, enrich the workbench, fan out live. */
 export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
-  if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET)
-    return new Response("unauthorized", { status: 401 });
-
   const body = IngestBatch.safeParse(await req.json());
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
+
+  // Auth: the shared secret (trusted backend / self-host ingest) OR a signed browser batch (H1.5):
+  // an operator's device key, registered to their callsign, signs the batch — so a PUBLIC gateway
+  // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
+  // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
+  const trusted = req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+  if (!trusted) {
+    const signed = await verifySignedIngest(req, env, body.data.packets);
+    if (!signed) return new Response("unauthorized", { status: 401 });
+    if (rateLimited(`ingest:${signed.callsign}`, Date.now(), 240, 60_000))
+      return json({ error: "rate limited" }, { status: 429 });
+  }
 
   const stmts: SqlStatement[] = [];
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
@@ -63,11 +74,15 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const fix = fixOf(p);
     if (!fix) continue;
     positions.push({ src: p.src, lat: fix.lat, lon: fix.lon, symbol: fix.symbol, course: fix.course });
+    // A signed browser batch may NOT assert an independent IGate (no self-corroboration to Tier A),
+    // so its fixes are stored IGate-less + tagged 'browser-rf'; trusted backends keep their IGate.
+    const igate = trusted ? (p.igateCall ?? null) : null;
+    const src = trusted ? "firehose" : "browser-rf";
     stmts.push(
       env.DB.prepare(
         `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source)
-         VALUES (?,?,?,?,?,?,?, 'firehose')`,
-      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, p.igateCall ?? null, p.path.join(",")),
+         VALUES (?,?,?,?,?,?,?,?)`,
+      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, igate, p.path.join(","), src),
     );
     stmts.push(
       env.DB.prepare(
@@ -77,7 +92,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
            symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
            altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)`,
       ).bind(p.src, fix.lat, fix.lon, p.ts, fix.symbol ?? null, fix.course ?? null,
-        fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, p.igateCall ?? null),
+        fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, igate),
     );
     // Keep a registered operated-station's location live: if this callsign is in someone's registry,
     // an APRS position fix updates its stored coordinates (docs/13 — "updated via APRS if heard").

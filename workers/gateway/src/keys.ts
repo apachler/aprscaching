@@ -7,7 +7,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { RegisterKeyRequest, authorshipMessage } from "@aprsweb/shared";
+import { RegisterKeyRequest, authorshipMessage, ingestMessage, sha256Hex, stableStringify } from "@aprsweb/shared";
 import { importVerifyKey, fromB64 } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { sessionCallsign } from "./auth.js";
@@ -51,4 +51,26 @@ export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
     );
     return await crypto.subtle.verify("Ed25519", key, fromB64(a.authorSig), msg);
   } catch { return false; }
+}
+
+/**
+ * Signed browser ingest (docs/16 H1.5). Lets a browser RF station push to a PUBLIC gateway without
+ * the shared ingest secret: the batch is signed by the operator's device key (registered to their
+ * callsign). Verifies signature + digest + freshness + key registration. Returns the attributed
+ * callsign, or null. Trust is unaffected — callers strip the IGate so browser RF stays Tier C.
+ */
+export async function verifySignedIngest(req: Request, env: Env, packets: unknown[]): Promise<{ callsign: string } | null> {
+  const callsign = (req.headers.get("x-acs-callsign") ?? "").toUpperCase();
+  const key = req.headers.get("x-acs-key") ?? "";
+  const sig = req.headers.get("x-acs-sig") ?? "";
+  const at = Number(req.headers.get("x-acs-at") ?? 0);
+  if (!callsign || !key || !sig || !Number.isFinite(at)) return null;
+  if (Math.abs(Math.floor(Date.now() / 1000) - at) > 300) return null;       // 5-min freshness window
+  if (!(await isKeyRegistered(env, callsign, key))) return null;             // key must belong to the callsign
+  try {
+    const digest = await sha256Hex(stableStringify(packets));
+    const msg = new TextEncoder().encode(ingestMessage({ callsign, at, count: packets.length, digest }));
+    const ok = await crypto.subtle.verify("Ed25519", await importVerifyKey(key), fromB64(sig), msg);
+    return ok ? { callsign } : null;
+  } catch { return null; }
 }

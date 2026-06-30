@@ -30,3 +30,19 @@ export function authorshipMessage(a: Authorship): string {
 export function accountActionMessage(a: { action: string; callsign: string; instance: string; at: number }): string {
   return stableStringify({ v: 1, action: a.action, callsign: a.callsign.toUpperCase(), instance: a.instance, at: a.at });
 }
+
+/**
+ * The exact bytes a browser RF station signs to push an ingest batch to a public gateway without the
+ * shared ingest secret (docs/16 H1.5). Binds the operator's callsign, a freshness timestamp, and the
+ * batch count + digest of the canonical packets, so a signature can't be replayed for other content.
+ * The gateway verifies the signature against a key registered to `callsign` (callsign_keys).
+ */
+export function ingestMessage(a: { callsign: string; at: number; count: number; digest: string }): string {
+  return stableStringify({ v: 1, kind: "ingest", callsign: a.callsign.toUpperCase(), at: a.at, count: a.count, digest: a.digest });
+}
+
+/** SHA-256 of a string as lowercase hex (WebCrypto — browser, Worker, Node 20+). For ingest digests. */
+export async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}

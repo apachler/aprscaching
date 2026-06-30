@@ -2,7 +2,7 @@
 // registered to the callsign; finds are signed with the private key so authorship is portable and
 // verifiable network-wide. Best-effort: on a browser without Ed25519 WebCrypto, signing is skipped
 // and the find is simply logged unsigned.
-import { authorshipMessage, accountActionMessage, type Authorship } from "@aprsweb/shared";
+import { authorshipMessage, accountActionMessage, ingestMessage, sha256Hex, stableStringify, type Authorship } from "@aprsweb/shared";
 
 const PRIV = "acs.key.priv", PUB = "acs.key.pub";
 
@@ -41,6 +41,18 @@ export async function signAuthorship(a: Authorship): Promise<AuthorSig | undefin
 /** The device public key (creating one if needed), or null if unsupported. */
 export async function devicePublicKey(): Promise<string | null> {
   try { return (await deviceKey()).publicKey; } catch { return null; }
+}
+
+export type SignedIngestHeaders = { "x-acs-callsign": string; "x-acs-key": string; "x-acs-sig": string; "x-acs-at": string };
+/** Sign a browser RF ingest batch with the device key (docs/16 H1.5) → headers, or undefined. */
+export async function signIngest(callsign: string, packets: unknown[]): Promise<SignedIngestHeaders | undefined> {
+  try {
+    const { publicKey, priv } = await deviceKey();
+    const at = Math.floor(Date.now() / 1000);
+    const digest = await sha256Hex(stableStringify(packets));
+    const sig = await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(ingestMessage({ callsign, at, count: packets.length, digest })));
+    return { "x-acs-callsign": callsign.toUpperCase(), "x-acs-key": publicKey, "x-acs-sig": b64u(sig), "x-acs-at": String(at) };
+  } catch { return undefined; }
 }
 
 /** Sign a sensitive account action (export/delete/migrate) with the device key. */

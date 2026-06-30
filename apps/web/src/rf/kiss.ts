@@ -50,17 +50,33 @@ export function decodeKissBuffer(buf: Uint8Array, atMs: number): RfFrame[] {
   return out;
 }
 
+/** A KISS byte feeder: buffers a stream and emits RfFrames on each complete FEND-delimited frame. */
+function makeFeeder(onFrame: (f: RfFrame) => void): (chunk: Uint8Array) => void {
+  let buf: number[] = [];
+  return (chunk) => {
+    for (const b of chunk) buf.push(b);
+    const lastFend = buf.lastIndexOf(0xc0);
+    if (lastFend <= 0) return;                              // wait for a complete frame
+    const ready = Uint8Array.from(buf.slice(0, lastFend + 1));
+    buf = buf.slice(lastFend + 1);
+    for (const f of decodeKissBuffer(ready, Date.now())) onFrame(f);
+  };
+}
+
+/** A live RF link; both Web Serial and Web Bluetooth implement it. */
+export interface RfLink { disconnect(): Promise<void> }
+
 /**
  * Web Serial KISS reader. Reassembles KISS frames from the serial stream (split on FEND 0xC0,
  * matching apps/ingest), decodes each, and emits an RfFrame. Auto-cleans on disconnect.
  */
-export class WebSerialKiss {
+export class WebSerialKiss implements RfLink {
   private port: SerialPortLike | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  private buf: number[] = [];
   private closed = false;
+  private feed: (chunk: Uint8Array) => void;
 
-  constructor(private onFrame: (f: RfFrame) => void, private onClose?: (err?: Error) => void) {}
+  constructor(onFrame: (f: RfFrame) => void, private onClose?: (err?: Error) => void) { this.feed = makeFeeder(onFrame); }
 
   /** Prompt the user to pick a serial port (requires a user gesture) and start reading. */
   async connect(baudRate = 9600): Promise<void> {
@@ -88,15 +104,6 @@ export class WebSerialKiss {
     finally { if (!this.closed) this.onClose?.(err); }
   }
 
-  private feed(chunk: Uint8Array): void {
-    for (const b of chunk) this.buf.push(b);
-    const lastFend = this.buf.lastIndexOf(0xc0);
-    if (lastFend <= 0) return;                              // wait for a complete frame
-    const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
-    this.buf = this.buf.slice(lastFend + 1);
-    for (const f of decodeKissBuffer(ready, Date.now())) this.onFrame(f);
-  }
-
   async disconnect(): Promise<void> {
     this.closed = true;
     try { await this.reader?.cancel(); } catch { /* ignore */ }
@@ -106,9 +113,62 @@ export class WebSerialKiss {
   }
 }
 
-/** The slice of the Web Serial port API we use (avoids a @types/w3c-web-serial dependency). */
+// ---- H2: BLE-KISS over Web Bluetooth (Mobilinkd TNC4 & friends use the Nordic UART Service) ----
+const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_RX_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // device → host notifications (KISS bytes)
+
+/** Is browser-direct RF available over Bluetooth? (Web Bluetooth — Chromium, secure context.) */
+export const webBluetoothSupported = (): boolean =>
+  typeof navigator !== "undefined" && typeof (navigator as { bluetooth?: { requestDevice?: unknown } }).bluetooth?.requestDevice === "function";
+
+/**
+ * BLE-KISS reader. Connects a Bluetooth TNC over the Nordic UART Service, subscribes to the RX
+ * characteristic, reassembles KISS frames and emits RfFrames — same decode pipeline as serial.
+ */
+export class WebBluetoothKiss implements RfLink {
+  private device: BleDeviceLike | null = null;
+  private char: BleCharLike | null = null;
+  private closed = false;
+  private feed: (chunk: Uint8Array) => void;
+  private readonly onValue = (ev: Event) => {
+    const v = (ev.target as { value?: DataView }).value;
+    if (v) this.feed(new Uint8Array(v.buffer));
+  };
+
+  constructor(onFrame: (f: RfFrame) => void, private onClose?: (err?: Error) => void) { this.feed = makeFeeder(onFrame); }
+
+  /** Prompt the user to pick a BLE TNC (requires a user gesture) and start reading. */
+  async connect(): Promise<void> {
+    const bt = (navigator as unknown as { bluetooth: { requestDevice(o: unknown): Promise<BleDeviceLike> } }).bluetooth;
+    this.device = await bt.requestDevice({ filters: [{ services: [NUS_SERVICE] }], optionalServices: [NUS_SERVICE] });
+    this.device.addEventListener?.("gattserverdisconnected", () => { if (!this.closed) this.onClose?.(); });
+    const gatt = await this.device.gatt.connect();
+    const svc = await gatt.getPrimaryService(NUS_SERVICE);
+    this.char = await svc.getCharacteristic(NUS_RX_NOTIFY);
+    this.char.addEventListener("characteristicvaluechanged", this.onValue);
+    await this.char.startNotifications();
+    this.closed = false;
+  }
+
+  async disconnect(): Promise<void> {
+    this.closed = true;
+    try { this.char?.removeEventListener("characteristicvaluechanged", this.onValue); } catch { /* ignore */ }
+    try { await this.char?.stopNotifications(); } catch { /* ignore */ }
+    try { this.device?.gatt.disconnect(); } catch { /* ignore */ }
+    this.device = null; this.char = null;
+    this.onClose?.();
+  }
+}
+
+/** Minimal slices of the Web Serial / Web Bluetooth APIs we use (avoids extra @types deps). */
 interface SerialPortLike {
   readable: ReadableStream<Uint8Array> | null;
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
 }
+interface BleCharLike {
+  startNotifications(): Promise<unknown>; stopNotifications(): Promise<unknown>;
+  addEventListener(t: string, fn: (e: Event) => void): void; removeEventListener(t: string, fn: (e: Event) => void): void;
+}
+interface BleGattLike { connect(): Promise<{ getPrimaryService(u: string): Promise<{ getCharacteristic(u: string): Promise<BleCharLike> }> }>; disconnect(): void }
+interface BleDeviceLike { gatt: BleGattLike; addEventListener?(t: string, fn: () => void): void }

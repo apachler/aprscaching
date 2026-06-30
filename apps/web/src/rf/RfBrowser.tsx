@@ -1,98 +1,128 @@
 import { useEffect, useRef, useState } from "react";
-import { WebSerialKiss, webSerialSupported, type RfFrame } from "./kiss.js";
-import { ingestPackets } from "../api.js";
+import {
+  WebSerialKiss, WebBluetoothKiss, webSerialSupported, webBluetoothSupported, type RfFrame, type RfLink,
+} from "./kiss.js";
+import { ingestPackets, ingestSigned, registerKey } from "../api.js";
+import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
 import { Row, Switch, EmptyState, Advanced, useToast } from "../ui/index.js";
 
-const FWD_KEY = "acs.rf.forward"; // { url, secret } for the operator-local / self-host ingest path
+const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-secret) path
 
 /**
- * Workbench → RF (browser): connect a USB KISS TNC over Web Serial and decode live RF here, no
- * server needed (docs/16 H1). Optionally forward to a self-hosted gateway's /ingest. Chromium-only;
- * shows a clear fallback elsewhere.
+ * Workbench → RF (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE) and
+ * decode live RF here, no server (docs/16 H1 + H2). Optionally forward to a gateway — signed with
+ * your device key for a public gateway (H1.5), or with an ingest secret for self-host. Chromium-only.
  */
-export function RfBrowser() {
+export function RfBrowser(props: { callsign: string }) {
   const fmt = useFmt();
   const toast = useToast();
-  const supported = webSerialSupported();
-  const [connected, setConnected] = useState(false);
+  const serialOk = webSerialSupported();
+  const bleOk = webBluetoothSupported();
+  const signedIn = props.callsign.length >= 3;
+
+  const [link, setLink] = useState<"serial" | "ble" | null>(null);
   const [busy, setBusy] = useState(false);
   const [frames, setFrames] = useState<RfFrame[]>([]);
   const [count, setCount] = useState(0);
-  const [forward, setForward] = useState<{ url: string; secret: string } | null>(() => {
-    try { return JSON.parse(localStorage.getItem(FWD_KEY) || "null"); } catch { return null; }
-  });
   const [fwdOn, setFwdOn] = useState(false);
-  const kiss = useRef<WebSerialKiss | null>(null);
-  const fwd = useRef(forward); fwd.current = forward;
-  const fwdOnRef = useRef(fwdOn); fwdOnRef.current = fwdOn;
+  const [mode, setMode] = useState<"signed" | "secret">(signedIn ? "signed" : "secret");
+  const [secretCfg, setSecretCfg] = useState<{ url: string; secret: string }>(() => {
+    try { return JSON.parse(localStorage.getItem(FWD_KEY) || "null") ?? { url: "", secret: "" }; } catch { return { url: "", secret: "" }; }
+  });
 
-  useEffect(() => () => { void kiss.current?.disconnect(); }, []);
+  const linkRef = useRef<RfLink | null>(null);
+  const fwd = useRef({ on: false, mode, secretCfg, callsign: props.callsign });
+  fwd.current = { on: fwdOn, mode, secretCfg, callsign: props.callsign };
+  const fwdErr = useRef(false); // throttle: surface a forward error only once per session
 
-  async function connect() {
+  useEffect(() => () => { void linkRef.current?.disconnect(); }, []);
+
+  function onFrame(f: RfFrame) {
+    setFrames((prev) => [f, ...prev].slice(0, 100));
+    setCount((n) => n + 1);
+    const c = fwd.current;
+    if (!c.on) return;
+    const p = [f.packet];
+    const send = c.mode === "signed" && c.callsign.length >= 3
+      ? ingestSigned(p, c.callsign)
+      : c.secretCfg.secret ? ingestPackets(p, c.secretCfg.secret, c.secretCfg.url || undefined) : null;
+    if (send) send.catch((e) => { if (!fwdErr.current) { fwdErr.current = true; toast(`Forwarding failed: ${(e as Error).message}`); } });
+  }
+
+  async function connect(kind: "serial" | "ble") {
     setBusy(true);
     try {
-      const k = new WebSerialKiss(
-        (f) => {
-          setFrames((prev) => [f, ...prev].slice(0, 100));
-          setCount((n) => n + 1);
-          if (fwdOnRef.current && fwd.current?.secret) {
-            ingestPackets([f.packet], fwd.current.secret, fwd.current.url || undefined).catch(() => {/* shown once below */});
-          }
-        },
-        (err) => { setConnected(false); if (err) toast(`Radio disconnected: ${err.message}`); },
-      );
-      await k.connect();
-      kiss.current = k;
-      setConnected(true);
-      toast("Radio connected");
+      const onClose = (err?: Error) => { setLink(null); linkRef.current = null; if (err) toast(`Radio disconnected: ${err.message}`); };
+      const l = kind === "serial" ? new WebSerialKiss(onFrame, onClose) : new WebBluetoothKiss(onFrame, onClose);
+      await l.connect();
+      linkRef.current = l; setLink(kind); fwdErr.current = false;
+      toast(kind === "serial" ? "USB radio connected" : "Bluetooth radio connected");
     } catch (e) {
       const m = (e as Error).message || "";
-      if (!/No port selected|cancel/i.test(m)) toast(`Could not connect: ${m}`);
+      if (!/No port selected|chooser|cancel|User cancelled/i.test(m)) toast(`Could not connect: ${m}`);
     } finally { setBusy(false); }
   }
-  async function disconnect() { await kiss.current?.disconnect(); kiss.current = null; setConnected(false); }
+  async function disconnect() { await linkRef.current?.disconnect(); linkRef.current = null; setLink(null); }
 
-  function saveForward(url: string, secret: string) {
-    const v = secret ? { url: url.trim(), secret: secret.trim() } : null;
-    setForward(v);
-    try { v ? localStorage.setItem(FWD_KEY, JSON.stringify(v)) : localStorage.removeItem(FWD_KEY); } catch { /* ignore */ }
+  async function enableForward(on: boolean) {
+    if (on && mode === "signed" && signedIn) {
+      const key = await devicePublicKey();
+      if (!key) { toast("This browser can't sign (needs Ed25519). Use the self-host secret instead."); return; }
+      await registerKey({ callsign: props.callsign, publicKey: key, label: "browser RF" }).catch(() => {}); // ensure the key is registered
+    }
+    fwdErr.current = false; setFwdOn(on);
+  }
+  function saveSecret(url: string, secret: string) {
+    const v = { url: url.trim(), secret: secret.trim() }; setSecretCfg(v);
+    try { localStorage.setItem(FWD_KEY, JSON.stringify(v)); } catch { /* ignore */ }
   }
 
-  if (!supported) return (
-    <p className="muted">Browser-direct RF needs <strong>Web Serial</strong> — available in Chromium-based
-      desktop browsers (Chrome, Edge) over HTTPS. On other browsers, run the operator-local
+  if (!serialOk && !bleOk) return (
+    <p className="muted">Browser-direct RF needs <strong>Web Serial</strong> or <strong>Web Bluetooth</strong> —
+      Chromium-based desktop/Android browsers over HTTPS. On other browsers, run the operator-local
       <span className="mono"> apps/ingest</span> instead. RX never implies trust — finds are still gated by the
       verification engine.</p>
   );
 
   return (
     <>
-      <p className="muted">Plug in a USB KISS TNC and decode RF here — no server. Frames heard on your own
+      <p className="muted">Plug in or pair a KISS TNC and decode RF here — no server. Frames heard on your own
         radio are Tier C (no independent IGate); verification is unchanged.</p>
+
       <div className="row gap-2">
-        {connected
+        {link
           ? <button className="danger" onClick={disconnect}>Disconnect</button>
-          : <button className="primary" onClick={connect} disabled={busy}>{busy ? "Connecting…" : "Connect a radio"}</button>}
-        <span className="muted">{connected ? `● live · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}</span>
+          : <>
+              {serialOk && <button className="primary" onClick={() => connect("serial")} disabled={busy}>{busy ? "…" : "Connect USB radio"}</button>}
+              {bleOk && <button onClick={() => connect("ble")} disabled={busy}>{busy ? "…" : "Connect Bluetooth"}</button>}
+            </>}
+        <span className="muted">{link ? `● live (${link === "ble" ? "BLE" : "USB"}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}</span>
       </div>
 
-      <Row label="Forward to my gateway" help={forward?.secret ? "Decoded frames POST to your gateway /ingest" : "Set a gateway URL + ingest secret below to enable"}>
-        <Switch label="Forward to my gateway" checked={fwdOn} disabled={!forward?.secret}
-                onChange={(v) => setFwdOn(v)} />
+      <Row label="Forward to a gateway" help={mode === "signed" ? "Signed with your device key (public gateway, no secret)" : "With an ingest secret (self-host)"}>
+        <Switch label="Forward to a gateway" checked={fwdOn} disabled={mode === "secret" && !secretCfg.secret}
+                onChange={(v) => { void enableForward(v); }} />
       </Row>
-      <Advanced label="Gateway forwarding (self-host)">
-        <label>Gateway base URL <input className="mono" defaultValue={forward?.url ?? ""} placeholder="https://your-gateway"
-          onBlur={(e) => saveForward(e.target.value, forward?.secret ?? "")} /></label>
-        <label>Ingest secret <input className="mono" type="password" defaultValue={forward?.secret ?? ""} placeholder="INGEST_SECRET"
-          onBlur={(e) => saveForward(forward?.url ?? "", e.target.value)} /></label>
-        <p className="muted fine">Stored only in this browser. This is the single-operator / off-grid path; a
-          multi-operator shared gateway should use per-operator signed keys (a later step).</p>
-      </Advanced>
+      <Row label="Auth">
+        <div className="seg">
+          <button className={mode === "signed" ? "on" : ""} disabled={!signedIn} onClick={() => setMode("signed")}>signed ({props.callsign || "sign in"})</button>
+          <button className={mode === "secret" ? "on" : ""} onClick={() => setMode("secret")}>secret (self-host)</button>
+        </div>
+      </Row>
+      {mode === "secret" && (
+        <Advanced label="Self-host gateway">
+          <label>Gateway base URL <input className="mono" defaultValue={secretCfg.url} placeholder="https://your-gateway"
+            onBlur={(e) => saveSecret(e.target.value, secretCfg.secret)} /></label>
+          <label>Ingest secret <input className="mono" type="password" defaultValue={secretCfg.secret} placeholder="INGEST_SECRET"
+            onBlur={(e) => saveSecret(secretCfg.url, e.target.value)} /></label>
+          <p className="muted fine">Stored only in this browser.</p>
+        </Advanced>
+      )}
 
       <h4>Live RX</h4>
       {frames.length === 0
-        ? <EmptyState>{connected ? "Listening… frames appear as your radio hears them." : "Connect a radio to see live packets."}</EmptyState>
+        ? <EmptyState>{link ? "Listening… frames appear as your radio hears them." : "Connect a radio to see live packets."}</EmptyState>
         : <ul className="logs rf-rx">{frames.map((f, i) => (
             <li key={`${f.at}-${i}`}>
               <span className="mono"><strong>{f.frame.src}</strong>{f.frame.dst ? `>${f.frame.dst}` : ""}</span>
