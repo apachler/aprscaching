@@ -9,6 +9,7 @@ import { handleIngest } from "./ingest.js";
 import {
   handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleCacheLogs, handleUpdateCache,
 } from "./caches.js";
+import { handleSearch } from "./search.js";
 import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleListCallsigns, handleAddCallsign,
   handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
@@ -226,6 +227,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // caching REST
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
   if (p === "/api/caches" && m === "POST") return handleCreateCache(req, env);
+
+  // enriched as-you-type search across caches + stations (docs/11 M2)
+  if (p === "/api/search" && m === "GET") return handleSearch(req, env);
 
   // community / gamification (M4)
   if (p === "/api/leaderboard" && m === "GET") return handleLeaderboard(req, env);

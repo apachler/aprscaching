@@ -5,7 +5,9 @@ import "./styles.css";
 import {
   listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount, getProfile,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot, type MapViewState,
+  type SearchHitCache, type SearchHitStation,
 } from "./api.js";
+import { SearchSuggest } from "./search/SearchSuggest.js";
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
 import { Landing } from "./Landing.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -478,6 +480,18 @@ export function App() {
     }
   }
 
+  // enriched-search picks: a cache opens its detail + flies there; a station just flies to it
+  function pickCacheHit(hit: SearchHitCache) {
+    setFilters((f) => ({ ...f, q: "" }));
+    setRemote(null);
+    openOnly(() => setSelectedId(hit.id));
+    if (hit.lat != null && hit.lon != null) map.current?.flyTo({ center: [hit.lon, hit.lat], zoom: Math.max(map.current.getZoom(), 14) });
+  }
+  function pickStationHit(hit: SearchHitStation) {
+    setFilters((f) => ({ ...f, q: "" }));
+    if (hit.lat != null && hit.lon != null) map.current?.flyTo({ center: [hit.lon, hit.lat], zoom: Math.max(map.current.getZoom(), 12) });
+  }
+
   function startHide() {
     setSelectedId(null);
     setRemote(null);
@@ -515,6 +529,7 @@ export function App() {
               onFilters={() => openOnly(() => setShowFilter(true))}
               filtered={filters.types.length > 0 || filters.q.length > 0}
               q={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} onSearchSubmit={runSearch}
+              onPickCache={pickCacheHit} onPickStation={pickStationHit}
               onNearby={() => openOnly(() => setShowNearby(true))}
               onActivity={() => openOnly(() => setShowActivity(true))}
               onProfile={() => openOnly(() => setShowProfile(true))} />
@@ -651,6 +666,7 @@ function TopBar(props: {
   onHide: () => void; onCancel: () => void; count: number; queued: number;
   onFilters: () => void; filtered: boolean;
   q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
+  onPickCache: (hit: SearchHitCache) => void; onPickStation: (hit: SearchHitStation) => void;
   onNearby: () => void; onActivity: () => void; onProfile: () => void;
 }) {
   return (
@@ -658,12 +674,8 @@ function TopBar(props: {
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
       {props.mode === "view" && <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type">⌕</button>}
       {props.mode === "view" && (
-        <label className="topsearch">
-          <Icon name="search" size={16} />
-          <input value={props.q} placeholder="Search callsign, cache id, or grid…" aria-label="Search caches"
-                 onChange={(e) => props.onSearch(e.target.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter") props.onSearchSubmit(props.q); }} />
-        </label>
+        <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
+                       onPickCache={props.onPickCache} onPickStation={props.onPickStation} />
       )}
       <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
       {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}

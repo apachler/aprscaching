@@ -453,13 +453,34 @@ button.link:hover { text-decoration: underline; }
   border-radius: 8px; padding: 5px 9px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2);
   display: flex; gap: 8px; align-items: center; backdrop-filter: blur(6px); }
 
-/* ---- top-bar global search (M8 P3) ---- */
-.topsearch { display: none; align-items: center; gap: 8px; height: 34px; padding: 0 12px; flex: 1; max-width: 420px;
+/* ---- top-bar global search (M8 P3) + enriched suggest (docs/11 M2) ---- */
+.topsearch-wrap { display: none; position: relative; flex: 1; max-width: 420px; }
+@media (min-width: 768px) { .topsearch-wrap { display: block; } }
+.topsearch { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: rgba(255,255,255,.6); }
-.topsearch input { border: none; background: none; color: #fff; padding: 0; font-family: var(--font-mono); font-size: 13px; }
+.topsearch:focus-within { border-color: rgba(255,255,255,.4); }
+.topsearch input { flex: 1; min-width: 0; border: none; background: none; color: #fff; padding: 0; font-family: var(--font-mono); font-size: 13px; }
 .topsearch input::placeholder { color: rgba(255,255,255,.5); font-family: system-ui, sans-serif; }
 .topsearch input:focus { outline: none; }
-@media (min-width: 768px) { .topsearch { display: flex; } }
+.search-spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff; animation: search-spin .7s linear infinite; flex: none; }
+@keyframes search-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .search-spin { animation-duration: 2s; } }
+
+/* suggestion listbox */
+.search-pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40; margin: 0; padding: 4px;
+  list-style: none; max-height: min(60dvh, 420px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.32); }
+.search-opt { display: flex; align-items: center; gap: 9px; padding: 8px 10px; min-height: 40px; border-radius: 7px;
+  cursor: pointer; color: var(--ink); }
+.search-opt.active, .search-opt:hover { background: color-mix(in oklch, var(--accent) 14%, transparent); }
+.so-kind { flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 5px; }
+.so-kind.cache { background: color-mix(in oklch, var(--accent) 20%, transparent); color: var(--accent); }
+.so-kind.stn { background: color-mix(in oklch, var(--tier-a) 22%, transparent); color: var(--tier-a); }
+.so-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.so-meta { flex: none; color: var(--ink-2); font-size: 11.5px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-empty { padding: 12px 10px; color: var(--ink-2); font-size: 12.5px; }
 
 /* ---- identity chip (top bar) + account callsign list (M9 Phase 1) ---- */
 .idchip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;

@@ -192,6 +192,19 @@ export interface CacheStage {
   lon: number | null;
 }
 
+// ---- M2 enriched search (docs/11): as-you-type suggestions across caches + stations ----
+export interface SearchHitCache {
+  kind: "cache";
+  id: number; code: string; title: string; ownerCall: string; type: CacheType;
+  lat: number | null; lon: number | null;
+}
+export interface SearchHitStation {
+  kind: "station";
+  callsign: string; symbol: string | null; comment: string | null;
+  lat: number | null; lon: number | null;
+}
+export interface SearchResults { caches: SearchHitCache[]; stations: SearchHitStation[] }
+
 // ---- M4 community response shapes ----
 export interface LeaderboardEntry { rank: number; loggerCall: string; finds: number; points: number }
 export interface Badge { badge: string; earnedAt: number }

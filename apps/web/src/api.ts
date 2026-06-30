@@ -48,6 +48,12 @@ export function updateProfile(p: ProfileEdit): Promise<{ ok: boolean }> {
 export function getProfile(callsign: string): Promise<Profile> {
   return call(`/api/profile/${encodeURIComponent(callsign)}`);
 }
+import type { SearchResults } from "@aprsweb/shared";
+export type { SearchResults, SearchHitCache, SearchHitStation } from "@aprsweb/shared";
+/** Enriched as-you-type suggestions across caches + stations (docs/11 M2). */
+export function searchSuggest(q: string, signal?: AbortSignal, limit = 8): Promise<SearchResults> {
+  return call(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
+}
 import type { ActivityItem, PageInfo } from "@aprsweb/shared";
 export type { ActivityItem };
 /** Keyset-paginated recent finds (docs/11). Pass nextCursor back as `cursor` for older pages. */
