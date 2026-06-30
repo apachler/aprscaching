@@ -236,7 +236,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     protocolVersions: PROTOCOL_VERSIONS,
     instance: instanceOf(req, env),
     software: "aprscaching",
-    capabilities: ["caches", "finds", "keys", "tombstones", "moves", "notify", env.FED_SUBMIT_SECRET ? "submit" : null].filter(Boolean),
+    capabilities: ["caches", "finds", "keys", "tombstones", "moves", "bulletins", "notify", env.FED_SUBMIT_SECRET ? "submit" : null].filter(Boolean),
     endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones", "account-moves": "/federation/account-moves", notify: "/federation/notify" },
     sigAlg: "Ed25519",
     signed: !!fk,

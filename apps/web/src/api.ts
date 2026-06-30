@@ -328,6 +328,14 @@ export function getBulletins(): Promise<{ bulletins: BbsMessage[] }> {
 export function postBbsMessage(body: { fromCall: string; toCall: string; subject?: string; body: string }): Promise<{ ok: boolean; id: number; type: string }> {
   return call(`/api/bbs/messages`, { method: "POST", body: JSON.stringify(body) });
 }
+/** Personal mail you SENT, with its store-and-forward delivery state (docs/17 BBS). */
+export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {
+  return call(`/api/bbs/sent?from=${encodeURIComponent(callsign)}`);
+}
+/** Mark a personal message read (clears its unread state). */
+export function markBbsRead(id: number): Promise<{ ok: boolean }> {
+  return call(`/api/bbs/messages/${id}/read`, { method: "POST" });
+}
 
 // ---- account data lifecycle (GDPR) ----
 type SignedAction = { key: string; sig: string; at: number };

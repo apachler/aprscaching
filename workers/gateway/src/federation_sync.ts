@@ -13,6 +13,7 @@ import {
   loadRegistry, registryKeyAllowed, buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
+import { upsertRemoteBulletin } from "./bbs.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -22,7 +23,7 @@ export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "bloc
 
 interface PeerRow {
   url: string; instance: string | null; public_key: string | null;
-  caches_cursor: number; finds_cursor: number; keys_cursor: number; tombstones_cursor: number; moves_cursor: number; enabled: number;
+  caches_cursor: number; finds_cursor: number; keys_cursor: number; tombstones_cursor: number; moves_cursor: number; bulletins_cursor: number; enabled: number;
   trust: TrustLevel;
 }
 
@@ -91,24 +92,24 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
   }
 }
 
-export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; tombstones: number; moves: number; errors: string[] }> {
+export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number; errors: string[] }> {
   const peers = await listEnabledPeers(env);
-  let caches = 0, finds = 0, keys = 0, tombstones = 0, moves = 0;
+  let caches = 0, finds = 0, keys = 0, tombstones = 0, moves = 0, bulletins = 0;
   const errors: string[] = [];
   for (const p of peers) {
     try {
       const r = await syncPeer(env, p);
-      caches += r.caches; finds += r.finds; keys += r.keys; tombstones += r.tombstones; moves += r.moves;
+      caches += r.caches; finds += r.finds; keys += r.keys; tombstones += r.tombstones; moves += r.moves; bulletins += r.bulletins;
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
       await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?").bind(msg, now(), p.url).run();
     }
   }
-  return { peers: peers.length, caches, finds, keys, tombstones, moves, errors };
+  return { peers: peers.length, caches, finds, keys, tombstones, moves, bulletins, errors };
 }
 
-async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number }> {
+async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
   const base = p.url.replace(/\/+$/, "");
   const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; publicKeys?: FedPublicKey[]; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
@@ -126,7 +127,7 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   }
 
   // never mirror ourselves
-  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0 };
+  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
 
   // T4.2 anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
   // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
@@ -153,7 +154,7 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
        mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
   ).bind(now(), now(), total, JSON.stringify(counts), p.url).run();
-  return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0, moves: counts["account-move"] ?? 0 };
+  return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0, moves: counts["account-move"] ?? 0, bulletins: counts.bulletin ?? 0 };
 }
 
 /**
@@ -174,7 +175,7 @@ export function negotiateFeeds<T extends { capability: string }>(
 /** Which feed each sync def consumes: its endpoint, advertised capability, peer cursor, and applier. */
 interface SyncDef {
   type: string; path: string; capability: string;
-  cursorCol: "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor";
+  cursorCol: "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor" | "bulletins_cursor";
   apply(env: Env, rec: FeedRecord, origin: string): Promise<void>;
 }
 const SYNC_DEFS: SyncDef[] = [
@@ -183,6 +184,7 @@ const SYNC_DEFS: SyncDef[] = [
   { type: "find", path: "/federation/finds", capability: "finds", cursorCol: "finds_cursor", apply: upsertRemoteFind },
   { type: "key", path: "/federation/keys", capability: "keys", cursorCol: "keys_cursor", apply: upsertRemoteKey },
   { type: "account-move", path: "/federation/account-moves", capability: "moves", cursorCol: "moves_cursor", apply: upsertRemoteAccountMove },
+  { type: "bulletin", path: "/federation/bulletins", capability: "bulletins", cursorCol: "bulletins_cursor", apply: (env, rec, origin) => upsertRemoteBulletin(env, rec, origin) },
 ];
 
 /**

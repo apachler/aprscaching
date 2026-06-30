@@ -7,6 +7,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import type { FeedServeDef } from "./federation.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_ATTEMPTS = 5;
@@ -67,6 +68,50 @@ export async function handleBbsBulletins(req: Request, env: Env): Promise<Respon
 export async function handleBbsRead(req: Request, env: Env, id: number): Promise<Response> {
   await env.DB.prepare("UPDATE bbs_messages SET read_at=? WHERE id=? AND read_at IS NULL").bind(now(), id).run();
   return json({ ok: true });
+}
+
+/** GET /api/bbs/sent?from= — personal mail YOU sent, with its store-and-forward delivery state. */
+export async function handleBbsSent(req: Request, env: Env): Promise<Response> {
+  const from = new URL(req.url).searchParams.get("from");
+  if (!from) return json({ error: "from (callsign) required" }, { status: 400 });
+  const msgs = (await env.DB.prepare(
+    `SELECT m.*, d.status AS delivery, d.line_no AS lineNo, d.attempts, d.acked_at AS ackedAt
+       FROM bbs_messages m LEFT JOIN bbs_delivery d ON d.msg_id=m.id
+      WHERE m.type='P' AND m.from_call=? AND m.origin='local' ORDER BY m.posted_at DESC LIMIT 200`,
+  ).bind(from.toUpperCase()).all()).results;
+  return json({ messages: msgs.map((m: any) => ({ ...row(m), delivery: m.delivery, lineNo: m.lineNo, attempts: m.attempts, ackedAt: m.ackedAt })) });
+}
+
+// ---------------------------------------------------------------- bulletin federation (BBS #1)
+interface BulletinRow { id: number; bid: string | null; from_call: string; to_call: string; subject: string | null; body: string; posted_at: number; expires_at: number | null }
+
+/**
+ * Serve this instance's LOCAL bulletins as a signed federation feed (mirrors of peers' bulletins
+ * carry origin != 'local' and are filtered out, so a bulletin never loops back to its source). BID is
+ * the stable cross-instance id; the consumer dedups on it.
+ */
+export const BULLETIN_FEED: FeedServeDef<BulletinRow> = {
+  type: "bulletin",
+  selectRows: async (env, since, limit) => (await env.DB.prepare(
+    `SELECT id, bid, from_call, to_call, subject, body, posted_at, expires_at FROM bbs_messages
+       WHERE type='B' AND origin='local' AND (expires_at IS NULL OR expires_at > ?) AND posted_at >= ?
+       ORDER BY posted_at, id LIMIT ?`,
+  ).bind(now(), since, limit).all<BulletinRow>()).results,
+  recordOf: (r, instance) => ({
+    id: r.bid ?? `${r.id}_${instance}`,
+    cursor: r.posted_at,
+    data: { fromCall: r.from_call, toCall: r.to_call, subject: r.subject, body: r.body, postedAt: r.posted_at, expiresAt: r.expires_at },
+  }),
+};
+
+/** Mirror a peer's bulletin into the local base (BID-deduped, never re-served — origin = the peer). */
+export async function upsertRemoteBulletin(env: Env, rec: { id: string; data: Record<string, unknown> }, origin: string): Promise<void> {
+  const d = rec.data as { fromCall?: string; toCall?: string; subject?: string | null; body?: string; postedAt?: number; expiresAt?: number | null };
+  if (!d.fromCall || !d.toCall || !d.body || !rec.id) return;
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
+     VALUES (?, 'B', ?,?,?,?,?,?,?)`,
+  ).bind(rec.id, String(d.fromCall).toUpperCase(), String(d.toCall).toUpperCase(), d.subject ?? null, String(d.body), d.postedAt ?? now(), d.expiresAt ?? null, origin).run();
 }
 
 // ---------------------------------------------------------------- store-and-forward delivery

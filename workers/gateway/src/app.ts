@@ -18,7 +18,7 @@ import { handleWxSubmit, handleWxKey, handleWxTx } from "./wx.js";
 import { handleMyStations, handleMyStation, handleStationWxKey, handleStationToCache, handleMeCache } from "./stations_mine.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
-import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
+import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry, serveFeed } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
@@ -42,7 +42,7 @@ import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
-import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead } from "./bbs.js";
+import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, BULLETIN_FEED } from "./bbs.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -150,6 +150,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/.well-known/aprscaching" && m === "GET") return handleWellKnown(req, env);
   if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
   if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
+  if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED); // BBS #1
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // T1.1 operator promote/block
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
@@ -249,6 +250,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // BBS store-and-forward (messages + bulletins)
   if (p === "/api/bbs/messages" && m === "POST") return handleBbsPost(req, env);
   if (p === "/api/bbs/messages" && m === "GET") return handleBbsList(req, env);
+  if (p === "/api/bbs/sent" && m === "GET") return handleBbsSent(req, env);
   if (p === "/api/bbs/bulletins" && m === "GET") return handleBbsBulletins(req, env);
   const bbsReadMatch = /^\/api\/bbs\/messages\/(\d+)\/read$/.exec(p);
   if (bbsReadMatch && m === "POST") return handleBbsRead(req, env, Number(bbsReadMatch[1]));

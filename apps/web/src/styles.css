@@ -596,6 +596,12 @@ button.link:hover { text-decoration: underline; }
 .serial-wx .row { align-items: center; gap: 10px; }
 .serial-live { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px; border: 1px solid var(--hair);
   border-radius: 8px; background: color-mix(in oklch, var(--surface) 60%, transparent); font-size: 12.5px; }
+/* BBS inbox unread + subject */
+.bbs-unread { cursor: pointer; }
+.bbs-unread > strong { font-weight: 700; }
+.bbs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: middle; }
+.bbs-subj { color: var(--ink-2); font-style: italic; }
+
 .rigctl { display: grid; gap: 8px; }
 .rigctl .row { align-items: center; gap: 10px; }
 .rigctl input, .rigctl select { min-height: 32px; }
