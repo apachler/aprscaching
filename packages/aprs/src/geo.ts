@@ -25,6 +25,34 @@ export function destinationPoint(lat: number, lon: number, bearingDeg: number, d
   return { lat: (φ2 * 180) / Math.PI, lon: (((λ2 * 180) / Math.PI + 540) % 360) - 180 };
 }
 
+/**
+ * `steps + 1` points along the great-circle (shortest-path) arc A→B, as [lon,lat] pairs (GeoJSON
+ * order). Spherical interpolation (slerp) so the path bends correctly on a Mercator map; endpoints
+ * are exact. `steps` defaults to 64.
+ */
+export function greatCircleArc(
+  aLat: number, aLon: number, bLat: number, bLon: number, steps = 64,
+): [number, number][] {
+  const φ1 = (aLat * Math.PI) / 180, λ1 = (aLon * Math.PI) / 180;
+  const φ2 = (bLat * Math.PI) / 180, λ2 = (bLon * Math.PI) / 180;
+  const d = haversineMeters(aLat, aLon, bLat, bLon) / 6371000; // angular distance (rad)
+  if (d === 0) return [[aLon, aLat], [bLon, bLat]];
+  const out: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    const A = Math.sin((1 - f) * d) / Math.sin(d);
+    const B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
+    const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
+    const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+    const φ = Math.atan2(z, Math.sqrt(x * x + y * y));
+    const λ = Math.atan2(y, x);
+    out.push([(λ * 180) / Math.PI, (φ * 180) / Math.PI]);
+  }
+  out[0] = [aLon, aLat]; out[out.length - 1] = [bLon, bLat]; // pin endpoints exactly (no FP drift)
+  return out;
+}
+
 export function toMaidenhead(lat: number, lon: number): string {
   lon += 180; lat += 90;
   const A = "ABCDEFGHIJKLMNOPQRSTUVWX";

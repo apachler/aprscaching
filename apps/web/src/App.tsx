@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount,
+  listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount, getProfile,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot, type MapViewState,
 } from "./api.js";
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
@@ -446,6 +446,18 @@ export function App() {
     try { setDetail((await getCache(selectedId, callsignRef.current)).cache); } catch (e) { console.error(e); }
   }, [selectedId]);
 
+  // home QTH (from your profile locator) — feeds the MapTools bearing arc to the selected cache
+  const [home, setHome] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    if (!callsign) { setHome(null); return; }
+    let live = true;
+    getProfile(callsign)
+      .then((p) => { if (live) setHome(p.profile?.homeGrid ? gridCenter(p.profile.homeGrid) : null); })
+      .catch(() => { if (live) setHome(null); });
+    return () => { live = false; };
+  }, [callsign]);
+  const target: [number, number] | null = detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
+
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
   const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || showSiteMap || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
@@ -577,7 +589,7 @@ export function App() {
               <div><div className="crl">MGRS</div><div className="crv">{toMgrs(center[0], center[1], 4) || "—"}</div></div>
             </div>
           )}
-          {ready && <MapTools map={map.current} />}
+          {ready && <MapTools map={map.current} home={home} target={target} />}
           {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
           {nearPrompt && mode === "view" && (
             <div className="geo-banner">

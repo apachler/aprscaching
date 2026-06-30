@@ -4,6 +4,7 @@ export * from "./qconstruct.js";
 export * from "./position.js";
 export * from "./geo.js";
 export * from "./mgrs.js";
+export * from "./sun.js";
 export * from "./symbols.js";
 export * from "./compressed.js";
 export * from "./mice.js";

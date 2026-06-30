@@ -448,6 +448,7 @@ button.link:hover { text-decoration: underline; }
 .maptools-bar button:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); }
 .maptools-bar button.on { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--ink); }
 .maptools-bar button:focus-visible { outline: 2px solid var(--heading); outline-offset: -2px; }
+.maptools-bar button:disabled { opacity: 0.4; cursor: not-allowed; background: none; }
 .maptools-legend { background: color-mix(in oklch, var(--surface) 88%, transparent); border: 1px solid var(--hair);
   border-radius: 8px; padding: 5px 9px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2);
   display: flex; gap: 8px; align-items: center; backdrop-filter: blur(6px); }
