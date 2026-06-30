@@ -219,6 +219,13 @@ export function setStages(cacheId: number, ownerCall: string, stages: Array<Part
 /** Absolute URL for a media clue path returned by the API. */
 export const mediaUrl = (path: string): string => API_BASE + path;
 
+// ---- per-cache share funnel (docs/11 M4): print a QR on your station so visitors can find it ----
+/** The public deep-link a QR encodes (opens the cache in the app — the current origin). */
+export const cacheShareUrl = (code: string): string =>
+  `${typeof window !== "undefined" ? window.location.origin : ""}/?cache=${encodeURIComponent(code)}`;
+/** An SVG QR for the cache's share link, served by the gateway embed surface. */
+export const cacheQrUrl = (code: string, size = 256): string => `${API_BASE}/embed/qr.svg?cache=${encodeURIComponent(code)}&size=${size}`;
+
 // ---- BBS store-and-forward ----
 import type { BbsMessage } from "@aprsweb/shared";
 export type { BbsMessage };

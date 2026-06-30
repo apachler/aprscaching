@@ -486,6 +486,12 @@ button.link:hover { text-decoration: underline; }
 .iconbtn:hover { color: var(--ink); }
 .iconbtn:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
 
+/* share funnel: copy-link + printable QR on the cache detail (docs/11 M4) */
+.sharecache { margin: 10px 0; }
+.qrbox { display: flex; gap: 12px; align-items: center; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.qrbox img { background: #fff; padding: 6px; border-radius: 6px; flex: none; }
+.qrbox .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
 /* finds-over-time sparkline on the cache detail (docs/11) */
 .findstrend { margin: 10px 0; }
 .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 4px; }

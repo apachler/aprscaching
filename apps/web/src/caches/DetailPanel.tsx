@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { toggleFavorite, getCacheLogs, type CacheDetail, type Spot } from "../api.js";
+import { toggleFavorite, getCacheLogs, cacheShareUrl, cacheQrUrl, type CacheDetail, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";
 import { typeMeta } from "../cacheTypes.js";
 import { useFmt } from "../format.js";
@@ -89,6 +89,9 @@ export function DetailPanel(props: {
       {c.source !== "native" && c.sourceUrl && (
         <p className="imported">⤓ Imported from <strong>{c.sourceName ?? c.source}</strong> · <a href={c.sourceUrl} target="_blank" rel="noreferrer noopener">view source ↗</a></p>
       )}
+
+      <ShareCache code={c.code} title={c.title} onToast={toast} />
+
       <p><strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}
         {c.status !== "active" && <> · <em>{c.status}</em></>}
         {c.needsMaintenance && <span className="warn"> · ⚠ needs maintenance</span>}</p>
@@ -119,6 +122,30 @@ export function DetailPanel(props: {
       {[...c.logs, ...moreLogs].map((l) => <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />)}
       <LoadMore hasMore={logsMore} loading={logsLoading} onClick={loadMoreLogs} />
     </Panel>
+  );
+}
+
+/** Share funnel (docs/11 M4): copy the deep-link or print a QR for visitors to scan at the site. */
+function ShareCache(props: { code: string; title: string; onToast: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const url = cacheShareUrl(props.code);
+  const qr = cacheQrUrl(props.code, 256);
+  return (
+    <div className="sharecache">
+      <div className="row gap-2">
+        <button onClick={() => { navigator.clipboard?.writeText(url); props.onToast("Share link copied"); }}><Icon name="share" size={15} /> Copy link</button>
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}>▦ QR</button>
+      </div>
+      {open && (
+        <div className="qrbox">
+          <img src={qr} width={180} height={180} alt={`QR linking to ${props.code}`} />
+          <div className="col">
+            <a href={qr} download={`aprscache-${props.code}.svg`}>download SVG</a>
+            <p className="muted fine">Print it at your station, shack or the cache site so visitors can scan and find <span className="mono">{props.code}</span>.</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
