@@ -486,6 +486,11 @@ button.link:hover { text-decoration: underline; }
 .iconbtn:hover { color: var(--ink); }
 .iconbtn:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
 
+/* finds-over-time sparkline on the cache detail (docs/11) */
+.findstrend { margin: 10px 0; }
+.sparkline { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 4px; }
+.spark-bar { flex: 1; min-width: 2px; background: var(--accent, #7BB912); border-radius: 1px 1px 0 0; opacity: .85; }
+
 /* keyset "Load more" control (docs/11) — centered, recedes; the list bottoms out cleanly when hidden */
 .loadmore { display: flex; justify-content: center; padding: 8px 0 2px; }
 .loadmore button { min-height: 36px; }

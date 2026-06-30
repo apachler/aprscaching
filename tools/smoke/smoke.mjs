@@ -189,6 +189,7 @@ const detail = await call("GET", `/api/caches/${id}`);
 ok("detail: 2 verified finds", detail.data?.cache?.finds === 2, JSON.stringify(detail.data?.cache?.finds));
 ok("detail: logbook has 3 entries", (detail.data?.cache?.logs ?? []).length === 3,
   `len=${(detail.data?.cache?.logs ?? []).length}`);
+ok("detail: carries a finds-over-time series", Array.isArray(detail.data?.cache?.findsByMonth) && detail.data.cache.findsByMonth.some((m) => m.n > 0), JSON.stringify(detail.data?.cache?.findsByMonth));
 
 // keyset pagination (docs/11): page the logbook 2 at a time and follow the cursor with no overlap
 const lp1 = await call("GET", `/api/caches/${id}/logs?limit=2`);

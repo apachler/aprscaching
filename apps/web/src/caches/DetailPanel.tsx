@@ -99,6 +99,18 @@ export function DetailPanel(props: {
 
       <LogForm cacheId={c.id} cacheCode={c.code} callsign={props.callsign} onLogged={props.onLogged} />
 
+      {c.findsByMonth && c.findsByMonth.some((m) => m.n > 0) && (
+        <div className="findstrend">
+          <span className="ulabel">Finds over time</span>
+          <div className="sparkline" role="img" aria-label="Verified finds per month">
+            {c.findsByMonth.map((m) => {
+              const max = Math.max(...c.findsByMonth!.map((x) => x.n), 1);
+              return <span key={m.month} className="spark-bar" style={{ height: `${Math.max(10, (m.n / max) * 100)}%` }} title={`${m.month}: ${m.n}`} />;
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="row between logbook-h">
         <h4 className="m-0">Logbook</h4>
         <span className="ulabel">{c.finds} finds</span>

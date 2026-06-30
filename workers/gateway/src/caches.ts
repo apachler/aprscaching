@@ -7,6 +7,7 @@ import {
 import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
+import { pushAlert } from "./notify.js";
 import { sessionCallsign } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration } from "./corroborate.js";
@@ -150,6 +151,11 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const finds = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ? AND log_type = 'found' AND verified = 1",
   ).bind(id).first<{ n: number }>();
+  // finds-over-time: monthly verified-find counts (last 12 months), oldest→newest for a sparkline
+  const series = (await env.DB.prepare(
+    `SELECT strftime('%Y-%m', ts, 'unixepoch') AS month, COUNT(*) AS n FROM cache_logs
+       WHERE cache_id = ? AND log_type = 'found' AND verified = 1 GROUP BY month ORDER BY month DESC LIMIT 12`,
+  ).bind(id).all<{ month: string; n: number }>()).results.reverse();
   const who = new URL(req.url).searchParams.get("callsign");
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
@@ -159,6 +165,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     hint: row.hint, description: row.description, externalId: row.external_id,
     createdAt: row.created_at, updatedAt: row.updated_at,
     finds: finds?.n ?? 0,
+    findsByMonth: series,
     logs: logs.items.map(toLogEntry),
     logsCursor: logs.nextCursor, logsHasMore: logs.hasMore,
     favorites: fav.favorites, favorited: fav.favorited,
@@ -361,6 +368,21 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   // M4: award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
+
+  // Cache-owner loop (docs/11): tell the owner their cache was found (in-app alert + push), unless
+  // they found it themselves. Reuses the watchlist alert channel.
+  const ownerCall = (cache as { owner_call?: string }).owner_call;
+  if (ownerCall && baseCall(ownerCall) !== baseCall(loggerCall)) {
+    const ownerAcct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
+      .bind(baseCall(ownerCall)).first<{ account_id: string }>();
+    if (ownerAcct?.account_id) {
+      const detail = `${loggerCall} found ${cache.code}${result.verified ? ` · Tier ${result.tier}` : " · unverified"}`;
+      await env.DB.prepare(
+        "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
+      ).bind(ownerAcct.account_id, loggerCall, "cache_found", detail, cacheId, cache.lat ?? null, cache.lon ?? null, now).run();
+      await pushAlert(env, ownerAcct.account_id);
+    }
+  }
 
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
