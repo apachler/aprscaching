@@ -137,3 +137,26 @@ export async function handleStationSeries(req: Request, env: Env, callsign: stri
 
   return json({ callsign: cs, windowSec, wx, motion });
 }
+
+/**
+ * Recent raw frames heard from a station (docs/26 Stage 0.2) — a workbench diagnostic. Reconstructs
+ * the TNC2 line (`src>dst,path:payload`) from the short-lived packets_recent ring. Newest first,
+ * capped; the ring itself is TTL-pruned by the scheduled job, so this is inherently bounded.
+ */
+export async function handleStationPackets(req: Request, env: Env, callsign: string): Promise<Response> {
+  const cs = callsign.toUpperCase();
+  const u = new URL(req.url);
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit")) || 50, 1), 200);
+  const rows = (await env.DB.prepare(
+    `SELECT ts, dst, path, payload, heard_via AS heardVia, port
+       FROM packets_recent WHERE callsign = ? ORDER BY ts DESC LIMIT ?`,
+  ).bind(cs, limit).all()).results as {
+    ts: number; dst: string | null; path: string | null; payload: string | null; heardVia: string | null; port: string | null;
+  }[];
+  const packets = rows.map((r) => {
+    const path = r.path ? `,${r.path}` : "";
+    const tnc2 = `${cs}>${r.dst ?? "APRS"}${path}:${r.payload ?? ""}`;
+    return { ts: r.ts, dst: r.dst, path: r.path, payload: r.payload, heardVia: r.heardVia, port: r.port, tnc2 };
+  });
+  return json({ callsign: cs, count: packets.length, packets });
+}

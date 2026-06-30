@@ -25,6 +25,7 @@ export interface Env {
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)
   FED_AUTO_PROMOTE?: string;         // confirmed-corroboration count to auto-promote an unvetted peer to trusted (T1.1; 0=off)
   TOMBSTONE_TTL_DAYS?: string;       // retention for delete tombstones before GC (F4/T1.3; default 180)
+  PACKETS_TTL_HOURS?: string;        // retention for the workbench raw-packet ring (Stage 0.2; default 24)
   // ---- corroboration hardening + privacy coarsening (F4/T1.2) — all optional ----
   FED_CORROBORATION_SECRET?: string;        // if set, /federation/corroborate requires x-fed-secret (peer allowlist)
   FED_REVEAL_IGATE?: string;                // if set, corroboration responses include the exact IGate (both peers opt in)

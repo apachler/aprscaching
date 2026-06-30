@@ -37,7 +37,7 @@ import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
 import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
-import { handleDecode, handleStations, handleStation, handleStationSeries, handlePorts, handleMessages } from "./workbench.js";
+import { handleDecode, handleStations, handleStation, handleStationSeries, handleStationPackets, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia } from "./stages.js";
@@ -59,6 +59,9 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
 export async function runScheduled(env: Env): Promise<void> {
   const nowS = Math.floor(Date.now() / 1000);
   await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(nowS - 7 * 24 * 3600).run();
+  // raw packet ring (Stage 0.2) is a short-lived workbench diagnostic — prune hard (default 24h)
+  const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
+  await env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(nowS - pktTtl).run();
   // tombstones are tiny + PII-free; retain long enough for every peer to converge (T1.3, default 180d)
   const tombTtl = (Number(env.TOMBSTONE_TTL_DAYS) || 180) * 24 * 3600;
   await env.DB.batch([
@@ -246,6 +249,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   const seriesMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/series$/.exec(p);
   if (seriesMatch && m === "GET") return handleStationSeries(req, env, seriesMatch[1]!);
+  const pktMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/packets$/.exec(p);
+  if (pktMatch && m === "GET") return handleStationPackets(req, env, pktMatch[1]!);
   const stationMatch = /^\/api\/stations\/([A-Za-z0-9-]+)$/.exec(p);
   if (stationMatch && m === "GET") return handleStation(req, env, stationMatch[1]!);
 

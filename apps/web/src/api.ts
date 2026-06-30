@@ -97,6 +97,11 @@ export interface StationSeries { callsign: string; windowSec: number; wx: WxPoin
 export function getStationSeries(callsign: string, windowSec = 86400, signal?: AbortSignal): Promise<StationSeries> {
   return call(`/api/stations/${encodeURIComponent(callsign)}/series?window=${Math.floor(windowSec)}`, { signal });
 }
+export interface RawPacket { ts: number; dst: string | null; path: string | null; payload: string | null; heardVia: string | null; port: string | null; tnc2: string }
+/** Recent raw TNC2 frames heard from a station (docs/26 Stage 0.2) — workbench diagnostic. */
+export function getStationPackets(callsign: string, limit = 50, signal?: AbortSignal): Promise<{ callsign: string; count: number; packets: RawPacket[] }> {
+  return call(`/api/stations/${encodeURIComponent(callsign)}/packets?limit=${Math.floor(limit)}`, { signal });
+}
 import type { StationTrackPoint } from "@aprsweb/shared";
 export type { StationTrackPoint };
 export interface StationTrack { callsign: string; from: number; until: number; count: number; positions: StationTrackPoint[] }

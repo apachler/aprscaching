@@ -71,6 +71,14 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
 
+    // workbench raw packet view (docs/26 Stage 0.2): a short, TTL-pruned ring of raw frames per
+    // station — every heard packet, not only position fixes (status, telemetry, messages too).
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO packets_recent (callsign, ts, dst, path, payload, heard_via, port) VALUES (?,?,?,?,?,?,?)",
+      ).bind(p.src, p.ts, p.dst ?? null, p.path.join(","), p.payload, p.heardVia, p.port),
+    );
+
     const fix = fixOf(p);
     if (!fix) continue;
     positions.push({ src: p.src, lat: fix.lat, lon: fix.lon, symbol: fix.symbol, course: fix.course });

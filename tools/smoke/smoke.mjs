@@ -327,6 +327,12 @@ ok("station series carries the weather series",
   wxSeries.status === 200 && (wxSeries.data?.wx ?? []).some((p) => p.tempC != null),
   JSON.stringify({ wx: wxSeries.data?.wx }));
 
+// raw per-station packet view (docs/26 Stage 0.2) — verbatim TNC2 frames from the TTL ring
+const rawPkts = await call("GET", "/api/stations/OE1MOB-9/packets?limit=10");
+ok("station raw packets reconstruct the TNC2 line",
+  rawPkts.status === 200 && (rawPkts.data?.packets ?? []).some((p) => typeof p.tnc2 === "string" && p.tnc2.startsWith("OE1MOB-9>")),
+  JSON.stringify({ packets: rawPkts.data?.packets }));
+
 // ---- M6: interop (CoT/TAK bridge) + transports + messaging ----
 const msgIngest = await call("POST", "/ingest", {
   packets: [

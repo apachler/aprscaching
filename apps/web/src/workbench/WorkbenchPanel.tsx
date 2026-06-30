@@ -13,6 +13,7 @@ import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
 import { TrackReplay } from "./TrackReplay.js";
 import { StationGraphs } from "./StationGraphs.js";
+import { StationPackets } from "./StationPackets.js";
 import { RigControl } from "./RigControl.js";
 
 /** Workbench — the full APRS toolset, grouped; switch on only what you need. */
@@ -93,6 +94,7 @@ export function WorkbenchPanel(props: {
             </div>
             <TrackReplay map={props.map} callsign={station.callsign} />
             <StationGraphs callsign={station.callsign} />
+            <StationPackets callsign={station.callsign} />
           </div>
         ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
       </Group>
