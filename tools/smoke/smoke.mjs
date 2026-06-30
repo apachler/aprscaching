@@ -526,6 +526,18 @@ ok("thread view returns root + reply oldest-first", thread.data?.threadId === ms
 const bbsT = await call("POST", "/api/bbs/messages", { fromCall: "OE8APR", toCall: "OE3XYZ", type: "T", body: "QTC 1 msg" });
 ok("BBS accepts NTS traffic (type T)", bbsT.data?.type === "T", JSON.stringify(bbsT.data));
 
+// P3: forwarding + hierarchical routing + White Pages
+const fwdDefault = await call("GET", `/api/bbs/route?addr=${encodeURIComponent("W1AW @ W1XYZ.MA.USA.NOAM")}`);
+ok("unmatched address routes to the ip-fed catch-all", fwdDefault.data?.partner?.partner === "ip-fed", JSON.stringify(fwdDefault.data?.partner));
+const addRule = await call("POST", "/api/bbs/forward", { partner: "rf-oe", route: "OE", transport: "rf-fbb" });
+ok("sysop can add a forward rule", addRule.status === 201 && addRule.data?.id > 0, JSON.stringify(addRule.data));
+const fwdOe = await call("GET", `/api/bbs/route?addr=${encodeURIComponent("OE8APR @ OE8XBM.#OE3.OE.EU")}`);
+ok("an OE address routes to the more-specific rf-oe partner", fwdOe.data?.partner?.partner === "rf-oe", JSON.stringify(fwdOe.data?.partner));
+const wpSet = await call("POST", "/api/bbs/wp", { callsign: "OE8APR", homeBbs: "OE8XBM.OE.EU" });
+ok("White Pages stores a home BBS (with its H-route)", wpSet.data?.ok === true && wpSet.data?.homeBbs === "OE8XBM.OE.EU", JSON.stringify(wpSet.data));
+const wpRoute = await call("GET", "/api/bbs/route?to=OE8APR");
+ok("a bare callsign is steered via White Pages then routed", /OE8XBM/.test(wpRoute.data?.addr ?? "") && wpRoute.data?.partner?.partner === "rf-oe", JSON.stringify(wpRoute.data));
+
 const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
 ok("personal mail starts held", (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "held"), JSON.stringify(list1.data?.messages?.[0]));
 

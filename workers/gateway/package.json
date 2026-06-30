@@ -19,6 +19,6 @@
     "migrate": "wrangler d1 migrations apply aprscaching --local",
     "test": "vitest run"
   },
-  "dependencies": { "@aprsweb/aprs": "workspace:*", "@aprsweb/shared": "workspace:*" },
+  "dependencies": { "@aprsweb/aprs": "workspace:*", "@aprsweb/shared": "workspace:*", "@aprsweb/packet": "workspace:*" },
   "devDependencies": { "@cloudflare/workers-types": "^4.20241127.0", "wrangler": "^3.80.0", "typescript": "^5.5.0", "vitest": "^1.6.0" }
 }

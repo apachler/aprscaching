@@ -43,6 +43,7 @@ import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia, handleListCacheMedia, handleAddCacheMedia, handleDeleteCacheMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
 import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, BULLETIN_FEED } from "./bbs.js";
+import { handleBbsRoute, handleWhitePages, handleForwardRules, handleForwardRuleDelete } from "./forward.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -263,6 +264,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (bbsReadMatch && m === "POST") return handleBbsRead(req, env, Number(bbsReadMatch[1]));
   const bbsThreadMatch = /^\/api\/bbs\/thread\/(\d+)$/.exec(p);
   if (bbsThreadMatch && m === "GET") return handleBbsThread(req, env, Number(bbsThreadMatch[1]));
+  // P3 forwarding + hierarchical routing + White Pages
+  if (p === "/api/bbs/route" && m === "GET") return handleBbsRoute(req, env);
+  if (p === "/api/bbs/wp" && (m === "GET" || m === "POST")) return handleWhitePages(req, env);
+  if (p === "/api/bbs/forward" && (m === "GET" || m === "POST")) return handleForwardRules(req, env);
+  const fwdDel = /^\/api\/bbs\/forward\/(\d+)$/.exec(p);
+  if (fwdDel && m === "DELETE") return handleForwardRuleDelete(req, env, Number(fwdDel[1]));
 
   // workbench interop + transports (M6)
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
