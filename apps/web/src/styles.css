@@ -494,6 +494,9 @@ button.link:hover { text-decoration: underline; }
 
 /* browser-direct RF live RX list (docs/16 H1) — cap height, scroll within the workbench group */
 .rf-rx { max-height: 320px; overflow: auto; }
+/* gated transmit block (docs/16 H5) — set apart from RX */
+.tx-block { border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 8px; }
+.tx-block h5 { margin: 8px 0 4px; }
 
 /* finds-over-time sparkline on the cache detail (docs/11) */
 .findstrend { margin: 10px 0; }

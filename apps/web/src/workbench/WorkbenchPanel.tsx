@@ -167,7 +167,7 @@ export function WorkbenchPanel(props: {
       </Group>
 
       <Group title="RF (browser)" status="Web Serial · BLE" defaultOpen={false}>
-        <RfBrowser callsign={props.callsign} />
+        <RfBrowser callsign={props.callsign} verified={props.verified} />
       </Group>
 
       <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={false}>

@@ -10,8 +10,11 @@
  * Trust note (docs/22): a frame heard directly on the operator's own radio has no independent IGate,
  * so the provenance derivation keeps it Tier C — a browser receiver can't self-corroborate to Tier A.
  */
-import { kissFrames, decodeAx25, decodeAprs, type ParsedFrame, type AprsData } from "@aprsweb/aprs";
+import { kissFrames, decodeAx25, decodeAprs, encodeAx25, kissWrap, type ParsedFrame, type AprsData } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
+
+/** A frame to transmit (docs/16 H5). src is the operator's verified callsign+SSID; dst is the TOCALL. */
+export interface TxFrame { src: string; dst: string; path?: string[]; payload: string }
 
 /** Is browser-direct RF available here? (Web Serial — Chromium desktop, secure context.) */
 export const webSerialSupported = (): boolean =>
@@ -64,7 +67,11 @@ function makeFeeder(onFrame: (f: RfFrame) => void): (chunk: Uint8Array) => void 
 }
 
 /** A live RF link; both Web Serial and Web Bluetooth implement it. */
-export interface RfLink { disconnect(): Promise<void> }
+export interface RfLink {
+  disconnect(): Promise<void>;
+  /** Transmit a frame (H5 — gated UI-side on a verified callsign + opt-in). May throw if RX-only. */
+  send(frame: TxFrame): Promise<void>;
+}
 
 /**
  * Web Serial KISS reader. Reassembles KISS frames from the serial stream (split on FEND 0xC0,
@@ -104,6 +111,13 @@ export class WebSerialKiss implements RfLink {
     finally { if (!this.closed) this.onClose?.(err); }
   }
 
+  /** Transmit a frame over the serial port (H5). Throws if the port has no writable stream. */
+  async send(frame: TxFrame): Promise<void> {
+    if (!this.port?.writable) throw new Error("port is not writable");
+    const writer = this.port.writable.getWriter();
+    try { await writer.write(kissWrap(encodeAx25(frame))); } finally { writer.releaseLock(); }
+  }
+
   async disconnect(): Promise<void> {
     this.closed = true;
     try { await this.reader?.cancel(); } catch { /* ignore */ }
@@ -116,6 +130,7 @@ export class WebSerialKiss implements RfLink {
 // ---- H2: BLE-KISS over Web Bluetooth (Mobilinkd TNC4 & friends use the Nordic UART Service) ----
 const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const NUS_RX_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // device → host notifications (KISS bytes)
+const NUS_TX_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";  // host → device writes (TX, H5)
 
 /** Is browser-direct RF available over Bluetooth? (Web Bluetooth — Chromium, secure context.) */
 export const webBluetoothSupported = (): boolean =>
@@ -128,6 +143,7 @@ export const webBluetoothSupported = (): boolean =>
 export class WebBluetoothKiss implements RfLink {
   private device: BleDeviceLike | null = null;
   private char: BleCharLike | null = null;
+  private txChar: BleCharLike | null = null;
   private closed = false;
   private feed: (chunk: Uint8Array) => void;
   private readonly onValue = (ev: Event) => {
@@ -147,7 +163,19 @@ export class WebBluetoothKiss implements RfLink {
     this.char = await svc.getCharacteristic(NUS_RX_NOTIFY);
     this.char.addEventListener("characteristicvaluechanged", this.onValue);
     await this.char.startNotifications();
+    try { this.txChar = await svc.getCharacteristic(NUS_TX_WRITE); } catch { this.txChar = null; } // TX optional
     this.closed = false;
+  }
+
+  /** Transmit a frame over BLE (H5). Chunked to 20 bytes for the default ATT MTU. Throws if RX-only. */
+  async send(frame: TxFrame): Promise<void> {
+    if (!this.txChar) throw new Error("this TNC has no writable TX characteristic");
+    const bytes = kissWrap(encodeAx25(frame));
+    for (let i = 0; i < bytes.length; i += 20) {
+      const chunk = bytes.subarray(i, i + 20);
+      if (this.txChar.writeValueWithoutResponse) await this.txChar.writeValueWithoutResponse(chunk);
+      else await this.txChar.writeValue!(chunk);
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -155,7 +183,7 @@ export class WebBluetoothKiss implements RfLink {
     try { this.char?.removeEventListener("characteristicvaluechanged", this.onValue); } catch { /* ignore */ }
     try { await this.char?.stopNotifications(); } catch { /* ignore */ }
     try { this.device?.gatt.disconnect(); } catch { /* ignore */ }
-    this.device = null; this.char = null;
+    this.device = null; this.char = null; this.txChar = null;
     this.onClose?.();
   }
 }
@@ -163,12 +191,14 @@ export class WebBluetoothKiss implements RfLink {
 /** Minimal slices of the Web Serial / Web Bluetooth APIs we use (avoids extra @types deps). */
 interface SerialPortLike {
   readable: ReadableStream<Uint8Array> | null;
+  writable: WritableStream<Uint8Array> | null;
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
 }
 interface BleCharLike {
   startNotifications(): Promise<unknown>; stopNotifications(): Promise<unknown>;
   addEventListener(t: string, fn: (e: Event) => void): void; removeEventListener(t: string, fn: (e: Event) => void): void;
+  writeValueWithoutResponse?(data: Uint8Array): Promise<void>; writeValue?(data: Uint8Array): Promise<void>;
 }
 interface BleGattLike { connect(): Promise<{ getPrimaryService(u: string): Promise<{ getCharacteristic(u: string): Promise<BleCharLike> }> }>; disconnect(): void }
 interface BleDeviceLike { gatt: BleGattLike; addEventListener?(t: string, fn: () => void): void }

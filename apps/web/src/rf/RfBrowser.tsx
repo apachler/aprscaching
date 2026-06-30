@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   WebSerialKiss, WebBluetoothKiss, webSerialSupported, webBluetoothSupported, type RfFrame, type RfLink,
 } from "./kiss.js";
+import { encodeAprsPosition, encodeAprsMessage } from "@aprsweb/aprs";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
@@ -14,12 +15,21 @@ const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-s
  * decode live RF here, no server (docs/16 H1 + H2). Optionally forward to a gateway — signed with
  * your device key for a public gateway (H1.5), or with an ingest secret for self-host. Chromium-only.
  */
-export function RfBrowser(props: { callsign: string }) {
+export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const fmt = useFmt();
   const toast = useToast();
   const serialOk = webSerialSupported();
   const bleOk = webBluetoothSupported();
   const signedIn = props.callsign.length >= 3;
+  const base = props.callsign.toUpperCase().split("-")[0] ?? "";
+
+  // H5 gated TX — OFF by default; only available on a control-verified callsign + explicit opt-in.
+  const [txOn, setTxOn] = useState(false);
+  const [ssid, setSsid] = useState("7");
+  const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
+  const [msg, setMsg] = useState({ to: "", text: "" });
+  const [txBusy, setTxBusy] = useState(false);
+  const txCall = ssid && ssid !== "0" ? `${base}-${ssid}` : base;
 
   const [link, setLink] = useState<"serial" | "ble" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +88,32 @@ export function RfBrowser(props: { callsign: string }) {
     try { localStorage.setItem(FWD_KEY, JSON.stringify(v)); } catch { /* ignore */ }
   }
 
+  // H5 transmit — gated on a verified callsign + opt-in; every send is a deliberate, confirmed action.
+  async function tx(payload: string, what: string) {
+    const l = linkRef.current;
+    if (!l || !props.verified || !txOn) return;
+    setTxBusy(true);
+    try { await l.send({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload }); toast(`Transmitted: ${what}`); }
+    catch (e) { toast(`TX failed: ${(e as Error).message}`); }
+    finally { setTxBusy(false); }
+  }
+  async function beacon() {
+    const lat = Number(bcn.lat), lon = Number(bcn.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) { toast("Enter a valid latitude and longitude"); return; }
+    if (!confirm(`Transmit a position beacon as ${txCall}?`)) return;
+    await tx(encodeAprsPosition(lat, lon, bcn.symbol || "/>", bcn.comment), "position");
+  }
+  async function sendMsg() {
+    if (!msg.to.trim() || !msg.text.trim()) { toast("Enter a recipient and a message"); return; }
+    if (!confirm(`Transmit a message to ${msg.to.toUpperCase()} as ${txCall}?`)) return;
+    await tx(encodeAprsMessage(msg.to, msg.text), `message to ${msg.to.toUpperCase()}`);
+  }
+  function useMyLocation() {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => setBcn((b) => ({ ...b, lat: p.coords.latitude.toFixed(5), lon: p.coords.longitude.toFixed(5) })),
+      () => toast("Couldn't get your location"));
+  }
+
   if (!serialOk && !bleOk) return (
     <p className="muted">Browser-direct RF needs <strong>Web Serial</strong> or <strong>Web Bluetooth</strong> —
       Chromium-based desktop/Android browsers over HTTPS. On other browsers, run the operator-local
@@ -118,6 +154,43 @@ export function RfBrowser(props: { callsign: string }) {
             onBlur={(e) => saveSecret(secretCfg.url, e.target.value)} /></label>
           <p className="muted fine">Stored only in this browser.</p>
         </Advanced>
+      )}
+
+      {link && (
+        <div className="tx-block">
+          <h4>Transmit (H5)</h4>
+          {!props.verified
+            ? <p className="muted">Transmit is for <strong>licensed, control-verified</strong> operators only — verify
+                your callsign in Settings → Account to enable it. (RX is always available; trust is unaffected.)</p>
+            : <>
+                <Row label="Enable transmit" help="You are a licensed operator and are responsible for what you send">
+                  <Switch label="Enable transmit" checked={txOn} onChange={setTxOn} />
+                </Row>
+                {txOn && <>
+                  <Row label="TX callsign">
+                    <span className="mono">{base}-</span>
+                    <input className="field-sm mono" value={ssid} inputMode="numeric" maxLength={2}
+                           onChange={(e) => setSsid(e.target.value.replace(/[^0-9]/g, ""))} aria-label="SSID" />
+                    <span className="muted"> → {txCall}</span>
+                  </Row>
+                  <h5>Beacon position</h5>
+                  <div className="row gap-2">
+                    <input className="mono field-sm" placeholder="lat" value={bcn.lat} onChange={(e) => setBcn((b) => ({ ...b, lat: e.target.value }))} />
+                    <input className="mono field-sm" placeholder="lon" value={bcn.lon} onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))} />
+                    <button onClick={useMyLocation} title="Use my location">📍</button>
+                  </div>
+                  <input placeholder="comment (optional)" maxLength={43} value={bcn.comment} onChange={(e) => setBcn((b) => ({ ...b, comment: e.target.value }))} />
+                  <div className="row end"><button className="primary" onClick={beacon} disabled={txBusy}>Beacon</button></div>
+                  <h5>Message</h5>
+                  <div className="row gap-2">
+                    <input className="mono field-sm" placeholder="to" maxLength={9} value={msg.to} onChange={(e) => setMsg((m) => ({ ...m, to: e.target.value }))} />
+                    <input placeholder="message" maxLength={67} value={msg.text} onChange={(e) => setMsg((m) => ({ ...m, text: e.target.value }))} />
+                  </div>
+                  <div className="row end"><button className="primary" onClick={sendMsg} disabled={txBusy}>Send</button></div>
+                  <p className="muted fine">Each transmit is deliberate. Do not transmit without a valid licence for <span className="mono">{base}</span>.</p>
+                </>}
+              </>}
+        </div>
       )}
 
       <h4>Live RX</h4>
