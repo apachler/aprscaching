@@ -11,6 +11,7 @@ import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } fr
 import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
+import { TrackReplay } from "./TrackReplay.js";
 
 /** Workbench — the full APRS toolset, grouped; switch on only what you need. */
 export function WorkbenchPanel(props: {
@@ -88,6 +89,7 @@ export function WorkbenchPanel(props: {
                 : <span />}
               <button onClick={() => props.onFly(station.lat, station.lon)}>fly to</button>
             </div>
+            <TrackReplay map={props.map} callsign={station.callsign} />
           </div>
         ) : <p className="muted">Tap a station pin on the map to inspect it.</p>}
       </Group>

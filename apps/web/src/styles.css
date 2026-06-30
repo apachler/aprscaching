@@ -451,6 +451,29 @@ button.link:hover { text-decoration: underline; }
 .maptools-bar button.on { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--ink); }
 .maptools-bar button:focus-visible { outline: 2px solid var(--heading); outline-offset: -2px; }
 .maptools-bar button:disabled { opacity: 0.4; cursor: not-allowed; background: none; }
+/* ---- track history + time-replay (docs/11 M3) ---- */
+.trackreplay { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.tr-head { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.tr-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tr-controls .seg { display: flex; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+.tr-controls .seg button { min-height: 32px; padding: 0 10px; border: none; background: none; color: var(--ink-2); font-weight: 600; font-size: 12px; cursor: pointer; }
+.tr-controls .seg button + button { border-left: 1px solid var(--hair); }
+.tr-controls .seg button.on { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--ink); }
+.tr-controls input[type="date"] { min-height: 32px; }
+.tr-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-2); }
+.tr-legend { display: inline-flex; align-items: center; gap: 5px; }
+.tr-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-left: 6px; }
+.tr-legend i.rf, .tr-via.rf { color: #36b36b; } .tr-legend i.rf { background: #36b36b; }
+.tr-legend i.app, .tr-via.app { color: #5b9dff; } .tr-legend i.app { background: #5b9dff; }
+.tr-legend i.is, .tr-via.is { color: #8aa0b4; } .tr-legend i.is { background: #8aa0b4; }
+.tr-player { display: flex; align-items: center; gap: 8px; }
+.tr-player input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.tr-play { min-width: 38px; min-height: 34px; border: 1px solid var(--hair); border-radius: 8px; background: none; color: var(--ink); cursor: pointer; }
+.tr-now { font-size: 12px; color: var(--ink-2); }
+.tr-via { font-weight: 700; }
+.tr-err { font-size: 12.5px; color: var(--bad); }
+.tr-empty { font-size: 12.5px; }
+
 .maptools-legend { background: color-mix(in oklch, var(--surface) 88%, transparent); border: 1px solid var(--hair);
   border-radius: 8px; padding: 5px 9px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2);
   display: flex; gap: 8px; align-items: center; backdrop-filter: blur(6px); }

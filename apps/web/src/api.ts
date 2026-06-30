@@ -90,6 +90,13 @@ export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }>
 export function getStation(callsign: string): Promise<{ station: StationDetail }> {
   return call(`/api/stations/${encodeURIComponent(callsign)}`);
 }
+import type { StationTrackPoint } from "@aprsweb/shared";
+export type { StationTrackPoint };
+export interface StationTrack { callsign: string; from: number; until: number; count: number; positions: StationTrackPoint[] }
+/** Date-windowed position history (docs/11 M3) via the public read API — free, rate-limited. */
+export function getStationTrack(callsign: string, fromSec: number, toSec: number, signal?: AbortSignal): Promise<StationTrack> {
+  return call(`/api/v1/station/${encodeURIComponent(callsign)}/track?from=${Math.floor(fromSec)}&to=${Math.floor(toSec)}`, { signal });
+}
 export function decodePacket(raw: string): Promise<DecodedPacket> {
   return call(`/api/decode`, { method: "POST", body: JSON.stringify({ raw }) });
 }
