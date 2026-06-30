@@ -73,6 +73,10 @@ export interface Env {
   VAPID_PRIVATE?: string;   // VAPID private key 'd' (base64url)
   VAPID_SUBJECT?: string;   // contact for the push service, e.g. "mailto:admin@aprscaching.net"
 
+  // ---- supporter recognition (docs/12 M4) — donation links surfaced on /support; recognition only ----
+  SUPPORT_LIBERAPAY?: string; SUPPORT_KOFI?: string; SUPPORT_PATREON?: string;
+  SUPPORT_GITHUB?: string; SUPPORT_OPENCOLLECTIVE?: string;
+
   // ---- AGPL §13 source link (ADR-3) — the running instance's published source ----
   SOURCE_REPO?: string;     // repo URL; absent => upstream default. Self-hosters who MODIFY code MUST set this to their fork.
   SOURCE_COMMIT?: string;   // commit (or tag) the instance is running; host-resolved at build/start

@@ -19,6 +19,7 @@ import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./ca
 import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
+import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js";
 import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
 import { handleSpots } from "./spots.js";
@@ -79,6 +80,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // AGPL §13 source link (ADR-3) — the source this instance is running
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
   if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
+
+  // supporter recognition + public transparency ledger (docs/12 M4) — recognition only, gates nothing
+  if (p === "/support" && m === "GET") return handleSupportPage(req, env);
+  if (p === "/api/support" && m === "GET") return handleSupport(req, env);
+  if (p === "/api/support/prefs" && (m === "GET" || m === "POST")) return handleSupportPrefs(req, env);
+  if (p === "/api/support/confirm" && m === "POST") return handleSupportConfirm(req, env);
 
   // site map + RSS feeds — machine-readable map of the app + feeds for crawlers/readers/tooling
   if (p === "/sitemap.xml" && m === "GET") return handleSitemapXml(req, env);

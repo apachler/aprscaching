@@ -602,5 +602,15 @@ ok("corroborator board ranks the gating IGate", (board.data?.corroborators ?? []
 const igProf = await call("GET", "/api/profile/OE8XXX");
 ok("an operator's profile shows its Infrastructure corroborations", (igProf.data?.corroborations ?? 0) >= 1, JSON.stringify(igProf.data?.corroborations));
 
+// supporter recognition + public ledger (docs/12 M4) — recognition only, gates nothing
+ok("confirm a donation (ingest secret) marks supporter + ledgers it", (await call("POST", "/api/support/confirm", { callsign: "OE9PROF", amountCents: 500, bucket: "hosting", source: "manual" })).data?.supporter === "OE9PROF");
+ok("the supporter flag shows on the profile (recognition)", (await call("GET", "/api/profile/OE9PROF")).data?.supporter === true);
+const support = await call("GET", "/api/support");
+ok("/api/support exposes the public ledger summary", support.data?.ledger?.totalInCents >= 500 && support.data?.supporters?.includes("OE9PROF"), JSON.stringify({ in: support.data?.ledger?.totalInCents }));
+ok("support prefs require a session (401)", (await fetch(`${BASE}/api/support/prefs`)).status === 401);
+ok("hide-nag toggles for the session", (await (await fetch(`${BASE}/api/support/prefs`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ hideNag: true }) })).json()).hideNag === true);
+const supPage = await text("/support");
+ok("/support renders a public HTML transparency page", supPage.status === 200 && /text\/html/.test(supPage.ct) && /Support aprscaching/.test(supPage.body));
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

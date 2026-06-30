@@ -201,6 +201,7 @@ export interface ProfileCard {
 }
 export interface Profile {
   callsign: string; accountVerified: boolean;
+  supporter?: boolean;  // recognition badge (docs/12); never affects functionality
   finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
   corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify (docs/13)
   byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];

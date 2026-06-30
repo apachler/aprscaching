@@ -10,6 +10,7 @@ import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.
 import { ProfileEditor } from "../profile/ProfileEditor.js";
 import { WeatherStation } from "../profile/WeatherStation.js";
 import { MyStations } from "../profile/MyStations.js";
+import { SupportSettings } from "./SupportSettings.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
@@ -138,6 +139,12 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
             </div>
             {gdpr && <p className="muted mt-2">{gdpr}</p>}
           </>)}
+        </Group>
+      )}
+
+      {match("support donate donation supporter sponsor ledger transparency liberapay kofi patreon contribute") && (
+        <Group title="Support the project" status="♥" defaultOpen={false}>
+          <SupportSettings signedIn={props.session.signedIn} />
         </Group>
       )}
 

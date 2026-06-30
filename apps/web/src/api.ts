@@ -186,6 +186,25 @@ export function becomeACache(opts: { title?: string } = {}): Promise<{ cache: Ca
   return call(`/api/me/cache`, { method: "POST", body: JSON.stringify(opts) });
 }
 
+// ---- supporter recognition + public ledger (docs/12 M4) — recognition only, gates nothing ----
+export interface SupportLedger {
+  currency: string; totalInCents: number; totalOutCents: number; balanceCents: number;
+  buckets: Record<string, { inCents: number; outCents: number }>;
+  months: { month: string; inCents: number; outCents: number }[];
+}
+export interface SupportInfo {
+  model: string; donationLinks: { label: string; url: string }[];
+  ledger: SupportLedger; supporters: string[]; supporterCount: number;
+}
+export interface SupportPrefs { supporter: boolean; hideNag: boolean }
+export function getSupport(): Promise<SupportInfo> { return call(`/api/support`); }
+export function getSupportPrefs(): Promise<SupportPrefs> { return call(`/api/support/prefs`); }
+export function setSupportPrefs(hideNag: boolean): Promise<SupportPrefs> {
+  return call(`/api/support/prefs`, { method: "POST", body: JSON.stringify({ hideNag }) });
+}
+/** The public transparency ledger page (server-rendered on the gateway). */
+export const supportUrl = `${API_BASE}/support`;
+
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
