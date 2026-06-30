@@ -1,8 +1,9 @@
 /**
- * sitemap.ts — machine-readable map of the app, generated from the shared SURFACES manifest
- * (packages/shared). One source of truth feeds the in-app Site map page, crawlers, and any dynamic
- * tooling (e.g. the teaser tour).
+ * sitemap.ts — machine- and human-readable map of the app, generated from the shared SURFACES
+ * manifest (packages/shared). One source of truth feeds the standalone /sitemap page, crawlers, and
+ * any dynamic tooling (e.g. the teaser tour).
  *
+ *   GET /sitemap         human-readable site map page (linked from the landing footer)
  *   GET /sitemap.xml     XML sitemap of public, linkable surfaces (deep-linked via ?view=)
  *   GET /api/sitemap     JSON: the full surface manifest + feed catalogue (for tooling)
  *   GET /robots.txt      allow-all + a Sitemap: pointer

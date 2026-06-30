@@ -39,7 +39,6 @@ import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
-import { SiteMapPanel } from "./SiteMapPanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
 import { MailPanel } from "./live/MailPanel.js";
 
@@ -109,7 +108,6 @@ export function App() {
   useEffect(() => { spotFiltersRef.current = spotFilters; }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
-  const [showSiteMap, setShowSiteMap] = useState(false);
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
@@ -136,7 +134,7 @@ export function App() {
   const closeAll = useCallback(() => {
     setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
     setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
-    setShowFilter(false); setShowSiteMap(false);
+    setShowFilter(false);
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
@@ -147,7 +145,7 @@ export function App() {
       map: () => {}, nearby: () => setShowNearby(true), filter: () => setShowFilter(true),
       hide: () => startHide(), activity: () => setShowActivity(true), ranks: () => setShowBoard(true),
       workbench: () => setShowWB(true), bbs: () => setShowMail(true), profile: () => setShowProfile(true),
-      settings: () => setShowSettings(true), sitemap: () => setShowSiteMap(true),
+      settings: () => setShowSettings(true),
     };
     openOnly(() => opener[key]?.());
   }, [openOnly]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -462,7 +460,7 @@ export function App() {
   const target: [number, number] | null = detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || showSiteMap || mode === "hide";
+  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
     const t = setTimeout(() => map.current?.resize(), 60);
@@ -525,8 +523,8 @@ export function App() {
       </>
     ) : (
     <div className="app">
-      <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => (session.signedIn ? setShowSettings(true) : setShowSignIn(true)))} mode={mode}
-              onHide={startHide} onCancel={cancelHide} count={shown.length} queued={queued}
+      <TopBar callsign={callsign} verified={verified} onAccount={() => openOnly(() => (session.signedIn ? setShowSettings(true) : setShowSignIn(true)))}
+              onHide={startHide} count={shown.length} queued={queued}
               onFilters={() => openOnly(() => setShowFilter(true))}
               filtered={filters.types.length > 0 || filters.q.length > 0}
               q={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} onSearchSubmit={runSearch}
@@ -569,11 +567,7 @@ export function App() {
                         onWorkbench={() => openOnly(() => setShowWB(true))}
                         onMail={() => openOnly(() => setShowMail(true))}
                         onSettings={() => openOnly(() => setShowSettings(true))}
-                        onSiteMap={() => openOnly(() => setShowSiteMap(true))}
                         onClose={() => setShowProfile(false)} />
-        )}
-        {showSiteMap && mode === "view" && (
-          <SiteMapPanel callsign={callsign} onNavigate={navigate} onClose={() => setShowSiteMap(false)} />
         )}
         {showBoard && mode === "view" && (
           <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
@@ -664,21 +658,21 @@ export function App() {
 
 // ----------------------------------------------------------------- top bar (cacher destinations)
 function TopBar(props: {
-  callsign: string; verified: boolean; onAccount: () => void; mode: Mode;
-  onHide: () => void; onCancel: () => void; count: number; queued: number;
+  callsign: string; verified: boolean; onAccount: () => void;
+  onHide: () => void; count: number; queued: number;
   onFilters: () => void; filtered: boolean;
   q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
   onPickCache: (hit: SearchHitCache) => void; onPickStation: (hit: SearchHitStation) => void;
   onNearby: () => void; onActivity: () => void; onProfile: () => void;
 }) {
+  // The header is identical in every mode — switching into "hide" must not reshuffle the chrome
+  // (cancelling a hide lives in the Hide panel itself, not the top bar).
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      {props.mode === "view" && <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type" aria-label="Filter caches by type"><Icon name="filter" size={16} /></button>}
-      {props.mode === "view" && (
-        <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
-                       onPickCache={props.onPickCache} onPickStation={props.onPickStation} />
-      )}
+      <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type" aria-label="Filter caches by type"><Icon name="filter" size={16} /></button>
+      <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
+                     onPickCache={props.onPickCache} onPickStation={props.onPickStation} />
       <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
       {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
       <span className="spacer" />
@@ -687,16 +681,12 @@ function TopBar(props: {
           ? <><span className="mono">{props.callsign}</span>{props.verified ? <Icon name="check" size={14} /> : <span className="idchip-x">unverified</span>}</>
           : <><Icon name="profile" size={15} /> Sign in</>}
       </button>
-      {props.mode === "view"
-        ? <>
-            <span className="nav-desktop">
-              <button onClick={props.onNearby}>Nearby</button>
-              <button onClick={props.onActivity}>Activity</button>
-              <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
-            </span>
-            <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>
-          </>
-        : <button onClick={props.onCancel}>Cancel</button>}
+      <span className="nav-desktop">
+        <button onClick={props.onNearby}>Nearby</button>
+        <button onClick={props.onActivity}>Activity</button>
+        <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
+      </span>
+      <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>
     </header>
   );
 }

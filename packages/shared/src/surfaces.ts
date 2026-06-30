@@ -1,6 +1,6 @@
 /**
  * surfaces.ts — the canonical map of the app's pages/tools (the single source of truth for the
- * in-app Site map page, the gateway's `/sitemap.xml` + `/api/sitemap`, and any dynamic tooling
+ * gateway's standalone `/sitemap` page, `/sitemap.xml` + `/api/sitemap`, and any dynamic tooling
  * such as the teaser tour). Add a surface here once and every consumer picks it up.
  *
  * The app is a single-page map workbench: most surfaces are overlay panels, not separate documents,
@@ -19,7 +19,7 @@ export interface Surface {
   label: string;
   /** full page title / teaser caption */
   title: string;
-  /** one-line description (Site map row + sitemap.xml comment) */
+  /** one-line description (site map row + sitemap.xml comment) */
   summary: string;
   group: SurfaceGroup;
   /** public = browsable signed-out (Explore); account = needs a callsign/account */
@@ -52,8 +52,8 @@ export const SURFACES: Surface[] = [
     summary: "Your finds, points, badges and identity." },
   { key: "settings", view: "settings", label: "Settings", title: "Settings", group: "Account", access: "account", indexable: false,
     summary: "Units, basemap, notifications and account." },
-  { key: "sitemap", view: "sitemap", label: "Site map", title: "Site map", group: "Account", access: "public", indexable: true,
-    summary: "Every page and tool on aprscaching, in one place." },
+  // NB: the site map is intentionally NOT a surface here — it is a standalone page (gateway /sitemap,
+  // linked from the landing footer), not an in-app panel. It lists these surfaces; it isn't one.
 ];
 
 export const SURFACE_GROUPS: SurfaceGroup[] = ["Caching", "Community", "Workbench", "Account"];
@@ -61,7 +61,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = ["Caching", "Community", "Workbenc
 export const surfaceByKey = (key: string): Surface | null => SURFACES.find((s) => s.key === key) ?? null;
 export const surfaceByView = (view: string): Surface | null => SURFACES.find((s) => s.view === view) ?? null;
 
-/** Platform RSS feeds — advertised in /api/sitemap and the in-app Site map page. */
+/** Platform RSS feeds — advertised in /api/sitemap and the /sitemap page. */
 export interface FeedDef { key: string; path: string; title: string; summary: string }
 
 export const FEEDS: FeedDef[] = [

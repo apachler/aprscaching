@@ -38,7 +38,8 @@ describe("sitemap (manifest-driven)", () => {
     expect(data.protocol).toBe("aprscaching-sitemap/1");
     expect(data.app).toBe("https://app.example");
     expect(data.surfaces).toHaveLength(SURFACES.length);
-    expect(data.surfaces.find((s: any) => s.key === "sitemap").url).toBe("https://app.example/?view=sitemap");
+    expect(data.surfaces.find((s: any) => s.key === "settings").url).toBe("https://app.example/?view=settings");
+    expect(data.surfaces.find((s: any) => s.key === "sitemap")).toBeUndefined(); // the site map is a page, not a surface
     expect(data.feeds).toHaveLength(FEEDS.length);
     for (const f of data.feeds) expect(f.url).toBe(`https://app.example${f.path}`);
   });
