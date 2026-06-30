@@ -61,6 +61,15 @@ if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: Number(env.MESH_PORT ?? 1883) }, enqueue).start();
   console.log("[mesh] enabled");
 }
+// AGWPE TNC (docs/27 B.1) — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
+if (env.AGWPE_HOST) {
+  const { AgwpeTnc } = await import("./agwpe.js");
+  new AgwpeTnc(
+    { host: env.AGWPE_HOST, port: Number(env.AGWPE_PORT ?? 8000), radioPort: Number(env.AGWPE_RADIO_PORT ?? 0) },
+    { onPacket: enqueue },
+  ).start();
+  console.log("[agwpe] enabled");
+}
 // AXUDP tunnel (docs/22 reserved seam) — opt-in; tunnelled frames stay Tier C, never first-party RF.
 if (env.AXUDP_PORT) {
   const { AxudpListener } = await import("./axudp.js");
