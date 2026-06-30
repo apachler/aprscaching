@@ -492,6 +492,9 @@ button.link:hover { text-decoration: underline; }
 .qrbox img { background: #fff; padding: 6px; border-radius: 6px; flex: none; }
 .qrbox .col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
+/* browser-direct RF live RX list (docs/16 H1) — cap height, scroll within the workbench group */
+.rf-rx { max-height: 320px; overflow: auto; }
+
 /* finds-over-time sparkline on the cache detail (docs/11) */
 .findstrend { margin: 10px 0; }
 .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 4px; }

@@ -205,6 +205,24 @@ export function setSupportPrefs(hideNag: boolean): Promise<SupportPrefs> {
 /** The public transparency ledger page (server-rendered on the gateway). */
 export const supportUrl = `${API_BASE}/support`;
 
+// ---- browser-direct RF ingest (docs/16 H1) — forward Web Serial KISS frames to a gateway ----
+import type { Packet } from "@aprsweb/shared";
+export type { Packet };
+/**
+ * Forward decoded RF packets to a gateway's /ingest. Authenticated by the ingest secret, so this is
+ * the operator-local / self-host path (the rule's blessed single-operator case): the operator points
+ * it at their own gateway. `base` defaults to the configured API base.
+ */
+export async function ingestPackets(packets: Packet[], secret: string, base = API_BASE): Promise<{ ok: boolean; stored: number }> {
+  const res = await fetch(`${base.replace(/\/+$/, "")}/ingest`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-ingest-secret": secret },
+    body: JSON.stringify({ packets }),
+  });
+  if (!res.ok) throw new Error(`ingest ${res.status}`);
+  return res.json() as Promise<{ ok: boolean; stored: number }>;
+}
+
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;

@@ -10,6 +10,7 @@ import { useFmt } from "../format.js";
 import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
 import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
+import { RfBrowser } from "../rf/RfBrowser.js";
 
 /** Workbench — the full APRS toolset, grouped; switch on only what you need. */
 export function WorkbenchPanel(props: {
@@ -163,6 +164,10 @@ export function WorkbenchPanel(props: {
 
       <Group title="Watchlist" defaultOpen={false}>
         <Watchlist callsign={props.callsign} onFly={props.onFly} />
+      </Group>
+
+      <Group title="RF (browser)" status="Web Serial" defaultOpen={false}>
+        <RfBrowser />
       </Group>
 
       <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={false}>
