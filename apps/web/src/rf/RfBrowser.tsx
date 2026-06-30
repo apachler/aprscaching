@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   WebSerialKiss, WebBluetoothKiss, webSerialSupported, webBluetoothSupported, type RfFrame, type RfLink,
 } from "./kiss.js";
+import { WebAudioAfsk, WebSerialMeshtastic, webAudioSupported } from "./extralinks.js";
 import { encodeAprsPosition, encodeAprsMessage } from "@aprsweb/aprs";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
@@ -9,6 +10,8 @@ import { useFmt } from "../format.js";
 import { Row, Switch, EmptyState, Advanced, useToast } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-secret) path
+type LinkKind = "serial" | "ble" | "audio" | "mesh";
+const LINK_LABEL: Record<LinkKind, string> = { serial: "USB radio", ble: "Bluetooth radio", audio: "Soundcard (AFSK)", mesh: "Meshtastic node" };
 
 /**
  * Workbench → RF (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE) and
@@ -20,6 +23,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const toast = useToast();
   const serialOk = webSerialSupported();
   const bleOk = webBluetoothSupported();
+  const audioOk = webAudioSupported();
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
@@ -31,7 +35,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const [txBusy, setTxBusy] = useState(false);
   const txCall = ssid && ssid !== "0" ? `${base}-${ssid}` : base;
 
-  const [link, setLink] = useState<"serial" | "ble" | null>(null);
+  const [link, setLink] = useState<LinkKind | null>(null);
   const [busy, setBusy] = useState(false);
   const [frames, setFrames] = useState<RfFrame[]>([]);
   const [count, setCount] = useState(0);
@@ -60,17 +64,21 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     if (send) send.catch((e) => { if (!fwdErr.current) { fwdErr.current = true; toast(`Forwarding failed: ${(e as Error).message}`); } });
   }
 
-  async function connect(kind: "serial" | "ble") {
+  async function connect(kind: LinkKind) {
     setBusy(true);
     try {
       const onClose = (err?: Error) => { setLink(null); linkRef.current = null; if (err) toast(`Radio disconnected: ${err.message}`); };
-      const l = kind === "serial" ? new WebSerialKiss(onFrame, onClose) : new WebBluetoothKiss(onFrame, onClose);
+      const l: RfLink & { connect(): Promise<void> } =
+        kind === "serial" ? new WebSerialKiss(onFrame, onClose)
+        : kind === "ble" ? new WebBluetoothKiss(onFrame, onClose)
+        : kind === "audio" ? new WebAudioAfsk(onFrame, onClose)
+        : new WebSerialMeshtastic(onFrame, onClose);
       await l.connect();
       linkRef.current = l; setLink(kind); fwdErr.current = false;
-      toast(kind === "serial" ? "USB radio connected" : "Bluetooth radio connected");
+      toast(LINK_LABEL[kind] + " connected");
     } catch (e) {
       const m = (e as Error).message || "";
-      if (!/No port selected|chooser|cancel|User cancelled/i.test(m)) toast(`Could not connect: ${m}`);
+      if (!/No port selected|chooser|cancel|User cancelled|Permission denied|NotAllowed/i.test(m)) toast(`Could not connect: ${m}`);
     } finally { setBusy(false); }
   }
   async function disconnect() { await linkRef.current?.disconnect(); linkRef.current = null; setLink(null); }
@@ -114,17 +122,18 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       () => toast("Couldn't get your location"));
   }
 
-  if (!serialOk && !bleOk) return (
-    <p className="muted">Browser-direct RF needs <strong>Web Serial</strong> or <strong>Web Bluetooth</strong> —
-      Chromium-based desktop/Android browsers over HTTPS. On other browsers, run the operator-local
-      <span className="mono"> apps/ingest</span> instead. RX never implies trust — finds are still gated by the
-      verification engine.</p>
+  if (!serialOk && !bleOk && !audioOk) return (
+    <p className="muted">Browser-direct RF needs <strong>Web Serial</strong>, <strong>Web Bluetooth</strong> or
+      <strong> Web Audio</strong> — Chromium-based desktop/Android browsers over HTTPS. On other browsers, run the
+      operator-local <span className="mono"> apps/ingest</span> instead. RX never implies trust — finds are still
+      gated by the verification engine.</p>
   );
 
   return (
     <>
-      <p className="muted">Plug in or pair a KISS TNC and decode RF here — no server. Frames heard on your own
-        radio are Tier C (no independent IGate); verification is unchanged.</p>
+      <p className="muted">Decode RF here with no server — a KISS TNC (USB/BLE), a radio's audio through the
+        soundcard (no TNC), or a Meshtastic/LoRa node. Frames heard on your own radio are Tier C (no independent
+        IGate); verification is unchanged.</p>
 
       <div className="row gap-2">
         {link
@@ -132,8 +141,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           : <>
               {serialOk && <button className="primary" onClick={() => connect("serial")} disabled={busy}>{busy ? "…" : "Connect USB radio"}</button>}
               {bleOk && <button onClick={() => connect("ble")} disabled={busy}>{busy ? "…" : "Connect Bluetooth"}</button>}
+              {audioOk && <button onClick={() => connect("audio")} disabled={busy} title="Decode APRS audio from a radio via the soundcard — no TNC (H4)">{busy ? "…" : "Soundcard AFSK"}</button>}
+              {serialOk && <button onClick={() => connect("mesh")} disabled={busy} title="Read a Meshtastic/LoRa node's positions over USB (H3)">{busy ? "…" : "Meshtastic node"}</button>}
             </>}
-        <span className="muted">{link ? `● live (${link === "ble" ? "BLE" : "USB"}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}</span>
+        <span className="muted">{link ? `● live (${LINK_LABEL[link]}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}</span>
       </div>
 
       <Row label="Forward to a gateway" help={mode === "signed" ? "Signed with your device key (public gateway, no secret)" : "With an ingest secret (self-host)"}>
