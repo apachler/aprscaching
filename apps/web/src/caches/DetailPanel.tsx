@@ -113,6 +113,19 @@ export function DetailPanel(props: {
 
       <CacheMedia cacheId={c.id} isOwner={props.callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
 
+      {c.rendezvous.length > 0 && (
+        <div className="rendezvous">
+          <span className="ulabel">Rendezvous</span>
+          <ul className="rdv-list">
+            {c.rendezvous.map((r, i) => (
+              <li key={`${r.withCacheId}-${r.ts}-${i}`}>
+                🤝 met <span className="mono">{r.withCall}</span> <span className="muted">· {fmt.ago(r.ts)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={props.callsign} />}
 
       <LogForm cacheId={c.id} cacheCode={c.code} callsign={props.callsign} onLogged={props.onLogged} />

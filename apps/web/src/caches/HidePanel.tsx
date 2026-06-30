@@ -27,6 +27,7 @@ export function HidePanel(props: {
   const [country, setCountry] = useState("");
   const [tags, setTags] = useState("");
   const [ratingPolicy, setRatingPolicy] = useState<"finders" | "all" | "off">("finders");
+  const [rendezvous, setRendezvous] = useState(false);
   const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function HidePanel(props: {
         country: country.trim() || undefined,
         tags: tagList.length ? tagList : undefined,
         ratingPolicy,
+        rendezvous: type === "aprs_living" ? rendezvous : undefined,
       });
       props.onCreated(cache);
     } catch (e) { setErr((e as Error).message); }
@@ -71,9 +73,15 @@ export function HidePanel(props: {
         </select>
       </label>
       {type === "aprs_living" && (
-        <label>Station callsign (the beaconing station that <em>is</em> the cache)
-          <input value={stationCall} onChange={(e) => setStationCall(e.target.value)} placeholder="OE8XYZ-9" />
-        </label>
+        <>
+          <label>Station callsign (the beaconing station that <em>is</em> the cache)
+            <input value={stationCall} onChange={(e) => setStationCall(e.target.value)} placeholder="OE8XYZ-9" />
+          </label>
+          <label className="row gap-2 inline-check">
+            <input type="checkbox" checked={rendezvous} onChange={(e) => setRendezvous(e.target.checked)} />
+            Log rendezvous when I meet other living caches
+          </label>
+        </>
       )}
       <div className="row">
         <label>Difficulty {difficulty.toFixed(1)}

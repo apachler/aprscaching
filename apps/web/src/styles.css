@@ -238,6 +238,9 @@ button.heart.on { color: #e8556a; }
 /* audio-cache stages */
 .stages { margin: 12px 0; }
 .nfc-unlock input { flex: 1; min-width: 0; }
+/* living-cache rendezvous */
+.rendezvous { margin: 12px 0; }
+.rdv-list { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 4px; font-size: 13px; }
 /* cache media gallery */
 .cache-media { margin: 12px 0; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 6px; }

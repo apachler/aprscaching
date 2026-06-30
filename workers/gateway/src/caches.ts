@@ -14,6 +14,7 @@ import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
+import { rendezvousFor } from "./rendezvous.js";
 import { stageCount } from "./stages.js";
 
 // ---- D1 row shapes (snake_case) ----
@@ -24,7 +25,7 @@ interface CacheDbRow {
   hint: string | null; description: string | null; min_trust: string | null;
   source_url: string | null; source_name: string | null; fed_scope: string;
   drive_in: number | null; country: string | null; tags: string | null;
-  rating_policy: string | null;
+  rating_policy: string | null; rendezvous: number | null;
   created_at: number; updated_at: number;
 }
 interface LogDbRow {
@@ -177,6 +178,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
   const rating = await ratingInfo(env, id, (row.rating_policy ?? "finders") as "finders" | "all" | "off", who);
+  const rendezvous = row.rendezvous ? await rendezvousFor(env, id) : [];
   const stages = await stageCount(env, id);
   const detail: CacheDetail = {
     ...toSummary(row),
@@ -189,6 +191,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     favorites: fav.favorites, favorited: fav.favorited,
     needsMaintenance: health.needsMaintenance, dnfStreak: health.dnfStreak, lastFound: health.lastFound,
     rating,
+    rendezvous,
     stageCount: stages,
   };
   return json({ cache: detail });
@@ -217,12 +220,12 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
       `INSERT INTO caches
          (code, owner_call, title, type, status, difficulty, terrain, lat, lon,
           station_call, source, hint, description, min_trust, fed_scope,
-          drive_in, country, tags, rating_policy, created_at, updated_at)
-       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?,?,?, ?,?)`,
+          drive_in, country, tags, rating_policy, rendezvous, created_at, updated_at)
+       VALUES (?,?,?,?, 'active', ?,?,?,?, ?, 'native', ?,?,?,?, ?,?,?,?,?, ?,?)`,
     ).bind(
       tmpCode, owner, b.title, b.type, b.difficulty, b.terrain, b.lat, b.lon,
       b.stationCall ?? null, b.hint ?? null, b.description ?? null, b.minTrust ?? null, b.fedScope,
-      b.driveIn ? 1 : 0, b.country ?? null, joinTags(b.tags), b.ratingPolicy ?? "finders", now, now,
+      b.driveIn ? 1 : 0, b.country ?? null, joinTags(b.tags), b.ratingPolicy ?? "finders", b.rendezvous ? 1 : 0, now, now,
     ).run();
     const id = Number(ins.meta.last_row_id);
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
@@ -268,15 +271,16 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     country: b.country ?? existing.country,
     tags: b.tags === undefined ? existing.tags : joinTags(b.tags),
     rating_policy: b.ratingPolicy ?? existing.rating_policy ?? "finders",
+    rendezvous: b.rendezvous === undefined ? existing.rendezvous : (b.rendezvous ? 1 : 0),
   };
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
        station_call=?, hint=?, description=?, min_trust=?, fed_scope=?,
-       drive_in=?, country=?, tags=?, rating_policy=?, updated_at=? WHERE id=?`,
+       drive_in=?, country=?, tags=?, rating_policy=?, rendezvous=?, updated_at=? WHERE id=?`,
   ).bind(m.title, m.type, m.status, m.difficulty, m.terrain, m.lat, m.lon,
          m.station_call, m.hint, m.description, m.min_trust, m.fed_scope,
-         m.drive_in, m.country, m.tags, m.rating_policy, now, id).run();
+         m.drive_in, m.country, m.tags, m.rating_policy, m.rendezvous, now, id).run();
   // T3.3: turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
   // tombstone so they purge it (a public→unlisted change re-propagates the redacted version via the
   // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.

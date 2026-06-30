@@ -67,6 +67,7 @@ export const CreateCacheRequest = z.object({
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
   ratingPolicy: RatingPolicy.optional(),       // who may rate (F-6); default 'finders'
+  rendezvous: z.boolean().optional(),          // living cache opts into mutual rendezvous logging (F-4)
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
@@ -89,6 +90,7 @@ export const UpdateCacheRequest = z.object({
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
   ratingPolicy: RatingPolicy.optional(),
+  rendezvous: z.boolean().optional(),
 });
 export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
@@ -203,6 +205,8 @@ export interface CacheDetail extends CacheSummary {
   lastFound: number | null;
   // F-6 owner-gated rating
   rating: { avg: number | null; count: number; mine: number | null; policy: RatingPolicy; canRate: boolean };
+  // F-4 living-cache rendezvous: recent meetings (empty unless this is a rendezvous living cache)
+  rendezvous: { withCacheId: number; withCall: string; ts: number; lat: number | null; lon: number | null }[];
   // M2 audio-cache
   stageCount: number;
 }

@@ -443,6 +443,18 @@ ok("non-owner cannot delete cache media -> 403", delNonOwner.status === 403, `st
 const delOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id}`, { method: "DELETE", headers: { "x-owner-call": "OE8APR", "x-ingest-secret": SECRET } });
 ok("owner deletes cache media", delOwner.status === 200, `status=${delOwner.status}`);
 
+// F-4: living-cache rendezvous — two opted-in living caches co-located + both beaconing log each other
+const lcA = await call("POST", "/api/caches", { title: "Living A", type: "aprs_living", lat: 47.50, lon: 15.70, ownerCall: "OE7RVA", stationCall: "OE7RVA-9", rendezvous: true });
+const lcB = await call("POST", "/api/caches", { title: "Living B", type: "aprs_living", lat: 47.50, lon: 15.70, ownerCall: "OE7RVB", stationCall: "OE7RVB-9", rendezvous: true });
+ok("two rendezvous living caches created", lcA.status === 201 && lcB.status === 201, JSON.stringify({ a: lcA.status, b: lcB.status }));
+// beacon B first (so it's in the registry), then A co-located → A's ingest detects the meeting
+await call("POST", "/ingest", { packets: [{ src: "OE7RVB-9", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: "!4730.00N/01542.00E>", kind: "position", heardVia: "aprs_is", port: "aprs-is", ts: now() }] });
+await call("POST", "/ingest", { packets: [{ src: "OE7RVA-9", dst: "APRS", path: ["TCPIP*", "qAC", "T2"], payload: "!4730.00N/01542.00E>", kind: "position", heardVia: "aprs_is", port: "aprs-is", ts: now() }] });
+const rdvA = await call("GET", `/api/caches/${lcA.data?.cache?.id}`);
+ok("rendezvous recorded on the beaconing living cache", (rdvA.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE7RVB-9"), JSON.stringify(rdvA.data?.cache?.rendezvous));
+const rdvB = await call("GET", `/api/caches/${lcB.data?.cache?.id}`);
+ok("rendezvous is mutual (shows on the other living cache)", (rdvB.data?.cache?.rendezvous ?? []).some((r) => r.withCall === "OE7RVA-9"), JSON.stringify(rdvB.data?.cache?.rendezvous));
+
 // F-2: NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
 const nfcCache = await call("POST", "/api/caches", { title: "Tag Hunt", type: "two_stage", lat: 47.20, lon: 15.60, ownerCall: "OE8APR" });
 const nid = nfcCache.data?.cache?.id;
