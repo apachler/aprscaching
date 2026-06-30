@@ -170,6 +170,14 @@ export function deleteStation(id: number): Promise<{ ok: boolean }> {
 }
 export function getStationWxKey(id: number): Promise<StationWxKey> { return call(`/api/my/stations/${id}/wx-key`); }
 export function issueStationWxKey(id: number): Promise<StationWxKey> { return call(`/api/my/stations/${id}/wx-key`, { method: "POST" }); }
+/** Turn an operated station into an APRScache at its location (single, or a beacon-following living cache). */
+export function stationToCache(id: number, opts: { living?: boolean; title?: string } = {}): Promise<{ cache: CacheSummary }> {
+  return call(`/api/my/stations/${id}/cache`, { method: "POST", body: JSON.stringify(opts) });
+}
+/** "Become a cache" — an aprs_living cache that follows your own beacon (placed at your beacon/home). */
+export function becomeACache(opts: { title?: string } = {}): Promise<{ cache: CacheSummary }> {
+  return call(`/api/me/cache`, { method: "POST", body: JSON.stringify(opts) });
+}
 
 /** Public CoT/TAK feed URL for the current viewport (paste into ATAK as a data feed). */
 export function cotUrl(bbox: BBox): string {

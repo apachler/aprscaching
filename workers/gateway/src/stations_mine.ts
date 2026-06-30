@@ -14,10 +14,12 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionAccountId } from "./watch.js";
+import { sessionCallsign } from "./auth.js";
 import { sanitizeBio } from "./profile.js";
 import { makeWxKey, wxUrls } from "./wx.js";
+import { handleCreateCache } from "./caches.js";
 import { parsePage, keyset, paginate } from "./paging.js";
-import { STATION_ROLES, type StationRole, type OperatedStation } from "@aprsweb/shared";
+import { gridToLatLon, STATION_ROLES, type StationRole, type OperatedStation } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}(-[0-9]{1,2})?$/;   // base call + optional SSID
@@ -182,4 +184,62 @@ export async function handleStationWxKey(req: Request, env: Env, id: number): Pr
   const key = await env.DB.prepare("SELECT key, last_seen AS lastSeen FROM wx_keys WHERE station_id = ?").bind(id).first<{ key: string; lastSeen: number | null }>();
   const urls = key ? wxUrls(new URL(req.url).origin, row.callsign, key.key) : null;
   return json({ key: key?.key ?? null, lastSeen: key?.lastSeen ?? null, ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null });
+}
+
+/** Delegate to the canonical create path, preserving the caller's session so actor() owns the cache. */
+function createVia(req: Request, env: Env, body: Record<string, unknown>): Promise<Response> {
+  const headers = new Headers({ "content-type": "application/json" });
+  const cookie = req.headers.get("cookie"); if (cookie) headers.set("cookie", cookie);
+  const secret = req.headers.get("x-ingest-secret"); if (secret) headers.set("x-ingest-secret", secret);
+  const r = new Request(`${new URL(req.url).origin}/api/caches`, { method: "POST", headers, body: JSON.stringify(body) });
+  return handleCreateCache(r, env);
+}
+
+/**
+ * POST /api/my/stations/:id/cache — turn an operated station into an APRScache at its location
+ * (docs/13). A single cache by default; `{ living: true }` makes it an aprs_living cache that follows
+ * the station's beacon. Owned by the signed-in operator.
+ */
+export async function handleStationToCache(req: Request, env: Env, id: number): Promise<Response> {
+  const acct = await sessionAccountId(req, env);
+  if (!acct) return json({ error: "sign in to make a cache" }, { status: 401 });
+  const row = await ownedStation(env, acct, id);
+  if (!row) return json({ error: "no such station" }, { status: 404 });
+  if (row.lat == null || row.lon == null) return json({ error: "give the station a location first" }, { status: 400 });
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const living = b.living === true || b.type === "aprs_living";
+  const title = (typeof b.title === "string" && b.title.trim()) ? b.title.trim().slice(0, 120)
+    : `${row.callsign}${row.description ? ` — ${row.description}` : ""}`.slice(0, 120);
+  return createVia(req, env, {
+    title, type: living ? "aprs_living" : "single", lat: row.lat, lon: row.lon,
+    ...(living ? { stationCall: row.callsign } : {}),
+    ...(typeof b.difficulty === "number" ? { difficulty: b.difficulty } : {}),
+    ...(typeof b.terrain === "number" ? { terrain: b.terrain } : {}),
+    ...(typeof b.description === "string" ? { description: b.description } : row.description ? { description: row.description } : {}),
+  });
+}
+
+/**
+ * POST /api/me/cache — "become a cache" (docs/13): an aprs_living cache that follows the operator's
+ * own beacon. Placed at their latest beacon fix, else their home grid. stationCall is the most recent
+ * SSID heard (so the living-cache match works), else the base call.
+ */
+export async function handleMeCache(req: Request, env: Env): Promise<Response> {
+  const cs = await sessionCallsign(req, env);
+  if (!cs) return json({ error: "sign in to put yourself on the map" }, { status: 401 });
+  const base = cs.toUpperCase().split("-")[0]!;
+  const beacon = await env.DB.prepare(
+    "SELECT callsign, lat, lon FROM positions WHERE callsign = ? OR callsign LIKE ? ORDER BY ts DESC LIMIT 1",
+  ).bind(base, `${base}-%`).first<{ callsign: string; lat: number; lon: number }>();
+  let lat = beacon?.lat ?? null, lon = beacon?.lon ?? null;
+  let stationCall = beacon?.callsign ?? base;
+  if (lat == null) {
+    const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?").bind(base).first<{ homeGrid: string | null }>();
+    const ll = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
+    if (ll) { lat = ll.lat; lon = ll.lon; }
+  }
+  if (lat == null || lon == null) return json({ error: "set a home locator (Settings → Profile) or beacon on APRS first" }, { status: 400 });
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const title = (typeof b.title === "string" && b.title.trim()) ? b.title.trim().slice(0, 120) : `${base} (live)`;
+  return createVia(req, env, { title, type: "aprs_living", stationCall, lat, lon });
 }

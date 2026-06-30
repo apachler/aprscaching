@@ -585,6 +585,11 @@ ok("a weather-capable station issues its own PWS key + URLs", /^wx_/.test(stWx.k
 await fetch(`${BASE}/api/wx/submit?key=${stWx.key}&tempf=41&humidity=70&stationtype=EasyWeather`);
 const stDet = await call("GET", "/api/stations/OE9PROF-2");
 ok("the remote station's reading lands at ITS coords (not the home grid)", stDet.data?.station?.wx && Math.abs((stDet.data.station.lat ?? 0) - 47.62) < 0.01 && Math.abs((stDet.data.station.wx.tempC ?? 0) - 5) < 0.5, JSON.stringify({ lat: stDet.data?.station?.lat, wx: stDet.data?.station?.wx }));
+// become-a-cache flows (docs/13): turn a station into a cache, and put yourself on the map
+const s2c = await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}/cache`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({}) })).json();
+ok("turn a station into a cache at its location", s2c.cache?.type === "single" && Math.abs((s2c.cache?.lat ?? 0) - 47.62) < 0.01 && s2c.cache?.ownerCall === "OE9PROF", JSON.stringify(s2c.cache));
+const meC = await (await fetch(`${BASE}/api/me/cache`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({}) })).json();
+ok("become a cache → a living cache that follows your beacon", meC.cache?.type === "aprs_living" && (meC.cache?.stationCall ?? "").startsWith("OE9PROF"), JSON.stringify(meC.cache));
 ok("DELETE /api/my/stations/:id removes it", (await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "DELETE", headers: { cookie: prcookie } })).json()).ok === true);
 
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");

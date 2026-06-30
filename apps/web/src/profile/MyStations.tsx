@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { STATION_ROLES, type StationRole } from "@aprsweb/shared";
 import {
-  listMyStations, createStation, updateStation, deleteStation,
+  listMyStations, createStation, updateStation, deleteStation, stationToCache, becomeACache,
   getStationWxKey, issueStationWxKey, type OperatedStation, type StationInput, type StationWxKey,
 } from "../api.js";
 import { useFmt } from "../format.js";
@@ -27,6 +27,12 @@ export function MyStations(props: { callsign: string }) {
     catch (e) { toast((e as Error).message); }
   }
 
+  async function becomeCache() {
+    if (!confirm("Put yourself on the map as a live cache others can find when you beacon?")) return;
+    try { const r = await becomeACache(); toast(`You're a cache now: ${r.cache.code}`); }
+    catch (e) { toast((e as Error).message); }
+  }
+
   if (props.callsign.length < 3) return <p className="muted">Sign in to manage your stations.</p>;
   return (
     <>
@@ -34,6 +40,9 @@ export function MyStations(props: { callsign: string }) {
         mountain. Each has its own callsign, location and roles; weather-capable stations get a push key.
         The callsign need not be your own (clubs, inherited infrastructure). Set a location, or leave it
         blank to adopt a station already heard on the map — and tap any station pin to add it directly.</p>
+      <p className="muted fine">Running infrastructure feeds the commons: every IGate and digi you operate
+        helps corroborate other people's finds (Tier&nbsp;A). It's recognised, never gated.</p>
+      <div className="row end"><button onClick={becomeCache}>★ Become a cache</button></div>
 
       {stations.items.length === 0
         ? <EmptyState>No stations yet — add your first below.</EmptyState>
@@ -78,6 +87,13 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
           <div className="row between mt-2">
             <button className="danger" onClick={remove}>Remove</button>
             <button className="primary" onClick={save} disabled={busy}>Save</button>
+          </div>
+          <div className="row end mt-1">
+            <button onClick={async () => {
+              const living = confirm("Living cache that follows this station's beacon? OK = living, Cancel = a fixed cache here.");
+              try { const r = await stationToCache(props.station.id, { living }); toast(`Cache created: ${r.cache.code}`); }
+              catch (e) { toast((e as Error).message); }
+            }}>⚑ Turn into a cache</button>
           </div>
           {props.station.roles.includes("weather") && <StationWxKeyPanel stationId={props.station.id} />}
         </div>
