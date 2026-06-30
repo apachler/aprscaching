@@ -11,6 +11,7 @@ export const TYPE_META: Record<CacheType, TypeMeta> = {
   multi:       { label: "Multi",        color: BRAND.blue,   glyph: "Ⓜ" },
   aprs_living: { label: "Living (APRS)", color: BRAND.blue,   glyph: "✦" },
   audio:       { label: "Audio",        color: BRAND.beige2, glyph: "♪" },
+  virtual:     { label: "Virtual",      color: BRAND.blue,   glyph: "◇" },
   sota:        { label: "SOTA summit",  color: BRAND.grey,   glyph: "▲" },
   pota:        { label: "POTA park",    color: BRAND.beige,  glyph: "❂" },
   wwff:        { label: "WWFF reserve", color: "#5a8a0e",    glyph: "❀" },
@@ -19,7 +20,7 @@ export const TYPE_META: Record<CacheType, TypeMeta> = {
 };
 
 export const TYPE_ORDER: CacheType[] = [
-  "single", "two_stage", "multi", "aprs_living", "audio", "traditional", "sota", "pota",
+  "single", "two_stage", "multi", "aprs_living", "audio", "virtual", "traditional", "sota", "pota",
 ];
 
 export function typeMeta(t: string): TypeMeta {

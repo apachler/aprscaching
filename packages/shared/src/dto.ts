@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const CacheType = z.enum([
-  "single", "two_stage", "multi", "aprs_living", "audio", "traditional", "sota", "pota",
+  "single", "two_stage", "multi", "aprs_living", "audio", "virtual", "traditional", "sota", "pota",
   "wwff", "bunker", "castle",
 ]);
 export type CacheType = z.infer<typeof CacheType>;

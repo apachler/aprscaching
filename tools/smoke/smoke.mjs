@@ -68,6 +68,13 @@ ok("create -> 201 + AC code", created.status === 201 && /^AC-\d+/.test(created.d
   `status=${created.status} ${JSON.stringify(created.data)}`);
 const id = created.data?.cache?.id;
 
+// F-1: the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
+const vCache = await call("POST", "/api/caches", {
+  title: "Virtual Landmark", type: "virtual", lat: 47.08, lon: 15.44, ownerCall: "OE8APR",
+});
+ok("create accepts the virtual cache type", vCache.status === 201 && vCache.data?.cache?.type === "virtual",
+  `status=${vCache.status} ${JSON.stringify(vCache.data?.cache)}`);
+
 // list in bbox
 const list = await call("GET", "/api/caches?bbox=15,46,16,48");
 ok("list includes the new cache", (list.data?.caches ?? []).some((c) => c.id === id));
