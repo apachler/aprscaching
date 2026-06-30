@@ -2,9 +2,40 @@
 
 **Project:** aprscaching.com (greenfield revival)
 **Doc type:** Implementation plan (Claude Code foundation)
-**Status:** PLANNED — not yet built. Opt-in, full-app theme.
+**Status:** PLANNED — not yet built. One of **exactly two dark-only themes** (Modern + Cogmind); the
+roadmap (`docs/26` Stage 3) merges this with the retro terminal shell — **selecting Cogmind *is* the
+late-90s flip**. Light mode is dropped from scope.
 **Owner:** OE8APR
-**Reads with:** `.claude/rules/ui-ux.md`, `.claude/rules/css.md`, `docs/06-ui-ia-m1.md`.
+**Reads with:** `.claude/rules/ui-ux.md`, `.claude/rules/css.md`, `docs/06-ui-ia-m1.md`, `docs/27`
+(Graphic Packet heritage).
+
+---
+
+## 1a. Locked design decisions (2026-06 — from Graphic Packet / F6FBB heritage research)
+
+Research into the actual packet-era look (GP was a *graphics-mode* DOS app with bordered multi-channel
+windows + color-by-station-type via `NAMES.GP`; F6FBB/BPQ BBS menus were 16-color ANSI, not monochrome)
+settled these, locked by the owner:
+
+1. **Palette = hybrid.** A green-phosphor **base** + a disciplined **DOS-derived accent set**
+   (cyan/amber/red/white) used **only where color carries meaning** — trust tiers A/B/C, station types
+   (the `NAMES.GP` registry), TX/RX. NOT pure monochrome (less faithful to GP/FBB) and NOT a busy full
+   16-color field. Accents derived in OKLCH for even brightness (`css.md`).
+2. **Coverage = context-aware, but total.** **Every** element follows the Cogmind theming — header,
+   nav rail/menu, all controls, sheets, the map — nothing un-themed. Packet/BBS/terminal/workbench
+   surfaces additionally lean into the **full ANSI-BBS treatment** (box-drawing channel windows, ANSI
+   menus); map/cacher surfaces get the lighter HUD skin. The flip is strongest where the heritage lives,
+   but the chrome is coherent everywhere.
+3. **CRT FX = off by default, opt-in.** No scanlines/glow/flicker unless the user enables it; the retro
+   feel comes from layout + palette + font. (Still `prefers-reduced-motion`-gated when on.) Best for the
+   outdoor/field GPU budget.
+4. **Font = a bundled CP437/VGA bitmap-style webfont** (PxPlus / More-Perfect-DOS-VGA lineage, OFL/free),
+   loaded **only** when the Cogmind theme is active (lazy, ~30–80 KB) — authentic DOS glyphs + box-
+   drawing. Modern theme keeps IBM Plex Mono.
+
+These shape how the **P1 packet terminal** (Stage 1) is built: its channel windows, monitor, status
+line, `NAMES.GP` coloring and ANSI subset are authored **token-driven**, so the Stage-3 flip is a token
+swap, not a rebuild.
 
 ---
 
