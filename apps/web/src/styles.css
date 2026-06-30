@@ -732,6 +732,11 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 .landing-cta button { min-height: 44px; padding: 0 18px; border-radius: 10px; font-weight: 600; }
 .landing-explore { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
 .landing-note { margin: 14px 0 0; font-size: 12px; opacity: .75; }
+.landing-footer { position: absolute; left: 0; right: 0; bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; padding: 0 16px; font-size: 12.5px; }
+.landing-footer a { color: rgba(255,255,255,.82); text-decoration: none; }
+.landing-footer a:hover { color: #fff; text-decoration: underline; }
+.landing-footer a:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 3px; }
 
 /* quick-tour framework (docs/18 — mechanics; steps deferred). Bottom-anchored accessible dialog. */
 .tour-scrim { position: fixed; inset: 0; z-index: 60; display: grid; align-items: end; justify-items: center;

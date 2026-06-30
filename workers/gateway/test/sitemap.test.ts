@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleSitemapXml, handleSitemapJson, handleRobots, surfaceUrl } from "../src/sitemap.js";
+import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots, surfaceUrl } from "../src/sitemap.js";
 import { SURFACES, FEEDS } from "@aprsweb/shared";
 import type { Env } from "../src/env.js";
 
@@ -41,6 +41,22 @@ describe("sitemap (manifest-driven)", () => {
     expect(data.surfaces.find((s: any) => s.key === "sitemap").url).toBe("https://app.example/?view=sitemap");
     expect(data.feeds).toHaveLength(FEEDS.length);
     for (const f of data.feeds) expect(f.url).toBe(`https://app.example${f.path}`);
+  });
+
+  it("/sitemap is a real HTML page listing every surface + feed (not a panel)", async () => {
+    const res = handleSitemapPage(req, env);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const body = await res.text();
+    expect(body).toContain("<h1>Site map</h1>");
+    // every surface title is linked on the page (titles are HTML-escaped, e.g. "&" → "&amp;")
+    const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    for (const s of SURFACES) expect(body).toContain(`>${esc(s.title)}</a>`);
+    // links to the machine endpoints + static pages
+    expect(body).toContain("/sitemap.xml");
+    expect(body).toContain("/api/sitemap");
+    expect(body).toContain("/api/v1");
+    expect(body).toContain("/support");
+    expect(body).toContain("/source");
   });
 
   it("/robots.txt advertises the sitemap", async () => {

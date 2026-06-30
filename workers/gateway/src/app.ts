@@ -21,7 +21,7 @@ import { outboxPending, outboxAck } from "./outbox.js";
 import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry } from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
-import { handleSitemapXml, handleSitemapJson, handleRobots } from "./sitemap.js";
+import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
 import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
@@ -90,6 +90,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // site map + RSS feeds — machine-readable map of the app + feeds for crawlers/readers/tooling
   if (p === "/sitemap.xml" && m === "GET") return handleSitemapXml(req, env);
+  if (p === "/sitemap" && m === "GET") return handleSitemapPage(req, env);
   if (p === "/api/sitemap" && m === "GET") return handleSitemapJson(req, env);
   if (p === "/robots.txt" && m === "GET") return handleRobots(req, env);
   if (p === "/feeds/activity.xml" && m === "GET") return handleActivityFeed(req, env);
