@@ -27,6 +27,7 @@ import { SignIn } from "./identity/SignIn.js";
 import { maidenhead, gridCenter, haversine } from "./map/geo.js";
 import { toMgrs } from "@aprsweb/aprs";
 import { MapTools } from "./map/MapTools.js";
+import { BasemapSwitcher } from "./map/BasemapSwitcher.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
@@ -604,6 +605,7 @@ export function App() {
               <div><div className="crl">MGRS</div><div className="crv">{toMgrs(center[0], center[1], 4) || "—"}</div></div>
             </div>
           )}
+          {ready && <BasemapSwitcher map={map.current} />}
           {ready && <MapTools map={map.current} home={home} target={target} />}
           {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
           {nearPrompt && mode === "view" && (

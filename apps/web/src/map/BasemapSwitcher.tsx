@@ -1,0 +1,68 @@
+import { useEffect, useState } from "react";
+import type maplibregl from "maplibre-gl";
+
+/**
+ * Basemap layer switcher (docs/11 M2): Vector (default) · Topo · Satellite. Raster is OPT-IN per
+ * css.md — vector is the default and raster tiles load only when the operator picks them. Topo is
+ * keyless OpenTopoMap; satellite is provider-configurable via VITE_SAT_TILES (Esri World Imagery is
+ * the dev fallback — see docs for licensing). Both raster layers are inserted *below* the data
+ * overlays (markers are DOM, always on top) and toggled by visibility, so switching is instant and
+ * never re-creates the style. The choice is remembered across sessions.
+ */
+type Base = "vector" | "topo" | "satellite";
+
+const TOPO_TILES = [
+  "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+  "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+  "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+];
+const TOPO_ATTR = "© OpenTopoMap (CC-BY-SA) · © OpenStreetMap contributors";
+const SAT_TILES = (import.meta.env.VITE_SAT_TILES as string | undefined)
+  ?? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SAT_ATTR = (import.meta.env.VITE_SAT_ATTRIBUTION as string | undefined)
+  ?? "Imagery © Esri, Maxar, Earthstar Geographics";
+
+/** Insert the two raster basemap layers once, beneath any data overlay (mt-* / spots / caches). */
+function ensureRaster(m: maplibregl.Map) {
+  if (!m.getSource("bm-topo")) m.addSource("bm-topo", { type: "raster", tiles: TOPO_TILES, tileSize: 256, maxzoom: 17, attribution: TOPO_ATTR });
+  if (!m.getSource("bm-sat")) m.addSource("bm-sat", { type: "raster", tiles: [SAT_TILES], tileSize: 256, maxzoom: 19, attribution: SAT_ATTR });
+  // keep raster under our overlays — find the first overlay layer to insert before, else append on top
+  const overlay = m.getStyle().layers?.find((l) => /^(mt-|spots|cache)/.test(l.id))?.id;
+  if (!m.getLayer("bm-topo-l")) m.addLayer({ id: "bm-topo-l", type: "raster", source: "bm-topo", layout: { visibility: "none" } }, overlay);
+  if (!m.getLayer("bm-sat-l")) m.addLayer({ id: "bm-sat-l", type: "raster", source: "bm-sat", layout: { visibility: "none" } }, overlay);
+}
+
+export function BasemapSwitcher(props: { map: maplibregl.Map | null }) {
+  const [base, setBase] = useState<Base>(() => {
+    try { return (localStorage.getItem("acs.basemap") as Base) || "vector"; } catch { return "vector"; }
+  });
+
+  useEffect(() => {
+    const m = props.map; if (!m) return;
+    const apply = () => {
+      if (!m.isStyleLoaded()) return;
+      ensureRaster(m);
+      m.setLayoutProperty("bm-topo-l", "visibility", base === "topo" ? "visible" : "none");
+      m.setLayoutProperty("bm-sat-l", "visibility", base === "satellite" ? "visible" : "none");
+    };
+    if (m.isStyleLoaded()) apply(); else m.once("load", apply);
+    try { localStorage.setItem("acs.basemap", base); } catch { /* private mode */ }
+  }, [props.map, base]);
+
+  if (!props.map) return null;
+  const opts: { key: Base; label: string; title: string }[] = [
+    { key: "vector", label: "Map", title: "Vector basemap (default)" },
+    { key: "topo", label: "Topo", title: "OpenTopoMap relief" },
+    { key: "satellite", label: "Sat", title: "Satellite imagery" },
+  ];
+  return (
+    <div className="basemap-switch" role="radiogroup" aria-label="Basemap">
+      {opts.map((o) => (
+        <button key={o.key} role="radio" aria-checked={base === o.key} title={o.title}
+                className={base === o.key ? "on" : ""} onClick={() => setBase(o.key)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
