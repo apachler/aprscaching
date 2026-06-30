@@ -26,6 +26,7 @@ export function HidePanel(props: {
   const [driveIn, setDriveIn] = useState(false);
   const [country, setCountry] = useState("");
   const [tags, setTags] = useState("");
+  const [ratingPolicy, setRatingPolicy] = useState<"finders" | "all" | "off">("finders");
   const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function HidePanel(props: {
         driveIn: driveIn || undefined,
         country: country.trim() || undefined,
         tags: tagList.length ? tagList : undefined,
+        ratingPolicy,
       });
       props.onCreated(cache);
     } catch (e) { setErr((e as Error).message); }
@@ -93,6 +95,13 @@ export function HidePanel(props: {
         <label>Tags<input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="scenic, family, qrp" /></label>
       </div>
       {tagList.length > 0 && <div className="badges">{tagList.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
+      <label>Who can rate
+        <select value={ratingPolicy} onChange={(e) => setRatingPolicy(e.target.value as "finders" | "all" | "off")}>
+          <option value="finders">Finders only</option>
+          <option value="all">Anyone signed in</option>
+          <option value="off">Nobody (disabled)</option>
+        </select>
+      </label>
       <h4>Federation</h4>
       <div className="badges" role="radiogroup" aria-label="Federation scope">
         {SCOPES.map((s) => (

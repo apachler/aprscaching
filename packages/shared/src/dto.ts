@@ -38,6 +38,17 @@ export type AppGeo = z.infer<typeof AppGeo>;
 /** Free-form cache tags: up to 12, each a short trimmed token (deduped + lowercased by the gateway). */
 export const CacheTags = z.array(z.string().trim().min(1).max(24)).max(12);
 
+/** Who may rate a cache (owner-gated, F-6): only finders (default), any signed-in caller, or nobody. */
+export const RatingPolicy = z.enum(["finders", "all", "off"]);
+export type RatingPolicy = z.infer<typeof RatingPolicy>;
+
+/** Submit a 1–5 star rating for a cache. */
+export const RateRequest = z.object({
+  callsign: Callsign.optional(),      // omitted by signed-in web (attributed to the session)
+  stars: z.number().int().min(1).max(5),
+});
+export type RateRequest = z.infer<typeof RateRequest>;
+
 export const CreateCacheRequest = z.object({
   title: z.string().trim().min(1).max(120),
   type: CacheType.default("single"),
@@ -55,6 +66,7 @@ export const CreateCacheRequest = z.object({
   driveIn: z.boolean().optional(),             // car-accessible cache (original APRSCaching "Drive-In")
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
+  ratingPolicy: RatingPolicy.optional(),       // who may rate (F-6); default 'finders'
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
@@ -76,6 +88,7 @@ export const UpdateCacheRequest = z.object({
   driveIn: z.boolean().optional(),
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
+  ratingPolicy: RatingPolicy.optional(),
 });
 export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
@@ -188,6 +201,8 @@ export interface CacheDetail extends CacheSummary {
   needsMaintenance: boolean;
   dnfStreak: number;
   lastFound: number | null;
+  // F-6 owner-gated rating
+  rating: { avg: number | null; count: number; mine: number | null; policy: RatingPolicy; canRate: boolean };
   // M2 audio-cache
   stageCount: number;
 }

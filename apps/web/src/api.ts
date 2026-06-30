@@ -72,6 +72,11 @@ export function getCacheLogs(id: number, cursor?: string | null, limit = 50): Pr
 export function toggleFavorite(cacheId: number, callsign: string, on: boolean): Promise<{ on: boolean; count: number }> {
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
 }
+export type CacheRating = CacheDetail["rating"];
+/** Submit a 1–5 star rating (owner-gated, F-6) — returns the updated aggregate. */
+export function rateCache(cacheId: number, stars: number, callsign?: string): Promise<{ rating: CacheRating }> {
+  return call(`/api/caches/${cacheId}/rate`, { method: "POST", body: JSON.stringify({ stars, callsign }) });
+}
 
 // ---- live activity spots (docs/20 S2) — read-only overlay, opt-in ----
 export function getSpots(bbox: BBox, opts: { bands?: string[]; modes?: string[]; sources?: string[] } = {}):

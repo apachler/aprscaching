@@ -6,6 +6,8 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { parsePage, keyset, paginate } from "./paging.js";
+import { actor } from "./caches.js";
+import { RateRequest } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const DAY = 86400;
@@ -178,6 +180,51 @@ export async function cacheHealth(env: Env, cacheId: number): Promise<{ needsMai
   const lf = await env.DB.prepare("SELECT MAX(ts) AS ts FROM cache_logs WHERE cache_id=? AND log_type='found'").bind(cacheId).first<{ ts: number | null }>();
   return { needsMaintenance: dnfStreak >= 3, dnfStreak, lastFound: lf?.ts ?? null };
 }
+// ---------------------------------------------------------------- rating (F-6, owner-gated)
+type RatingPolicy = "finders" | "all" | "off";
+
+/** True if `callsign` is permitted to rate this cache under its policy (a verified finder, or anyone). */
+async function mayRate(env: Env, cacheId: number, policy: RatingPolicy, callsign: string): Promise<boolean> {
+  if (policy === "off") return false;
+  if (policy === "all") return true;
+  const found = await env.DB.prepare(
+    "SELECT 1 AS x FROM cache_logs WHERE cache_id=? AND logger_call=? AND log_type='found' AND verified=1 LIMIT 1",
+  ).bind(cacheId, callsign.toUpperCase()).first();
+  return !!found;
+}
+
+/** Aggregate rating for the cache detail: average, count, the caller's own star, the policy + can-rate. */
+export async function ratingInfo(env: Env, cacheId: number, policy: RatingPolicy, callsign?: string | null):
+  Promise<{ avg: number | null; count: number; mine: number | null; policy: RatingPolicy; canRate: boolean }> {
+  const agg = await env.DB.prepare("SELECT AVG(stars) AS avg, COUNT(*) AS n FROM cache_ratings WHERE cache_id=?")
+    .bind(cacheId).first<{ avg: number | null; n: number }>();
+  let mine: number | null = null, canRate = false;
+  if (callsign) {
+    const cs = callsign.toUpperCase();
+    const r = await env.DB.prepare("SELECT stars FROM cache_ratings WHERE cache_id=? AND callsign=?").bind(cacheId, cs).first<{ stars: number }>();
+    mine = r?.stars ?? null;
+    canRate = await mayRate(env, cacheId, policy, cs);
+  }
+  return { avg: agg?.avg ?? null, count: agg?.n ?? 0, mine, policy, canRate };
+}
+
+export async function handleRate(req: Request, env: Env, cacheId: number): Promise<Response> {
+  const parsed = RateRequest.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return json({ error: "stars must be 1–5", issues: parsed.error.issues }, { status: 400 });
+  const who = await actor(req, env, parsed.data.callsign);
+  if (!who) return json({ error: "sign in or pass callsign to rate" }, { status: 401 });
+  const cache = await env.DB.prepare("SELECT rating_policy FROM caches WHERE id=?").bind(cacheId).first<{ rating_policy: string }>();
+  if (!cache) return json({ error: "no such cache" }, { status: 404 });
+  const policy = (cache.rating_policy ?? "finders") as RatingPolicy;
+  if (!(await mayRate(env, cacheId, policy, who)))
+    return json({ error: policy === "off" ? "rating is disabled for this cache" : "only finders may rate this cache" }, { status: 403 });
+  await env.DB.prepare(
+    `INSERT INTO cache_ratings (cache_id, callsign, stars, ts) VALUES (?,?,?,?)
+     ON CONFLICT(cache_id, callsign) DO UPDATE SET stars=excluded.stars, ts=excluded.ts`,
+  ).bind(cacheId, who, parsed.data.stars, Math.floor(Date.now() / 1000)).run();
+  return json({ rating: await ratingInfo(env, cacheId, policy, who) });
+}
+
 export async function favoritesInfo(env: Env, cacheId: number, callsign?: string | null): Promise<{ favorites: number; favorited: boolean }> {
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM favorites WHERE cache_id=?").bind(cacheId).first<{ n: number }>();
   let favorited = false;

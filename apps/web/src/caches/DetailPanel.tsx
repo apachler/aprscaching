@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { toggleFavorite, getCacheLogs, cacheShareUrl, cacheQrUrl, type CacheDetail, type Spot } from "../api.js";
+import { toggleFavorite, rateCache, getCacheLogs, cacheShareUrl, cacheQrUrl, type CacheDetail, type CacheRating, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";
 import { typeMeta } from "../cacheTypes.js";
 import { useFmt } from "../format.js";
@@ -82,6 +82,8 @@ export function DetailPanel(props: {
 
       <MinTier tier={minTier} desc={TIER_DESC[minTier]} />
 
+      <RatingWidget cacheId={c.id} callsign={props.callsign} rating={c.rating} onToast={toast} />
+
       {grid && (
         <div className="coordblock">
           <div className="coordblock-h">
@@ -132,6 +134,39 @@ export function DetailPanel(props: {
       {[...c.logs, ...moreLogs].map((l) => <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />)}
       <LoadMore hasMore={logsMore} loading={logsLoading} onClick={loadMoreLogs} />
     </Panel>
+  );
+}
+
+/** Owner-gated 1–5 star rating (F-6). Shows the aggregate; lets a permitted caller set/replace theirs. */
+function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheRating; onToast: (m: string) => void }) {
+  const [r, setR] = useState(props.rating);
+  const [hover, setHover] = useState(0);
+  useEffect(() => { setR(props.rating); }, [props.cacheId, props.rating]);
+  if (r.policy === "off") return null;
+  async function rate(stars: number) {
+    if (!r.canRate) return;
+    try { const res = await rateCache(props.cacheId, stars, props.callsign || undefined); setR(res.rating); props.onToast(`Rated ${stars}★`); }
+    catch (e) { props.onToast((e as Error).message); }
+  }
+  const shown = hover || r.mine || 0;
+  return (
+    <div className="rating">
+      <div className="rating-h">
+        <span className="ulabel">Rating</span>
+        <span className="rating-agg">{r.avg != null ? <>★ {r.avg.toFixed(1)} <span className="muted">({r.count})</span></> : <span className="muted">no ratings yet</span>}</span>
+      </div>
+      {r.canRate ? (
+        <div className="rating-stars" role="radiogroup" aria-label="Rate this cache" onMouseLeave={() => setHover(0)}>
+          {[1, 2, 3, 4, 5].map((s) => (
+            <button key={s} type="button" role="radio" aria-checked={r.mine === s} aria-label={`${s} star${s === 1 ? "" : "s"}`}
+              className={`star${s <= shown ? " on" : ""}`} onMouseEnter={() => setHover(s)} onClick={() => rate(s)}>★</button>
+          ))}
+          {r.mine ? <span className="muted fine">your rating</span> : null}
+        </div>
+      ) : (
+        <p className="muted fine">{r.policy === "finders" ? "Log a verified find to rate this cache." : "Sign in to rate."}</p>
+      )}
+    </div>
   );
 }
 

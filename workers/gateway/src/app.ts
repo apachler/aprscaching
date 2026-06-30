@@ -36,7 +36,7 @@ import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
-import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch } from "./community.js";
+import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch, handleRate } from "./community.js";
 import { handleDecode, handleStations, handleStation, handleStationSeries, handleStationPackets, handlePorts, handleMessages } from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
@@ -282,8 +282,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (stageOpMatch[3] === "media" && m === "PUT") return handleStageMedia(req, env, id, n);
   }
 
-  // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch}
-  const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch)?$/.exec(p);
+  // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch,rate}
+  const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch|\/rate)?$/.exec(p);
   if (cacheMatch) {
     const id = Number(cacheMatch[1]);
     const sub = cacheMatch[2];
@@ -291,6 +291,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (sub === "/logs" && m === "GET") return handleCacheLogs(req, env, id);
     if (sub === "/favorite" && m === "POST") return handleFavorite(req, env, id);
     if (sub === "/watch" && m === "POST") return handleWatch(req, env, id);
+    if (sub === "/rate" && m === "POST") return handleRate(req, env, id);
     if (!sub && m === "GET") return handleCacheDetail(req, env, id);
     if (!sub && (m === "PATCH" || m === "PUT")) return handleUpdateCache(req, env, id);
     return new Response("method not allowed", { status: 405 });

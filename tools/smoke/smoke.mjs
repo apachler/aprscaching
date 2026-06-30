@@ -111,6 +111,16 @@ ok("ingest stores 1 position", ing.data?.ok === true && ing.data?.stored === 1, 
 const ta = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE3RF", logType: "found" });
 ok("Tier A verified (aprs_rf)", ta.data?.verified === true && ta.data?.tier === "A", JSON.stringify(ta.data));
 
+// F-6: owner-gated rating — default policy 'finders' lets a verified finder rate, blocks a non-finder
+const rateFinder = await call("POST", `/api/caches/${id}/rate`, { callsign: "DL1ABC", stars: 4 });
+ok("a verified finder can rate (1–5)", rateFinder.status === 200 && rateFinder.data?.rating?.mine === 4 && rateFinder.data?.rating?.count >= 1,
+  JSON.stringify(rateFinder.data));
+const rateNon = await call("POST", `/api/caches/${id}/rate`, { callsign: "NOFIND", stars: 5 });
+ok("a non-finder is blocked under the 'finders' policy (403)", rateNon.status === 403, JSON.stringify(rateNon.data));
+const ratedDetail = await call("GET", `/api/caches/${id}`);
+ok("cache detail carries the rating aggregate", (ratedDetail.data?.cache?.rating?.count ?? 0) >= 1 && ratedDetail.data?.cache?.rating?.avg >= 1,
+  JSON.stringify(ratedDetail.data?.cache?.rating));
+
 // DNF — recorded, never verified
 const dnf = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ", logType: "dnf" });
 ok("DNF logged, unverified", dnf.data?.logged === true && dnf.data?.verified === false, JSON.stringify(dnf.data));

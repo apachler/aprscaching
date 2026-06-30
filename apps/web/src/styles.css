@@ -315,6 +315,14 @@ button.link:hover { text-decoration: underline; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; font-size: 12px; color: var(--ink-2); background: color-mix(in oklch, var(--surface-2) 50%, transparent); }
 .cache-tags { margin: 6px 0 2px; }
+/* owner-gated 1–5 rating */
+.rating { border: 1px solid var(--line); border-radius: 11px; padding: 10px 13px; margin: 0 0 14px; }
+.rating-h { display: flex; align-items: center; justify-content: space-between; }
+.rating-agg { font-size: 14px; }
+.rating-stars { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+.rating-stars .star { border: none; background: none; cursor: pointer; font-size: 22px; line-height: 1; padding: 0 2px; color: var(--muted); }
+.rating-stars .star.on { color: var(--warn); }
+.rating-stars .fine { margin-left: 8px; }
 .inline-check { align-items: center; gap: 8px; font-weight: 500; }
 .inline-check input { width: auto; }
 .award { background: #3a3413; color: #f0d96a; border: 1px solid #5a5320; border-radius: 12px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
