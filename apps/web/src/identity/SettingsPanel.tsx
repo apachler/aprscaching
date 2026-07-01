@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type maplibregl from "maplibre-gl";
 import { getInstance, getSource, sourceLinkUrl, exportAccount, deleteAccount, getNotifyPrefs, setNotifyPrefs, type SourceInfo } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import {
@@ -6,6 +7,9 @@ import {
 } from "../format.js";
 import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
+import { ConnectionsSettings } from "./ConnectionsSettings.js";
+import { NetworkSettings } from "./NetworkSettings.js";
+import { Watchlist } from "../workbench/Watchlist.js";
 import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
 import { ProfileEditor } from "../profile/ProfileEditor.js";
 import { WeatherStation } from "../profile/WeatherStation.js";
@@ -14,8 +18,12 @@ import { SupportSettings } from "./SupportSettings.js";
 
 type Sess = { callsign: string; verified: boolean; email: string | null; signedIn: boolean; signOut: () => void; refresh: () => void };
 
-/** Settings — account, locale/units, GDPR data tools, and credits. Grouped + searchable. */
-export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; session: Sess; onSignIn: () => void; onClose: () => void }) {
+/** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
+export function SettingsPanel(props: {
+  settings: LocaleSettings; onApply: (s: LocaleSettings) => void; callsign: string; verified: boolean;
+  map: maplibregl.Map | null; onFly: (lat: number, lon: number) => void;
+  session: Sess; onSignIn: () => void; onClose: () => void;
+}) {
   const s = props.settings;
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
@@ -99,7 +107,19 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
         </Group>
       )}
 
-      {props.session.signedIn && match("notifications alerts email digest push watchlist") && (
+      {match("connections sources transports ports APRS-IS KISS Meshtastic RF Web Serial BLE TAK CoT feed ingest") && (
+        <Group title="Connections & sources" status="APRS data plane" defaultOpen={false}>
+          <ConnectionsSettings callsign={props.callsign} verified={props.verified} map={props.map} />
+        </Group>
+      )}
+
+      {match("network federation peers mirror trust corroboration instance sync") && (
+        <Group title="Network" status="federation" defaultOpen={false}>
+          <NetworkSettings />
+        </Group>
+      )}
+
+      {props.session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (
         <Group title="Notifications" defaultOpen={false}>
           <Row label="Email digest" help={prefs?.hasEmail ? "Batched watchlist alerts, emailed to you" : "Add an email to your account to receive a digest"}>
             <Switch label="Email digest" checked={!!prefs?.digest} disabled={!prefs?.hasEmail}
@@ -114,7 +134,8 @@ export function SettingsPanel(props: { settings: LocaleSettings; onApply: (s: Lo
           </Row>
           {pushState === "denied" && <p className="muted error">Notifications are blocked — allow them in your browser settings, then try again.</p>}
           {pushState === "error" && <p className="muted error">Could not enable push. On iPhone, install the app to your home screen first.</p>}
-          <p className="muted">In-app watchlist alerts are always on.</p>
+          <h4 className="set-subh">Watchlist</h4>
+          <Watchlist callsign={props.callsign} onFly={props.onFly} />
         </Group>
       )}
 

@@ -605,7 +605,7 @@ export function App() {
           <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
         )}
         {showWB && mode === "view" && (
-          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current} callsign={callsign} verified={verified}
+          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current} callsign={callsign}
                           stationsOn={stationsOn} setStationsOn={setStationsOn}
                           stationCount={stations.length}
                           picked={pickedStation} onPick={setPickedStation}
@@ -619,7 +619,8 @@ export function App() {
           <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />
         )}
         {showSettings && (
-          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign}
+          <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} verified={verified}
+                         map={map.current} onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })}
                          session={session} onSignIn={() => openOnly(() => setShowSignIn(true))} onClose={() => setShowSettings(false)} />
         )}
 
