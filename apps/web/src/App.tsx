@@ -7,7 +7,7 @@ import {
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot, type MapViewState,
   type SearchHitCache, type SearchHitStation,
 } from "./api.js";
-import { SearchSuggest } from "./search/SearchSuggest.js";
+import { TopBar } from "./TopBar.js";
 import { ToastProvider, Icon, Tour, tourSeen, type TourStep } from "./ui/index.js";
 import { Landing } from "./Landing.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
@@ -692,41 +692,6 @@ export function App() {
     )}
     </ToastProvider>
     </FormatContext.Provider>
-  );
-}
-
-// ----------------------------------------------------------------- top bar (cacher destinations)
-function TopBar(props: {
-  callsign: string; verified: boolean; onAccount: () => void;
-  onHide: () => void; count: number; queued: number;
-  onFilters: () => void; filtered: boolean;
-  q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
-  onPickCache: (hit: SearchHitCache) => void; onPickStation: (hit: SearchHitStation) => void;
-  onNearby: () => void; onActivity: () => void; onProfile: () => void;
-}) {
-  // The header is identical in every mode — switching into "hide" must not reshuffle the chrome
-  // (cancelling a hide lives in the Hide panel itself, not the top bar).
-  return (
-    <header className="topbar">
-      <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      <button className={`icon filter-ic${props.filtered ? " on" : ""}`} onClick={props.onFilters} title="Filter by type" aria-label="Filter caches by type"><Icon name="filter" size={16} /></button>
-      <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
-                     onPickCache={props.onPickCache} onPickStation={props.onPickStation} />
-      <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
-      {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
-      <span className="spacer" />
-      <button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
-        {props.callsign
-          ? <><span className="mono">{props.callsign}</span>{props.verified ? <Icon name="check" size={14} /> : <span className="idchip-x">unverified</span>}</>
-          : <><Icon name="profile" size={15} /> Sign in</>}
-      </button>
-      <span className="nav-desktop">
-        <button onClick={props.onNearby}>Nearby</button>
-        <button onClick={props.onActivity}>Activity</button>
-        <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
-      </span>
-      <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>
-    </header>
   );
 }
 

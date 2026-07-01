@@ -10,6 +10,7 @@ import { BbsPanel } from "../live/BbsPanel.js";
 import { RigControl } from "../workbench/RigControl.js";
 import { RemoteControl } from "../workbench/RemoteControl.js";
 import { NavRail } from "../NavRail.js";
+import { TopBar } from "../TopBar.js";
 import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
@@ -24,14 +25,11 @@ const noop = () => {};
 function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
   return (
     <div className="app" style={{ height: "100dvh" }}>
-      <header className="topbar">
-        <img className="logo" src="/brand/wordmark.png" alt="APRScaching" />
-        <span className="muted">· 7 caches in view</span>
-        <span className="spacer" />
-        <button className="idchip ok"><span className="mono">{ME}</span></button>
-        <span className="nav-desktop"><button>Nearby</button><button>Activity</button><button>👤</button></span>
-        <button className="primary hide-cta">+ Hide a cache</button>
-      </header>
+      {/* the REAL top bar (empty callsign → "Sign in", matching the explore-mode teaser frames) so
+          every teaser frame shares identical chrome (ui-ux §6). Handlers are no-ops in the harness. */}
+      <TopBar callsign="" verified={false} onAccount={noop} onHide={noop} count={7} queued={0}
+              onFilters={noop} filtered={false} q="" onSearch={noop} onSearchSubmit={noop}
+              onPickCache={noop} onPickStation={noop} onNearby={noop} onActivity={noop} onProfile={noop} />
       <div className="shell">
         <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onRanks={noop}
                  onWorkbench={noop} onMail={noop} onProfile={noop} onSettings={noop} />
