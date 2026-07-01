@@ -29,7 +29,7 @@ export const WORKBENCH_APPS: WorkbenchApp[] = [
 export const appById = (id: WorkbenchAppId): WorkbenchApp | undefined => WORKBENCH_APPS.find((a) => a.id === id);
 
 const PIN_KEY = "acs.pins";
-const DEFAULT_PINS: WorkbenchAppId[] = ["bbs"]; // first-run default so BBS stays reachable from the rail
+const DEFAULT_PINS: WorkbenchAppId[] = []; // nothing pinned by default — the user pins what they use
 const readPins = (): WorkbenchAppId[] => {
   try {
     const stored = localStorage.getItem(PIN_KEY);
