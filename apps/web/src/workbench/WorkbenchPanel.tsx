@@ -1,35 +1,32 @@
 import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import {
-  getPorts, getMessages, cotUrl, getStation, decodePacket, listFederationPeers, createStation,
-  type DecodedPacket, type StationDetail, type PortStat, type FedPeer,
+  getPorts, getMessages, cotUrl, getStation, listFederationPeers, createStation,
+  type StationDetail, type PortStat, type FedPeer,
 } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprsweb/shared";
 import { useFmt } from "../format.js";
 import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast, Icon } from "../ui/index.js";
 import type { WorkbenchApp, WorkbenchAppId } from "./apps.js";
-import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
-import { NodePanel } from "./NodePanel.js";
-import { ToolsPanel } from "../tools/ToolsPanel.js";
 import { TrackReplay } from "./TrackReplay.js";
 import { StationGraphs } from "./StationGraphs.js";
 import { StationPackets } from "./StationPackets.js";
-import { RigControl } from "./RigControl.js";
 
-/** Workbench — the full APRS toolset, grouped; switch on only what you need. */
+/**
+ * Workbench — the app launcher + the operator toolset config that hasn't yet moved to its proper
+ * home. Every workbench APP (terminal, BBS, decoder, node, tools, rig, remote) launches into its own
+ * surface (WorkbenchAppSurface); this panel is the launcher plus the remaining platform-config groups.
+ */
 export function WorkbenchPanel(props: {
   onClose: () => void; map: maplibregl.Map | null; callsign: string; verified: boolean;
   stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
   picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
-  onOpenTerminal: () => void;
   apps: WorkbenchApp[]; pinned: WorkbenchAppId[]; onLaunchApp: (id: WorkbenchAppId) => void;
-  onTogglePin: (id: WorkbenchAppId) => void; focusGroup: string | null;
+  onTogglePin: (id: WorkbenchAppId) => void;
 }) {
-  const [raw, setRaw] = useState("");
-  const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
   const [station, setStation] = useState<StationDetail | null>(null);
   const [ports, setPorts] = useState<PortStat[]>([]);
   const [peers, setPeers] = useState<FedPeer[]>([]);
@@ -53,13 +50,6 @@ export function WorkbenchPanel(props: {
     getStation(props.picked).then((r) => { if (live) setStation(r.station); }).catch(console.error);
     return () => { live = false; };
   }, [props.picked]);
-
-  async function decode() {
-    try { setDecoded(await decodePacket(raw.trim())); }
-    catch (e) { setDecoded({ ok: false, error: (e as Error).message }); }
-  }
-
-  const SAMPLE = "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.41N/01526.27E>088/036/A=001234Mobile";
 
   return (
     <Panel title="📡 Workbench" onClose={props.onClose}>
@@ -134,28 +124,6 @@ export function WorkbenchPanel(props: {
         ))}
       </Group>
 
-      <Group title="Packet decoder" defaultOpen={props.focusGroup === "Packet decoder"}>
-        <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
-        <div className="row between mt-2">
-          <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
-          <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
-        </div>
-        {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
-        {decoded?.ok && decoded.frame && (
-          <div className="decoded">
-            <div className="row between">
-              <strong className="mono">{decoded.frame.src}</strong>
-              <Badge kind={decoded.frame.heardVia === "rf" ? "tierA" : undefined}>{decoded.frame.heardVia}</Badge>
-            </div>
-            <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
-            <div className="kind">{String(decoded.data?.kind)}</div>
-            <dl className="fields">
-              {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
-            </dl>
-          </div>
-        )}
-      </Group>
-
       <Group title="TAK / CoT feed" defaultOpen={false}>
         <p className="muted">Add this as a data feed in ATAK/WinTAK to see APRS stations as CoT:</p>
         <div className="row">
@@ -205,37 +173,6 @@ export function WorkbenchPanel(props: {
       <Group title="RF (browser)" status="Web Serial · BLE" defaultOpen={false}>
         <RfBrowser callsign={props.callsign} verified={props.verified} />
       </Group>
-
-      <Group title="NET/ROM node" status="node · digipeater · sysop" defaultOpen={false}>
-        <p className="muted">Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal (above) connects to it.</p>
-        <NodePanel />
-      </Group>
-
-      <Group title="Tools (plugins)" status="sandboxed · off by default" defaultOpen={props.focusGroup === "Tools (plugins)"}>
-        <ToolsPanel callsign={props.callsign} verified={props.verified} />
-      </Group>
-
-      <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={props.focusGroup === "Rig control (CAT)"}>
-        <p className="muted">Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).</p>
-        <RigControl />
-      </Group>
-
-      <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={props.focusGroup === "Remote control — your box"}>
-        <RemoteControl callsign={props.callsign} verified={props.verified} map={props.map} />
-      </Group>
     </Panel>
   );
-}
-
-function flatten(data: Record<string, unknown>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(data)) {
-    if (k === "kind") continue;
-    if (v == null) continue;
-    if (typeof v === "object") {
-      if (k === "symbol" && (v as any).label) { out.symbol = `${(v as any).label} (${(v as any).table}${(v as any).code})`; continue; }
-      out[k] = JSON.stringify(v);
-    } else out[k] = String(v);
-  }
-  return out;
 }

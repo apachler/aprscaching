@@ -110,10 +110,11 @@ async function step(name, fn) {
 // works on EVERY viewport (desktop/tablet/mobile — navigate() just calls setShowWB) and is immune to
 // accumulated journey state (a stuck "Hide a cache" mode won't swallow the open). Gate readiness on the
 // "Packet terminal" group being attached, retrying once.
+let navSeq = 0; // bump per goto so the URL is never byte-identical (same-URL goto = no reload → stale surface)
 async function openWorkbench(page) {
   const marker = () => page.locator(".group-toggle", { hasText: "Live stations" }).first();
   for (let attempt = 0; attempt < 2; attempt++) {
-    await page.goto(`${BASE}/?view=workbench#11.5/47.078/15.43`, { waitUntil: "load" });
+    await page.goto(`${BASE}/?view=workbench&n=${++navSeq}#11.5/47.078/15.43`, { waitUntil: "load" });
     await ready(page);
     try { await marker().waitFor({ state: "attached", timeout: 6000 }); await page.waitForTimeout(300); return; }
     catch { /* retry the open once */ }
@@ -137,6 +138,15 @@ async function gotoDemo(page, variant, waitSel) {
   await page.goto(`${BASE}/?demo=${variant}`, { waitUntil: "load" });
   await page.waitForSelector(waitSel, { timeout: 12000 });
   await page.waitForTimeout(800);
+}
+// Launch a workbench app from the drawer's launcher (every app opens its own surface now) and wait for
+// it. Used for the apps that work against the seeded gateway (tools, node, decoder) — the hardware ones
+// (terminal, rig, remote) + BBS are shown via the ?demo= sims instead.
+async function launchWbApp(page, label, waitSel) {
+  await openWorkbench(page);
+  await page.locator(".wb-app-launch", { hasText: label }).first().click().catch(() => {});
+  await page.waitForSelector(waitSel, { timeout: 8000 });
+  await page.waitForTimeout(400);
 }
 
 // Friendlier captions for the terse rail/tab titles; unknown titles fall back to themselves.
@@ -292,16 +302,21 @@ for (const v of VIEWS) {
     await shot(page, v.id, "workbench-launcher", "Workbench — app launcher (pin to rail)");
   });
   await step("node", async () => {
-    await openWorkbench(page);
-    await expandGroup(page, "NET/ROM node");
+    await launchWbApp(page, "NET/ROM node", ".node-panel");
     await clickAny(page, [".node-panel button:has-text('NODES')"]); // reveal the NET/ROM node view
     await page.waitForTimeout(400);
     await shot(page, v.id, "node", "NET/ROM node · digipeater · sysop");
   });
   await step("tools", async () => {
-    await openWorkbench(page);
-    await expandGroup(page, "Tools");
+    await launchWbApp(page, "Tools", ".tools-panel");
     await shot(page, v.id, "tools", "Tools — sandboxed plugins");
+  });
+  await step("decoder", async () => {
+    await launchWbApp(page, "Packet decoder", ".panel textarea");
+    await clickAny(page, [".panel button:has-text('use a sample')"]);
+    await clickAny(page, [".panel button:has-text('Decode')"]);
+    await page.waitForTimeout(500);
+    await shot(page, v.id, "decoder", "Packet decoder — raw AX.25 / APRS");
   });
   await step("packet", async () => {
     await gotoDemo(page, "app-packet", ".pt-window");

@@ -41,8 +41,7 @@ import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
-import { TerminalPanel } from "./packet/TerminalPanel.js";
-import { BbsPanel } from "./live/BbsPanel.js";
+import { WorkbenchAppSurface } from "./workbench/WorkbenchAppSurface.js";
 import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
@@ -91,9 +90,7 @@ export function App() {
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
   const [showBoard, setShowBoard] = useState(false);
   const [showWB, setShowWB] = useState(false);
-  const [showMail, setShowMail] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [wbFocus, setWbFocus] = useState<string | null>(null); // workbench group to expand when launched
+  const [wbApp, setWbApp] = useState<WorkbenchAppId | null>(null); // the launched workbench app surface (its own workspace)
   const { pins, toggle: togglePin } = usePinnedApps();
   const [showNearby, setShowNearby] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
@@ -152,7 +149,7 @@ export function App() {
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
-    setShowBoard(false); setShowWB(false); setShowMail(false); setShowTerminal(false); setShowNearby(false);
+    setShowBoard(false); setShowWB(false); setWbApp(null); setShowNearby(false);
     setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
     setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
@@ -162,22 +159,17 @@ export function App() {
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
-  // Launch a workbench app: surface apps (terminal, BBS) open their own wide surface; the rest open the
-  // workbench focused on their config group. Used by the workbench launcher and the pinned rail items.
-  const launchApp = useCallback((id: WorkbenchAppId) => {
-    if (id === "terminal") return openOnly(() => setShowTerminal(true));
-    if (id === "bbs") return openOnly(() => setShowMail(true));
-    setWbFocus(appById(id)?.group ?? null);
-    openOnly(() => setShowWB(true));
-  }, [openOnly]);
+  // Launch a workbench app: EVERY app opens its own dedicated surface (WorkbenchAppSurface). Used by
+  // the workbench launcher and the pinned rail items.
+  const launchApp = useCallback((id: WorkbenchAppId) => openOnly(() => setWbApp(id)), [openOnly]);
 
   // Navigate to a surface by its manifest key (Site map rows + ?view= deep-links share this).
   const navigate = useCallback((key: string) => {
     const opener: Record<string, () => void> = {
       map: () => {}, nearby: () => setShowNearby(true), filter: () => setShowFilter(true),
       hide: () => startHide(), activity: () => setShowActivity(true), ranks: () => setShowBoard(true),
-      workbench: () => setShowWB(true), bbs: () => setShowMail(true), profile: () => setShowProfile(true),
-      settings: () => setShowSettings(true),
+      workbench: () => setShowWB(true), bbs: () => setWbApp("bbs"), terminal: () => setWbApp("terminal"),
+      profile: () => setShowProfile(true), settings: () => setShowSettings(true),
     };
     openOnly(() => opener[key]?.());
   }, [openOnly]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -492,7 +484,7 @@ export function App() {
   const target: [number, number] | null = detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || showMail || showSettings || mode === "hide";
+  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || wbApp != null || showSettings || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
     const t = setTimeout(() => map.current?.resize(), 60);
@@ -566,13 +558,12 @@ export function App() {
               onProfile={() => openOnly(() => setShowProfile(true))} />
       <div className="shell">
         <NavRail
-          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : showTerminal ? "terminal" : showWB ? "workbench" : showMail ? "bbs" : showProfile ? "profile" : showSettings ? "settings" : "map"}
+          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
           onMap={closeAll}
           onNearby={() => openOnly(() => setShowNearby(true))}
           onActivity={() => openOnly(() => setShowActivity(true))}
           onRanks={() => openOnly(() => setShowBoard(true))}
           onWorkbench={() => openOnly(() => setShowWB(true))}
-          onMail={() => openOnly(() => setShowMail(true))}
           onProfile={() => openOnly(() => setShowProfile(true))}
           onSettings={() => openOnly(() => setShowSettings(true))}
           pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a)}
@@ -599,7 +590,7 @@ export function App() {
         {showProfile && mode === "view" && (
           <ProfilePanel callsign={callsign} map={map.current}
                         onWorkbench={() => openOnly(() => setShowWB(true))}
-                        onMail={() => openOnly(() => setShowMail(true))}
+                        onMail={() => launchApp("bbs")}
                         onSettings={() => openOnly(() => setShowSettings(true))}
                         onClose={() => setShowProfile(false)} />
         )}
@@ -611,15 +602,11 @@ export function App() {
                           stationsOn={stationsOn} setStationsOn={setStationsOn}
                           stationCount={stations.length}
                           picked={pickedStation} onPick={setPickedStation}
-                          onOpenTerminal={() => openOnly(() => setShowTerminal(true))}
-                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin} focusGroup={wbFocus}
+                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin}
                           onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
         )}
-        {showTerminal && mode === "view" && (
-          <TerminalPanel callsign={callsign} onClose={() => setShowTerminal(false)} />
-        )}
-        {showMail && mode === "view" && (
-          <BbsPanel callsign={callsign} onClose={() => setShowMail(false)} />
+        {wbApp && mode === "view" && (
+          <WorkbenchAppSurface app={wbApp} callsign={callsign} verified={verified} map={map.current} onClose={() => setWbApp(null)} />
         )}
         {showSignIn && (
           <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />

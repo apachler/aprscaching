@@ -32,7 +32,7 @@ function AppShell({ active, title, children, childIsPanel, wide }: { active: str
               onPickCache={noop} onPickStation={noop} onNearby={noop} onActivity={noop} onProfile={noop} />
       <div className="shell">
         <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onRanks={noop}
-                 onWorkbench={noop} onMail={noop} onProfile={noop} onSettings={noop} />
+                 onWorkbench={noop} onProfile={noop} onSettings={noop} />
         <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
         {childIsPanel ? children : (
           <aside className={`panel right${wide ? " panel-wide" : ""}`}>

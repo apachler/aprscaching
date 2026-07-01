@@ -7,24 +7,29 @@ import { useEffect, useState } from "react";
 import type { IconName } from "../ui/index.js";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
-export type WorkbenchAppId = "terminal" | "bbs" | "tools" | "decoder" | "rig" | "remote";
+export type WorkbenchAppId = "terminal" | "bbs" | "tools" | "decoder" | "rig" | "remote" | "node";
 
 export interface WorkbenchApp {
   id: WorkbenchAppId;
   icon: IconName;
   label: string;
   blurb: string;
-  /** For non-surface apps: the WorkbenchPanel Group title to expand when launched. */
-  group?: string;
+  /** Surface header title (with glyph) shown when the app is launched into its own workspace. */
+  title: string;
+  /** Wide workspace (fills the content area, hides the map) vs. a normal docked side panel. */
+  wide?: boolean;
 }
 
+// Every workbench app opens its OWN surface (terminal/BBS/tools/decoder/node are wide workspaces;
+// rig/remote are compact docked panels). Order = launcher order.
 export const WORKBENCH_APPS: WorkbenchApp[] = [
-  { id: "terminal", icon: "radio", label: "Packet terminal", blurb: "Graphic-Packet multi-channel connected-mode terminal" },
-  { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads" },
-  { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", group: "Tools (plugins)" },
-  { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", group: "Packet decoder" },
-  { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", group: "Rig control (CAT)" },
-  { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", group: "Remote control — your box" },
+  { id: "terminal", icon: "radio", label: "Packet terminal", blurb: "Graphic-Packet multi-channel connected-mode terminal", title: "📻 Packet terminal", wide: true },
+  { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads", title: "✉ BBS", wide: true },
+  { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", title: "🔎 Packet decoder", wide: true },
+  { id: "node", icon: "node", label: "NET/ROM node", blurb: "Run a node · digipeater · sysop console", title: "🗄 NET/ROM node", wide: true },
+  { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", title: "🧩 Tools", wide: true },
+  { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", title: "🎚 Rig control (CAT)" },
+  { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", title: "🛰 Remote control — your box" },
 ];
 
 export const appById = (id: WorkbenchAppId): WorkbenchApp | undefined => WORKBENCH_APPS.find((a) => a.id === id);

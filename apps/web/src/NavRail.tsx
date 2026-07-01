@@ -9,7 +9,7 @@ import type { WorkbenchApp } from "./workbench/apps.js";
 export function NavRail(props: {
   active: string;
   onMap: () => void; onNearby: () => void; onActivity: () => void; onRanks: () => void;
-  onWorkbench: () => void; onMail: () => void; onProfile: () => void; onSettings: () => void;
+  onWorkbench: () => void; onProfile: () => void; onSettings: () => void;
   pinnedApps?: WorkbenchApp[]; onLaunchApp?: (id: WorkbenchApp["id"]) => void;
 }) {
   const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
