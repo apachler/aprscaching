@@ -345,6 +345,16 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 /* subsection heading inside a settings group (e.g. Transports / RF / TAK under Connections & sources) */
 .set-subh { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .set-subh:first-child { margin-top: 0; }
+/* inline text-button (e.g. "remove" beside a list row) */
+.link-btn { background: none; border: 0; padding: 0 2px; margin-left: 8px; color: var(--muted);
+  font-size: 12px; cursor: pointer; text-decoration: underline; }
+.link-btn:hover, .link-btn:focus-visible { color: var(--bad); }
+/* FBB forwarding-partner add form (Settings → Network) — a sectioned grid, not one long scroll */
+.partner-form { display: grid; gap: 8px; margin: 8px 0; padding: 10px; border: 1px solid var(--hair);
+  border-radius: 8px; background: var(--surface-2); container-type: inline-size; }
+.partner-form label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.partner-form input, .partner-form select { font: inherit; padding: 5px 7px; }
+@container (min-width: 26rem) { .partner-form { grid-template-columns: 1fr 1fr; } .partner-form .row { grid-column: 1 / -1; } }
 /* nav rail: divider before pinned apps */
 .rail-div { width: 26px; height: 1px; background: var(--hair); margin: 3px 0; flex: none; }
 

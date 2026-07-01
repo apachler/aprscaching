@@ -108,6 +108,22 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   zero I/O, tri-runtime-clean.
 - **Licensing:** reimplemented from open specs (NET/ROM, FBB, MBL/RLI, AXIP/AXUDP); `packages/*` stay MIT.
 
+## Progress (pure cores + product wiring landed)
+- **F1 (session glue):** `packages/packet/src/link-app.ts` (`LineApp` + `serveApp` binding a connected
+  link to a line app) + `loopback.ts` (`VirtualClock` + deferred-delivery `LoopbackChannel`) — the
+  headless RF-integration harness. Unit-tested.
+- **F2 (NET/ROM wire + circuit):** `netrom-wire.ts` (network+transport header + NODES broadcast codec,
+  quality formula) and `netrom-circuit.ts` (L4 sliding-window state machine: ConnReq/ConnAck + window
+  negotiation, DiscReq/DiscAck, in-order Info with cumulative InfoAck, 236-byte fragment/reassemble
+  via more-follows, choke). Unit-tested over the deferred-queue loopback. **Missing:** ingest NODES
+  TX/consume + routing a connect *through* a node (RF-wiring, validate-at-deploy).
+- **F4 (FBB forwarding):** `fbb-session.ts` (SID → `FB…/F>` proposal → `FS` verdicts → block transfer →
+  reverse forwarding → `FF`/`FQ`) driven headlessly over the loopback; BID dedup. Product wiring:
+  migration `0040_bbs_partners` + gateway `forward.ts` sysop partner CRUD (`normalizePartner` +
+  `/api/bbs/partners` GET/POST, `/api/bbs/partners/:id` DELETE, tri-runtime green) + Settings → Network
+  "Forwarding partners" UI. **Missing:** the ingest forwarding scheduler that connects through nodes and
+  runs the codec on interval/timeband, and LZHUF B0/B1 (RF-wiring, validate-at-deploy).
+
 ## Deferred (out of scope this pass)
 Winlink/RMS gateway, chat/conference node, HF/Pactor, telnet node access, modulo-128 / SREJ, DAMA,
 Dijkstra auto-routing, B2 (RMS-only).

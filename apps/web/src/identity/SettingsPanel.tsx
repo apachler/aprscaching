@@ -113,7 +113,7 @@ export function SettingsPanel(props: {
         </Group>
       )}
 
-      {match("network federation peers mirror trust corroboration instance sync") && (
+      {match("network federation peers mirror trust corroboration instance sync forwarding partners bbs mail fbb rf") && (
         <Group title="Network" status="federation" defaultOpen={false}>
           <NetworkSettings />
         </Group>

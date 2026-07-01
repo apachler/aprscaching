@@ -380,6 +380,20 @@ export function getBbsThread(id: number): Promise<{ threadId: number; messages: 
 export interface NodeRouteRow { dest: string; alias: string; neighbor: string; quality: number; port: string | null }
 export interface MheardRow { callsign: string; port: string; lastHeard: number; count: number }
 export function getNodes(): Promise<{ nodes: NodeRouteRow[] }> { return call(`/api/node/nodes`); }
+
+// ---- FBB forwarding partners (docs/29 F4) — sysop transport-level partner config ----
+export interface ForwardPartner {
+  id: number; call: string; ha: string | null; connectScript: string;
+  proto: "rf-fbb" | "axudp" | "ip-fed"; intervalMin: number; timebands: string;
+  requestReverse: boolean; msgtypes: string; maxBlock: number; enabled: boolean;
+}
+export function listForwardPartners(): Promise<{ partners: ForwardPartner[] }> { return call(`/api/bbs/partners`); }
+export function saveForwardPartner(p: Partial<ForwardPartner> & { call: string }): Promise<{ ok: boolean; partner: ForwardPartner }> {
+  return call(`/api/bbs/partners`, { method: "POST", body: JSON.stringify(p) });
+}
+export function deleteForwardPartner(id: number): Promise<{ ok: boolean }> {
+  return call(`/api/bbs/partners/${id}`, { method: "DELETE" });
+}
 export function getMheard(limit = 50): Promise<{ mheard: MheardRow[] }> { return call(`/api/node/mheard?limit=${limit}`); }
 /** Personal mail you SENT, with its store-and-forward delivery state (docs/17 BBS). */
 export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {

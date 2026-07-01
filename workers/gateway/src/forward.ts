@@ -83,3 +83,75 @@ export async function handleForwardRuleDelete(req: Request, env: Env, id: number
   await env.DB.prepare("DELETE FROM bbs_forward_rules WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
+
+// ---- FBB forwarding partners (docs/29 F4) ----
+const PARTNER_PROTOS = ["rf-fbb", "axudp", "ip-fed"] as const;
+export interface ForwardPartner {
+  call: string; ha: string | null; connectScript: string; proto: (typeof PARTNER_PROTOS)[number];
+  intervalMin: number; timebands: string; requestReverse: boolean; msgtypes: string; maxBlock: number; enabled: boolean;
+}
+const clampInt = (v: unknown, lo: number, hi: number, dflt: number): number => {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+};
+
+/**
+ * Normalize + validate a partner from untrusted JSON into a safe row (pure → unit-tested). Uppercases the
+ * call/HA, keeps msgtypes to the P/B/T set, caps the block size to the FBB spec limit (5), and only accepts
+ * a known transport. Returns null when the mandatory callsign is missing/blank.
+ */
+export function normalizePartner(input: unknown): ForwardPartner | null {
+  const b = (input ?? {}) as Record<string, unknown>;
+  const call = String(b.call ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{3,6}(-\d{1,2})?$/.test(call)) return null;
+  const proto = PARTNER_PROTOS.includes(b.proto as never) ? (b.proto as ForwardPartner["proto"]) : "rf-fbb";
+  const msgtypes = [...new Set(String(b.msgtypes ?? "PBT").toUpperCase().split("").filter((c) => "PBT".includes(c)))].join("") || "PBT";
+  const timebands = String(b.timebands ?? "").replace(/[^0-9,\-]/g, "").slice(0, 64);
+  return {
+    call,
+    ha: b.ha != null && String(b.ha).trim() ? String(b.ha).trim().toUpperCase().slice(0, 64) : null,
+    connectScript: String(b.connectScript ?? "").slice(0, 512),
+    proto,
+    intervalMin: clampInt(b.intervalMin, 0, 1440, 30),
+    timebands,
+    requestReverse: b.requestReverse == null ? true : !!b.requestReverse,
+    msgtypes,
+    maxBlock: clampInt(b.maxBlock, 1, 5, 5),
+    enabled: b.enabled == null ? true : !!b.enabled,
+  };
+}
+
+const partnerRow = (r: any): ForwardPartner & { id: number } => ({
+  id: r.id, call: r.call, ha: r.ha, connectScript: r.connect_script, proto: r.proto,
+  intervalMin: r.interval_min, timebands: r.timebands, requestReverse: !!r.request_reverse,
+  msgtypes: r.msgtypes, maxBlock: r.max_block, enabled: !!r.enabled,
+});
+
+/** Sysop partner CRUD: GET list · POST create (upsert by call). */
+export async function handleForwardPartners(req: Request, env: Env): Promise<Response> {
+  if (req.method === "GET") {
+    const rows = (await env.DB.prepare(
+      "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners ORDER BY call",
+    ).all()).results;
+    return json({ partners: rows.map(partnerRow) });
+  }
+  const p = normalizePartner(await req.json().catch(() => ({})));
+  if (!p) return json({ error: "valid partner call required" }, { status: 400 });
+  const ts = now();
+  await env.DB.prepare(
+    `INSERT INTO bbs_partners (call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(call) DO UPDATE SET ha=excluded.ha, connect_script=excluded.connect_script, proto=excluded.proto,
+       interval_min=excluded.interval_min, timebands=excluded.timebands, request_reverse=excluded.request_reverse,
+       msgtypes=excluded.msgtypes, max_block=excluded.max_block, enabled=excluded.enabled, updated_at=excluded.updated_at`,
+  ).bind(p.call, p.ha, p.connectScript, p.proto, p.intervalMin, p.timebands, p.requestReverse ? 1 : 0, p.msgtypes, p.maxBlock, p.enabled ? 1 : 0, ts, ts).run();
+  const row = await env.DB.prepare(
+    "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners WHERE call=?",
+  ).bind(p.call).first();
+  return json({ ok: true, partner: partnerRow(row) }, { status: 201 });
+}
+
+export async function handleForwardPartnerDelete(req: Request, env: Env, id: number): Promise<Response> {
+  await env.DB.prepare("DELETE FROM bbs_partners WHERE id=?").bind(id).run();
+  return json({ ok: true });
+}
