@@ -15,3 +15,6 @@ export function useSession() {
     signedIn: !!s.callsign, loading, refresh, signOut,
   };
 }
+
+/** The value returned by `useSession` — passed down to the lazily-loaded Platform. */
+export type SessionState = ReturnType<typeof useSession>;

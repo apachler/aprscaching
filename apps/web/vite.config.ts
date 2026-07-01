@@ -1,14 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Split the heavy, rarely-changing vendors into their own chunks so a code-only deploy doesn't force
-// a re-download of MapLibre/React (long-term caching + parallel fetch). MapLibre GL is ~800 KB on its
-// own — an unavoidable floor for a vector-map app — so the warning limit reflects that reality rather
-// than flagging a dependency we can't shrink; the app chunk itself stays under the default budget.
+// Vendor chunking + preload policy for the landing-vs-platform split:
+//  - React is an eager entry dependency → its own long-term-cacheable chunk.
+//  - MapLibre (~800 KB, an unshrinkable vector-map floor) gets its own chunk too so a code-only deploy
+//    doesn't force a re-download — but it is reachable ONLY through the lazily-imported Platform.
+//  - resolveDependencies strips MapLibre from the preload graph so Vite does NOT hoist a modulepreload
+//    for it into index.html; the signed-out landing therefore never fetches it. It loads on demand when
+//    Platform mounts (explore / sign-in). The warning limit reflects MapLibre's real size.
 export default defineConfig({
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 900,
+    modulePreload: {
+      resolveDependencies: (_url, deps) => deps.filter((d) => !d.includes("maplibre")),
+    },
     rollupOptions: {
       output: {
         manualChunks: {
