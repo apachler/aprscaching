@@ -11,7 +11,7 @@ DB="$(mktemp -d)/teaser.db"
 export PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 for c in /opt/pw-browsers/chromium-*/chrome-linux/chrome /opt/pw-browsers/chromium/chrome-linux/chrome; do [ -x "$c" ] && export PW_CHROMIUM="$c" && break; done
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png "$OUT"/manifest.json 2>/dev/null || true
+rm -f "$OUT"/*.png "$OUT"/manifest*.json "$OUT"/problems*.json 2>/dev/null || true
 
 cleanup() { for p in ${API_PID:-} ${WEB_PID:-}; do kill -9 "-$p" 2>/dev/null || true; done; pkill -9 -f "src/server.ts" 2>/dev/null || true; pkill -9 -f "vite preview" 2>/dev/null || true; }
 trap cleanup EXIT
@@ -37,9 +37,15 @@ wait_url "http://127.0.0.1:$PORT_WEB/" || { echo "preview did not start"; tail "
 echo "==> run the UI tour (one node process per viewport; tour.mjs closes its own browser)"
 # NOTE: do NOT pkill on the chrome path here — that pattern also matches this script's own command
 # line and would kill the orchestrator mid-loop. Playwright's browser.close() in tour.mjs is enough.
+# Per-viewport exit codes: 0 = clean, 4 = some steps skipped (video still builds), other = the tour
+# process crashed. Recorded here and reported in the problem summary so a full run surfaces failures.
+declare -a VIEW_RC=()
 for VIEW in desktop tablet mobile; do
   echo "   -- $VIEW"
-  ( cd "$HERE" && BASE="http://127.0.0.1:$PORT_WEB" OUT="$OUT/" VIEW="$VIEW" node tour.mjs ) || echo "   ($VIEW had errors — continuing)"
+  rc=0
+  ( cd "$HERE" && BASE="http://127.0.0.1:$PORT_WEB" OUT="$OUT/" VIEW="$VIEW" node tour.mjs ) || rc=$?
+  VIEW_RC+=("$VIEW=$rc")
+  [ "$rc" -ne 0 ] && echo "   ($VIEW exited $rc — details in the problem summary below)"
   sleep 2
 done
 
@@ -48,4 +54,29 @@ echo "==> tour frames in $OUT: $(ls "$OUT"/[123]-*.png 2>/dev/null | wc -l)"
 echo "==> assemble the captioned teaser video"
 bash "$HERE/build-video.sh" || { echo "   (compose hiccup — retrying once)"; sleep 2; bash "$HERE/build-video.sh"; }
 
+# ---- problem summary: aggregate the per-viewport problems-*.json into one findable report ----
+# A full run must end with an unmissable list of what (if anything) failed, plus per-viewport exit
+# codes. Exits non-zero when any step was skipped or a viewport crashed — the video is already built.
+echo "==> problem summary"
+PROBLEMS=0
+node - "$OUT" <<'NODE' || PROBLEMS=$?
+const fs = require("fs"), dir = process.argv[2];
+const files = fs.readdirSync(dir).filter((f) => /^problems-.*\.json$/.test(f));
+let all = [];
+for (const f of files) { try { all.push(...JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8"))); } catch {} }
+if (!all.length) { console.log("   ✓ no problems — every scripted step captured on all viewports"); process.exit(0); }
+console.log(`   ✗ ${all.length} step(s) skipped across viewports:`);
+for (const p of all) console.log(`     - ${p.viewport}/${p.step} — ${p.reason}`);
+process.exit(1);
+NODE
+CRASHED=0
+for entry in "${VIEW_RC[@]}"; do
+  v="${entry%=*}"; rc="${entry#*=}"
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 4 ]; then echo "   ✗ viewport '$v' crashed (exit $rc) — its tour did not finish"; CRASHED=1; fi
+done
+
 echo "==> teaser complete: $OUT/aprscaching-ui-teaser.webm"
+if [ "$PROBLEMS" -ne 0 ] || [ "$CRASHED" -ne 0 ]; then
+  echo "==> FINISHED WITH PROBLEMS (video built, but some steps were skipped — see summary above)"
+  exit 1
+fi

@@ -34,7 +34,9 @@ const VIEWS = only ? ALL.filter((v) => v.id === only) : ALL;
 const viewIndex = (id) => ALL.findIndex((v) => v.id === id) + 1; // 1..3 → frame-order prefix
 
 let seq = 0;
+let curView = process.env.VIEW ?? "all"; // set per viewport in the loop; tags problem records
 const manifest = [];
+const problems = []; // { viewport, step, reason } for any step that failed — surfaced at end of run
 async function shot(page, vid, name, label) {
   seq++;
   const file = `${viewIndex(vid)}-${String(seq).padStart(2, "0")}-${vid}-${name}.png`;
@@ -96,7 +98,12 @@ async function openProfileAdvanced(page, btnText) {
   return clickAny(page, [`button:has-text('${btnText}')`]);
 }
 async function step(name, fn) {
-  try { await fn(); } catch (e) { console.log("   ! skip", name, "-", String(e.message).split("\n")[0]); }
+  try { await fn(); }
+  catch (e) {
+    const reason = String(e.message).split("\n")[0];
+    problems.push({ viewport: curView, step: name, reason });
+    console.log("   ✗ SKIP", `[${curView}]`, name, "-", reason);
+  }
 }
 // Open the Workbench panel deterministically via the ?view=workbench deep-link (the same one-shot
 // mechanism the Site map / sitemap.xml consumers use) rather than navigating the stateful rail. This
@@ -151,6 +158,7 @@ async function advancedTools(page) {
 }
 
 for (const v of VIEWS) {
+  curView = v.id;
   console.log("==>", v.id);
   browser = await launchBrowser();
 
@@ -295,4 +303,12 @@ for (const v of VIEWS) {
 }
 
 fs.writeFileSync(OUT + `manifest-${only ?? "all"}.json`, JSON.stringify(manifest, null, 2));
-console.log(`\ntour complete (${only ?? "all"}): ${seq} frames -> ${OUT}`);
+// Always emit a problems file (empty on a clean run) so run-tour.sh can aggregate and report failures
+// at the end of a full run — a skipped step must be findable without grepping the whole log.
+fs.writeFileSync(OUT + `problems-${only ?? "all"}.json`, JSON.stringify(problems, null, 2));
+console.log(`\ntour complete (${only ?? "all"}): ${seq} frames, ${problems.length} skipped -> ${OUT}`);
+if (problems.length) {
+  console.log(`  problems (${problems.length}):`);
+  for (const p of problems) console.log(`    ✗ ${p.viewport}/${p.step} — ${p.reason}`);
+  process.exitCode = 4; // signal to run-tour.sh that steps were skipped (video still builds)
+}
