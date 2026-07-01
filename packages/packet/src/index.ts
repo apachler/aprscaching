@@ -10,6 +10,7 @@ export * from "./netrom-wire.js";
 export * from "./netrom-circuit.js";
 export * from "./netrom-node.js";
 export * from "./netrom-connect-through.js";
+export * from "./netrom-switch.js";
 export * from "./link-app.js";
 export * from "./session-server.js";
 export * from "./cached-bbs-store.js";

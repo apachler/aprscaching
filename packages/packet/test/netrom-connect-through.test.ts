@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { SessionServer } from "../src/session-server.js";
 import { NetromNode } from "../src/netrom-node.js";
-import { nodeConnectThrough, type CircuitDialer } from "../src/netrom-connect-through.js";
+import { nodeConnectThrough, parseConnectScript, type CircuitDialer } from "../src/netrom-connect-through.js";
 import { NodeSession, type NodeStore } from "../src/netrom.js";
 import { NetromCircuit, type NrTpPacket } from "../src/netrom-circuit.js";
 import { encodeNodesBroadcast } from "../src/netrom-wire.js";
@@ -65,6 +65,13 @@ describe("NET/ROM connect-through (docs/29 F2)", () => {
     const { client, pump, rx } = setup(echoDialer);
     client.send(enc("C ZZ9ZZ\r")); pump();
     expect(rx()).toContain("no route to ZZ9ZZ");
+  });
+
+  it("parses a BPQ connect script (optional port + callsign per hop)", () => {
+    expect(parseConnectScript("C NODE1\nC 3 DB0XYZ")).toEqual([{ call: "NODE1" }, { port: 3, call: "DB0XYZ" }]);
+    expect(parseConnectScript("  c oe8xbm  \n\n")).toEqual([{ call: "OE8XBM" }]); // case + blank lines
+    expect(parseConnectScript("hello\nC")).toEqual([]);                           // non-C / bare C ignored
+    expect(parseConnectScript("C 0 OE1ABC-7")).toEqual([{ port: 0, call: "OE1ABC-7" }]);
   });
 
   it("returns the user to the node when the far end disconnects", () => {

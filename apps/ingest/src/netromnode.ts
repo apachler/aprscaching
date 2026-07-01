@@ -6,10 +6,10 @@
  * connecting in and issuing C <dest> to route through us) rides the same KISS link and is validate-at-deploy.
  */
 import {
-  NetromNode, NetromCircuit, nodeConnectThrough, encodeNetrom, decodeNetrom,
+  NetromNode, NetromCircuit, nodeConnectThrough, routeNetrom, encodeNetrom, decodeNetrom,
   type LearnedRoute, type NodeStore, type NodeMheard, type CircuitDialer, type RelayController,
 } from "@aprsweb/packet";
-import { decodeFrame, parseAddr, addrStr, sameAddr, PID_NETROM, type Ax25Address } from "@aprsweb/ax25";
+import { decodeFrame, parseAddr, addrStr, PID_NETROM, type Ax25Address } from "@aprsweb/ax25";
 import type { KissTnc } from "./kiss.js";
 
 const NODES_DST = { call: "NODES", ssid: 0 };
@@ -79,17 +79,22 @@ export class NetromNodeRunner {
     this.heard.set(addrStr(f.src), { call: addrStr(f.src), port: this.port, lastHeard: Math.floor(Date.now() / 1000) });
     if (f.type !== "UI" || f.pid !== PID_NETROM || !f.info) return;
 
-    // NET/ROM L3 addressed to us (not the "NODES" broadcast) → route the transport packet to its circuit
-    if (sameAddr(f.dst, this.me)) {
+    // A directed NET/ROM frame (not the "NODES" broadcast): switch it — deliver locally to its circuit,
+    // transit-forward it toward its destination, or drop (TTL/no-route/loop). docs/29 F2.
+    if (f.dst.call !== NODES_DST.call) {
       const pkt = decodeNetrom(f.info);
-      if (pkt && this.circuits.length) {
-        // single-circuit typical; with several, route to the connecting/connected one (full demux is validate-at-deploy)
-        const c = this.circuits.find((x) => x.state === "connecting" || x.state === "connected") ?? this.circuits[0]!;
-        c.onPacket(pkt.tp, pkt.info);
+      if (!pkt) return;
+      const decision = routeNetrom(pkt, this.node, this.me);
+      if (decision.action === "local") {
+        const c = this.circuits.find((x) => x.localIndex === pkt.tp.circuitIndex && x.localId === pkt.tp.circuitId);
+        c?.onPacket(pkt.tp, pkt.info);                 // demux to the owning circuit (ConnReq to us = inbound circuit, not yet handled)
+      } else if (decision.action === "forward") {
+        this.kiss.sendFrame({ dst: decision.neighbor, src: this.me, command: true, type: "UI", pf: false, pid: PID_NETROM, info: encodeNetrom(decision.packet) });
+      } else if (decision.reason !== "no-route") {
+        console.log(`[netrom] dropped transit to ${addrStr(pkt.net.dest)} (${decision.reason})`);
       }
       return;
     }
-    if (f.dst.call !== NODES_DST.call) return;
     const learned = this.node.consume(f.info, f.src, this.port);
     if (learned) { console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)}`); void this.mirror(); }
   }

@@ -10,6 +10,29 @@ import type { RelayController } from "./link-app.js";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
+/** One hop of a BPQ-style connect script: `C [port] <call>` (an optional radio port then a callsign). */
+export interface ConnectStep { port?: number; call: string }
+
+/**
+ * Parse a BPQ connect script into hops. Each non-empty line is `C [port] <call>` (case-insensitive `C`);
+ * a leading integer is the port, the last token is the callsign. Blank lines and non-`C` lines are ignored.
+ * Example: "C NODE1\nC 3 DB0XYZ" → [{call:"NODE1"}, {port:3, call:"DB0XYZ"}]. Pure — the sequencer that
+ * actually drives these connects (waiting for each node's prompt) is the radio leg (validate-at-deploy).
+ */
+export function parseConnectScript(script: string): ConnectStep[] {
+  const steps: ConnectStep[] = [];
+  for (const raw of script.split(/[\r\n]+/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const toks = line.split(/\s+/);
+    if (toks[0]!.toUpperCase() !== "C" || toks.length < 2) continue;
+    const rest = toks.slice(1);
+    const port = /^\d+$/.test(rest[0]!) && rest.length > 1 ? Number(rest.shift()) : undefined;
+    steps.push({ ...(port != null ? { port } : {}), call: rest[rest.length - 1]!.toUpperCase() });
+  }
+  return steps;
+}
+
 /** The onward leg of a connect-through: send bytes to the destination, and tear it down. */
 export interface OutboundCircuit { send(bytes: Uint8Array): void; disconnect(): void }
 /** Open an onward circuit to `route`, delivering its data via `onData` and its teardown via `onClose`. */

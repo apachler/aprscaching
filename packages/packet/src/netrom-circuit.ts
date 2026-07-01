@@ -39,6 +39,10 @@ export class NetromCircuit {
     this.myIndex = id.index; this.myId = id.id;
   }
 
+  /** This end's local circuit identity — a received transport packet carries these so a node can demux it. */
+  get localIndex(): number { return this.myIndex; }
+  get localId(): number { return this.myId; }
+
   /** Initiate the circuit: send a Connect Request proposing `window`. */
   connect(window = 4): void {
     if (this.state !== "disconnected" || !this.origin) return;
