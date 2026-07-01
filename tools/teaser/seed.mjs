@@ -55,4 +55,68 @@ if (heroId) {
   await j("POST", `/api/caches/${heroId}/logs`, { loggerCall: "DJ1NOTE", logType: "note", comment: "Clock restored last week — looks great." });
   console.log("seeded logbook on hero cache id", heroId);
 }
+
+// ---- Demo Phase A: populate the data-driven surfaces (Live stations, station pages, weather graphs,
+// track history, activity feed, ranks). The gateway DECODES the APRS `payload`, so seed real payloads. ----
+const T = now();
+const ingest = (packets) => j("POST", "/ingest", { packets }, { "x-ingest-secret": SECRET });
+// build an uncompressed APRS position payload: =DDMM.mmN<symtable>DDDMM.mmE<symcode><comment>
+const pad = (n, w) => String(n).padStart(w, "0");
+const dm = (v, degW) => { const a = Math.abs(v), d = Math.floor(a), min = (a - d) * 60; return pad(d, degW) + pad(min.toFixed(2), 5); };
+const aprsPos = (lat, lon, st, sc, comment = "") =>
+  `=${dm(lat, 2)}${lat >= 0 ? "N" : "S"}${st}${dm(lon, 3)}${lon >= 0 ? "E" : "W"}${sc}${comment}`;
+const pkt = (src, payload, ts) => ({ src, dst: "APRS", path: ["WIDE1-1", "qAR", "OE8XXX"], payload,
+  kind: "position", heardVia: "rf", igateCall: "OE8XXX", port: "aprs-is", ts });
+
+// Live stations across roles (the symbol drives the map glyph + role). → stations + station pages.
+const STATIONS = [
+  { src: "OE8XXX-10", lat: 47.0700, lon: 15.4400, st: "I", sc: "&", c: "Graz iGate - RX 24/7 JN77rb" },
+  { src: "OE6XRR-3",  lat: 47.1980, lon: 15.4660, st: "/", sc: "#", c: "Schoeckl WIDE2 digipeater @1445m" },
+  { src: "OE8APR-1",  lat: 47.0735, lon: 15.4378, st: "/", sc: "-", c: "home QTH JN77rb" },
+  { src: "DL2GRZ-9",  lat: 47.0655, lon: 15.4500, st: "/", sc: ">", c: "mobile - enroute A2" },
+  { src: "OE5MUL-7",  lat: 47.0820, lon: 15.4640, st: "/", sc: "[", c: "HT portable @ Hilmteich" },
+  { src: "OE8WX-13",  lat: 47.0760, lon: 15.4210, st: "/", sc: "_", c: "PWS Graz-West" },
+];
+for (const s of STATIONS) await ingest([pkt(s.src, aprsPos(s.lat, s.lon, s.st, s.sc, s.c), T)]);
+console.log("seeded", STATIONS.length, "live stations");
+
+// A rover track over the last ~2h → track history / replay.
+for (let i = 12; i >= 0; i--) {
+  const f = (12 - i) / 12;
+  await ingest([pkt("OE8XYZ-9", aprsPos(47.045 + f * 0.03, 15.39 + f * 0.04, "/", ">", "living cache rover"), T - i * 600)]);
+}
+console.log("seeded rover track (13 fixes)");
+
+// Hourly weather (APRS position+weather report) for the PWS → weather graphs (sensor_readings).
+const cToF = (c) => Math.round(c * 9 / 5 + 32);
+for (let i = 23; i >= 0; i--) {
+  const h = 23 - i;
+  const tC = 9 + 6 * Math.sin((h / 24) * Math.PI * 2) + (h % 3) * 0.4;
+  const wx = `=${dm(47.076, 2)}N/${dm(15.421, 3)}E_${pad((120 + h * 8) % 360, 3)}/${pad(4 + (h % 7), 3)}`
+    + `g${pad(7 + (h % 5), 3)}t${pad(cToF(tC), 3)}h${pad((60 + ((h * 3) % 30)) % 100, 2)}b${pad((1012 + ((h % 5) - 2)) * 10, 5)}`;
+  await ingest([{ src: "OE8WX-13", dst: "APRS", path: ["qAR", "OE8XXX"], payload: wx, heardVia: "aprs_is", igateCall: "OE8XXX", port: "aprs-is", ts: T - i * 3600 }]);
+}
+console.log("seeded 24h weather for OE8WX-13");
+
+// More finds across caches → richer Activity feed + Leaderboard.
+const finders = [
+  ["Mur Riverwalk", "OE3ABC", "found", "Nice two-stage, solved it at the bridge. TFTC!"],
+  ["Eggenberg Gardens", "DL2GRZ", "found", "Peacocks approved. Quick find."],
+  ["Plabutsch Park", "OE1POTA", "found", "POTA + cache combo, activated 20m too."],
+  ["Hilmteich Loop", "OE5MUL", "found", "Great walk around the pond."],
+  ["Murinsel Echo", "OE5FLM", "found", "Decoded the audio clue on the second try!"],
+  ["Schoeckl OE/ST-027", "OE6SOTA", "found", "Summit activated, 8 QSOs on 2m FM. vy73"],
+  ["Mur Riverwalk", "OE8APR", "found", "FTF check — all good."],
+  ["Eggenberg Gardens", "OE3ABC", "dnf", "Ran out of daylight, back next week."],
+];
+let logged = 0;
+for (const [title, call, logType, comment] of finders) {
+  const id = idByTitle.get(title);
+  if (!id) continue;
+  const appGeo = logType === "found" ? { lat: CACHES.find((c) => c.title === title).lat + 0.0001, lon: CACHES.find((c) => c.title === title).lon, accuracyM: 12, ts: T } : undefined;
+  const r = await j("POST", `/api/caches/${id}/logs`, { loggerCall: call, logType, comment, appGeo });
+  if (r.ok) logged++;
+}
+console.log("seeded", logged, "extra cache logs");
+
 console.log("seed complete");
