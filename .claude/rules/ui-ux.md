@@ -155,8 +155,15 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 - **Hide-a-cache / forms:** **sectioned** (grouped) form, inline validation, optional fields marked,
   never one long scroll of inputs.
 - **Settings / profile / maintenance:** §2 architecture — grouped, toggle-gated, collapsible,
-  searchable. This is the home for **APRS/platform config** — connections & sources (transports, the
-  browser RF bridge, TAK/CoT), network (federation), and notifications (incl. the watchlist).
+  searchable. This is the home for **per-user config** — the user's own account/profile, their browser
+  RF bridge (My radio), locale/units, notifications (incl. the watchlist), and GDPR data tools.
+  **MUST NOT** surface instance-wide config here (see the operator surface below).
+- **Instance admin (operator/sysop surface):** instance-WIDE configuration — the federation network
+  (peers + trust), FBB forwarding (partners + routing rules), and the server ingest data plane
+  (transports, TAK/CoT feed) — belongs to the ham who **deployed** this instance, NOT to platform
+  users. It MUST live on a **dedicated, sysop-gated surface** (revealed only when the signed-in account
+  is an operator, `ADMIN_CALLSIGNS`), and every write MUST be gated **server-side** (`requireSysop`),
+  never merely hidden in the UI. A normal user MUST NOT see or reach it.
 - **Workbench:** an **app launcher**, not a config page. It lists the operator *apps* (packet
   terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
   into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching

@@ -8,7 +8,6 @@ import {
 import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
-import { NetworkSettings } from "./NetworkSettings.js";
 import { Watchlist } from "../workbench/Watchlist.js";
 import { pushSupported, pushSubscribed, enablePush, disablePush } from "../push.js";
 import { ProfileEditor } from "../profile/ProfileEditor.js";
@@ -107,15 +106,9 @@ export function SettingsPanel(props: {
         </Group>
       )}
 
-      {match("connections sources transports ports APRS-IS KISS Meshtastic RF Web Serial BLE TAK CoT feed ingest") && (
-        <Group title="Connections & sources" status="APRS data plane" defaultOpen={false}>
-          <ConnectionsSettings callsign={props.callsign} verified={props.verified} map={props.map} />
-        </Group>
-      )}
-
-      {match("network federation peers mirror trust corroboration instance sync forwarding partners bbs mail fbb rf") && (
-        <Group title="Network" status="federation" defaultOpen={false}>
-          <NetworkSettings />
+      {props.session.signedIn && match("my radio browser RF Web Serial BLE KISS TNC bridge station") && (
+        <Group title="My radio (browser)" status="RF bridge" defaultOpen={false}>
+          <ConnectionsSettings callsign={props.callsign} verified={props.verified} />
         </Group>
       )}
 

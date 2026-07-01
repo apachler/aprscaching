@@ -8,6 +8,11 @@ export interface Env {
   ROOMS: RoomNamespace;
   INGEST_SECRET: string;
 
+  // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
+  // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin
+  // endpoints locked; the ingest still uses INGEST_SECRET). The operator sets their own signed-in call.
+  ADMIN_CALLSIGNS?: string;
+
   // ---- federation (F1) — all optional; absent => feeds served unsigned ----
   INSTANCE?: string;        // canonical instance id/domain, e.g. "oe.aprscaching.org"
   FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed

@@ -6,6 +6,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { requireSysop } from "./admin.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -20,12 +21,14 @@ export async function recordMheard(env: Env, calls: { src: string; port: string 
     ).bind(c.src.toUpperCase(), c.port, ts)));
 }
 
-/** GET /api/node/nodes (list) · POST (sysop add a node route). */
+/** GET /api/node/nodes (public read — operational NODES table) · POST (add a node route; operator or the
+ *  operator-local ingest mirroring learned routes). */
 export async function handleNodeNodes(req: Request, env: Env): Promise<Response> {
   if (req.method === "GET") {
     const rows = (await env.DB.prepare("SELECT dest, alias, neighbor, quality, port FROM netrom_nodes ORDER BY quality DESC LIMIT 500").all()).results;
     return json({ nodes: rows });
   }
+  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;   // sysop or ingest mirror
   const b = (await req.json().catch(() => ({}))) as { dest?: string; alias?: string; neighbor?: string; quality?: number; port?: string };
   if (!b.dest || !b.alias || !b.neighbor) return json({ error: "dest + alias + neighbor required" }, { status: 400 });
   await env.DB.prepare(

@@ -8,6 +8,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { requireSysop } from "./admin.js";
 import {
   importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, activeFedKeys, type FedPublicKey,
   loadRegistry, registryKeyAllowed, buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
@@ -307,6 +308,7 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
 }
 
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;   // operator observability
   await seedPeers(env);
   const rows = (await env.DB.prepare(
     `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
@@ -333,12 +335,12 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
 }
 
 /**
- * Operator control (T1.1): set a peer's trust level. INGEST_SECRET-gated (operator-only), so the
- * Workbench Settings → Federation surface can promote (`trusted`), demote (`unvetted`), or quarantine
- * (`blocked`) a peer. Promotion stamps `approved_at` once.
+ * Operator control (T1.1): set a peer's trust level. Sysop-only (signed-in instance operator) or the
+ * ingest secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
+ * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
  */
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
-  if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return new Response("unauthorized", { status: 401 });
+  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
   const b = (await req.json().catch(() => null)) as { url?: string; trust?: string } | null;
   const trust = b?.trust as TrustLevel | undefined;
   if (!b?.url || !trust || !TRUST_LEVELS.includes(trust))

@@ -7,6 +7,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { requireSysop } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprsweb/packet";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -65,8 +66,9 @@ export async function handleWhitePages(req: Request, env: Env): Promise<Response
   return json({ ok: true, callsign: b.callsign.toUpperCase(), homeBbs: b.homeBbs.toUpperCase() });
 }
 
-/** Sysop forward-rule CRUD: GET list · POST add · DELETE /:id. */
+/** Sysop forward-rule CRUD: GET list · POST add · DELETE /:id. Instance-operator only. */
 export async function handleForwardRules(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env); if (gate) return gate;
   if (req.method === "GET") {
     const rows = (await env.DB.prepare("SELECT id, partner, route, transport, enabled FROM bbs_forward_rules ORDER BY id").all()).results;
     return json({ rules: rows.map((r: any) => ({ ...r, enabled: !!r.enabled })) });
@@ -80,6 +82,7 @@ export async function handleForwardRules(req: Request, env: Env): Promise<Respon
 }
 
 export async function handleForwardRuleDelete(req: Request, env: Env, id: number): Promise<Response> {
+  const gate = await requireSysop(req, env); if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_forward_rules WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
@@ -127,8 +130,10 @@ const partnerRow = (r: any): ForwardPartner & { id: number } => ({
   msgtypes: r.msgtypes, maxBlock: r.max_block, enabled: !!r.enabled,
 });
 
-/** Sysop partner CRUD: GET list · POST create (upsert by call). */
+/** Sysop partner CRUD: GET list · POST create (upsert by call). Operator-only; the ingest reads the list
+ *  with its INGEST_SECRET (the forwarder loads partners), so GET also accepts the ingest credential. */
 export async function handleForwardPartners(req: Request, env: Env): Promise<Response> {
+  const gate = await requireSysop(req, env, { allowIngest: req.method === "GET" }); if (gate) return gate;
   if (req.method === "GET") {
     const rows = (await env.DB.prepare(
       "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners ORDER BY call",
@@ -152,6 +157,7 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
 }
 
 export async function handleForwardPartnerDelete(req: Request, env: Env, id: number): Promise<Response> {
+  const gate = await requireSysop(req, env); if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_partners WHERE id=?").bind(id).run();
   return json({ ok: true });
 }

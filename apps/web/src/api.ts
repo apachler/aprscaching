@@ -317,6 +317,25 @@ export interface FedPeer {
 export function listFederationPeers(): Promise<{ peers: FedPeer[] }> {
   return call(`/federation/peers`);
 }
+/** Operator: promote/demote/quarantine a federation peer (sysop-gated). */
+export function setPeerTrust(url: string, trust: "trusted" | "unvetted" | "blocked"): Promise<{ ok: boolean }> {
+  return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust }) });
+}
+
+// ---- instance operator (sysop) admin ----
+/** Is the signed-in account the instance operator? Drives whether the admin surface is revealed. */
+export function adminWhoami(): Promise<{ sysop: boolean; callsign: string | null; configured: boolean }> {
+  return call(`/api/admin/whoami`);
+}
+/** FBB forwarding routing rules (route token → partner). Sysop-gated. */
+export interface ForwardRuleRow { id: number; partner: string; route: string; transport: string; enabled: boolean }
+export function listForwardRules(): Promise<{ rules: ForwardRuleRow[] }> { return call(`/api/bbs/forward`); }
+export function saveForwardRule(r: { partner: string; route: string; transport?: string }): Promise<{ ok: boolean; id: number }> {
+  return call(`/api/bbs/forward`, { method: "POST", body: JSON.stringify(r) });
+}
+export function deleteForwardRule(id: number): Promise<{ ok: boolean }> {
+  return call(`/api/bbs/forward/${id}`, { method: "DELETE" });
+}
 
 // ---- M2 audio-cache: staged multi-cache ----
 import type { CacheStage } from "@aprsweb/shared";

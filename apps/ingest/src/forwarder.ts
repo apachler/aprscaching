@@ -20,7 +20,7 @@ export class GatewayApi implements ForwardApi {
   constructor(private base: string, private secret: string) {}
   private h() { return { "content-type": "application/json", "x-ingest-secret": this.secret }; }
   async partners(): Promise<GwPartner[]> {
-    const r = await fetch(`${this.base}/api/bbs/partners`);
+    const r = await fetch(`${this.base}/api/bbs/partners`, { headers: { "x-ingest-secret": this.secret } });
     return ((await r.json()) as { partners?: GwPartner[] }).partners ?? [];
   }
   async pool(call: string): Promise<FbbMessage[]> {

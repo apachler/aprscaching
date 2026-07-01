@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import {
-  listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount, getProfile,
+  listCaches, getCache, getStations, getSpots, resolveView, API_BASE, flushLogQueue, queuedLogCount, getProfile, adminWhoami,
   type CacheSummary, type CacheDetail, type MapCache, type BBox, type StationSummary, type Spot, type MapViewState,
   type SearchHitCache, type SearchHitStation,
 } from "./api.js";
@@ -31,6 +31,7 @@ import { MapTools } from "./map/MapTools.js";
 import { BasemapSwitcher } from "./map/BasemapSwitcher.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
+import { AdminPanel } from "./identity/AdminPanel.js";
 import { NearbyPanel } from "./caches/NearbyPanel.js";
 import { FilterPanel } from "./caches/FilterPanel.js";
 import { HidePanel } from "./caches/HidePanel.js";
@@ -118,6 +119,8 @@ export function App() {
   useEffect(() => { spotFiltersRef.current = spotFilters; }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [sysop, setSysop] = useState(false);              // signed-in account is this instance's operator
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); notePrefChange(); }, []);
@@ -126,6 +129,11 @@ export function App() {
   // apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
   // untouched (the endpoint is session-gated). localStorage stays the source of truth.
   useEffect(() => { if (session.signedIn) void pullPrefs(); }, [session.signedIn]);
+  // Instance-operator (sysop) check — reveals the admin surface only for the ham who deployed this instance.
+  useEffect(() => {
+    if (!session.signedIn) { setSysop(false); return; }
+    adminWhoami().then((r) => setSysop(!!r.sysop)).catch(() => setSysop(false));
+  }, [session.signedIn]);
   useEffect(() => {
     const onSync = () => setLocSettings(loadSettings());
     window.addEventListener(PREFS_EVENT, onSync);
@@ -153,7 +161,7 @@ export function App() {
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
     setShowBoard(false); setShowWB(false); setWbApp(null); setShowNearby(false);
-    setShowActivity(false); setShowMessages(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
+    setShowActivity(false); setShowMessages(false); setShowProfile(false); setShowSettings(false); setShowAdmin(false); setShowSignIn(false);
     setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
     // and its draft marker, not leave it stuck on top of the destination panel.
@@ -559,7 +567,8 @@ export function App() {
               onPickCache={pickCacheHit} onPickStation={pickStationHit}
               onNearby={() => openOnly(() => setShowNearby(true))}
               onActivity={() => openOnly(() => setShowActivity(true))}
-              onProfile={() => openOnly(() => setShowProfile(true))} />
+              onProfile={() => openOnly(() => setShowProfile(true))}
+              sysop={sysop} onAdmin={() => openOnly(() => setShowAdmin(true))} />
       <div className="shell">
         <NavRail
           active={showNearby ? "nearby" : showActivity ? "activity" : showMessages ? "messages" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
@@ -625,6 +634,9 @@ export function App() {
           <SettingsPanel settings={locSettings} onApply={applySettings} callsign={callsign} verified={verified}
                          map={map.current} onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })}
                          session={session} onSignIn={() => openOnly(() => setShowSignIn(true))} onClose={() => setShowSettings(false)} />
+        )}
+        {showAdmin && sysop && mode === "view" && (
+          <AdminPanel callsign={callsign} map={map.current} onClose={() => setShowAdmin(false)} />
         )}
 
         <div className="mapwrap">

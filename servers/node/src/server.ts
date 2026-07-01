@@ -69,6 +69,7 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
+  ADMIN_CALLSIGNS: process.env.ADMIN_CALLSIGNS,
   INSTANCE: process.env.INSTANCE,
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_KEY_HISTORY: process.env.FED_KEY_HISTORY,

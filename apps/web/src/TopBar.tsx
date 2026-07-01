@@ -16,6 +16,7 @@ export function TopBar(props: {
   q: string; onSearch: (v: string) => void; onSearchSubmit: (v: string) => void;
   onPickCache: (hit: SearchHitCache) => void; onPickStation: (hit: SearchHitStation) => void;
   onNearby: () => void; onActivity: () => void; onProfile: () => void;
+  sysop?: boolean; onAdmin?: () => void;
 }) {
   return (
     <header className="topbar">
@@ -34,6 +35,9 @@ export function TopBar(props: {
       <span className="nav-desktop">
         <button onClick={props.onNearby}>Nearby</button>
         <button onClick={props.onActivity}>Activity</button>
+        {props.sysop && props.onAdmin && (
+          <button onClick={props.onAdmin} title="Instance admin — operator only">🛡</button>
+        )}
         <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
       </span>
       <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>

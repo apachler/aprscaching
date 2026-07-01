@@ -32,6 +32,7 @@ import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve }
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
+import { handleAdminWhoami } from "./admin.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleCorroborate } from "./corroborate.js";
@@ -161,6 +162,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
   if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED); // BBS #1
+  if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // T1.1 operator promote/block
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
