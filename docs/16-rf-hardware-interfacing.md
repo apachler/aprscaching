@@ -136,3 +136,38 @@ use Path A or a native/PWA-BLE shell later). No reinventing KISS/AX.25/BLE-KISS 
 - **H5:** TX is impossible until the callsign is control-verified and the user opts in; default is RX-only.
 - All paths: frames deframe via `@aprsweb/aprs` (no duplicated codec); RF receptions still earn trust
   only through `verify.ts`.
+
+## Field station — making APRS + APRScaching work off-grid (proposal)
+
+**The scenario.** A web-only user, no server box, out in the field with a laptop + handheld + a USB/BLE
+TNC (or soundcard). They must still get **APRS** (see who's around, exchange messages) and **APRScaching**
+(nearby caches, log a find) — possibly with **no internet**. Today the browser-RF path decodes frames and
+*forwards them to a gateway*; the map/messages/caches all render **from** the gateway. Off-grid, that
+breaks. The fix is to make the browser a first-class **local** APRS engine, with online as an enhancement,
+not a requirement. Four seams, all building on what exists:
+
+- **A. Local RF → live map + inbox (no gateway).** The browser already deframes every RF frame
+  (`@aprsweb/aprs`). Add a **client-side sink** so decoded *positions* drop onto the map as stations and
+  decoded *APRS messages* land in a local inbox — immediately, in-memory/IndexedDB, independent of any
+  gateway. The same decoder that feeds the forward-to-gateway path also feeds this local view. Result:
+  plug in a radio and you see live APRS with zero connectivity.
+- **B. APRS messaging TX over browser-RF (H5-gated).** Compose → encode an APRS message frame → send via
+  Web Serial/BLE KISS to the radio; RX replies land in the local inbox (A). Gated exactly like all TX:
+  callsign control-verified + explicit opt-in (`verify.ts`/H5). This makes the Messages surface usable
+  radio-only, not just APRS-IS-backed.
+- **C. Offline-ready caching (mostly built; close the gap).** Find-logging already **queues offline and
+  syncs** (`flushLogQueue`), and views are shareable/PWA-installable. Add a **"download this area"**: cache
+  the current viewport's caches + basemap tiles into IndexedDB so *Nearby / cache detail / Log find* all
+  render with no network. Navigate-to-cache (bearing/compass) is already client-side. So the whole
+  find-a-cache loop works in the field; the log syncs when back online.
+- **D. Sync-back when connectivity returns.** The queued finds POST as today; optionally the locally-heard
+  RF receptions replay to the gateway via the existing browser-ingest forward path (signed device key or
+  ingest secret) so the field session enriches the platform once online — **RX ≠ trust** still holds
+  (`verify.ts` gates every reception regardless of transport).
+
+**Framing.** This is the natural completion of the *field station* concept (workbench §): the browser +
+radio is a self-contained station — decode, map, message, cache, log — **online-optional**. Ordering:
+A (local map/inbox) unlocks the most, then C (offline caching), then B (message TX), then D (sync-back).
+None require a server; all reuse the pure `@aprsweb/aprs` codec + the existing offline-queue + PWA. Scope
+as a post-Stage-3 track (or fold A+C into Stage 0 loose-ends if prioritised) — not a v1.0 gate, but the
+piece that makes "radio-only in the field" a real, coherent mode rather than an implication.
