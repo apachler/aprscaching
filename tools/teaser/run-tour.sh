@@ -7,6 +7,11 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 OUT="$HERE/tour"
 PORT_API="${PORT_API:-8799}"
 PORT_WEB="${PORT_WEB:-4199}"
+# Which viewports to capture. Default all three; pass a subset to save time, e.g.
+#   tools/teaser/run-tour.sh desktop        (desktop only)
+#   tools/teaser/run-tour.sh desktop mobile
+VIEWS="${*:-desktop tablet mobile}"
+for v in $VIEWS; do case "$v" in desktop|tablet|mobile) ;; *) echo "unknown viewport: $v (use desktop|tablet|mobile)"; exit 2 ;; esac; done
 DB="$(mktemp -d)/teaser.db"
 export PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 for c in /opt/pw-browsers/chromium-*/chrome-linux/chrome /opt/pw-browsers/chromium/chrome-linux/chrome; do [ -x "$c" ] && export PW_CHROMIUM="$c" && break; done
@@ -40,7 +45,8 @@ echo "==> run the UI tour (one node process per viewport; tour.mjs closes its ow
 # Per-viewport exit codes: 0 = clean, 4 = some steps skipped (video still builds), other = the tour
 # process crashed. Recorded here and reported in the problem summary so a full run surfaces failures.
 declare -a VIEW_RC=()
-for VIEW in desktop tablet mobile; do
+echo "==> viewports: $VIEWS"
+for VIEW in $VIEWS; do
   echo "   -- $VIEW"
   rc=0
   ( cd "$HERE" && BASE="http://127.0.0.1:$PORT_WEB" OUT="$OUT/" VIEW="$VIEW" node tour.mjs ) || rc=$?
