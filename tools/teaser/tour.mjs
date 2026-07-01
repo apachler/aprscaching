@@ -10,6 +10,7 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
+const API_BASE = process.env.API_BASE ?? "http://127.0.0.1:8799";
 const OUT = (process.env.OUT ?? new URL("./tour", import.meta.url).pathname).replace(/\/?$/, "/");
 const EXE = process.env.PW_CHROMIUM || undefined;
 fs.mkdirSync(OUT, { recursive: true });
@@ -67,6 +68,24 @@ async function gotoMap(page) {
   await page.goto(`${BASE}/#11.5/47.078/15.43`, { waitUntil: "load" });
   await ready(page);
 }
+// Sign in for REAL via the email dev-link (no email provider in dev → the gateway returns the link
+// directly), so the tour reaches the sign-in-gated surfaces (Settings groups, save-view, GDPR, …).
+// The app must be loaded first so the credentialed fetch runs from its origin. Idempotent across
+// viewports: the first registers OE8APR, the rest log in. Throws on failure so the caller can fall
+// back to explore mode.
+async function signIn(page) {
+  await page.goto(`${BASE}/`, { waitUntil: "load" }).catch(() => {});
+  const r = await page.evaluate(async (api) => {
+    const res = await fetch(api + "/auth/email/start", {
+      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "oe8apr@teaser.local", callsign: "OE8APR" }),
+    });
+    return { status: res.status, body: await res.json().catch(() => ({})) };
+  }, API_BASE);
+  const link = r.body && r.body.devLink;
+  if (!link) throw new Error(`no devLink (status ${r.status} ${JSON.stringify(r.body).slice(0, 100)})`);
+  await page.goto(link, { waitUntil: "load" }).catch(() => {}); // consumes the token, sets the session cookie
+}
 // lightweight reset between steps (no reload): exit hide mode + close any open panel. The desktop rail
 // and the mobile tab bar stay visible regardless of mode, so a reload isn't needed.
 async function closeAll(page) {
@@ -120,6 +139,13 @@ async function openWorkbench(page) {
     catch { /* retry the open once */ }
   }
   throw new Error("workbench did not open");
+}
+// Open a surface via its ?view= deep-link (nonce so same-URL gotos actually reload) and wait for it.
+async function openView(page, view, waitSel) {
+  await page.goto(`${BASE}/?view=${view}&n=${++navSeq}#11.5/47.078/15.43`, { waitUntil: "load" });
+  await ready(page);
+  if (waitSel) await page.waitForSelector(waitSel, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(300);
 }
 // Expand a named workbench group (e.g. "Packet terminal", "Tools") + scroll it into view for the shot.
 async function expandGroup(page, title) {
@@ -193,13 +219,25 @@ for (const v of VIEWS) {
       await page.waitForTimeout(700);
       await shot(page, v.id, "signin", "Sign in / register");
     });
+    // splash FOOTER pages — the canonical site-wide links (gateway-rendered HTML). /source is an
+    // external 302 (skipped) and sitemap.xml/api are machine formats; /sitemap + /support are pages.
+    for (const [path, name, label] of [["/sitemap", "sitemap-page", "Site map (public page)"], ["/support", "support-page", "Support & transparency"]]) {
+      await step(name, async () => {
+        await page.goto(`${API_BASE}${path}`, { waitUntil: "load" });
+        await page.waitForSelector("h1, main, body", { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(500);
+        await shot(page, v.id, name, label);
+      });
+    }
     await ctx.close();
   });
 
   // signed-in demo journey (one context; reset to the map before each destination)
-  let ctx, page;
+  let ctx, page, signedIn = false;
   try {
     ctx = await ctxFor(v, true); page = await ctx.newPage();
+    try { await signIn(page); signedIn = true; }
+    catch (e) { console.log("   (real sign-in failed — explore mode, gated surfaces skip):", String(e.message).split("\n")[0]); }
     await gotoMap(page);
   } catch (e) {
     console.log("   !! app setup failed for", v.id, "-", String(e.message).split("\n")[0]);
@@ -221,6 +259,23 @@ for (const v of VIEWS) {
     await shot(page, v.id, "detail", "Cache detail + logbook");
   });
 
+  await step("qr", async () => {
+    await closeAll(page);
+    await clickCache(page, "Schlossberg");
+    await clickAny(page, [".panel button:has-text('QR')"]);
+    await page.waitForSelector(".panel canvas, .panel svg, .panel img[src^='data:']", { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    await shot(page, v.id, "qr", "Per-cache QR — scan to find");
+  });
+
+  await step("logfind", async () => {
+    await closeAll(page);
+    await clickCache(page, "Schlossberg");
+    await clickAny(page, [".panel button:has-text('Log a find')", ".panel button:has-text('Log find')"]);
+    await page.waitForTimeout(500);
+    await shot(page, v.id, "logfind", "Log a find — verified by APRS");
+  });
+
   await step("hide", async () => {
     await closeAll(page);
     await clickAny(page, ["button.primary:has-text('Hide a cache')", ".tabbar .fab"]);
@@ -230,6 +285,27 @@ for (const v of VIEWS) {
     await page.fill('.panel label:has-text("Title") input', "Castle Casemates").catch(() => {});
     await page.waitForTimeout(300);
     await shot(page, v.id, "hide", "Hide a cache");
+  });
+
+  // Live stations layer + the station detail sheet (tap a station pin). Enable the layer in Search &
+  // filter → Live layers, then click a station marker → StationPanel.
+  await step("station", async () => {
+    await closeAll(page);
+    await clickAny(page, ["button[title='Filter by type']"]);
+    await page.waitForSelector(".panel", { timeout: 6000 });
+    await clickAny(page, [".panel label:has-text('Live stations') ~ * input", ".panel:has-text('Live stations') .switch input"]);
+    // fall back: toggle the first switch under "Live layers"
+    await page.evaluate(() => {
+      const lbl = [...document.querySelectorAll(".panel label")].find((l) => /Live stations/.test(l.textContent || ""));
+      const sw = lbl?.parentElement?.querySelector("input[type=checkbox], button[role=switch]");
+      if (sw && sw.getAttribute("aria-checked") !== "true" && !sw.checked) sw.click();
+    });
+    await closeAll(page);
+    await page.waitForSelector(".station-pin", { timeout: 8000 });
+    await page.locator(".station-pin").first().click();
+    await page.waitForSelector(".panel:has-text('last heard'), .panel .logform", { timeout: 8000 });
+    await page.waitForTimeout(600);
+    await shot(page, v.id, "station", "Station detail — track, telemetry & packets");
   });
 
   // --- destinations: auto-discovered, so new pages are captured without editing this script ---
@@ -339,6 +415,28 @@ for (const v of VIEWS) {
   await step("remote", async () => {
     await gotoDemo(page, "app-remote", ".logs");
     await shot(page, v.id, "remote", "Remote control — your ingest box");
+  });
+
+  // Settings — expand EVERY group and screenshot it (exhaustive, self-maintaining: a new Settings
+  // group is captured without editing this script). Signed in, so the account/profile/weather/
+  // stations/notifications/data groups render; connections & network render regardless.
+  await step("settings-groups", async () => {
+    await openView(page, "settings", ".panel");
+    const titles = await page.$$eval(".panel .group-toggle", (els) =>
+      els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean)).catch(() => []);
+    for (const t of titles) {
+      const short = (t.split(/\s{2,}|·/)[0].replace(/^[▸▾▿►▼▶\s]+/, "").trim().slice(0, 40)) || t;
+      await step(`set-${slug(short)}`, async () => {
+        const toggle = page.locator(".panel .group-toggle", { hasText: short }).first();
+        await toggle.waitFor({ state: "visible", timeout: 5000 });
+        if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
+        await page.waitForTimeout(350);
+        await toggle.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(250);
+        await shot(page, v.id, `set-${slug(short)}`, `Settings — ${short}`);
+        if ((await toggle.getAttribute("aria-expanded")) === "true") await toggle.click().catch(() => {}); // collapse so the next shot is clean
+      });
+    }
   });
 
   // Site map page — reached via the ?view= deep-link (dogfooding the sitemap tooling). Captured on

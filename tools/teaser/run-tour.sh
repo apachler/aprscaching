@@ -49,7 +49,7 @@ echo "==> viewports: $VIEWS"
 for VIEW in $VIEWS; do
   echo "   -- $VIEW"
   rc=0
-  ( cd "$HERE" && BASE="http://127.0.0.1:$PORT_WEB" OUT="$OUT/" VIEW="$VIEW" node tour.mjs ) || rc=$?
+  ( cd "$HERE" && BASE="http://127.0.0.1:$PORT_WEB" API_BASE="http://127.0.0.1:$PORT_API" OUT="$OUT/" VIEW="$VIEW" node tour.mjs ) || rc=$?
   VIEW_RC+=("$VIEW=$rc")
   [ "$rc" -ne 0 ] && echo "   ($VIEW exited $rc — details in the problem summary below)"
   sleep 2

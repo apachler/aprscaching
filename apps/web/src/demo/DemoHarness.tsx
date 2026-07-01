@@ -25,9 +25,9 @@ const noop = () => {};
 function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
   return (
     <div className="app" style={{ height: "100dvh" }}>
-      {/* the REAL top bar (empty callsign → "Sign in", matching the explore-mode teaser frames) so
-          every teaser frame shares identical chrome (ui-ux §6). Handlers are no-ops in the harness. */}
-      <TopBar callsign="" verified={false} onAccount={noop} onHide={noop} count={7} queued={0}
+      {/* the REAL top bar with the demo operator's chip, matching the signed-in teaser frames so every
+          teaser frame shares identical chrome (ui-ux §6). Handlers are no-ops in the harness. */}
+      <TopBar callsign={ME} verified={false} onAccount={noop} onHide={noop} count={7} queued={0}
               onFilters={noop} filtered={false} q="" onSearch={noop} onSearchSubmit={noop}
               onPickCache={noop} onPickStation={noop} onNearby={noop} onActivity={noop} onProfile={noop} />
       <div className="shell">
