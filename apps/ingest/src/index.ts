@@ -118,6 +118,21 @@ setInterval(async () => {
 aprs.start();
 console.log(`[ingest] started -> ${INGEST_URL}`);
 
+// ---- FBB forwarding scheduler (docs/29 F4) — connect out to partner BBSes and exchange mail over RF.
+// Opt-in: needs a KISS TNC + a station call. Partners + routing are configured in the gateway
+// (Settings → Network); this box runs the sessions (ingest-locality). Off by default.
+if (env.BBS_FORWARD === "1" && env.KISS_TNC_HOST && env.BBS_FORWARD_CALL) {
+  const { BbsForwarder } = await import("./forwarder.js");
+  const base = INGEST_URL.replace(/\/ingest$/, "");
+  new BbsForwarder({
+    base, secret: SECRET, mycall: env.BBS_FORWARD_CALL,
+    kiss: { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
+    pollMs: Number(env.BBS_FORWARD_POLL_MS ?? 60000),
+    sid: env.BBS_FORWARD_SID,
+  }).start();
+  console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
+}
+
 // ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
 import { AprsUplink } from "./uplink.js";
 const SERVICE_CALL = env.APRSIS_SERVICE_CALL;

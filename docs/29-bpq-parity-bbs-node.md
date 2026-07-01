@@ -118,11 +118,18 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   via more-follows, choke). Unit-tested over the deferred-queue loopback. **Missing:** ingest NODES
   TX/consume + routing a connect *through* a node (RF-wiring, validate-at-deploy).
 - **F4 (FBB forwarding):** `fbb-session.ts` (SID → `FB…/F>` proposal → `FS` verdicts → block transfer →
-  reverse forwarding → `FF`/`FQ`) driven headlessly over the loopback; BID dedup. Product wiring:
-  migration `0040_bbs_partners` + gateway `forward.ts` sysop partner CRUD (`normalizePartner` +
-  `/api/bbs/partners` GET/POST, `/api/bbs/partners/:id` DELETE, tri-runtime green) + Settings → Network
-  "Forwarding partners" UI. **Missing:** the ingest forwarding scheduler that connects through nodes and
-  runs the codec on interval/timeband, and LZHUF B0/B1 (RF-wiring, validate-at-deploy).
+  reverse forwarding → `FF`/`FQ`) driven headlessly over the loopback; BID dedup. `fbb-forward.ts`
+  (`FbbForwarder`) wraps it as a byte-stream driver (CR framing + line buffering) for a real link.
+  Product wiring: migration `0040_bbs_partners` + gateway `forward.ts` sysop partner CRUD
+  (`normalizePartner` + `/api/bbs/partners`) + Settings → Network "Forwarding partners" UI.
+- **F4 scheduler (ingest):** `apps/ingest/src/forwarder.ts` `BbsForwarder` — on an interval it polls the
+  gateway for partners, picks the due ones (`forward-schedule.ts` `partnerDue`: interval + UTC time-bands,
+  unit-tested), and per partner runs an FBB session over an injectable `ForwardLink`, bridging the gateway
+  **forwarding pool** (migration `0041_bbs_forward_log`; `/api/bbs/forward/pool` pulls outbound routed to
+  that partner via White-Pages + rules, `/inbound` stores received mail BID-deduped, `/sent` records what
+  was forwarded — all `x-ingest-secret` gated, tri-runtime, live-smoked). The default `kissForwardLink`
+  drives a real AX.25 `ConnectedLink` over KISS-TCP. **Validate-at-deploy:** multi-hop connect scripts
+  (`C NODE1` → `C 3 DB0XYZ`), AXUDP partners, and LZHUF B0/B1 compression.
 
 ## Deferred (out of scope this pass)
 Winlink/RMS gateway, chat/conference node, HF/Pactor, telnet node access, modulo-128 / SREJ, DAMA,

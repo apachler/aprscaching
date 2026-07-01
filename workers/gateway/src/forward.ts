@@ -155,3 +155,86 @@ export async function handleForwardPartnerDelete(req: Request, env: Env, id: num
   await env.DB.prepare("DELETE FROM bbs_partners WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
+
+// ---- FBB forwarding pool (docs/29 F4) — the ingest scheduler pulls outbound / pushes inbound here ----
+/** An FBB message on the wire (matches @aprsweb/packet FbbMessage; the ingest feeds these to FbbSession). */
+export interface FbbWireMsg { type: "P" | "B"; from: string; at: string; to: string; bid: string; title: string; body: string }
+interface PoolRow { id: number; bid: string | null; type: string; from_call: string; to_call: string; subject: string | null; body: string }
+
+/** Map a local bbs_messages row → the FBB wire shape. `at` is the routing hint (partner HA). Pure. */
+export function fbbFromRow(r: PoolRow, instance: string, at: string): FbbWireMsg {
+  return {
+    type: r.type === "B" ? "B" : "P",                 // FBB proposes P or B; T (traffic) rides as P
+    from: r.from_call, at, to: r.to_call,
+    bid: r.bid ?? `${r.id}_${instance}`,
+    title: r.subject ?? "", body: r.body,
+  };
+}
+
+/** Values for INSERT OR IGNORE of an inbound forwarded message (BID-deduped). Pure; null if invalid. */
+export function inboundRow(m: Partial<FbbWireMsg>, origin: string, ts: number):
+  { bid: string; type: string; from: string; to: string; title: string; body: string; posted: number; origin: string } | null {
+  if (!m.bid || !m.from || !m.to || m.body == null) return null;
+  return {
+    bid: m.bid, type: m.type === "B" ? "B" : "P",
+    from: String(m.from).toUpperCase(), to: String(m.to).toUpperCase(),
+    title: m.title ?? "", body: String(m.body), posted: ts, origin,
+  };
+}
+
+const ingestOk = (req: Request, env: Env) => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+
+/** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
+export async function handleForwardPool(req: Request, env: Env): Promise<Response> {
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const u = new URL(req.url);
+  const partner = (u.searchParams.get("partner") ?? "").toUpperCase();
+  if (!partner) return json({ error: "partner required" }, { status: 400 });
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit")) || 20, 1), 50);
+  const instance = env.INSTANCE ?? u.host;
+  const at = (await env.DB.prepare("SELECT ha FROM bbs_partners WHERE call=?").bind(partner).first<{ ha: string | null }>())?.ha ?? partner;
+
+  const rows = (await env.DB.prepare(
+    `SELECT m.id, m.bid, m.type, m.from_call, m.to_call, m.subject, m.body, m.posted_at
+       FROM bbs_messages m
+       WHERE m.origin='local' AND m.bid IS NOT NULL AND (m.expires_at IS NULL OR m.expires_at > ?)
+         AND NOT EXISTS (SELECT 1 FROM bbs_forward_log l WHERE l.partner=? AND l.bid=m.bid)
+       ORDER BY m.posted_at LIMIT 200`,
+  ).bind(now(), partner).all<PoolRow>()).results;
+
+  const out: FbbWireMsg[] = [];
+  for (const r of rows) {
+    // route the destination (White Pages expands a bare call to "CALL @ homeBBS", then the @AT hierarchy matches a rule)
+    const { partner: rule } = await resolvePartner(env, r.to_call);
+    if ((rule?.partner ?? "").toUpperCase() !== partner) continue;
+    out.push(fbbFromRow(r, instance, at));
+    if (out.length >= limit) break;
+  }
+  return json({ partner, messages: out });
+}
+
+/** POST /api/bbs/forward/inbound {message} — store an inbound forwarded message (BID-deduped). */
+export async function handleForwardInbound(req: Request, env: Env): Promise<Response> {
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
+  const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), now());
+  if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
+  const res = await env.DB.prepare(
+    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
+     VALUES (?,?,?,?,?,?,?,?)`,
+  ).bind(row.bid, row.type, row.from, row.to, row.title || null, row.body, row.posted, row.origin).run();
+  if (row.type === "P") await learnWhitePages(env, row.from, row.origin);   // FBB White Pages: learn HomeBBS from P-mail
+  return json({ ok: true, stored: res.meta.changes ? 1 : 0, deduped: !res.meta.changes });
+}
+
+/** POST /api/bbs/forward/sent {partner, bids} — mark messages forwarded to a partner (don't re-offer). */
+export async function handleForwardSent(req: Request, env: Env): Promise<Response> {
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const b = (await req.json().catch(() => ({}))) as { partner?: string; bids?: string[] };
+  const partner = (b.partner ?? "").toUpperCase();
+  if (!partner || !Array.isArray(b.bids) || !b.bids.length) return json({ error: "partner + bids required" }, { status: 400 });
+  const ts = now();
+  await env.DB.batch(b.bids.slice(0, 200).map((bid) =>
+    env.DB.prepare("INSERT OR IGNORE INTO bbs_forward_log (partner, bid, forwarded_at) VALUES (?,?,?)").bind(partner, String(bid), ts)));
+  return json({ ok: true, marked: Math.min(b.bids.length, 200) });
+}

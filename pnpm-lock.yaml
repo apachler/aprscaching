@@ -13,6 +13,9 @@ importers:
       '@aprsweb/aprs':
         specifier: workspace:*
         version: link:../../packages/aprs
+      '@aprsweb/ax25':
+        specifier: workspace:*
+        version: link:../../packages/ax25
       '@aprsweb/packet':
         specifier: workspace:*
         version: link:../../packages/packet

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePartner } from "../src/forward.js";
+import { normalizePartner, fbbFromRow, inboundRow } from "../src/forward.js";
 
 describe("FBB forwarding partner normalizer (docs/29 F4)", () => {
   it("normalizes a full partner and uppercases call/HA", () => {
@@ -38,5 +38,29 @@ describe("FBB forwarding partner normalizer (docs/29 F4)", () => {
   it("strips junk from timebands and dedups msgtypes", () => {
     expect(normalizePartner({ call: "OE1XYZ", timebands: "0-6; drop table" })!.timebands).toBe("0-6");
     expect(normalizePartner({ call: "OE1XYZ", msgtypes: "PPBB" })!.msgtypes).toBe("PB");
+  });
+});
+
+describe("FBB forwarding-pool mappers (docs/29 F4)", () => {
+  it("maps a local row to the FBB wire shape (subject → title, T rides as P, at = routing hint)", () => {
+    const wire = fbbFromRow(
+      { id: 42, bid: "42_oe.aprscaching.net", type: "T", from_call: "OE8APR", to_call: "DL1ABC", subject: "hello", body: "hi there" },
+      "oe.aprscaching.net", "DB0XYZ.OE.EU",
+    );
+    expect(wire).toEqual({ type: "P", from: "OE8APR", at: "DB0XYZ.OE.EU", to: "DL1ABC", bid: "42_oe.aprscaching.net", title: "hello", body: "hi there" });
+  });
+
+  it("synthesizes a BID from id_instance when the row has none, keeps B type", () => {
+    const wire = fbbFromRow({ id: 7, bid: null, type: "B", from_call: "OE8APR", to_call: "ALL", subject: null, body: "net sat" }, "oe.net", "OE");
+    expect(wire.bid).toBe("7_oe.net");
+    expect(wire.type).toBe("B");
+    expect(wire.title).toBe("");
+  });
+
+  it("builds an inbound insert row (uppercased, origin stamped) and rejects incomplete input", () => {
+    const row = inboundRow({ type: "P", from: "dl1abc", to: "oe8apr", bid: "9_db0", title: "re", body: "thanks" }, "rf-fbb", 1000);
+    expect(row).toEqual({ bid: "9_db0", type: "P", from: "DL1ABC", to: "OE8APR", title: "re", body: "thanks", posted: 1000, origin: "rf-fbb" });
+    expect(inboundRow({ from: "X", to: "Y" }, "rf-fbb", 1000)).toBeNull();   // no bid / body
+    expect(inboundRow({ bid: "1", from: "X", to: "Y", body: "" }, "rf-fbb", 1000)).not.toBeNull(); // empty body is valid
   });
 });
