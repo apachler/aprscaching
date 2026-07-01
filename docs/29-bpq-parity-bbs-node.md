@@ -115,8 +115,21 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
 - **F2 (NET/ROM wire + circuit):** `netrom-wire.ts` (network+transport header + NODES broadcast codec,
   quality formula) and `netrom-circuit.ts` (L4 sliding-window state machine: ConnReq/ConnAck + window
   negotiation, DiscReq/DiscAck, in-order Info with cumulative InfoAck, 236-byte fragment/reassemble
-  via more-follows, choke). Unit-tested over the deferred-queue loopback. **Missing:** ingest NODES
-  TX/consume + routing a connect *through* a node (RF-wiring, validate-at-deploy).
+  via more-follows, choke). Unit-tested over the deferred-queue loopback.
+- **F2 node (ingest):** `netrom-node.ts` `NetromNode` — the routing engine: learns routes from heard NODES
+  broadcasts (quality = combineQuality(advertised, path), obsolescence init 6 with decay, locked routes
+  survive), builds our top-N NODES broadcast, picks the best next hop. Unit-tested. Ingest
+  `netromnode.ts` `NetromNodeRunner` drives it over KISS (periodic UI→"NODES" TX + inbound consume +
+  gateway node-table mirror). **Validate-at-deploy:** the connected-mode node *session* (a user connecting
+  in and `C <dest>` routing a circuit *through* us).
+- **F3 connected digi:** AX.25 codec now round-trips the digi H-bit (`digisRepeated`); `digipeatAx25`
+  (pure, unit-tested) repeats ANY frame type whose next un-repeated via-hop is our call/alias (sets the
+  H-bit). Ingest `ConnectedDigipeater` (KISS `onRaw`, dedup + viscous delay) relays NET/ROM + FBB through
+  us. **Validate-at-deploy** on real RF.
+- **F5 AXUDP port:** `axudp.ts` gains `AxudpPort` — a bidirectional KISS-equivalent transport over UDP
+  (`sendFrame` to peers + `onRaw`/`onFrame`), so NET/ROM crosslinks *and* FBB run over the Internet leg;
+  the RX-only `AxudpListener` (Tier-C ingest) stays. Tunnelled frames remain Tier C (never first-party).
+  **Validate-at-deploy:** cross-port routing of the node/digi over the AXUDP peer.
 - **F4 (FBB forwarding):** `fbb-session.ts` (SID → `FB…/F>` proposal → `FS` verdicts → block transfer →
   reverse forwarding → `FF`/`FQ`) driven headlessly over the loopback; BID dedup. `fbb-forward.ts`
   (`FbbForwarder`) wraps it as a byte-stream driver (CR framing + line buffering) for a real link.

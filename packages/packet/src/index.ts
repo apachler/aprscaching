@@ -8,6 +8,7 @@ export * from "./forward.js";
 export * from "./netrom.js";
 export * from "./netrom-wire.js";
 export * from "./netrom-circuit.js";
+export * from "./netrom-node.js";
 export * from "./link-app.js";
 export * from "./loopback.js";
 export * from "./fbb-session.js";

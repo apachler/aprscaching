@@ -2,7 +2,7 @@ import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
 import { CotListener } from "./cotlisten.js";
 import { MeshtasticReader } from "./mesh.js";
-import { Digipeater } from "./digipeater.js";
+import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
@@ -27,9 +27,10 @@ const enqueue = (p: Packet) => batch.push(p);
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
   const frameSubs: ((f: ParsedFrame) => void)[] = [];
+  const rawSubs: ((b: Uint8Array) => void)[] = [];
   const kiss = new KissTnc(
     { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
-    { onPacket: enqueue, onFrame: (f) => { for (const s of frameSubs) s(f); } },
+    { onPacket: enqueue, onFrame: (f) => { for (const s of frameSubs) s(f); }, onRaw: (b) => { for (const s of rawSubs) s(b); } },
   );
   kiss.start();
   console.log("[kiss] enabled");
@@ -40,6 +41,30 @@ if (env.KISS_TNC_HOST) {
     const digi = new Digipeater(kiss, { mycall: env.DIGI_CALL, aliases });
     frameSubs.push((f) => digi.onFrame(f));
     console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
+
+    // connected-mode digipeater (docs/29 F3) — repeat SABM/I/… for NET/ROM + FBB relay through us
+    if (env.DIGI_CONNECTED === "1") {
+      const cdigi = new ConnectedDigipeater(kiss, {
+        mycall: env.DIGI_CALL, aliases: [...aliases],
+        viscousMs: env.DIGI_VISCOUS_MS ? Number(env.DIGI_VISCOUS_MS) : undefined,
+      });
+      rawSubs.push((b) => cdigi.onRaw(b));
+      console.log(`[digi-c] connected-mode digipeater enabled as ${env.DIGI_CALL}`);
+    }
+  }
+
+  // NET/ROM node (docs/29 F2) — NODES broadcast/consume + learned routing table over KISS
+  if (env.NETROM_CALL && env.NETROM_ALIAS) {
+    const { NetromNodeRunner } = await import("./netromnode.js");
+    const gwBase = INGEST_URL.replace(/\/ingest$/, "");
+    const node = new NetromNodeRunner(kiss, {
+      mycall: env.NETROM_CALL, alias: env.NETROM_ALIAS,
+      broadcastMs: env.NETROM_BROADCAST_MS ? Number(env.NETROM_BROADCAST_MS) : undefined,
+      pathQuality: env.NETROM_PATH_QUALITY ? Number(env.NETROM_PATH_QUALITY) : undefined,
+      gatewayBase: gwBase, secret: SECRET,
+    });
+    rawSubs.push((b) => node.onRaw(b));
+    node.start();
   }
   // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
   if (env.IGATE_CALL && env.IGATE_PASS) {
@@ -79,11 +104,21 @@ if (env.HOSTMODE_HOST) {
   ).start();
   console.log("[hostmode] enabled");
 }
-// AXUDP tunnel (docs/22 reserved seam) — opt-in; tunnelled frames stay Tier C, never first-party RF.
+// AXUDP tunnel (docs/22 reserved seam; docs/29 F5) — opt-in; tunnelled frames stay Tier C, never
+// first-party RF. With AXUDP_PEERS it's a bidirectional KISS-equivalent port (carries NET/ROM
+// crosslinks + FBB over the Internet leg); without, a plain RX-only listener.
 if (env.AXUDP_PORT) {
-  const { AxudpListener } = await import("./axudp.js");
-  new AxudpListener({ port: Number(env.AXUDP_PORT), bind: env.AXUDP_BIND }, enqueue).start();
-  console.log("[axudp] enabled");
+  const opts = { port: Number(env.AXUDP_PORT), bind: env.AXUDP_BIND };
+  if (env.AXUDP_PEERS) {
+    const { AxudpPort, parseAxudpPeers } = await import("./axudp.js");
+    const axPort = new AxudpPort({ ...opts, peers: parseAxudpPeers(env.AXUDP_PEERS) }, enqueue);
+    axPort.start();
+    console.log("[axudp] bidirectional port enabled (NET/ROM + FBB crosslink, Tier C)");
+  } else {
+    const { AxudpListener } = await import("./axudp.js");
+    new AxudpListener(opts, enqueue).start();
+    console.log("[axudp] listener enabled");
+  }
 }
 
 aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));

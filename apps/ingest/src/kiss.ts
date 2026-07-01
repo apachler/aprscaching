@@ -1,12 +1,14 @@
 import net from "node:net";
 import { kissFrames, kissWrap, decodeAx25, encodeAx25 } from "@aprsweb/aprs";
+import { encodeFrame, type Ax25Frame } from "@aprsweb/ax25";
 import type { Packet, } from "@aprsweb/shared";
 import type { ParsedFrame } from "@aprsweb/aprs";
 
 export interface KissOpts { host: string; port: number }
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
-  onFrame?: (f: ParsedFrame) => void; // raw decoded RF frame (for digipeater / igate)
+  onFrame?: (f: ParsedFrame) => void;       // UI-decoded RF frame (for the APRS digipeater / igate)
+  onRaw?: (bytes: Uint8Array) => void;       // raw KISS-unwrapped AX.25 frame (for connected-mode: node/digi)
 }
 
 /**
@@ -28,6 +30,12 @@ export class KissTnc {
     try { this.sock.write(kissWrap(encodeAx25(f))); return true; } catch { return false; }
   }
 
+  /** Transmit a full AX.25 frame (any type — for connected-mode: NET/ROM node, connected digi). */
+  sendFrame(f: Ax25Frame): boolean {
+    if (!this.connected || !this.sock) return false;
+    try { this.sock.write(kissWrap(encodeFrame(f))); return true; } catch { return false; }
+  }
+
   private connect() {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
@@ -39,6 +47,7 @@ export class KissTnc {
       const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
       this.buf = this.buf.slice(lastFend + 1);
       for (const raw of kissFrames(ready)) {
+        this.h.onRaw?.(raw);                    // raw AX.25 for connected-mode consumers (node/digi)
         const f = decodeAx25(raw);
         if (!f) continue;
         this.h.onFrame?.(f);

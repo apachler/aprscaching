@@ -15,6 +15,7 @@ export interface Ax25Frame {
   dst: Ax25Address;
   src: Ax25Address;
   digis?: Ax25Address[];     // via path (each with its has-been-repeated bit on decode)
+  digisRepeated?: boolean[]; // parallel to digis: the H (has-been-repeated) bit per via-hop
   command: boolean;          // from the C bits: true = command, false = response (AX.25 v2)
   type: FrameType;
   pf: boolean;               // poll (command) / final (response)
@@ -62,7 +63,7 @@ export function encodeFrame(f: Ax25Frame): Uint8Array {
   const digis = f.digis ?? [];
   const src = encodeAddress(f.src, !f.command, digis.length === 0);
   parts.push(...dst, ...src);
-  digis.forEach((d, i) => parts.push(...encodeAddress(d, false, i === digis.length - 1)));
+  digis.forEach((d, i) => parts.push(...encodeAddress(d, f.digisRepeated?.[i] ?? false, i === digis.length - 1)));
 
   let ctrl: number;
   if (f.type === "I") ctrl = ((f.nr! & 7) << 5) | (f.pf ? PF : 0) | ((f.ns! & 7) << 1);
@@ -107,6 +108,7 @@ export function decodeFrame(bytes: Uint8Array): Ax25Frame | null {
   return {
     dst: dst!.addr, src: src!.addr,
     digis: digis.length ? digis.map((d) => d.addr) : undefined,
+    digisRepeated: digis.length ? digis.map((d) => d.cbit) : undefined,
     command, type, pf, nr, ns, pid, info: info && info.length ? info : undefined,
   };
 }

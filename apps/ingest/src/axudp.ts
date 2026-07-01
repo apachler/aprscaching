@@ -1,8 +1,11 @@
 import dgram from "node:dgram";
 import { decodeAx25 } from "@aprsweb/aprs";
+import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 
 export interface AxudpOpts { port: number; bind?: string }
+/** A UDP endpoint to send AX.25 frames to (the other end of an AXUDP link). */
+export interface AxudpPeer { host: string; port: number }
 
 /**
  * AXUDP listener — AX.25 frames tunnelled over UDP (the BPQ node mesh, port 10093). RESERVED seam
@@ -33,4 +36,58 @@ export class AxudpListener {
     s.bind(this.o.port, this.o.bind);
     console.log(`[axudp] listening udp/${this.o.port} (tunnelled AX.25 — Tier C only)`);
   }
+}
+
+/**
+ * AXUDP as a bidirectional KISS-equivalent PORT (docs/29 F5): the same raw AX.25 frames a KISS TNC
+ * carries, but over UDP, so NET/ROM crosslinks *and* FBB forwarding run over the Internet leg of the
+ * bridge. `send()` datagrams a full frame to each configured peer; `onRaw`/`onFrame` deliver inbound
+ * frames to the connected-mode consumers (the same interface shape as KissTnc). The Tier-C ingest path
+ * is preserved via `onPacket` — a tunnelled frame is still never first-party-attested (see above).
+ */
+export class AxudpPort {
+  private sock?: dgram.Socket;
+  private rawCbs: ((b: Uint8Array) => void)[] = [];
+  private frameCbs: ((f: Ax25Frame) => void)[] = [];
+  constructor(private o: AxudpOpts & { peers: AxudpPeer[] }, private onPacket?: (p: Packet) => void) {}
+
+  start() {
+    const s = dgram.createSocket("udp4");
+    this.sock = s;
+    s.on("message", (msg: Buffer) => {
+      const bytes = Uint8Array.from(msg);
+      for (const cb of this.rawCbs) cb(bytes);
+      const f = decodeFrame(bytes);
+      if (f) for (const cb of this.frameCbs) cb(f);
+      const ui = decodeAx25(bytes);                       // also feed the Tier-C ingest (positions/etc.)
+      if (ui && this.onPacket) this.onPacket({
+        src: ui.src, dst: ui.dst, path: ui.path, payload: ui.payload,
+        kind: "other", heardVia: "aprs_is", port: "axudp",
+        ts: Math.floor(Date.now() / 1000), raw: ui.raw,
+      });
+    });
+    s.on("error", (e) => console.error("[axudp] socket error:", e.message));
+    s.bind(this.o.port, this.o.bind);
+    console.log(`[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`);
+  }
+
+  /** Send a full AX.25 frame to every configured peer (best-effort). */
+  sendFrame(f: Ax25Frame): boolean {
+    if (!this.sock) return false;
+    const bytes = encodeFrame(f);
+    let ok = false;
+    for (const p of this.o.peers) { try { this.sock.send(bytes, p.port, p.host); ok = true; } catch { /* drop */ } }
+    return ok;
+  }
+
+  onRaw(cb: (b: Uint8Array) => void): void { this.rawCbs.push(cb); }
+  onFrame(cb: (f: Ax25Frame) => void): void { this.frameCbs.push(cb); }
+}
+
+/** Parse "host:port,host:port" into peer endpoints (AXUDP default port 10093). */
+export function parseAxudpPeers(spec: string): AxudpPeer[] {
+  return spec.split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
+    const [host, port] = s.split(":");
+    return { host: host!, port: Number(port) || 10093 };
+  });
 }
