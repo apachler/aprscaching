@@ -111,7 +111,7 @@ async function step(name, fn) {
 // accumulated journey state (a stuck "Hide a cache" mode won't swallow the open). Gate readiness on the
 // "Packet terminal" group being attached, retrying once.
 async function openWorkbench(page) {
-  const marker = () => page.locator(".group-toggle", { hasText: "Packet terminal" }).first();
+  const marker = () => page.locator(".group-toggle", { hasText: "Live stations" }).first();
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE}/?view=workbench#11.5/47.078/15.43`, { waitUntil: "load" });
     await ready(page);
@@ -128,6 +128,15 @@ async function expandGroup(page, title) {
   await page.waitForTimeout(500);
   await toggle.scrollIntoViewIfNeeded().catch(() => {});
   await page.waitForTimeout(300);
+}
+// Open a `?demo=` harness route (the hardware-free simulator: real components + in-process sims). The
+// hardware/gated surfaces (packet terminal, BBS, CAT rig, remote box) can't populate against a headless
+// browser with no TNC/radio, so the teaser shows them here in demo mode — populated and working. These
+// routes render their own app shell (no MapLibre canvas), so wait on the surface selector, not ready().
+async function gotoDemo(page, variant, waitSel) {
+  await page.goto(`${BASE}/?demo=${variant}`, { waitUntil: "load" });
+  await page.waitForSelector(waitSel, { timeout: 12000 });
+  await page.waitForTimeout(800);
 }
 
 // Friendlier captions for the terse rail/tab titles; unknown titles fall back to themselves.
@@ -274,18 +283,47 @@ for (const v of VIEWS) {
     }
   }
 
-  // --- Workbench deep-dive: showcase the packet stack (Stage 1) + the Tools plugins (Stage 2) ---
-  await step("packet", async () => {
+  // --- Workbench deep-dive: the launcher, the NET/ROM node + Tools plugins (real seeded app), then the
+  // hardware/gated surfaces in demo mode (populated sims): GP packet terminal, BBS, CAT rig, remote box.
+  await step("workbench", async () => {
     await openWorkbench(page);
-    await expandGroup(page, "Packet terminal");
+    await page.waitForSelector(".wb-apps", { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    await shot(page, v.id, "workbench-launcher", "Workbench — app launcher (pin to rail)");
+  });
+  await step("node", async () => {
+    await openWorkbench(page);
+    await expandGroup(page, "NET/ROM node");
     await clickAny(page, [".node-panel button:has-text('NODES')"]); // reveal the NET/ROM node view
     await page.waitForTimeout(400);
-    await shot(page, v.id, "packet", "Packet terminal — Graphic Packet reborn");
+    await shot(page, v.id, "node", "NET/ROM node · digipeater · sysop");
   });
   await step("tools", async () => {
     await openWorkbench(page);
     await expandGroup(page, "Tools");
     await shot(page, v.id, "tools", "Tools — sandboxed plugins");
+  });
+  await step("packet", async () => {
+    await gotoDemo(page, "app-packet", ".pt-window");
+    await shot(page, v.id, "packet", "Packet terminal — Graphic Packet reborn");
+  });
+  await step("bbs", async () => {
+    await gotoDemo(page, "app-bbs", ".bbs-body");
+    await clickAny(page, [".bbs-row"]);                               // open the first thread → reply tree
+    await page.waitForSelector(".bbs-thread, .bbs-read", { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    await shot(page, v.id, "bbs", "BBS — mail, bulletins & threads");
+  });
+  await step("rig", async () => {
+    await gotoDemo(page, "app-rig", ".rigctl");
+    await clickAny(page, [".rigctl button:has-text('Connect rig')"]); // fake serial connects instantly
+    await page.waitForSelector(".rigctl button:has-text('APRS')", { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    await shot(page, v.id, "rig", "Rig control — one-click CAT tune");
+  });
+  await step("remote", async () => {
+    await gotoDemo(page, "app-remote", ".logs");
+    await shot(page, v.id, "remote", "Remote control — your ingest box");
   });
 
   // Site map page — reached via the ?view= deep-link (dogfooding the sitemap tooling). Captured on

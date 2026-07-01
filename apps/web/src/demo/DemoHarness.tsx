@@ -7,9 +7,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { PacketTerminal } from "../packet/PacketTerminal.js";
 import { BbsPanel } from "../live/BbsPanel.js";
+import { RigControl } from "../workbench/RigControl.js";
+import { RemoteControl } from "../workbench/RemoteControl.js";
 import { NavRail } from "../NavRail.js";
 import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
+import { installBoxSim } from "./simBoxApi.js";
+import { installSerialSim } from "./simSerial.js";
 import "../styles.css";
 
 const ME = "OE8APR-7";
@@ -55,6 +59,13 @@ export function DemoHarness({ which }: { which: string }) {
   const showPacket = which === "packet" || which === "1" || which === "both" || which === "";
   const showBbs = which === "bbs" || which === "1" || which === "both" || which === "";
   const [bbsReady, setBbsReady] = useState(false);
+  // Install the fetch/serial sims SYNCHRONOUSLY (useState initialiser) so catSupported() and the box
+  // log see them on the very first render — a useEffect would flash the un-simulated fallback first.
+  useState(() => {
+    if (which === "app-rig") installSerialSim();
+    if (which === "app-remote") { installBoxSim(); try { localStorage.setItem("acs.boxId", "pi-home"); } catch { /* ignore */ } }
+    return null;
+  });
   useEffect(() => { installBbsSim(); setBbsReady(true); }, []);
 
   // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
@@ -67,6 +78,14 @@ export function DemoHarness({ which }: { which: string }) {
   }
   if (which === "app-bbs") {
     return <AppShell active="bbs" title="✉ BBS" childIsPanel>{bbsReady && <BbsPanel callsign={ME} onClose={noop} />}</AppShell>;
+  }
+  if (which === "app-rig") {
+    // A demo operator with a control-verified callsign, so the connected tune UI is shown (RX-side,
+    // no H5 gate on tuning). The fake serial port is already installed above.
+    return <AppShell active="workbench" title="🎚 Rig control (CAT)"><RigControl /></AppShell>;
+  }
+  if (which === "app-remote") {
+    return <AppShell active="workbench" title="🛰 Remote control — your box"><RemoteControl callsign={ME} verified map={null} /></AppShell>;
   }
 
   return (
