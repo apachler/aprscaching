@@ -144,6 +144,15 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   packets to the owning circuit by `(index,id)`. `parseConnectScript` turns a BPQ `C [port] <call>` script
   into hops (the sequencer that drives them is the radio leg). Ingest `onRaw` runs every directed NET/ROM
   frame through the switch (local → demux, transit → re-frame to the neighbour over KISS, drop → log).
+- **F2 L4 inbound session:** the AX.25 line-driver core is extracted to `makeLineDriver` (shared by
+  `serveApp`); `serveNetromApp` binds a `LineApp` to an accepting `NetromCircuit`, so a station connecting
+  a NET/ROM *circuit* to us (from across the network, multi-hop) reaches the node CLI/BBS with greeting +
+  commands + connect-through. Unit-tested end-to-end over a circuit loopback. Ingest `NetromNodeRunner`
+  accepts an inbound ConnReq (`acceptInbound`) and routes replies to the reverse-path neighbour.
+- **F2 connect sequencer:** `ConnectSequencer` drives a multi-hop connect script — issues `C <call>` per
+  hop, watches for the node's "Connected to …" confirmation, signals ready after the last hop (or fails on
+  busy). Unit-tested. Ingest `kissForwardLink` connects the AX.25 link to the first hop then sequences the
+  rest before the FBB session starts.
 - **F3 connected digi:** AX.25 codec now round-trips the digi H-bit (`digisRepeated`); `digipeatAx25`
   (pure, unit-tested) repeats ANY frame type whose next un-repeated via-hop is our call/alias (sets the
   H-bit). Ingest `ConnectedDigipeater` (KISS `onRaw`, dedup + viscous delay) relays NET/ROM + FBB through
@@ -197,18 +206,18 @@ real FBB partner, not a headless build. ASCII FBB forwarding is fully interopera
 | NODES table + broadcast | `netrom-node.ts` ✅ | `NetromNodeRunner` (TX/consume) ✅ | RF |
 | L3 transit switch | `routeNetrom` ✅ | `onRaw` → switch ✅ | neighbour TX |
 | Connect-through | `nodeConnectThrough` ✅ | `NetromNodeRunner.dialer` ✅ | neighbour; multi-circuit demux is minimal |
-| Connect-script | `parseConnectScript` ✅ | — | the multi-hop **sequencer** (prompt-driven) |
+| L4 inbound session | `serveNetromApp` + `makeLineDriver` ✅ | `NetromNodeRunner.acceptInbound` ✅ | a live neighbour |
+| Connect-script + sequencer | `parseConnectScript`,`ConnectSequencer` ✅ | `kissForwardLink` multi-hop ✅ | the node prompts' exact wording (tune the regex) |
 | FBB forwarding (ASCII) | `fbb-session.ts`,`fbb-forward.ts` ✅ | scheduler + pool ✅ | a real FBB partner |
 | FBB scheduler | `BbsForwarder` (e2e loopback) ✅ | `GatewayApi`+`kissForwardLink` ✅ | RF |
 | AXUDP transport | — | `AxudpPort` (bidir) ✅ | a peer + cross-port routing |
 | FBB binary B0/B1 | ✗ (see below) | — | LZHUF + a real FBB partner |
 
-**Headlessly-buildable follow-ons** (not yet done, but do NOT need RF — good next tasks): the **L4 inbound
-session server** (accept a NET/ROM *circuit* terminating at us → bind to a BBS/NodeSession, mirroring the
-AX.25 `SessionServer` one layer up — `NetromCircuit.onConnReq` already accepts); the **multi-hop connect
-sequencer** (drive `parseConnectScript` steps, watching each node's prompt — testable over a scripted
-loopback); **viscous-digi cancellation** (cancel a pending repeat when the frame is heard already-digied);
-NODES **worst-quality pruning / obsolescence broadcast threshold**.
+**Headlessly-buildable follow-ons still open** (do NOT need RF): **viscous-digi cancellation** (cancel a
+pending repeat when the frame is heard already-digied by a better-placed digi); NODES **worst-quality
+pruning / obsolescence broadcast threshold** (only re-advertise routes above a threshold, evict the worst
+when the table is full). Both are small; everything else headlessly-testable in the F1–F5 node/BBS/forward
+path is now built (incl. the L4 inbound session server and the multi-hop connect sequencer).
 
 **Deliberately not built — LZHUF B0/B1.** Its correctness *is* byte-exact compatibility with FBB's fixed
 Huffman/position tables, which a round-trip test cannot prove (it only checks internal consistency) and
@@ -232,11 +241,12 @@ Verify: from a second station, send a frame routed `via YOURCALL`; confirm it's 
 set (watch the monitor). `digipeatAx25` already decides; only TX timing is new. *Add viscous-cancel* if
 you run parallel digis (cancel the pending repeat on hearing the frame already digied).
 
-**2. Inbound BBS / node session server (F1).** Set `BBS_NODE_CALL` (e.g. `OE8APR-1`) and/or `NETROM_CALL`
-+ `NETROM_ALIAS`. Connect to that SSID from another station: you should get the greeting, then drive
-`L`/`R n`/`S`/`B` (BBS) or `N`/`R`/`U`/`MH`/`I`/`C` (node). The async BBS warm-up fetches
-`/api/bbs/session?call=` before greeting — confirm the peer's SABM-retransmit window (T1×N2) exceeds one
-gateway round-trip (default 3 s × 10 is ample). Tune `SessionServer` `cfg` (T1/T3/window) for your channel.
+**2. Inbound BBS / node session server (F1/F2).** Set `BBS_NODE_CALL` (e.g. `OE8APR-1`) and/or
+`NETROM_CALL` + `NETROM_ALIAS`. Connect to that SSID by **AX.25** from another station: you should get the
+greeting, then drive `L`/`R n`/`S`/`B` (BBS) or `N`/`R`/`U`/`MH`/`I`/`C` (node). Connect by a **NET/ROM
+circuit** (from across the network) and the same node CLI answers via `serveNetromApp` (`acceptInbound`).
+The async BBS warm-up fetches `/api/bbs/session?call=` before greeting — confirm the peer's SABM-retransmit
+window (T1×N2) exceeds one gateway round-trip (default 3 s × 10 is ample). Tune `SessionServer` `cfg`.
 
 **3. NET/ROM node: NODES + transit switch (F2).** With `NETROM_CALL`/`NETROM_ALIAS` set, the runner
 broadcasts NODES (default 5 min) and consumes neighbours'. Verify your node appears in a neighbour's NODES
@@ -255,8 +265,11 @@ then `C DB0XYZ`) needs the **sequencer** (build it against `parseConnectScript`,
 script, interval, time-bands) and a routing rule (region → partner). Set `BBS_FORWARD=1`,
 `BBS_FORWARD_CALL`. On the interval, `BbsForwarder` pulls `/api/bbs/forward/pool`, opens `kissForwardLink`
 to the partner, runs the ASCII FBB exchange, and reconciles `/inbound` + `/sent`. Verify against a test
-LinBPQ/FBB: watch the `[FBB-…]` SID handshake, `FB`/`F>`/`FS` lines, and BID dedup. For **binary B0/B1**,
-implement `lzhuf.ts` and advertise `B1` in the SID — validate the decompressed body against the partner.
+LinBPQ/FBB: watch the `[FBB-…]` SID handshake, `FB`/`F>`/`FS` lines, and BID dedup. A **multi-hop** partner
+(connect script with >1 `C` line) routes through node(s): `kissForwardLink` connects to the first hop and
+`ConnectSequencer` drives the rest — if your intermediate nodes phrase confirmations oddly, adjust the
+sequencer's `connectedRe`/`failRe`. For **binary B0/B1**, implement `lzhuf.ts` and advertise `B1` in the
+SID — validate the decompressed body against the partner.
 
 **6. AXUDP crosslink (F5).** Set `AXUDP_PORT` + `AXUDP_PEERS=host:port,…`. `AxudpPort` presents the same
 `onRaw`/`sendFrame` shape as KISS; route the node/digi/forwarder over it for HAMNET/Internet links. Cross-

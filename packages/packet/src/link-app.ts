@@ -30,6 +30,48 @@ export interface RelayController {
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
+/** The transport-agnostic side of a line session: feed bytes/up/down, it drives the app. */
+export interface LineDriver { onData(info: Uint8Array): void; onUp(): void; onDown(): void }
+
+/**
+ * The transport-neutral core that binds a `LineApp` to a byte duplex: buffers received bytes into CR/LF
+ * lines, hands each to `app.handle`, sends replies back, greets on connect, and supports connect-through
+ * relay. `io.send` writes bytes to the peer; `io.disconnect` tears the session down. Reused by `serveApp`
+ * (over an AX.25 `ConnectedLink`) and `serveNetromApp` (over a NET/ROM `NetromCircuit`).
+ */
+export function makeLineDriver(
+  app: LineApp,
+  io: { send: (bytes: Uint8Array) => void; disconnect: () => void; onConnect?: (dest: string, relay: RelayController) => void },
+): LineDriver {
+  let buf = "";
+  let greeted = false;
+  let relaySink: ((bytes: Uint8Array) => void) | null = null;
+  const push = (lines: string[]) => { if (lines.length) io.send(enc(lines.join("\r") + "\r")); };
+  const relay: RelayController = {
+    toUser: (bytes) => io.send(bytes),
+    attach: (sink) => { relaySink = sink; buf = ""; },
+    detach: () => { relaySink = null; },
+    disconnectUser: () => io.disconnect(),
+  };
+  return {
+    onData(info) {
+      if (relaySink) { relaySink(info); return; }          // transparent relay (connect-through) — no line-splitting
+      buf += dec(info);
+      let i: number;
+      while ((i = buf.search(/[\r\n]/)) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        const r = app.handle(line);
+        push(r.lines);
+        if (r.connect && io.onConnect) io.onConnect(r.connect, relay);
+        if (r.disconnect) io.disconnect();
+      }
+    },
+    onUp() { if (!greeted) { greeted = true; push(app.greeting()); } },
+    onDown() { greeted = false; buf = ""; relaySink = null; },
+  };
+}
+
 /**
  * Stand up the server side of a connected-mode session: a `ConnectedLink` whose received data drives the
  * given `LineApp`. Returns the link — the caller pumps inbound frames via `link.onReceive(frame)` and runs
@@ -43,37 +85,15 @@ export function serveApp(
     onState?: (s: LinkState) => void; onConnect?: (dest: string, relay: RelayController) => void;
   },
 ): ConnectedLink {
-  let buf = "";
-  let greeted = false;
-  let relaySink: ((bytes: Uint8Array) => void) | null = null;
-  // eslint-disable-next-line prefer-const -- the events close over `link` before it is assigned
+  // eslint-disable-next-line prefer-const -- the driver closes over `link` before it is assigned
   let link: ConnectedLink;
-  const push = (lines: string[]) => { if (lines.length) link.send(enc(lines.join("\r") + "\r")); };
-  const relay: RelayController = {
-    toUser: (bytes) => link.send(bytes),
-    attach: (sink) => { relaySink = sink; buf = ""; },   // discard any buffered command text on switch
-    detach: () => { relaySink = null; },
-    disconnectUser: () => link.disconnect(),
-  };
-
+  const driver = makeLineDriver(app, { send: (b) => link.send(b), disconnect: () => link.disconnect(), onConnect: opts.onConnect });
   link = new ConnectedLink(local, remote, {
     send: opts.send,
-    deliver: (info: Uint8Array) => {
-      if (relaySink) { relaySink(info); return; }         // transparent relay (connect-through) — no line-splitting
-      buf += dec(info);
-      let i: number;
-      while ((i = buf.search(/[\r\n]/)) >= 0) {
-        const line = buf.slice(0, i);
-        buf = buf.slice(i + 1);
-        const r = app.handle(line);
-        push(r.lines);
-        if (r.connect && opts.onConnect) opts.onConnect(r.connect, relay);
-        if (r.disconnect) link.disconnect();
-      }
-    },
+    deliver: (info: Uint8Array) => driver.onData(info),
     state: (s: LinkState) => {
-      if (s === "connected" && !greeted) { greeted = true; push(app.greeting()); }
-      if (s === "disconnected") { greeted = false; buf = ""; relaySink = null; }
+      if (s === "connected") driver.onUp();
+      else if (s === "disconnected") driver.onDown();
       opts.onState?.(s);
     },
   }, opts.cfg, opts.clock);

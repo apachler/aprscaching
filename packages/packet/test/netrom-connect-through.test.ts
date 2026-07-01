@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { SessionServer } from "../src/session-server.js";
 import { NetromNode } from "../src/netrom-node.js";
-import { nodeConnectThrough, parseConnectScript, type CircuitDialer } from "../src/netrom-connect-through.js";
+import { nodeConnectThrough, parseConnectScript, ConnectSequencer, type CircuitDialer } from "../src/netrom-connect-through.js";
 import { NodeSession, type NodeStore } from "../src/netrom.js";
 import { NetromCircuit, type NrTpPacket } from "../src/netrom-circuit.js";
 import { encodeNodesBroadcast } from "../src/netrom-wire.js";
@@ -72,6 +72,34 @@ describe("NET/ROM connect-through (docs/29 F2)", () => {
     expect(parseConnectScript("  c oe8xbm  \n\n")).toEqual([{ call: "OE8XBM" }]); // case + blank lines
     expect(parseConnectScript("hello\nC")).toEqual([]);                           // non-C / bare C ignored
     expect(parseConnectScript("C 0 OE1ABC-7")).toEqual([{ port: 0, call: "OE1ABC-7" }]);
+  });
+
+  it("sequences a multi-hop connect script, ready after the last hop", () => {
+    const enc2 = (s: string) => new TextEncoder().encode(s);
+    const sent: string[] = [];
+    let ready = false;
+    const seq = new ConnectSequencer(parseConnectScript("C NODE1\nC DB0XYZ\nC OE8XBM"), {
+      send: (l) => sent.push(l), onReady: () => { ready = true; }, onFail: () => {},
+    });
+    seq.start();
+    expect(sent).toEqual(["C DB0XYZ"]);                 // hop 0 (NODE1) is the link's job; sequencer drives hop 1
+    seq.feed(enc2("Connected to DB0XYZ\r"));
+    expect(sent).toEqual(["C DB0XYZ", "C OE8XBM"]);      // advanced to hop 2
+    expect(ready).toBe(false);
+    seq.feed(enc2("Connected to OE8XBM\r"));
+    expect(ready).toBe(true);                            // final hop up
+  });
+
+  it("is ready immediately for a single-hop (direct) script and fails on a busy node", () => {
+    let ready = false, failed = "";
+    const direct = new ConnectSequencer(parseConnectScript("C DB0XYZ"), { send: () => {}, onReady: () => { ready = true; }, onFail: () => {} });
+    direct.start();
+    expect(ready).toBe(true);
+
+    const seq = new ConnectSequencer(parseConnectScript("C NODE1\nC DB0XYZ"), { send: () => {}, onReady: () => {}, onFail: (r) => { failed = r; } });
+    seq.start();
+    seq.feed(new TextEncoder().encode("DB0XYZ busy from OE1ABC\r"));
+    expect(failed).toContain("busy");
   });
 
   it("returns the user to the node when the far end disconnects", () => {

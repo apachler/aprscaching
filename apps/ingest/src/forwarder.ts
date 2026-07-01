@@ -11,7 +11,9 @@
 import net from "node:net";
 import { kissWrap, kissFrames } from "@aprsweb/aprs";
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprsweb/ax25";
-import { BbsForwarder, type ForwardApi, type ForwardLink, type GwPartner, type FbbMessage, type CachedBbsBackend, type BbsMsgFull, type BbsType } from "@aprsweb/packet";
+import { BbsForwarder, ConnectSequencer, parseConnectScript, type ForwardApi, type ForwardLink, type GwPartner, type FbbMessage, type CachedBbsBackend, type BbsMsgFull, type BbsType } from "@aprsweb/packet";
+
+const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 /** The gateway REST client for the forwarding pool (all endpoints x-ingest-secret gated). */
 export class GatewayApi implements ForwardApi {
@@ -68,18 +70,23 @@ export function startForwarder(o: { base: string; secret: string; mycall: string
  */
 export function kissForwardLink(o: { host: string; port: number; mycall: string; partnerCall: string; connectScript: string }): ForwardLink {
   const local = parseAddr(o.mycall);
-  const remote = parseAddr(o.partnerCall);
-  if (o.connectScript.trim()) console.log(`[forward] ${o.partnerCall}: connect script (manual/validate-at-deploy): ${o.connectScript.replace(/\n/g, " ; ")}`);
+  // A connect script routes through node(s): connect the AX.25 link to the FIRST hop, then sequence the
+  // rest with ConnectSequencer. No script → connect directly to the partner.
+  const steps = parseConnectScript(o.connectScript);
+  const firstHop = steps.length ? steps[0]!.call : o.partnerCall;
+  const remote = parseAddr(firstHop);
 
   let sock: net.Socket | null = null;
   let rxBuf: number[] = [];
+  let sequencing = false;                              // while true, delivered bytes drive the sequencer, not the app
+  let seq: ConnectSequencer | null = null;
   const dataCbs: ((b: Uint8Array) => void)[] = [];
   const closeCbs: (() => void)[] = [];
   const fireClose = () => { for (const c of closeCbs.splice(0)) c(); };
 
   const link = new ConnectedLink(local, remote, {
     send: (f: Ax25Frame) => { try { sock?.write(kissWrap(encodeFrame(f))); } catch { /* link down */ } },
-    deliver: (info: Uint8Array) => { for (const c of dataCbs) c(info); },
+    deliver: (info: Uint8Array) => { if (sequencing) seq?.feed(info); else for (const c of dataCbs) c(info); },
     state: (s: LinkState) => { if (s === "disconnected") fireClose(); },
     error: (msg: string) => console.error(`[forward] ${o.partnerCall} link error: ${msg}`),
   });
@@ -100,7 +107,17 @@ export function kissForwardLink(o: { host: string; port: number; mycall: string;
       });
       s.on("error", (e) => reject(e));
       s.on("close", () => { clearInterval(poll); fireClose(); });
-      const wait = setInterval(() => { if (link.state === "connected") { clearInterval(wait); resolve(); } }, 200);
+      const settle = () => {                            // AX.25 link to the first hop is up
+        if (steps.length <= 1) return resolve();         // direct partner → ready
+        sequencing = true;                               // multi-hop: sequence "C <next>" through the node(s)
+        seq = new ConnectSequencer(steps, {
+          send: (line) => link.send(enc(line + "\r")),
+          onReady: () => { sequencing = false; resolve(); },
+          onFail: (why) => reject(new Error(`connect script failed: ${why}`)),
+        });
+        seq.start();
+      };
+      const wait = setInterval(() => { if (link.state === "connected") { clearInterval(wait); settle(); } }, 200);
       setTimeout(() => { clearInterval(wait); if (link.state !== "connected") reject(new Error("connect timeout")); }, 30_000);
     }),
     send: (bytes: Uint8Array) => link.send(bytes),

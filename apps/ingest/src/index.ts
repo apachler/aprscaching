@@ -72,11 +72,10 @@ if (env.KISS_TNC_HOST) {
     });
     rawSubs.push((b) => node.onRaw(b));
     node.start();
-    services.push({
-      addr: parseAddr(env.NETROM_CALL), name: "NODE",
-      app: (r) => new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!),
-      onConnect: node.connectThrough(),           // C <dest> → route + bridge onward (docs/29 F2)
-    });
+    const nodeApp = (r: import("@aprsweb/ax25").Ax25Address) =>
+      new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!);
+    services.push({ addr: parseAddr(env.NETROM_CALL), name: "NODE", app: nodeApp, onConnect: node.connectThrough() });
+    node.serveInbound(nodeApp);                    // also answer stations that connect a NET/ROM circuit TO us (L4 inbound)
     console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
   }
 

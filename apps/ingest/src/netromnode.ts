@@ -6,8 +6,8 @@
  * connecting in and issuing C <dest> to route through us) rides the same KISS link and is validate-at-deploy.
  */
 import {
-  NetromNode, NetromCircuit, nodeConnectThrough, routeNetrom, encodeNetrom, decodeNetrom,
-  type LearnedRoute, type NodeStore, type NodeMheard, type CircuitDialer, type RelayController,
+  NetromNode, NetromCircuit, nodeConnectThrough, routeNetrom, serveNetromApp, encodeNetrom, decodeNetrom, NrOp,
+  type LearnedRoute, type NodeStore, type NodeMheard, type CircuitDialer, type RelayController, type LineApp,
 } from "@aprsweb/packet";
 import { decodeFrame, parseAddr, addrStr, PID_NETROM, type Ax25Address } from "@aprsweb/ax25";
 import type { KissTnc } from "./kiss.js";
@@ -27,14 +27,37 @@ export class NetromNodeRunner {
   private heard = new Map<string, NodeMheard>();   // callsign -> last-heard (for the node's MHeard list)
   private circuits: NetromCircuit[] = [];          // active connect-through circuits (for inbound demux)
   private nextIdx = 1;
+  private inboundApp?: (user: Ax25Address) => LineApp;   // build a session for a station connecting a circuit TO us
   constructor(private kiss: KissTnc, private o: NetromNodeOpts) {
     this.me = parseAddr(o.mycall);
     this.node = new NetromNode({ call: this.me, alias: o.alias }, { pathQuality: o.pathQuality });
     this.port = o.port ?? "kiss-tnc";
   }
 
+  /** Enable the L4 inbound session server: bind a station's inbound circuit to this app (the node CLI). */
+  serveInbound(app: (user: Ax25Address) => LineApp): void { this.inboundApp = app; }
+
   /** The node's connect-through handler (docs/29 F2): `C <dest>` → route + bridge to an onward circuit. */
   connectThrough(): (dest: string, relay: RelayController) => void { return nodeConnectThrough(this.node, this.dialer); }
+
+  /** Accept an inbound NET/ROM circuit terminating at us (docs/29 F2) and bind it to the node CLI. Replies
+   *  route back to the reverse-path neighbour; the user gets full node behaviour incl. onward connect. */
+  private acceptInbound(pkt: import("@aprsweb/packet").NrPacket, neighbor: Ax25Address): void {
+    const origin = NetromCircuit.originOf(pkt.info);
+    const user = origin?.user ?? pkt.net.origin;
+    const idx = this.nextIdx++ & 0xff;
+    const circ = serveNetromApp({ index: idx, id: idx }, this.inboundApp!(user), {
+      send: (p) => {
+        const bytes = encodeNetrom({ net: { origin: this.me, dest: user, ttl: 25 }, tp: p.tp, info: p.info });
+        this.kiss.sendFrame({ dst: neighbor, src: this.me, command: true, type: "UI", pf: false, pid: PID_NETROM, info: bytes });
+      },
+      onConnect: this.connectThrough(),                // a NET/ROM-connected user can C <dest> onward too
+      onState: (s) => { if (s === "disconnected") this.circuits = this.circuits.filter((c) => c !== circ); },
+    });
+    this.circuits.push(circ);
+    circ.onPacket(pkt.tp, pkt.info);                    // feed the ConnReq → the circuit accepts + greets
+    console.log(`[netrom] inbound circuit from ${addrStr(user)} accepted`);
+  }
 
   /** A CircuitDialer that opens a NET/ROM L4 circuit to a neighbour over KISS (validate-at-deploy on RF). */
   private dialer: CircuitDialer = (route, hooks) => {
@@ -87,7 +110,8 @@ export class NetromNodeRunner {
       const decision = routeNetrom(pkt, this.node, this.me);
       if (decision.action === "local") {
         const c = this.circuits.find((x) => x.localIndex === pkt.tp.circuitIndex && x.localId === pkt.tp.circuitId);
-        c?.onPacket(pkt.tp, pkt.info);                 // demux to the owning circuit (ConnReq to us = inbound circuit, not yet handled)
+        if (c) c.onPacket(pkt.tp, pkt.info);            // demux to the owning circuit
+        else if (pkt.tp.opcode === NrOp.ConnReq && this.inboundApp) this.acceptInbound(pkt, f.src);  // L4 inbound session
       } else if (decision.action === "forward") {
         this.kiss.sendFrame({ dst: decision.neighbor, src: this.me, command: true, type: "UI", pf: false, pid: PID_NETROM, info: encodeNetrom(decision.packet) });
       } else if (decision.reason !== "no-route") {
