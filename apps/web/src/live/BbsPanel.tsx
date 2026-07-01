@@ -17,6 +17,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   const [type, setType] = useState<"P" | "B" | "T">("P");
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [selected, setSelected] = useState<BbsMessage | null>(null); // reading pane (wide master-detail)
 
   const load = useCallback(() => {
     if (signedIn) {
@@ -29,11 +30,21 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
 
   const unread = inbox.filter((m) => m.readAt == null).length;
 
-  // open an inbox message: mark it read (optimistic) and persist
-  async function openMessage(m: BbsMessage) {
-    if (m.readAt != null) return;
-    setInbox((prev) => prev.map((x) => (x.id === m.id ? { ...x, readAt: Math.floor(Date.now() / 1000) } : x)));
-    try { await markBbsRead(m.id); } catch { /* a re-load will reconcile */ }
+  // open a message into the reading pane; mark inbox mail read (optimistic) and persist
+  function openMessage(m: BbsMessage) {
+    setSelected(m);
+    if (m.type !== "B" && m.readAt == null) {
+      setInbox((prev) => prev.map((x) => (x.id === m.id ? { ...x, readAt: Math.floor(Date.now() / 1000) } : x)));
+      void markBbsRead(m.id).catch(() => { /* a re-load will reconcile */ });
+    }
+  }
+  // the conversation for a message: itself + anything sharing its thread_id, oldest first (SR chain).
+  function threadOf(m: BbsMessage): BbsMessage[] {
+    const tid = m.threadId ?? m.id;
+    const all = [...inbox, ...sent, ...bulletins];
+    const seen = new Set<number>();
+    return all.filter((x) => (x.threadId ?? x.id) === tid && !seen.has(x.id) && seen.add(x.id))
+      .sort((a, b) => a.postedAt - b.postedAt);
   }
 
   function reply(m: BbsMessage) {
@@ -55,14 +66,57 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
 
   const DELIVERY: Record<string, string> = { held: "⏳ held", sent: "📡 sent", acked: "✓ delivered", expired: "✕ expired" };
   const tabBtn = (key: Tab, label: string, badge?: number) => (
-    <button className={tab === key ? "primary" : ""} onClick={() => setTab(key)}>
+    <button className={tab === key ? "primary" : ""} onClick={() => { setTab(key); setSelected(null); }}>
       {label}{badge ? <Badge className="ml-1">{badge}</Badge> : null}
     </button>
   );
 
+  // one compact list row (from/date/subject) for the master list; clicking loads the reading pane.
+  const listRow = (m: BbsMessage, kind: "inbox" | "bulletins") => (
+    <li key={m.id} className={`bbs-row${kind === "inbox" && m.readAt == null ? " bbs-unread" : ""}${selected?.id === m.id ? " on" : ""}`}
+        onClick={() => openMessage(m)}>
+      <div className="bbs-row-h">
+        {kind === "inbox" && m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
+        {kind === "bulletins" && <Badge>{m.toCall}</Badge>}
+        <strong>{m.fromCall}</strong>
+        <span className="muted bbs-row-date">{fmt.dateTime(m.postedAt)}</span>
+      </div>
+      {m.subject && <div className="bbs-subj">{m.subject}</div>}
+    </li>
+  );
+
+  // the reading pane: full message headers + body + its SR thread + Reply
+  const reader = () => {
+    if (!selected) return <div className="bbs-reader-empty muted">Select a message to read.</div>;
+    const chain = threadOf(selected);
+    return (
+      <article className="bbs-read">
+        <button className="link bbs-back" onClick={() => setSelected(null)}>← Messages</button>
+        <h3>{selected.subject || "(no subject)"}</h3>
+        <dl className="bbs-hdr">
+          <div><dt>From</dt><dd className="mono">{selected.fromCall}</dd></div>
+          <div><dt>To</dt><dd className="mono">{selected.toCall}</dd></div>
+          <div><dt>BID</dt><dd className="mono">{selected.bid}</dd></div>
+          <div><dt>Date</dt><dd>{fmt.dateTime(selected.postedAt)}</dd></div>
+        </dl>
+        {chain.length > 1 ? (
+          <div className="bbs-thread">
+            {chain.map((t, i) => (
+              <div key={t.id} className={`bbs-msg${t.id === selected.id ? " on" : ""}`} style={{ marginLeft: Math.min(i, 4) * 14 }}>
+                <div className="bbs-msg-h"><strong className="mono">{t.fromCall}</strong> <span className="muted">{fmt.dateTime(t.postedAt)}</span></div>
+                <div className="comment">{t.body}</div>
+              </div>
+            ))}
+          </div>
+        ) : <div className="comment bbs-read-body">{selected.body}</div>}
+        <div className="row end"><button className="primary" onClick={() => reply(selected)}>Reply</button></div>
+      </article>
+    );
+  };
+
   return (
-    <Panel title="✉ BBS" onClose={props.onClose}>
-      <div className="row gap-2">
+    <Panel title="✉ BBS" onClose={props.onClose} wide>
+      <div className="row gap-2 bbs-tabs">
         {tabBtn("inbox", "Inbox", unread)}
         {tabBtn("sent", "Sent")}
         {tabBtn("bulletins", "Bulletins")}
@@ -71,15 +125,10 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
 
       {tab === "inbox" && (!signedIn ? <EmptyState>Set your callsign to see your mail.</EmptyState> :
         inbox.length === 0 ? <EmptyState>No messages for {props.callsign}.</EmptyState> : (
-        <ul className="logs">{inbox.map((m) => (
-          <li key={m.id} className={m.readAt == null ? "bbs-unread" : ""} onClick={() => openMessage(m)}>
-            {m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
-            <strong>{m.fromCall}</strong> <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
-            {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
-            <div className="comment">{m.body}</div>
-            <button className="link" onClick={(e) => { e.stopPropagation(); reply(m); }}>Reply</button>
-          </li>
-        ))}</ul>
+        <div className="bbs-body" data-sel={selected ? "1" : "0"}>
+          <ul className="bbs-list">{inbox.map((m) => listRow(m, "inbox"))}</ul>
+          <div className="bbs-reader">{reader()}</div>
+        </div>
       ))}
 
       {tab === "sent" && (!signedIn ? <EmptyState>Set your callsign to see your sent mail.</EmptyState> :
@@ -95,14 +144,10 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       ))}
 
       {tab === "bulletins" && (bulletins.length === 0 ? <EmptyState>No bulletins.</EmptyState> : (
-        <ul className="logs">{bulletins.map((m) => (
-          <li key={m.id}>
-            <Badge>{m.toCall}</Badge> <strong>{m.fromCall}</strong>
-            <span className="muted"> · {fmt.dateTime(m.postedAt)}{m.origin && m.origin !== "local" ? ` · via ${m.origin}` : ""}</span>
-            {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
-            <div className="comment">{m.body}</div>
-          </li>
-        ))}</ul>
+        <div className="bbs-body" data-sel={selected ? "1" : "0"}>
+          <ul className="bbs-list">{bulletins.map((m) => listRow(m, "bulletins"))}</ul>
+          <div className="bbs-reader">{reader()}</div>
+        </div>
       ))}
 
       {tab === "compose" && (<>

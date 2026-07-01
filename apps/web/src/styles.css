@@ -204,6 +204,11 @@ label input, label select, label textarea { margin-top: 3px; }
     border: none; border-right: 1px solid var(--hair); border-radius: 0; box-shadow: none; background: var(--panel-2); }
   /* detail/remote come after the map in DOM → dock on the right */
   .shell > .mapwrap ~ .panel { flex-basis: 392px; border-right: none; border-left: 1px solid var(--hair); }
+  /* dense workspace surfaces (packet terminal, BBS) take the whole content area instead of a slim
+     drawer; the map hides while one is active (a full app-switch, not a squeezed column beside a map
+     you're not using). Reveals the multi-pane internal layouts below. */
+  .shell:has(> .panel-wide) > .mapwrap { display: none; }
+  .shell > .panel-wide { flex: 1 1 auto; flex-basis: auto; max-width: none; }
 }
 .panel h2 { margin: 0 0 4px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
 .panel h3 { margin: 6px 0; font-size: 17px; }
@@ -687,6 +692,40 @@ button.link:hover { text-decoration: underline; }
 .bbs-unread > strong { font-weight: 700; }
 .bbs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: middle; }
 .bbs-subj { color: var(--ink-2); font-style: italic; }
+
+/* BBS master–detail: message list | reading pane. Two columns when the panel is wide (container
+   query — the wide workspace surface), stacked master→detail swap when it's a slim drawer/sheet. */
+.bbs-tabs { flex-wrap: wrap; margin-bottom: 8px; }
+.bbs-body { display: grid; gap: 14px; align-items: start; }
+.bbs-list { list-style: none; margin: 0; padding: 0; }
+.bbs-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.bbs-row + .bbs-row { margin-top: 2px; }
+.bbs-row:hover { background: color-mix(in oklch, var(--ink) 6%, transparent); }
+.bbs-row.on { background: color-mix(in oklch, var(--accent) 14%, transparent); border-color: color-mix(in oklch, var(--accent) 40%, transparent); }
+.bbs-row-h { display: flex; align-items: baseline; gap: 6px; }
+.bbs-row-date { margin-left: auto; white-space: nowrap; font-size: 12px; }
+.bbs-read { max-width: 80ch; }                  /* keep prose line-length readable on a wide pane */
+.bbs-read h3 { margin: 0 0 10px; }
+.bbs-hdr { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 14px; font-size: 13px; }
+.bbs-hdr > div { display: contents; }
+.bbs-hdr dt { color: var(--muted); }
+.bbs-hdr dd { margin: 0; }
+.bbs-thread .bbs-msg { padding: 8px 0; border-top: 1px solid var(--line); }
+.bbs-thread .bbs-msg.on { background: color-mix(in oklch, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px; border-top-color: transparent; }
+.bbs-msg-h { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+.bbs-reader-empty { padding: 24px 8px; }
+.bbs-back { display: inline-block; margin-bottom: 8px; }
+
+@container panel (min-width: 40rem) {
+  .bbs-body { grid-template-columns: 320px minmax(0, 1fr); }
+  .bbs-list { border-right: 1px solid var(--hair); padding-right: 14px; }
+  .bbs-reader { position: sticky; top: 0; }
+  .bbs-back { display: none; }                  /* both panes visible → no back nav needed */
+}
+@container panel (max-width: 40rem) {
+  .bbs-body[data-sel="1"] .bbs-list { display: none; }
+  .bbs-body[data-sel="0"] .bbs-reader { display: none; }
+}
 
 .rigctl { display: grid; gap: 8px; }
 .rigctl .row { align-items: center; gap: 10px; }

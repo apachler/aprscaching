@@ -18,9 +18,10 @@ const INBOX: Msg[] = [
   m({ id: 1, type: "P", fromCall: "OE3ABC", toCall: "OE8APR-7", subject: "Re: JN77 activation Sat", body: "Great, I'll bring the 2m beam and the DigiRig. Meet at the Schoeckl car park 0900z? 73 Martin OE3ABC", delivery: "held" }),
   m({ id: 2, type: "P", fromCall: "DL2XYZ", toCall: "OE8APR-7", subject: "QSL via bureau OK", body: "Confirmed our 20m SSB QSO from last Sunday. Card on its way via the DARC bureau. 73!", delivery: "held" }),
   m({ id: 3, type: "P", fromCall: "OE5FLM", toCall: "OE8APR-7", subject: "Found AC-0008 Schoeckl", body: "Logged your living cache on the summit today - beaconed from the TH-D75. Nice hide! vy 73", readAt: T, delivery: "acked" }),
+  m({ id: 4, type: "P", fromCall: "OE3ABC", toCall: "OE8APR-7", subject: "Re: JN77 activation Sat", body: "One more thing - I'll also bring the mast clamp and a spare coax. See you Sat! 73", replyTo: 10, threadId: 1, postedAt: T + 3600 }),
 ];
 const SENT: Msg[] = [
-  m({ id: 10, type: "P", fromCall: "OE8APR-7", toCall: "OE3ABC", subject: "Re: JN77 activation Sat", body: "Perfect - car park 0900z it is. I'll bring coffee and the spare LiFePO4. 73 Andreas", delivery: "sent" }),
+  m({ id: 10, type: "P", fromCall: "OE8APR-7", toCall: "OE3ABC", subject: "Re: JN77 activation Sat", body: "Perfect - car park 0900z it is. I'll bring coffee and the spare LiFePO4. 73 Andreas", replyTo: 1, threadId: 1, postedAt: T + 1800, delivery: "sent" }),
 ];
 const BULLETINS: Msg[] = [
   m({ id: 20, type: "B", fromCall: "OE8XBM-7", toCall: "ALL", subject: "Graz packet net Tue 19:00", body: "Weekly Steiermark packet net every Tuesday 19:00 local on 144.800 MHz. All welcome - connect OE8XBM-7." }),

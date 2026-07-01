@@ -8,9 +8,12 @@ import type { ReactNode } from "react";
 
 export function Panel(props: {
   title: ReactNode; onClose?: () => void; side?: "left" | "right"; actions?: ReactNode; children: ReactNode;
+  /** Dense workspace surfaces (packet terminal, BBS) fill the content area at ≥1024px instead of
+   *  docking as a slim ~348px drawer — the map hides while the surface is active (see css.md). */
+  wide?: boolean;
 }) {
   return (
-    <aside className={`panel ${props.side ?? "right"}`}>
+    <aside className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}>
       <div className="row between">
         <h2>{props.title}</h2>
         <span className="spacer" />
