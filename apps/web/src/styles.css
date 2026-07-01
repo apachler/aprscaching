@@ -312,6 +312,17 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .decoded dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; word-break: break-word; }
 .wx { margin-top: 6px; font-size: 13px; }
 
+/* tools (plugins) panel */
+.tools-panel { display: grid; gap: 10px; }
+.tools-list { display: grid; gap: 8px; }
+.tool-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+.tool-meta { min-width: 0; }
+.tool-perms { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+.tool-sub { border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 6px; }
+.tool-sub textarea, .tool-sub input { width: 100%; }
+.tool-out { background: var(--surface-2); border-radius: 8px; padding: 8px; font-size: 12px; margin: 0; white-space: pre-wrap; }
+.tool-prompt { border: 1px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: color-mix(in oklch, var(--warn) 8%, transparent); }
+
 /* packet terminal (docs/25 P1) — built token-driven for the Stage-3 Cogmind flip */
 .packet-term { display: grid; gap: 8px; }
 .pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; }

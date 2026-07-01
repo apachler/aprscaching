@@ -13,6 +13,7 @@ import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
 import { PacketTerminal } from "../packet/PacketTerminal.js";
 import { NodePanel } from "./NodePanel.js";
+import { ToolsPanel } from "../tools/ToolsPanel.js";
 import { TrackReplay } from "./TrackReplay.js";
 import { StationGraphs } from "./StationGraphs.js";
 import { StationPackets } from "./StationPackets.js";
@@ -183,6 +184,10 @@ export function WorkbenchPanel(props: {
         <p className="muted">A Graphic-Packet-style multi-channel connected-mode terminal over a KISS TNC (Web Serial). Connect to a BBS or node and drive it.</p>
         <PacketTerminal callsign={props.callsign} />
         <NodePanel />
+      </Group>
+
+      <Group title="Tools (plugins)" status="sandboxed · off by default" defaultOpen={false}>
+        <ToolsPanel callsign={props.callsign} verified={props.verified} />
       </Group>
 
       <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={false}>
