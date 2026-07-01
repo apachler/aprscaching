@@ -33,6 +33,9 @@ const ingestOk = (req: Request, env: Env): boolean => req.headers.get("x-ingest-
 export async function requireSysop(req: Request, env: Env, opts: { allowIngest?: boolean } = {}): Promise<Response | null> {
   if (opts.allowIngest && ingestOk(req, env)) return null;
   if (await isSysop(req, env)) return null;
+  // A machine that PRESENTED an ingest secret but it was wrong → 401 (bad credential), matching the
+  // established ingest-auth contract. A browser with no session / a non-operator session → 403.
+  if (opts.allowIngest && req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
   if (adminCalls(env).size === 0) return json({ error: "no instance operator configured (set ADMIN_CALLSIGNS)" }, { status: 403 });
   return json({ error: "instance-operator (sysop) access required" }, { status: 403 });
 }
