@@ -19,6 +19,7 @@ const INBOX: Msg[] = [
   m({ id: 2, type: "P", fromCall: "DL2XYZ", toCall: "OE8APR-7", subject: "QSL via bureau OK", body: "Confirmed our 20m SSB QSO from last Sunday. Card on its way via the DARC bureau. 73!", delivery: "held" }),
   m({ id: 3, type: "P", fromCall: "OE5FLM", toCall: "OE8APR-7", subject: "Found AC-0008 Schoeckl", body: "Logged your living cache on the summit today - beaconed from the TH-D75. Nice hide! vy 73", readAt: T, delivery: "acked" }),
   m({ id: 4, type: "P", fromCall: "OE3ABC", toCall: "OE8APR-7", subject: "Re: JN77 activation Sat", body: "One more thing - I'll also bring the mast clamp and a spare coax. See you Sat! 73", replyTo: 10, threadId: 1, postedAt: T + 3600 }),
+  m({ id: 6, type: "P", fromCall: "OE5FLM", toCall: "OE8APR-7", subject: "Re: JN77 activation Sat", body: "Mind if I join for the activation? I can bring a second HT and log. 73 Franz", replyTo: 1, threadId: 1, postedAt: T + 5400 }),
 ];
 const SENT: Msg[] = [
   m({ id: 10, type: "P", fromCall: "OE8APR-7", toCall: "OE3ABC", subject: "Re: JN77 activation Sat", body: "Perfect - car park 0900z it is. I'll bring coffee and the spare LiFePO4. 73 Andreas", replyTo: 1, threadId: 1, postedAt: T + 1800, delivery: "sent" }),

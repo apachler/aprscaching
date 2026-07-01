@@ -38,13 +38,25 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       void markBbsRead(m.id).catch(() => { /* a re-load will reconcile */ });
     }
   }
-  // the conversation for a message: itself + anything sharing its thread_id, oldest first (SR chain).
-  function threadOf(m: BbsMessage): BbsMessage[] {
+  // the conversation for a message rendered as a real reply TREE (forum/BBS style): every message in
+  // the thread nested under its parent (reply_to), depth-first, each child sorted oldest-first. Depth
+  // drives the indentation + connector, so a reply-to-a-reply sits under the message it answered.
+  function threadTree(m: BbsMessage): { msg: BbsMessage; depth: number }[] {
     const tid = m.threadId ?? m.id;
-    const all = [...inbox, ...sent, ...bulletins];
-    const seen = new Set<number>();
-    return all.filter((x) => (x.threadId ?? x.id) === tid && !seen.has(x.id) && seen.add(x.id))
-      .sort((a, b) => a.postedAt - b.postedAt);
+    const byId = new Map<number, BbsMessage>();
+    for (const x of [...inbox, ...sent, ...bulletins]) if ((x.threadId ?? x.id) === tid) byId.set(x.id, x);
+    const kids = new Map<number | null, BbsMessage[]>();
+    for (const x of byId.values()) {
+      const parent = x.replyTo != null && byId.has(x.replyTo) ? x.replyTo : null; // orphans → roots
+      (kids.get(parent) ?? kids.set(parent, []).get(parent)!).push(x);
+    }
+    for (const arr of kids.values()) arr.sort((a, b) => a.postedAt - b.postedAt);
+    const out: { msg: BbsMessage; depth: number }[] = [];
+    const walk = (parent: number | null, depth: number) => {
+      for (const x of kids.get(parent) ?? []) { out.push({ msg: x, depth }); walk(x.id, depth + 1); }
+    };
+    walk(null, 0);
+    return out;
   }
 
   function reply(m: BbsMessage) {
@@ -88,7 +100,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   // the reading pane: full message headers + body + its SR thread + Reply
   const reader = () => {
     if (!selected) return <div className="bbs-reader-empty muted">Select a message to read.</div>;
-    const chain = threadOf(selected);
+    const tree = threadTree(selected);
     return (
       <article className="bbs-read">
         <button className="link bbs-back" onClick={() => setSelected(null)}>← Messages</button>
@@ -99,15 +111,26 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
           <div><dt>BID</dt><dd className="mono">{selected.bid}</dd></div>
           <div><dt>Date</dt><dd>{fmt.dateTime(selected.postedAt)}</dd></div>
         </dl>
-        {chain.length > 1 ? (
-          <div className="bbs-thread">
-            {chain.map((t, i) => (
-              <div key={t.id} className={`bbs-msg${t.id === selected.id ? " on" : ""}`} style={{ marginLeft: Math.min(i, 4) * 14 }}>
-                <div className="bbs-msg-h"><strong className="mono">{t.fromCall}</strong> <span className="muted">{fmt.dateTime(t.postedAt)}</span></div>
-                <div className="comment">{t.body}</div>
-              </div>
-            ))}
-          </div>
+        {tree.length > 1 ? (
+          <>
+            {tree.length > 1 && <div className="bbs-thread-h muted">Thread · {tree.length} messages</div>}
+            <div className="bbs-thread">
+              {tree.map(({ msg: t, depth }) => (
+                <div key={t.id} className={`bbs-node depth-${Math.min(depth, 6)}${t.id === selected.id ? " on" : ""}`}
+                     onClick={() => setSelected(t)} role="button" tabIndex={0}>
+                  <div className="bbs-msg">
+                    <div className="bbs-msg-h">
+                      {depth > 0 && <span className="bbs-reply-mark" aria-hidden="true">↳</span>}
+                      <strong className="mono">{t.fromCall}</strong>
+                      <span className="muted">→ {t.toCall}</span>
+                      <span className="muted bbs-node-date">{fmt.dateTime(t.postedAt)}</span>
+                    </div>
+                    <div className="comment">{t.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : <div className="comment bbs-read-body">{selected.body}</div>}
         <div className="row end"><button className="primary" onClick={() => reply(selected)}>Reply</button></div>
       </article>

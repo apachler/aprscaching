@@ -722,9 +722,18 @@ button.link:hover { text-decoration: underline; }
 .bbs-hdr > div { display: contents; }
 .bbs-hdr dt { color: var(--muted); }
 .bbs-hdr dd { margin: 0; }
-.bbs-thread .bbs-msg { padding: 8px 0; border-top: 1px solid var(--line); }
-.bbs-thread .bbs-msg.on { background: color-mix(in oklch, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px; border-top-color: transparent; }
-.bbs-msg-h { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+/* thread reply tree — forum/BBS style: replies nested under their parent, a connector line per level */
+.bbs-thread-h { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 6px; }
+.bbs-node { cursor: pointer; }
+.bbs-node .bbs-msg { padding: 8px 0; border-top: 1px solid var(--line); }
+.bbs-node.on > .bbs-msg { background: color-mix(in oklch, var(--accent) 8%, transparent); border-radius: 6px; padding: 8px; border-top-color: transparent; }
+.bbs-node:not(.depth-0) { border-left: 2px solid var(--hair); padding-left: 10px; }
+.bbs-node.depth-1 { margin-left: 14px; } .bbs-node.depth-2 { margin-left: 30px; }
+.bbs-node.depth-3 { margin-left: 46px; } .bbs-node.depth-4 { margin-left: 62px; }
+.bbs-node.depth-5 { margin-left: 78px; } .bbs-node.depth-6 { margin-left: 94px; }
+.bbs-reply-mark { color: var(--muted); }
+.bbs-msg-h { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; flex-wrap: wrap; }
+.bbs-node-date { margin-left: auto; white-space: nowrap; }
 .bbs-reader-empty { padding: 24px 8px; }
 .bbs-back { display: inline-block; margin-bottom: 8px; }
 
