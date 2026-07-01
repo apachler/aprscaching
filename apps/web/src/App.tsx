@@ -42,6 +42,7 @@ import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
 import { TerminalPanel } from "./packet/TerminalPanel.js";
 import { BbsPanel } from "./live/BbsPanel.js";
+import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // keyless online basemap by default; `VITE_BASEMAP=offline` uses the self-contained grid.
@@ -91,6 +92,8 @@ export function App() {
   const [showWB, setShowWB] = useState(false);
   const [showMail, setShowMail] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
+  const [wbFocus, setWbFocus] = useState<string | null>(null); // workbench group to expand when launched
+  const { pins, toggle: togglePin } = usePinnedApps();
   const [showNearby, setShowNearby] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -148,6 +151,14 @@ export function App() {
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
+  // Launch a workbench app: surface apps (terminal, BBS) open their own wide surface; the rest open the
+  // workbench focused on their config group. Used by the workbench launcher and the pinned rail items.
+  const launchApp = useCallback((id: WorkbenchAppId) => {
+    if (id === "terminal") return openOnly(() => setShowTerminal(true));
+    if (id === "bbs") return openOnly(() => setShowMail(true));
+    setWbFocus(appById(id)?.group ?? null);
+    openOnly(() => setShowWB(true));
+  }, [openOnly]);
 
   // Navigate to a surface by its manifest key (Site map rows + ?view= deep-links share this).
   const navigate = useCallback((key: string) => {
@@ -544,7 +555,7 @@ export function App() {
               onProfile={() => openOnly(() => setShowProfile(true))} />
       <div className="shell">
         <NavRail
-          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : showWB ? "workbench" : showMail ? "bbs" : showProfile ? "profile" : showSettings ? "settings" : "map"}
+          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : showTerminal ? "terminal" : showWB ? "workbench" : showMail ? "bbs" : showProfile ? "profile" : showSettings ? "settings" : "map"}
           onMap={closeAll}
           onNearby={() => openOnly(() => setShowNearby(true))}
           onActivity={() => openOnly(() => setShowActivity(true))}
@@ -552,7 +563,9 @@ export function App() {
           onWorkbench={() => openOnly(() => setShowWB(true))}
           onMail={() => openOnly(() => setShowMail(true))}
           onProfile={() => openOnly(() => setShowProfile(true))}
-          onSettings={() => openOnly(() => setShowSettings(true))} />
+          onSettings={() => openOnly(() => setShowSettings(true))}
+          pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a)}
+          onLaunchApp={launchApp} />
 
         {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
         {mode === "hide" && (
@@ -588,6 +601,7 @@ export function App() {
                           stationCount={stations.length}
                           picked={pickedStation} onPick={setPickedStation}
                           onOpenTerminal={() => openOnly(() => setShowTerminal(true))}
+                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin} focusGroup={wbFocus}
                           onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
         )}
         {showTerminal && mode === "view" && (

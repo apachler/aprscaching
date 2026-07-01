@@ -9,7 +9,8 @@ export type IconName =
   | "close" | "search" | "settings" | "map" | "bench" | "bbs" | "ranks" | "import" | "profile"
   | "hide" | "log" | "navigation" | "flag" | "summit" | "park" | "castle" | "copy" | "share"
   | "bookmark" | "locate" | "layers" | "plus" | "minus" | "check" | "check-circle" | "bell"
-  | "shield-check" | "more" | "chevron" | "alert" | "info" | "near" | "radio" | "filter";
+  | "shield-check" | "more" | "chevron" | "alert" | "info" | "near" | "radio" | "filter"
+  | "tools" | "decode" | "dial" | "server" | "pin" | "pin-off";
 
 const D: Record<IconName, string> = {
   close: "M18 6 6 18 M6 6l12 12",
@@ -46,6 +47,12 @@ const D: Record<IconName, string> = {
   near: "M3 11l19-9-9 19-2-8-8-2z",
   radio: "M4.9 19.1a10 10 0 0 1 0-14.2 M7.8 16.2a6 6 0 0 1 0-8.4 M16.2 7.8a6 6 0 0 1 0 8.4 M19.1 4.9a10 10 0 0 1 0 14.2 M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
   filter: "M3 5h18l-7 8v6l-4 2v-8z",
+  tools: "M14 7a4 4 0 0 1 5-5l-3 3 2 2 3-3a4 4 0 0 1-5 5L5 20a2 2 0 1 1-3-3z",
+  decode: "M4 6v12 M8 6v12 M12 6v12 M16 6v12 M20 6v12",
+  dial: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 12l3.5-3.5 M12 7v1 M17 12h-1 M7 12H6",
+  server: "M4 4h16v6H4z M4 14h16v6H4z M7.5 7h.01 M7.5 17h.01",
+  pin: "M9 3h6l-1 7 4 3v2h-5v6l-1 2-1-2v-6H5v-2l4-3z",
+  "pin-off": "M9 3h6l-1 7 4 3v2h-5v6l-1 2-1-2v-6H5v-2l4-3z M3 3l18 18",
 };
 
 const FILLED = new Set<IconName>(["navigation", "near"]);

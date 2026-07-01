@@ -7,7 +7,8 @@ import {
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprsweb/shared";
 import { useFmt } from "../format.js";
-import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
+import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast, Icon } from "../ui/index.js";
+import type { WorkbenchApp, WorkbenchAppId } from "./apps.js";
 import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
@@ -24,6 +25,8 @@ export function WorkbenchPanel(props: {
   stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
   picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
   onOpenTerminal: () => void;
+  apps: WorkbenchApp[]; pinned: WorkbenchAppId[]; onLaunchApp: (id: WorkbenchAppId) => void;
+  onTogglePin: (id: WorkbenchAppId) => void; focusGroup: string | null;
 }) {
   const [raw, setRaw] = useState("");
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
@@ -60,7 +63,30 @@ export function WorkbenchPanel(props: {
 
   return (
     <Panel title="📡 Workbench" onClose={props.onClose}>
-      <p className="muted">The full APRS toolset, grouped — switch on only what you need.</p>
+      <p className="muted">Launch a workbench app, or pin it (📌) to the left rail for one-click access.</p>
+
+      {/* app launcher — the workbench functions available as launchable, pinnable apps */}
+      <div className="wb-apps" role="list">
+        {props.apps.map((app) => {
+          const pinned = props.pinned.includes(app.id);
+          return (
+            <div key={app.id} className="wb-app" role="listitem">
+              <button className="wb-app-launch" onClick={() => props.onLaunchApp(app.id)}>
+                <Icon name={app.icon} size={22} />
+                <span className="wb-app-t"><span className="wb-app-label">{app.label}</span>
+                  <span className="wb-app-blurb muted">{app.blurb}</span></span>
+              </button>
+              <button className={`icon wb-pin${pinned ? " on" : ""}`} aria-pressed={pinned}
+                title={pinned ? `Unpin ${app.label} from the rail` : `Pin ${app.label} to the rail`}
+                onClick={() => props.onTogglePin(app.id)}>
+                <Icon name={pinned ? "pin-off" : "pin"} size={16} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <h3 className="wb-config-h">Configuration</h3>
 
       <Group title="Live stations" status={props.stationsOn ? `${props.stationCount} on map` : "off"}
              master={{ on: props.stationsOn, set: props.setStationsOn }}
@@ -108,7 +134,7 @@ export function WorkbenchPanel(props: {
         ))}
       </Group>
 
-      <Group title="Packet decoder" defaultOpen={false}>
+      <Group title="Packet decoder" defaultOpen={props.focusGroup === "Packet decoder"}>
         <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
         <div className="row between mt-2">
           <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
@@ -180,22 +206,21 @@ export function WorkbenchPanel(props: {
         <RfBrowser callsign={props.callsign} verified={props.verified} />
       </Group>
 
-      <Group title="Packet terminal" status="connected-mode · multi-channel" defaultOpen={false}>
-        <p className="muted">A Graphic-Packet-style multi-channel connected-mode terminal over a KISS TNC (Web Serial). Opens as a full workspace — channels, active window and monitor side by side.</p>
-        <div className="row"><button className="primary" onClick={props.onOpenTerminal}>⤢ Open packet terminal</button></div>
+      <Group title="NET/ROM node" status="node · digipeater · sysop" defaultOpen={false}>
+        <p className="muted">Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal (above) connects to it.</p>
         <NodePanel />
       </Group>
 
-      <Group title="Tools (plugins)" status="sandboxed · off by default" defaultOpen={false}>
+      <Group title="Tools (plugins)" status="sandboxed · off by default" defaultOpen={props.focusGroup === "Tools (plugins)"}>
         <ToolsPanel callsign={props.callsign} verified={props.verified} />
       </Group>
 
-      <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={false}>
+      <Group title="Rig control (CAT)" status="one-click tune" defaultOpen={props.focusGroup === "Rig control (CAT)"}>
         <p className="muted">Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).</p>
         <RigControl />
       </Group>
 
-      <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={false}>
+      <Group title="Remote control — your box" status={props.verified ? "TX ready" : "RX only"} defaultOpen={props.focusGroup === "Remote control — your box"}>
         <RemoteControl callsign={props.callsign} verified={props.verified} map={props.map} />
       </Group>
     </Panel>

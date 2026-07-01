@@ -328,6 +328,23 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .tool-out { background: var(--surface-2); border-radius: 8px; padding: 8px; font-size: 12px; margin: 0; white-space: pre-wrap; }
 .tool-prompt { border: 1px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: color-mix(in oklch, var(--warn) 8%, transparent); }
 
+/* workbench app launcher — the available apps as launchable + pinnable cards */
+.wb-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.wb-app { position: relative; }
+.wb-app-launch { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; padding: 10px 34px 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; color: inherit; }
+.wb-app-launch:hover { border-color: color-mix(in oklch, var(--accent) 45%, transparent); background: color-mix(in oklch, var(--accent) 8%, var(--surface-2)); }
+.wb-app-launch:focus-visible { outline: 2px solid var(--heading); outline-offset: 2px; }
+.wb-app-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wb-app-label { font-weight: 600; }
+.wb-app-blurb { font-size: 11.5px; line-height: 1.25; }
+.wb-pin { position: absolute; top: 7px; right: 7px; opacity: .45; padding: 3px; }
+.wb-pin:hover, .wb-pin.on { opacity: 1; }
+.wb-pin.on { color: var(--accent); }
+.wb-config-h { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+/* nav rail: divider before pinned apps */
+.rail-div { width: 26px; height: 1px; background: var(--hair); margin: 3px 0; flex: none; }
+
 /* packet terminal (docs/25 P1) — the Graphic Packet layout: a numbered channel bar on top, ONE big
    central window (the selected channel, or channel 0 = monitor), a status line, command line, and a
    function/macro bar. Built token-driven so the Stage-3 Cogmind flip is a skin swap. */
