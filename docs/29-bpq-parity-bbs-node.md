@@ -138,6 +138,12 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   end-to-end over loopback against a real `NetromCircuit` echo peer. Ingest `NetromNodeRunner.dialer` opens
   a real `NetromCircuit` over KISS (network-header-framed NETROM UI to the neighbour) + demuxes inbound
   transport packets. **Validate-at-deploy:** the onward RF leg + multi-circuit demux (needs a live neighbour).
+- **F2 switch (L3 transit):** `netrom-switch.ts` `routeNetrom(pkt, node, me)` — the node's switch decision:
+  deliver locally, transit-forward toward the destination (TTL-1), or drop (ttl / no-route / self-loop).
+  Unit-tested. `NetromCircuit` exposes `localIndex`/`localId` so the ingest demuxes inbound transport
+  packets to the owning circuit by `(index,id)`. `parseConnectScript` turns a BPQ `C [port] <call>` script
+  into hops (the sequencer that drives them is the radio leg). Ingest `onRaw` runs every directed NET/ROM
+  frame through the switch (local → demux, transit → re-frame to the neighbour over KISS, drop → log).
 - **F3 connected digi:** AX.25 codec now round-trips the digi H-bit (`digisRepeated`); `digipeatAx25`
   (pure, unit-tested) repeats ANY frame type whose next un-repeated via-hop is our call/alias (sets the
   H-bit). Ingest `ConnectedDigipeater` (KISS `onRaw`, dedup + viscous delay) relays NET/ROM + FBB through
@@ -175,6 +181,87 @@ with FBB's fixed Huffman/position tables, which a round-trip test cannot prove (
 consistency) and whose ~128 table constants are silently error-prone. Building it would ship intricate
 bit-twiddling whose test gives false assurance — so it stays a documented follow-on to validate against a
 real FBB partner, not a headless build. ASCII FBB forwarding is fully interoperable without it.
+
+## Status matrix (what's built, tested, and what each still needs)
+
+| Capability | Pure core (tested) | Product wiring | Still needs |
+|---|---|---|---|
+| AX.25 v2.2 connected link | `packages/ax25` `link.ts` ✅ | — | on-air T1/T3 tuning |
+| KISS framing + TX/RX | `@aprsweb/aprs` kiss ✅ | `apps/ingest/kiss.ts` (`onRaw`, `sendFrame`) ✅ | a real TNC/radio |
+| Connected-mode digi | `digipeatAx25` (H-bit) ✅ | `ConnectedDigipeater` ✅ | RF; viscous-cancel (follow-on) |
+| Session server (answer connects) | `SessionServer` + `serveApp` ✅ | NODE + BBS services ✅ | RF |
+| BBS command interpreter | `bbs.ts` `BbsSession` ✅ | gateway `/api/bbs/session`,`/kill` ✅ | RF |
+| BBS inbound store | `CachedBbsStore` ✅ | `gatewayBbsBackend` ✅ | RF; snapshot-refresh cadence tuning |
+| NET/ROM L3/L4 codec | `netrom-wire.ts` ✅ | — | — |
+| NET/ROM L4 circuit | `netrom-circuit.ts` ✅ | dialer over KISS ✅ | a live neighbour |
+| NODES table + broadcast | `netrom-node.ts` ✅ | `NetromNodeRunner` (TX/consume) ✅ | RF |
+| L3 transit switch | `routeNetrom` ✅ | `onRaw` → switch ✅ | neighbour TX |
+| Connect-through | `nodeConnectThrough` ✅ | `NetromNodeRunner.dialer` ✅ | neighbour; multi-circuit demux is minimal |
+| Connect-script | `parseConnectScript` ✅ | — | the multi-hop **sequencer** (prompt-driven) |
+| FBB forwarding (ASCII) | `fbb-session.ts`,`fbb-forward.ts` ✅ | scheduler + pool ✅ | a real FBB partner |
+| FBB scheduler | `BbsForwarder` (e2e loopback) ✅ | `GatewayApi`+`kissForwardLink` ✅ | RF |
+| AXUDP transport | — | `AxudpPort` (bidir) ✅ | a peer + cross-port routing |
+| FBB binary B0/B1 | ✗ (see below) | — | LZHUF + a real FBB partner |
+
+**Headlessly-buildable follow-ons** (not yet done, but do NOT need RF — good next tasks): the **L4 inbound
+session server** (accept a NET/ROM *circuit* terminating at us → bind to a BBS/NodeSession, mirroring the
+AX.25 `SessionServer` one layer up — `NetromCircuit.onConnReq` already accepts); the **multi-hop connect
+sequencer** (drive `parseConnectScript` steps, watching each node's prompt — testable over a scripted
+loopback); **viscous-digi cancellation** (cancel a pending repeat when the frame is heard already-digied);
+NODES **worst-quality pruning / obsolescence broadcast threshold**.
+
+**Deliberately not built — LZHUF B0/B1.** Its correctness *is* byte-exact compatibility with FBB's fixed
+Huffman/position tables, which a round-trip test cannot prove (it only checks internal consistency) and
+whose ~128 constants are silently error-prone. A headless build would ship intricate bit-twiddling with a
+false-assurance test — so it stays a follow-on to validate against a real FBB. ASCII FBB is fully
+interoperable without it.
+
+## RF bring-up guide (implementing the deploy-gated legs)
+
+Everything below is *wired and unit-tested*; these steps light it up on real hardware and verify it.
+Recommended kit: a KISS TNC over TCP (Direwolf, or a NinoTNC/Mobilinkd/TH-D75 in KISS) reachable at
+`KISS_TNC_HOST:KISS_TNC_PORT`. The ingest is operator-local (`.claude/rules/ingest-locality.md`).
+
+**0. Common setup.** Run `apps/ingest` on the operator box with `INGEST_URL` → your gateway and
+`INGEST_SECRET` matching it. Point `KISS_TNC_HOST`/`KISS_TNC_PORT` at the TNC. Confirm `[kiss] connected`
+and that RX frames appear (existing APRS path). All connected-mode features hang off `KissTnc.onRaw`
+(inbound raw AX.25) and `KissTnc.sendFrame` (full-frame TX) — already in place.
+
+**1. Connected-mode digipeater (F3).** Set `DIGI_CALL` + `DIGI_CONNECTED=1` (optional `DIGI_VISCOUS_MS`).
+Verify: from a second station, send a frame routed `via YOURCALL`; confirm it's repeated with the H-bit
+set (watch the monitor). `digipeatAx25` already decides; only TX timing is new. *Add viscous-cancel* if
+you run parallel digis (cancel the pending repeat on hearing the frame already digied).
+
+**2. Inbound BBS / node session server (F1).** Set `BBS_NODE_CALL` (e.g. `OE8APR-1`) and/or `NETROM_CALL`
++ `NETROM_ALIAS`. Connect to that SSID from another station: you should get the greeting, then drive
+`L`/`R n`/`S`/`B` (BBS) or `N`/`R`/`U`/`MH`/`I`/`C` (node). The async BBS warm-up fetches
+`/api/bbs/session?call=` before greeting — confirm the peer's SABM-retransmit window (T1×N2) exceeds one
+gateway round-trip (default 3 s × 10 is ample). Tune `SessionServer` `cfg` (T1/T3/window) for your channel.
+
+**3. NET/ROM node: NODES + transit switch (F2).** With `NETROM_CALL`/`NETROM_ALIAS` set, the runner
+broadcasts NODES (default 5 min) and consumes neighbours'. Verify your node appears in a neighbour's NODES
+list and vice-versa (`node.list()` mirrored to `/api/node/nodes`). For the **transit switch**, arrange
+three nodes (A—us—B) so A's traffic for B routes through us; `routeNetrom` already decides forward/drop —
+confirm the re-framed UI/NETROM frame goes out to the correct neighbour with TTL-1. Tune `NETROM_PATH_QUALITY`.
+
+**4. Connect-through (F2).** From a station connected to our node, type `C <dest>` where `<dest>` is a
+learned NODES entry via a live neighbour. `nodeConnectThrough` resolves the route and `NetromNodeRunner.dialer`
+opens a real `NetromCircuit` to the neighbour; you should see `Connected to <dest>.` then transparent data.
+The **single-circuit demux** is fine for one session; for concurrent connect-throughs, the inbound demux
+keys on `(circuitIndex, circuitId)` — validate multi-circuit before advertising it. Multi-hop (`C NODE1`
+then `C DB0XYZ`) needs the **sequencer** (build it against `parseConnectScript`, watching prompts).
+
+**5. FBB forwarding to a real partner (F4).** In Settings → Network add a partner (call, HA, connect
+script, interval, time-bands) and a routing rule (region → partner). Set `BBS_FORWARD=1`,
+`BBS_FORWARD_CALL`. On the interval, `BbsForwarder` pulls `/api/bbs/forward/pool`, opens `kissForwardLink`
+to the partner, runs the ASCII FBB exchange, and reconciles `/inbound` + `/sent`. Verify against a test
+LinBPQ/FBB: watch the `[FBB-…]` SID handshake, `FB`/`F>`/`FS` lines, and BID dedup. For **binary B0/B1**,
+implement `lzhuf.ts` and advertise `B1` in the SID — validate the decompressed body against the partner.
+
+**6. AXUDP crosslink (F5).** Set `AXUDP_PORT` + `AXUDP_PEERS=host:port,…`. `AxudpPort` presents the same
+`onRaw`/`sendFrame` shape as KISS; route the node/digi/forwarder over it for HAMNET/Internet links. Cross-
+port routing (a circuit that arrives on KISS and forwards over AXUDP) is the piece to validate — the
+switch already emits a neighbour + frame; wire the TX side to pick the port by neighbour.
 
 ## Deferred (out of scope this pass)
 Winlink/RMS gateway, chat/conference node, HF/Pactor, telnet node access, modulo-128 / SREJ, DAMA,
