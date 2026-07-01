@@ -55,10 +55,15 @@ if (env.KISS_TNC_HOST) {
     }
   }
 
-  // NET/ROM node (docs/29 F2) — NODES broadcast/consume + learned routing table over KISS
+  // Connected-mode session server (docs/29 F1/F2) — answer inbound connects to our NET/ROM node and/or
+  // BBS SSIDs. The NODE runs the NET/ROM CLI over the live routing table; the BBS runs the FBB command
+  // interpreter over a per-caller gateway mail snapshot. NODE also broadcasts/consumes NODES over KISS.
+  const gwBase = INGEST_URL.replace(/\/ingest$/, "");
+  const services: import("@aprsweb/packet").Service[] = [];
+  const users = new Set<string>();
+
   if (env.NETROM_CALL && env.NETROM_ALIAS) {
     const { NetromNodeRunner } = await import("./netromnode.js");
-    const gwBase = INGEST_URL.replace(/\/ingest$/, "");
     const node = new NetromNodeRunner(kiss, {
       mycall: env.NETROM_CALL, alias: env.NETROM_ALIAS,
       broadcastMs: env.NETROM_BROADCAST_MS ? Number(env.NETROM_BROADCAST_MS) : undefined,
@@ -67,21 +72,31 @@ if (env.KISS_TNC_HOST) {
     });
     rawSubs.push((b) => node.onRaw(b));
     node.start();
+    services.push({
+      addr: parseAddr(env.NETROM_CALL), name: "NODE",
+      app: (r) => new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!),
+    });
+    console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
+  }
 
-    // connected-mode session server (docs/29 F1) — answer inbound connects to our node SSID with the
-    // NET/ROM CLI (Nodes/Routes/Users/MHeard/Info/CQ), backed by the live routing table.
-    const users = new Set<string>();
-    const nodeServer = new SessionServer({
-      send: (f) => { kiss.sendFrame(f); },
-      services: [{
-        addr: parseAddr(env.NETROM_CALL), name: "NODE",
-        app: (r) => new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!),
-      }],
+  if (env.BBS_NODE_CALL) {
+    const { gatewayBbsBackend } = await import("./forwarder.js");
+    const { CachedBbsStore, BbsSession } = await import("@aprsweb/packet");
+    const backend = gatewayBbsBackend(gwBase, SECRET);
+    services.push({
+      addr: parseAddr(env.BBS_NODE_CALL), name: "BBS",
+      app: async (r) => { const store = new CachedBbsStore(r.call, backend); await store.refresh(); return new BbsSession(r.call, store, env.BBS_NODE_CALL!); },
+    });
+    console.log(`[bbs] BBS answering inbound connects on ${env.BBS_NODE_CALL}`);
+  }
+
+  if (services.length) {
+    const server = new SessionServer({
+      send: (f) => { kiss.sendFrame(f); }, services,
       onEvent: (e) => { if (e.kind === "connect") users.add(e.remote); else if (e.kind === "disconnect") users.delete(e.remote); },
     });
-    rawSubs.push((b) => nodeServer.onRaw(b));
-    setInterval(() => nodeServer.poll(), 1000);
-    console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
+    rawSubs.push((b) => server.onRaw(b));
+    setInterval(() => server.poll(), 1000);
   }
   // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
   if (env.IGATE_CALL && env.IGATE_PASS) {

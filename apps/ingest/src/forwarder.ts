@@ -11,7 +11,7 @@
 import net from "node:net";
 import { kissWrap, kissFrames } from "@aprsweb/aprs";
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprsweb/ax25";
-import { BbsForwarder, type ForwardApi, type ForwardLink, type GwPartner, type FbbMessage } from "@aprsweb/packet";
+import { BbsForwarder, type ForwardApi, type ForwardLink, type GwPartner, type FbbMessage, type CachedBbsBackend, type BbsMsgFull, type BbsType } from "@aprsweb/packet";
 
 /** The gateway REST client for the forwarding pool (all endpoints x-ingest-secret gated). */
 export class GatewayApi implements ForwardApi {
@@ -32,6 +32,23 @@ export class GatewayApi implements ForwardApi {
     if (!bids.length) return;
     await fetch(`${this.base}/api/bbs/forward/sent`, { method: "POST", headers: this.h(), body: JSON.stringify({ partner, bids }) });
   }
+}
+
+/** A gateway-backed CachedBbsBackend for an inbound connected-mode BBS session (docs/29 F1). */
+export function gatewayBbsBackend(base: string, secret: string): CachedBbsBackend {
+  const h = () => ({ "content-type": "application/json", "x-ingest-secret": secret });
+  return {
+    load: async (call) => {
+      const r = await fetch(`${base}/api/bbs/session?call=${encodeURIComponent(call)}`, { headers: { "x-ingest-secret": secret } });
+      return ((await r.json()) as { messages?: BbsMsgFull[] }).messages ?? [];
+    },
+    post: async (m: { type: BbsType; from: string; to: string; subject: string | null; body: string; replyTo?: number | null }) => {
+      const r = await fetch(`${base}/api/bbs/messages`, { method: "POST", headers: h(), body: JSON.stringify({ fromCall: m.from, toCall: m.to, type: m.type, subject: m.subject ?? undefined, body: m.body, replyTo: m.replyTo ?? undefined }) });
+      return ((await r.json().catch(() => ({}))) as { id?: number }).id ?? 0;
+    },
+    markRead: async (id) => { await fetch(`${base}/api/bbs/messages/${id}/read`, { method: "POST", headers: h() }); },
+    kill: async (id, call) => { await fetch(`${base}/api/bbs/kill`, { method: "POST", headers: h(), body: JSON.stringify({ id, call }) }); },
+  };
 }
 
 /** Build + start a forwarder from env config (KISS-TCP link + gateway pool). */

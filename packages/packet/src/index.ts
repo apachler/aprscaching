@@ -11,6 +11,7 @@ export * from "./netrom-circuit.js";
 export * from "./netrom-node.js";
 export * from "./link-app.js";
 export * from "./session-server.js";
+export * from "./cached-bbs-store.js";
 export * from "./loopback.js";
 export * from "./fbb-session.js";
 export * from "./fbb-forward.js";

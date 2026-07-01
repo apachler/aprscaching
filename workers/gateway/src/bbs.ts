@@ -88,6 +88,42 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
   return json({ ok: true });
 }
 
+// -------------------------------------- connected-mode BBS session (docs/29 F1; x-ingest-secret gated)
+const ingestOk = (req: Request, env: Env) => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+
+/**
+ * GET /api/bbs/session?call=CALL — the per-caller mail snapshot an inbound connected-mode BBS session
+ * serves synchronously (personal to/from the caller + current bulletins, with bodies). This is also the
+ * access boundary: the connected user can only read what's in their own snapshot. Ingest-secret gated.
+ */
+export async function handleBbsSession(req: Request, env: Env): Promise<Response> {
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const call = (new URL(req.url).searchParams.get("call") ?? "").toUpperCase();
+  if (!call) return json({ error: "call required" }, { status: 400 });
+  const rows = (await env.DB.prepare(
+    `SELECT id, type, from_call, to_call, subject, body, posted_at, reply_to, read_at
+       FROM bbs_messages
+      WHERE (expires_at IS NULL OR expires_at > ?) AND (type='B' OR to_call=? OR from_call=?)
+      ORDER BY posted_at DESC LIMIT 300`,
+  ).bind(now(), call, call).all<any>()).results;
+  const messages = rows.map((m) => ({
+    id: m.id, type: m.type, from: m.from_call, to: m.to_call, subject: m.subject,
+    postedAt: m.posted_at, body: m.body, replyTo: m.reply_to ?? null, readAt: m.read_at ?? null,
+  }));
+  return json({ call, messages });
+}
+
+/** POST /api/bbs/kill {id, call} — remove a message the caller authored/received. Ingest-secret gated. */
+export async function handleBbsKill(req: Request, env: Env): Promise<Response> {
+  if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
+  const b = (await req.json().catch(() => ({}))) as { id?: number; call?: string };
+  if (!b.id || !b.call) return json({ error: "id + call required" }, { status: 400 });
+  const cs = b.call.toUpperCase();
+  const res = await env.DB.prepare("DELETE FROM bbs_messages WHERE id=? AND (from_call=? OR to_call=?)").bind(b.id, cs, cs).run();
+  await env.DB.prepare("DELETE FROM bbs_delivery WHERE msg_id=?").bind(b.id).run();
+  return json({ ok: true, killed: !!res.meta.changes });
+}
+
 /** GET /api/bbs/sent?from= — personal mail YOU sent, with its store-and-forward delivery state. */
 export async function handleBbsSent(req: Request, env: Env): Promise<Response> {
   const from = new URL(req.url).searchParams.get("from");

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SessionServer } from "../src/session-server.js";
+import { CachedBbsStore, type CachedBbsBackend } from "../src/cached-bbs-store.js";
 import { BbsSession, type MessageStore, type BbsMsgFull, type BbsMsgMeta } from "../src/bbs.js";
 import { NodeSession, type NodeStore } from "../src/netrom.js";
 import { ConnectedLink, type Ax25Address, type Ax25Frame } from "@aprsweb/ax25";
@@ -97,6 +98,34 @@ describe("connected-mode session server (docs/29 F1)", () => {
     server.onFrame({ dst: A("OE9XXX"), src: A("OE1USR"), command: true, type: "SABM", pf: true });
     expect(server.count()).toBe(0);
     expect(sent).toBe(0);
+  });
+
+  it("awaits an async app factory (BBS mail warm-up) before greeting, then serves from the snapshot", async () => {
+    const rows: BbsMsgFull[] = [
+      { id: 5, type: "P", from: "OE8APR", to: "OE1USR", subject: "welcome", postedAt: 1000, body: "hi there OE1USR", readAt: null },
+    ];
+    const backend: CachedBbsBackend = { load: async () => rows.map((r) => ({ ...r })), post: async () => 1 };
+    const server = new SessionServer({
+      send: () => {},
+      services: [{ addr: A("OE8BBS"), name: "BBS", app: async (r) => { const s = new CachedBbsStore(r.call, backend); await s.refresh(); return new BbsSession(r.call, s, "OE8BBS"); } }],
+    });
+
+    // manual bridge so we can re-pump after the async warm-up resolves
+    const q: Array<{ to: "server" | "client"; f: Ax25Frame }> = [];
+    let rx = "";
+    const client = new ConnectedLink(A("OE1USR"), A("OE8BBS"), { send: (f) => q.push({ to: "server", f }), deliver: (b) => { rx += dec(b); }, state: () => {} });
+    (server as unknown as { o: { send: (f: Ax25Frame) => void } }).o.send = (f) => q.push({ to: "client", f });
+    const pump = (g = 5000) => { while (q.length && g-- > 0) { const { to, f } = q.shift()!; if (to === "server") server.onFrame(f); else client.onReceive(f); } };
+
+    client.connect(); pump();                   // SABM → server reserves the slot, kicks the async factory
+    expect(rx).toBe("");                          // nothing sent yet — still warming
+    for (let i = 0; i < 10; i++) await Promise.resolve(); // let load()/refresh()/factory settle
+    pump();                                       // now UA + greeting flow from the warm store
+    client.send(enc("R 5\r")); pump();
+
+    expect(rx).toContain("[APRScaching BBS OE8BBS]");
+    expect(rx).toContain("1 new message");        // greeting read the warmed snapshot
+    expect(rx).toContain("hi there OE1USR");       // R 5 served the body from the cache
   });
 
   it("enforces maxSessions (refuses a new caller at capacity)", () => {

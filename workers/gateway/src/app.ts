@@ -43,7 +43,7 @@ import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia, handleListCacheMedia, handleAddCacheMedia, handleDeleteCacheMedia } from "./stages.js";
 import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
-import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, BULLETIN_FEED } from "./bbs.js";
+import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, handleBbsSession, handleBbsKill, BULLETIN_FEED } from "./bbs.js";
 import { handleBbsRoute, handleWhitePages, handleForwardRules, handleForwardRuleDelete, handleForwardPartners, handleForwardPartnerDelete, handleForwardPool, handleForwardInbound, handleForwardSent } from "./forward.js";
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
 export { syncAllPeers } from "./federation_sync.js";
@@ -281,6 +281,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const partnerDel = /^\/api\/bbs\/partners\/(\d+)$/.exec(p);
   if (partnerDel && m === "DELETE") return handleForwardPartnerDelete(req, env, Number(partnerDel[1]));
   // F4 forwarding pool (ingest scheduler ↔ gateway store; x-ingest-secret gated)
+  // connected-mode BBS session snapshot + kill (docs/29 F1; ingest-secret gated)
+  if (p === "/api/bbs/session" && m === "GET") return handleBbsSession(req, env);
+  if (p === "/api/bbs/kill" && m === "POST") return handleBbsKill(req, env);
   if (p === "/api/bbs/forward/pool" && m === "GET") return handleForwardPool(req, env);
   if (p === "/api/bbs/forward/inbound" && m === "POST") return handleForwardInbound(req, env);
   if (p === "/api/bbs/forward/sent" && m === "POST") return handleForwardSent(req, env);

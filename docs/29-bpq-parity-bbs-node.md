@@ -113,10 +113,16 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   connected link to a line app) + `loopback.ts` (`VirtualClock` + deferred `LoopbackChannel`). Built on
   it, `session-server.ts` `SessionServer` — the "answer a connect" half: routes inbound frames to per-
   caller sessions, stands a fresh `BbsSession`/`NodeSession` up on an inbound SABM to a service SSID,
-  cleans up on disconnect, enforces `maxSessions`. Unit-tested end-to-end (a client link connects in and
-  drives L/R/B over the deferred bridge). Ingest wires the **NODE** service to a live-table `NodeStore`
-  (answers Nodes/Routes/Users/MHeard/Info/CQ over KISS). **Validate-at-deploy:** the BBS service needs a
-  synchronous gateway-backed `MessageStore` (the cloud store is async — cache/reconcile tuning is on-air).
+  cleans up on disconnect, enforces `maxSessions`, and supports an **async app factory** (warm-up) so a
+  service can load state before greeting. Unit-tested end-to-end (a client link connects in and drives
+  L/R/B over the deferred bridge). Ingest wires the **NODE** (live-table `NodeStore`: Nodes/Routes/Users/
+  MHeard/Info/CQ) and the **BBS** services over KISS.
+- **BBS inbound store:** `cached-bbs-store.ts` `CachedBbsStore` — a synchronous `MessageStore` over an
+  async backend: loads the caller's per-session snapshot once at connect (also the access boundary — a
+  connected user can only read their own personal mail + bulletins), serves list/read synchronously,
+  posts/kills optimistically + writes through. Unit-tested. Gateway `/api/bbs/session` (per-caller
+  snapshot) + `/api/bbs/kill` (owner-gated), both `x-ingest-secret` gated, tri-runtime + live-smoked
+  (private mail excluded, kill owner-only). A station can now connect **into** our BBS over RF.
 - **F2 (NET/ROM wire + circuit):** `netrom-wire.ts` (network+transport header + NODES broadcast codec,
   quality formula) and `netrom-circuit.ts` (L4 sliding-window state machine: ConnReq/ConnAck + window
   negotiation, DiscReq/DiscAck, in-order Info with cumulative InfoAck, 236-byte fragment/reassemble

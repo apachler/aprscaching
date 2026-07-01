@@ -8,7 +8,7 @@
  */
 export type BbsType = "P" | "B" | "T";
 export interface BbsMsgMeta { id: number; type: BbsType; from: string; to: string; subject: string | null; postedAt: number }
-export interface BbsMsgFull extends BbsMsgMeta { body: string; replyTo?: number | null }
+export interface BbsMsgFull extends BbsMsgMeta { body: string; replyTo?: number | null; readAt?: number | null }
 
 export interface MessageStore {
   listNew(call: string): BbsMsgMeta[];        // unread personal to `call` + recent bulletins

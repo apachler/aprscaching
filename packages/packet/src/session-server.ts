@@ -9,8 +9,10 @@
 import { serveApp, type LineApp } from "./link-app.js";
 import { decodeFrame, addrStr, sameAddr, type Ax25Address, type Ax25Frame, type LinkConfig, type ConnectedLink } from "@aprsweb/ax25";
 
-/** A service we answer for: its address (call+SSID) and a factory building the app for each caller. */
-export interface Service { addr: Ax25Address; app: (remote: Ax25Address) => LineApp; name?: string }
+/** A service we answer for: its address (call+SSID) and a factory building the app for each caller.
+ *  The factory MAY be async (e.g. a BBS that loads the caller's mail snapshot before greeting) — the
+ *  server holds the connect until it resolves; the peer's SABM retransmit covers the warm-up window. */
+export interface Service { addr: Ax25Address; app: (remote: Ax25Address) => LineApp | Promise<LineApp>; name?: string }
 
 export interface SessionServerOpts {
   send: (f: Ax25Frame) => void;
@@ -21,7 +23,7 @@ export interface SessionServerOpts {
   onEvent?: (e: { kind: "connect" | "disconnect" | "refused"; service: string; remote: string }) => void;
 }
 
-interface Live { link: ConnectedLink; service: Service }
+interface Live { link?: ConnectedLink; service: Service; warming: boolean }
 
 export class SessionServer {
   private sessions = new Map<string, Live>();
@@ -40,32 +42,52 @@ export class SessionServer {
     const svc = this.o.services.find((s) => sameAddr(s.addr, f.dst));
     if (!svc) return;                                     // not for one of our services
     const key = this.key(f.src, svc.addr);
-    let live = this.sessions.get(key);
-    if (!live) {
-      if (f.type !== "SABM") return;                      // no session + not a connect request → ignore
-      if (this.o.maxSessions != null && this.sessions.size >= this.o.maxSessions) {
-        this.o.onEvent?.({ kind: "refused", service: svc.name ?? addrStr(svc.addr), remote: addrStr(f.src) });
-        return;                                           // at capacity — let T1 retry / the DM path handle it
-      }
-      const link = serveApp(svc.addr, f.src, svc.app(f.src), {
+    const live = this.sessions.get(key);
+    if (live) { live.link?.onReceive(f); return; }        // existing (or warming) session
+
+    if (f.type !== "SABM") return;                        // no session + not a connect request → ignore
+    if (this.o.maxSessions != null && this.sessions.size >= this.o.maxSessions) {
+      this.o.onEvent?.({ kind: "refused", service: svc.name ?? addrStr(svc.addr), remote: addrStr(f.src) });
+      return;                                             // at capacity — the peer's SABM retransmit / DM handles it
+    }
+    this.open(svc, f, key);
+  }
+
+  /** Stand up a session for an inbound SABM. A sync app factory wires immediately; an async one (BBS mail
+   *  warm-up) reserves the slot and wires when it resolves — the peer's SABM retransmit covers the window. */
+  private open(svc: Service, sabm: Ax25Frame, key: string): void {
+    const remote = sabm.src;
+    const slot: Live = { service: svc, warming: true };
+    this.sessions.set(key, slot);                         // reserve the key so a retransmitted SABM doesn't double-open
+    const wire = (app: LineApp) => {
+      if (!this.sessions.has(key)) return;                // torn down while warming
+      slot.warming = false;
+      slot.link = serveApp(svc.addr, remote, app, {
         send: this.o.send, clock: this.o.clock, cfg: this.o.cfg,
         onState: (s) => {
           if (s === "disconnected") {
             this.sessions.delete(key);
-            this.o.onEvent?.({ kind: "disconnect", service: svc.name ?? addrStr(svc.addr), remote: addrStr(f.src) });
+            this.o.onEvent?.({ kind: "disconnect", service: svc.name ?? addrStr(svc.addr), remote: addrStr(remote) });
           }
         },
       });
-      live = { link, service: svc };
-      this.sessions.set(key, live);
-      this.o.onEvent?.({ kind: "connect", service: svc.name ?? addrStr(svc.addr), remote: addrStr(f.src) });
+      this.o.onEvent?.({ kind: "connect", service: svc.name ?? addrStr(svc.addr), remote: addrStr(remote) });
+      slot.link.onReceive(sabm);                          // send UA + greeting from a warm app
+    };
+    const built = svc.app(remote);
+    if (built instanceof Promise) {
+      built.then(wire).catch((e) => {
+        this.sessions.delete(key);                        // warm-up failed → drop; the peer retransmits/times out
+        console.error(`[session] ${svc.name ?? addrStr(svc.addr)} warm-up failed:`, (e as Error).message);
+      });
+    } else {
+      wire(built);                                        // sync factory → answer immediately
     }
-    live.link.onReceive(f);
   }
 
   /** Drive T1/T3 timers on every live link (the ingest calls this on a ~1s interval). */
-  poll(): void { for (const { link } of this.sessions.values()) link.poll(); }
+  poll(): void { for (const { link } of this.sessions.values()) link?.poll(); }
 
-  /** Number of active sessions (observability / tests). */
+  /** Number of active (incl. warming) sessions (observability / tests). */
   count(): number { return this.sessions.size; }
 }
