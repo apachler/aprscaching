@@ -24,7 +24,7 @@ const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
  */
 export function serveApp(
   local: Ax25Address, remote: Ax25Address, app: LineApp,
-  opts: { send: (f: Ax25Frame) => void; clock?: () => number; cfg?: Partial<LinkConfig> },
+  opts: { send: (f: Ax25Frame) => void; clock?: () => number; cfg?: Partial<LinkConfig>; onState?: (s: LinkState) => void },
 ): ConnectedLink {
   let buf = "";
   let greeted = false;
@@ -48,6 +48,7 @@ export function serveApp(
     state: (s: LinkState) => {
       if (s === "connected" && !greeted) { greeted = true; push(app.greeting()); }
       if (s === "disconnected") { greeted = false; buf = ""; }
+      opts.onState?.(s);
     },
   }, opts.cfg, opts.clock);
 

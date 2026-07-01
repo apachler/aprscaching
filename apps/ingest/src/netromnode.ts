@@ -5,7 +5,7 @@
  * up to the gateway (the workbench node view reads them). The connected-mode node *session* (a user
  * connecting in and issuing C <dest> to route through us) rides the same KISS link and is validate-at-deploy.
  */
-import { NetromNode, type LearnedRoute } from "@aprsweb/packet";
+import { NetromNode, type LearnedRoute, type NodeStore, type NodeMheard } from "@aprsweb/packet";
 import { decodeFrame, parseAddr, addrStr, PID_NETROM } from "@aprsweb/ax25";
 import type { KissTnc } from "./kiss.js";
 
@@ -20,9 +20,21 @@ export interface NetromNodeOpts {
 export class NetromNodeRunner {
   private node: NetromNode;
   private port: string;
+  private heard = new Map<string, NodeMheard>();   // callsign -> last-heard (for the node's MHeard list)
   constructor(private kiss: KissTnc, private o: NetromNodeOpts) {
     this.node = new NetromNode({ call: parseAddr(o.mycall), alias: o.alias }, { pathQuality: o.pathQuality });
     this.port = o.port ?? "kiss-tnc";
+  }
+
+  /** A synchronous NodeStore over the live routing table + MHeard — feeds an inbound NodeSession CLI. */
+  nodeStore(activeUsers: () => string[]): NodeStore {
+    return {
+      nodes: () => this.node.list().map((r) => ({ alias: r.alias, call: addrStr(r.dest), quality: r.quality })),
+      routes: () => this.node.list().map((r) => ({ neighbor: addrStr(r.neighbor), port: r.port ?? this.port, quality: r.quality })),
+      users: () => activeUsers().map((call) => ({ call })),
+      mheard: () => [...this.heard.values()].sort((a, b) => b.lastHeard - a.lastHeard).slice(0, 30),
+      info: () => `${this.o.alias}:${this.o.mycall} — APRScaching NET/ROM node`,
+    };
   }
 
   start(): void {
@@ -37,7 +49,9 @@ export class NetromNodeRunner {
   /** Feed a raw inbound AX.25 frame (wire this to KissTnc.onRaw). Learns from NODES broadcasts. */
   onRaw(bytes: Uint8Array): void {
     const f = decodeFrame(bytes);
-    if (!f || f.type !== "UI" || f.pid !== PID_NETROM) return;
+    if (!f) return;
+    this.heard.set(addrStr(f.src), { call: addrStr(f.src), port: this.port, lastHeard: Math.floor(Date.now() / 1000) });
+    if (f.type !== "UI" || f.pid !== PID_NETROM) return;
     if (f.dst.call !== NODES_DST.call || !f.info) return;
     const learned = this.node.consume(f.info, f.src, this.port);
     if (learned) { console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)}`); void this.mirror(); }

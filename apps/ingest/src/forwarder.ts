@@ -1,42 +1,20 @@
 /**
- * forwarder.ts — the FBB forwarding scheduler (docs/29 F4), operator-local in `apps/ingest`. On an
- * interval it asks the gateway for its configured forwarding partners, decides which are due now
- * (interval + UTC time-bands, `partnerDue`), and for each opens a connected-mode session to that BBS,
- * runs the pure FBB session codec (`FbbForwarder`) over the link, and bridges the gateway's message
- * store: pull outbound from `/api/bbs/forward/pool`, push inbound to `/inbound`, mark forwarded to
- * `/sent`. The message store stays in the cloud; the RF session runs here (ingest-locality).
+ * forwarder.ts — the ingest adapters for the FBB forwarding scheduler (docs/29 F4). The scheduler brain
+ * (`BbsForwarder`) is pure and lives in `@aprsweb/packet`; here we supply its two I/O dependencies: a
+ * `GatewayApi` (the forwarding-pool REST client, x-ingest-secret gated) and `kissForwardLink` (a real
+ * connected-mode AX.25 link over KISS-TCP). `startForwarder` wires them together from env. The message
+ * store stays in the cloud; the RF session runs here (ingest-locality).
  *
- * The connected-mode link is injectable (`linkFactory`) so the codec + scheduler are exercised without
- * a radio; the default `kissForwardLink` drives a real `ConnectedLink` over KISS-TCP. Multi-hop connect
- * scripts (`C NODE1` → `C 3 DB0XYZ`) and AXUDP partners are validate-at-deploy — the default link does a
- * single direct connect to the partner call and logs the script for the operator.
+ * Multi-hop connect scripts (`C NODE1` → `C 3 DB0XYZ`) and AXUDP partners are validate-at-deploy — the
+ * default link does a single direct connect to the partner call and logs the script for the operator.
  */
 import net from "node:net";
 import { kissWrap, kissFrames } from "@aprsweb/aprs";
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprsweb/ax25";
-import { FbbForwarder, partnerDue, type FbbMessage, type FbbStore } from "@aprsweb/packet";
-
-/** A forwarding partner as returned by the gateway `/api/bbs/partners`. */
-export interface GwPartner {
-  id: number; call: string; ha: string | null; connectScript: string;
-  proto: "rf-fbb" | "axudp" | "ip-fed"; intervalMin: number; timebands: string;
-  requestReverse: boolean; msgtypes: string; maxBlock: number; enabled: boolean;
-}
-
-/** A connected-mode byte duplex to a partner: connect, exchange bytes, close. */
-export interface ForwardLink {
-  connect(): Promise<void>;
-  send(bytes: Uint8Array): void;
-  onData(cb: (bytes: Uint8Array) => void): void;
-  onClose(cb: () => void): void;
-  disconnect(): void;
-}
-export type LinkFactory = (partner: GwPartner) => ForwardLink;
-
-const SESSION_TIMEOUT_MS = 120_000;
+import { BbsForwarder, type ForwardApi, type ForwardLink, type GwPartner, type FbbMessage } from "@aprsweb/packet";
 
 /** The gateway REST client for the forwarding pool (all endpoints x-ingest-secret gated). */
-class GatewayApi {
+export class GatewayApi implements ForwardApi {
   constructor(private base: string, private secret: string) {}
   private h() { return { "content-type": "application/json", "x-ingest-secret": this.secret }; }
   async partners(): Promise<GwPartner[]> {
@@ -56,88 +34,15 @@ class GatewayApi {
   }
 }
 
-/** Per-session FbbStore over a pool snapshot: the outbound queue drains as messages are sent; inbound is
- *  buffered and flushed to the gateway after the session (which dedups by BID). */
-class SessionStore implements FbbStore {
-  readonly inbox: FbbMessage[] = [];
-  readonly sentBids: string[] = [];
-  constructor(private queue: FbbMessage[]) {}
-  outbound(): FbbMessage[] { return this.queue; }
-  hasBid(): boolean { return false; }                 // accept inbound; the gateway INSERT-OR-IGNORE dedups by BID
-  accept(m: FbbMessage): void { this.inbox.push(m); }
-  sent(bid: string): void {
-    this.sentBids.push(bid);
-    const i = this.queue.findIndex((q) => q.bid === bid);
-    if (i >= 0) this.queue.splice(i, 1);
-  }
-}
-
-export class BbsForwarder {
-  private api: GatewayApi;
-  private lastRun = new Map<string, number>();
-  private timer?: ReturnType<typeof setInterval>;
-  private busy = new Set<string>();
-  private linkFactory: LinkFactory;
-  private now: () => number;
-
-  constructor(private o: {
-    base: string; secret: string; mycall: string; kiss?: { host: string; port: number };
-    pollMs?: number; sid?: string; linkFactory?: LinkFactory; now?: () => number;
-  }) {
-    this.api = new GatewayApi(o.base, o.secret);
-    this.now = o.now ?? (() => Math.floor(Date.now() / 1000));
-    this.linkFactory = o.linkFactory ?? ((p) => kissForwardLink({
-      host: o.kiss!.host, port: o.kiss!.port, mycall: o.mycall, partnerCall: p.call, connectScript: p.connectScript,
-    }));
-  }
-
-  start(): void {
-    this.timer = setInterval(() => { void this.tick(); }, this.o.pollMs ?? 60_000);
-    void this.tick();
-  }
-  stop(): void { if (this.timer) clearInterval(this.timer); }
-
-  /** One scheduler pass: forward every partner that is due now. */
-  async tick(): Promise<void> {
-    let partners: GwPartner[];
-    try { partners = await this.api.partners(); } catch (e) { console.error("[forward] partner poll failed:", (e as Error).message); return; }
-    const nowSec = this.now();
-    for (const p of partners.filter((x) => x.proto === "rf-fbb" || x.proto === "axudp")) {
-      if (this.busy.has(p.call)) continue;
-      if (!partnerDue(p, this.lastRun.get(p.call) ?? null, nowSec)) continue;
-      this.lastRun.set(p.call, nowSec);
-      this.busy.add(p.call);
-      try { await this.runSession(p); }
-      catch (e) { console.error(`[forward] ${p.call} session failed:`, (e as Error).message); }
-      finally { this.busy.delete(p.call); }
-    }
-  }
-
-  /** Run one FBB forwarding session with a partner and reconcile the results back to the gateway. */
-  private async runSession(p: GwPartner): Promise<void> {
-    const store = new SessionStore(await this.api.pool(p.call));
-    const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid });
-    const link = this.linkFactory(p);
-    await link.connect();
-
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => { if (!settled) { settled = true; resolve(); } };
-      const timer = setTimeout(() => { link.disconnect(); finish(); }, SESSION_TIMEOUT_MS);
-      link.onClose(() => { clearTimeout(timer); finish(); });
-      link.onData((bytes) => {
-        const out = fwd.onData(bytes);
-        if (out) link.send(out);
-        if (fwd.done) { clearTimeout(timer); link.disconnect(); finish(); }
-      });
-      const open = fwd.start();
-      if (open) link.send(open);
-    });
-
-    for (const m of store.inbox) await this.api.inbound(m, `rf-fbb:${p.call}`);
-    await this.api.markSent(p.call, store.sentBids);
-    console.log(`[forward] ${p.call}: forwarded ${store.sentBids.length}, received ${store.inbox.length}`);
-  }
+/** Build + start a forwarder from env config (KISS-TCP link + gateway pool). */
+export function startForwarder(o: { base: string; secret: string; mycall: string; kiss: { host: string; port: number }; pollMs?: number; sid?: string }): BbsForwarder {
+  const fwd = new BbsForwarder({
+    api: new GatewayApi(o.base, o.secret),
+    linkFactory: (p) => kissForwardLink({ host: o.kiss.host, port: o.kiss.port, mycall: o.mycall, partnerCall: p.call, connectScript: p.connectScript }),
+    pollMs: o.pollMs, sid: o.sid,
+  });
+  fwd.start();
+  return fwd;
 }
 
 /**
@@ -178,9 +83,7 @@ export function kissForwardLink(o: { host: string; port: number; mycall: string;
       });
       s.on("error", (e) => reject(e));
       s.on("close", () => { clearInterval(poll); fireClose(); });
-      // resolve once the AX.25 link reaches "connected"
-      const wait = setInterval(() => { if (link.state === "connected") { clearInterval(wait); resolve(); }
-        else if (link.state === "disconnected" && sock) { /* still dialing TCP or refused */ } }, 200);
+      const wait = setInterval(() => { if (link.state === "connected") { clearInterval(wait); resolve(); } }, 200);
       setTimeout(() => { clearInterval(wait); if (link.state !== "connected") reject(new Error("connect timeout")); }, 30_000);
     }),
     send: (bytes: Uint8Array) => link.send(bytes),

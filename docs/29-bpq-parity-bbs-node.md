@@ -109,9 +109,14 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
 - **Licensing:** reimplemented from open specs (NET/ROM, FBB, MBL/RLI, AXIP/AXUDP); `packages/*` stay MIT.
 
 ## Progress (pure cores + product wiring landed)
-- **F1 (session glue):** `packages/packet/src/link-app.ts` (`LineApp` + `serveApp` binding a connected
-  link to a line app) + `loopback.ts` (`VirtualClock` + deferred-delivery `LoopbackChannel`) — the
-  headless RF-integration harness. Unit-tested.
+- **F1 (session glue + server):** `packages/packet/src/link-app.ts` (`LineApp` + `serveApp` binding a
+  connected link to a line app) + `loopback.ts` (`VirtualClock` + deferred `LoopbackChannel`). Built on
+  it, `session-server.ts` `SessionServer` — the "answer a connect" half: routes inbound frames to per-
+  caller sessions, stands a fresh `BbsSession`/`NodeSession` up on an inbound SABM to a service SSID,
+  cleans up on disconnect, enforces `maxSessions`. Unit-tested end-to-end (a client link connects in and
+  drives L/R/B over the deferred bridge). Ingest wires the **NODE** service to a live-table `NodeStore`
+  (answers Nodes/Routes/Users/MHeard/Info/CQ over KISS). **Validate-at-deploy:** the BBS service needs a
+  synchronous gateway-backed `MessageStore` (the cloud store is async — cache/reconcile tuning is on-air).
 - **F2 (NET/ROM wire + circuit):** `netrom-wire.ts` (network+transport header + NODES broadcast codec,
   quality formula) and `netrom-circuit.ts` (L4 sliding-window state machine: ConnReq/ConnAck + window
   negotiation, DiscReq/DiscAck, in-order Info with cumulative InfoAck, 236-byte fragment/reassemble
@@ -140,9 +145,12 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   unit-tested), and per partner runs an FBB session over an injectable `ForwardLink`, bridging the gateway
   **forwarding pool** (migration `0041_bbs_forward_log`; `/api/bbs/forward/pool` pulls outbound routed to
   that partner via White-Pages + rules, `/inbound` stores received mail BID-deduped, `/sent` records what
-  was forwarded — all `x-ingest-secret` gated, tri-runtime, live-smoked). The default `kissForwardLink`
-  drives a real AX.25 `ConnectedLink` over KISS-TCP. **Validate-at-deploy:** multi-hop connect scripts
-  (`C NODE1` → `C 3 DB0XYZ`), AXUDP partners, and LZHUF B0/B1 compression.
+  was forwarded — all `x-ingest-secret` gated, tri-runtime, live-smoked). The scheduler brain
+  (`fbb-scheduler.ts` `BbsForwarder`, injectable `ForwardApi` + `ForwardLink`) is unit-tested **end-to-end
+  over a loopback** — our pool → partner inbox, partner's reply → gateway `/inbound`, `markSent` reconciled,
+  due-partner filtering (rf-fbb only, interval-gated). The ingest supplies the fetch `GatewayApi` +
+  `kissForwardLink` (a real AX.25 `ConnectedLink` over KISS-TCP). **Validate-at-deploy:** multi-hop connect
+  scripts (`C NODE1` → `C 3 DB0XYZ`), AXUDP partners, and LZHUF B0/B1 compression.
 
 ## Deferred (out of scope this pass)
 Winlink/RMS gateway, chat/conference node, HF/Pactor, telnet node access, modulo-128 / SREJ, DAMA,

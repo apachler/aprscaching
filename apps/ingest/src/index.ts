@@ -6,6 +6,8 @@ import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
+import { SessionServer, NodeSession } from "@aprsweb/packet";
+import { parseAddr } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 
 const env = process.env;
@@ -65,6 +67,21 @@ if (env.KISS_TNC_HOST) {
     });
     rawSubs.push((b) => node.onRaw(b));
     node.start();
+
+    // connected-mode session server (docs/29 F1) — answer inbound connects to our node SSID with the
+    // NET/ROM CLI (Nodes/Routes/Users/MHeard/Info/CQ), backed by the live routing table.
+    const users = new Set<string>();
+    const nodeServer = new SessionServer({
+      send: (f) => { kiss.sendFrame(f); },
+      services: [{
+        addr: parseAddr(env.NETROM_CALL), name: "NODE",
+        app: (r) => new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!),
+      }],
+      onEvent: (e) => { if (e.kind === "connect") users.add(e.remote); else if (e.kind === "disconnect") users.delete(e.remote); },
+    });
+    rawSubs.push((b) => nodeServer.onRaw(b));
+    setInterval(() => nodeServer.poll(), 1000);
+    console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
   }
   // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
   if (env.IGATE_CALL && env.IGATE_PASS) {
@@ -157,14 +174,13 @@ console.log(`[ingest] started -> ${INGEST_URL}`);
 // Opt-in: needs a KISS TNC + a station call. Partners + routing are configured in the gateway
 // (Settings → Network); this box runs the sessions (ingest-locality). Off by default.
 if (env.BBS_FORWARD === "1" && env.KISS_TNC_HOST && env.BBS_FORWARD_CALL) {
-  const { BbsForwarder } = await import("./forwarder.js");
-  const base = INGEST_URL.replace(/\/ingest$/, "");
-  new BbsForwarder({
-    base, secret: SECRET, mycall: env.BBS_FORWARD_CALL,
+  const { startForwarder } = await import("./forwarder.js");
+  startForwarder({
+    base: INGEST_URL.replace(/\/ingest$/, ""), secret: SECRET, mycall: env.BBS_FORWARD_CALL,
     kiss: { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
     pollMs: Number(env.BBS_FORWARD_POLL_MS ?? 60000),
     sid: env.BBS_FORWARD_SID,
-  }).start();
+  });
   console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
 }
 
