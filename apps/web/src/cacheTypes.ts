@@ -14,7 +14,7 @@ export const TYPE_META: Record<CacheType, TypeMeta> = {
   virtual:     { label: "Virtual",      color: BRAND.blue,   glyph: "◇" },
   sota:        { label: "SOTA summit",  color: BRAND.grey,   glyph: "▲" },
   pota:        { label: "POTA park",    color: BRAND.beige,  glyph: "❂" },
-  wwff:        { label: "WWFF reserve", color: "#5a8a0e",    glyph: "❀" },
+  wwff:        { label: "WWFF reserve", color: BRAND.greenDark, glyph: "❀" },
   bunker:      { label: "Bunker",       color: BRAND.grey,   glyph: "▣" },
   castle:      { label: "Castle",       color: BRAND.beige,  glyph: "♜" },
 };

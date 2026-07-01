@@ -15,7 +15,7 @@ import { surfaceByView } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
 import { roleMeta } from "./stationRoles.js";
 import { aprsGlyph } from "./aprsGlyph.js";
-import { ASSET } from "./brand.js";
+import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle } from "./offlineBasemap.js";
 import {
   FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, type LocaleSettings,
@@ -352,7 +352,7 @@ export function App() {
       const lat = +e.lngLat.lat.toFixed(6), lon = +e.lngLat.wrap().lng.toFixed(6);
       setDraft({ lat, lon });
       draftMarker.current?.remove();
-      draftMarker.current = new maplibregl.Marker({ color: "#e53e3e", draggable: true })
+      draftMarker.current = new maplibregl.Marker({ color: MAP_MARKER.draft, draggable: true })
         .setLngLat([lon, lat]).addTo(m);
       draftMarker.current.on("dragend", () => {
         const ll = draftMarker.current!.getLngLat();
@@ -431,7 +431,7 @@ export function App() {
       el.title = `${s.callsign}${label ? ` · ${label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
       el.classList.toggle("role", !!role);
       el.style.background = role ? role.color : "";
-      el.style.color = role ? "#0d141a" : "";
+      el.style.color = role ? "var(--ink-tier)" : "";
       const moving = s.course != null && !!s.speedKn;
       const span = el.querySelector("span") as HTMLElement;
       span.textContent = role ? role.glyph : aprs ? aprs.glyph : moving ? "➤" : "•";
