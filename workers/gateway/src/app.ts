@@ -29,6 +29,7 @@ import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
+import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
 import { handleFederationTombstones } from "./tombstones.js";
@@ -122,6 +123,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (viewDel && m === "DELETE") return handleViewDelete(req, env, viewDel[1]!);
   const viewGet = /^\/v\/([a-z0-9]+)$/.exec(p);
   if (viewGet && m === "GET") return handleViewResolve(req, env, viewGet[1]!);
+
+  // account-level UI preferences sync (docs/13): theme, units/locale, pinned apps, basemap
+  if (p === "/api/prefs" && m === "GET") return handlePrefsGet(req, env);
+  if (p === "/api/prefs" && m === "PUT") return handlePrefsPut(req, env);
 
   // push + email-digest delivery (ADR-4b) — subscriptions + prefs; in-app W1 alerts are the source
   if (p === "/api/push/key" && m === "GET") return handlePushKey(req, env);

@@ -3,8 +3,9 @@
  * symbol so it can be launched from the workbench AND pinned to the left nav rail. Some apps open a
  * dedicated wide surface (terminal, BBS); the rest open the workbench focused on their config group.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { IconName } from "../ui/index.js";
+import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
 export type WorkbenchAppId = "terminal" | "bbs" | "tools" | "decoder" | "rig" | "remote";
 
@@ -42,9 +43,16 @@ const readPins = (): WorkbenchAppId[] => {
 /** Pinned-app ids (persisted in localStorage) + a toggle. Pinned apps show in the nav rail. */
 export function usePinnedApps(): { pins: WorkbenchAppId[]; toggle: (id: WorkbenchAppId) => void; isPinned: (id: WorkbenchAppId) => boolean } {
   const [pins, setPins] = useState<WorkbenchAppId[]>(readPins);
+  // Re-read when an account sign-in pulls prefs and rewrites acs.pins (multi-device sync).
+  useEffect(() => {
+    const onSync = () => setPins(readPins());
+    window.addEventListener(PREFS_EVENT, onSync);
+    return () => window.removeEventListener(PREFS_EVENT, onSync);
+  }, []);
   const toggle = (id: WorkbenchAppId) => setPins((prev) => {
     const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    notePrefChange();                                               // mirror to the account (if signed in)
     return next;
   });
   return { pins, toggle, isPinned: (id) => pins.includes(id) };

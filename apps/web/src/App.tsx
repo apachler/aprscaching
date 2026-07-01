@@ -20,6 +20,7 @@ import { buildGraticuleStyle } from "./offlineBasemap.js";
 import {
   FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, type LocaleSettings,
 } from "./format.js";
+import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import { useSession } from "./identity/useSession.js";
@@ -119,7 +120,17 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
-  const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); }, []);
+  const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); notePrefChange(); }, []);
+
+  // Account UI-prefs sync (docs/13): on sign-in, pull the account's theme/units/pins/basemap and
+  // apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
+  // untouched (the endpoint is session-gated). localStorage stays the source of truth.
+  useEffect(() => { if (session.signedIn) void pullPrefs(); }, [session.signedIn]);
+  useEffect(() => {
+    const onSync = () => setLocSettings(loadSettings());
+    window.addEventListener(PREFS_EVENT, onSync);
+    return () => window.removeEventListener(PREFS_EVENT, onSync);
+  }, []);
 
   // operator 3-pane mode (≥1024px): side panels dock and the cache detail coexists with a left panel
   const [op, setOp] = useState(() => window.matchMedia?.("(min-width: 1024px)").matches ?? false);

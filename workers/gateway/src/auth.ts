@@ -135,7 +135,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
 const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
 
 /** Resolve the durable account behind the signed-in session (by its active callsign). */
-async function sessionAccountId(req: Request, env: Env): Promise<{ accountId: string; callsign: string } | null> {
+export async function sessionAccountId(req: Request, env: Env): Promise<{ accountId: string; callsign: string } | null> {
   const cur = await sessionCallsign(req, env);
   if (!cur) return null;
   const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?").bind(cur).first<{ account_id: string }>();

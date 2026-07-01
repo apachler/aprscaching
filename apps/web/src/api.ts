@@ -168,6 +168,13 @@ export function resolveView(slug: string): Promise<{ slug: string; name: string 
   return call(`/v/${encodeURIComponent(slug)}`);
 }
 
+// ---- account-level UI preferences sync (docs/13): theme, units/locale, pinned apps, basemap ----
+export type AccountPrefs = Record<string, unknown>;
+export function getPrefs(): Promise<{ prefs: AccountPrefs }> { return call(`/api/prefs`); }
+export function putPrefs(prefs: AccountPrefs): Promise<{ ok: boolean; prefs: AccountPrefs }> {
+  return call(`/api/prefs`, { method: "PUT", body: JSON.stringify({ prefs }) });
+}
+
 // ---- notification prefs + push subscription (ADR-4b) ----
 export function getNotifyPrefs(): Promise<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean }> { return call(`/api/notify/prefs`); }
 export function setNotifyPrefs(digest: boolean): Promise<{ digest: boolean }> { return call(`/api/notify/prefs`, { method: "POST", body: JSON.stringify({ digest }) }); }

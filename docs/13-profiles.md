@@ -64,9 +64,21 @@ ALTER TABLE accounts ADD COLUMN profile_public  INTEGER NOT NULL DEFAULT 1; -- m
   Profile group; public/private toggles. Avatar (R2) fits here too.
 - **M5**: operated **SSID stations** on the profile, once `account_stations` lands (`docs/10`).
 
+## Account UI-preferences sync (DONE)
+Device-independent UI settings follow the **account**, not the browser, so signing in on a second
+device restores them. localStorage stays the single source of truth for the running app; a thin
+sync layer mirrors a known subset to the account: **theme + units/locale** (`acs.locale`), **pinned
+workbench apps** (`acs.pins`), and **basemap** (`acs.basemap`). Server: `account_prefs` (migration
+`0039`, keyed by `account_id` per ADR-1/ADR-2) + `GET`/`PUT /api/prefs` (session-gated, validated,
+size-capped). Client: `pullPrefs()` on sign-in (seeds the account from this device on first use),
+debounced `notePrefChange()` push on change; guests are untouched (endpoint 401s). Inside the GDPR
+export/erase. Saved *map views* remain their own shareable, slug-addressed store (`docs/11` M1).
+
 ## Acceptance
 - A signed-in user can set a display name, locator, avatar, bio, and links; each is shown publicly
   only when filled and not hidden.
+- UI prefs (theme, units, pinned apps, basemap) set on one device reappear after signing in on
+  another; a signed-out user's prefs stay local; prefs are in the GDPR export and removed on erase.
 - The account (magic-link) email is never shown; a public contact appears only if explicitly opted in.
 - No legal name / address is ever collected or displayed.
 - Profile data is included in GDPR export and removed on erase.

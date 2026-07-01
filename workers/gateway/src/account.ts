@@ -62,6 +62,7 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
     verifications: await rows(env, "SELECT method, status, verified_at FROM callsign_verifications WHERE callsign=?", cs),
     stations: await rows(env, "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE callsign=? OR callsign LIKE ?", cs, `${cs}-%`),
     weatherKeys: await rows(env, "SELECT callsign, station_id, created_at, last_seen FROM wx_keys WHERE callsign=?", cs),
+    uiPrefs: await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=(SELECT account_id FROM accounts WHERE callsign=?)").bind(cs).first(),
   };
   return json(data, { headers: { "content-disposition": `attachment; filename="aprscaching-${cs}.json"` } });
 }
@@ -93,6 +94,8 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM account_stations WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM wx_keys WHERE callsign=?").bind(cs),
+    // account-level UI prefs — delete BEFORE the accounts row (the subselect needs account_id)
+    env.DB.prepare("DELETE FROM account_prefs WHERE account_id IN (SELECT account_id FROM accounts WHERE callsign=?)").bind(cs),
     env.DB.prepare("DELETE FROM accounts WHERE callsign=?").bind(cs),
     env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'deleted', NULL, ?)").bind(cs, now()),
   ]);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type maplibregl from "maplibre-gl";
+import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
 /**
  * Basemap layer switcher (docs/11 M2): Vector (default) · Topo · Satellite. Raster is OPT-IN per
@@ -40,6 +41,13 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null }) {
     try { return (localStorage.getItem("acs.basemap") as Base) || "vector"; } catch { return "vector"; }
   });
 
+  // Re-read when an account sign-in pulls prefs and rewrites acs.basemap (multi-device sync).
+  useEffect(() => {
+    const onSync = () => { try { setBase((localStorage.getItem("acs.basemap") as Base) || "vector"); } catch { /* ignore */ } };
+    window.addEventListener(PREFS_EVENT, onSync);
+    return () => window.removeEventListener(PREFS_EVENT, onSync);
+  }, []);
+
   useEffect(() => {
     const m = props.map; if (!m) return;
     const apply = () => {
@@ -62,7 +70,7 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null }) {
     <div className="basemap-switch" role="radiogroup" aria-label="Basemap">
       {opts.map((o) => (
         <button key={o.key} role="radio" aria-checked={base === o.key} title={o.title}
-                className={base === o.key ? "on" : ""} onClick={() => setBase(o.key)}>
+                className={base === o.key ? "on" : ""} onClick={() => { setBase(o.key); notePrefChange(); }}>
           {o.label}
         </button>
       ))}
