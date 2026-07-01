@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { digipeatAx25 } from "../src/digipeat.js";
+import { frameContentKey, ViscousDigi } from "../src/digipeat.js";
 import { encodeFrame, decodeFrame, type Ax25Frame } from "../src/frame.js";
 
 const A = (call: string, ssid = 0) => ({ call, ssid });
@@ -40,5 +41,33 @@ describe("connected-mode AX.25 digipeat (docs/29 F3)", () => {
     const wire = decodeFrame(encodeFrame(out))!;
     expect(wire.digisRepeated).toEqual([true, false]);
     expect(wire.digis!.map((d) => d.call)).toEqual(["OE8DGI", "OE9OTH"]);
+  });
+});
+
+describe("viscous-digi bookkeeping (docs/29 F3)", () => {
+  it("content key ignores the via path so a re-digied copy matches the original", () => {
+    const a = frameContentKey(base([A("OE8DGI"), A("OE9OTH")]));                     // fresh
+    const b = frameContentKey(base([A("OE8DGI"), A("OE9OTH")], [true, false]));      // our hop now repeated
+    const c = frameContentKey(base([A("RELAY")]));                                   // different via path
+    expect(a).toBe(b);                                                                // same frame, later stage → same key
+    expect(a).toBe(c);                                                                // via path excluded entirely
+    // a different frame (poll bit set) does not collide
+    expect(a).not.toBe(frameContentKey({ ...base([]), pf: false }));
+  });
+
+  it("cancels a pending repeat when a duplicate is heard, then not again", () => {
+    const v = new ViscousDigi<number>();
+    v.schedule("k", 42);
+    expect(v.pendingCount()).toBe(1);
+    expect(v.onDuplicate("k")).toBe(42);        // heard again → cancel token returned
+    expect(v.onDuplicate("k")).toBeNull();      // already cancelled
+    expect(v.pendingCount()).toBe(0);
+  });
+
+  it("a fired repeat is no longer cancellable (our own TX echo is ignored)", () => {
+    const v = new ViscousDigi<number>();
+    v.schedule("k", 7);
+    v.fired("k");
+    expect(v.onDuplicate("k")).toBeNull();
   });
 });

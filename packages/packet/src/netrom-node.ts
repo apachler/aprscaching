@@ -21,10 +21,20 @@ export interface LearnedRoute {
 const OBS_INIT = 6;                 // NET/ROM initial obsolescence count
 const DEFAULT_PATH_QUALITY = 192;   // link quality assumed for a directly-heard neighbour
 const DEFAULT_TOP_N = 3;            // best routes we re-advertise
+const DEFAULT_MIN_OBS_BROADCAST = 5; // only re-advertise routes at/above this obsolescence (BPQ default)
+
+export interface NetromNodeConfig {
+  pathQuality?: number;
+  topN?: number;
+  /** Only re-advertise routes whose obsolescence ≥ this (stale routes stay routable but stop propagating). */
+  minObsToBroadcast?: number;
+  /** Cap the table size; a new route past the cap evicts the worst-quality *unlocked* route (if worse). */
+  maxRoutes?: number;
+}
 
 export class NetromNode {
   private routes = new Map<string, LearnedRoute>();   // key = dest call-ssid
-  constructor(private ident: NodeIdent, private opts: { pathQuality?: number; topN?: number } = {}) {}
+  constructor(private ident: NodeIdent, private opts: NetromNodeConfig = {}) {}
 
   private key(a: Ax25Address): string { return addrStr(a).toUpperCase(); }
 
@@ -32,11 +42,19 @@ export class NetromNode {
   private learn(r: Omit<LearnedRoute, "obsolescence" | "locked"> & { locked?: boolean }): void {
     const k = this.key(r.dest);
     const cur = this.routes.get(k);
-    if (!cur || r.quality >= cur.quality) {
-      this.routes.set(k, { ...r, alias: r.alias.toUpperCase(), obsolescence: OBS_INIT, locked: r.locked ?? cur?.locked ?? false });
-    } else if (cur) {
-      cur.obsolescence = OBS_INIT;                    // still heard → refresh even if we keep the better route
+    if (cur) {
+      if (r.quality >= cur.quality) this.routes.set(k, { ...r, alias: r.alias.toUpperCase(), obsolescence: OBS_INIT, locked: r.locked ?? cur.locked });
+      else cur.obsolescence = OBS_INIT;               // still heard → refresh even if we keep the better route
+      return;
     }
+    // a genuinely new destination — enforce the table cap by evicting the worst unlocked route
+    const max = this.opts.maxRoutes;
+    if (max != null && this.routes.size >= max) {
+      const worst = [...this.routes.values()].filter((x) => !x.locked).sort((a, b) => a.quality - b.quality)[0];
+      if (!worst || r.quality <= worst.quality) return;   // table full of better/locked routes → drop the newcomer
+      this.routes.delete(this.key(worst.dest));
+    }
+    this.routes.set(k, { ...r, alias: r.alias.toUpperCase(), obsolescence: OBS_INIT, locked: r.locked ?? false });
   }
 
   /** Pin a route so it survives decay (a manually-configured neighbour link). */
@@ -80,8 +98,9 @@ export class NetromNode {
    */
   broadcast(): Uint8Array[] {
     const topN = this.opts.topN ?? DEFAULT_TOP_N;
+    const minObs = this.opts.minObsToBroadcast ?? DEFAULT_MIN_OBS_BROADCAST;
     const self: NodesDest = { dest: this.ident.call, alias: this.ident.alias, neighbor: this.ident.call, quality: 0 };
-    const best = this.list().filter((r) => r.obsolescence > 0).slice(0, topN)
+    const best = this.list().filter((r) => r.obsolescence >= minObs).slice(0, topN)
       .map<NodesDest>((r) => ({ dest: r.dest, alias: r.alias, neighbor: r.neighbor, quality: r.quality }));
     return encodeNodesBroadcast(this.ident.alias, [self, ...best]);
   }

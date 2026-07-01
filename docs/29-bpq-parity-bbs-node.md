@@ -213,11 +213,13 @@ real FBB partner, not a headless build. ASCII FBB forwarding is fully interopera
 | AXUDP transport | — | `AxudpPort` (bidir) ✅ | a peer + cross-port routing |
 | FBB binary B0/B1 | ✗ (see below) | — | LZHUF + a real FBB partner |
 
-**Headlessly-buildable follow-ons still open** (do NOT need RF): **viscous-digi cancellation** (cancel a
-pending repeat when the frame is heard already-digied by a better-placed digi); NODES **worst-quality
-pruning / obsolescence broadcast threshold** (only re-advertise routes above a threshold, evict the worst
-when the table is full). Both are small; everything else headlessly-testable in the F1–F5 node/BBS/forward
-path is now built (incl. the L4 inbound session server and the multi-hop connect sequencer).
+**Everything headlessly-testable in the F1–F5 node/BBS/forward path is now built.** The last two follow-ons
+landed: **viscous-digi cancellation** (`ViscousDigi` + `frameContentKey` in `@aprsweb/ax25`; the
+`ConnectedDigipeater` holds each repeat `viscousMs` and cancels it if the frame is heard again — a better
+digi carried it) and **NODES pruning + broadcast threshold** (`NetromNode` `maxRoutes` evicts the worst
+unlocked route for a better newcomer; `minObsToBroadcast` stops re-advertising a route once it decays below
+the threshold while keeping it routable). What remains is purely on-air (a live neighbour / partner / peer,
+KISS timing) plus LZHUF byte-exact interop.
 
 **Deliberately not built — LZHUF B0/B1.** Its correctness *is* byte-exact compatibility with FBB's fixed
 Huffman/position tables, which a round-trip test cannot prove (it only checks internal consistency) and

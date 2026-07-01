@@ -56,4 +56,33 @@ describe("NET/ROM node routing engine (docs/29 F2)", () => {
     expect(node.best("OE3FAR")).toBeNull();        // learned route decayed away
     expect(node.best("OE7PIN")).not.toBeNull();    // locked route survives
   });
+
+  it("stops re-advertising a route once its obsolescence drops below the broadcast threshold", () => {
+    const node = new NetromNode(ME, { pathQuality: 200, minObsToBroadcast: 5 });
+    node.consume(bcastFrom("N", [{ dest: A("OE3FAR"), alias: "FAR", neighbor: A("OE1N"), quality: 100 }]), A("OE1N"));
+    const before = decodeNodesBroadcast(node.broadcast()[0]!)!;
+    expect(before.dests.some((d) => d.dest.call === "OE3FAR")).toBe(true);   // obs 6 ≥ 5 → advertised
+    node.decay(); node.decay();                    // obs 6 → 4 (< 5)
+    const after = decodeNodesBroadcast(node.broadcast()[0]!)!;
+    expect(after.dests.some((d) => d.dest.call === "OE3FAR")).toBe(false);   // stale → not advertised
+    expect(node.best("OE3FAR")).not.toBeNull();    // …but still routable
+  });
+
+  it("caps the table, evicting the worst-quality *unlocked* route for a better newcomer", () => {
+    const node = new NetromNode(ME, { pathQuality: 100, maxRoutes: 4 });
+    node.lock({ dest: A("OE7PIN"), alias: "PIN", neighbor: A("OE7PIN"), quality: 10 });   // locked, lowest quality
+    // fill the table: OE1N(neighbour q100), OE3A(q≈78 via OE1N), OE4B(q≈16 via OE1N)
+    node.consume(bcastFrom("N1", [
+      { dest: A("OE3A"), alias: "A", neighbor: A("OE1N"), quality: 200 },
+      { dest: A("OE4B"), alias: "B", neighbor: A("OE1N"), quality: 40 },
+    ]), A("OE1N"));
+    // now full (4). A strong route via a new neighbour evicts the two worst unlocked (OE4B q16, then OE3A q78)
+    node.consume(bcastFrom("N2", [{ dest: A("OE5C"), alias: "C", neighbor: A("OE2N"), quality: 250 }]), A("OE2N"));
+    expect(node.best("OE7PIN")).not.toBeNull();    // locked survived despite being the lowest quality of all
+    expect(node.best("OE5C")).not.toBeNull();      // strong newcomer admitted
+    expect(node.best("OE4B")).toBeNull();          // worst unlocked evicted
+    // a weak newcomer against a table of better/locked routes is simply dropped
+    node.consume(bcastFrom("N1", [{ dest: A("OE6D"), alias: "D", neighbor: A("OE1N"), quality: 5 }]), A("OE1N"));
+    expect(node.best("OE6D")).toBeNull();
+  });
 });
