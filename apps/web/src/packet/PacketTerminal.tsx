@@ -150,60 +150,60 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
 
       {portOpen && (
         <>
-          <div className="row gap-2 pt-connect">
-            <input value={remoteCall} placeholder="connect to (e.g. OE8XBM-7)" onChange={(e) => setRemoteCall(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") connect(); }} />
-            <button onClick={connect} disabled={remoteCall.trim().length < 3}>Connect</button>
-          </div>
-
-          {/* channel tabs */}
-          {session && session.channels.length > 0 && (
-            <div className="pt-tabs" role="tablist">
-              {session.channels.map((ch) => (
-                <button key={ch.id} role="tab" aria-selected={ch.id === active?.id}
-                  className={`pt-tab st-${namesRef.current.classify(ch.remoteCall)}${ch.id === active?.id ? " on" : ""}`}
-                  onClick={() => setActiveId(ch.id)}>
-                  {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
-                  <span className="pt-x" role="button" aria-label="close channel" onClick={(e) => { e.stopPropagation(); session.close(ch.id); }}>✕</span>
-                </button>
-              ))}
+          {/* left pane: connect + channel list + connect-text */}
+          <div className="pt-side">
+            <div className="row gap-2 pt-connect">
+              <input value={remoteCall} placeholder="connect to (e.g. OE8XBM-7)" onChange={(e) => setRemoteCall(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") connect(); }} />
+              <button onClick={connect} disabled={remoteCall.trim().length < 3}>Connect</button>
             </div>
-          )}
-
-          {/* active channel window */}
-          {active ? (
-            <div className="pt-window">
-              <pre className="pt-out" aria-live="polite">{active.lines.map((l, i) => (
-                <div key={i} className={`pt-line ${l.dir}`}><AnsiLine text={l.text} /></div>
-              ))}</pre>
-              <div className="pt-status mono">
-                {active.remoteCall} · {active.state} · {active.lines.length} lines
-              </div>
-              <div className="row gap-2 pt-cmd">
-                <input value={cmd} placeholder="send a line…" onChange={(e) => setCmd(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") sendCmd(); }} disabled={active.state !== "connected"} />
-                <button onClick={() => sendCmd()} disabled={active.state !== "connected"}>Send</button>
-              </div>
-              {/* function-key macro bar */}
-              <div className="pt-macros">
-                {macros.map((m: { key: string; label: string; text: string }) => (
-                  <button key={m.key} className="pt-macro" disabled={active.state !== "connected"}
-                    title={m.text} onClick={() => sendCmd(m.text)}>{m.key} {m.label}</button>
+            {session && session.channels.length > 0 && (
+              <div className="pt-tabs" role="tablist">
+                {session.channels.map((ch) => (
+                  <button key={ch.id} role="tab" aria-selected={ch.id === active?.id}
+                    className={`pt-tab st-${namesRef.current.classify(ch.remoteCall)}${ch.id === active?.id ? " on" : ""}`}
+                    onClick={() => setActiveId(ch.id)}>
+                    {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
+                    <span className="pt-x" role="button" aria-label="close channel" onClick={(e) => { e.stopPropagation(); session.close(ch.id); }}>✕</span>
+                  </button>
                 ))}
               </div>
-            </div>
-          ) : <p className="muted">Connect to a BBS or node to open a channel.</p>}
+            )}
+            <details className="pt-ctext">
+              <summary>Connect-text (auto-sent on connect)</summary>
+              <input value={ctext} placeholder="e.g. Welcome — {call} auto-greeter"
+                onChange={(e) => { setCtext(e.target.value); localStorage.setItem(LS_CTEXT, e.target.value); }} />
+            </details>
+          </div>
 
-          {/* CTEXT (connect auto-text) */}
-          <details className="pt-ctext">
-            <summary>Connect-text (auto-sent on connect)</summary>
-            <input value={ctext} placeholder="e.g. Welcome — {call} auto-greeter"
-              onChange={(e) => { setCtext(e.target.value); localStorage.setItem(LS_CTEXT, e.target.value); }} />
-          </details>
+          {/* centre pane: active channel window + command line + function-key macros */}
+          <div className="pt-main">
+            {active ? (
+              <div className="pt-window">
+                <pre className="pt-out" aria-live="polite">{active.lines.map((l, i) => (
+                  <div key={i} className={`pt-line ${l.dir}`}><AnsiLine text={l.text} /></div>
+                ))}</pre>
+                <div className="pt-status mono">
+                  {active.remoteCall} · {active.state} · {active.lines.length} lines
+                </div>
+                <div className="row gap-2 pt-cmd">
+                  <input value={cmd} placeholder="send a line…" onChange={(e) => setCmd(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") sendCmd(); }} disabled={active.state !== "connected"} />
+                  <button onClick={() => sendCmd()} disabled={active.state !== "connected"}>Send</button>
+                </div>
+                <div className="pt-macros">
+                  {macros.map((m: { key: string; label: string; text: string }) => (
+                    <button key={m.key} className="pt-macro" disabled={active.state !== "connected"}
+                      title={m.text} onClick={() => sendCmd(m.text)}>{m.key} {m.label}</button>
+                  ))}
+                </div>
+              </div>
+            ) : <p className="muted pt-empty">Connect to a BBS or node to open a channel.</p>}
+          </div>
 
-          {/* monitor pane — all heard traffic, colourised by NAMES.GP type */}
-          <div className="pt-monitor">
-            <button className="link" aria-expanded={showMonitor} onClick={() => setShowMonitor((v) => !v)}>
+          {/* right pane: monitor — all heard traffic, colourised by NAMES.GP type */}
+          <div className="pt-mon">
+            <button className="link pt-mon-toggle" aria-expanded={showMonitor} onClick={() => setShowMonitor((v) => !v)}>
               {showMonitor ? "▾" : "▸"} Monitor ({monitor.length})
             </button>
             {showMonitor && (

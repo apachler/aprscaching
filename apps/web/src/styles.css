@@ -330,6 +330,18 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 
 /* packet terminal (docs/25 P1) — built token-driven for the Stage-3 Cogmind flip */
 .packet-term { display: grid; gap: 8px; }
+.pt-side, .pt-main, .pt-mon { display: grid; gap: 8px; align-content: start; min-width: 0; }
+/* Graphic-Packet multi-pane workspace: channels/connect | active window | monitor, once the panel is
+   wide (the wide surface). Stacks to a single column in a slim drawer/sheet (container query, css.md). */
+@container panel (min-width: 52rem) {
+  .packet-term { grid-template-columns: 250px minmax(0, 1fr) 320px; align-items: start; }
+  .pt-bar { grid-column: 1 / -1; }
+  .pt-side { grid-column: 1; }
+  .pt-main { grid-column: 2; }
+  .pt-mon  { grid-column: 3; }
+  .pt-out { max-height: 62vh; min-height: 340px; }
+  .pt-mon-out { max-height: 66vh; min-height: 340px; }
+}
 .pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .pt-tab { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px 6px 0 0; background: var(--surface-2); cursor: pointer; }
 .pt-tab.on { border-bottom-color: transparent; background: var(--surface); font-weight: 600; }

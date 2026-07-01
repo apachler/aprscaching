@@ -17,7 +17,7 @@ const noop = () => {};
 
 // The real desktop 3-pane shell (top bar + nav rail + map + docked panel), so the surfaces are shown
 // at their true docked width in context — the panel is a fixed ~392px column beside the map, by design.
-function AppShell({ active, title, children, childIsPanel }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean }) {
+function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
   return (
     <div className="app" style={{ height: "100dvh" }}>
       <header className="topbar">
@@ -33,7 +33,7 @@ function AppShell({ active, title, children, childIsPanel }: { active: string; t
                  onWorkbench={noop} onMail={noop} onProfile={noop} onSettings={noop} />
         <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
         {childIsPanel ? children : (
-          <aside className="panel right">
+          <aside className={`panel right${wide ? " panel-wide" : ""}`}>
             <div className="row between"><h2>{title}</h2><span className="spacer" /><button className="icon" aria-label="Close">✕</button></div>
             {children}
           </aside>
@@ -60,7 +60,7 @@ export function DemoHarness({ which }: { which: string }) {
   // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
   if (which === "app-packet") {
     return (
-      <AppShell active="workbench" title="📻 Packet terminal">
+      <AppShell active="workbench" title="📻 Packet terminal" wide>
         <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
       </AppShell>
     );
