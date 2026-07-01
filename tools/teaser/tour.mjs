@@ -203,6 +203,28 @@ async function advancedTools(page) {
   }));
 }
 
+// Expand EVERY collapsible group (.group-toggle) in the currently-open panel/drawer and screenshot
+// each one — exhaustive + self-maintaining, so a new disclosure section is captured without editing
+// this script. Used for Settings and the Instance-admin drawer; any multi-group drawer can reuse it.
+async function captureGroups(page, vid, prefix, panelLabel) {
+  const titles = await page.$$eval(".panel .group-toggle", (els) =>
+    els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean)).catch(() => []);
+  for (const t of titles) {
+    const short = (t.split(/\s{2,}|·/)[0].replace(/^[▸▾▿►▼▶\s]+/, "").trim().slice(0, 40)) || t;
+    await step(`${prefix}-${slug(short)}`, async () => {
+      const toggle = page.locator(".panel .group-toggle", { hasText: short }).first();
+      await toggle.waitFor({ state: "visible", timeout: 5000 });
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
+      await page.waitForTimeout(350);
+      await toggle.scrollIntoViewIfNeeded().catch(() => {});
+      await page.waitForTimeout(250);
+      await shot(page, vid, `${prefix}-${slug(short)}`, `${panelLabel} — ${short}`);
+      if ((await toggle.getAttribute("aria-expanded")) === "true") await toggle.click().catch(() => {}); // collapse so the next shot is clean
+    });
+  }
+  return titles.length;
+}
+
 for (const v of VIEWS) {
   curView = v.id;
   console.log("==>", v.id);
@@ -220,16 +242,6 @@ for (const v of VIEWS) {
       await page.waitForTimeout(700);
       await shot(page, v.id, "signin", "Sign in / register");
     });
-    // splash FOOTER pages — the canonical site-wide links (gateway-rendered HTML). /source is an
-    // external 302 (skipped) and sitemap.xml/api are machine formats; /sitemap + /support are pages.
-    for (const [path, name, label] of [["/sitemap", "sitemap-page", "Site map (public page)"], ["/support", "support-page", "Support & transparency"]]) {
-      await step(name, async () => {
-        await page.goto(`${API_BASE}${path}`, { waitUntil: "load" });
-        await page.waitForSelector("h1, main, body", { timeout: 8000 }).catch(() => {});
-        await page.waitForTimeout(500);
-        await shot(page, v.id, name, label);
-      });
-    }
     await ctx.close();
   });
 
@@ -345,6 +357,10 @@ for (const v of VIEWS) {
         await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
         await page.waitForTimeout(450);
         await shot(page, v.id, slug(title), LABELS[title] || title);
+        // Instance-admin drawer: while it's freshly open, expand + shoot EACH operator group
+        // (Federation / Forwarding / Ingest). Doing it here — not in a later step — avoids re-finding
+        // the sysop entry after the settings openView reloads. (Settings has its own dedicated walk.)
+        if (/^admin$/i.test(title)) await captureGroups(page, v.id, "admin", "Instance admin");
       });
     }
   } else {
@@ -444,46 +460,22 @@ for (const v of VIEWS) {
   // stations/notifications/data groups render; connections & network render regardless.
   await step("settings-groups", async () => {
     await openView(page, "settings", ".panel");
-    const titles = await page.$$eval(".panel .group-toggle", (els) =>
-      els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean)).catch(() => []);
-    for (const t of titles) {
-      const short = (t.split(/\s{2,}|·/)[0].replace(/^[▸▾▿►▼▶\s]+/, "").trim().slice(0, 40)) || t;
-      await step(`set-${slug(short)}`, async () => {
-        const toggle = page.locator(".panel .group-toggle", { hasText: short }).first();
-        await toggle.waitFor({ state: "visible", timeout: 5000 });
-        if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
-        await page.waitForTimeout(350);
-        await toggle.scrollIntoViewIfNeeded().catch(() => {});
-        await page.waitForTimeout(250);
-        await shot(page, v.id, `set-${slug(short)}`, `Settings — ${short}`);
-        if ((await toggle.getAttribute("aria-expanded")) === "true") await toggle.click().catch(() => {}); // collapse so the next shot is clean
-      });
-    }
+    await captureGroups(page, v.id, "set", "Settings");
   });
 
-  // Site map page — reached via the ?view= deep-link (dogfooding the sitemap tooling). Captured on
-  // every viewport regardless of where it sits in nav.
-  await step("sitemap", async () => {
-    await page.goto(`${BASE}/?view=sitemap#11.5/47.078/15.43`, { waitUntil: "load" });
-    await ready(page);
-    await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
-    await page.waitForTimeout(400);
-    await shot(page, v.id, "sitemap", "Site map");
-  });
 
   // Operator "Instance Admin" surface — EXCLUDED from public teasers, captured only with TEASER_ADMIN=1
   // (which sets ADMIN_CALLSIGNS so the sysop entry renders). On desktop the rail walk above already
-  // captured it (it's a first-class rail destination now); only cover the non-rail viewports here, via
-  // the top-bar 🛡 that shows below 1024px. Never publish an operator teaser.
+  // expanded + shot every operator group; this covers rail-hidden viewports via the top-bar 🛡. Never
+  // publish an operator teaser.
   if (process.env.TEASER_ADMIN === "1" && !railVisible) {
-    await step("admin", async () => {
+    await step("admin-groups", async () => {
       await closeAll(page);
       const btn = page.locator('header .nav-desktop button[title^="Instance admin"]');
       await btn.waitFor({ state: "visible", timeout: 8000 });
       await btn.click();
       await page.waitForSelector(".panel", { timeout: 6000 });
-      await page.waitForTimeout(400);
-      await shot(page, v.id, "admin", "Instance admin (operator only)");
+      await captureGroups(page, v.id, "admin", "Instance admin");
     });
   }
 
