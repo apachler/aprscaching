@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { TerminalSession, parseAnsi, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType } from "@aprsweb/packet";
+import { TerminalSession, parseAnsi, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport } from "@aprsweb/packet";
+import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
+
+/** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
+export interface TermTransport extends Transport { connect(baud?: number): Promise<void>; disconnect(): Promise<void>; }
+export type MakeTransport = (onFrame: (f: Ax25Frame) => void, onClose: (e?: Error) => void) => TermTransport;
 
 /**
  * PacketTerminal (docs/25 P1) — the Graphic-Packet-reborn web terminal: multi-channel connected-mode
@@ -41,13 +46,13 @@ function AnsiLine({ text }: { text: string }) {
   return <>{spans.map((s, i) => <span key={i} style={ansiStyle(s.fg, s.bg, s.bold)}>{s.text}</span>)}</>;
 }
 
-export function PacketTerminal(props: { callsign: string }) {
+export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTransport; autoConnect?: string }) {
   const [, forceRender] = useReducer((n) => n + 1, 0);
   const notify = useCallback(() => forceRender(), []);
   const fmt = useFmt();
 
   const sessionRef = useRef<TerminalSession | null>(null);
-  const transportRef = useRef<SerialKissTransport | null>(null);
+  const transportRef = useRef<TermTransport | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const namesRef = useRef(new StationRegistry());
 
@@ -78,10 +83,11 @@ export function PacketTerminal(props: { callsign: string }) {
   });
 
   async function openPort() {
-    if (!webSerialSupported()) { setErr("Web Serial needs Chromium (desktop). Use the operator-local ingest otherwise."); return; }
+    if (!props.makeTransport && !webSerialSupported()) { setErr("Web Serial needs Chromium (desktop). Use the operator-local ingest otherwise."); return; }
     setErr(null);
     try {
-      const transport = new SerialKissTransport((f) => sessionRef.current?.onFrame(f), (e) => { if (e) setErr(e.message); setPortOpen(false); });
+      const make: MakeTransport = props.makeTransport ?? ((onF, onC) => new SerialKissTransport(onF, onC));
+      const transport = make((f) => sessionRef.current?.onFrame(f), (e) => { if (e) setErr(e.message); setPortOpen(false); });
       const session = new TerminalSession(myCall, transport, notify, namesRef.current);
       await transport.connect(9600);
       transportRef.current = transport; sessionRef.current = session;
@@ -96,6 +102,21 @@ export function PacketTerminal(props: { callsign: string }) {
     setPortOpen(false); setActiveId(null); notify();
   }
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); void transportRef.current?.disconnect(); }, []);
+
+  // Simulator/demo convenience: when an injected transport + autoConnect are given (never in the real
+  // Web Serial path), open the port and open a channel on mount so the surface renders populated.
+  useEffect(() => {
+    if (!props.makeTransport || !props.autoConnect) return;
+    let cancelled = false;
+    void (async () => {
+      await openPort();
+      if (cancelled) return;
+      const s = sessionRef.current;
+      if (s) { const id = s.connect(props.autoConnect!.trim().toUpperCase()); setActiveId(id); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function connect() {
     const s = sessionRef.current; if (!s || remoteCall.trim().length < 3) return;
@@ -113,7 +134,7 @@ export function PacketTerminal(props: { callsign: string }) {
   const active = session?.channels.find((c) => c.id === activeId) ?? session?.channels[0];
   const monitor = session?.monitor ?? [];
 
-  if (!webSerialSupported()) {
+  if (!props.makeTransport && !webSerialSupported()) {
     return <p className="muted">The packet terminal needs Web Serial (Chromium desktop). On other devices, run the operator-local ingest.</p>;
   }
 
