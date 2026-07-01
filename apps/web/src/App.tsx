@@ -58,7 +58,11 @@ const TOUR_STEPS: TourStep[] = [
 ];
 
 export function App() {
-  const mapEl = useRef<HTMLDivElement>(null);
+  // Callback-ref node (not a plain ref): the map must initialise exactly when its container mounts.
+  // If `active` is already true on first render (a returning explorer / signed-in user reloading, where
+  // sessionStorage/session make `active` true before the app subtree mounts), an effect keyed only on
+  // `active` would run once while the container is still absent and never re-run — leaving a blank map.
+  const [mapNode, setMapNode] = useState<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
   const draftMarker = useRef<maplibregl.Marker | null>(null);
@@ -135,6 +139,10 @@ export function App() {
     setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
     setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
     setShowFilter(false);
+    // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
+    // and its draft marker, not leave it stuck on top of the destination panel.
+    setMode("view"); setDraft(null);
+    draftMarker.current?.remove(); draftMarker.current = null;
     setSelectedId(null); setRemote(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
@@ -290,9 +298,9 @@ export function App() {
 
   // ---- init map once ----
   useEffect(() => {
-    if (!active || !mapEl.current || map.current) return;
+    if (!active || !mapNode || map.current) return;
     const m = new maplibregl.Map({
-      container: mapEl.current, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
+      container: mapNode, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
@@ -318,7 +326,7 @@ export function App() {
       });
     });
     return () => { m.remove(); map.current = null; };
-  }, [refresh, active]);
+  }, [refresh, active, mapNode]);
 
   // ---- render cache markers (diffed against the live map) ----
   useEffect(() => {
@@ -591,7 +599,7 @@ export function App() {
         )}
 
         <div className="mapwrap">
-          <div ref={mapEl} className="map" />
+          <div ref={setMapNode} className="map" />
           {ready && center && (
             <div className="coordreadout">
               <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>
