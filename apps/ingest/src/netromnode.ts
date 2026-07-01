@@ -5,8 +5,11 @@
  * up to the gateway (the workbench node view reads them). The connected-mode node *session* (a user
  * connecting in and issuing C <dest> to route through us) rides the same KISS link and is validate-at-deploy.
  */
-import { NetromNode, type LearnedRoute, type NodeStore, type NodeMheard } from "@aprsweb/packet";
-import { decodeFrame, parseAddr, addrStr, PID_NETROM } from "@aprsweb/ax25";
+import {
+  NetromNode, NetromCircuit, nodeConnectThrough, encodeNetrom, decodeNetrom,
+  type LearnedRoute, type NodeStore, type NodeMheard, type CircuitDialer, type RelayController,
+} from "@aprsweb/packet";
+import { decodeFrame, parseAddr, addrStr, sameAddr, PID_NETROM, type Ax25Address } from "@aprsweb/ax25";
 import type { KissTnc } from "./kiss.js";
 
 const NODES_DST = { call: "NODES", ssid: 0 };
@@ -20,11 +23,34 @@ export interface NetromNodeOpts {
 export class NetromNodeRunner {
   private node: NetromNode;
   private port: string;
+  private me: Ax25Address;
   private heard = new Map<string, NodeMheard>();   // callsign -> last-heard (for the node's MHeard list)
+  private circuits: NetromCircuit[] = [];          // active connect-through circuits (for inbound demux)
+  private nextIdx = 1;
   constructor(private kiss: KissTnc, private o: NetromNodeOpts) {
-    this.node = new NetromNode({ call: parseAddr(o.mycall), alias: o.alias }, { pathQuality: o.pathQuality });
+    this.me = parseAddr(o.mycall);
+    this.node = new NetromNode({ call: this.me, alias: o.alias }, { pathQuality: o.pathQuality });
     this.port = o.port ?? "kiss-tnc";
   }
+
+  /** The node's connect-through handler (docs/29 F2): `C <dest>` → route + bridge to an onward circuit. */
+  connectThrough(): (dest: string, relay: RelayController) => void { return nodeConnectThrough(this.node, this.dialer); }
+
+  /** A CircuitDialer that opens a NET/ROM L4 circuit to a neighbour over KISS (validate-at-deploy on RF). */
+  private dialer: CircuitDialer = (route, hooks) => {
+    const idx = this.nextIdx++ & 0xff;
+    const circuit = new NetromCircuit({
+      send: (p) => {                                 // wrap the transport packet in the network header → UI/NETROM to the neighbour
+        const bytes = encodeNetrom({ net: { origin: this.me, dest: route.dest, ttl: 25 }, tp: p.tp, info: p.info });
+        this.kiss.sendFrame({ dst: route.neighbor, src: this.me, command: true, type: "UI", pf: false, pid: PID_NETROM, info: bytes });
+      },
+      deliver: (b) => hooks.onData(b),
+      state: (s) => { if (s === "disconnected") { this.circuits = this.circuits.filter((c) => c !== circuit); hooks.onClose(); } },
+    }, { index: idx, id: idx }, { user: this.me, node: route.dest });
+    this.circuits.push(circuit);
+    circuit.connect(4);
+    return { send: (bytes) => circuit.send(bytes), disconnect: () => circuit.disconnect() };
+  };
 
   /** A synchronous NodeStore over the live routing table + MHeard — feeds an inbound NodeSession CLI. */
   nodeStore(activeUsers: () => string[]): NodeStore {
@@ -51,8 +77,19 @@ export class NetromNodeRunner {
     const f = decodeFrame(bytes);
     if (!f) return;
     this.heard.set(addrStr(f.src), { call: addrStr(f.src), port: this.port, lastHeard: Math.floor(Date.now() / 1000) });
-    if (f.type !== "UI" || f.pid !== PID_NETROM) return;
-    if (f.dst.call !== NODES_DST.call || !f.info) return;
+    if (f.type !== "UI" || f.pid !== PID_NETROM || !f.info) return;
+
+    // NET/ROM L3 addressed to us (not the "NODES" broadcast) → route the transport packet to its circuit
+    if (sameAddr(f.dst, this.me)) {
+      const pkt = decodeNetrom(f.info);
+      if (pkt && this.circuits.length) {
+        // single-circuit typical; with several, route to the connecting/connected one (full demux is validate-at-deploy)
+        const c = this.circuits.find((x) => x.state === "connecting" || x.state === "connected") ?? this.circuits[0]!;
+        c.onPacket(pkt.tp, pkt.info);
+      }
+      return;
+    }
+    if (f.dst.call !== NODES_DST.call) return;
     const learned = this.node.consume(f.info, f.src, this.port);
     if (learned) { console.log(`[netrom] learned ${learned} route(s) from ${addrStr(f.src)}`); void this.mirror(); }
   }

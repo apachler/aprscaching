@@ -75,6 +75,7 @@ if (env.KISS_TNC_HOST) {
     services.push({
       addr: parseAddr(env.NETROM_CALL), name: "NODE",
       app: (r) => new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!),
+      onConnect: node.connectThrough(),           // C <dest> → route + bridge onward (docs/29 F2)
     });
     console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
   }

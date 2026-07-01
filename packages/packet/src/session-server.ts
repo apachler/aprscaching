@@ -6,13 +6,19 @@
  * the "answer a connect" half of a node/BBS: a station connects to our SSID, gets the greeting, and drives
  * the command interpreter, one line at a time, until BYE/disconnect.
  */
-import { serveApp, type LineApp } from "./link-app.js";
+import { serveApp, type LineApp, type RelayController } from "./link-app.js";
 import { decodeFrame, addrStr, sameAddr, type Ax25Address, type Ax25Frame, type LinkConfig, type ConnectedLink } from "@aprsweb/ax25";
 
 /** A service we answer for: its address (call+SSID) and a factory building the app for each caller.
  *  The factory MAY be async (e.g. a BBS that loads the caller's mail snapshot before greeting) — the
  *  server holds the connect until it resolves; the peer's SABM retransmit covers the warm-up window. */
-export interface Service { addr: Ax25Address; app: (remote: Ax25Address) => LineApp | Promise<LineApp>; name?: string }
+export interface Service {
+  addr: Ax25Address;
+  app: (remote: Ax25Address) => LineApp | Promise<LineApp>;
+  name?: string;
+  /** Route the session onward (NET/ROM connect-through) when the app requests `C <dest>`. */
+  onConnect?: (dest: string, relay: RelayController, remote: Ax25Address) => void;
+}
 
 export interface SessionServerOpts {
   send: (f: Ax25Frame) => void;
@@ -64,6 +70,7 @@ export class SessionServer {
       slot.warming = false;
       slot.link = serveApp(svc.addr, remote, app, {
         send: this.o.send, clock: this.o.clock, cfg: this.o.cfg,
+        onConnect: svc.onConnect ? (dest, relay) => svc.onConnect!(dest, relay, remote) : undefined,
         onState: (s) => {
           if (s === "disconnected") {
             this.sessions.delete(key);
