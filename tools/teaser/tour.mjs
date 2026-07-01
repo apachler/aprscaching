@@ -98,22 +98,25 @@ async function openProfileAdvanced(page, btnText) {
 async function step(name, fn) {
   try { await fn(); } catch (e) { console.log("   ! skip", name, "-", String(e.message).split("\n")[0]); }
 }
-// Open the Workbench panel (desktop rail, else Profile → Advanced → Workbench).
+// Open the Workbench panel deterministically via the ?view=workbench deep-link (the same one-shot
+// mechanism the Site map / sitemap.xml consumers use) rather than navigating the stateful rail. This
+// works on EVERY viewport (desktop/tablet/mobile — navigate() just calls setShowWB) and is immune to
+// accumulated journey state (a stuck "Hide a cache" mode won't swallow the open). Gate readiness on the
+// "Packet terminal" group being attached, retrying once.
 async function openWorkbench(page) {
-  await closeAll(page);
-  if (!(await clickAny(page, [".rail button[title='Bench']"]))) {
-    await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]);
-    await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
-    await clickAny(page, [".group-toggle:has-text('Advanced')"]);
-    await clickAny(page, ["button:has-text('Workbench')"]);
+  const marker = () => page.locator(".group-toggle", { hasText: "Packet terminal" }).first();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto(`${BASE}/?view=workbench#11.5/47.078/15.43`, { waitUntil: "load" });
+    await ready(page);
+    try { await marker().waitFor({ state: "attached", timeout: 6000 }); await page.waitForTimeout(300); return; }
+    catch { /* retry the open once */ }
   }
-  await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
-  await page.waitForTimeout(400);
+  throw new Error("workbench did not open");
 }
 // Expand a named workbench group (e.g. "Packet terminal", "Tools") + scroll it into view for the shot.
 async function expandGroup(page, title) {
-  const toggle = page.locator(`.group-toggle:has-text('${title}')`).first();
-  if (!(await toggle.isVisible().catch(() => false))) throw new Error(`group '${title}' not found`);
+  const toggle = page.locator(".group-toggle", { hasText: title }).first();
+  await toggle.waitFor({ state: "visible", timeout: 6000 });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
   await page.waitForTimeout(500);
   await toggle.scrollIntoViewIfNeeded().catch(() => {});
