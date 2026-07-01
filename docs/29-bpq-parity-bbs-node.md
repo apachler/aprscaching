@@ -131,8 +131,13 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   broadcasts (quality = combineQuality(advertised, path), obsolescence init 6 with decay, locked routes
   survive), builds our top-N NODES broadcast, picks the best next hop. Unit-tested. Ingest
   `netromnode.ts` `NetromNodeRunner` drives it over KISS (periodic UI→"NODES" TX + inbound consume +
-  gateway node-table mirror). **Validate-at-deploy:** the connected-mode node *session* (a user connecting
-  in and `C <dest>` routing a circuit *through* us).
+  gateway node-table mirror).
+- **F2 connect-through:** `serveApp` gains a relay mode + `onConnect`; `nodeConnectThrough(node, dial)`
+  resolves the best route on `C <dest>` and splices the inbound user link to an onward L4 circuit
+  (transparent byte relay; no-route → tells the user; far close → back to the node prompt). Unit-tested
+  end-to-end over loopback against a real `NetromCircuit` echo peer. Ingest `NetromNodeRunner.dialer` opens
+  a real `NetromCircuit` over KISS (network-header-framed NETROM UI to the neighbour) + demuxes inbound
+  transport packets. **Validate-at-deploy:** the onward RF leg + multi-circuit demux (needs a live neighbour).
 - **F3 connected digi:** AX.25 codec now round-trips the digi H-bit (`digisRepeated`); `digipeatAx25`
   (pure, unit-tested) repeats ANY frame type whose next un-repeated via-hop is our call/alias (sets the
   H-bit). Ingest `ConnectedDigipeater` (KISS `onRaw`, dedup + viscous delay) relays NET/ROM + FBB through
@@ -157,6 +162,19 @@ Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** laye
   due-partner filtering (rf-fbb only, interval-gated). The ingest supplies the fetch `GatewayApi` +
   `kissForwardLink` (a real AX.25 `ConnectedLink` over KISS-TCP). **Validate-at-deploy:** multi-hop connect
   scripts (`C NODE1` → `C 3 DB0XYZ`), AXUDP partners, and LZHUF B0/B1 compression.
+
+## Validate-at-deploy vs. genuinely blocked
+Everything whose **logic** can be exercised over the loopback is built + tested: the FBB codec + scheduler,
+the NET/ROM wire + circuit + node + connect-through, the connected-mode session server, and the inbound
+BBS store. What remains is either a **real-radio leg** (KISS timing, a live neighbour for connect-through /
+multi-hop / multi-circuit demux, an AXUDP peer) or **byte-exact FBB interop** — both need on-air testing,
+not more code.
+
+**LZHUF B0/B1** is the one item deliberately *not* built: its correctness *is* byte-exact compatibility
+with FBB's fixed Huffman/position tables, which a round-trip test cannot prove (it only checks internal
+consistency) and whose ~128 table constants are silently error-prone. Building it would ship intricate
+bit-twiddling whose test gives false assurance — so it stays a documented follow-on to validate against a
+real FBB partner, not a headless build. ASCII FBB forwarding is fully interoperable without it.
 
 ## Deferred (out of scope this pass)
 Winlink/RMS gateway, chat/conference node, HF/Pactor, telnet node access, modulo-128 / SREJ, DAMA,
