@@ -9,7 +9,7 @@ import path from "node:path";
 
 const OUT = (process.env.OUT ?? new URL("./tour", import.meta.url).pathname).replace(/\/?$/, "/");
 const EXE = process.env.PW_CHROMIUM || undefined;
-const HOLD = Number(process.env.HOLD ?? 2.4) * 1000; // ms per step (incl. incoming fade)
+const HOLD = Number(process.env.HOLD ?? 4.0) * 1000; // ms per step (incl. incoming fade) — ~3.5s of full view
 const FADE = Number(process.env.FADE ?? 0.45) * 1000; // ms crossfade
 const W = 1920, H = 1080;
 // Static position of the viewport tag (desktop/tablet/mobile) — fixed + left-anchored, independent of

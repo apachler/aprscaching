@@ -303,7 +303,21 @@ for (const v of VIEWS) {
     });
     await closeAll(page);
     await page.waitForSelector(".station-pin", { timeout: 8000 });
-    await page.locator(".station-pin").first().click();
+    // Click via the DOM, not Playwright's .click(): MapLibre markers get live transform updates from
+    // the WS position stream, so actionability's "element is stable" wait can hang the full 30s. The
+    // marker is a real <button>, so el.click() fires its React onClick regardless of motion/position.
+    // Prefer a pin sitting inside the viewport (below the top bar) for a clean shot.
+    const clicked = await page.evaluate(() => {
+      const pins = [...document.querySelectorAll(".station-pin")];
+      const inView = pins.find((p) => {
+        const r = p.getBoundingClientRect();
+        return r.top > 60 && r.left > 0 && r.bottom < innerHeight && r.right < innerWidth;
+      });
+      const el = inView || pins[0];
+      el?.click();
+      return !!el;
+    });
+    if (!clicked) throw new Error("no station pin to click");
     await page.waitForSelector(".panel:has-text('last heard'), .panel .logform", { timeout: 8000 });
     await page.waitForTimeout(600);
     await shot(page, v.id, "station", "Station detail — track, telemetry & packets");
