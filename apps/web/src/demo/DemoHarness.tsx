@@ -4,14 +4,44 @@
  * (loopback KISS peer + canned BBS API) so the UI can be designed and screenshotted without a TNC,
  * gateway, or sign-in. This is the bench the Stage-3 Cogmind "flip" (docs/24 / docs/25 P5) is built on.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PacketTerminal } from "../packet/PacketTerminal.js";
 import { BbsPanel } from "../live/BbsPanel.js";
+import { NavRail } from "../NavRail.js";
 import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import "../styles.css";
 
 const ME = "OE8APR-7";
+const noop = () => {};
+
+// The real desktop 3-pane shell (top bar + nav rail + map + docked panel), so the surfaces are shown
+// at their true docked width in context — the panel is a fixed ~392px column beside the map, by design.
+function AppShell({ active, title, children, childIsPanel }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean }) {
+  return (
+    <div className="app" style={{ height: "100dvh" }}>
+      <header className="topbar">
+        <img className="logo" src="/brand/wordmark.png" alt="APRScaching" />
+        <span className="muted">· 7 caches in view</span>
+        <span className="spacer" />
+        <button className="idchip ok"><span className="mono">{ME}</span></button>
+        <span className="nav-desktop"><button>Nearby</button><button>Activity</button><button>👤</button></span>
+        <button className="primary hide-cta">+ Hide a cache</button>
+      </header>
+      <div className="shell">
+        <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onRanks={noop}
+                 onWorkbench={noop} onMail={noop} onProfile={noop} onSettings={noop} />
+        <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
+        {childIsPanel ? children : (
+          <aside className="panel right">
+            <div className="row between"><h2>{title}</h2><span className="spacer" /><button className="icon" aria-label="Close">✕</button></div>
+            {children}
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Neutralise the app's absolute/docked .panel positioning so each surface sizes to its content for the
 // side-by-side harness (BbsPanel renders its own .panel; PacketTerminal is wrapped in one below).
@@ -26,6 +56,18 @@ export function DemoHarness({ which }: { which: string }) {
   const showBbs = which === "bbs" || which === "1" || which === "both" || which === "";
   const [bbsReady, setBbsReady] = useState(false);
   useEffect(() => { installBbsSim(); setBbsReady(true); }, []);
+
+  // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
+  if (which === "app-packet") {
+    return (
+      <AppShell active="workbench" title="📻 Packet terminal">
+        <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
+      </AppShell>
+    );
+  }
+  if (which === "app-bbs") {
+    return <AppShell active="bbs" title="✉ BBS" childIsPanel>{bbsReady && <BbsPanel callsign={ME} onClose={noop} />}</AppShell>;
+  }
 
   return (
     <div className="app" style={{ minHeight: "100dvh", background: "var(--surface)", padding: 20 }}>
