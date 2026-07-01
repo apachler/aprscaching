@@ -6,3 +6,4 @@ export * from "./hostmode.js";
 export * from "./bbs.js";
 export * from "./forward.js";
 export * from "./netrom.js";
+export * from "./netrom-wire.js";
