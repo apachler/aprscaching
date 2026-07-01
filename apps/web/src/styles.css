@@ -328,33 +328,27 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .tool-out { background: var(--surface-2); border-radius: 8px; padding: 8px; font-size: 12px; margin: 0; white-space: pre-wrap; }
 .tool-prompt { border: 1px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: color-mix(in oklch, var(--warn) 8%, transparent); }
 
-/* packet terminal (docs/25 P1) — built token-driven for the Stage-3 Cogmind flip */
-.packet-term { display: grid; gap: 8px; }
-.pt-side, .pt-main, .pt-mon { display: grid; gap: 8px; align-content: start; min-width: 0; }
-/* Graphic-Packet multi-pane workspace: channels/connect | active window | monitor, once the panel is
-   wide (the wide surface). Stacks to a single column in a slim drawer/sheet (container query, css.md). */
-@container panel (min-width: 52rem) {
-  .packet-term { grid-template-columns: 250px minmax(0, 1fr) 320px; align-items: start; }
-  .pt-bar { grid-column: 1 / -1; }
-  .pt-side { grid-column: 1; }
-  .pt-main { grid-column: 2; }
-  .pt-mon  { grid-column: 3; }
-  .pt-out { max-height: 62vh; min-height: 340px; }
-  .pt-mon-out { max-height: 66vh; min-height: 340px; }
-}
-.pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-.pt-chan-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+/* packet terminal (docs/25 P1) — the Graphic Packet layout: a numbered channel bar on top, ONE big
+   central window (the selected channel, or channel 0 = monitor), a status line, command line, and a
+   function/macro bar. Built token-driven so the Stage-3 Cogmind flip is a skin swap. */
+.packet-term { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* channel bar — GP's numbered channel buttons (0 Monitor, 1..N), inline connect pushed to the right */
+.pt-chanbar { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.pt-cbtn { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 4px 9px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); cursor: pointer; }
+.pt-cbtn.on { background: var(--surface); border-color: color-mix(in oklch, var(--accent) 55%, transparent); font-weight: 600; }
+.pt-cbtn .pt-state { color: var(--muted); text-transform: uppercase; }
+.pt-cbtn .pt-x { color: var(--muted); }
+.pt-cbtn .pt-count { color: var(--muted); font-size: 11px; }
 .pt-ch-n { display: inline-block; min-width: 15px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
-.pt-tab.on .pt-ch-n { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 55%, transparent); }
-/* in the wide side pane the channels stack as a vertical list (GP numbered-channel list) */
-.pt-side .pt-tabs { flex-direction: column; align-items: stretch; }
-.pt-side .pt-tab { text-align: left; border-radius: 6px; }
-.pt-tab { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px 6px 0 0; background: var(--surface-2); cursor: pointer; }
-.pt-tab.on { border-bottom-color: transparent; background: var(--surface); font-weight: 600; }
-.pt-tab .pt-state { color: var(--muted); text-transform: uppercase; }
-.pt-tab .pt-x { margin-left: 6px; color: var(--muted); }
-.pt-window { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-.pt-out { margin: 0; padding: 8px; min-height: 120px; max-height: 260px; overflow-y: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
+.pt-cbtn.on .pt-ch-n { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 55%, transparent); }
+.pt-connect-inline { display: flex; gap: 4px; margin-left: auto; }
+.pt-connect-inline input { width: 150px; }
+.pt-fnbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pt-fnbar .pt-macros { padding: 0; }
+.pt-fnbar .pt-ctext { margin-left: auto; }
+.pt-window { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.pt-out { margin: 0; padding: 10px; min-height: 300px; max-height: 60vh; flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
 .pt-line.tx { color: var(--accent); }
 .pt-line.sys { color: var(--muted); font-style: italic; }
 .pt-status { padding: 4px 8px; border-top: 1px solid var(--hair); background: var(--surface-2); font-size: 11.5px; color: var(--muted); }
@@ -362,7 +356,7 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .pt-cmd input { flex: 1; min-width: 0; }
 .pt-macros { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 8px; }
 .pt-macro { font-size: 11.5px; padding: 2px 7px; }
-.pt-mon-out { margin: 6px 0 0; padding: 8px; max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.4; background: var(--surface-2); border-radius: 8px; }
+.pt-mon-out { background: var(--surface-2); font-size: 11.5px; line-height: 1.4; }
 .pt-mon-tag { font-weight: 700; }
 .pt-ctext input { width: 100%; margin-top: 6px; }
 
