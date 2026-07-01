@@ -550,7 +550,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               sysop={sysop} onAdmin={() => openOnly(() => setShowAdmin(true))} />
       <div className="shell">
         <NavRail
-          active={showNearby ? "nearby" : showActivity ? "activity" : showMessages ? "messages" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
+          active={showAdmin ? "admin" : showNearby ? "nearby" : showActivity ? "activity" : showMessages ? "messages" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
           onMap={closeAll}
           onNearby={() => openOnly(() => setShowNearby(true))}
           onActivity={() => openOnly(() => setShowActivity(true))}
@@ -560,7 +560,8 @@ export default function Platform({ session, startTour }: { session: SessionState
           onProfile={() => openOnly(() => setShowProfile(true))}
           onSettings={() => openOnly(() => setShowSettings(true))}
           pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a && (sysop || !a.sysop))}
-          onLaunchApp={launchApp} />
+          onLaunchApp={launchApp}
+          sysop={sysop} onAdmin={() => openOnly(() => setShowAdmin(true))} />
 
         {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
         {mode === "hide" && (

@@ -11,6 +11,7 @@ export function NavRail(props: {
   onMap: () => void; onNearby: () => void; onActivity: () => void; onMessages: () => void; onRanks: () => void;
   onWorkbench: () => void; onProfile: () => void; onSettings: () => void;
   pinnedApps?: WorkbenchApp[]; onLaunchApp?: (id: WorkbenchApp["id"]) => void;
+  sysop?: boolean; onAdmin?: () => void; // instance-operator only — the Instance-admin surface
 }) {
   const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
     <button className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`} onClick={onClick}
@@ -30,6 +31,8 @@ export function NavRail(props: {
       {(props.pinnedApps ?? []).map((app) => item(app.id, app.icon, app.label, () => props.onLaunchApp?.(app.id), "rail-pinned"))}
       {item("profile", "profile", "You", props.onProfile, "rail-sp")}
       {item("settings", "settings", "Setup", props.onSettings)}
+      {/* operator-only: the instance-admin surface — hidden for normal users (server-gated too) */}
+      {props.sysop && props.onAdmin && item("admin", "shield-check", "Admin", props.onAdmin)}
     </nav>
   );
 }

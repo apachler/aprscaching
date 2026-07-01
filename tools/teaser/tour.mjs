@@ -179,6 +179,7 @@ async function launchWbApp(page, label, waitSel) {
 const LABELS = {
   Map: "Live cache map", Nearby: "Nearby caches", Activity: "Activity feed", Ranks: "Leaderboard",
   Bench: "Workbench — APRS toolset", BBS: "BBS — store & forward mail", You: "Profile", Setup: "Settings",
+  Admin: "Instance admin — operator only",
 };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "view";
 
@@ -456,12 +457,15 @@ for (const v of VIEWS) {
     await shot(page, v.id, "sitemap", "Site map");
   });
 
-  // Operator "Instance Admin" surface — EXCLUDED from public teasers. Only captured when explicitly
-  // requested via TEASER_ADMIN=1 (which also sets ADMIN_CALLSIGNS so the 🛡 entry renders). Never publish.
-  if (process.env.TEASER_ADMIN === "1") {
+  // Operator "Instance Admin" surface — EXCLUDED from public teasers, captured only with TEASER_ADMIN=1
+  // (which sets ADMIN_CALLSIGNS so the sysop entry renders). On desktop the rail walk above already
+  // captured it (it's a first-class rail destination now); only cover the non-rail viewports here, via
+  // the top-bar 🛡 that shows below 1024px. Never publish an operator teaser.
+  if (process.env.TEASER_ADMIN === "1" && !railVisible) {
     await step("admin", async () => {
+      await closeAll(page);
       const btn = page.locator('header .nav-desktop button[title^="Instance admin"]');
-      await btn.waitFor({ state: "visible", timeout: 6000 });
+      await btn.waitFor({ state: "visible", timeout: 8000 });
       await btn.click();
       await page.waitForSelector(".panel", { timeout: 6000 });
       await page.waitForTimeout(400);
