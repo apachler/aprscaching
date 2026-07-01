@@ -268,6 +268,7 @@ export const supportUrl = `${API_BASE}/support`;
 
 // ---- browser-direct RF ingest (docs/16 H1) — forward Web Serial KISS frames to a gateway ----
 import type { Packet } from "@aprsweb/shared";
+import { signIngest } from "./crypto.js";
 export type { Packet };
 /**
  * Forward decoded RF packets to a gateway's /ingest. Authenticated by the ingest secret, so this is
@@ -290,7 +291,6 @@ export async function ingestPackets(packets: Packet[], secret: string, base = AP
  * Browser-heard frames are stored IGate-less and stay Tier C.
  */
 export async function ingestSigned(packets: Packet[], callsign: string, base = API_BASE): Promise<{ ok: boolean; stored: number }> {
-  const { signIngest } = await import("./crypto.js");
   const headers = await signIngest(callsign, packets);
   if (!headers) throw new Error("this browser can't sign (needs Ed25519)");
   const res = await fetch(`${base.replace(/\/+$/, "")}/ingest`, {
