@@ -172,7 +172,13 @@ export function App() {
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
   // Launch a workbench app: EVERY app opens its own dedicated surface (WorkbenchAppSurface). Used by
   // the workbench launcher and the pinned rail items.
-  const launchApp = useCallback((id: WorkbenchAppId) => openOnly(() => setWbApp(id)), [openOnly]);
+  // Operator-only apps (NET/ROM node, remote box) drive the instance's server RF box — refuse to open them
+  // for non-operators even by deep link. Field-station apps (terminal/BBS/decoder/tools/rig) are open to all.
+  const launchApp = useCallback((id: WorkbenchAppId) => {
+    if (appById(id)?.sysop && !sysop) return;
+    openOnly(() => setWbApp(id));
+  }, [openOnly, sysop]);
+  const visibleApps = useMemo(() => WORKBENCH_APPS.filter((a) => sysop || !a.sysop), [sysop]);
 
   // Navigate to a surface by its manifest key (Site map rows + ?view= deep-links share this).
   const navigate = useCallback((key: string) => {
@@ -580,7 +586,7 @@ export function App() {
           onWorkbench={() => openOnly(() => setShowWB(true))}
           onProfile={() => openOnly(() => setShowProfile(true))}
           onSettings={() => openOnly(() => setShowSettings(true))}
-          pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a)}
+          pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a && (sysop || !a.sysop))}
           onLaunchApp={launchApp} />
 
         {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
@@ -617,7 +623,7 @@ export function App() {
         )}
         {showWB && mode === "view" && (
           <WorkbenchPanel onClose={() => setShowWB(false)}
-                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin} />
+                          apps={visibleApps} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin} />
         )}
         {wbApp && mode === "view" && (
           <WorkbenchAppSurface app={wbApp} callsign={callsign} verified={verified} map={map.current} onClose={() => setWbApp(null)} />

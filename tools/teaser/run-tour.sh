@@ -27,7 +27,12 @@ echo "==> build web (offline grid basemap, api -> :$PORT_API)"
 
 echo "==> start Node gateway on :$PORT_API"
 pkill -9 -f "src/server.ts" 2>/dev/null || true; sleep 1
-setsid bash -c "DB_PATH='$DB' PORT=$PORT_API INSTANCE=oe.teaser FED_PRIVATE_KEY='' exec pnpm --filter @aprsweb/node-gateway start" >"$OUT/api.log" 2>&1 &
+# The operator "Instance Admin" surface is EXCLUDED from public teasers: we do NOT set ADMIN_CALLSIGNS,
+# so the seeded OE8APR signs in as a normal user (whoami sysop=false) and the 🛡 admin entry never renders.
+# Capture it on direct request ONLY via TEASER_ADMIN=1 (sets ADMIN_CALLSIGNS + an extra admin step) —
+# never use that for anything published.
+ADMIN_ENV=""; [ "${TEASER_ADMIN:-0}" = "1" ] && ADMIN_ENV="ADMIN_CALLSIGNS=OE8APR"
+setsid bash -c "DB_PATH='$DB' PORT=$PORT_API INSTANCE=oe.teaser FED_PRIVATE_KEY='' $ADMIN_ENV exec pnpm --filter @aprsweb/node-gateway start" >"$OUT/api.log" 2>&1 &
 API_PID=$!
 wait_url "http://127.0.0.1:$PORT_API/health" || { echo "gateway did not start"; tail "$OUT/api.log"; exit 1; }
 

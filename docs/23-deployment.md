@@ -88,6 +88,16 @@ or a remote cloud gateway. The four topologies below choose where the **gateway/
 - **Env (Node runtime, 1–3):** `DB_PATH`, `PORT`, plus ingest: `APRSIS_HOST/PORT/CALLSIGN/PASSCODE/
   FILTER`, `INGEST_URL`, `INGEST_SECRET`, `BATCH_MS`. (CF runtime #4 uses `wrangler.toml` bindings +
   `wrangler secret`.)
+- **Instance operator (sysop):** set **`ADMIN_CALLSIGNS`** (gateway) to the comma-separated licensed
+  call(s) of the ham who deploys this instance, e.g. `ADMIN_CALLSIGNS=OE8APR` (`OE8APR,DL1ABC` for
+  several). Only these calls — when **signed in** — may administer the instance (federation peers +
+  trust, FBB forwarding partners/rules, NET/ROM node routes) via the in-app **Instance Admin** panel;
+  every such write is gated server-side (`requireSysop`), not merely hidden. **Absent ⇒ no web sysop**
+  (secure default: the config endpoints are locked; the operator-local ingest still uses
+  `INGEST_SECRET`). Identity lives in env by design — who can administer the box is a deploy-time
+  decision, not something a signed-in session can escalate. Server-side ingest/RF-box config is
+  therefore operator-only; **web-only users get browser-direct RF (Web Serial / BLE / Web Audio) as their
+  own field station** — no box required.
 - **DB migrations:** Node → `migrate.ts` applies `db/migrations` to the SQLite file. CF → `wrangler
   d1 migrations apply`.
 - **TLS:** self-host (1–2) use **Caddy** (automatic Let's Encrypt). Behind Cloudflare (3) TLS is

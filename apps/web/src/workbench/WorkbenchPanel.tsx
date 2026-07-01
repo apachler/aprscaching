@@ -14,7 +14,9 @@ export function WorkbenchPanel(props: {
 }) {
   return (
     <Panel title="📡 Workbench" onClose={props.onClose}>
-      <p className="muted">Launch a workbench app, or pin it (📌) to the left rail for one-click access.</p>
+      <p className="muted">Your <strong>field station</strong>: these apps drive a radio straight from this
+        browser (Web Serial / Bluetooth / audio) or run on the platform — so you can operate off-grid with
+        just a laptop and a rig, no server box. Launch one, or pin it (📌) to the left rail.</p>
 
       <div className="wb-apps" role="list">
         {props.apps.map((app) => {
@@ -23,7 +25,8 @@ export function WorkbenchPanel(props: {
             <div key={app.id} className="wb-app" role="listitem">
               <button className="wb-app-launch" onClick={() => props.onLaunchApp(app.id)}>
                 <Icon name={app.icon} size={22} />
-                <span className="wb-app-t"><span className="wb-app-label">{app.label}</span>
+                <span className="wb-app-t">
+                  <span className="wb-app-label">{app.label}{app.sysop && <span className="wb-app-op" title="Operator only — administers this instance's server RF box"> · operator</span>}</span>
                   <span className="wb-app-blurb muted">{app.blurb}</span></span>
               </button>
               <button className={`icon wb-pin${pinned ? " on" : ""}`} aria-pressed={pinned}

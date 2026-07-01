@@ -377,12 +377,16 @@ for (const v of VIEWS) {
     await page.waitForTimeout(400);
     await shot(page, v.id, "workbench-launcher", "Workbench — app launcher (pin to rail)");
   });
-  await step("node", async () => {
-    await launchWbApp(page, "NET/ROM node", ".node-panel");
-    await clickAny(page, [".node-panel button:has-text('NODES')"]); // reveal the NET/ROM node view
-    await page.waitForTimeout(400);
-    await shot(page, v.id, "node", "NET/ROM node · digipeater · sysop");
-  });
+  // NET/ROM node is an OPERATOR-only app (administers the instance's server box) — hidden from the field
+  // user's launcher, so it's captured only for an operator teaser (TEASER_ADMIN=1), never in public ones.
+  if (process.env.TEASER_ADMIN === "1") {
+    await step("node", async () => {
+      await launchWbApp(page, "NET/ROM node", ".node-panel");
+      await clickAny(page, [".node-panel button:has-text('NODES')"]); // reveal the NET/ROM node view
+      await page.waitForTimeout(400);
+      await shot(page, v.id, "node", "NET/ROM node · digipeater · sysop");
+    });
+  }
   await step("tools", async () => {
     await launchWbApp(page, "Tools", ".tools-panel");
     await shot(page, v.id, "tools", "Tools — sandboxed plugins");
@@ -412,10 +416,13 @@ for (const v of VIEWS) {
     await page.waitForTimeout(400);
     await shot(page, v.id, "rig", "Rig control — one-click CAT tune");
   });
-  await step("remote", async () => {
-    await gotoDemo(page, "app-remote", ".logs");
-    await shot(page, v.id, "remote", "Remote control — your ingest box");
-  });
+  // Remote-box control is operator-only too — demo sim, captured only for an operator teaser.
+  if (process.env.TEASER_ADMIN === "1") {
+    await step("remote", async () => {
+      await gotoDemo(page, "app-remote", ".logs");
+      await shot(page, v.id, "remote", "Remote control — your ingest box");
+    });
+  }
 
   // Settings — expand EVERY group and screenshot it (exhaustive, self-maintaining: a new Settings
   // group is captured without editing this script). Signed in, so the account/profile/weather/
@@ -448,6 +455,19 @@ for (const v of VIEWS) {
     await page.waitForTimeout(400);
     await shot(page, v.id, "sitemap", "Site map");
   });
+
+  // Operator "Instance Admin" surface — EXCLUDED from public teasers. Only captured when explicitly
+  // requested via TEASER_ADMIN=1 (which also sets ADMIN_CALLSIGNS so the 🛡 entry renders). Never publish.
+  if (process.env.TEASER_ADMIN === "1") {
+    await step("admin", async () => {
+      const btn = page.locator('header .nav-desktop button[title^="Instance admin"]');
+      await btn.waitFor({ state: "visible", timeout: 6000 });
+      await btn.click();
+      await page.waitForSelector(".panel", { timeout: 6000 });
+      await page.waitForTimeout(400);
+      await shot(page, v.id, "admin", "Instance admin (operator only)");
+    });
+  }
 
   await ctx.close();
   await browser.close();
