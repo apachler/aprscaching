@@ -26,6 +26,9 @@ const SENT: Msg[] = [
 const BULLETINS: Msg[] = [
   m({ id: 20, type: "B", fromCall: "OE8XBM-7", toCall: "ALL", subject: "Graz packet net Tue 19:00", body: "Weekly Steiermark packet net every Tuesday 19:00 local on 144.800 MHz. All welcome - connect OE8XBM-7." }),
   m({ id: 21, type: "B", fromCall: "OE1SGW", toCall: "SOTA", subject: "SOTA OE/ST-027 Schoeckl Sat", body: "Activating Schoeckl this Saturday from 0900z. 2m FM + 20m CW. Chasers welcome, spot me on the cluster." }),
+  m({ id: 22, type: "B", fromCall: "DL2XYZ", toCall: "SALE", subject: "FS: Kenwood TH-D75 as new", body: "For sale: Kenwood TH-D75E, boxed, 2 months old, APRS + D-STAR. EUR 590 + shipping. Reply via packet or email.", origin: "db0abc.deu.eu" }),
+  m({ id: 23, type: "B", fromCall: "OE3ABC", toCall: "WANTED", subject: "WTB: DigiRig or NinoTNC", body: "Looking for a DigiRig Mobile or a NinoTNC N9600A4 for a portable digipeater build. Anyone in OE3? 73 Martin" }),
+  m({ id: 24, type: "B", fromCall: "OK1DX", toCall: "DX", subject: "3Y0J Bouvet QRV 20m", body: "3Y0J spotted 14.023 CW up 2, strong into central EU around 1800z. Good luck all - rare one!", origin: "ok0nag.cze.eu" }),
 ];
 
 const ok = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { "content-type": "application/json" } });

@@ -132,6 +132,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   }
 
   const active = session?.channels.find((c) => c.id === activeId) ?? session?.channels[0];
+  const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 
   if (!props.makeTransport && !webSerialSupported()) {
@@ -159,11 +160,14 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
             </div>
             {session && session.channels.length > 0 && (
               <div className="pt-tabs" role="tablist">
-                {session.channels.map((ch) => (
+                {/* channel 0 = the monitor (all heard traffic), 1..N = connected-mode channels — GP's
+                    numbered-channel model (docs/27 Part B.2). */}
+                <div className="pt-chan-label muted">Channels</div>
+                {session.channels.map((ch, i) => (
                   <button key={ch.id} role="tab" aria-selected={ch.id === active?.id}
                     className={`pt-tab st-${namesRef.current.classify(ch.remoteCall)}${ch.id === active?.id ? " on" : ""}`}
                     onClick={() => setActiveId(ch.id)}>
-                    {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
+                    <span className="pt-ch-n">{i + 1}</span> {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
                     <span className="pt-x" role="button" aria-label="close channel" onClick={(e) => { e.stopPropagation(); session.close(ch.id); }}>✕</span>
                   </button>
                 ))}
@@ -184,7 +188,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                   <div key={i} className={`pt-line ${l.dir}`}><AnsiLine text={l.text} /></div>
                 ))}</pre>
                 <div className="pt-status mono">
-                  {active.remoteCall} · {active.state} · {active.lines.length} lines
+                  ch {activeIx} · {active.remoteCall} · {active.state} · {active.lines.length} fr
                 </div>
                 <div className="row gap-2 pt-cmd">
                   <input value={cmd} placeholder="send a line…" onChange={(e) => setCmd(e.target.value)}
@@ -204,7 +208,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
           {/* right pane: monitor — all heard traffic, colourised by NAMES.GP type */}
           <div className="pt-mon">
             <button className="link pt-mon-toggle" aria-expanded={showMonitor} onClick={() => setShowMonitor((v) => !v)}>
-              {showMonitor ? "▾" : "▸"} Monitor ({monitor.length})
+              {showMonitor ? "▾" : "▸"} Ch 0 · Monitor ({monitor.length})
             </button>
             {showMonitor && (
               <pre className="pt-mon-out">{monitor.slice(-200).map((m, i) => {

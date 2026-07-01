@@ -343,6 +343,12 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
   .pt-mon-out { max-height: 66vh; min-height: 340px; }
 }
 .pt-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.pt-chan-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.pt-ch-n { display: inline-block; min-width: 15px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
+.pt-tab.on .pt-ch-n { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 55%, transparent); }
+/* in the wide side pane the channels stack as a vertical list (GP numbered-channel list) */
+.pt-side .pt-tabs { flex-direction: column; align-items: stretch; }
+.pt-side .pt-tab { text-align: left; border-radius: 6px; }
 .pt-tab { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px 6px 0 0; background: var(--surface-2); cursor: pointer; }
 .pt-tab.on { border-bottom-color: transparent; background: var(--surface); font-weight: 600; }
 .pt-tab .pt-state { color: var(--muted); text-transform: uppercase; }
