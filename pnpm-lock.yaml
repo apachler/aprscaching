@@ -104,6 +104,16 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/tools:
+    dependencies:
+      '@aprsweb/packet':
+        specifier: workspace:*
+        version: link:../packet
+    devDependencies:
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.43)
+
   servers/bun:
     dependencies:
       '@aprsweb/gateway':
