@@ -33,7 +33,7 @@ describe("FBB hierarchical addressing + forward routing (docs/25 P3)", () => {
       { type: "B", from: "OE8APR", to: "ALL", atBbs: "WW", bid: "12_oe", size: 240 },
       { type: "P", from: "OE8APR", to: "DL1ABC", atBbs: "DB0XYZ", bid: "13_oe", size: 80 },
     ]);
-    expect(lines[0]).toBe("FB B OE8APR ALL WW 12_oe 240");
+    expect(lines[0]).toBe("FB B OE8APR WW ALL 12_oe 240");
     expect(lines.at(-1)).toBe("F>");
     expect(parseFS("FS +-")).toEqual(["accept", "reject"]);
     expect(parseFS("FS Y=N")).toEqual(["accept", "defer", "reject"]);

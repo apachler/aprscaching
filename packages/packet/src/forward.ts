@@ -50,11 +50,25 @@ export class ForwardRouter {
 // ---- FBB forward proposal/accept protocol (the F> / FS handshake) ----
 export interface Proposal { type: "P" | "B" | "T"; from: string; to: string; atBbs: string; bid: string; size: number }
 
-/** Build the proposal block a sender offers: one "FB <T> from to @bbs bid size" per message, then "F>". */
+/**
+ * Build the proposal block a sender offers: one line per message then "F>". The FBB field order is
+ * `FB <type> <FROM> <@AT> <TO> <BID> <size>` (7 fields incl. FB) — the @AT is the recipient's home BBS.
+ */
 export function buildProposal(msgs: Proposal[]): string[] {
-  const lines = msgs.map((m) => `FB ${m.type} ${m.from} ${m.to} ${m.atBbs} ${m.bid} ${m.size}`);
+  const lines = msgs.map((m) => `FB ${m.type} ${m.from} ${m.atBbs} ${m.to} ${m.bid} ${m.size}`);
   lines.push("F>");
   return lines;
+}
+
+/** Parse one "FB <type> <from> <@at> <to> <bid> <size>" proposal line. Null if malformed (≠7 fields). */
+export function parseProposal(line: string): Proposal | null {
+  const f = line.trim().split(/\s+/);
+  if (f.length !== 7 || f[0] !== "FB") return null;
+  const type = f[1] as Proposal["type"];
+  if (type !== "P" && type !== "B" && type !== "T") return null;
+  const size = Number(f[6]);
+  if (!Number.isFinite(size)) return null;
+  return { type, from: f[2]!.toUpperCase(), atBbs: f[3]!.toUpperCase(), to: f[4]!.toUpperCase(), bid: f[5]!, size };
 }
 
 /**
