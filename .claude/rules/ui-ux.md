@@ -53,7 +53,9 @@ If a screen feels like "a big list of everything," it is wrong. Fix it with the 
 
 ## 2. Settings & dense-config architecture (the anti-"big fat list" rule)
 
-This applies to **app settings, account/profile, workbench port config, and any maintenance page.**
+This applies to **app settings, account/profile, connections/network config, an individual workbench
+app's surface, and any maintenance page.** (The Workbench itself is an app launcher, not a config
+page — see §5.)
 
 **Structure MUST be:** Page → **grouped sections (cards)** → each group has a **header with a
 master toggle/status** → child controls. Specifically:
@@ -153,8 +155,14 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 - **Hide-a-cache / forms:** **sectioned** (grouped) form, inline validation, optional fields marked,
   never one long scroll of inputs.
 - **Settings / profile / maintenance:** §2 architecture — grouped, toggle-gated, collapsible,
-  searchable.
-- **Workbench page:** denser, grouped by subsystem, status at headers, collapse inactive groups.
+  searchable. This is the home for **APRS/platform config** — connections & sources (transports, the
+  browser RF bridge, TAK/CoT), network (federation), and notifications (incl. the watchlist).
+- **Workbench:** an **app launcher**, not a config page. It lists the operator *apps* (packet
+  terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
+  into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching
+  *functionality* lives OUTSIDE the workbench — on the map (caches, live stations, spots), as its own
+  surface (Messages), or in Settings (the config above). Each launched app surface is itself denser,
+  grouped by subsystem, with status at headers per §2.
 
 ---
 

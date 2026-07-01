@@ -75,7 +75,7 @@ adapters fill the rest.
   always-on RF connection; W2 reuses the existing batched TX path.
 - **Identity fit:** a user's weather station is just another **station under their base call** (`-13`),
   already anticipated by the `account_callsigns`/stations model (`docs/10`).
-- **ui-ux/css:** a grouped, toggle-gated **Workbench → Weather station** surface — master switch per
+- **ui-ux/css:** a grouped, toggle-gated **Settings → Home weather station** surface — master switch per
   source (Platform push / APRS beacon / CWOP / Serial), each collapsing its detail when off, with the
   push URL + station key shown for W1; a one-line reason when a path is unavailable (e.g. "verify your
   callsign to beacon"). No inline styles; reduced-motion honored.

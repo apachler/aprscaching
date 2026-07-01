@@ -75,7 +75,8 @@ API: `GET /api/spots?bbox=&bands=&modes=&sources=` (edge-cached); `POST /api/box
 
 ## 4. Rules / trust / cost
 - ui-ux: spots + remote-control are **toggle-gated, collapsible** surfaces (the spots layer off by
-  default; remote control lives in the Workbench, not the cacher map). One primary action each.
+  default, toggled in Search & filter → Live layers; remote control is a **Workbench app** — its own
+  surface, launched from the workbench launcher — not the cacher map). One primary action each.
 - css: markers/animation use `transform`/`opacity` only, reduced-motion paths; no blur over the map.
 - trust: spots never touch the A/B/C find tiers; remote TX gated by control-verification, never by a
   passcode (`docs/19`).
@@ -90,7 +91,7 @@ API: `GET /api/spots?bbox=&bands=&modes=&sources=` (edge-cached); `POST /api/box
 - **S2 — spots map layer:** opt-in, filterable overlay; spot detail; cache "being activated now" tie-in.
 - **S3 — DX-cluster + RBN/PSKReporter sources:** broaden aggregation.
 - **R1 — box command channel:** per-box signed command queue over the box's existing connection.
-- **R2 — remote control UI:** Workbench panel — beacon / message / TX-IGate toggle / live RX; H5-gated.
+- **R2 — remote control UI:** a Workbench app (its own surface) — beacon / message / TX-IGate toggle / live RX; H5-gated.
 - **W1 — watchlist alerts:** `watch_calls` + "watched callsign spotted/heard/near-a-cache" alert
   (extends `docs/11` / ADR-4b).
 

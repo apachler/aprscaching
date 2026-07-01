@@ -50,7 +50,7 @@ are *also* probed — **advisorily, never counting toward quorum** — so they c
 confirmed corroborations, and one crosses to `trusted` automatically once `rep_confirmed ≥ N` with no
 contradictions (`shouldAutoPromote`). Default behaviour + cost are unchanged (trusted-only) until an
 operator opts in. **Still deferred:** an automatic *contradiction* signal for `rep_failed`, and a
-dedicated Settings → Federation UI (the Workbench → Federation group now shows trust + health + reputation).
+dedicated Settings → Federation UI (the Settings → Network group now shows trust + health + reputation).
 
 - **Schema** — extend `fed_peers`:
   ```sql
@@ -309,7 +309,7 @@ operator Workbench, and structured `last_error`. Extends the existing `fed_peers
 records `last_ok` (last success → lag = now − last_ok), `sync_ok`/`sync_err` counts, cumulative
 `mirrored_total`, and `last_counts` (the per-feed breakdown JSON). `GET /federation/peers` now derives a
 `health` (`ok | error | new | blocked`) + `errorRate` per peer so an operator scans state without doing
-the math; the **Workbench → Federation** group lists each peer with a health badge, trust, "synced N ago",
+the math; the **Settings → Network** group lists each peer with a health badge, trust, "synced N ago",
 mirrored total, error rate, and the last error. **Deferred:** the rep_confirmed/rep_failed
 auto-promotion loop — now has its measured inputs (T1.1 follow-up).
 - *Worth:* you can't operate a network you can't see; reputation (T1.1) needs measured inputs.
@@ -398,4 +398,4 @@ across instances is also out (cost) — corroboration stays on-demand (T1.2) wit
   publisher's real key; `verifyRegistry`/`registryKeyAllowed` unit-test the verify + the impostor reject).
 - **T4.3:** an operator can see each peer's health — sync success/error counts, lag, mirrored total, the
   per-feed breakdown, and the last error (**met**: smoke asserts the metrics populate after sync; the
-  Workbench → Federation group renders them with a health badge).
+  Settings → Network group renders them with a health badge).

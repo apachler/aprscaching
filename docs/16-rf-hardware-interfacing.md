@@ -101,7 +101,7 @@ Proven prior art: `SQ2CPA/aprs-tnc-web` (browser KISS TNC), Meshtastic Web (Web 
   (`GET /api/ports`); browser-direct frames either render locally or POST to `/ingest` like any source.
 - **Cost:** Path B runs entirely client-side (no server/daemon); Path A keeps the existing batch-POST +
   filter caps. No new always-on connections introduced by the browser path.
-- **ui-ux/css:** a grouped, toggle-gated **Workbench → Devices** surface (per ui-ux §2): each transport
+- **ui-ux/css:** a grouped, toggle-gated **Settings → Connections & sources** surface (per ui-ux §2): each transport
   is a master-switched group (Serial / Bluetooth / Audio TNC / Mesh) with a one-line reason when
   unavailable (e.g. "Web Serial needs Chromium" / "pair a BLE TNC"). Connect is a single explicit
   user-gesture action; never auto-opens hardware. Honors reduced-motion; no inline styles.

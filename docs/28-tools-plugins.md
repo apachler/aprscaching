@@ -28,7 +28,7 @@ Off by default, opt-in per Tool. A Tool can **never** bypass `verify.ts` trust o
   front-ends (tone/BPSK demod → symbols) are browser-side Web Audio, **validate-at-deploy**.
 
 ## 3. Web (`apps/web/src/tools`)
-- **`ToolsPanel`** (workbench group "Tools (plugins)") — lists built-ins with a switch + their requested
+- **`ToolsPanel`** (the "Tools" Workbench app — its own launched surface) — lists built-ins with a switch + their requested
   permissions, a **decode box** for the F-5 decoders, a **command runner**, and **import-by-URL** with a
   **permission-prompt dialog** before anything runs.
 - **`sandbox.ts`** — imported (untrusted) tools run in a **locked-down Web Worker**: `fetch`, `XHR`,
