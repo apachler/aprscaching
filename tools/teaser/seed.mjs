@@ -134,4 +134,22 @@ for (const [title, call, logType, comment] of finders) {
 }
 console.log("seeded", logged, "extra cache logs");
 
+// Verify OE8APR so the teaser chrome shows an ACTIVATED operator (the green check, not "unverified").
+// Dev-only, HTTP-only: register the account via the email dev-link (no mail provider → the link is
+// returned), then complete the APRS message-challenge by reading the one-time code back out of the
+// outbox (ingest-secret gated) — no real RF/TX. The tour signs in to this same account → verified=1.
+{
+  const CALL = "OE8APR", EMAIL = "oe8apr@teaser.local";
+  const start = await j("POST", "/auth/email/start", { email: EMAIL, callsign: CALL });
+  if (start.data?.devLink) await fetch(start.data.devLink).catch(() => {}); // GET verify link → creates the account
+  await j("POST", "/verify/aprs/start", { callsign: CALL });                // queues a 6-digit code to the outbox
+  const ob = await j("GET", "/outbox");                                     // ingest-secret gated
+  const item = (ob.data?.items ?? []).find((x) => String(x.payload || "").includes(CALL) && /code \d{6}/.test(x.payload));
+  const code = item && (String(item.payload).match(/code (\d{6})/) || [])[1];
+  if (code) {
+    const conf = await j("POST", "/verify/aprs/confirm", { callsign: CALL, code });
+    console.log("verified operator OE8APR:", conf.data?.verified === true);
+  } else console.log("could not read challenge code from outbox — OE8APR stays unverified");
+}
+
 console.log("seed complete");
