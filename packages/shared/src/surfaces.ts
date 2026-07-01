@@ -45,8 +45,8 @@ export const SURFACES: Surface[] = [
   { key: "messages", view: "messages", label: "Messages", title: "APRS messages", group: "Community", access: "public", indexable: false,
     summary: "Live APRS text messages — a first-class inbox, separate from BBS mail." },
 
-  { key: "workbench", view: "workbench", label: "Workbench", title: "Workbench — APRS toolset", group: "Workbench", access: "public", indexable: true,
-    summary: "Live stations, transports, IGate, digipeater and packet decoder — the operator toolset." },
+  { key: "workbench", view: "workbench", label: "Workbench", title: "Workbench — APRS apps", group: "Workbench", access: "public", indexable: true,
+    summary: "App launcher for the operator tools — packet terminal, BBS, decoder, NET/ROM node, plugins, rig & remote control." },
   { key: "bbs", view: "bbs", label: "BBS", title: "BBS — store & forward mail", group: "Workbench", access: "account", indexable: false,
     summary: "APRS store-and-forward mail and bulletins." },
 

@@ -43,6 +43,7 @@ import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
 import { WorkbenchAppSurface } from "./workbench/WorkbenchAppSurface.js";
 import { MessagesPanel } from "./messages/MessagesPanel.js";
+import { StationPanel } from "./stations/StationPanel.js";
 import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
@@ -158,7 +159,7 @@ export function App() {
     // and its draft marker, not leave it stuck on top of the destination panel.
     setMode("view"); setDraft(null);
     draftMarker.current?.remove(); draftMarker.current = null;
-    setSelectedId(null); setRemote(null);
+    setSelectedId(null); setRemote(null); setPickedStation(null);
   }, []);
   const openOnly = useCallback((open: () => void) => { closeAll(); open(); }, [closeAll]);
   // Launch a workbench app: EVERY app opens its own dedicated surface (WorkbenchAppSurface). Used by
@@ -402,7 +403,7 @@ export function App() {
         const btn = document.createElement("button");
         btn.className = "station-pin";
         btn.innerHTML = "<span></span>";
-        btn.onclick = (ev) => { ev.stopPropagation(); setPickedStation(s.callsign); setShowWB(true); };
+        btn.onclick = (ev) => { ev.stopPropagation(); openOnly(() => setPickedStation(s.callsign)); };
         mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
         stationMarkers.current.set(s.callsign, mk);
       } else {
@@ -487,7 +488,7 @@ export function App() {
   const target: [number, number] | null = detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = showNearby || showActivity || showMessages || showProfile || showFilter || showBoard || showWB || wbApp != null || showSettings || mode === "hide";
+  const leftOpen = showNearby || showActivity || showMessages || showProfile || showFilter || showBoard || showWB || wbApp != null || pickedStation != null || showSettings || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
     const t = setTimeout(() => map.current?.resize(), 60);
@@ -591,7 +592,8 @@ export function App() {
         {showFilter && mode === "view" && (
           <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}
             includeUnvetted={includeUnvetted} setIncludeUnvetted={setIncludeUnvetted}
-            spotsOn={spotsOn} setSpotsOn={setSpotsOn} spotFilters={spotFilters} setSpotFilters={setSpotFilters}
+            spotsOn={spotsOn} setSpotsOn={setSpotsOn} stationsOn={stationsOn} setStationsOn={setStationsOn}
+            spotFilters={spotFilters} setSpotFilters={setSpotFilters}
             getViewState={getViewState} onClose={() => setShowFilter(false)} />
         )}
         {showProfile && mode === "view" && (
@@ -605,15 +607,16 @@ export function App() {
           <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />
         )}
         {showWB && mode === "view" && (
-          <WorkbenchPanel onClose={() => setShowWB(false)} map={map.current} callsign={callsign}
-                          stationsOn={stationsOn} setStationsOn={setStationsOn}
-                          stationCount={stations.length}
-                          picked={pickedStation} onPick={setPickedStation}
-                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin}
-                          onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
+          <WorkbenchPanel onClose={() => setShowWB(false)}
+                          apps={WORKBENCH_APPS} pinned={pins} onLaunchApp={launchApp} onTogglePin={togglePin} />
         )}
         {wbApp && mode === "view" && (
           <WorkbenchAppSurface app={wbApp} callsign={callsign} verified={verified} map={map.current} onClose={() => setWbApp(null)} />
+        )}
+        {pickedStation && mode === "view" && (
+          <StationPanel callsign={callsign} picked={pickedStation} map={map.current}
+                        onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })}
+                        onClose={() => setPickedStation(null)} />
         )}
         {showSignIn && (
           <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />

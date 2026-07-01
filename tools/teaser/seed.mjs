@@ -98,6 +98,21 @@ for (let i = 23; i >= 0; i--) {
 }
 console.log("seeded 24h weather for OE8WX-13");
 
+// APRS text messages → the Messages surface (first-class inbox, separate from BBS). Payload is the
+// APRS message format `:ADDRESSEE :text{msgno` (addressee padded to 9). Some are to/from OE8APR
+// (highlighted as "yours" in the inbox), some are third-party traffic.
+const msg = (src, to, text, ts, id) => ({ src, dst: "APRS", path: ["WIDE1-1", "qAR", "OE8XXX"],
+  payload: `:${String(to).padEnd(9)}:${text}{${id}`, heardVia: "rf", igateCall: "OE8XXX", port: "aprs-is", ts });
+const MSGS = [
+  ["OE3ABC", "OE8APR", "QRV Schoeckl 0900z, see you at the car park 73", 240, "042"],
+  ["DL2XYZ", "OE8APR", "TU for the 20m QSO, card via bureau 73", 900, "017"],
+  ["OE5FLM", "OE8APR", "Found your living cache on the summit, nice hide!", 1800, "088"],
+  ["OE6XRR-3", "OE3ABC", "digi test de Schoeckl, ur 599 here", 1500, "003"],
+  ["OE8APR", "OE3ABC", "roger, bringing coffee + spare LiFePO4 73", 600, "051"],
+];
+for (const [src, to, text, ago, id] of MSGS) await ingest([msg(src, to, text, T - ago, id)]);
+console.log("seeded", MSGS.length, "APRS messages");
+
 // More finds across caches → richer Activity feed + Leaderboard.
 const finders = [
   ["Mur Riverwalk", "OE3ABC", "found", "Nice two-stage, solved it at the bridge. TFTC!"],

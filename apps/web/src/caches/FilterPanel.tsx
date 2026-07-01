@@ -14,6 +14,7 @@ export function FilterPanel(props: {
   filters: { types: CacheType[]; q: string }; setFilters: (f: { types: CacheType[]; q: string }) => void;
   includeUnvetted: boolean; setIncludeUnvetted: (v: boolean) => void;
   spotsOn: boolean; setSpotsOn: (v: boolean) => void;
+  stationsOn: boolean; setStationsOn: (v: boolean) => void;
   spotFilters: SpotFilters; setSpotFilters: (f: SpotFilters) => void;
   getViewState: () => MapViewState;
   count: number; onClose: () => void;
@@ -53,6 +54,12 @@ export function FilterPanel(props: {
         <Switch label="Include unvetted network data" checked={props.includeUnvetted} onChange={props.setIncludeUnvetted} />
       </div>
       <h4>Live layers</h4>
+      <div className="row between">
+        <label>Live stations
+          <span className="muted block">Plot live APRS stations on the map; tap a pin to inspect. Off by default; opt-in.</span>
+        </label>
+        <Switch label="Live stations" checked={props.stationsOn} onChange={props.setStationsOn} />
+      </div>
       <div className="row between">
         <label>Activity spots
           <span className="muted block">Live POTA/SOTA activations on the map. Off by default; opt-in.</span>
