@@ -98,6 +98,27 @@ async function openProfileAdvanced(page, btnText) {
 async function step(name, fn) {
   try { await fn(); } catch (e) { console.log("   ! skip", name, "-", String(e.message).split("\n")[0]); }
 }
+// Open the Workbench panel (desktop rail, else Profile → Advanced → Workbench).
+async function openWorkbench(page) {
+  await closeAll(page);
+  if (!(await clickAny(page, [".rail button[title='Bench']"]))) {
+    await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]);
+    await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+    await clickAny(page, [".group-toggle:has-text('Advanced')"]);
+    await clickAny(page, ["button:has-text('Workbench')"]);
+  }
+  await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
+  await page.waitForTimeout(400);
+}
+// Expand a named workbench group (e.g. "Packet terminal", "Tools") + scroll it into view for the shot.
+async function expandGroup(page, title) {
+  const toggle = page.locator(`.group-toggle:has-text('${title}')`).first();
+  if (!(await toggle.isVisible().catch(() => false))) throw new Error(`group '${title}' not found`);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
+  await page.waitForTimeout(500);
+  await toggle.scrollIntoViewIfNeeded().catch(() => {});
+  await page.waitForTimeout(300);
+}
 
 // Friendlier captions for the terse rail/tab titles; unknown titles fall back to themselves.
 const LABELS = {
@@ -241,6 +262,20 @@ for (const v of VIEWS) {
       });
     }
   }
+
+  // --- Workbench deep-dive: showcase the packet stack (Stage 1) + the Tools plugins (Stage 2) ---
+  await step("packet", async () => {
+    await openWorkbench(page);
+    await expandGroup(page, "Packet terminal");
+    await clickAny(page, [".node-panel button:has-text('NODES')"]); // reveal the NET/ROM node view
+    await page.waitForTimeout(400);
+    await shot(page, v.id, "packet", "Packet terminal — Graphic Packet reborn");
+  });
+  await step("tools", async () => {
+    await openWorkbench(page);
+    await expandGroup(page, "Tools");
+    await shot(page, v.id, "tools", "Tools — sandboxed plugins");
+  });
 
   // Site map page — reached via the ?view= deep-link (dogfooding the sitemap tooling). Captured on
   // every viewport regardless of where it sits in nav.

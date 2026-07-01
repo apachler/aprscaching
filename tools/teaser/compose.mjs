@@ -12,18 +12,25 @@ const EXE = process.env.PW_CHROMIUM || undefined;
 const HOLD = Number(process.env.HOLD ?? 2.4) * 1000; // ms per step (incl. incoming fade)
 const FADE = Number(process.env.FADE ?? 0.45) * 1000; // ms crossfade
 const W = 1920, H = 1080;
+// Static position of the viewport tag (desktop/tablet/mobile) — fixed + left-anchored, independent of
+// the caption text. Move it by changing VPX (left offset) / VPY.
+const VPX = Number(process.env.VPX ?? 56);
+const VPY = Number(process.env.VPY ?? H - 124);
 
-// Ordered frames (prefix 1/2/3 = desktop/tablet/mobile) + label map from the per-viewport manifests.
+// Ordered frames (prefix 1/2/3 = desktop/tablet/mobile) + label/viewport map from the per-viewport
+// manifests. Label (the step name) and viewport are kept SEPARATE so the viewport tag can be drawn at
+// a fixed static position rather than trailing the variable-length caption.
 const frames = fs.readdirSync(OUT).filter((f) => /^[123]-.*\.png$/.test(f)).sort();
 if (!frames.length) { console.error("no frames in", OUT); process.exit(1); }
 const labels = {};
 for (const v of ["desktop", "tablet", "mobile"]) {
   const f = OUT + `manifest-${v}.json`;
-  if (fs.existsSync(f)) for (const e of JSON.parse(fs.readFileSync(f, "utf8"))) labels[e.file] = `${e.label}  ·  ${e.viewport}`;
+  if (fs.existsSync(f)) for (const e of JSON.parse(fs.readFileSync(f, "utf8"))) labels[e.file] = { label: e.label, viewport: e.viewport };
 }
 const slides = frames.map((file) => ({
   url: "data:image/png;base64," + fs.readFileSync(OUT + file).toString("base64"),
-  label: labels[file] || file.replace(/\.png$/, ""),
+  label: labels[file]?.label || file.replace(/\.png$/, ""),
+  viewport: labels[file]?.viewport || "",
 }));
 console.log(`composing ${slides.length} steps -> webm (${Math.round((slides.length * HOLD) / 1000)}s)`);
 
@@ -36,7 +43,7 @@ const page = await ctx.newPage();
 await page.setContent(`<!doctype html><html><body style="margin:0;background:#0b0e13">
 <canvas id="c" width="${W}" height="${H}" style="display:block"></canvas></body></html>`);
 
-const b64 = await page.evaluate(async ({ slides, W, H, HOLD, FADE }) => {
+const b64 = await page.evaluate(async ({ slides, W, H, HOLD, FADE, VPX, VPY }) => {
   const cv = document.getElementById("c");
   const ctx = cv.getContext("2d", { alpha: false });
   // preload images
@@ -56,7 +63,16 @@ const b64 = await page.evaluate(async ({ slides, W, H, HOLD, FADE }) => {
     ctx.globalAlpha = alpha;
     const r = rects[i];
     ctx.drawImage(imgs[i], r.x, r.y, r.w, r.h);
-    // caption bar (bottom-left)
+    // viewport tag — STATIC position (fixed, left-anchored), drawn above the caption bar
+    const vp = (slides[i].viewport || "").toUpperCase();
+    if (vp) {
+      ctx.font = "600 24px system-ui, Arial, sans-serif";
+      ctx.fillStyle = "rgba(111,208,239,0.95)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(vp, VPX, VPY);
+    }
+    // caption bar (bottom-left) — the step label only (viewport is drawn separately, static)
     const label = slides[i].label;
     ctx.font = "600 40px system-ui, Arial, sans-serif";
     const tw = ctx.measureText(label).width;
@@ -66,12 +82,6 @@ const b64 = await page.evaluate(async ({ slides, W, H, HOLD, FADE }) => {
     ctx.fillStyle = "#ffffff";
     ctx.textBaseline = "middle";
     ctx.fillText(label, bx + 28, by + bh / 2 + 1);
-    // brand (top-right)
-    ctx.font = "600 28px system-ui, Arial, sans-serif";
-    ctx.fillStyle = "#6fd0ef";
-    ctx.textAlign = "right";
-    ctx.fillText("aprscaching", W - 56, 64);
-    ctx.textAlign = "left";
     ctx.globalAlpha = 1;
   }
 
@@ -110,7 +120,7 @@ const b64 = await page.evaluate(async ({ slides, W, H, HOLD, FADE }) => {
   let bin = ""; const u8 = new Uint8Array(buf);
   for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
   return btoa(bin);
-}, { slides, W, H, HOLD, FADE });
+}, { slides, W, H, HOLD, FADE, VPX, VPY });
 
 await browser.close();
 const outFile = OUT + "aprscaching-ui-teaser.webm";

@@ -46,6 +46,6 @@ done
 echo "==> tour frames in $OUT: $(ls "$OUT"/[123]-*.png 2>/dev/null | wc -l)"
 
 echo "==> assemble the captioned teaser video"
-bash "$HERE/build-video.sh"
+bash "$HERE/build-video.sh" || { echo "   (compose hiccup — retrying once)"; sleep 2; bash "$HERE/build-video.sh"; }
 
 echo "==> teaser complete: $OUT/aprscaching-ui-teaser.webm"
