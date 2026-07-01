@@ -11,7 +11,6 @@ import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast } fr
 import { RemoteControl } from "./RemoteControl.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
-import { PacketTerminal } from "../packet/PacketTerminal.js";
 import { NodePanel } from "./NodePanel.js";
 import { ToolsPanel } from "../tools/ToolsPanel.js";
 import { TrackReplay } from "./TrackReplay.js";
@@ -24,6 +23,7 @@ export function WorkbenchPanel(props: {
   onClose: () => void; map: maplibregl.Map | null; callsign: string; verified: boolean;
   stationsOn: boolean; setStationsOn: (v: boolean) => void; stationCount: number;
   picked: string | null; onPick: (cs: string | null) => void; onFly: (lat: number, lon: number) => void;
+  onOpenTerminal: () => void;
 }) {
   const [raw, setRaw] = useState("");
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
@@ -181,8 +181,8 @@ export function WorkbenchPanel(props: {
       </Group>
 
       <Group title="Packet terminal" status="connected-mode · multi-channel" defaultOpen={false}>
-        <p className="muted">A Graphic-Packet-style multi-channel connected-mode terminal over a KISS TNC (Web Serial). Connect to a BBS or node and drive it.</p>
-        <PacketTerminal callsign={props.callsign} />
+        <p className="muted">A Graphic-Packet-style multi-channel connected-mode terminal over a KISS TNC (Web Serial). Opens as a full workspace — channels, active window and monitor side by side.</p>
+        <div className="row"><button className="primary" onClick={props.onOpenTerminal}>⤢ Open packet terminal</button></div>
         <NodePanel />
       </Group>
 

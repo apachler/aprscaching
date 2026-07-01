@@ -40,6 +40,7 @@ import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
+import { TerminalPanel } from "./packet/TerminalPanel.js";
 import { BbsPanel } from "./live/BbsPanel.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
@@ -89,6 +90,7 @@ export function App() {
   const [showBoard, setShowBoard] = useState(false);
   const [showWB, setShowWB] = useState(false);
   const [showMail, setShowMail] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
   const [showNearby, setShowNearby] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -136,7 +138,7 @@ export function App() {
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
-    setShowBoard(false); setShowWB(false); setShowMail(false); setShowNearby(false);
+    setShowBoard(false); setShowWB(false); setShowMail(false); setShowTerminal(false); setShowNearby(false);
     setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
     setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
@@ -585,7 +587,11 @@ export function App() {
                           stationsOn={stationsOn} setStationsOn={setStationsOn}
                           stationCount={stations.length}
                           picked={pickedStation} onPick={setPickedStation}
+                          onOpenTerminal={() => openOnly(() => setShowTerminal(true))}
                           onFly={(lat, lon) => map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })} />
+        )}
+        {showTerminal && mode === "view" && (
+          <TerminalPanel callsign={callsign} onClose={() => setShowTerminal(false)} />
         )}
         {showMail && mode === "view" && (
           <BbsPanel callsign={callsign} onClose={() => setShowMail(false)} />
