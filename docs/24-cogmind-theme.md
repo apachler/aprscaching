@@ -171,6 +171,77 @@ Each MUST read correctly in-theme:
 
 ---
 
+## 6a. Workbench in Cogmind — the TUI transformation (the "flip" for full-width apps)
+
+The full-width workbench apps (packet terminal, **BBS**, packet decoder, tools, and the operator node)
+were designed for the Modern theme as clean docked panels. In Cogmind, **the same app becomes a
+terminal-user-interface** — the operator feels dropped into a late-90s packet BBS/node session, but it's a
+*modern, nicely-built TUI*, not a skin over web widgets and not a fake VT100. **Same DOM, same data, same
+keyboard/AT semantics — only the presentation flips**, driven entirely by `[data-shell="terminal"]` on the
+workbench app surface (set alongside `[data-theme="cogmind"]`; theme = shell, one motion, `docs/24` §1a).
+
+**The frame (every wide app gets it).** A workbench app in terminal shell renders as one bordered CRT
+"window" using box-drawing tokens, laid out as a fixed grid (CSS grid, `ch`/`lh` units, mono):
+
+```
+┌─ OE8APR : BBS ──────────────────────────────[ RF ]─[ 02:14Z ]─┐   ← title bar: who / app / live status
+│ MSGS 12  BULLETINS 3  UNREAD 2                                 │   ← summary/HUD line (was the panel header stats)
+├───────────────────────────────────────────────────────────────┤
+│  # TO       FROM     SUBJECT                         AGE  BID   │   ← column header (was a table head)
+│  1 DL1ABC   OE8APR   welcome                          2h  1_oe  │
+│> 2 ALL      OE8APR   Sunday net 144.800               1h  9_db0 │   ← cursor row (▌/> marker, not just hover)
+│  3 OE1USR   OE8APR   re: cache OE-42                 20m  12_oe  │
+│                                                       -- more -- │   ← LoadMore as a terminal affordance
+├───────────────────────────────────────────────────────────────┤
+│ R read  S send  SR reply  K kill  /find  ?help                  │   ← function/command bar (the app's verbs)
+│ cmd> _                                                          │   ← command line: type a verb OR click a row
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Interaction model — keyboard-first, but not keyboard-only.** This is the crux of "modern approach":
+- **Dual input.** Every action is reachable *both* by its terminal verb typed at the `cmd>` line (`R 2`,
+  `SR`, `S DL1ABC`) *and* by clicking the row/soft-key — the command line mirrors the GUI, never replaces
+  it. Clicking a row echoes the equivalent command so users learn the verbs (Graphic Packet did this).
+- **A cursor, not just hover.** Up/Down move a real selection cursor (`aria-activedescendant`), Enter =
+  the row's primary verb, the function bar shows the current context's verbs. Focus is always visible as a
+  block cursor `▌`, honoring `:focus-visible`.
+- **Command line = the app's existing interpreter.** The BBS already has a pure FBB command interpreter
+  (`packages/packet/bbs.ts` L/R/S/SR/K/…); in terminal shell the `cmd>` line drives *that same grammar*
+  locally, so the retro CLI and the buttons are the one model. The packet terminal already IS a command
+  line — it just loses its rounded chrome and gains box-drawing channel windows + the status/function bars
+  it was built with (P1 was authored token-driven for exactly this flip).
+- **Boot-in, don't fade-in.** Opening an app in terminal shell types a one-line "connect" banner
+  (`*** CONNECTED TO OE8APR:BBS  12 msgs, 2 new  ***`) then draws the frame — reduced-motion prints it
+  instantly. This is the "you're in a session" feel, done in ~200ms, never blocking.
+
+**Per-app treatment.**
+- **BBS** → the classic packet-mail session above: message table + `cmd>` FBB verbs + a boxed read/compose
+  pane; threads render as an indented tree of mono lines. This is the app the user pictures — "in the
+  terminal like the old days," legible and quick.
+- **Packet terminal** → already terminal-shaped: numbered channel windows become box-drawing panes, the
+  monitor is the big central `<pre>`, `NAMES.GP` colors + the ANSI subset light up, status + function bars
+  are native.
+- **Packet decoder** → an input line + a boxed field-by-field readout (`DST/SRC/CTRL/PID` columns), tier
+  in brackets.
+- **Tools** → a two-pane TUI: tool list (left, `[x]` enabled) + the tool's output console (right); the
+  decode box is a `<pre>` scope.
+- **NET/ROM node (operator)** → a sysop console: NODES/ROUTES/MHEARD as mono tables switched by the
+  function bar, `cmd>` for the node CLI verbs — the full BPQ-console fantasy, but accessible.
+
+**What MUST NOT happen (the modern part).** No ASCII-art buttons that aren't `<button>`; no
+`contenteditable` fake shell; no color-only state; no motion that a screen reader or reduced-motion user
+can't skip. The TUI is **styling + a keyboard affordance layer over the real, semantic components** — box
+frames via CSS `border-image`/`box-drawing` on the *same* list/table/form DOM, the cursor via
+roving-tabindex + `aria-activedescendant`, the command line as an ordinary `<input>` whose parser is the
+app's existing pure interpreter. AA contrast in green, `≥44px`/one-line targets preserved, works in
+sunlight. It reads as *aprscaching-in-terminal-mode*, not a clone and not a toy.
+
+**Phasing note (folds into §7):** the frame + command/function bars + cursor model land in **T1** (they're
+token + a small `useTuiCursor` hook over existing components); per-app verb wiring rides each app's existing
+interpreter, so it's mostly CSS. The full-screen TUI monitor (§6.8) is the T3 flourish on top.
+
+---
+
 ## 7. Phasing
 
 - **T1 — Tokens + chrome (small).** `[data-theme="cogmind"]` token set, font, box-frame primitives,

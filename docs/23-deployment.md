@@ -124,6 +124,36 @@ or a remote cloud gateway. The four topologies below choose where the **gateway/
 - **Cost rules still apply:** filter APRS-IS server-side, batch ingest, TTL the firehose, keep
   living-cache tracks, raster basemaps opt-in.
 
+## Config model — 12-factor, with a runtime override tier (decision)
+
+**Do we follow 12-factor config?** Yes (factor III). All deploy-time config is read from the *environment*
+— Cloudflare Worker bindings + `wrangler secret` on runtime #4, `process.env` on the Node/Bun runtimes
+(1–3, 0). There are **no per-environment config files checked into the repo**; the same build runs
+everywhere and its behaviour is set entirely by env. Secrets (`INGEST_SECRET`, `FED_PRIVATE_KEY`) and
+operator **identity** (`ADMIN_CALLSIGNS`) live only in env. ~119 distinct `env.*` reads, all optional with
+safe defaults.
+
+**Should env vars be overridable at runtime?** Partly — and we already do it where it's right. The model is
+**two tiers**, and new config MUST be placed deliberately:
+
+1. **Env (immutable, deploy-time) — secrets, identity, wiring.** `INGEST_SECRET`, `FED_PRIVATE_KEY`,
+   `ADMIN_CALLSIGNS`, `INSTANCE`, DB/port/host bindings. These MUST stay env-only: making *who may
+   administer the box* or *the signing key* mutable from a signed-in session would let a compromised
+   account escalate. This is a security property, not a limitation — keep it.
+2. **Runtime store (mutable, operator-editable) — operational policy + topology.** Already DB-backed and
+   edited in the **Instance Admin** panel: forwarding partners (`bbs_partners`), routing rules
+   (`bbs_forward_rules`), federation peers + trust (`fed_peers`), NET/ROM routes (`netrom_nodes`). These
+   change with the network, not with a redeploy, so they belong in the DB, not env.
+
+**Recommendation (post-1.0, non-blocking): add a thin `instance_config` KV table as an override layer for
+NON-secret operational knobs** that today are env-only and would benefit from live tuning without a
+redeploy — e.g. `min_trust` policy, `FED_CORROBORATION_QUORUM`, NODES broadcast interval, feature toggles.
+Resolution order: **`instance_config` row → env default → hard-coded default** (a small `cfg(env, key)`
+helper). Rules: sysop-gated writes; **never** shadow a secret or an identity key (those stay strictly env);
+surface each override in Instance Admin with its effective source ("from env" vs "overridden"). This keeps
+12-factor for bootstrap/secrets while giving the operator a redeploy-free control surface for policy — the
+same pattern we already use for partners/peers, generalised. Not a v1.0 gate; flag for Stage 4/post-1.0.
+
 ### Common prereqs (1–3)
 ```bash
 # Node 20 (ARM on Pi/OCI A1), pnpm, build
