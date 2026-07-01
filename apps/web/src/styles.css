@@ -725,6 +725,14 @@ button.link:hover { text-decoration: underline; }
 /* BBS master–detail: message list | reading pane. Two columns when the panel is wide (container
    query — the wide workspace surface), stacked master→detail swap when it's a slim drawer/sheet. */
 .bbs-tabs { flex-wrap: wrap; margin-bottom: 8px; }
+/* APRS messages inbox (first-class surface, separate from BBS) */
+.msg-list { list-style: none; margin: 0; padding: 0; }
+.msg-row { padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+.msg-row + .msg-row { margin-top: 4px; }
+.msg-row.mine { background: color-mix(in oklch, var(--accent) 12%, transparent); border-color: color-mix(in oklch, var(--accent) 30%, transparent); }
+.msg-h { display: flex; align-items: center; gap: 6px; font-size: 0.86rem; }
+.msg-body { margin-top: 2px; }
+
 .bbs-body { display: grid; gap: 14px; align-items: start; }
 .bbs-list { list-style: none; margin: 0; padding: 0; }
 .bbs-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }

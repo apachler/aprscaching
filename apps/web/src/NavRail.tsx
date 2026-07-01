@@ -8,7 +8,7 @@ import type { WorkbenchApp } from "./workbench/apps.js";
 
 export function NavRail(props: {
   active: string;
-  onMap: () => void; onNearby: () => void; onActivity: () => void; onRanks: () => void;
+  onMap: () => void; onNearby: () => void; onActivity: () => void; onMessages: () => void; onRanks: () => void;
   onWorkbench: () => void; onProfile: () => void; onSettings: () => void;
   pinnedApps?: WorkbenchApp[]; onLaunchApp?: (id: WorkbenchApp["id"]) => void;
 }) {
@@ -23,6 +23,7 @@ export function NavRail(props: {
       {item("map", "map", "Map", props.onMap)}
       {item("nearby", "locate", "Nearby", props.onNearby)}
       {item("activity", "bench", "Activity", props.onActivity)}
+      {item("messages", "message", "Messages", props.onMessages)}
       {item("ranks", "ranks", "Ranks", props.onRanks)}
       {item("workbench", "tools", "Bench", props.onWorkbench)}
       {(props.pinnedApps ?? []).length > 0 && <span className="rail-div" aria-hidden="true" />}

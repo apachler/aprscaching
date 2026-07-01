@@ -31,7 +31,7 @@ function AppShell({ active, title, children, childIsPanel, wide }: { active: str
               onFilters={noop} filtered={false} q="" onSearch={noop} onSearchSubmit={noop}
               onPickCache={noop} onPickStation={noop} onNearby={noop} onActivity={noop} onProfile={noop} />
       <div className="shell">
-        <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onRanks={noop}
+        <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onMessages={noop} onRanks={noop}
                  onWorkbench={noop} onProfile={noop} onSettings={noop} />
         <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
         {childIsPanel ? children : (

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import {
-  getPorts, getMessages, cotUrl, getStation, listFederationPeers, createStation,
+  getPorts, cotUrl, getStation, listFederationPeers, createStation,
   type StationDetail, type PortStat, type FedPeer,
 } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprsweb/shared";
 import { useFmt } from "../format.js";
-import { Panel, Group, Row, Badge, EmptyState, LoadMore, usePaged, useToast, Icon } from "../ui/index.js";
+import { Panel, Group, Row, Badge, EmptyState, useToast, Icon } from "../ui/index.js";
 import type { WorkbenchApp, WorkbenchAppId } from "./apps.js";
 import { Watchlist } from "./Watchlist.js";
 import { RfBrowser } from "../rf/RfBrowser.js";
@@ -32,7 +32,6 @@ export function WorkbenchPanel(props: {
   const [peers, setPeers] = useState<FedPeer[]>([]);
   const fmt = useFmt();
   const toast = useToast();
-  const messages = usePaged((cursor) => getMessages(false, cursor).then((r) => ({ items: r.messages, nextCursor: r.nextCursor, hasMore: r.hasMore })), []);
 
   useEffect(() => {
     getPorts().then((r) => setPorts(r.ports)).catch(console.error);
@@ -130,20 +129,6 @@ export function WorkbenchPanel(props: {
           <input className="mono" readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
           <button onClick={() => { navigator.clipboard?.writeText(feedUrl); toast("Feed URL copied"); }}>copy</button>
         </div>
-      </Group>
-
-      <Group title="Messages" status={messages.items.length ? `${messages.items.length}${messages.hasMore ? "+" : ""} recent` : "none"} defaultOpen={false}>
-        {messages.items.length === 0 ? <EmptyState>No inbound messages.</EmptyState> : (
-          <ul className="logs">
-            {messages.items.map((mm) => (
-              <li key={mm.id}>
-                <Badge><span className="mono">{mm.fromCall}</span></Badge>→ <span className="mono">{mm.toCall}</span> <span className="muted">· {fmt.ago(mm.ts)}</span>
-                <div className="comment">{mm.body}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <LoadMore hasMore={messages.hasMore} loading={messages.loading} onClick={messages.loadMore} />
       </Group>
 
       <Group title="Federation" status={peers.length ? `${peers.length} peer${peers.length === 1 ? "" : "s"}` : "none"} defaultOpen={false}>

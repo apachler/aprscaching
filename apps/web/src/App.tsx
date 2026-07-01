@@ -42,6 +42,7 @@ import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { WorkbenchPanel } from "./workbench/WorkbenchPanel.js";
 import { WorkbenchAppSurface } from "./workbench/WorkbenchAppSurface.js";
+import { MessagesPanel } from "./messages/MessagesPanel.js";
 import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
@@ -94,6 +95,7 @@ export function App() {
   const { pins, toggle: togglePin } = usePinnedApps();
   const [showNearby, setShowNearby] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
@@ -150,7 +152,7 @@ export function App() {
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
     setShowBoard(false); setShowWB(false); setWbApp(null); setShowNearby(false);
-    setShowActivity(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
+    setShowActivity(false); setShowMessages(false); setShowProfile(false); setShowSettings(false); setShowSignIn(false);
     setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
     // and its draft marker, not leave it stuck on top of the destination panel.
@@ -168,6 +170,7 @@ export function App() {
     const opener: Record<string, () => void> = {
       map: () => {}, nearby: () => setShowNearby(true), filter: () => setShowFilter(true),
       hide: () => startHide(), activity: () => setShowActivity(true), ranks: () => setShowBoard(true),
+      messages: () => setShowMessages(true),
       workbench: () => setShowWB(true), bbs: () => setWbApp("bbs"), terminal: () => setWbApp("terminal"),
       profile: () => setShowProfile(true), settings: () => setShowSettings(true),
     };
@@ -484,7 +487,7 @@ export function App() {
   const target: [number, number] | null = detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = showNearby || showActivity || showProfile || showFilter || showBoard || showWB || wbApp != null || showSettings || mode === "hide";
+  const leftOpen = showNearby || showActivity || showMessages || showProfile || showFilter || showBoard || showWB || wbApp != null || showSettings || mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
     const t = setTimeout(() => map.current?.resize(), 60);
@@ -558,10 +561,11 @@ export function App() {
               onProfile={() => openOnly(() => setShowProfile(true))} />
       <div className="shell">
         <NavRail
-          active={showNearby ? "nearby" : showActivity ? "activity" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
+          active={showNearby ? "nearby" : showActivity ? "activity" : showMessages ? "messages" : showBoard ? "ranks" : wbApp ? wbApp : showWB ? "workbench" : showProfile ? "profile" : showSettings ? "settings" : "map"}
           onMap={closeAll}
           onNearby={() => openOnly(() => setShowNearby(true))}
           onActivity={() => openOnly(() => setShowActivity(true))}
+          onMessages={() => openOnly(() => setShowMessages(true))}
           onRanks={() => openOnly(() => setShowBoard(true))}
           onWorkbench={() => openOnly(() => setShowWB(true))}
           onProfile={() => openOnly(() => setShowProfile(true))}
@@ -580,6 +584,9 @@ export function App() {
         )}
         {showActivity && mode === "view" && (
           <ActivityPanel map={map.current} onBoard={() => openOnly(() => setShowBoard(true))} onClose={() => setShowActivity(false)} />
+        )}
+        {showMessages && mode === "view" && (
+          <MessagesPanel callsign={callsign} onClose={() => setShowMessages(false)} />
         )}
         {showFilter && mode === "view" && (
           <FilterPanel filters={filters} setFilters={setFilters} count={shown.length}

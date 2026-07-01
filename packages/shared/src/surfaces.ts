@@ -42,6 +42,8 @@ export const SURFACES: Surface[] = [
     summary: "Recent finds, hides and DNFs across the network." },
   { key: "ranks", view: "ranks", label: "Leaderboard", title: "Leaderboard", group: "Community", access: "public", indexable: true,
     summary: "Top finders and hiders, ranked by callsign and profile." },
+  { key: "messages", view: "messages", label: "Messages", title: "APRS messages", group: "Community", access: "public", indexable: false,
+    summary: "Live APRS text messages — a first-class inbox, separate from BBS mail." },
 
   { key: "workbench", view: "workbench", label: "Workbench", title: "Workbench — APRS toolset", group: "Workbench", access: "public", indexable: true,
     summary: "Live stations, transports, IGate, digipeater and packet decoder — the operator toolset." },
