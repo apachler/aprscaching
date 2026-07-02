@@ -16,6 +16,7 @@ import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
 import { installSerialSim } from "./simSerial.js";
+import { setToolEnabled } from "../tools/host.js";
 import "../styles.css";
 
 const ME = "OE8APR-7";
@@ -63,12 +64,13 @@ export function DemoHarness({ which }: { which: string }) {
   useState(() => {
     if (which === "app-rig") installSerialSim();
     if (which === "app-remote") { installBoxSim(); try { localStorage.setItem("acs.boxId", "pi-home"); } catch { /* ignore */ } }
+    if (which === "app-packet-tools") { setToolEnabled("mheard", true); setToolEnabled("watch-alert", true); }
     return null;
   });
   useEffect(() => { installBbsSim(); setBbsReady(true); }, []);
 
   // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
-  if (which === "app-packet") {
+  if (which === "app-packet" || which === "app-packet-tools") {
     return (
       <AppShell active="workbench" title={<><Ico e="📻 " />Packet terminal</>} wide>
         <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
