@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getNodes, getMheard, type NodeRouteRow, type MheardRow } from "../api.js";
 import { useFmt } from "../format.js";
+import { useToolHost } from "../tools/host.js";
+import { ToolPanels } from "../tools/ToolPanels.js";
 
 /**
  * NodePanel (docs/25 P4) — the read-only NET/ROM node view: the NODES routing table this node knows +
@@ -12,6 +14,7 @@ export function NodePanel() {
   const [nodes, setNodes] = useState<NodeRouteRow[] | null>(null);
   const [mheard, setMheard] = useState<MheardRow[] | null>(null);
   const fmt = useFmt();
+  const host = useToolHost(); // tools targeting the "node" surface
 
   useEffect(() => {
     if (!open || nodes) return;
@@ -40,6 +43,7 @@ export function NodePanel() {
               ))}</ul>}
         </div>
       )}
+      <ToolPanels host={host} surface="node" />
     </div>
   );
 }

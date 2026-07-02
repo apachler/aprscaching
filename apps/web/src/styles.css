@@ -430,6 +430,28 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 .tool-sub textarea, .tool-sub input { width: 100%; }
 .tool-out { background: var(--surface-2); border-radius: 8px; padding: 8px; font-size: 12px; margin: 0; white-space: pre-wrap; }
 .tool-prompt { border: 1px solid var(--warn); border-radius: 9px; padding: 10px 12px; background: color-mix(in oklch, var(--warn) 8%, transparent); }
+.tool-surfaces { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+.tool-surfaces .badge { margin-right: 4px; }
+
+/* declarative tool panels (docs/28 `panel` capability) — a tool's typed nodes rendered by the host */
+.tool-panels { display: grid; gap: 8px; }
+.tool-panel { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; display: grid; gap: 6px; }
+.tool-panel-h { margin: 0; font-size: 12px; font-weight: 600; }
+.tp-text { margin: 0; font-size: 13px; }
+.tp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.tp-k { color: var(--muted); }
+.tp-v { font-family: var(--font-mono); }
+.tp-bar { display: grid; gap: 3px; font-size: 12px; }
+.tp-track { display: block; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.tp-fill { display: block; height: 100%; background: var(--accent); }
+.tp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tp-table th { text-align: left; color: var(--muted); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 0 8px 3px 0; }
+.tp-table td { padding: 1px 8px 1px 0; font-family: var(--font-mono); }
+.tp-muted { color: var(--muted); }
+.tp-accent, .tp-fill.tp-accent { color: var(--accent); }
+.tp-ok { color: var(--ok); } .tp-fill.tp-ok { background: var(--ok); }
+.tp-warn { color: var(--warn); } .tp-fill.tp-warn { background: var(--warn); }
+.tp-bad { color: var(--bad); } .tp-fill.tp-bad { background: var(--bad); }
 
 /* workbench app launcher — the available apps as launchable + pinnable cards */
 .wb-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 4px; }

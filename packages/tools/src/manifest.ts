@@ -4,6 +4,7 @@
  * JS module URL/file the sandbox loads.
  */
 import { isCapability, type Capability } from "./capabilities.js";
+import { isSurface, type Surface } from "./surfaces.js";
 
 export interface ToolManifest {
   name: string;              // unique id, e.g. "cw-decoder"
@@ -11,6 +12,7 @@ export interface ToolManifest {
   author: string;            // author callsign
   version: string;
   permissions: Capability[]; // requested capabilities
+  surfaces: Surface[];       // the tool's TYPE — which host surface(s) it plugs into (defaults to ["web"])
   description?: string;
   entry?: string;            // imported tools: the script URL/path the sandbox runs (built-ins omit it)
   signature?: string;        // optional detached signature over the manifest (author key)
@@ -27,12 +29,15 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
   if (typeof m.author !== "string" || !m.author.trim()) return { ok: false, error: "author (callsign) required" };
   if (typeof m.version !== "string" || !m.version.trim()) return { ok: false, error: "version required" };
   if (!Array.isArray(m.permissions) || !m.permissions.every(isCapability)) return { ok: false, error: "permissions must be a list of known capabilities" };
+  if (m.surfaces !== undefined && (!Array.isArray(m.surfaces) || !m.surfaces.every(isSurface))) return { ok: false, error: "surfaces must be a list of known surfaces (web/terminal/bbs/node/map)" };
   if (m.entry !== undefined && typeof m.entry !== "string") return { ok: false, error: "entry must be a string URL/path" };
+  const surfaces = Array.isArray(m.surfaces) && m.surfaces.length ? [...new Set(m.surfaces as Surface[])] : (["web"] as Surface[]);
   return {
     ok: true,
     manifest: {
       name: m.name, title: m.title.trim(), author: m.author.trim().toUpperCase(), version: m.version.trim(),
       permissions: [...new Set(m.permissions as Capability[])],
+      surfaces,
       description: typeof m.description === "string" ? m.description : undefined,
       entry: typeof m.entry === "string" ? m.entry : undefined,
       signature: typeof m.signature === "string" ? m.signature : undefined,

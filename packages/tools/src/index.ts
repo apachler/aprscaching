@@ -1,4 +1,6 @@
 export * from "./capabilities.js";
+export * from "./surfaces.js";
+export * from "./panel.js";
 export * from "./manifest.js";
 export * from "./host.js";
 export * from "./decoders/morse.js";

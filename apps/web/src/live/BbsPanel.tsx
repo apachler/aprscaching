@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, EmptyState, ErrorState, Ico } from "../ui/index.js";
+import { useToolHost } from "../tools/host.js";
+import { ToolPanels } from "../tools/ToolPanels.js";
 
 /** Enter/Space activate a role="button" row so it's keyboard-operable (ui-ux.md §7). */
 const rowKey = (fn: () => void) => (e: React.KeyboardEvent) => {
@@ -13,6 +15,7 @@ type Tab = "inbox" | "sent" | "bulletins" | "compose";
 /** BBS — store-and-forward APRS mail + (network-federated) bulletins + connected-mode threads. */
 export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   const fmt = useFmt();
+  const toolHost = useToolHost(); // tools targeting the "bbs" surface
   const signedIn = props.callsign.length >= 3;
   const [tab, setTab] = useState<Tab>("inbox");
   const [inbox, setInbox] = useState<BbsMessage[]>([]);
@@ -199,6 +202,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
         <p className="muted">From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded over APRS when the recipient is next heard; bulletins propagate to federated instances.</p>
       </>)}
       {msg && <p className="muted">{msg}</p>}
+      <ToolPanels host={toolHost} surface="bbs" />
     </Panel>
   );
 }

@@ -3,6 +3,8 @@ import { TerminalSession, parseAnsi, toAnsi, cp437Bytes, StationRegistry, TYPE_T
 import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
+import { useToolHost } from "../tools/host.js";
+import { ToolPanels } from "../tools/ToolPanels.js";
 
 /** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
 export interface TermTransport extends Transport { connect(baud?: number): Promise<void>; disconnect(): Promise<void>; }
@@ -50,6 +52,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const [, forceRender] = useReducer((n) => n + 1, 0);
   const notify = useCallback(() => forceRender(), []);
   const fmt = useFmt();
+  const host = useToolHost(); // shared Tool host — colourisers/panels targeting the "terminal" surface
 
   const sessionRef = useRef<TerminalSession | null>(null);
   const transportRef = useRef<TermTransport | null>(null);
@@ -197,9 +200,17 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
             {viewMon ? (
               <pre className="pt-out pt-mon-out" aria-live="polite">{monitor.slice(-300).map((m, i) => {
                 const type = namesRef.current.classify(m.src, { dest: m.dst });
+                // let enabled `monitor` tools (surface: terminal) recolour or hide the line
+                let colorVar = TYPE_COLOR_VAR[type as StationType];
+                let hidden = false;
+                for (const fn of host.colourisers("terminal")) {
+                  const c = fn({ src: m.src, dst: m.dst, text: m.text });
+                  if (c) { if (c.colorVar) colorVar = c.colorVar; if (c.hidden) hidden = true; }
+                }
+                if (hidden) return null;
                 return (
                   <div key={i} className="pt-mon-line">
-                    <span className="pt-mon-tag" style={{ color: `var(${TYPE_COLOR_VAR[type as StationType]})` }}>{TYPE_TAG[type as StationType]}</span>
+                    <span className="pt-mon-tag" style={{ color: `var(${colorVar})` }}>{TYPE_TAG[type as StationType]}</span>
                     {" "}<span className="mono">{m.src}&gt;{m.dst}</span>
                     <span className="muted"> {fmt.ago(Math.floor(m.at / 1000))}</span>
                     <span className="pt-mon-text"> {m.text.slice(0, 120)}</span>
@@ -241,6 +252,9 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
           </div>
         </>
       )}
+
+      {/* panels contributed by enabled `panel`-tools that target the terminal surface (docs/28) */}
+      <ToolPanels host={host} surface="terminal" />
     </div>
   );
 }

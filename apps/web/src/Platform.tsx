@@ -20,6 +20,7 @@ import {
   FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, resolveCrt, type LocaleSettings,
 } from "./format.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
+import { setToolTxVerified } from "./tools/host.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
@@ -84,6 +85,8 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   const callsign = session.callsign;
   const verified = session.verified;
+  // Keep the shared Tool host's TX gate in sync with the session so a tool's beacon/TX stays H5-gated.
+  useEffect(() => { setToolTxVerified(verified); }, [verified]);
   const [showSignIn, setShowSignIn] = useState(false);
   const [tourOpen, setTourOpen] = useState(startTour);
   const [caches, setCaches] = useState<MapCache[]>([]);

@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(5);
+    expect(host.list()).toHaveLength(6);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -28,7 +28,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
 
   it("a tool cannot use a surface it wasn't granted (capability gate)", () => {
     const rogue: Tool = {
-      manifest: { name: "rogue", title: "Rogue", author: "X", version: "1", permissions: ["monitor"] },
+      manifest: { name: "rogue", title: "Rogue", author: "X", version: "1", permissions: ["monitor"], surfaces: ["web"] },
       activate(ctx) { ctx.registerCommand("hack", () => ["pwned"]); }, // needs 'command' — not granted
     };
     const host = new ToolHost();
@@ -68,5 +68,45 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
     expect(host.runCommand("73")).not.toBeNull();
     host.setEnabled("ctext-macros", false);
     expect(host.runCommand("73")).toBeNull();
+  });
+});
+
+describe("Tool surfaces — a tool's type routes its contributions (docs/28)", () => {
+  it("defaults surfaces to ['web'] and validates the enum", () => {
+    const r = validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: ["panel"] });
+    expect(r.ok && r.manifest.surfaces).toEqual(["web"]);
+    const t2 = validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: ["command"], surfaces: ["terminal", "bbs"] });
+    expect(t2.ok && t2.manifest.surfaces).toEqual(["terminal", "bbs"]);
+    expect(validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: [], surfaces: ["nope"] }).ok).toBe(false);
+  });
+
+  it("filters commands/colourisers by the requesting surface", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("ctext-macros", true);          // surfaces: terminal, bbs
+    host.setEnabled("monitor-colouriser", true);    // surfaces: terminal
+    expect(host.runCommand("cq", "", "terminal")).not.toBeNull();
+    expect(host.runCommand("cq", "", "bbs")).not.toBeNull();
+    expect(host.runCommand("cq", "", "node")).toBeNull();       // ctext-macros doesn't target node
+    expect(host.colourisers("terminal")).toHaveLength(1);
+    expect(host.colourisers("bbs")).toHaveLength(0);            // colouriser is terminal-only
+    expect(host.commandNames("web")).toEqual([]);              // no command tool targets web
+  });
+
+  it("panel capability: setPanel is gated + panels() returns the spec for the surface", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "aprs-ssid-guide")!); // panel, web
+    host.setEnabled("aprs-ssid-guide", true);
+    const webPanels = host.panels("web");
+    expect(webPanels).toHaveLength(1);
+    expect(webPanels[0]!.spec.title).toMatch(/SSID/);
+    expect(host.panels("node")).toHaveLength(0);               // ssid-guide targets web/terminal/bbs, not node
+
+    const rogue: Tool = {
+      manifest: { name: "rogue-panel", title: "R", author: "X", version: "1", permissions: ["command"], surfaces: ["web"] },
+      activate(ctx) { ctx.setPanel({ nodes: [{ kind: "text", text: "x" }] }); }, // needs 'panel'
+    };
+    host.register(rogue);
+    expect(host.setEnabled("rogue-panel", true).error).toMatch(/permission 'panel' not granted/);
   });
 });

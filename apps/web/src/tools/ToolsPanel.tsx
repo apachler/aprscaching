@@ -1,27 +1,23 @@
-import { useMemo, useReducer, useRef, useState } from "react";
-import { ToolHost, builtinTools, type Capability, type ToolManifest } from "@aprsweb/tools";
+import { useEffect, useRef, useState } from "react";
+import { type Capability, type ToolManifest } from "@aprsweb/tools";
 import { fetchToolManifest, loadSandbox, type Sandbox } from "./sandbox.js";
-import { Switch, useToast, useModalDialog } from "../ui/index.js";
+import { useToolHost, setToolEnabled, TOOLS_TOAST_EVENT } from "./host.js";
+import { ToolPanels } from "./ToolPanels.js";
+import { Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
 
 /**
- * ToolsPanel (docs/27 B.3) — manage the sandboxed, capability-gated Tools. Built-ins run in-process
- * under the capability model (off by default); imported tools are fetched by URL, shown with a
- * permission prompt, and run in a locked-down Worker sandbox. TX-capable tools additionally require a
- * verified callsign (the H5 gate). Nothing here can bypass the trust engine.
+ * ToolsPanel (docs/27 B.3 / docs/28) — manage the sandboxed, capability-gated Tools. It drives the ONE
+ * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
+ * (packet terminal, BBS, node, or this web console) — not just here. Built-ins run in-process under the
+ * capability model (off by default); imported tools are fetched by URL, permission-prompted, and run in
+ * a locked-down Worker. TX-capable tools additionally require a verified callsign (H5). Nothing here
+ * can bypass the trust engine.
  */
 interface Imported { manifest: ToolManifest; sandbox: Sandbox; enabled: boolean }
 
 export function ToolsPanel(props: { callsign: string; verified: boolean }) {
-  const [, rerender] = useReducer((n) => n + 1, 0);
+  const host = useToolHost();
   const toast = useToast();
-  const host = useMemo(() => new ToolHost({
-    txGate: () => props.verified,
-    onLog: (t, m) => console.log(`[tool:${t}]`, m),
-    onBeacon: (t, s) => toast(`${t}: beacon every ${s.intervalSec / 60}min (TX-gated)`),
-    transmit: (t, info) => toast(`${t} TX: ${info}`),
-  }), [props.verified]);
-  // register the built-ins once
-  useMemo(() => { for (const t of builtinTools()) { try { host.register(t); } catch { /* already */ } } return null; }, [host]);
 
   const [decodeIn, setDecodeIn] = useState("");
   const [decodeKind, setDecodeKind] = useState("cw");
@@ -33,10 +29,16 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const promptRef = useRef<HTMLDivElement>(null);
   useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
 
+  // Surface beacon/TX feedback the shared host emits (it can't hold a React toast itself).
+  useEffect(() => {
+    const h = (e: Event) => toast((e as CustomEvent<string>).detail);
+    window.addEventListener(TOOLS_TOAST_EVENT, h);
+    return () => window.removeEventListener(TOOLS_TOAST_EVENT, h);
+  }, [toast]);
+
   function toggle(name: string, on: boolean) {
-    const r = host.setEnabled(name, on);
+    const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
-    rerender();
   }
   function runDecode() {
     const dec = host.decoders().find((d) => d.id === decodeKind);
@@ -75,7 +77,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
 
   return (
     <div className="tools-panel">
-      <p className="muted">Sandboxed, capability-gated plugins. Everything is off by default; TX-capable tools need a verified callsign.</p>
+      <p className="muted">Sandboxed, capability-gated plugins. A tool's <strong>surfaces</strong> say where it runs — this console, the packet terminal, BBS, or the node. Everything is off by default; TX-capable tools need a verified callsign.</p>
+      {!props.verified && <p className="muted fine">Your callsign isn't verified yet — TX/beacon tools stay gated until it is.</p>}
 
       <div className="tools-list">
         {host.list().map((t) => (
@@ -83,6 +86,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
             <div className="tool-meta">
               <strong>{t.manifest.title}</strong> <span className="muted fine">v{t.manifest.version} · {t.manifest.author}</span>
               <div className="muted fine">{t.manifest.description}</div>
+              <div className="tool-surfaces">{t.manifest.surfaces.map((s) => <Badge key={s}>{s}</Badge>)}</div>
               <div className="tool-perms">perms: {perms(t.manifest.permissions)}</div>
               {t.error && <div className="error fine">{t.error}</div>}
             </div>
@@ -90,6 +94,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
           </div>
         ))}
       </div>
+
+      {/* panels contributed by enabled `panel`-tools that target this (web) console */}
+      <ToolPanels host={host} surface="web" />
 
       {decodersOn && (
         <div className="tool-sub">
@@ -131,6 +138,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         <div className="tool-prompt" role="dialog" aria-modal="true" aria-label="Approve tool permissions" ref={promptRef}>
           <p><strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span> requests:</p>
           <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
+          <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
           <p className="muted fine">It will run sandboxed in a Worker. Network access is blocked unless it requested (and you approve) the <code>network</code> capability. TX still requires your verified callsign.</p>
           <div className="row gap-2 end">
             <button onClick={() => setPrompt(null)}>Cancel</button>

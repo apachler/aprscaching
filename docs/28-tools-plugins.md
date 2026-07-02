@@ -49,7 +49,29 @@ unit-testable, tri-runtime-clean. The host API, capability model, built-ins and 
 **runtime-agnostic**, so a Lua runtime (wasmoon/Fengari) can be added later as a drop-in without
 touching them.
 
+## 5a. Surfaces (a tool's *type*) + the `panel` capability — IMPLEMENTED (2026-07)
+Two additions make the plugin system serve **every** surface, not just the packet terminal:
+
+- **Surfaces = the tool's type.** A manifest declares `surfaces: Surface[]` (`web` · `terminal` · `bbs`
+  · `node` · `map`; defaults to `["web"]`). Capabilities say *what* a tool may do; surfaces say *where*
+  its contributions appear. The host getters take a surface filter — `colourisers(s)`, `runCommand(w,a,s)`,
+  `commandNames(s)`, `decoders(s)`, `panels(s)`, `dispatch(e,p,s)` — so each host asks only for the tools
+  relevant to it. (`packages/tools/src/surfaces.ts`, `manifest.ts`, `host.ts`.)
+- **`panel` capability = a real UI region, sandbox-safe.** A `panel` tool calls `ctx.setPanel(spec)` with a
+  **declarative** `PanelSpec` (typed nodes: `text` · `kv` · `badge` · `bar` · `table`) — it never touches
+  the DOM. The host renders it with semantic elements + theme tokens (`apps/web/src/tools/ToolPanels.tsx`);
+  `sanitizePanel()` bounds the untrusted (imported) path. (`packages/tools/src/panel.ts`.)
+- **One shared host.** `apps/web/src/tools/host.ts` is a module singleton (`useToolHost()` hook + a
+  `CHANGED` event), so enabling a tool in the Tools app lights it up wherever its surfaces say — the
+  packet terminal (monitor colourisers + a terminal panel region), BBS, the node, and the web console.
+  This replaced the per-panel host that had siloed tools inside the Tools app.
+- **Built-in surfaces:** monitor-colouriser=`terminal`; ctext-macros=`terminal,bbs`; auto-responder=
+  `terminal,bbs,node`; beacon-scheduler=`terminal`; digimode-decoders=`web`; **aprs-ssid-guide** (new,
+  `panel`) = `web,terminal,bbs` — demonstrates one plugin rendering on several typed surfaces.
+
 ## 6. Follow-ons (not v1)
-Signed-manifest verification + a community **registry/marketplace**; sandboxed colouriser/decoder/
-panel/map contributions (async bridge or a Lua runtime); the browser Web Audio DSP front-ends that feed
-the CW/PSK31 decoders live signal (pairs `docs/16` H4).
+Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)
+tools contributing colourisers/decoders/panels across the postMessage bridge (today only `/commands`
+cross the worker boundary; built-ins get the full set); a `map` layer host surface (capability declared,
+no host surface yet); the browser Web Audio DSP front-ends that feed the CW/PSK31 decoders live signal
+(pairs `docs/16` H4).
