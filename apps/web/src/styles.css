@@ -460,6 +460,11 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 }
 .tp-blocks > span { display: block; text-align: center; }
 
+/* field station (docs/16) — local RF stations + inbox, two columns on wide, stacked narrow */
+.field-station { margin: 10px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; }
+.field-station .fs-cols { display: grid; gap: 12px; }
+@container (min-width: 34rem) { .field-station .fs-cols { grid-template-columns: 1fr 1fr; } }
+
 /* workbench app launcher — the available apps as launchable + pinnable cards */
 .wb-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 4px; }
 .wb-app { position: relative; }

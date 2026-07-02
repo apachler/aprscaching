@@ -5,6 +5,7 @@ import type {
 } from "@aprsweb/shared";
 
 export type { CacheSummary, CacheDetail, CacheLogEntry, CreateCacheRequest, MapCache, LogType, AppGeo, TrustTier, LeaderboardEntry, Profile, StationSummary, StationDetail, DecodedPacket, PortStat, MessageItem, Spot };
+import { saveArea, loadArea } from "./offlineArea.js";
 
 /** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.com. */
 export const API_BASE: string =
@@ -23,8 +24,16 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
-export function listCaches(bbox: BBox, includeUnvetted = false): Promise<{ caches: MapCache[] }> {
-  return call(`/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`);
+export async function listCaches(bbox: BBox, includeUnvetted = false): Promise<{ caches: MapCache[]; offline?: boolean }> {
+  try {
+    const r = await call<{ caches: MapCache[] }>(`/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`);
+    saveArea(r.caches, bbox);                       // write-through: browsing an area caches it (docs/16 C)
+    return r;
+  } catch (e) {
+    const off = loadArea();                          // offline: render the last-downloaded area, no network
+    if (off) return { caches: off.caches, offline: true };
+    throw e;
+  }
 }
 
 export function getCache(id: number, callsign?: string): Promise<{ cache: CacheDetail }> {

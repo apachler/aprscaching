@@ -137,6 +137,19 @@ use Path A or a native/PWA-BLE shell later). No reinventing KISS/AX.25/BLE-KISS 
 - All paths: frames deframe via `@aprsweb/aprs` (no duplicated codec); RF receptions still earn trust
   only through `verify.ts`.
 
+## Field station — making APRS + APRScaching work off-grid (BUILT)
+
+> **Status: ✅ A–D implemented.** The pure core is `@aprsweb/aprs` `field.ts` (`localEvent` maps a decoded
+> frame → live station / inbox message; `ackReply`; `syncBackBatch`), unit-tested. **A** — the browser RF
+> bridge (`RfBrowser`) feeds a client `fieldStation` sink so decoded positions become live stations + APRS
+> messages land in a local inbox, gateway-independent. **B** — H5-gated message TX already ships (beacon +
+> message compose); a heard message addressed to us gets a one-tap **ACK** over KISS. **C** — `listCaches`
+> write-throughs the viewport to `offlineArea` (localStorage) and reads it back when the network is down, so
+> Nearby / map / cache detail / Log-find render offline; a **"Download this area"** button on Nearby makes it
+> deliberate (basemap tiles via the offline style + SW). **D** — a **"Sync N heard"** action replays
+> locally-heard receptions to a gateway (signed device key / ingest secret) when back online; RX ≠ trust
+> still holds (`verify.ts`). Radio TX + tile precache are the validate-at-deploy legs (hardware/SW).
+
 ## Field station — making APRS + APRScaching work off-grid (proposal)
 
 **The scenario.** A web-only user, no server box, out in the field with a laptop + handheld + a USB/BLE

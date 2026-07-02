@@ -4,6 +4,7 @@ import { useFmt, useTheme } from "../format.js";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";
 import { Panel, EmptyState, Icon } from "../ui/index.js";
+import { saveArea } from "../offlineArea.js";
 import type { MapCache, StationSummary } from "../api.js";
 
 type Filter = "all" | "caches" | "stations";
@@ -16,6 +17,7 @@ export function NearbyPanel(props: {
   const fmt = useFmt();
   const cogmind = useTheme() === "cogmind";
   const [filter, setFilter] = useState<Filter>("all");
+  const [saved, setSaved] = useState(false);
   const c = props.map?.getCenter();
   const here = c ? { lat: c.lat, lon: c.lng } : null;
   const grid = here ? maidenhead(here.lat, here.lon, 10) : null;
@@ -33,6 +35,13 @@ export function NearbyPanel(props: {
       <div className="nearby-h">
         <span className="muted">nearest first</span>
         {grid && <span className="nearby-grid">{grid}</span>}
+        <button className="fine" title="Cache these caches for offline / field use (docs/16 C)"
+          onClick={() => {
+            const b = props.map?.getBounds();
+            if (!b || !props.caches.length) return;
+            saveArea(props.caches, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+            setSaved(true);
+          }}>{saved ? "Saved offline" : "Download this area"}</button>
       </div>
       <div className="seg-chips">{chip("all", "All")}{chip("caches", "Caches")}{chip("stations", "Stations")}</div>
 

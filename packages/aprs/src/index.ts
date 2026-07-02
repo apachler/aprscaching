@@ -18,3 +18,5 @@ export * from "./cotin.js";
 export * from "./meshtastic.js";
 export * from "./digipeat.js";
 export * from "./igate.js";
+export * from "./thirdparty.js";
+export * from "./field.js";

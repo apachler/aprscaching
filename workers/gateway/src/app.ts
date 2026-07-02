@@ -27,6 +27,7 @@ import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
+import { handleUserTx } from "./tx.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
@@ -297,6 +298,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
+  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env);   // docs/19 P3 — gated user TX (path A)
 
   // audio-cache: stages + media (M2)
   if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));

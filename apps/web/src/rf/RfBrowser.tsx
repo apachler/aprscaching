@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import {
   WebSerialKiss, WebBluetoothKiss, webSerialSupported, webBluetoothSupported, type RfFrame, type RfLink,
 } from "./kiss.js";
 import { WebAudioAfsk, WebSerialMeshtastic, webAudioSupported } from "./extralinks.js";
-import { encodeAprsPosition, encodeAprsMessage } from "@aprsweb/aprs";
+import { encodeAprsPosition, encodeAprsMessage, ackReply, syncBackBatch, type LocalMessage } from "@aprsweb/aprs";
+import { fieldStation } from "./fieldStation.js";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
@@ -52,9 +53,38 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   useEffect(() => () => { void linkRef.current?.disconnect(); }, []);
 
+  // Field station (docs/16 A/D): re-render when the local sink updates (live stations + inbox).
+  const [, forceField] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => fieldStation.subscribe(() => forceField()), []);
+
+  /** (B) ACK a message heard for us over the radio — H5-gated, reuses the KISS TX path. */
+  async function ackMessage(mm: LocalMessage) {
+    const info = ackReply(mm, props.callsign);
+    if (!info || !linkRef.current || !txOn) return;
+    setTxBusy(true);
+    try { await linkRef.current.send({ src: `${base}-${ssid}`, dst: "APZACG", path: ["WIDE1-1"], payload: info }); toast(`ACK ${mm.msgNo} → ${mm.from}`); }
+    catch (e) { toast(`TX failed: ${(e as Error).message}`); }
+    finally { setTxBusy(false); }
+  }
+
+  /** (D) Sync-back: replay locally-heard receptions to a gateway once online (via the forward path). */
+  async function syncBack() {
+    const heard = fieldStation.heardForSync();
+    const keep = new Set(syncBackBatch(heard.map((h) => ({ raw: h.raw, at: h.at })), props.callsign).map((h) => h.raw));
+    const packets = heard.filter((h) => keep.has(h.raw)).map((h) => h.packet);
+    if (!packets.length) { toast("Nothing new to sync."); return; }
+    const c = fwd.current;
+    const send = c.mode === "signed" && c.callsign.length >= 3 ? ingestSigned(packets, c.callsign)
+      : c.secretCfg.secret ? ingestPackets(packets, c.secretCfg.secret, c.secretCfg.url || undefined) : null;
+    if (!send) { toast("Configure gateway forwarding first (below)."); return; }
+    try { await send; fieldStation.clearHeard(); toast(`Synced ${packets.length} heard frame(s).`); }
+    catch (e) { toast(`Sync failed: ${(e as Error).message}`); }
+  }
+
   function onFrame(f: RfFrame) {
     setFrames((prev) => [f, ...prev].slice(0, 100));
     setCount((n) => n + 1);
+    fieldStation.feed(f);        // off-grid sink (docs/16 A): live stations + local inbox, gateway-independent
     const c = fwd.current;
     if (!c.on) return;
     const p = [f.packet];
@@ -203,6 +233,49 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               </>}
         </div>
       )}
+
+      {/* Field station (docs/16 A/B/D): local RF -> live stations + inbox, no gateway needed. */}
+      {(() => { const stations = fieldStation.liveStations(); const inbox = fieldStation.inbox(); const heardN = fieldStation.heardForSync().length;
+        return (stations.length > 0 || inbox.length > 0) ? (
+        <div className="field-station">
+          <div className="row between">
+            <h4>Field station <span className="muted fine">off-grid · no gateway</span></h4>
+            <button onClick={syncBack} disabled={heardN === 0} title="Replay locally-heard frames to a gateway when back online">
+              Sync {heardN} heard
+            </button>
+          </div>
+          <div className="fs-cols">
+            <div>
+              <div className="ulabel">Stations heard <span className="muted fine">({stations.length})</span></div>
+              {stations.length === 0 ? <EmptyState>None yet.</EmptyState> : (
+                <ul className="logs">{stations.slice(0, 30).map((s) => (
+                  <li key={s.callsign}>
+                    <span className="mono"><strong>{s.callsign}</strong></span>
+                    <span className="muted"> · {s.lat.toFixed(3)},{s.lon.toFixed(3)}</span>
+                    {s.kind !== "station" && <span className="muted"> · {s.kind}</span>}
+                    <span className="muted"> · {fmt.ago(s.heardAt / 1000)}</span>
+                    {s.comment && <div className="comment mono">{s.comment.slice(0, 60)}</div>}
+                  </li>
+                ))}</ul>
+              )}
+            </div>
+            <div>
+              <div className="ulabel">Local inbox <span className="muted fine">({inbox.length})</span></div>
+              {inbox.length === 0 ? <EmptyState>No messages.</EmptyState> : (
+                <ul className="logs">{inbox.slice(0, 30).map((mm: LocalMessage, i) => (
+                  <li key={`${mm.at}-${i}`}>
+                    <span className="mono"><strong>{mm.from}</strong>{mm.ack ? " (ack)" : ""} &rarr; {mm.to}</span>
+                    <span className="muted"> · {fmt.ago(mm.at / 1000)}</span>
+                    <div className="comment mono">{mm.text.slice(0, 80)}</div>
+                    {txOn && link && ackReply(mm, props.callsign) &&
+                      <button className="fine" onClick={() => ackMessage(mm)} disabled={txBusy}>ACK {mm.msgNo}</button>}
+                  </li>
+                ))}</ul>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null; })()}
 
       <h4>Live RX</h4>
       {frames.length === 0

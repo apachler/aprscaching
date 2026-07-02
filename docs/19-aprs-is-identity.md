@@ -104,7 +104,11 @@ the operator call.
 - **P1 — peer identity:** `SERVICE_SSID` + `TOCALL` config; outbox/`BBS_CALL` default → `CALL-SSID`;
   `aprsCall` in the well-known descriptor.
 - **P2 — tocall registration:** request an `APAC…` id via `aprs-deviceid`; flip the default.
-- **P3 — gated user TX (path A):** third-party injection of a control-verified user's traffic.
+- **P3 — gated user TX (path A): ✅ DONE.** `POST /api/tx/aprs` (gateway `tx.ts`) — a signed-in,
+  control-verified user enqueues a beacon or message into `aprs_outbox` under their **own** call; the ingest
+  box drains + injects it as third-party traffic (`}USERCALL>…`, `thirdPartyEncap` in `@aprsweb/aprs`). Gate
+  = control-verification (H5), never a passcode. `aprsPasscode()` pure util added (path-B/ops). Tested; the
+  APRS-IS write itself is validate-at-deploy (the box's existing login).
 - **P4 — LoTW-TLS auth:** TLS + LoTW cert login for peers (then direct-TX users).
 - **P5 — direct user TX (path B):** with `docs/16` H5 (auto-passcode/LoTW, verified, opt-in).
 - Registry `aprsCall` binding lands with `docs/15` T4.2.
