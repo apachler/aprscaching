@@ -29,7 +29,9 @@ server**, an **RMS/Winlink gateway**, and a **web management UI**.
 
 ## Current state (what we already have — P1–P4)
 Pure, tested cores + gateway surface; the gaps are all at the **RF-wiring** layer.
-- **AX.25 LAPB (mod-8):** `packages/ax25` — SABM/UA, I-frames + windowing, T1/T3, RR/RNR/REJ. (mod-128, SREJ deferred.)
+- **AX.25 LAPB (mod-8 + mod-128):** `packages/ax25` — SABM/UA, I-frames + windowing, T1/T3, RR/RNR/REJ,
+  plus the modulo-128 **SABME** extended-window connect (2-octet I/S control, 7-bit sequence numbers) and
+  **SREJ** selective-reject recovery with a receive buffer. Only on-air T1/T3 tuning remains.
 - **FBB BBS interpreter:** `packages/packet/src/bbs.ts` — L/LA/LB/LM/LL, R, S/SP/SB/ST, SR (threaded), K, X, H, I, B; P/B/T; BID `id_instance`; `MessageStore` interface. Gateway `bbs.ts` + web `BbsPanel.tsx`.
 - **NET/ROM table + node CLI:** `packages/packet/src/netrom.ts` — `NodesTable` (learn/decay/lookup, route reversal), `NodeSession` (Nodes/Routes/Connect/Users/MHeard/CQ/Info/Bye). Gateway `node.ts`, `netrom_nodes`/`node_mheard` (migration 0038). **Missing:** the L3/L4 wire codec, NODES broadcast TX, L4 circuits.
 - **Forwarding core:** `packages/packet/src/forward.ts` — hierarchical `TO@AT` parse, longest-prefix routing, FB proposal build + FS verdict parse. Migration 0037 `bbs_forward_rules`; `white_pages` table + lookup/learn. Transport enum `rf-fbb | ip-fed | axip` (only `ip-fed` = signed bulletin federation is live).
@@ -196,6 +198,7 @@ real FBB partner, not a headless build. ASCII FBB forwarding is fully interopera
 | Capability | Pure core (tested) | Product wiring | Still needs |
 |---|---|---|---|
 | AX.25 v2.2 connected link | `packages/ax25` `link.ts` ✅ | — | on-air T1/T3 tuning |
+| Modulo-128 (SABME) + SREJ | `link.ts` (`modulo`/`srej` cfg) + `frame.ts` extended codec ✅ | — | on-air |
 | KISS framing + TX/RX | `@aprsweb/aprs` kiss ✅ | `apps/ingest/kiss.ts` (`onRaw`, `sendFrame`) ✅ | a real TNC/radio |
 | Connected-mode digi | `digipeatAx25` (H-bit) ✅ | `ConnectedDigipeater` ✅ | RF; viscous-cancel (follow-on) |
 | Session server (answer connects) | `SessionServer` + `serveApp` ✅ | NODE + BBS services ✅ | RF |

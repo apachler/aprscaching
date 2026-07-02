@@ -1,9 +1,11 @@
 /**
  * frame.ts — AX.25 v2.2 frame codec for CONNECTED mode (docs/25 P0). Unlike the APRS UI-only path in
  * @aprsweb/aprs, this handles every frame type and the full control field (N(S)/N(R)/P-F), so the
- * LAPB state machine in link.ts can speak real packet. Pure + runtime-neutral. Modulo-8 control only
- * (modulo-128 / SABME is a documented P0.b extension); SABME is recognised but its I/S control is not
- * yet 2-byte-decoded.
+ * LAPB state machine in link.ts can speak real packet. Pure + runtime-neutral. Supports BOTH the
+ * modulo-8 control field (1 octet, 3-bit sequence numbers) and — when `extended` is set — the
+ * modulo-128 / SABME extended control field (2 octets for I and S frames, 7-bit sequence numbers).
+ * The modulo is a per-link property established at connect (SABM ⇒ mod-8, SABME ⇒ mod-128), so the
+ * codec cannot infer it from the bytes; the caller passes `extended` to match the link.
  */
 export interface Ax25Address { call: string; ssid: number }
 
@@ -19,6 +21,7 @@ export interface Ax25Frame {
   command: boolean;          // from the C bits: true = command, false = response (AX.25 v2)
   type: FrameType;
   pf: boolean;               // poll (command) / final (response)
+  extended?: boolean;        // set on decode (and by the link on emit) when this is a modulo-128 I/S frame
   nr?: number;               // I + S frames
   ns?: number;               // I frames
   pid?: number;              // I + UI frames (0xF0 = no layer 3)
@@ -55,8 +58,12 @@ export function decodeAddress(b: Uint8Array, off: number): { addr: Ax25Address; 
 }
 
 // ------------------------------------------------------------------ frame
-/** Serialize an AX.25 frame to bytes. Command/response is carried in the dst/src C bits (v2). */
-export function encodeFrame(f: Ax25Frame): Uint8Array {
+/**
+ * Serialize an AX.25 frame to bytes. Command/response is carried in the dst/src C bits (v2). When
+ * `extended` (modulo-128), I and S frames get a 2-octet control field (7-bit N(S)/N(R)); U frames are
+ * unchanged. `extended` defaults to the frame's own `extended` flag so a link can tag what it emits.
+ */
+export function encodeFrame(f: Ax25Frame, extended = f.extended ?? false): Uint8Array {
   const parts: number[] = [];
   // dst C bit = command, src C bit = !command (AX.25 v2 convention)
   const dst = encodeAddress(f.dst, f.command, false);
@@ -65,19 +72,30 @@ export function encodeFrame(f: Ax25Frame): Uint8Array {
   parts.push(...dst, ...src);
   digis.forEach((d, i) => parts.push(...encodeAddress(d, f.digisRepeated?.[i] ?? false, i === digis.length - 1)));
 
-  let ctrl: number;
-  if (f.type === "I") ctrl = ((f.nr! & 7) << 5) | (f.pf ? PF : 0) | ((f.ns! & 7) << 1);
-  else if (S_BITS[f.type] !== undefined) ctrl = ((f.nr! & 7) << 5) | (f.pf ? PF : 0) | (S_BITS[f.type]! << 2) | 0b01;
-  else ctrl = U[f.type]! | (f.pf ? PF : 0);
-  parts.push(ctrl);
+  const isI = f.type === "I", isS = S_BITS[f.type] !== undefined;
+  if (extended && (isI || isS)) {
+    // 16-bit control, low octet first: octet1 carries the type/N(S), octet2 carries P/F + N(R).
+    const o1 = isI ? ((f.ns! & 0x7f) << 1) : (0b01 | (S_BITS[f.type]! << 2));
+    const o2 = ((f.nr! & 0x7f) << 1) | (f.pf ? 1 : 0);
+    parts.push(o1, o2);
+  } else {
+    let ctrl: number;
+    if (isI) ctrl = ((f.nr! & 7) << 5) | (f.pf ? PF : 0) | ((f.ns! & 7) << 1);
+    else if (isS) ctrl = ((f.nr! & 7) << 5) | (f.pf ? PF : 0) | (S_BITS[f.type]! << 2) | 0b01;
+    else ctrl = U[f.type]! | (f.pf ? PF : 0);
+    parts.push(ctrl);
+  }
 
   if (f.type === "I" || f.type === "UI") parts.push(f.pid ?? PID_NO_L3);
   if (f.info && (f.type === "I" || f.type === "UI" || f.type === "FRMR" || f.type === "TEST")) parts.push(...f.info);
   return Uint8Array.from(parts);
 }
 
-/** Parse bytes into an AX.25 frame, or null if malformed. */
-export function decodeFrame(bytes: Uint8Array): Ax25Frame | null {
+/**
+ * Parse bytes into an AX.25 frame, or null if malformed. Pass `extended` (modulo-128) to read the 2-octet
+ * I/S control field — the caller knows the link's modulo from the connect (SABM vs SABME); the bytes don't.
+ */
+export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | null {
   if (bytes.length < 15) return null;                       // 2 addresses + control minimum
   const addrs: { addr: Ax25Address; cbit: boolean; last: boolean }[] = [];
   let off = 0;
@@ -91,15 +109,19 @@ export function decodeFrame(bytes: Uint8Array): Ax25Frame | null {
   const command = dst!.cbit;                                // v2: dst C bit set ⇒ command
 
   const ctrl = bytes[off++]!;
-  const pf = !!(ctrl & PF);
+  let pf = !!(ctrl & PF), isExt = false;
   let type: FrameType, nr: number | undefined, ns: number | undefined, pid: number | undefined, info: Uint8Array | undefined;
 
   if ((ctrl & 1) === 0) {                                   // I frame
-    type = "I"; nr = (ctrl >> 5) & 7; ns = (ctrl >> 1) & 7;
+    type = "I";
+    if (extended) { const c2 = bytes[off++]!; isExt = true; ns = (ctrl >> 1) & 0x7f; nr = (c2 >> 1) & 0x7f; pf = !!(c2 & 1); }
+    else { nr = (ctrl >> 5) & 7; ns = (ctrl >> 1) & 7; }
     pid = bytes[off++]; info = bytes.subarray(off);
   } else if ((ctrl & 0b11) === 0b01) {                      // S frame
-    type = S_REV[(ctrl >> 2) & 3]!; nr = (ctrl >> 5) & 7;
-  } else {                                                  // U frame
+    type = S_REV[(ctrl >> 2) & 3]!;
+    if (extended) { const c2 = bytes[off++]!; isExt = true; nr = (c2 >> 1) & 0x7f; pf = !!(c2 & 1); }
+    else { nr = (ctrl >> 5) & 7; }
+  } else {                                                  // U frame (always 1 octet, even in extended mode)
     const base = ctrl & ~PF;
     type = U_REV[base] ?? "DM";
     if (type === "UI") { pid = bytes[off++]; info = bytes.subarray(off); }
@@ -110,6 +132,7 @@ export function decodeFrame(bytes: Uint8Array): Ax25Frame | null {
     digis: digis.length ? digis.map((d) => d.addr) : undefined,
     digisRepeated: digis.length ? digis.map((d) => d.cbit) : undefined,
     command, type, pf, nr, ns, pid, info: info && info.length ? info : undefined,
+    ...(isExt ? { extended: true } : {}),
   };
 }
 
