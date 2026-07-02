@@ -66,8 +66,8 @@ Two additions make the plugin system serve **every** surface, not just the packe
   packet terminal (monitor colourisers + a terminal panel region), BBS, the node, and the web console.
   This replaced the per-panel host that had siloed tools inside the Tools app.
 - **Built-in surfaces:** monitor-colouriser=`terminal`; ctext-macros=`terminal,bbs`; auto-responder=
-  `terminal,bbs,node`; beacon-scheduler=`terminal`; digimode-decoders=`web`; **aprs-ssid-guide** (new,
-  `panel`) = `web,terminal,bbs` — demonstrates one plugin rendering on several typed surfaces.
+  `terminal,bbs,node`; beacon-scheduler=`terminal`; digimode-decoders=`web`; aprs-ssid-guide (`panel`)
+  = `web,terminal,bbs` — demonstrates one plugin rendering on several typed surfaces.
 
 ## 5b. Graphic-Packet / LinPac patterns adopted (2026-07 — A–F)
 Adopted from the GP/LinPac extension model (their macros, event bus, per-station DB, remote colon-
@@ -81,17 +81,67 @@ commands, shared vars, external "channel apps"):
 - **C · Macro variable expansion.** One shared `expand(text, vars)` (`macros.ts`) with the GP `{token}`
   set (`{call} {mycall} {peer} {chan} {grid} {date} {time}`); the packet terminal uses it. Unknown
   tokens are left intact.
-- **D · Remote-invocable commands (PMS).** `manifest.remote: true` opts a command tool into being driven
-  by a *connected remote peer* (GP colon-commands). `runCommand(w,a,surface,{remote})` gates it so a peer
-  can never reach operator-only tools. Built-in **pms** answers `H/INFO/TIME/73`. The Tools console has an
-  "as a remote peer" toggle; the server-side consumer is the ingest/node session (`session-server`).
+- **D · Remote-invocable commands.** `manifest.remote: true` opts a command tool into being driven by a
+  *connected remote peer* (GP colon-commands). `runCommand(w,a,surface,{remote})` gates it so a peer can
+  never reach operator-only tools. No `remote` built-in ships (see §5d — we do not build an APRS PMS); the
+  mechanism is there for third-party/imported tools. The Tools console has an "as a remote peer" toggle;
+  the server-side consumer is the ingest/node session (`session-server`).
 - **E · Shared var store.** `ctx.store` (LinPac `lp_set_var/get_var`) — a bounded per-host key/value scratch
-  so cooperating tools share state (pms counts sessions with it).
+  so cooperating tools share state (watch-alert/mheard keep their heard-lists in it).
 - **F · "Channel apps" — concept adopted, raw exec rejected.** LinPac runs arbitrary Linux programs as
   channel-bound apps over stdio. In the browser we **never** exec; the sanctioned equivalents are the
   **Worker-sandboxed imported tool** (bound to a surface/channel via the event context) and the operator
   **companion/ingest box** (`docs/21`). The `channel` field in the event payload is what lets a tool act
   per-session like a GP app, without a shell.
+
+## 5c. Built-in tools shipped (all OFF by default)
+GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-side, capability-gated):
+
+| Tool | Caps | Surfaces | GP/LinPac analog · function |
+|---|---|---|---|
+| monitor-colouriser | monitor | terminal | NAMES.GP — colour heard traffic by station type |
+| ctext-macros | command | terminal,bbs | macros — `/cq /73 /qth` canned text |
+| auto-responder | event | terminal,bbs,node | ctext.mac — greet a connect (now peer-personalised) |
+| beacon-scheduler | command,beacon | terminal | timed beacon (TX-gated) |
+| digimode-decoders | decoder | web | CW + PSK31 codecs |
+| aprs-ssid-guide | panel | web,terminal,bbs | reference — conventional -SSID table |
+| **watch-alert** | command,monitor,panel | terminal,web | **WATCH/CATCH** — highlight + log `/watch`-ed calls |
+| **mheard** | monitor,event,panel | terminal,web | **MHEARD** — rolling recently-heard list |
+| **auto-status** | command,event,tx | terminal | timed macro — `/autostatus <min> <text>`, TX-gated |
+| **grid-bearing** | command,panel | web,terminal | locator util — `/grid <A> [B]` distance + bearing |
+| **sevenplus** | decoder | web | **7PLUS** — parse/reassemble multi-part 7plus messages |
+
+## 5d. We do NOT build an APRS PMS (deliberate divergence)
+Graphic Packet / LinPac ship a **PMS** (Personal Message System / personal mailbox) that a *connected*
+peer drives with colon-commands. We considered a PMS mailbox tool and **dropped it on purpose** because
+our messaging model diverges:
+
+- **Our BBS is FBB store-and-forward over connected-mode AX.25 + signed federation** (`docs/25` P2–P3):
+  threaded mail/bulletins, BIDs, hierarchical routing, one canonical store. That already *is* the mailbox
+  — reimplementing a second, parallel mailbox as a plugin would fork the message store and the routing.
+- **Classic APRS "PMS"/messaging is unconnected APRS *message* packets** (`:addressee:text{seq`, acked),
+  a different transport with different semantics (unproto, per-message ACK, no threads). Bolting a
+  connected-mode PMS plugin onto that would blur two message models users already keep distinct.
+- So: the **`remote` capability + gate stay** (any third-party tool may still offer remote colon-commands
+  on the node), but **no first-party PMS ships**. Connected-mode mail = the BBS app; APRS messaging =
+  the Messages surface. They are intentionally separate and neither is a "tool".
+
+## 5e. Deferred tools (documented, not built)
+Evaluated from the GP/LinPac catalog; parked with the reason + what each needs:
+
+- **Logbook** (event+store) — per-callsign connect/disconnect log (LinPac `LOGBOOK`/`cinit/cexit`).
+  Needs persistence beyond the in-memory store (account data or export) → build once a tool storage/export
+  surface exists.
+- **RTT / ping** (command+tx) — round-trip time to a station (LinPac `RTT`). Needs the connected-mode
+  round-trip timing hook on the ingest; TX-gated. Server-side consumer.
+- **Auto-login / PW** (event+command) — auto-answer BBS/node auth (FBB MD2/MD5, FLEXNET, TheNet). Deferred
+  on security grounds: it stores credentials, and per `docs/19` the APRS passcode verifies nothing. If
+  built, do the **LoTW-TLS** path only, behind a security review.
+- **File transfer (AUTOBIN / YAPP / 7plus-send)** — binary transfer protocols. Not a sandboxed plugin: it
+  needs a new `transfer` capability **and** Web Serial framing — it belongs in the packet *terminal*, not
+  the tool sandbox.
+- **CONVERS / JOIN conference relay** — cross-channel bidirectional relay. Server-side (ingest/node)
+  multi-session concern, not a browser plugin.
 
 ## 6. Follow-ons (not v1)
 Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)

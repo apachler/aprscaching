@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(7);
+    expect(host.list()).toHaveLength(11);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -117,20 +117,38 @@ describe("Tool surfaces — a tool's type routes its contributions (docs/28)", (
 
   it("(D) remote peers only reach remote-allowed command tools", () => {
     const host = new ToolHost();
-    for (const t of builtinTools()) host.register(t);
-    host.setEnabled("pms", true);           // remote:true, surfaces bbs/node/terminal
-    host.setEnabled("ctext-macros", true);  // remote:false
-    expect(host.runCommand("info", "", "bbs", { remote: true })).not.toBeNull();  // PMS answers a peer
-    expect(host.runCommand("cq", "", "bbs", { remote: true })).toBeNull();        // macro is operator-only
-    expect(host.runCommand("cq", "", "bbs")).not.toBeNull();                       // …but local still works
+    host.register(builtinTools().find((t) => t.manifest.name === "ctext-macros")!); // remote:false, surfaces terminal/bbs
+    const rq: Tool = {
+      manifest: { name: "rq", title: "Remote query", author: "X", version: "1", permissions: ["command"], surfaces: ["bbs"], remote: true },
+      activate(ctx) { ctx.registerCommand("info", () => ["ok"]); },
+    };
+    host.register(rq); host.setEnabled("rq", true); host.setEnabled("ctext-macros", true);
+    expect(host.runCommand("info", "", "bbs", { remote: true })).not.toBeNull();   // remote tool answers a peer
+    expect(host.runCommand("cq", "", "bbs", { remote: true })).toBeNull();         // macro is operator-only
+    expect(host.runCommand("cq", "", "bbs")).not.toBeNull();                        // …but local still works
   });
 
-  it("(E) the shared store lets tools persist/cooperate", () => {
+  it("(E) the shared store persists across command invocations", () => {
     const host = new ToolHost();
-    host.register(builtinTools().find((t) => t.manifest.name === "pms")!);
-    host.setEnabled("pms", true);
-    expect(host.runCommand("73", "", "bbs", { remote: true })![0]).toMatch(/session 1/);
-    expect(host.runCommand("73", "", "bbs", { remote: true })![0]).toMatch(/session 2/);
+    const t: Tool = {
+      manifest: { name: "counter", title: "C", author: "X", version: "1", permissions: ["command"], surfaces: ["web"] },
+      activate(ctx) { ctx.registerCommand("bump", () => { const n = Number(ctx.store.get("n") ?? "0") + 1; ctx.store.set("n", String(n)); return [String(n)]; }); },
+    };
+    host.register(t); host.setEnabled("counter", true);
+    expect(host.runCommand("bump")![0]).toBe("1");
+    expect(host.runCommand("bump")![0]).toBe("2");
+  });
+
+  it("(tools 5+8) grid-bearing computes distance/bearing; 7plus summarises a block", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("grid-bearing", true);
+    const g = host.runCommand("grid", "JN76jx JO30")!;
+    expect(g[0]).toMatch(/JN76JX → JO30:.*km, bearing/);
+    host.setEnabled("sevenplus", true);
+    const out = host.decoders().find((d) => d.id === "7plus")!.decode("file.zip part 1 of 3\ngo_7+. abcd\nQUJD\nstop_7+");
+    expect(out).toMatch(/part 1 of 3/);
+    expect(out).toMatch(/incomplete/);
   });
 
   it("panel capability: setPanel is gated + panels() returns the spec for the surface", () => {
