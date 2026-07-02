@@ -1,7 +1,7 @@
-import { useMemo, useReducer, useState } from "react";
+import { useMemo, useReducer, useRef, useState } from "react";
 import { ToolHost, builtinTools, type Capability, type ToolManifest } from "@aprsweb/tools";
 import { fetchToolManifest, loadSandbox, type Sandbox } from "./sandbox.js";
-import { Switch, useToast } from "../ui/index.js";
+import { Switch, useToast, useModalDialog } from "../ui/index.js";
 
 /**
  * ToolsPanel (docs/27 B.3) — manage the sandboxed, capability-gated Tools. Built-ins run in-process
@@ -30,6 +30,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const [importUrl, setImportUrl] = useState("");
   const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string } | null>(null);
   const [imported, setImported] = useState<Imported[]>([]);
+  const promptRef = useRef<HTMLDivElement>(null);
+  useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
 
   function toggle(name: string, on: boolean) {
     const r = host.setEnabled(name, on);
@@ -107,7 +109,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         <div className="tool-sub">
           <div className="ulabel">Run a tool command <span className="muted fine">({cmds.map((c) => `/${c}`).join(" ")})</span></div>
           <div className="row gap-2">
-            <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="/cq" onKeyDown={(e) => { if (e.key === "Enter") runCmd(); }} />
+            <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="/cq" aria-label="Tool command" onKeyDown={(e) => { if (e.key === "Enter") runCmd(); }} />
             <button onClick={runCmd}>Run</button>
           </div>
           {cmdOut.length > 0 && <pre className="tool-out mono">{cmdOut.join("\n")}</pre>}
@@ -117,7 +119,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       <div className="tool-sub">
         <div className="ulabel">Import a tool <span className="muted fine">(by tool.json URL)</span></div>
         <div className="row gap-2">
-          <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://…/tool.json" />
+          <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://…/tool.json" aria-label="Tool manifest URL" />
           <button onClick={startImport}>Import…</button>
         </div>
         {imported.map((im) => (
@@ -126,7 +128,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       </div>
 
       {prompt && (
-        <div className="tool-prompt" role="dialog" aria-label="Approve tool permissions">
+        <div className="tool-prompt" role="dialog" aria-modal="true" aria-label="Approve tool permissions" ref={promptRef}>
           <p><strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span> requests:</p>
           <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
           <p className="muted fine">It will run sandboxed in a Worker. Network access is blocked unless it requested (and you approve) the <code>network</code> capability. TX still requires your verified callsign.</p>

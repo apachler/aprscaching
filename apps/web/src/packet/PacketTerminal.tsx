@@ -158,15 +158,20 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
               <span className="pt-ch-n">0</span> Monitor <span className="pt-count">{monitor.length}</span>
             </button>
             {session?.channels.map((ch, i) => (
-              <button key={ch.id} role="tab" aria-selected={!viewMon && ch.id === active?.id}
-                className={`pt-cbtn st-${namesRef.current.classify(ch.remoteCall)}${!viewMon && ch.id === active?.id ? " on" : ""}`}
-                onClick={() => { setViewMon(false); setActiveId(ch.id); }}>
-                <span className="pt-ch-n">{i + 1}</span> {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
-                <span className="pt-x" role="button" aria-label="close channel" onClick={(e) => { e.stopPropagation(); session!.close(ch.id); }}>✕</span>
-              </button>
+              // tab + close are sibling real <button>s (a button can't nest inside a button, and the
+              // close must be independently keyboard-reachable) wrapped in a presentational container.
+              <span key={ch.id} className="pt-cbtn-wrap" role="presentation">
+                <button role="tab" aria-selected={!viewMon && ch.id === active?.id}
+                  className={`pt-cbtn st-${namesRef.current.classify(ch.remoteCall)}${!viewMon && ch.id === active?.id ? " on" : ""}`}
+                  onClick={() => { setViewMon(false); setActiveId(ch.id); }}>
+                  <span className="pt-ch-n">{i + 1}</span> {ch.remoteCall} <span className="pt-state">{ch.state[0]}</span>
+                </button>
+                <button className="pt-x" aria-label={`Close channel ${ch.remoteCall}`}
+                  onClick={(e) => { e.stopPropagation(); session!.close(ch.id); }}>✕</button>
+              </span>
             ))}
             <div className="pt-connect-inline">
-              <input value={remoteCall} placeholder="connect to…" onChange={(e) => setRemoteCall(e.target.value)}
+              <input value={remoteCall} placeholder="connect to…" aria-label="Connect to callsign" onChange={(e) => setRemoteCall(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") connect(); }} />
               <button onClick={connect} disabled={remoteCall.trim().length < 3}>Connect</button>
             </div>
@@ -199,7 +204,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
             </div>
 
             <div className="row gap-2 pt-cmd">
-              <input value={cmd} placeholder={viewMon ? "select a channel (1–9) to type" : "send a line…"} onChange={(e) => setCmd(e.target.value)}
+              <input value={cmd} placeholder={viewMon ? "select a channel (1–9) to type" : "send a line…"} aria-label="Send a line" onChange={(e) => setCmd(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") sendCmd(); }} disabled={viewMon || !active || active.state !== "connected"} />
               <button onClick={() => sendCmd()} disabled={viewMon || !active || active.state !== "connected"}>Send</button>
             </div>

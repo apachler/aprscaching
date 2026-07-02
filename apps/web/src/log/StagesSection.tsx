@@ -92,7 +92,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
                   <button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}>📶 Scan NFC tag</button>
                 </div>
                 <div className="row gap-2 mt-2">
-                  <input value={code} placeholder="…or enter the tag code" onChange={(e) => setCode(e.target.value)} />
+                  <input value={code} placeholder="…or enter the tag code" aria-label="Stage tag code" onChange={(e) => setCode(e.target.value)} />
                   <button className="primary" disabled={busy === s.stageNo || !code.trim()} onClick={() => reveal(s.stageNo)}>
                     {busy === s.stageNo ? "Checking…" : "Unlock"}
                   </button>

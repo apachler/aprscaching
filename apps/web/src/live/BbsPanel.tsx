@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState } from "../ui/index.js";
+
+/** Enter/Space activate a role="button" row so it's keyboard-operable (ui-ux.md §7). */
+const rowKey = (fn: () => void) => (e: React.KeyboardEvent) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+};
 
 type Tab = "inbox" | "sent" | "bulletins" | "compose";
 
@@ -17,14 +22,17 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   const [type, setType] = useState<"P" | "B" | "T">("P");
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [selected, setSelected] = useState<BbsMessage | null>(null); // reading pane (wide master-detail)
 
   const load = useCallback(() => {
+    setErr(null);
+    const fail = (e: unknown) => setErr((e as Error).message); // an outage must read as an error, not "empty"
     if (signedIn) {
-      getBbsInbox(props.callsign).then((r) => setInbox(r.messages)).catch(console.error);
-      getBbsSent(props.callsign).then((r) => setSent(r.messages)).catch(console.error);
+      getBbsInbox(props.callsign).then((r) => setInbox(r.messages)).catch(fail);
+      getBbsSent(props.callsign).then((r) => setSent(r.messages)).catch(fail);
     }
-    getBulletins().then((r) => setBulletins(r.bulletins)).catch(console.error);
+    getBulletins().then((r) => setBulletins(r.bulletins)).catch(fail);
   }, [props.callsign, signedIn]);
   useEffect(() => { load(); }, [load]);
 
@@ -86,7 +94,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   // one compact list row (from/date/subject) for the master list; clicking loads the reading pane.
   const listRow = (m: BbsMessage, kind: "inbox" | "bulletins") => (
     <li key={m.id} className={`bbs-row${kind === "inbox" && m.readAt == null ? " bbs-unread" : ""}${selected?.id === m.id ? " on" : ""}`}
-        onClick={() => openMessage(m)}>
+        role="button" tabIndex={0} onClick={() => openMessage(m)} onKeyDown={rowKey(() => openMessage(m))}>
       <div className="bbs-row-h">
         {kind === "inbox" && m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
         {kind === "bulletins" && <Badge>{m.toCall}</Badge>}
@@ -117,7 +125,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             <div className="bbs-thread">
               {tree.map(({ msg: t, depth }) => (
                 <div key={t.id} className={`bbs-node depth-${Math.min(depth, 6)}${t.id === selected.id ? " on" : ""}`}
-                     onClick={() => setSelected(t)} role="button" tabIndex={0}>
+                     onClick={() => setSelected(t)} onKeyDown={rowKey(() => setSelected(t))} role="button" tabIndex={0}>
                   <div className="bbs-msg">
                     <div className="bbs-msg-h">
                       {depth > 0 && <span className="bbs-reply-mark" aria-hidden="true">↳</span>}
@@ -147,7 +155,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       </div>
 
       {tab === "inbox" && (!signedIn ? <EmptyState>Set your callsign to see your mail.</EmptyState> :
-        inbox.length === 0 ? <EmptyState>No messages for {props.callsign}.</EmptyState> : (
+        inbox.length === 0 ? (err ? <ErrorState onRetry={load} /> : <EmptyState>No messages for {props.callsign}.</EmptyState>) : (
         <div className="bbs-body" data-sel={selected ? "1" : "0"}>
           <ul className="bbs-list">{inbox.map((m) => listRow(m, "inbox"))}</ul>
           <div className="bbs-reader">{reader()}</div>
@@ -155,7 +163,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
       ))}
 
       {tab === "sent" && (!signedIn ? <EmptyState>Set your callsign to see your sent mail.</EmptyState> :
-        sent.length === 0 ? <EmptyState>You haven't sent any mail yet.</EmptyState> : (
+        sent.length === 0 ? (err ? <ErrorState onRetry={load} /> : <EmptyState>You haven't sent any mail yet.</EmptyState>) : (
         <ul className="logs">{sent.map((m) => (
           <li key={m.id}>
             <span className="muted">to</span> <strong>{m.toCall}</strong> <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
@@ -166,7 +174,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
         ))}</ul>
       ))}
 
-      {tab === "bulletins" && (bulletins.length === 0 ? <EmptyState>No bulletins.</EmptyState> : (
+      {tab === "bulletins" && (bulletins.length === 0 ? (err ? <ErrorState onRetry={load} /> : <EmptyState>No bulletins.</EmptyState>) : (
         <div className="bbs-body" data-sel={selected ? "1" : "0"}>
           <ul className="bbs-list">{bulletins.map((m) => listRow(m, "bulletins"))}</ul>
           <div className="bbs-reader">{reader()}</div>

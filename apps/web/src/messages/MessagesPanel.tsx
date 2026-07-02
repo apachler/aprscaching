@@ -1,6 +1,6 @@
 import { getMessages } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, LoadMore, usePaged } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
 
 /**
  * MessagesPanel — APRS text messaging as a first-class platform surface (its own inbox), NOT the BBS.
@@ -22,7 +22,9 @@ export function MessagesPanel(props: { callsign: string; onClose: () => void }) 
   return (
     <Panel title="✉ Messages" onClose={props.onClose}>
       <p className="muted">Live APRS text messages. Your callsign's traffic is highlighted. This is radio messaging — separate from BBS mail.</p>
-      {messages.items.length === 0
+      {messages.error && messages.items.length === 0
+        ? <ErrorState onRetry={messages.reload} />
+        : messages.items.length === 0
         ? <EmptyState>No APRS messages yet. Messages addressed to or from stations appear here as they're heard.</EmptyState>
         : (
           <ul className="msg-list">

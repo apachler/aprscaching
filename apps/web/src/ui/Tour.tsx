@@ -17,6 +17,8 @@ export function Tour(props: { steps: TourStep[]; onDone: () => void }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const finish = useCallback(() => { markSeen(); props.onDone(); }, [props]);
 
+  // restore focus to whatever opened the tour when it closes (ui-ux.md §7)
+  useEffect(() => { const prev = document.activeElement as HTMLElement | null; return () => prev?.focus?.(); }, []);
   useEffect(() => { cardRef.current?.querySelector<HTMLElement>("button.primary")?.focus(); }, [i]);
   useEffect(() => {
     const card = cardRef.current; if (!card) return;

@@ -18,7 +18,7 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
     catch (e) { toast((e as Error).message); }
   }
   return (
-    <div className="spot-card" role="dialog" aria-label={`Spot ${s.callsign}`}>
+    <div className="spot-card" role="group" aria-label={`Spot ${s.callsign}`}>
       <div className="spot-card-h">
         <span className="mono spot-call">{s.callsign}</span>
         <Badge className="ml-2">{s.source.toUpperCase()}</Badge>

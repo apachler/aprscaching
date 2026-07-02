@@ -1,5 +1,5 @@
 import { typeMeta } from "../cacheTypes.js";
-import { Panel } from "../ui/index.js";
+import { Panel, Badge } from "../ui/index.js";
 import type { MapCache } from "../api.js";
 
 /** A mirrored (peer-instance) cache — read-only; log on its home instance. */
@@ -15,7 +15,7 @@ export function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }
       </p>
       <p className="federated">
         ⇄ mirrored from <strong>{c.origin}</strong>
-        {c.originTrust === "unvetted" && <span className="badge warn" title="From a peer you haven't vetted">unvetted</span>}
+        {c.originTrust === "unvetted" && <Badge kind="warn" title="From a peer you haven't vetted">unvetted</Badge>}
       </p>
       <p className="muted">
         This cache lives on another instance in the network. Log your find on its home instance;

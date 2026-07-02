@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, type WatchEntry } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
+import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast } from "../ui/index.js";
 
 /**
  * Watchlist (docs/20 W1) — watch callsigns and see in-app alerts when one is heard, especially near a
@@ -51,7 +51,9 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
           ))}</div>}
 
       <div className="row between"><h4>Alerts{unseen > 0 ? ` (${unseen} new)` : ""}</h4>{unseen > 0 && <button className="link" onClick={clearSeen}>mark all seen</button>}</div>
-      {alerts.items.length === 0
+      {alerts.error && alerts.items.length === 0
+        ? <ErrorState onRetry={alerts.reload} />
+        : alerts.items.length === 0
         ? <EmptyState>No alerts yet.</EmptyState>
         : <ul className="logs">{alerts.items.map((a) => (
             <li key={a.id} className={a.seen ? "" : "unseen"}>

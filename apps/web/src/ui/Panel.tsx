@@ -4,7 +4,7 @@
  * close button right. Responsive docked↔sheet behaviour lives in styles.css (.panel is a query
  * container; the panel↔sheet swap is a viewport media query).
  */
-import type { ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 export function Panel(props: {
   title: ReactNode; onClose?: () => void; side?: "left" | "right"; actions?: ReactNode; children: ReactNode;
@@ -12,13 +12,27 @@ export function Panel(props: {
    *  docking as a slim ~348px drawer — the map hides while the surface is active (see css.md). */
   wide?: boolean;
 }) {
+  const ref = useRef<HTMLElement>(null);
+  const { onClose } = props;
+  // Move focus into the drawer on open so keyboard/AT users land inside it, and return focus to the
+  // control that opened it on close (ui-ux.md §7). Not a modal focus-trap — the panel coexists with
+  // the map — so Escape-to-close is scoped to the panel (bubbles from its children), not the document.
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    ref.current?.focus();
+    return () => prev?.focus?.();
+  }, []);
+  const onKeyDown = onClose
+    ? (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }
+    : undefined;
   return (
-    <aside className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}>
+    <aside ref={ref} tabIndex={-1} onKeyDown={onKeyDown}
+           className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}>
       <div className="row between">
         <h2>{props.title}</h2>
         <span className="spacer" />
         {props.actions}
-        {props.onClose && <button className="icon" aria-label="Close" onClick={props.onClose}>✕</button>}
+        {onClose && <button className="icon" aria-label="Close" onClick={onClose}>✕</button>}
       </div>
       {props.children}
     </aside>

@@ -86,7 +86,7 @@ export function StationGraphs(props: { callsign: string }) {
 
       const wxX = series.wx.map((p) => p.ts);
       add("Temperature", wxX, [{ label: "temp", color: tok("--bad", "#e55"), unit: "°C", data: series.wx.map((p) => p.tempC) }]);
-      add("Humidity & pressure", wxX, [
+      add("Humidity", wxX, [
         { label: "humidity", color: tok("--tier-b", "#59f"), unit: "%", data: series.wx.map((p) => p.humidity) },
       ]);
       add("Pressure", wxX, [{ label: "pressure", color: tok("--accent", "#0bd"), unit: "hPa", data: series.wx.map((p) => p.pressureHpa) }]);

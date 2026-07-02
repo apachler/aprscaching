@@ -5,7 +5,7 @@ import {
   getStationWxKey, issueStationWxKey, type OperatedStation, type StationInput, type StationWxKey,
 } from "../api.js";
 import { useFmt } from "../format.js";
-import { Badge, EmptyState, LoadMore, usePaged, useToast } from "../ui/index.js";
+import { Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast } from "../ui/index.js";
 import { WxTxToggles } from "./WxTxToggles.js";
 
 const ROLE_LABEL: Record<StationRole, string> = {
@@ -45,7 +45,9 @@ export function MyStations(props: { callsign: string }) {
         helps corroborate other people's finds (Tier&nbsp;A). It's recognised, never gated.</p>
       <div className="row end"><button onClick={becomeCache}>★ Become a cache</button></div>
 
-      {stations.items.length === 0
+      {stations.error && stations.items.length === 0
+        ? <ErrorState onRetry={stations.reload} />
+        : stations.items.length === 0
         ? <EmptyState>No stations yet — add your first below.</EmptyState>
         : stations.items.map((s) => <StationCard key={s.id} station={s} onChanged={stations.reload} />)}
       <LoadMore hasMore={stations.hasMore} loading={stations.loading} onClick={stations.loadMore} label="Load more stations" />

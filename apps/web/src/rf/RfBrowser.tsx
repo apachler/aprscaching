@@ -186,16 +186,16 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                   </Row>
                   <h5>Beacon position</h5>
                   <div className="row gap-2">
-                    <input className="mono field-sm" placeholder="lat" value={bcn.lat} onChange={(e) => setBcn((b) => ({ ...b, lat: e.target.value }))} />
-                    <input className="mono field-sm" placeholder="lon" value={bcn.lon} onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))} />
-                    <button onClick={useMyLocation} title="Use my location">📍</button>
+                    <input className="mono field-sm" placeholder="lat" aria-label="Latitude" value={bcn.lat} onChange={(e) => setBcn((b) => ({ ...b, lat: e.target.value }))} />
+                    <input className="mono field-sm" placeholder="lon" aria-label="Longitude" value={bcn.lon} onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))} />
+                    <button onClick={useMyLocation} title="Use my location" aria-label="Use my location">📍</button>
                   </div>
-                  <input placeholder="comment (optional)" maxLength={43} value={bcn.comment} onChange={(e) => setBcn((b) => ({ ...b, comment: e.target.value }))} />
+                  <input placeholder="comment (optional)" aria-label="Beacon comment" maxLength={43} value={bcn.comment} onChange={(e) => setBcn((b) => ({ ...b, comment: e.target.value }))} />
                   <div className="row end"><button className="primary" onClick={beacon} disabled={txBusy}>Beacon</button></div>
                   <h5>Message</h5>
                   <div className="row gap-2">
-                    <input className="mono field-sm" placeholder="to" maxLength={9} value={msg.to} onChange={(e) => setMsg((m) => ({ ...m, to: e.target.value }))} />
-                    <input placeholder="message" maxLength={67} value={msg.text} onChange={(e) => setMsg((m) => ({ ...m, text: e.target.value }))} />
+                    <input className="mono field-sm" placeholder="to" aria-label="Message recipient" maxLength={9} value={msg.to} onChange={(e) => setMsg((m) => ({ ...m, to: e.target.value }))} />
+                    <input placeholder="message" aria-label="Message text" maxLength={67} value={msg.text} onChange={(e) => setMsg((m) => ({ ...m, text: e.target.value }))} />
                   </div>
                   <div className="row end"><button className="primary" onClick={sendMsg} disabled={txBusy}>Send</button></div>
                   <p className="muted fine">Each transmit is deliberate. Do not transmit without a valid licence for <span className="mono">{base}</span>.</p>

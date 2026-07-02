@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead } from "../map/geo.js";
-import { Panel } from "../ui/index.js";
+import { Panel, Row, Switch } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprsweb/shared";
 
 const SCOPES: { v: FedScope; label: string; help: string }[] = [
@@ -77,10 +77,9 @@ export function HidePanel(props: {
           <label>Station callsign (the beaconing station that <em>is</em> the cache)
             <input value={stationCall} onChange={(e) => setStationCall(e.target.value)} placeholder="OE8XYZ-9" />
           </label>
-          <label className="row gap-2 inline-check">
-            <input type="checkbox" checked={rendezvous} onChange={(e) => setRendezvous(e.target.checked)} />
-            Log rendezvous when I meet other living caches
-          </label>
+          <Row label="Log rendezvous when I meet other living caches">
+            <Switch label="Log rendezvous" checked={rendezvous} onChange={setRendezvous} />
+          </Row>
         </>
       )}
       <div className="row">
@@ -94,10 +93,9 @@ export function HidePanel(props: {
       <label>Hint<input value={hint} onChange={(e) => setHint(e.target.value)} /></label>
       <label>Description
         <textarea value={description} rows={3} onChange={(e) => setDescription(e.target.value)} /></label>
-      <label className="row gap-2 inline-check">
-        <input type="checkbox" checked={driveIn} onChange={(e) => setDriveIn(e.target.checked)} />
-        Drive-in (car-accessible)
-      </label>
+      <Row label="Drive-in (car-accessible)">
+        <Switch label="Drive-in" checked={driveIn} onChange={setDriveIn} />
+      </Row>
       <div className="row">
         <label>Country<input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="AT" maxLength={56} /></label>
         <label>Tags<input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="scenic, family, qrp" /></label>

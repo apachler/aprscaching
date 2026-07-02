@@ -144,8 +144,8 @@ function ForwardingAdmin() {
         </ul>
       )}
       <div className="row">
-        <input className="mono" placeholder="route (DL, EU, *)" value={rule.route} onChange={(e) => setRule((x) => ({ ...x, route: e.target.value }))} />
-        <input className="mono" placeholder="partner call" value={rule.partner} onChange={(e) => setRule((x) => ({ ...x, partner: e.target.value }))} />
+        <input className="mono" placeholder="route (DL, EU, *)" aria-label="Route (region prefix)" value={rule.route} onChange={(e) => setRule((x) => ({ ...x, route: e.target.value }))} />
+        <input className="mono" placeholder="partner call" aria-label="Partner callsign" value={rule.partner} onChange={(e) => setRule((x) => ({ ...x, partner: e.target.value }))} />
         <button onClick={submitRule}>Add rule</button>
       </div>
     </>

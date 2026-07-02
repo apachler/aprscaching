@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { getActivity, getLeaderboard, getCorroborators, type LeaderboardEntry, type Corroborator, type BBox } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, LoadMore, usePaged } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
 export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void; onClose: () => void }) {
@@ -22,7 +22,8 @@ export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () =
   return (
     <Panel title="Activity" onClose={props.onClose}>
       <h4>Recent finds</h4>
-      {feed.items.length === 0 ? <EmptyState>No recent activity here — be the first to log a find.</EmptyState> : (
+      {feed.error && feed.items.length === 0 ? <ErrorState onRetry={feed.reload} /> :
+       feed.items.length === 0 ? <EmptyState>No recent activity here — be the first to log a find.</EmptyState> : (
         <ul className="logs">
           {feed.items.map((a) => (
             <li key={a.id}>

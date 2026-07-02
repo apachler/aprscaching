@@ -90,7 +90,7 @@ export function AccountSettings(props: { session: Session; onSignIn: () => void 
       <Advanced label="Add a callsign">
         <p className="muted fine">Hold another licensed base call on this account (a club call, a second-country call). Each SSID station (-7 HT, -9 mobile, -10 IGate…) inherits its base call's verification.</p>
         <div className="row">
-          <input value={newCs} placeholder="OE1XYZ" onChange={(e) => setNewCs(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addNew(); }} />
+          <input value={newCs} placeholder="OE1XYZ" aria-label="Additional base callsign" onChange={(e) => setNewCs(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addNew(); }} />
           <button className="primary" disabled={busy} onClick={addNew}>Add</button>
         </div>
       </Advanced>

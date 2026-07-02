@@ -67,7 +67,6 @@ const TOUR_STEPS: TourStep[] = [
  * It mounts only when `active` (signed in or exploring), so `active` is constant-true within.
  */
 export default function Platform({ session, startTour }: { session: SessionState; startTour: boolean }) {
-  const active = true;
   // Callback-ref node (not a plain ref): the map must initialise exactly when its container mounts.
   // An effect keyed only on a boolean would run once while the container is still absent and never
   // re-run — leaving a blank map — so we key the map-init effect on the container node itself.
@@ -195,14 +194,14 @@ export default function Platform({ session, startTour }: { session: SessionState
   // stays in MapLibre's #z/lat/lon hash, so this query param never collides with it.
   const deepLinked = useRef(false);
   useEffect(() => {
-    if (deepLinked.current || !active) return;
+    if (deepLinked.current) return;
     deepLinked.current = true;
     try {
       const view = new URLSearchParams(window.location.search).get("view");
       const s = view ? surfaceByView(view) : null;
       if (s) navigate(s.key);
     } catch { /* ignore */ }
-  }, [active, navigate]);
+  }, [navigate]);
 
   // capture / restore a shareable map view (docs/11 M1)
   const getViewState = useCallback((): MapViewState => {
@@ -222,13 +221,13 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [openOnly]); // eslint-disable-line react-hooks/exhaustive-deps
   const viewLinked = useRef(false);
   useEffect(() => {
-    if (viewLinked.current || !active || !ready) return;
+    if (viewLinked.current || !ready) return;
     viewLinked.current = true;
     try {
       const slug = new URLSearchParams(window.location.search).get("v");
       if (slug) resolveView(slug).then((r) => applyView(r.state)).catch(() => {});
     } catch { /* ignore */ }
-  }, [active, ready, applyView]);
+  }, [ready, applyView]);
 
   // Explore → drop into the read-only platform for this session; run the tour once (first time).
   // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
@@ -286,7 +285,6 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // live WebSocket: geofence prompts ("you're near a cache")
   useEffect(() => {
-    if (!active) return;
     const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
     ws.current = s;
     s.addEventListener("open", () => { const m = map.current; if (m) { const b = m.getBounds(); subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]); } });
@@ -305,7 +303,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       } catch { /* ignore */ }
     });
     return () => { try { s.close(); } catch { /* */ } ws.current = null; };
-  }, [subscribeLive, active]);
+  }, [subscribeLive]);
 
   // re-subscribe when the callsign changes so prompts are addressed to you
   useEffect(() => {
@@ -316,7 +314,7 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // ---- init map once ----
   useEffect(() => {
-    if (!active || !mapNode || map.current) return;
+    if (!mapNode || map.current) return;
     const m = new maplibregl.Map({
       container: mapNode, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
     });
@@ -344,7 +342,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       });
     });
     return () => { m.remove(); map.current = null; };
-  }, [refresh, active, mapNode]);
+  }, [refresh, mapNode]);
 
   // ---- render cache markers (diffed against the live map) ----
   useEffect(() => {
@@ -353,30 +351,36 @@ export default function Platform({ session, startTour }: { session: SessionState
     for (const c of shown) {
       if (c.lat == null || c.lon == null) continue;
       seen.add(c.globalId);
-      if (markers.current.has(c.globalId)) continue;
       const meta = typeMeta(c.type);
       let el: HTMLElement;
-      let anchor: maplibregl.PositionAnchor = "bottom";
-      if (c.type === "aprs_living") {
-        // living caches ARE a beaconing station — use the brand beacon icon
-        const img = document.createElement("img");
-        img.className = "beacon-pin"; img.src = ASSET.beaconBlue; anchor = "center";
-        el = img;
+      const existing = markers.current.get(c.globalId);
+      if (existing) {
+        el = existing.getElement();
+        // keep the class in sync if a cache flips mirrored↔native (glyph pins only)
+        if (c.type !== "aprs_living") el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
       } else {
-        const btn = document.createElement("button");
-        btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`; btn.style.background = meta.color;
-        btn.innerHTML = `<span>${meta.glyph}</span>`;
-        el = btn;
+        let anchor: maplibregl.PositionAnchor = "bottom";
+        if (c.type === "aprs_living") {
+          // living caches ARE a beaconing station — use the brand beacon icon
+          const img = document.createElement("img");
+          img.className = "beacon-pin"; img.src = ASSET.beaconBlue; anchor = "center";
+          el = img;
+        } else {
+          const btn = document.createElement("button");
+          btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`; btn.style.background = meta.color;
+          btn.innerHTML = `<span>${meta.glyph}</span>`;
+          el = btn;
+        }
+        markers.current.set(c.globalId, new maplibregl.Marker({ element: el, anchor }).setLngLat([c.lon, c.lat]).addTo(m));
       }
+      // rebind title + click each pass so a cache whose title/mirrored/id changed doesn't keep a stale
+      // tooltip or route clicks the wrong way (mirrored→setRemote vs native→setSelectedId).
       el.title = `${c.code} — ${c.title}${c.mirrored ? ` · via ${c.origin}` : ""}`;
       el.onclick = (ev) => {
         ev.stopPropagation();
         if (c.mirrored) { setSelectedId(null); setRemote(c); }
         else if (c.id != null) { setRemote(null); setSelectedId(c.id); }
       };
-      const mk = new maplibregl.Marker({ element: el, anchor })
-        .setLngLat([c.lon, c.lat]).addTo(m);
-      markers.current.set(c.globalId, mk);
     }
     for (const [gid, mk] of markers.current) {
       if (!seen.has(gid)) { mk.remove(); markers.current.delete(gid); }
@@ -447,13 +451,16 @@ export default function Platform({ session, startTour }: { session: SessionState
         const btn = document.createElement("button");
         btn.className = "spot-pin";
         btn.innerHTML = "<span>◎</span>";
-        btn.onclick = (ev) => { ev.stopPropagation(); setPickedSpot(s); };
         mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
         spotMarkers.current.set(s.id, mk);
       } else {
         mk.setLngLat([s.lon, s.lat]);
       }
-      mk.getElement().title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
+      // rebind onclick + title every refresh: an existing marker's `s` would otherwise be the stale
+      // object captured at creation, so a spot that changed band/mode/ref would open the old card.
+      const el = mk.getElement();
+      el.onclick = (ev) => { ev.stopPropagation(); setPickedSpot(s); };
+      el.title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
     }
     for (const [id, mk] of spotMarkers.current) {
       if (!seen.has(id)) { mk.remove(); spotMarkers.current.delete(id); }
@@ -640,7 +647,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 setRemote(null); setSelectedId(nearPrompt.cacheId); setNearPrompt(null);
                 map.current?.flyTo({ center: map.current.getCenter(), zoom: Math.max(map.current.getZoom(), 14) });
               }}>Log it</button>
-              <button className="icon" onClick={() => setNearPrompt(null)}>✕</button>
+              <button className="icon" aria-label="Dismiss" onClick={() => setNearPrompt(null)}>✕</button>
             </div>
           )}
           {pickedSpot && mode === "view" && (
