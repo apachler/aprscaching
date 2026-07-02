@@ -26,6 +26,10 @@ export const toolHost = new ToolHost({
 });
 for (const t of builtinTools()) { try { toolHost.register(t); } catch { /* already registered (HMR) */ } }
 
+// Drive the periodic on_tick event (docs/28 B) so timer tools (auto-status, watchdogs) fire. Cheap:
+// dispatch is a no-op unless a tool hooked on_tick. Once per module load.
+if (typeof window !== "undefined") setInterval(() => toolHost.dispatch("on_tick", {}), 60_000);
+
 /** Enable/disable a tool and notify every mounted surface to re-read the host. */
 export function setToolEnabled(name: string, on: boolean): { ok: boolean; error?: string } {
   const r = toolHost.setEnabled(name, on);

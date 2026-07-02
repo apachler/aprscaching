@@ -37,12 +37,35 @@ export function macroPackTool(): Tool {
   };
 }
 
-/** Auto-responder — GP PMS-style: greet an incoming connect (payload may carry a reply callback). */
-export function autoResponderTool(greeting = "Welcome - this is an APRScaching auto-responder. Type H for help."): Tool {
+/** Auto-responder — GP PMS-style: greet an incoming connect, personalised with the peer's callsign
+ *  (docs/28 A — the event now carries peerCall/myCall/station + a reply sink). */
+export function autoResponderTool(): Tool {
   return {
     manifest: { name: "auto-responder", title: "Auto-responder", author: AUTHOR, version: v, permissions: ["event"], surfaces: ["terminal", "bbs", "node"], description: "Greets an incoming connect (QTEXT/PMS style)." },
     activate(ctx) {
-      ctx.on("on_connect", (payload) => { (payload as { reply?: (t: string) => void })?.reply?.(greeting); });
+      ctx.on("on_connect", (p) => {
+        const who = p.peerCall ? ` ${p.peerCall}` : "";
+        p.reply?.(`Welcome${who} - this is${p.myCall ? ` ${p.myCall}` : " an APRScaching"} auto-responder. Type H for help.`);
+      });
+    },
+  };
+}
+
+/** Personal Message System — a remote-invocable command set (docs/28 D): a *connected peer* can drive
+ *  H / T(ime) / I(nfo) on a BBS/node session, GP colon-command style. `remote: true` opts these in;
+ *  operator-only tools are never reachable this way. Uses the shared store to count callers (LinPac vars). */
+export function pmsTool(): Tool {
+  return {
+    manifest: { name: "pms", title: "Personal Message System", author: AUTHOR, version: v, permissions: ["command"], surfaces: ["bbs", "node", "terminal"], remote: true, description: "Remote-invocable PMS verbs (H/TIME/INFO) a connected peer can run." },
+    activate(ctx) {
+      ctx.registerCommand("h", () => ["Commands: H help  TIME  INFO  73 bye"]);
+      ctx.registerCommand("info", () => ["APRScaching PMS - store-and-forward mailbox. 73."]);
+      ctx.registerCommand("time", () => [`It is ${new Date().toISOString().slice(11, 19)}Z here.`]);
+      ctx.registerCommand("73", () => {
+        const n = Number(ctx.store.get("pms.byes") ?? "0") + 1;
+        ctx.store.set("pms.byes", String(n));
+        return [`73! (session ${n})`];
+      });
     },
   };
 }
@@ -101,5 +124,5 @@ export function ssidReferenceTool(): Tool {
 
 /** The full curated built-in set the host ships (all OFF by default). */
 export function builtinTools(): Tool[] {
-  return [colouriserTool(), macroPackTool(), autoResponderTool(), beaconSchedulerTool(), decoderTools(), ssidReferenceTool()];
+  return [colouriserTool(), macroPackTool(), autoResponderTool(), beaconSchedulerTool(), decoderTools(), ssidReferenceTool(), pmsTool()];
 }

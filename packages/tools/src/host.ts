@@ -10,25 +10,45 @@ import type { ToolManifest } from "./manifest.js";
 import type { Surface } from "./surfaces.js";
 import type { PanelSpec } from "./panel.js";
 
-/** Lifecycle/monitor events a tool can hook. on_frame carries a heard frame; others are payload-shaped. */
-export type ToolEvent = "on_frame" | "on_connect" | "on_disconnect" | "on_beacon" | "on_find" | "on_spot";
+/** Lifecycle/monitor events a tool can hook. on_frame carries a heard frame; on_tick is periodic. */
+export type ToolEvent = "on_frame" | "on_connect" | "on_disconnect" | "on_beacon" | "on_find" | "on_spot" | "on_tick";
 
 export interface MonitorColour { colorVar?: string; hidden?: boolean }
 export type Colouriser = (line: { src: string; dst: string; text: string }) => MonitorColour | null;
 export interface Decoder { id: string; label: string; kind: string; decode(input: string): string }
 export interface BeaconSpec { comment: string; intervalSec: number }
 
+/**
+ * The context an event carries (docs/28 A — LinPac's channel/station model). Every field is optional so
+ * a caller supplies what its surface knows; a connected-mode surface fills peerCall/myCall/channel and a
+ * `reply` sink, and looks the peer up in the station registry for `station`.
+ */
+export interface ToolEventPayload {
+  surface?: Surface;
+  channel?: number;
+  peerCall?: string;                       // the far station (GP {chan})
+  myCall?: string;                         // the local station in use
+  station?: { roles?: string[]; [k: string]: unknown } | null; // per-callsign context (account_stations)
+  reply?: (text: string) => void;          // send a line back on this channel (PMS/auto-answer)
+  [k: string]: unknown;
+}
+
+/** A cooperative per-host string store (LinPac lp_set_var/get_var) shared by enabled tools. */
+export interface ToolStore { get(key: string): string | undefined; set(key: string, value: string): void; keys(): string[] }
+
 /** The host-API surface a tool receives on activation — every method is capability-gated. */
 export interface ToolContext {
   granted(cap: Capability): boolean;
   log(msg: string): void;
   registerCommand(word: string, handler: (args: string) => string[]): void;   // 'command'
-  on(event: ToolEvent, handler: (payload: unknown) => void): void;            // 'event' (on_frame → 'monitor')
+  on(event: ToolEvent, handler: (payload: ToolEventPayload) => void): void;    // 'event' (on_frame → 'monitor')
   addColouriser(fn: Colouriser): void;                                        // 'monitor'
   addDecoder(d: Decoder): void;                                               // 'decoder'
   setPanel(spec: PanelSpec | null): void;                                     // 'panel' — declarative UI region
   scheduleBeacon(spec: BeaconSpec): void;                                     // 'beacon' + TX gate
   requestTx(info: string): boolean;                                          // 'tx' + TX gate; false if denied
+  /** Cooperative shared key/value scratch (LinPac vars) — no capability needed; bounded by the host. */
+  store: ToolStore;
 }
 
 export interface Tool {
@@ -52,7 +72,7 @@ interface Registered {
   enabled: boolean;
   error?: string;
   commands: Map<string, (args: string) => string[]>;
-  events: Map<ToolEvent, ((payload: unknown) => void)[]>;
+  events: Map<ToolEvent, ((payload: ToolEventPayload) => void)[]>;
   colourisers: Colouriser[];
   decoders: Decoder[];
   panel: PanelSpec | null;
@@ -60,6 +80,7 @@ interface Registered {
 
 export class ToolHost {
   private tools = new Map<string, Registered>();
+  private vars = new Map<string, string>();   // cooperative shared store (LinPac vars); bounded below
   constructor(private opts: ToolHostOpts = {}) {}
 
   register(tool: Tool): void {
@@ -93,18 +114,23 @@ export class ToolHost {
   }
 
   /** Dispatch an event to every enabled tool hooking it (optionally only those on `surface`). */
-  dispatch(event: ToolEvent, payload: unknown, surface?: Surface): void {
+  dispatch(event: ToolEvent, payload: ToolEventPayload = {}, surface = payload.surface): void {
     for (const r of this.tools.values()) {
       if (!r.enabled || !this.onSurface(r, surface)) continue;
       for (const h of r.events.get(event) ?? []) { try { h(payload); } catch (e) { this.opts.onLog?.(r.tool.manifest.name, `event error: ${(e as Error).message}`); } }
     }
   }
 
-  /** Run a registered /command (optionally scoped to `surface`); output lines, or null if none owns it. */
-  runCommand(word: string, args = "", surface?: Surface): string[] | null {
+  /**
+   * Run a registered /command (optionally scoped to `surface`); output lines, or null if none owns it.
+   * `opts.remote` marks the caller as a *remote connected peer* (LinPac colon-commands, docs/28 D): only
+   * tools whose manifest opted in with `remote: true` answer — a peer can never invoke operator-only ones.
+   */
+  runCommand(word: string, args = "", surface?: Surface, opts: { remote?: boolean } = {}): string[] | null {
     const w = word.toLowerCase();
     for (const r of this.tools.values()) {
       if (!r.enabled || !this.onSurface(r, surface)) continue;
+      if (opts.remote && !r.tool.manifest.remote) continue;   // remote peers only reach remote-allowed tools
       const h = r.commands.get(w);
       if (h) { try { return h(args); } catch (e) { return [`error: ${(e as Error).message}`]; } }
     }
@@ -133,6 +159,11 @@ export class ToolHost {
       addColouriser: (fn) => { need("monitor"); r.colourisers.push(fn); },
       addDecoder: (d) => { need("decoder"); r.decoders.push(d); },
       setPanel: (spec) => { need("panel"); r.panel = spec; },
+      store: {
+        get: (k) => this.vars.get(k),
+        set: (k, val) => { if (this.vars.size < 200 || this.vars.has(k)) this.vars.set(String(k).slice(0, 64), String(val).slice(0, 1024)); },
+        keys: () => [...this.vars.keys()],
+      },
       scheduleBeacon: (spec) => { need("beacon"); if (!(this.opts.txGate?.() ?? false)) throw new Error("TX gate closed (verify callsign + opt-in)"); this.opts.onBeacon?.(name, spec); },
       requestTx: (info) => { need("tx"); if (!(this.opts.txGate?.() ?? false)) return false; this.opts.transmit?.(name, info); return true; },
     };

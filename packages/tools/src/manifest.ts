@@ -13,6 +13,7 @@ export interface ToolManifest {
   version: string;
   permissions: Capability[]; // requested capabilities
   surfaces: Surface[];       // the tool's TYPE — which host surface(s) it plugs into (defaults to ["web"])
+  remote?: boolean;          // its /commands may be invoked by a REMOTE connected peer (PMS; docs/28 D)
   description?: string;
   entry?: string;            // imported tools: the script URL/path the sandbox runs (built-ins omit it)
   signature?: string;        // optional detached signature over the manifest (author key)
@@ -38,6 +39,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
       name: m.name, title: m.title.trim(), author: m.author.trim().toUpperCase(), version: m.version.trim(),
       permissions: [...new Set(m.permissions as Capability[])],
       surfaces,
+      remote: m.remote === true || undefined,
       description: typeof m.description === "string" ? m.description : undefined,
       entry: typeof m.entry === "string" ? m.entry : undefined,
       signature: typeof m.signature === "string" ? m.signature : undefined,

@@ -23,6 +23,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const [decodeKind, setDecodeKind] = useState("cw");
   const [cmd, setCmd] = useState("");
   const [cmdOut, setCmdOut] = useState<string[]>([]);
+  const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer (docs/28 D)
   const [importUrl, setImportUrl] = useState("");
   const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string } | null>(null);
   const [imported, setImported] = useState<Imported[]>([]);
@@ -48,7 +49,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   async function runCmd() {
     const word = cmd.replace(/^\//, "").split(/\s+/)[0] ?? "";
     const args = cmd.replace(/^\/?\S+\s*/, "");
-    const built = host.runCommand(word, args);
+    const built = host.runCommand(word, args, undefined, { remote: asRemote });
     if (built) { setCmdOut(built); setCmd(""); return; }
     for (const im of imported) if (im.enabled && im.sandbox.commands.includes(word)) { setCmdOut(await im.sandbox.runCommand(word, args)); setCmd(""); return; }
     setCmdOut([`no such command "${word}"`]);
@@ -119,6 +120,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
             <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="/cq" aria-label="Tool command" onKeyDown={(e) => { if (e.key === "Enter") runCmd(); }} />
             <button onClick={runCmd}>Run</button>
           </div>
+          <label className="row gap-1 fine muted"><input type="checkbox" checked={asRemote} onChange={(e) => setAsRemote(e.target.checked)} /> as a remote peer (only <code>remote</code> tools answer)</label>
           {cmdOut.length > 0 && <pre className="tool-out mono">{cmdOut.join("\n")}</pre>}
         </div>
       )}

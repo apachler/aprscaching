@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { TerminalSession, parseAnsi, toAnsi, cp437Bytes, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport, type AnsiLine } from "@aprsweb/packet";
+import { expand as expandMacros, withNow } from "@aprsweb/tools";
 import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
@@ -28,9 +29,9 @@ const DEFAULT_MACROS: { key: string; label: string; text: string }[] = [
   { key: "F4", label: "Help", text: "help" },
 ];
 
+// Macro expansion is the shared Graphic-Packet/LinPac expander (docs/28 C) — same {token} set everywhere.
 function expand(text: string, vars: { call: string; chan: string }): string {
-  return text.replace(/\{call\}/g, vars.call).replace(/\{chan\}/g, vars.chan)
-    .replace(/\{date\}/g, new Date().toISOString().slice(0, 10));
+  return expandMacros(text, withNow({ call: vars.call, mycall: vars.call, chan: vars.chan, peer: vars.chan }));
 }
 
 function ansiStyle(fg: number | null, bg: number | null, bold: boolean): React.CSSProperties {

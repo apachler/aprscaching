@@ -69,6 +69,30 @@ Two additions make the plugin system serve **every** surface, not just the packe
   `terminal,bbs,node`; beacon-scheduler=`terminal`; digimode-decoders=`web`; **aprs-ssid-guide** (new,
   `panel`) = `web,terminal,bbs` — demonstrates one plugin rendering on several typed surfaces.
 
+## 5b. Graphic-Packet / LinPac patterns adopted (2026-07 — A–F)
+Adopted from the GP/LinPac extension model (their macros, event bus, per-station DB, remote colon-
+commands, shared vars, external "channel apps"):
+
+- **A · Typed event context.** `ToolEventPayload` carries `{ surface, channel, peerCall, myCall, station,
+  reply }` (LinPac's per-channel `_call`/`_state` vars + station DB). `on()` handlers and `dispatch()`
+  are typed; the auto-responder now greets the *peer* by callsign. (`host.ts`.)
+- **B · `on_tick` timer event.** A periodic lifecycle event (the web host fires it every 60 s) for auto-
+  status / watchdog / auto-ident tools — GP/LinPac timed macros. TX stays gated.
+- **C · Macro variable expansion.** One shared `expand(text, vars)` (`macros.ts`) with the GP `{token}`
+  set (`{call} {mycall} {peer} {chan} {grid} {date} {time}`); the packet terminal uses it. Unknown
+  tokens are left intact.
+- **D · Remote-invocable commands (PMS).** `manifest.remote: true` opts a command tool into being driven
+  by a *connected remote peer* (GP colon-commands). `runCommand(w,a,surface,{remote})` gates it so a peer
+  can never reach operator-only tools. Built-in **pms** answers `H/INFO/TIME/73`. The Tools console has an
+  "as a remote peer" toggle; the server-side consumer is the ingest/node session (`session-server`).
+- **E · Shared var store.** `ctx.store` (LinPac `lp_set_var/get_var`) — a bounded per-host key/value scratch
+  so cooperating tools share state (pms counts sessions with it).
+- **F · "Channel apps" — concept adopted, raw exec rejected.** LinPac runs arbitrary Linux programs as
+  channel-bound apps over stdio. In the browser we **never** exec; the sanctioned equivalents are the
+  **Worker-sandboxed imported tool** (bound to a surface/channel via the event context) and the operator
+  **companion/ingest box** (`docs/21`). The `channel` field in the event payload is what lets a tool act
+  per-session like a GP app, without a shell.
+
 ## 6. Follow-ons (not v1)
 Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)
 tools contributing colourisers/decoders/panels across the postMessage bridge (today only `/commands`
