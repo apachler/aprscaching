@@ -150,6 +150,24 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
   }
 }
 
+/**
+ * The contradiction signal (T1.1, was deferred): which probed peers DENIED a corroboration the trusted
+ * quorum nonetheless confirmed. A peer that answered the same (coarsened) query with `corroborated:false`
+ * while the network reached Tier A is contradicting a confirmed result — a negative reputation signal.
+ * Unavailable peers (timeout / error) are NOT contradictions, only explicit deniers. Pure + testable.
+ */
+export function contradictors(probes: { url: string; denied: boolean }[], hasWinner: boolean): string[] {
+  if (!hasWinner) return [];   // nothing was confirmed → a "no" isn't a contradiction
+  return [...new Set(probes.filter((p) => p.denied).map((p) => p.url))];
+}
+
+/** Penalise peers that contradicted a confirmed corroboration: bump rep_failed (blocks auto-promotion). */
+async function debitContradiction(env: Env, urls: string[]): Promise<void> {
+  for (const url of new Set(urls)) {
+    await env.DB.prepare("UPDATE fed_peers SET rep_failed = rep_failed + 1 WHERE url = ?").bind(url).run();
+  }
+}
+
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
   const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 1);
   const threshold = Number(env.FED_AUTO_PROMOTE ?? 0);
@@ -174,21 +192,26 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (env.FED_CORROBORATION_SECRET) headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
 
-  const probes = await Promise.all(pool.map(async (peer): Promise<{ peer: typeof pool[number]; ev: Evidence | null }> => {
+  const probes = await Promise.all(pool.map(async (peer): Promise<{ peer: typeof pool[number]; ev: Evidence | null; denied: boolean }> => {
     const base = peer.url.replace(/\/+$/, "");
     try {
       const r = await fetch(`${base}/federation/corroborate`, {
         method: "POST", headers, body: JSON.stringify(cq), signal: AbortSignal.timeout(3000),
       });
-      if (!r.ok) return { peer, ev: null };
+      if (!r.ok) return { peer, ev: null, denied: false };   // unavailable ≠ contradiction
       const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };
-      return { peer, ev: data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null };
-    } catch { return { peer, ev: null }; }
+      const ev = data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null;
+      return { peer, ev, denied: data.corroborated === false };   // explicit "no" from a reachable peer
+    } catch { return { peer, ev: null, denied: false }; }
   }));
 
   // Tier A is decided from TRUSTED hits only (quorum unchanged); unvetted hits are advisory.
   const trustedHits = probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => x.ev as Evidence);
   const winner = selectCorroboration(trustedHits, quorum);
-  if (winner) await creditCorroboration(env, probes.filter((x) => x.ev).map((x) => x.peer.url), threshold);
+  if (winner) {
+    await creditCorroboration(env, probes.filter((x) => x.ev).map((x) => x.peer.url), threshold);
+    // T1.1 contradiction signal: peers that DENIED a corroboration the trusted quorum confirmed lose rep.
+    await debitContradiction(env, contradictors(probes.map((x) => ({ url: x.peer.url, denied: x.denied })), true));
+  }
   return winner;
 }

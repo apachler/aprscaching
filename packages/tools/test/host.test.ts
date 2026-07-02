@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(20);
+    expect(host.list()).toHaveLength(21);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -163,6 +163,24 @@ describe("Tool surfaces — a tool's type routes its contributions (docs/28)", (
     expect(table.rows.map((r) => r[0]).sort()).toEqual(["OE1XDS-1", "OE8XBM-7"]); // 2 unique (dup collapsed)
     expect(table.rows.find((r) => r[0] === "OE1XDS-1")![1]).toBe("APRS");         // source label carried through
     expect(table.rows.find((r) => r[0] === "OE8XBM-7")![1]).toBe("RF");
+  });
+
+  it("map capability: setMapLayer is gated + mapLayers() returns layers from map-surface tools", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("map-waypoints", true);
+    expect(host.mapLayers()).toHaveLength(0);                    // no points yet
+    host.runCommand("wp", "JN76jx home", "web");
+    const layers = host.mapLayers();
+    expect(layers).toHaveLength(1);
+    expect(layers[0]!.spec.points[0]!.label).toBe("home");
+    host.runCommand("wpclear", "", "web");
+    expect(host.mapLayers()[0]!.spec.points).toHaveLength(0);
+
+    const rogue: Tool = { manifest: { name: "rogue-map", title: "R", author: "X", version: "1", permissions: ["command"], surfaces: ["map"] },
+      activate(ctx) { (ctx as unknown as { setMapLayer: (s: unknown) => void }).setMapLayer({ id: "x", points: [] }); } };
+    host.register(rogue);
+    expect(host.setEnabled("rogue-map", true).error).toMatch(/permission 'map' not granted/);
   });
 
   it("panel capability: setPanel is gated + panels() returns the spec for the surface", () => {

@@ -21,6 +21,7 @@ import {
 } from "./format.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import { setToolTxVerified, feedHeard } from "./tools/host.js";
+import { ToolMapLayers } from "./tools/ToolMapLayers.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
@@ -659,6 +660,7 @@ export default function Platform({ session, startTour }: { session: SessionState
 
         <div className="mapwrap">
           <div ref={setMapNode} className="map" />
+          <ToolMapLayers map={map.current} />{/* docs/28 §6 — `map`-capability tools render markers here */}
           {ready && center && (
             <div className="coordreadout">
               <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>

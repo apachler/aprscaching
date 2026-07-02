@@ -49,8 +49,12 @@ reaches Tier A, every peer whose corroboration was thus independently confirmed 
 are *also* probed — **advisorily, never counting toward quorum** — so they can EARN trust by agreeing with
 confirmed corroborations, and one crosses to `trusted` automatically once `rep_confirmed ≥ N` with no
 contradictions (`shouldAutoPromote`). Default behaviour + cost are unchanged (trusted-only) until an
-operator opts in. **Still deferred:** an automatic *contradiction* signal for `rep_failed`, and a
-dedicated Settings → Federation UI (the Settings → Network group now shows trust + health + reputation).
+operator opts in. **Contradiction signal — DONE:** a peer that answers the same (coarsened) corroboration
+query with `corroborated:false` while the trusted quorum nonetheless confirms it earns `rep_failed++`
+(`contradictors()` pure + tested; unavailable/timeout peers are NOT penalised) — which also blocks
+`shouldAutoPromote`. **Still deferred:** a dedicated Settings → Federation UI (Settings → Network already
+shows trust + health + reputation) + live re-homing of mirrored find attribution (T3.2) + the DNS-`TXT`
+registry anchor (T4.2).
 
 - **Schema** — extend `fed_peers`:
   ```sql

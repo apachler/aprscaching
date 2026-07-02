@@ -393,6 +393,28 @@ export function schedQueryTool(): Tool {
   };
 }
 
+/** (docs/28 map surface) Map waypoints — `/wp <locator|lat,lon> [label]` drops a marker on the map via
+ *  the declarative `map` layer; `/wpclear` empties it. Demonstrates the `map` capability end-to-end. */
+export function mapWaypointsTool(): Tool {
+  return {
+    manifest: { name: "map-waypoints", title: "Map waypoints", author: AUTHOR, version: v, permissions: ["command", "map"], surfaces: ["web", "map"], description: "/wp <locator|lat,lon> [label] — drop a marker on the map; /wpclear to reset." },
+    activate(ctx) {
+      const pts: { lat: number; lon: number; label?: string }[] = [];
+      const push = () => ctx.setMapLayer({ id: "waypoints", points: pts.map((p) => ({ ...p, tone: "accent" as const })) });
+      ctx.registerCommand("wp", (args) => {
+        const [loc, ...rest] = args.trim().split(/\s+/);
+        const label = rest.join(" ") || undefined;
+        let p = gridToLatLon(loc ?? "");
+        if (!p) { const m = (loc ?? "").match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/); if (m) p = { lat: Number(m[1]), lon: Number(m[2]) }; }
+        if (!p || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180) return ["Usage: /wp <locator|lat,lon> [label]"];
+        pts.push({ ...p, label }); push();
+        return [`Waypoint ${pts.length}: ${p.lat.toFixed(4)},${p.lon.toFixed(4)}${label ? ` (${label})` : ""}`];
+      });
+      ctx.registerCommand("wpclear", () => { pts.length = 0; push(); return ["Waypoints cleared."]; });
+    },
+  };
+}
+
 /** (GP GIP) Block art — render CP437/ANSI art as a `blocks` panel (the "graphic" in Graphic Packet).
  *  `/art <text>` renders text as a monochrome phosphor grid; any tool can also push an image by emitting
  *  `render.blocks` on the bus ({text} or a full blocks spec) — a generic renderer, function-agnostic. */
@@ -483,6 +505,6 @@ export function builtinTools(): Tool[] {
     watchAlertTool(), mheardTool(), autoStatusTool(), gridTool(), sevenPlusTool(),
     // GP-archive additions (docs/28 §5g): remote responders + IPC producer/consumers.
     unitConverterTool(), cwEncoderTool(), stationDbTool(), infoResponderTool(), awayNoteTool(), connectBellTool(), linkPingTool(),
-    schedQueryTool(), blockArtTool(),
+    schedQueryTool(), blockArtTool(), mapWaypointsTool(),
   ];
 }

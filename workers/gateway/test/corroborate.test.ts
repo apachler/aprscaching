@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selectCorroboration, shouldAutoPromote, type Evidence } from "../src/corroborate.js";
+import { selectCorroboration, shouldAutoPromote, contradictors, type Evidence } from "../src/corroborate.js";
 
 const ev = (instance: string, distanceM: number): Evidence => ({ instance, igateCall: "OE8XXX", distanceM, ts: 1 });
 
@@ -13,6 +13,17 @@ describe("peer auto-promotion (T1.1 reputation)", () => {
     expect(shouldAutoPromote("trusted", 99, 0, 5)).toBe(false);  // already trusted
     expect(shouldAutoPromote("blocked", 99, 0, 5)).toBe(false);  // quarantined stays quarantined
     expect(shouldAutoPromote("unvetted", 99, 0, 0)).toBe(false); // disabled
+  });
+
+  it("(T1.1 contradiction signal) debits only peers that DENIED a confirmed corroboration", () => {
+    const probes = [
+      { url: "https://a", denied: false }, // hit
+      { url: "https://b", denied: true },  // explicit "no"
+      { url: "https://c", denied: false }, // unavailable (timeout) — not a contradiction
+      { url: "https://b", denied: true },  // dup → collapsed
+    ];
+    expect(contradictors(probes, true)).toEqual(["https://b"]); // only the denier, deduped
+    expect(contradictors(probes, false)).toEqual([]);           // no winner → a "no" isn't a contradiction
   });
 });
 

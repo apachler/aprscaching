@@ -15,6 +15,7 @@ import type { Capability } from "./capabilities.js";
 import type { ToolManifest } from "./manifest.js";
 import type { Surface } from "./surfaces.js";
 import type { PanelSpec } from "./panel.js";
+import type { MapLayerSpec } from "./maplayer.js";
 
 /** Lifecycle/monitor events a tool can hook. on_frame carries a heard frame; on_tick is periodic. */
 export type ToolEvent = "on_frame" | "on_connect" | "on_disconnect" | "on_beacon" | "on_find" | "on_spot" | "on_tick";
@@ -56,6 +57,7 @@ export interface ToolContext {
   addColouriser(fn: Colouriser): void;                                        // 'monitor'
   addDecoder(d: Decoder): void;                                               // 'decoder'
   setPanel(spec: PanelSpec | null): void;                                     // 'panel' — declarative UI region
+  setMapLayer(spec: MapLayerSpec | null): void;                               // 'map' — declarative marker layer
   scheduleBeacon(spec: BeaconSpec): void;                                     // 'beacon' + TX gate
   requestTx(info: string): boolean;                                          // 'tx' + TX gate; false if denied
   // ---- inter-tool IPC ('ipc'): the host ROUTES, it never interprets the payload (docs/28 §5f) ----
@@ -92,6 +94,7 @@ interface Registered {
   colourisers: Colouriser[];
   decoders: Decoder[];
   panel: PanelSpec | null;
+  mapLayer: MapLayerSpec | null;
   subs: string[];   // IPC topics this tool subscribed (for teardown)
   svcs: string[];   // IPC service names this tool provided (for teardown)
 }
@@ -108,7 +111,7 @@ export class ToolHost {
 
   register(tool: Tool): void {
     if (this.tools.has(tool.manifest.name)) throw new Error(`tool ${tool.manifest.name} already registered`);
-    this.tools.set(tool.manifest.name, { tool, enabled: false, commands: new Map(), events: new Map(), colourisers: [], decoders: [], panel: null, subs: [], svcs: [] });
+    this.tools.set(tool.manifest.name, { tool, enabled: false, commands: new Map(), events: new Map(), colourisers: [], decoders: [], panel: null, mapLayer: null, subs: [], svcs: [] });
   }
 
   /** True if a registered tool targets the given surface (its manifest `surfaces` includes it). */
@@ -138,7 +141,7 @@ export class ToolHost {
 
   /** Reset a tool's contributions (commands/events/panels/decoders) and tear down its bus registrations. */
   private clearContributions(r: Registered): void {
-    r.commands.clear(); r.events.clear(); r.colourisers = []; r.decoders = []; r.panel = null;
+    r.commands.clear(); r.events.clear(); r.colourisers = []; r.decoders = []; r.panel = null; r.mapLayer = null;
     for (const t of r.subs) { const l = this.busSubs.get(t); if (l) { const kept = l.filter((s) => s.tool !== r.tool.manifest.name); kept.length ? this.busSubs.set(t, kept) : this.busSubs.delete(t); } }
     for (const n of r.svcs) { if (this.busSvcs.get(n)?.tool === r.tool.manifest.name) this.busSvcs.delete(n); }
     r.subs = []; r.svcs = [];
@@ -178,6 +181,12 @@ export class ToolHost {
       .filter((r) => r.enabled && r.panel && this.onSurface(r, surface))
       .map((r) => ({ tool: r.tool.manifest.name, title: r.tool.manifest.title, spec: r.panel! }));
   }
+  /** Enabled `map`-tools' declarative layers (the tool must target the `map` surface). */
+  mapLayers(): { tool: string; spec: MapLayerSpec }[] {
+    return [...this.tools.values()]
+      .filter((r) => r.enabled && r.mapLayer && r.tool.manifest.surfaces.includes("map"))
+      .map((r) => ({ tool: r.tool.manifest.name, spec: r.mapLayer! }));
+  }
 
   // ---- the capability-gated context handed to a tool on activation ----
   private contextFor(r: Registered): ToolContext {
@@ -192,6 +201,7 @@ export class ToolHost {
       addColouriser: (fn) => { need("monitor"); r.colourisers.push(fn); },
       addDecoder: (d) => { need("decoder"); r.decoders.push(d); },
       setPanel: (spec) => { need("panel"); r.panel = spec; },
+      setMapLayer: (spec) => { need("map"); r.mapLayer = spec; },
       store: {
         get: (k) => this.vars.get(k),
         set: (k, val) => { if (this.vars.size < 200 || this.vars.has(k)) this.vars.set(String(k).slice(0, 64), String(val).slice(0, 1024)); },

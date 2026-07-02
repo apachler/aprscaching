@@ -460,6 +460,9 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 }
 .tp-blocks > span { display: block; text-align: center; }
 
+/* tool-contributed map markers (docs/28 map surface) — a small tokened glyph */
+.tool-map-pin { font-size: 16px; line-height: 1; cursor: default; text-shadow: 0 0 2px var(--surface); }
+
 /* field station (docs/16) — local RF stations + inbox, two columns on wide, stacked narrow */
 .field-station { margin: 10px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; }
 .field-station .fs-cols { display: grid; gap: 12px; }

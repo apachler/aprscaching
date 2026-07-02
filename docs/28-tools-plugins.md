@@ -178,6 +178,7 @@ GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-sid
 | **link-ping** | command,ipc,panel | terminal,node | **GP rtt** — rolling round-trip time (samples over the `link.rtt` bus topic) |
 | **sched-query** | command,event,ipc,panel | terminal,node | **GP GPAUTO** — `/gpauto <steps>` batch connect/waitfor/send/disconnect (drives the terminal's `session.script` service) |
 | **block-art** | command,panel,ipc | web,terminal,bbs | **GP GIP** — render CP437/ANSI block art (`/art <text>`, or push `render.blocks` on the bus) |
+| **map-waypoints** | command,map | web,map | `/wp <locator\|lat,lon> [label]` — drop markers on the map via the `map` surface |
 
 ## 5d. We do NOT build an APRS PMS (deliberate divergence)
 Graphic Packet / LinPac ship a **PMS** (Personal Message System / personal mailbox) that a *connected*
@@ -278,7 +279,10 @@ Still open: a hosted community registry with multiple authorities + key rotation
 authority to a `/.well-known` doc (pairs `docs/15` F7 governance).
 
 ## 6. Follow-ons (not v1)
-A `map` layer host surface (capability declared, no host surface yet); the browser Web Audio DSP front-ends
-that feed the CW/PSK31 decoders live signal (pairs `docs/16` H4). Imported-tool parity is **closed** —
-commands, IPC, colourisers, panels, and decoders all cross the worker boundary (§5f) — and signing +
-a registry now gate third-party imports (§7).
+The Tools platform is now feature-complete: imported-tool parity is **closed** (commands, IPC, colourisers,
+panels, decoders all cross the worker boundary, §5f); signing + a registry gate third-party imports (§7);
+the **`map` host surface** ships (a `map`-capability tool emits a declarative `MapLayerSpec` → `ToolMapLayers`
+renders markers on the shared map; `map-waypoints` is the built-in producer); and the **CW audio front-end**
+ships (`cwdsp.ts` Goertzel tone detector → `cwKeyEvents` → `morseFromTiming` → `decodeMorse`, so the F-5 CW
+decoder works on a live signal). **Remaining seam:** the **PSK31 BPSK demod** (carrier + phase recovery at
+31.25 baud) and the thin Web Audio mic capture that drives both front-ends (validate-at-deploy).
