@@ -39,7 +39,7 @@ describe("signed registry (marketplace index)", () => {
     const reg = await signRegistry(entries, auth.pubB64url, auth.priv);
     expect(await verifyRegistry(reg, auth.pubB64url)).toBe(true);
     expect(await verifyRegistry(reg, "someOtherAuthorityKey")).toBe(false);          // pinned mismatch
-    expect(await verifyRegistry({ ...reg, entries: [...entries, { ...entries[0], name: "evil" }] }, auth.pubB64url)).toBe(false); // entries edited after signing
+    expect(await verifyRegistry({ ...reg, entries: [...entries, { ...entries[0]!, name: "evil" }] }, auth.pubB64url)).toBe(false); // entries edited after signing
   });
 });
 
