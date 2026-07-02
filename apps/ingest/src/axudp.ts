@@ -8,6 +8,12 @@ export interface AxudpOpts { port: number; bind?: string }
 export interface AxudpPeer { host: string; port: number }
 
 /**
+ * PURE: encode an AX.25 frame into the AXUDP wire payload for TX — a bare AX.25 frame (the UDP datagram
+ * body; BPQ AXUDP adds no header). Symmetric with `axudpToPacket`'s decode; used by `AxudpPort.sendFrame`.
+ */
+export function frameToAxudp(f: Ax25Frame): Uint8Array { return encodeFrame(f); }
+
+/**
  * PURE: normalize one AXUDP datagram (a bare AX.25 frame over UDP) into a Tier-C ingest Packet, or null if
  * it isn't a decodable UI/APRS frame. The trust decision lives here and is deliberately fixed:
  * `heardVia: "aprs_is"` + `port: "axudp"` → the gateway's provenance derivation stamps
@@ -82,7 +88,7 @@ export class AxudpPort {
   /** Send a full AX.25 frame to every configured peer (best-effort). */
   sendFrame(f: Ax25Frame): boolean {
     if (!this.sock) return false;
-    const bytes = encodeFrame(f);
+    const bytes = frameToAxudp(f);
     let ok = false;
     for (const p of this.o.peers) { try { this.sock.send(bytes, p.port, p.host); ok = true; } catch { /* drop */ } }
     return ok;

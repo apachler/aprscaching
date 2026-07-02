@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { encodeFrame, parseAddr } from "@aprsweb/ax25";
-import { axudpToPacket, parseAxudpPeers } from "../src/axudp.js";
+import { encodeFrame, decodeFrame, parseAddr } from "@aprsweb/ax25";
+import { axudpToPacket, parseAxudpPeers, frameToAxudp } from "../src/axudp.js";
 
 /** A bare AX.25 UI/APRS frame — exactly what an AXUDP datagram (BPQ mesh, UDP 10093) carries. */
 function axudpDatagram(src: string, dst: string, aprs: string): Uint8Array {
@@ -37,5 +37,16 @@ describe("AXUDP ingest normalize (docs/22 reserved seam)", () => {
       { host: "db0xyz.example", port: 10093 },
       { host: "44.1.2.3", port: 10093 },
     ]);
+  });
+
+  it("TX: frameToAxudp encodes a frame that decodes back through the RX path (round-trip)", () => {
+    const f = { dst: parseAddr("OE8XBM-7"), src: parseAddr("OE8APR-9"), command: true, type: "UI" as const, pf: false, pid: 0xf0, info: new TextEncoder().encode("egress") };
+    const datagram = frameToAxudp(f);
+    // a peer decoding our egress sees the same frame…
+    const back = decodeFrame(datagram)!;
+    expect(back.src).toEqual(f.src); expect(back.dst).toEqual(f.dst);
+    // …and our own RX normalizer would land it at Tier C on the axudp port.
+    const p = axudpToPacket(datagram, 1000)!;
+    expect(p.src).toBe("OE8APR-9"); expect(p.payload).toBe("egress"); expect(p.port).toBe("axudp");
   });
 });

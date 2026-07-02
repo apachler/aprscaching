@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { encodeFrame, parseAddr } from "@aprsweb/ax25";
-import { stripIpv4Header, axipToPacket } from "../src/axip.js";
+import { encodeFrame, decodeFrame, parseAddr } from "@aprsweb/ax25";
+import { stripIpv4Header, axipToPacket, frameToAxip, parseAxipPeers } from "../src/axip.js";
 
 /** A bare AX.25 UI/APRS frame (the AXIP IP-payload). */
 function ax25Frame(src: string, dst: string, aprs: string): Uint8Array {
@@ -55,5 +55,19 @@ describe("AXIP ingest — IP proto-93 encapsulation (docs/22 reserved seam)", ()
 
   it("returns null for an undecodable datagram", () => {
     expect(axipToPacket(new Uint8Array([1, 2, 3]))).toBeNull();
+  });
+
+  it("TX: frameToAxip emits the bare frame (kernel adds the IP header) and round-trips", () => {
+    const f = { dst: parseAddr("OE8XBM-7"), src: parseAddr("OE8APR-9"), command: true, type: "UI" as const, pf: false, pid: 0xf0, info: new TextEncoder().encode("axip-tx") };
+    const payload = frameToAxip(f);
+    // egress carries no IP header (raw proto-93 socket lets the kernel build it) → a peer decodes it directly…
+    expect(decodeFrame(payload)!.src).toEqual(f.src);
+    // …and our own RX (bare-frame fallback) lands it Tier C on the axip port.
+    const p = axipToPacket(payload, 1000)!;
+    expect(p.payload).toBe("axip-tx"); expect(p.port).toBe("axip");
+  });
+
+  it("parses AXIP peers (host only — no port, unlike AXUDP)", () => {
+    expect(parseAxipPeers("db0abc.ampr.org, 44.9.9.9")).toEqual([{ host: "db0abc.ampr.org" }, { host: "44.9.9.9" }]);
   });
 });

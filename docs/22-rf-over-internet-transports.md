@@ -382,12 +382,21 @@ in `apps/ingest` (`axudp.ts` — the datagram→Tier-C-Packet normalize is now f
 is `docs/decisions/0001-transport-vs-trust.md`; (6) the hybrid-topology sketch is §5A above; (7) the
 `amateurEndpoint?` seam is on the node model (`FED_AMATEUR_ENDPOINT`).
 
-**AXIP too (Phase-2 seam, decision #2) is now built** as an ingest RX path (`apps/ingest/src/axip.ts`,
-feature-flagged on `AXIP_ENABLE`): AX.25 in **raw IP proto 93** (vs AXUDP's UDP 10093). Its one genuinely
-distinct piece — a raw proto-93 socket delivers the whole IP datagram, so we **strip the IPv4 header**
-(`stripIpv4Header`) before decoding — plus the `axipToPacket` normalize are pure + unit-tested; the raw
-socket itself uses the optional `raw-socket` package and is validate-at-deploy (needs `CAP_NET_RAW`).
-Tunnelled AXIP frames land at Tier C (`port:"axip"`, `firstPartyAttested:false`), same rule as AXUDP.
+**AXIP too (Phase-2 seam, decision #2) is now built**, RX **and TX**, as `apps/ingest/src/axip.ts`: AX.25 in
+**raw IP proto 93** (vs AXUDP's UDP 10093). RX (`AxipListener`, flag `AXIP_ENABLE`) strips the IPv4 header a
+raw proto-93 socket delivers (`stripIpv4Header`) before decoding — its one genuinely distinct piece — then
+`axipToPacket` normalises. TX + bidirectional crosslink is `AxipPort` (flag `AXIP_PEERS`): `sendFrame`
+egresses a full AX.25 frame to each peer via `frameToAxip` (a bare frame — the kernel builds the IP header),
+and inbound also feeds `onRaw`/`onFrame` so NET/ROM + FBB run over the AXIP leg — the raw-IP twin of
+`AxudpPort`. All the pure codec (strip/normalize/encode + peer parse) is unit-tested incl. TX round-trips;
+only the raw-socket bind/send (optional `raw-socket`, `CAP_NET_RAW`) is validate-at-deploy.
+
+**Both transports are symmetric now:** AXUDP `AxudpPort.sendFrame`/`frameToAxudp` (UDP 10093) and AXIP
+`AxipPort.sendFrame`/`frameToAxip` (IP proto 93). TX is **operator-config-gated** (the sysop sets
+`AXUDP_PEERS`/`AXIP_PEERS`) internet node-transport for NET/ROM crosslinks + FBB forwarding — NOT on-air
+keying, so the H5 verified-callsign RF-TX gate (the box tx path) stays a separate concern. Egressed frames
+land at Tier C (`port:"axudp"`/`"axip"`, `firstPartyAttested:false`), same transport-≠-trust rule as RX;
+loop-prevention on ingest↔egress (decision #6) is still deferred with federation.
 
 What remains is exactly the **explicitly-deferred, non-code** work: owned-RF Tier-A hardware, the 44net PoP/
 subnet standup, IPIP Mesh / BGP — none built by design.

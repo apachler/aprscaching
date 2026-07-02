@@ -154,9 +154,16 @@ if (env.AXUDP_PORT) {
 }
 // AXIP tunnel (docs/22 reserved seam) — AX.25 in raw IP proto 93 (vs AXUDP's UDP). Opt-in; needs a raw
 // socket (CAP_NET_RAW) + the optional `raw-socket` package. Tunnelled frames stay Tier C, never first-party.
-if (env.AXIP_ENABLE) {
-  const { AxipListener } = await import("./axip.js");
-  await new AxipListener({ bind: env.AXIP_BIND }, enqueue).start();
+// With AXIP_PEERS it's a bidirectional port (RX + TX for NET/ROM + FBB crosslinks); without, RX-only.
+if (env.AXIP_ENABLE || env.AXIP_PEERS) {
+  if (env.AXIP_PEERS) {
+    const { AxipPort, parseAxipPeers } = await import("./axip.js");
+    await new AxipPort({ bind: env.AXIP_BIND, peers: parseAxipPeers(env.AXIP_PEERS) }, enqueue).start();
+    console.log("[axip] bidirectional port enabled (NET/ROM + FBB crosslink, Tier C)");
+  } else {
+    const { AxipListener } = await import("./axip.js");
+    await new AxipListener({ bind: env.AXIP_BIND }, enqueue).start();
+  }
 }
 
 aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));
