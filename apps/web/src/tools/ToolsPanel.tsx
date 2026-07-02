@@ -112,17 +112,20 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
   }
-  // Web Audio mic capture → the CW/PSK31 front-ends (docs/28 §6; Chromium + mic, validate-at-deploy).
+  // Web Audio mic capture → the CW/PSK31 front-ends (docs/28 §6; Chromium + mic). Live text arrives via
+  // onText as the signal decodes; the pure pipeline is unit- and Chromium-e2e-tested.
   const [listening, setListening] = useState(false);
+  const [liveText, setLiveText] = useState("");
   const capRef = useRef<AudioCapture | null>(null);
   async function listenToggle() {
     if (listening && capRef.current) {
       const text = await capRef.current.stop().catch(() => "");
-      capRef.current = null; setListening(false);
+      capRef.current = null; setListening(false); setLiveText("");
       setDecodeIn((v) => `${v}\n→ ${text || "(nothing decoded)"}`);
       return;
     }
-    try { capRef.current = await listenDecode(decodeKind as "cw" | "psk31", { pitchHz: 700, carrierHz: 1000 }); setListening(true); }
+    setLiveText("");
+    try { capRef.current = await listenDecode(decodeKind as "cw" | "psk31", { pitchHz: 700, carrierHz: 1000, onText: setLiveText }); setListening(true); }
     catch (e) { toast(`Mic: ${(e as Error).message}`); }
   }
 
@@ -229,6 +232,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
             {audioDecodeSupported() && (decodeKind === "cw" || decodeKind === "psk31") &&
               <button onClick={listenToggle} className={listening ? "primary" : ""}>{listening ? "Stop" : "Listen (mic)"}</button>}
           </div>
+          {listening && <div className="comment mono" aria-live="polite">{liveText || "listening…"}</div>}
           <textarea value={decodeIn} onChange={(e) => setDecodeIn(e.target.value)} rows={3}
             placeholder={decodeKind === "cw" ? "…. . .-.. .-.. ---" : "00…11…00 varicode bits"} className="mono" />
         </div>

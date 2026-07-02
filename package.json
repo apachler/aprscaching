@@ -9,10 +9,15 @@
     "test": "pnpm -r test",
     "check": "tools/dev/check.sh",
     "smoke": "tools/dev/smoke.sh",
+    "e2e:audio": "node tools/e2e/audio-mic.mjs",
     "verify": "tools/dev/verify.sh",
     "dev:web": "pnpm --filter @aprsweb/web dev",
     "dev:gateway": "pnpm --filter @aprsweb/gateway dev",
     "dev:ingest": "pnpm --filter @aprsweb/ingest dev"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "esbuild": "0.21.5",
+    "playwright-core": "^1.61.1"
+  }
 }

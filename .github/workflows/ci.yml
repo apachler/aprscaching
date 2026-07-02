@@ -99,3 +99,17 @@ jobs:
             bun run servers/bun/server.ts &
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+
+  e2e-audio:
+    name: e2e (live mic decode — Chromium fake-audio)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # playwright-core drives an existing browser; fetch a matching Chromium into ~/.cache/ms-playwright
+      # so audio-mic.mjs (which resolves via chromium.executablePath()) finds it. Version pinned to match.
+      - run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - run: node tools/e2e/audio-mic.mjs

@@ -292,4 +292,18 @@ so the F-5 CW/PSK31 decoders work on a live signal. The **weak/off-tuned refinem
 sidebands that defeat a plain energy search over an idle preamble), and **symbol-timing recovery** (max-energy
 sampling offset), then decodes differentially after de-rotating the residual carrier error θ (estimated from
 `mean(z²)`). Unit-tested through a carrier offset + timing offset + additive noise (`psk31robust.test.ts`).
-**Remaining (validate-at-deploy):** the live mic path itself has no headless test.
+
+The **live mic path** is now streaming and tested end-to-end, not batch-and-validate-at-deploy:
+- **Live/incremental.** `makeStreamDecoder` (`decoders/stream.ts`, pure) accumulates the mic chunks in a
+  bounded window and re-runs the robust batch decoder at a throttled cadence, returning the full text so far —
+  so text appears *as you listen* (surfaced via `onText` under the "Listen (mic)" button). Unit-tested by
+  feeding synthesised PCM in 128-sample frames (`stream.test.ts`).
+- **Off-main-thread tap.** `audioDecode.ts` taps PCM with an **AudioWorklet** (keeps sample handling off the
+  map render loop per `.claude/rules/css.md`), falling back to `ScriptProcessorNode` where worklets are absent.
+- **Headless E2E.** `tools/e2e/audio-mic.mjs` bundles the *real* `audioDecode.ts` and drives it in Chromium
+  fed by a synthesised, +6 Hz off-tuned PSK31 signal through the browser's **fake-audio-capture** device,
+  asserting the decoded text — exercising getUserMedia → AudioContext → AudioWorklet → StreamDecoder for real.
+  It runs as the `e2e-audio` CI job (`pnpm e2e:audio`) and self-skips where no browser is available.
+
+**Remaining (validate-at-deploy):** only real-radio behaviour on live off-air signals (true noise, QSB, drift,
+adjacent-signal interference) — inherently a field test, not something a synthesiser or CI can stand in for.
