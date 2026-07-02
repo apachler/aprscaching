@@ -1,3 +1,7 @@
+> **Status: historical proposal — superseded.** The federation network as built, and its next-level trust /
+> reach / governance design, are documented in **`docs/15-federation-next.md`**. Kept for the original
+> rationale and the iNaturalist-commons framing.
+
 # Open-source & the federated APRScaching network — proposal
 
 **Goal.** Open the source so any ham or club can self-host, *and* make them want to plug into

@@ -1,3 +1,7 @@
+> **Status: reference backlog — the built RF/hardware surface is in `docs/16-rf-hardware-interfacing.md`.**
+> This remains a useful catalogue of amateur modes/transports and their upstreams; treat it as the
+> wide-angle reference, and `docs/16` as the record of what's implemented.
+
 # Amateur Radio Modes & Transports — Backlog
 
 > Reference backlog for the APRS workbench / APRScaching platform.
