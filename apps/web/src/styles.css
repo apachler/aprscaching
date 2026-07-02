@@ -76,7 +76,14 @@
     /* spacing scale (the source of truth for the layout utilities below) */
     --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 14px;
 
+    /* corner radius scale — tokenised so the Cogmind flip can make terminals sharp in one swap */
+    --r-sm: 7px;    /* buttons, inputs, chips */
+    --r-md: 9px;    /* logform, list rows, small cards */
+    --r-lg: 12px;   /* panels, sheets, big cards */
+    --r-pill: 999px;
+
     --font-brand: "Fredoka", system-ui, sans-serif;
+    --font-ui:   system-ui, sans-serif;   /* body/UI text — Cogmind swaps this to the mono stack */
     --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
   }
   :root[data-theme="dark"] { color-scheme: dark; }
@@ -106,11 +113,76 @@
     --award-ink:  oklch(0.52 0.10 85);
     --award-line: oklch(0.90 0.06 95);
   }
+
+  /* ───────────────────────────────────────────────────────────────────────────────────────────
+     COGMIND — the late-90s green-phosphor "flip" (docs/24). Selecting it IS the flip: a token swap,
+     no per-component rebuild. Green-phosphor base + a disciplined DOS accent set (cyan/amber/red) used
+     only where colour carries meaning (trust tiers, station types, TX/RX). Sharp corners, glow instead
+     of drop-shadow, mono for all text. Derived in OKLCH so brightness stays even (sunlight AA). The
+     [data-shell="terminal"] TUI transformation of the workbench rides on top of this (later T1 slice).
+     ─────────────────────────────────────────────────────────────────────────────────────────── */
+  :root[data-theme="cogmind"] {
+    color-scheme: dark;
+
+    /* phosphor base — near-black with a faint green cast */
+    --bg:         oklch(0.15 0.02 155 / 0);
+    --page-bg:    oklch(0.15 0.02 155);
+    --surface:    oklch(0.19 0.028 155);
+    --surface-2:  oklch(0.24 0.035 155);
+    --field-bg:   oklch(0.16 0.024 155);
+    --ink:        oklch(0.90 0.16 150);   /* phosphor-green primary text */
+    --muted:      oklch(0.70 0.10 150);
+    --line:       oklch(0.42 0.08 150);
+    --heading:    oklch(0.92 0.17 150);
+
+    /* accent = bright phosphor green (our own, AA on the black — not Cogmind's exact green) */
+    --accent:     oklch(0.86 0.19 145);
+    --accent-ink: oklch(0.15 0.02 155);
+    --brand:      oklch(0.80 0.12 195);   /* cyan — chrome accent */
+    --beige:      oklch(0.80 0.10 90);
+
+    /* chrome */
+    --topbar-bg:  oklch(0.13 0.02 155);
+    --chip-bg:    oklch(0.25 0.04 155);
+    --chrome-ink: oklch(0.90 0.16 150);
+    --rail-bg:    oklch(0.13 0.02 155);
+    --panel-2:    oklch(0.17 0.025 155);
+    --hair:       oklch(0.36 0.07 150);
+    --ink-2:      oklch(0.88 0.15 150);
+    --ink-tier:   oklch(0.14 0.02 155);
+    --pin-station: oklch(0.80 0.11 150);
+    --fav:        oklch(0.72 0.18 20);
+
+    /* trust tiers re-hued onto the phosphor ramp: A=green, B=cyan, C=dim green */
+    --tier-a: oklch(0.86 0.19 145);
+    --tier-b: oklch(0.82 0.12 195);
+    --tier-c: oklch(0.66 0.05 150);
+    --ok:     oklch(0.86 0.19 145);
+    --warn:   oklch(0.85 0.15 90);   /* amber */
+    --bad:    oklch(0.68 0.20 27);   /* red */
+
+    /* recognition chip → amber phosphor */
+    --award-bg:   oklch(0.24 0.05 95);
+    --award-ink:  oklch(0.86 0.15 95);
+    --award-line: oklch(0.40 0.06 95);
+
+    /* elevation = phosphor glow, not a dark drop-shadow */
+    --shadow:     oklch(0.86 0.19 145 / 0.20);
+
+    /* terminals are sharp; all text is mono */
+    --r-sm: 0px; --r-md: 0px; --r-lg: 1px; --r-pill: 2px;
+    --font-ui: var(--font-mono);
+    --font-brand: var(--font-mono);
+
+    /* theme-only knobs the terminal shell consumes (scanline is opt-in / off by default) */
+    --frame:      color-mix(in oklch, var(--accent) 55%, transparent);  /* box-drawing frame colour */
+    --glow:       0 0 0 1px color-mix(in oklch, var(--accent) 28%, transparent);
+  }
 }
 
 * { box-sizing: border-box; }
 html, body, #root, .app { height: 100%; margin: 0; }
-body { font: 14px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--page-bg); }
+body { font: 14px/1.5 var(--font-ui); color: var(--ink); background: var(--page-bg); }
 h1, h2, h3, h4, .brand { font-family: var(--font-brand); font-weight: 600; letter-spacing: .01em; }
 h1, h2 { font-weight: 700; }
 .mono { font-family: var(--font-mono); letter-spacing: .01em; }
@@ -143,7 +215,7 @@ h1, h2 { font-weight: 700; }
 .muted { color: var(--muted); }
 
 /* buttons + inputs */
-button { font: inherit; padding: 6px 11px; border: 1px solid var(--line); border-radius: 7px;
+button { font: inherit; padding: 6px 11px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--surface-2); color: var(--ink); cursor: pointer; }
 button:hover { filter: brightness(1.08); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
@@ -158,7 +230,7 @@ button.primary:disabled { opacity: .5; cursor: default; }
 button.icon { border: none; background: none; font-size: 16px; color: var(--ink); }
 .topbar button.icon { color: var(--chrome-ink); }
 input, select, textarea { font: inherit; padding: 5px 7px; border: 1px solid var(--line);
-  border-radius: 6px; width: 100%; color: var(--ink); background: var(--field-bg); }
+  border-radius: var(--r-sm); width: 100%; color: var(--ink); background: var(--field-bg); }
 label { display: block; margin: 8px 0; font-size: 13px; color: var(--muted); }
 label input, label select, label textarea { margin-top: 3px; }
 .row { display: flex; gap: 10px; align-items: center; }
@@ -194,7 +266,7 @@ label input, label select, label textarea { margin-top: 3px; }
   position: absolute; top: 12px; bottom: 12px; width: 348px; max-width: calc(100% - 24px);
   z-index: 6; overflow: auto; padding: 16px;
   container: panel / inline-size;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
   box-shadow: 0 8px 28px var(--shadow);
   outline: none; /* the drawer takes programmatic focus on open (Panel.tsx) — no ring on the container */
 }
@@ -207,7 +279,7 @@ label input, label select, label textarea { margin-top: 3px; }
 .panel.right { right: 12px; }
 
 /* ---- operator nav rail + 3-pane docking (≥1024px) — M8 ---- */
-.rail button { width: 48px; height: 48px; border: none; background: none; border-radius: 11px;
+.rail button { width: 48px; height: 48px; border: none; background: none; border-radius: var(--r-md);
   color: var(--muted); cursor: pointer; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 3px; font-size: 9px; letter-spacing: .01em; }
 .rail button:hover { background: color-mix(in oklch, var(--ink) 8%, transparent); color: var(--ink); }
@@ -442,7 +514,7 @@ button.spot-pin::after { content: ""; position: absolute; inset: -2px; border-ra
 button.link { border: none; background: none; color: var(--heading); font-weight: 700; padding: 0; cursor: pointer; }
 button.link:hover { text-decoration: underline; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; font-size: 12px; color: var(--ink-2); background: color-mix(in oklch, var(--surface-2) 50%, transparent); }
+.chip { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px 9px; font-size: 12px; color: var(--ink-2); background: color-mix(in oklch, var(--surface-2) 50%, transparent); }
 .cache-tags { margin: 6px 0 2px; }
 /* owner-gated 1–5 rating */
 .rating { border: 1px solid var(--line); border-radius: 11px; padding: 10px 13px; margin: 0 0 14px; }
@@ -457,7 +529,7 @@ button.link:hover { text-decoration: underline; }
 .award { background: var(--award-bg); color: var(--award-ink); border: 1px solid var(--award-line); border-radius: 12px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
 
 /* log form + logbook */
-.logform { border: 1px solid var(--line); border-radius: 9px; padding: 11px; margin: 12px 0;
+.logform { border: 1px solid var(--line); border-radius: var(--r-md); padding: 11px; margin: 12px 0;
   background: var(--surface-2); }
 .logform .geo { display: flex; align-items: center; gap: 4px; margin: 0; white-space: nowrap; }
 .logform textarea { margin: 8px 0; }
@@ -467,7 +539,7 @@ button.link:hover { text-decoration: underline; }
 /* status/tier chips: one derivation per state works in both themes — translucent tint of the base
    over the surface, base as text. No per-theme hex overrides to hand-maintain (css.md). */
 .badge { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  padding: 1px 6px; border-radius: 10px; margin-right: 6px; background: var(--chip-bg); color: var(--muted); }
+  padding: 1px 6px; border-radius: var(--r-sm); margin-right: 6px; background: var(--chip-bg); color: var(--muted); }
 .badge.found { background: color-mix(in oklch, var(--ok) 20%, transparent); color: var(--ok); }
 .badge.dnf   { background: color-mix(in oklch, var(--bad) 20%, transparent); color: var(--bad); }
 .badge.tierA { background: color-mix(in oklch, var(--tier-a) 20%, transparent); color: var(--tier-a); }
@@ -837,7 +909,7 @@ button.link:hover { text-decoration: underline; }
 .geo-banner button.icon { color: var(--accent-ink); }
 
 /* ---- card / empty-state / toast primitives (ui-ux.md §3) ---- */
-.card { border: 1px solid var(--line); border-radius: 11px; padding: 12px; margin: 10px 0; background: var(--surface-2); }
+.card { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px; margin: 10px 0; background: var(--surface-2); }
 .empty { padding: 4px 0; }
 .empty-action { margin-top: 8px; }
 
@@ -850,7 +922,7 @@ button.link:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 
 /* ---- settings/dense-config primitives (ui-ux.md §2) ---- */
-.group { border: 1px solid var(--line); border-radius: 11px; margin: 10px 0; background: var(--surface-2); }
+.group { border: 1px solid var(--line); border-radius: var(--r-lg); margin: 10px 0; background: var(--surface-2); }
 .group-h { display: flex; align-items: center; gap: 8px; padding: 7px 11px; }
 .group-toggle { flex: 1; border: none; background: none; color: var(--ink); cursor: pointer;
   font-family: var(--font-brand); font-weight: 600; font-size: 15px; text-align: left;

@@ -7,19 +7,26 @@
  */
 import { createContext, useContext } from "react";
 
+/**
+ * v1 ships exactly two themes, both DARK-ONLY (docs/26 / docs/24): "modern" (the default visual
+ * language) and "cogmind" (the late-90s green-phosphor flip). There is no light mode.
+ */
+export type Theme = "modern" | "cogmind";
 export interface LocaleSettings {
   locale: string;    // BCP-47 (e.g. "de-AT"); "" => browser default
   timeZone: string;  // IANA (e.g. "Europe/Vienna"); "" => browser default
   units: "metric" | "imperial";
-  theme: "dark" | "light" | "auto";   // field-console dark by default (M7)
+  theme: Theme;
 }
 
-/** Resolve the active theme to "dark" | "light" (honouring the OS for "auto"). */
-export function resolveTheme(theme: LocaleSettings["theme"]): "dark" | "light" {
-  if (theme === "auto") {
-    try { return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; } catch { return "dark"; }
-  }
-  return theme;
+/** Map the chosen theme to the `data-theme` attribute the token layer keys off. Modern reuses the
+ *  default dark token set (attribute "dark"); Cogmind applies its own [data-theme="cogmind"] block. */
+export function resolveTheme(theme: Theme): "dark" | "cogmind" {
+  return theme === "cogmind" ? "cogmind" : "dark";
+}
+/** Coerce any previously-stored value (old dark/light/auto) to a valid v1 theme. */
+export function normalizeTheme(t: unknown): Theme {
+  return t === "cogmind" ? "cogmind" : "modern";
 }
 
 const KEY = "acs.locale";
@@ -40,12 +47,16 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
 
 export function defaultSettings(): LocaleSettings {
   const locale = browserLocale();
-  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "dark" };
+  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "modern" };
 }
 export function loadSettings(): LocaleSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...defaultSettings(), ...(JSON.parse(raw) as Partial<LocaleSettings>) };
+    if (raw) {
+      const s = { ...defaultSettings(), ...(JSON.parse(raw) as Partial<LocaleSettings>) };
+      s.theme = normalizeTheme(s.theme); // migrate old dark/light/auto → modern
+      return s;
+    }
   } catch { /* ignore */ }
   return defaultSettings();
 }

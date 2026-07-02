@@ -75,8 +75,8 @@ export function SettingsPanel(props: {
 
       {match("Display appearance theme units measurement") && (
         <Group title="Display">
-          <Row label="Theme">
-            <div className="seg">{(["dark", "light", "auto"] as const).map((t) => (
+          <Row label="Theme" help="Cogmind = the late-90s green-screen flip">
+            <div className="seg">{(["modern", "cogmind"] as const).map((t) => (
               <button key={t} className={s.theme === t ? "on" : ""} onClick={() => props.onApply({ ...s, theme: t })}>{t}</button>
             ))}</div>
           </Row>

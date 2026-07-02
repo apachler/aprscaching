@@ -145,15 +145,9 @@ export default function Platform({ session, startTour }: { session: SessionState
     const h = () => setOp(mq.matches); mq.addEventListener("change", h); return () => mq.removeEventListener("change", h);
   }, []);
 
-  // apply the field-console theme to the document root (dark default; honours OS for "auto")
+  // apply the theme to the document root — modern → "dark" tokens, cogmind → the phosphor flip
   useEffect(() => {
-    const apply = () => { document.documentElement.dataset.theme = resolveTheme(locSettings.theme); };
-    apply();
-    if (locSettings.theme === "auto" && window.matchMedia) {
-      const mq = window.matchMedia("(prefers-color-scheme: light)");
-      mq.addEventListener?.("change", apply);
-      return () => mq.removeEventListener?.("change", apply);
-    }
+    document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
   }, [locSettings.theme]);
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
