@@ -11,6 +11,7 @@ import type { PanelSpec } from "../panel.js";
 import { decodeMorse, encodeMorse } from "../decoders/morse.js";
 import { decodeVaricode } from "../decoders/psk31.js";
 import { decode7plus } from "../decoders/sevenplus.js";
+import { parseScript, type ScriptState } from "../session-script.js";
 
 const AUTHOR = "OE8APR";
 const v = "1.0.0";
@@ -351,6 +352,47 @@ export function linkPingTool(): Tool {
   };
 }
 
+/** (GP GPAUTO) Scheduled query — batch a connect→waitfor→send→disconnect script against a BBS/cluster and
+ *  capture the reply. The tool holds the SCRIPT + the progress panel; the packet terminal owns the actual
+ *  connection and offers the `session.script` host-service the tool calls (docs/28 §5f/§5h). Operator-only. */
+export function schedQueryTool(): Tool {
+  return {
+    manifest: { name: "sched-query", title: "Scheduled query (GPAUTO)", author: AUTHOR, version: v, permissions: ["command", "event", "ipc", "panel"], surfaces: ["terminal", "node"], description: "/gpauto <steps> — run/schedule a connect/waitfor/send/disconnect batch (GP GPAUTO)." },
+    activate(ctx) {
+      const runOnce = (script: string): string => {
+        const steps = parseScript(script);
+        if (!steps.length) return "No steps. e.g. /gpauto connect HB9W-8; waitfor Cluster; send sh/dx; disconnect";
+        const ok = ctx.callService("session.script", { steps });   // the terminal drives it; undefined if no TNC
+        return ok ? `Running ${steps.length} steps…` : "Open the packet TNC first (no session service).";
+      };
+      const render = (st?: ScriptState): void => {
+        ctx.setPanel({ title: "Scheduled query", nodes: st ? [
+          { kind: "kv", key: "Status", value: `${st.status} (${st.step}/${st.total})`, tone: st.status === "error" ? "bad" : st.status === "done" ? "ok" : "accent" },
+          ...(st.note ? [{ kind: "text", text: st.note, tone: "muted" } as const] : []),
+          ...st.captured.slice(-10).map((l) => ({ kind: "text", text: l } as const)),
+        ] : [{ kind: "text", text: "Idle. /gpauto <steps>  or  /gpauto every <min> <steps>.", tone: "muted" }] });
+      };
+      ctx.subscribe("session.progress", (data) => render(data as ScriptState));
+      ctx.registerCommand("gpauto", (args) => {
+        const a = args.trim();
+        if (!a) { const s = ctx.store.get("gpa.script"); return [s ? `Script set (${parseScript(s).length} steps). /gpauto run` : "No script. /gpauto <steps> or /gpauto every <min> <steps>"]; }
+        if (a.toLowerCase() === "off") { ctx.store.set("gpa.every", "0"); return ["Scheduled query off."]; }
+        const every = a.match(/^every\s+(\d+)\s+([\s\S]+)$/i);
+        if (every) { ctx.store.set("gpa.every", String(Math.max(1, Number(every[1])))); ctx.store.set("gpa.script", every[2]!); ctx.store.set("gpa.ticks", "0"); return [`Scheduled every ${every[1]} min. ${runOnce(every[2]!)}`]; }
+        if (a.toLowerCase() === "run") { const s = ctx.store.get("gpa.script"); return [s ? runOnce(s) : "No stored script — /gpauto <steps> first."]; }
+        ctx.store.set("gpa.script", a); return [runOnce(a)];
+      });
+      ctx.on("on_tick", () => {
+        const every = Number(ctx.store.get("gpa.every") || "0"); if (every <= 0) return;
+        const t = Number(ctx.store.get("gpa.ticks") || "0") + 1;
+        if (t < every) { ctx.store.set("gpa.ticks", String(t)); return; }
+        ctx.store.set("gpa.ticks", "0"); const s = ctx.store.get("gpa.script"); if (s) runOnce(s);
+      });
+      render();
+    },
+  };
+}
+
 /** Beacon scheduler — a /beacon command that schedules a comment beacon (TX-gated by the host). */
 export function beaconSchedulerTool(): Tool {
   return {
@@ -410,5 +452,6 @@ export function builtinTools(): Tool[] {
     watchAlertTool(), mheardTool(), autoStatusTool(), gridTool(), sevenPlusTool(),
     // GP-archive additions (docs/28 §5g): remote responders + IPC producer/consumers.
     unitConverterTool(), cwEncoderTool(), stationDbTool(), infoResponderTool(), awayNoteTool(), connectBellTool(), linkPingTool(),
+    schedQueryTool(),
   ];
 }

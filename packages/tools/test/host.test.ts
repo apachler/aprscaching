@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(18);
+    expect(host.list()).toHaveLength(19);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -240,6 +240,25 @@ describe("Inter-tool IPC bus (docs/28 §5f) — the host routes, never interpret
     host.register(rogue);
     expect(host.setEnabled("noipc", true).error).toMatch(/permission 'ipc' not granted/);
   });
+
+  it("a surface (host) can provide a service to tools + publish to them; disposers clean up", () => {
+    const host = new ToolHost();
+    const seen: unknown[] = [];
+    const consumer: Tool = {
+      manifest: { name: "cons2", title: "C", author: "X", version: "1", permissions: ["ipc", "command"], surfaces: ["terminal"] },
+      activate(ctx) {
+        ctx.subscribe("session.progress", (d) => seen.push(d));
+        ctx.registerCommand("go", () => [String(ctx.callService("session.script", { steps: [1, 2] }))]);
+      },
+    };
+    host.register(consumer); host.setEnabled("cons2", true);
+    const dispose = host.registerHostService("session.script", (a) => (a as { steps: unknown[] }).steps.length);
+    expect(host.runCommand("go", "", "terminal")).toEqual(["2"]);   // tool reached the host service
+    host.hostEmit("session.progress", { status: "running" });
+    expect(seen).toEqual([{ status: "running" }]);
+    dispose();
+    expect(host.runCommand("go", "", "terminal")).toEqual(["undefined"]);  // service gone after dispose
+  });
 });
 
 describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
@@ -279,6 +298,19 @@ describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
     expect(host.runCommand("note", "back at 1900z", "bbs", { remote: true })).toEqual(["Note saved - 73!"]);
     expect(host.runCommand("away", "on", "bbs", { remote: true })).toBeNull();   // operator-only
     expect(host.runCommand("notes", "", "bbs")![0]).toBe("back at 1900z");
+  });
+
+  it("sched-query (GPAUTO) calls the terminal's session.script service; reports when absent", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "sched-query")!);
+    host.setEnabled("sched-query", true);
+    // no session service yet → the tool reports it plainly (operator hasn't opened the TNC)
+    expect(host.runCommand("gpauto", "connect HB9W-8; send sh/dx; disconnect", "terminal")![0]).toMatch(/Open the packet TNC/);
+    // the terminal registers the service → the tool now hands it the parsed steps
+    let got: unknown = null;
+    host.registerHostService("session.script", (a) => { got = a; return { ok: true }; });
+    expect(host.runCommand("gpauto", "connect HB9W-8; send sh/dx; disconnect", "terminal")![0]).toMatch(/Running 3 steps/);
+    expect((got as { steps: unknown[] }).steps).toHaveLength(3);
   });
 });
 

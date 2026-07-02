@@ -227,4 +227,21 @@ export class ToolHost {
   /** Introspection for the Tools console: currently-live bus topics + service names (docs/28). */
   ipcTopics(): string[] { return [...this.busSubs.keys()].filter((t) => (this.busSubs.get(t)?.length ?? 0) > 0).sort(); }
   ipcServices(): string[] { return [...this.busSvcs.keys()].sort(); }
+
+  // ---- surface participation on the bus (docs/28 §5f): the trusted app (a surface like the packet
+  // terminal) may offer a SERVICE to tools and PUBLISH to them — GPRI's model where GP the host exposed
+  // getQsoData/transmit to plugins. Still route-only: the host never interprets the payload. Not
+  // capability-gated (the app is trusted); each registration returns a disposer for teardown. ----
+  private static readonly HOST = "(host)";
+  registerHostService(name: string, fn: (args: unknown) => unknown): () => void {
+    const n = this.busKey(name); this.busSvcs.set(n, { tool: ToolHost.HOST, fn });
+    return () => { if (this.busSvcs.get(n)?.tool === ToolHost.HOST) this.busSvcs.delete(n); };
+  }
+  hostEmit(topic: string, data?: unknown): void { this.busEmit(this.busKey(topic), data, ToolHost.HOST); }
+  hostCallService(name: string, args?: unknown): unknown { return this.busCall(this.busKey(name), args); }
+  hostSubscribe(topic: string, handler: IpcHandler): () => void {
+    const t = this.busKey(topic); const entry = { tool: ToolHost.HOST, fn: handler };
+    (this.busSubs.get(t) ?? this.busSubs.set(t, []).get(t)!).push(entry);
+    return () => { const l = this.busSubs.get(t); if (l) { const k = l.filter((s) => s !== entry); k.length ? this.busSubs.set(t, k) : this.busSubs.delete(t); } };
+  }
 }

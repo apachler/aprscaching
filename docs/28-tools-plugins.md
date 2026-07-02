@@ -131,10 +131,18 @@ chars, re-entrancy depth ≤16 so a topic loop can't run away), both torn down w
   generalised to plugin↔plugin. Services are host-global (cross-surface) by design — that is the point of a
   bus. The Tools console can introspect live topics/services via `host.ipcTopics()` / `host.ipcServices()`.
 
-**Imported (Worker-sandboxed) tools** reach the bus over their existing `postMessage` bridge (host relays
-`emit`/`subscribe`/`callService` to the in-process bus) — so third-party tools stay isolated but can still
-participate. v1 ships full IPC for **built-in** tools; the imported-tool bridge is the documented next seam
-(the Worker API today is command-only).
+**Imported (Worker-sandboxed) tools** reach the bus over the `postMessage` bridge in `sandbox.ts`: the
+worker exposes `register({ commands, ipc })`, and when the tool was granted `ipc` the host relays its
+`ipc.emit(topic,data)` / `ipc.subscribe(topic,cb)` / `ipc.call(name,args)` (async) to the in-process bus via
+`hostEmit`/`hostSubscribe`/`hostCallService`. So a sandboxed third-party tool cooperates over the same bus
+as the built-ins **without ever holding a host or another-tool reference** — the bridge is the only seam,
+and subscriptions are torn down on `destroy()`.
+
+### Surface-provided services (GPRI generalised)
+A **surface** (a trusted part of the app that owns a resource — the packet terminal owns the AX.25 link) may
+also participate: `host.registerHostService(name, fn)` offers a capability *to* tools, and `host.hostEmit`
+publishes to them. This is exactly GP's own model — GP the host exposed `transmit`/`getQsoData` to plugins —
+and it's what powers the scripted-session engine (§5h). Still route-only; the host never interprets.
 
 ## 5c. Built-in tools shipped (all OFF by default)
 GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-side, capability-gated):
@@ -159,6 +167,7 @@ GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-sid
 | **away-note** | command,event,panel | terminal,bbs,node | **GP msg** — away-message + let a peer leave a short note (*not* a mailbox — §5d) |
 | **connect-bell** | event,panel | terminal,bbs,node | **GP bimmel** — rings/logs when a station connects |
 | **link-ping** | command,ipc,panel | terminal,node | **GP rtt** — rolling round-trip time (samples over the `link.rtt` bus topic) |
+| **sched-query** | command,event,ipc,panel | terminal,node | **GP GPAUTO** — `/gpauto <steps>` batch connect/waitfor/send/disconnect (drives the terminal's `session.script` service) |
 
 ## 5d. We do NOT build an APRS PMS (deliberate divergence)
 Graphic Packet / LinPac ship a **PMS** (Personal Message System / personal mailbox) that a *connected*
@@ -197,11 +206,6 @@ Evaluated from the GP/LinPac catalog; parked with the reason + what each needs:
 From the full GP distribution (`gpri` spec + `remotes/` + `tools/`). Built ones are in §5c; the rest:
 
 **Deferred (documented, not built):**
-- **Scheduled query / GPAUTO** (`gpauto` `.gpa`, `gp_mc17b` "Mail-Check") — operator automation that runs a
-  timed `connect → send → capture` script against a BBS/cluster (GP's real batch power). Deferred: it needs
-  to drive the terminal's **connection state machine** (connect/send-raw/capture), which the tool host does
-  not expose — that's a terminal/ingest surface capability, not a sandbox verb. Revisit once the terminal
-  offers a scripted-session service the tool can `callService` into.
 - **Graphic-Packet imagery / GIP** (`gip`, `gipdisp`, `gppaint`, `gif2gip`) — the literal "graphic" in
   Graphic Packet: inline block/ANSI images. On-theme for Cogmind. Needs a new **generic `blocks`/`canvas`
   panel node** (a grid of glyph+colour cells the tool fills — function-agnostic, per §5f) + a GIP decoder.
@@ -220,9 +224,29 @@ From the full GP distribution (`gpri` spec + `remotes/` + `tools/`). Built ones 
 - **TNC drivers / NET-ROM node** (`tfpcx`, `tfx`, `gp_node`) — already ours natively (GPLSL driver layer, P4
   node); not plugins.
 
+## 5h. Scripted sessions (GPAUTO) — mechanism vs. policy split
+GP's **GPAUTO** batched a `connect → waitfor → send → wait → disconnect` script against a BBS/cluster and
+captured the reply (`.gpa` files). We keep that power while honouring §5f by splitting it in two:
+
+- **Mechanism = the surface.** The packet terminal owns the AX.25 connection, so it holds a pure, tick-driven
+  engine (`packages/tools` `ScriptRunner` + `parseScript`, testable, `Date.now()`-free) and exposes a single
+  generic **`session.script`** host-service (`registerHostService`). Progress is published on the
+  **`session.progress`** bus topic each poll. The terminal knows nothing about *why* — it just runs steps and
+  drives its `TerminalSession`.
+- **Policy = the tool.** `sched-query` parses the compact script (`connect HB9W-8; waitfor Cluster; send sh/dx;
+  disconnect`), calls `session.script`, subscribes to `session.progress`, and renders the panel. `/gpauto every
+  <min> …` re-runs it on `on_tick`. If no terminal is open the `callService` returns undefined and the tool
+  says so — no coupling.
+
+The step DSL (`connect`/`send`/`waitfor [timeout]`/`wait`/`disconnect`, `#`/`REM`/`***` comments) is a
+**generic session-scripting primitive**, not a GPAUTO-specific feature baked into the platform — the same
+service could drive any scripted connect flow. That is the invariant: the surface offers a capability, the
+tool decides the script.
+
 ## 6. Follow-ons (not v1)
 Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)
-tools contributing colourisers/decoders/panels across the postMessage bridge (today only `/commands`
-cross the worker boundary; built-ins get the full set); a `map` layer host surface (capability declared,
+tools contributing colourisers/decoders/panels across the postMessage bridge (today `/commands` **and IPC**
+— emit/subscribe/call — cross the worker boundary; colouriser/decoder/panel contributions from imported
+tools are the remaining seam; built-ins get the full set); a `map` layer host surface (capability declared,
 no host surface yet); the browser Web Audio DSP front-ends that feed the CW/PSK31 decoders live signal
 (pairs `docs/16` H4).

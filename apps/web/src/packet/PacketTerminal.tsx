@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { TerminalSession, parseAnsi, toAnsi, cp437Bytes, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport, type AnsiLine } from "@aprsweb/packet";
-import { expand as expandMacros, withNow } from "@aprsweb/tools";
+import { expand as expandMacros, withNow, ScriptRunner, type ScriptSession, type SessionStep } from "@aprsweb/tools";
 import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
@@ -59,6 +59,8 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const transportRef = useRef<TermTransport | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const namesRef = useRef(new StationRegistry());
+  const runnerRef = useRef<ScriptRunner | null>(null);          // GPAUTO scripted-session engine (docs/28 §5h)
+  const disposeScriptSvc = useRef<null | (() => void)>(null);   // teardown for the session.script host-service
 
   const [portOpen, setPortOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -95,17 +97,42 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
       const session = new TerminalSession(myCall, transport, notify, namesRef.current);
       await transport.connect(9600);
       transportRef.current = transport; sessionRef.current = session;
-      pollRef.current = setInterval(() => session.poll(), 1000);
+
+      // GPAUTO scripted-session engine (docs/28 §5h): the terminal OWNS the connection and offers a generic
+      // `session.script` service to tools; the sched-query tool supplies the steps + shows progress. The
+      // host only routes — it has no idea what the script is (the §5f invariant applied to automation).
+      const port: ScriptSession = {
+        connect: (call) => session.connect(call),
+        send: (id, text) => session.send(id, expand(text, { call: myCall, chan: session.channels.find((c) => c.id === id)?.remoteCall ?? "" })),
+        close: (id) => session.close(id),
+        channelState: (id) => session.channels.find((c) => c.id === id)?.state,
+        channelLines: (id) => session.channels.find((c) => c.id === id)?.lines.filter((l) => l.dir === "rx").map((l) => l.text) ?? [],
+      };
+      const runner = new ScriptRunner(port);
+      runnerRef.current = runner;
+      disposeScriptSvc.current = host.registerHostService("session.script", (a) => {
+        const steps = (a as { steps?: unknown }).steps;
+        if (!Array.isArray(steps)) return null;
+        runner.load(steps as SessionStep[], Date.now());
+        return { ok: true };
+      });
+
+      pollRef.current = setInterval(() => {
+        session.poll();
+        const st = runnerRef.current?.tick(Date.now());
+        if (st) host.hostEmit("session.progress", st);   // sched-query tool subscribes + renders
+      }, 1000);
       setPortOpen(true); notify();
     } catch (e) { setErr((e as Error).message); }
   }
   async function closePort() {
     if (pollRef.current) clearInterval(pollRef.current);
+    disposeScriptSvc.current?.(); disposeScriptSvc.current = null; runnerRef.current = null;
     await transportRef.current?.disconnect();
     transportRef.current = null; sessionRef.current = null; announced.current.clear();
     setPortOpen(false); setActiveId(null); notify();
   }
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); void transportRef.current?.disconnect(); }, []);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); disposeScriptSvc.current?.(); void transportRef.current?.disconnect(); }, []);
 
   // Simulator/demo convenience: when an injected transport + autoConnect are given (never in the real
   // Web Serial path), open the port and open a channel on mount so the surface renders populated.

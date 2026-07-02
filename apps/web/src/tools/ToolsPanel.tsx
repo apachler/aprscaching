@@ -71,7 +71,14 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     setPrompt(null);
     try {
       const scriptUrl = new URL(manifest.entry ?? "tool.js", base).href;
-      const sandbox = await loadSandbox(scriptUrl, manifest.permissions);
+      // Bridge the sandboxed tool to the shared bus (docs/28 §5f) — only if it was granted 'ipc'. The
+      // host routes emit/subscribe/call; the worker never holds a host or another-tool reference.
+      const bridge = {
+        emit: (t: string, d: unknown) => host.hostEmit(t, d),
+        subscribe: (t: string, cb: (data: unknown, from: string) => void) => host.hostSubscribe(t, cb),
+        call: (n: string, a: unknown) => host.hostCallService(n, a),
+      };
+      const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge);
       setImported((xs) => [...xs, { manifest, sandbox, enabled: true }]);
       toast(`Imported ${manifest.title} (${sandbox.commands.length} commands).`);
     } catch (e) { toast(`Import failed: ${(e as Error).message}`); }
