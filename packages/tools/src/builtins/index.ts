@@ -8,7 +8,7 @@
 import { StationRegistry } from "@aprsweb/packet";
 import type { Tool } from "../host.js";
 import type { PanelSpec } from "../panel.js";
-import { decodeMorse } from "../decoders/morse.js";
+import { decodeMorse, encodeMorse } from "../decoders/morse.js";
 import { decodeVaricode } from "../decoders/psk31.js";
 import { decode7plus } from "../decoders/sevenplus.js";
 
@@ -173,7 +173,7 @@ export function gridTool(): Tool {
     ],
   });
   return {
-    manifest: { name: "grid-bearing", title: "Grid & bearing", author: AUTHOR, version: v, permissions: ["command", "panel"], surfaces: ["web", "terminal"], description: "/grid <locA> [locB] — distance + bearing between two Maidenhead locators." },
+    manifest: { name: "grid-bearing", title: "Grid & bearing", author: AUTHOR, version: v, permissions: ["command", "panel"], surfaces: ["web", "terminal", "bbs", "node"], remote: true, description: "/grid <locA> [locB] — distance + bearing between two Maidenhead locators (GP QTH; peers may query)." },
     activate(ctx) {
       ctx.registerCommand("grid", (args) => {
         const [a, b] = args.trim().split(/\s+/);
@@ -194,6 +194,160 @@ export function sevenPlusTool(): Tool {
   return {
     manifest: { name: "sevenplus", title: "7PLUS reassembler", author: AUTHOR, version: v, permissions: ["decoder"], surfaces: ["web"], description: "Parse + reassemble multi-part 7plus messages (file / part / completeness)." },
     activate(ctx) { ctx.addDecoder({ id: "7plus", label: "7PLUS", kind: "7plus", decode: decode7plus }); },
+  };
+}
+
+/** (GP conv) Unit converter — `/conv <value> <from> <to>` for the common ham units. Pure + remote-safe. */
+export function unitConverterTool(): Tool {
+  // factor to multiply `from` → `to`; temperature handled specially below.
+  const F: Record<string, number> = {
+    "km>mi": 0.621371, "mi>km": 1.60934, "m>ft": 3.28084, "ft>m": 0.3048,
+    "kn>kmh": 1.852, "kmh>kn": 0.539957, "nm>km": 1.852, "km>nm": 0.539957, "m>yd": 1.09361, "yd>m": 0.9144,
+  };
+  return {
+    manifest: { name: "unit-convert", title: "Unit converter", author: AUTHOR, version: v, permissions: ["command"], surfaces: ["web", "terminal", "bbs", "node"], remote: true, description: "/conv <value> <from> <to> — km/mi/m/ft/yd/kn/kmh/nm + c/f." },
+    activate(ctx) {
+      ctx.registerCommand("conv", (args) => {
+        const [nS, from, to] = args.trim().split(/\s+/);
+        const n = Number(nS), f = (from ?? "").toLowerCase(), t = (to ?? "").toLowerCase();
+        if (!isFinite(n) || !f || !t) return ["Usage: /conv <value> <from> <to>   e.g.  /conv 100 km mi  |  /conv 20 c f"];
+        if (f === "c" && t === "f") return [`${n} C = ${(n * 9 / 5 + 32).toFixed(1)} F`];
+        if (f === "f" && t === "c") return [`${n} F = ${((n - 32) * 5 / 9).toFixed(1)} C`];
+        const factor = F[`${f}>${t}`];
+        if (factor == null) return [`Can't convert ${from} -> ${to}. Known: km mi m ft yd kn kmh nm, c f.`];
+        return [`${n} ${f} = ${(n * factor).toFixed(2)} ${t}`];
+      });
+    },
+  };
+}
+
+/** (GP cw) CW/Morse encoder — `/cw <text>` → dot/dash, the send-side companion to the F-5 CW decoder. */
+export function cwEncoderTool(): Tool {
+  return {
+    manifest: { name: "cw-encoder", title: "CW encoder", author: AUTHOR, version: v, permissions: ["command"], surfaces: ["web", "terminal"], description: "/cw <text> — encode text to Morse (dot/dash)." },
+    activate(ctx) {
+      ctx.registerCommand("cw", (args) => { const t = args.trim(); return t ? [encodeMorse(t)] : ["Usage: /cw <text>"]; });
+    },
+  };
+}
+
+/** (GP autoname/NAMES.GP) Station DB — classifies every heard station and PUBLISHES it on the IPC bus:
+ *  emits `station.seen` {call,type} and provides the `station.type` service other tools call (docs/28 §5f).
+ *  A pure IPC *producer* — it renders nothing itself; consumers (info-responder, panels) use the bus. */
+export function stationDbTool(registry = new StationRegistry()): Tool {
+  return {
+    manifest: { name: "station-db", title: "Station DB (NAMES.GP)", author: AUTHOR, version: v, permissions: ["monitor", "event", "ipc"], surfaces: ["terminal", "bbs", "node"], description: "Classifies heard stations (NAMES.GP) and shares them on the inter-tool bus." },
+    activate(ctx) {
+      // Resolve only stations we have actually HEARD (recorded on_frame) — an unheard call → "".
+      const classify = (call: string) => { const c = String(call).toUpperCase(); return c ? String(ctx.store.get("sdb." + c) || "") : ""; };
+      ctx.on("on_frame", (p) => {
+        const c = String(p.peerCall ?? "").toUpperCase(); if (!c) return;
+        const type = registry.classify(c, { payload: String(p.text ?? "") });
+        ctx.store.set("sdb." + c, type);
+        ctx.emit("station.seen", { call: c, type, source: p.source });   // opaque to the host; consumers decide
+      });
+      // request/response service: any tool can resolve a callsign's station type without knowing about us.
+      ctx.provideService("station.type", (arg) => classify(typeof arg === "string" ? arg : (arg as { call?: string })?.call ?? ""));
+    },
+  };
+}
+
+/** (GP gpserv/gpdir) Info / menu responder — answers a connected peer's read-only queries. Operator-only
+ *  commands (/setinfo) are registered `{remote:false}` so a peer can never set them (per-command gate). */
+export function infoResponderTool(): Tool {
+  return {
+    manifest: { name: "info-responder", title: "Info / menu responder", author: AUTHOR, version: v, permissions: ["command", "panel", "ipc"], surfaces: ["terminal", "bbs", "node"], remote: true, description: "Answers a peer's INFO / MENU / WHOIS <call> (GP gpserv/gpdir)." },
+    activate(ctx) {
+      const info = () => ctx.store.get("info.text") || "APRScaching workbench station. Type MENU for commands. 73!";
+      ctx.registerCommand("info", () => [info()]);
+      ctx.registerCommand("menu", () => ["Commands: INFO  MENU  WHOIS <call>  GRID <loc> [loc]  CONV <n> <from> <to>"]);
+      ctx.registerCommand("whois", (args) => {
+        const c = args.trim().toUpperCase(); if (!c) return ["Usage: WHOIS <CALL>"];
+        const type = ctx.callService("station.type", c);   // cross-tool: resolved by station-db over the bus
+        return [type ? `${c}: ${String(type)}` : `${c}: not heard yet (enable Station DB to classify).`];
+      });
+      ctx.registerCommand("setinfo", (args) => {   // operator-only: NOT remote-invokable
+        const t = args.trim(); if (!t) return ["Usage: /setinfo <text peers see>"];
+        ctx.store.set("info.text", t.slice(0, 240)); return ["Info text updated."];
+      }, { remote: false });
+      ctx.setPanel({ title: "Info responder", nodes: [
+        { kind: "text", text: "Connected peers may send INFO / MENU / WHOIS.", tone: "muted" },
+        { kind: "kv", key: "Peer info", value: info() },
+      ] });
+    },
+  };
+}
+
+/** (GP msg) Away-note responder — when the operator flags away, greet a connecting peer and let them
+ *  leave a short note (NOT a mailbox — see docs/28 §5d BBS/PMS divergence; ephemeral, capped, local). */
+export function awayNoteTool(): Tool {
+  const KEY = "away.notes";
+  return {
+    manifest: { name: "away-note", title: "Away note", author: AUTHOR, version: v, permissions: ["command", "event", "panel"], surfaces: ["terminal", "bbs", "node"], remote: true, description: "Away-message + let a connected peer leave a short note (not a mailbox)." },
+    activate(ctx) {
+      const notes = () => (ctx.store.get(KEY) || "").split("\n").filter(Boolean);
+      const rebuild = () => {
+        const away = ctx.store.get("away.on") === "1";
+        ctx.setPanel({ title: "Away note", nodes: [
+          { kind: "badge", text: away ? "AWAY" : "here", tone: away ? "warn" : "ok" },
+          ...notes().slice(-8).map((n) => ({ kind: "text", text: n } as const)),
+          ...(notes().length ? [] : [{ kind: "text", text: "No notes.", tone: "muted" } as const]),
+        ] });
+      };
+      ctx.on("on_connect", (p) => { if (ctx.store.get("away.on") === "1") p.reply?.(`${ctx.store.get("away.msg") || "Operator is away."} Leave a note with:  NOTE <text>`); });
+      ctx.registerCommand("note", (args) => {   // peer-facing: leave a note
+        const t = args.trim(); if (!t) return ["Usage: NOTE <text>"];
+        const list = [...notes(), t.slice(0, 120)].slice(-20);
+        ctx.store.set(KEY, list.join("\n")); rebuild(); return ["Note saved - 73!"];
+      });
+      ctx.registerCommand("away", (args) => {    // operator-only
+        const a = args.trim();
+        if (a.toLowerCase() === "off") { ctx.store.set("away.on", ""); rebuild(); return ["Away off."]; }
+        ctx.store.set("away.on", "1"); if (a) ctx.store.set("away.msg", a.slice(0, 160)); rebuild();
+        return [`Away on: "${ctx.store.get("away.msg") || "Operator is away."}"`];
+      }, { remote: false });
+      ctx.registerCommand("notes", () => notes().length ? notes() : ["No notes."], { remote: false });
+      rebuild();
+    },
+  };
+}
+
+/** (GP bimmel) Connect bell — a small on_connect notifier (LinPac "it rang"): logs + reply-pings the
+ *  operator's own toast via the host log sink; pairs naturally with watch-alert. */
+export function connectBellTool(): Tool {
+  return {
+    manifest: { name: "connect-bell", title: "Connect bell", author: AUTHOR, version: v, permissions: ["event", "panel"], surfaces: ["terminal", "bbs", "node"], description: "Rings (logs a notice) when a station connects." },
+    activate(ctx) {
+      ctx.on("on_connect", (p) => {
+        const who = p.peerCall ? String(p.peerCall) : "a station";
+        ctx.store.set("bell.last", `${who}\t${Date.now()}`);
+        ctx.log(`*ring* ${who} connected`);
+        ctx.setPanel({ title: "Connect bell", nodes: [{ kind: "kv", key: "Last connect", value: `${who} (${ago(Date.now())} ago)` }] });
+      });
+      ctx.setPanel({ title: "Connect bell", nodes: [{ kind: "text", text: "Waiting for a connect...", tone: "muted" }] });
+    },
+  };
+}
+
+/** (GP rtt) Link ping — measures round-trip time to the connected peer. The RF round-trip itself is a
+ *  surface concern (the terminal times a probe frame and dispatches `on_tick`-style samples); this tool
+ *  keeps the rolling stats + panel. Samples arrive over the bus topic `link.rtt` {ms}. */
+export function linkPingTool(): Tool {
+  return {
+    manifest: { name: "link-ping", title: "Link ping (RTT)", author: AUTHOR, version: v, permissions: ["command", "ipc", "panel"], surfaces: ["terminal", "node"], description: "Rolling round-trip-time to the connected station (GP rtt)." },
+    activate(ctx) {
+      const samples: number[] = [];
+      const rebuild = () => {
+        const last = samples.at(-1);
+        const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+        ctx.setPanel({ title: "Link ping", nodes: samples.length
+          ? [{ kind: "kv", key: "Last", value: `${last} ms` }, { kind: "kv", key: "Avg", value: `${avg.toFixed(0)} ms` }, { kind: "kv", key: "Samples", value: String(samples.length) }]
+          : [{ kind: "text", text: "No samples - /ping or feed link.rtt.", tone: "muted" }] });
+      };
+      ctx.subscribe("link.rtt", (data) => { const ms = Number((data as { ms?: unknown })?.ms); if (isFinite(ms) && ms >= 0) { samples.push(ms); if (samples.length > 50) samples.shift(); rebuild(); } });
+      ctx.registerCommand("ping", () => { ctx.emit("link.ping.request", {}); return ["Ping requested (the terminal times the round-trip)."]; });
+      rebuild();
+    },
   };
 }
 
@@ -254,5 +408,7 @@ export function builtinTools(): Tool[] {
   return [
     colouriserTool(), macroPackTool(), autoResponderTool(), beaconSchedulerTool(), decoderTools(), ssidReferenceTool(),
     watchAlertTool(), mheardTool(), autoStatusTool(), gridTool(), sevenPlusTool(),
+    // GP-archive additions (docs/28 §5g): remote responders + IPC producer/consumers.
+    unitConverterTool(), cwEncoderTool(), stationDbTool(), infoResponderTool(), awayNoteTool(), connectBellTool(), linkPingTool(),
   ];
 }

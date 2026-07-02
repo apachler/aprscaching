@@ -12,13 +12,14 @@ export type Capability =
   | "decoder"   // contribute an audio/signal decoder (PSK31/CW/…)
   | "panel"     // add a small workbench panel/overlay
   | "map"       // add a declarative map layer
+  | "ipc"       // publish/subscribe on the inter-tool bus + provide/call named services
   | "beacon"    // schedule a beacon  (GATED: also needs the TX gate)
   | "network"   // make an outbound request  (GATED)
   | "tx"        // transmit a frame  (GATED: also needs the H5 TX gate)
   | "geo";      // read device geolocation  (GATED)
 
 export const ALL_CAPABILITIES: Capability[] = [
-  "command", "monitor", "event", "decoder", "panel", "map", "beacon", "network", "tx", "geo",
+  "command", "monitor", "event", "decoder", "panel", "map", "ipc", "beacon", "network", "tx", "geo",
 ];
 
 /** Capabilities that require an explicit user grant and (tx/beacon) the runtime TX gate. */

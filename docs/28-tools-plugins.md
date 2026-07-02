@@ -86,9 +86,11 @@ commands, shared vars, external "channel apps"):
   tokens are left intact.
 - **D · Remote-invocable commands.** `manifest.remote: true` opts a command tool into being driven by a
   *connected remote peer* (GP colon-commands). `runCommand(w,a,surface,{remote})` gates it so a peer can
-  never reach operator-only tools. No `remote` built-in ships (see §5d — we do not build an APRS PMS); the
-  mechanism is there for third-party/imported tools. The Tools console has an "as a remote peer" toggle;
-  the server-side consumer is the ingest/node session (`session-server`).
+  never reach operator-only tools. Gating is **two-level**: the tool opts in with `manifest.remote`, and
+  **each command** may further opt out with `registerCommand(word, fn, { remote: false })` — so a remote
+  tool can expose read commands to peers (`/info`, `/whois`, `/note`) while keeping operator commands
+  (`/setinfo`, `/away`) local-only. The Tools console has an "as a remote peer" toggle; the server-side
+  consumer is the ingest/node session (`session-server`).
 - **E · Shared var store.** `ctx.store` (LinPac `lp_set_var/get_var`) — a bounded per-host key/value scratch
   so cooperating tools share state (watch-alert/mheard keep their heard-lists in it).
 - **F · "Channel apps" — concept adopted, raw exec rejected.** LinPac runs arbitrary Linux programs as
@@ -96,6 +98,43 @@ commands, shared vars, external "channel apps"):
   **Worker-sandboxed imported tool** (bound to a surface/channel via the event context) and the operator
   **companion/ingest box** (`docs/21`). The `channel` field in the event payload is what lets a tool act
   per-session like a GP app, without a shell.
+
+## 5f. The platform is agnostic to tool function — the host routes, it never interprets
+The single load-bearing invariant of the whole system, validated against Graphic Packet's own **GPRI**
+(Remote Interface, `prog/gpri/`): GP the host offered a plugin exactly three services — `transmit(string)`,
+`sendFile(name)`, `getQsoData()` — plus four lifecycle callbacks (`init` / `receive` / `strategy`-tick /
+`exit`), and handed over QSO *context* a second way as env vars (`GP_CCALL`/`GP_MYCALL`/`GP_CPATH`/…). In
+**every** case GP passed *who/where*, never *what the tool does with it* — it had no idea whether the remote
+was ELIZA, a weather server, or a calendar.
+
+Our host mirrors this exactly:
+
+- **Every host-API method is a generic verb** — `registerCommand` / `on` / `addColouriser` / `addDecoder` /
+  `setPanel` / `emit` / `subscribe` / `provideService` / `callService` / `store` / `scheduleBeacon` /
+  `requestTx`. **None is named after a domain function.** There is no `getMheard()`, no `getWeather()`,
+  no `renderGip()`. Our `ToolEventPayload` (`peerCall`/`myCall`/`channel`/`station`/`source`) *is* the
+  direct analog of GP's `GP_*` context vars: context in, behaviour never.
+- **All tool BEHAVIOUR lives in `builtins/` or imported (sandboxed) tools** — never in `host.ts`.
+- **The rule, enforced by code review + the header comment in `host.ts`:** *never add a method named after
+  a tool's function.* If a new feature seems to need one, it belongs in a tool that talks over the bus.
+
+### Inter-tool IPC (the `ipc` capability)
+Tools cooperate over a host-routed bus whose **payloads are opaque to the host** (it fans out / forwards
+bytes; it never reads them). Two primitives, both gated by the `ipc` capability, both bounded (name ≤64
+chars, re-entrancy depth ≤16 so a topic loop can't run away), both torn down when a tool is disabled:
+
+- **Pub/sub** — `ctx.emit(topic, data)` → every `ctx.subscribe(topic, (data, from) => …)`. Example:
+  `station-db` emits `station.seen {call,type}`; a panel or logger subscribes.
+- **Named services (request/response)** — `ctx.provideService(name, fn)` / `ctx.callService(name, args)`.
+  Example: `station-db` provides `station.type`; `info-responder`'s `/whois` calls it — the info tool
+  resolves a callsign's classification **without knowing station-db exists**. This is GPRI's `getQsoData`
+  generalised to plugin↔plugin. Services are host-global (cross-surface) by design — that is the point of a
+  bus. The Tools console can introspect live topics/services via `host.ipcTopics()` / `host.ipcServices()`.
+
+**Imported (Worker-sandboxed) tools** reach the bus over their existing `postMessage` bridge (host relays
+`emit`/`subscribe`/`callService` to the in-process bus) — so third-party tools stay isolated but can still
+participate. v1 ships full IPC for **built-in** tools; the imported-tool bridge is the documented next seam
+(the Worker API today is command-only).
 
 ## 5c. Built-in tools shipped (all OFF by default)
 GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-side, capability-gated):
@@ -111,8 +150,15 @@ GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-sid
 | **watch-alert** | command,monitor,panel | terminal,web | **WATCH/CATCH** — highlight + log `/watch`-ed calls |
 | **mheard** | monitor,event,panel | terminal,web | **MHEARD** — rolling recently-heard list, source-agnostic (RF + APRS + …) |
 | **auto-status** | command,event,tx | terminal | timed macro — `/autostatus <min> <text>`, TX-gated |
-| **grid-bearing** | command,panel | web,terminal | locator util — `/grid <A> [B]` distance + bearing |
+| **grid-bearing** | command,panel | web,terminal,bbs,node | locator util / **GP QTH** — `/grid <A> [B]` distance + bearing (remote-queryable) |
 | **sevenplus** | decoder | web | **7PLUS** — parse/reassemble multi-part 7plus messages |
+| **unit-convert** | command | web,terminal,bbs,node | **GP conv** — `/conv <n> <from> <to>` km/mi/m/ft/kn… + c/f (remote) |
+| **cw-encoder** | command | web,terminal | **GP cw** — `/cw <text>` encode to Morse (send-side of F-5) |
+| **station-db** | monitor,event,ipc | terminal,bbs,node | **NAMES.GP / autoname** — classifies heard stations, publishes on the IPC bus |
+| **info-responder** | command,panel,ipc | terminal,bbs,node | **GP gpserv/gpdir** — peer `INFO / MENU / WHOIS` (WHOIS resolves via station-db over IPC) |
+| **away-note** | command,event,panel | terminal,bbs,node | **GP msg** — away-message + let a peer leave a short note (*not* a mailbox — §5d) |
+| **connect-bell** | event,panel | terminal,bbs,node | **GP bimmel** — rings/logs when a station connects |
+| **link-ping** | command,ipc,panel | terminal,node | **GP rtt** — rolling round-trip time (samples over the `link.rtt` bus topic) |
 
 ## 5d. We do NOT build an APRS PMS (deliberate divergence)
 Graphic Packet / LinPac ship a **PMS** (Personal Message System / personal mailbox) that a *connected*
@@ -135,8 +181,9 @@ Evaluated from the GP/LinPac catalog; parked with the reason + what each needs:
 - **Logbook** (event+store) — per-callsign connect/disconnect log (LinPac `LOGBOOK`/`cinit/cexit`).
   Needs persistence beyond the in-memory store (account data or export) → build once a tool storage/export
   surface exists.
-- **RTT / ping** (command+tx) — round-trip time to a station (LinPac `RTT`). Needs the connected-mode
-  round-trip timing hook on the ingest; TX-gated. Server-side consumer.
+- **RTT / ping** — *now built* as `link-ping` (rolling stats + panel; samples arrive on the `link.rtt` bus
+  topic). The remaining seam is the **terminal/ingest feeder** that actually times a round-trip probe and
+  emits `link.rtt {ms}` — TX-gated, surface-side (not a tool concern).
 - **Auto-login / PW** (event+command) — auto-answer BBS/node auth (FBB MD2/MD5, FLEXNET, TheNet). Deferred
   on security grounds: it stores credentials, and per `docs/19` the APRS passcode verifies nothing. If
   built, do the **LoTW-TLS** path only, behind a security review.
@@ -145,6 +192,33 @@ Evaluated from the GP/LinPac catalog; parked with the reason + what each needs:
   the tool sandbox.
 - **CONVERS / JOIN conference relay** — cross-channel bidirectional relay. Server-side (ingest/node)
   multi-session concern, not a browser plugin.
+
+## 5g. Graphic-Packet archive — remaining verdicts (2026-07)
+From the full GP distribution (`gpri` spec + `remotes/` + `tools/`). Built ones are in §5c; the rest:
+
+**Deferred (documented, not built):**
+- **Scheduled query / GPAUTO** (`gpauto` `.gpa`, `gp_mc17b` "Mail-Check") — operator automation that runs a
+  timed `connect → send → capture` script against a BBS/cluster (GP's real batch power). Deferred: it needs
+  to drive the terminal's **connection state machine** (connect/send-raw/capture), which the tool host does
+  not expose — that's a terminal/ingest surface capability, not a sandbox verb. Revisit once the terminal
+  offers a scripted-session service the tool can `callService` into.
+- **Graphic-Packet imagery / GIP** (`gip`, `gipdisp`, `gppaint`, `gif2gip`) — the literal "graphic" in
+  Graphic Packet: inline block/ANSI images. On-theme for Cogmind. Needs a new **generic `blocks`/`canvas`
+  panel node** (a grid of glyph+colour cells the tool fills — function-agnostic, per §5f) + a GIP decoder.
+  Parked behind that panel-node addition.
+- **ELIZA auto-chat** (`gp_eliza`) — a remote chatbot responder. Trivial to build on `remote` + `event`;
+  low priority, kept as a demo/teaser candidate.
+
+**Rejected (with reason):**
+- **Remote DOS shell** (`gp_shel2`) and **any exec-a-program tool** — we never exec (§5f/§5b F). A peer
+  running host commands is exactly the boundary the sandbox forbids.
+- **sysinfo** (`sysinfo`) — exposing host system/memory to peers is off-mission and leaky.
+- **Password gate** (`pwd232`) — access control is a **platform** concern (`verify.ts` / control-verification),
+  never a plugin. A tool must not be able to grant access.
+- **QSO-SFX packer** (`qsosfx`) — a self-extracting archive helper; collides with the no-exec stance and has
+  no clear browser analog.
+- **TNC drivers / NET-ROM node** (`tfpcx`, `tfx`, `gp_node`) — already ours natively (GPLSL driver layer, P4
+  node); not plugins.
 
 ## 6. Follow-ons (not v1)
 Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)

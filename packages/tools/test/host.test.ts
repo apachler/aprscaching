@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(11);
+    expect(host.list()).toHaveLength(18);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -180,6 +180,105 @@ describe("Tool surfaces — a tool's type routes its contributions (docs/28)", (
     };
     host.register(rogue);
     expect(host.setEnabled("rogue-panel", true).error).toMatch(/permission 'panel' not granted/);
+  });
+});
+
+describe("Inter-tool IPC bus (docs/28 §5f) — the host routes, never interprets", () => {
+  const producer = (): Tool => ({
+    manifest: { name: "prod", title: "P", author: "X", version: "1", permissions: ["ipc", "command"], surfaces: ["web"] },
+    activate(ctx) {
+      ctx.provideService("sum", (a) => { const { x, y } = a as { x: number; y: number }; return x + y; });
+      ctx.registerCommand("fire", (args) => { ctx.emit("topic.a", { msg: args }); return ["fired"]; });
+    },
+  });
+  const consumer = (sink: string[]): Tool => ({
+    manifest: { name: "cons", title: "C", author: "X", version: "1", permissions: ["ipc"], surfaces: ["web"] },
+    activate(ctx) { ctx.subscribe("topic.a", (data, from) => sink.push(`${from}:${(data as { msg: string }).msg}`)); },
+  });
+
+  it("emit → subscribe delivers the opaque payload + emitting tool name", () => {
+    const sink: string[] = [];
+    const host = new ToolHost();
+    host.register(producer()); host.register(consumer(sink));
+    host.setEnabled("prod", true); host.setEnabled("cons", true);
+    host.runCommand("fire", "hi");
+    expect(sink).toEqual(["prod:hi"]);
+  });
+
+  it("provideService / callService is a request/response between tools", () => {
+    const host = new ToolHost();
+    const caller: Tool = {
+      manifest: { name: "caller", title: "C", author: "X", version: "1", permissions: ["ipc", "command"], surfaces: ["web"] },
+      activate(ctx) { ctx.registerCommand("ask", () => [String(ctx.callService("sum", { x: 2, y: 3 }))]); },
+    };
+    host.register(producer()); host.register(caller);
+    host.setEnabled("prod", true); host.setEnabled("caller", true);
+    expect(host.runCommand("ask")).toEqual(["5"]);
+    expect(host.ipcServices()).toContain("sum");
+  });
+
+  it("disabling a tool tears down its subscriptions + services", () => {
+    const sink: string[] = [];
+    const host = new ToolHost();
+    host.register(producer()); host.register(consumer(sink));
+    host.setEnabled("prod", true); host.setEnabled("cons", true);
+    host.setEnabled("cons", false);                 // subscriber gone
+    host.runCommand("fire", "x");
+    expect(sink).toEqual([]);                        // not delivered
+    host.setEnabled("prod", false);                 // provider gone
+    const c: Tool = { manifest: { name: "c2", title: "C", author: "X", version: "1", permissions: ["ipc", "command"], surfaces: ["web"] },
+      activate(ctx) { ctx.registerCommand("q", () => [String(ctx.callService("sum", { x: 1, y: 1 }))]); } };
+    host.register(c); host.setEnabled("c2", true);
+    expect(host.runCommand("q")).toEqual(["undefined"]);   // service no longer provided
+    expect(host.ipcServices()).not.toContain("sum");
+  });
+
+  it("emit/subscribe require the 'ipc' capability", () => {
+    const rogue: Tool = { manifest: { name: "noipc", title: "N", author: "X", version: "1", permissions: ["command"], surfaces: ["web"] },
+      activate(ctx) { (ctx as unknown as { emit: (t: string) => void }).emit("x"); } };
+    const host = new ToolHost();
+    host.register(rogue);
+    expect(host.setEnabled("noipc", true).error).toMatch(/permission 'ipc' not granted/);
+  });
+});
+
+describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
+  it("per-command remote gate: a peer reaches /info but not operator-only /setinfo", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "info-responder")!);
+    host.setEnabled("info-responder", true);
+    expect(host.runCommand("info", "", "bbs", { remote: true })).not.toBeNull();      // read command answers a peer
+    expect(host.runCommand("setinfo", "hax", "bbs", { remote: true })).toBeNull();    // operator-only: peer blocked
+    expect(host.runCommand("setinfo", "hi", "bbs")).toEqual(["Info text updated."]);  // …local still works
+  });
+
+  it("station-db publishes station.type over the bus; info-responder /whois consumes it", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("station-db", true);
+    host.setEnabled("info-responder", true);
+    host.dispatch("on_frame", { peerCall: "OE8XBM-1", surface: "terminal", text: "" });
+    const whois = host.runCommand("whois", "OE8XBM-1", "terminal", { remote: true })!;
+    expect(whois[0]).toMatch(/OE8XBM-1:/);            // resolved via the station.type service
+    expect(host.runCommand("whois", "ZZ9ZZZ", "terminal")![0]).toMatch(/not heard yet/);
+  });
+
+  it("unit converter + CW encoder produce expected output", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("unit-convert", true); host.setEnabled("cw-encoder", true);
+    expect(host.runCommand("conv", "100 km mi")![0]).toMatch(/62\.14 mi/);
+    expect(host.runCommand("conv", "0 c f")![0]).toMatch(/32\.0 F/);
+    expect(host.runCommand("cw", "SOS")).toEqual(["... --- ..."]);
+  });
+
+  it("away-note: a peer may leave a note but not toggle away", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "away-note")!);
+    host.setEnabled("away-note", true);
+    expect(host.runCommand("note", "back at 1900z", "bbs", { remote: true })).toEqual(["Note saved - 73!"]);
+    expect(host.runCommand("away", "on", "bbs", { remote: true })).toBeNull();   // operator-only
+    expect(host.runCommand("notes", "", "bbs")![0]).toBe("back at 1900z");
   });
 });
 
