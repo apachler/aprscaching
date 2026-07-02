@@ -8,10 +8,10 @@ flip**. Light mode is dropped from scope. T1 (token spine + chrome + terminal sh
 style), and T3 (opt-in CRT FX · CP437 glyph variants · `.ans` export on the packet terminal) are all
 shipped. The **standalone full-screen TUI monitor** (§6.8) was built and then **removed by owner
 decision** (2026-07 — it overlapped the existing Nearby/Activity/ports surfaces); its `.ans` export
-lives on where the doc actually intends it, the **packet terminal**. Remaining polish: a bundled
-CP437/VGA webfont binary (T1 §1a·4 — the Cogmind `--font-mono` stack already prefers such a face when
-present and falls back to a box-drawing-capable system mono) and the optional standalone
-`aprscaching-tui` read-API client (pairs with the Bun desktop topology).
+lives on where the doc actually intends it, the **packet terminal**. The **CP437/VGA webfont is now
+bundled** (PxPlus IBM VGA 8x16, CC BY-SA 4.0; `apps/web/public/fonts/`), lazy — referenced only by the
+Cogmind `--font-mono` stack so it never loads on the Modern/field path. Remaining optional: the
+standalone `aprscaching-tui` read-API client (pairs with the Bun desktop topology).
 **Owner:** OE8APR
 **Reads with:** `.claude/rules/ui-ux.md`, `.claude/rules/css.md`, `docs/06-ui-ia-m1.md`, `docs/27`
 (Graphic Packet heritage).
@@ -261,8 +261,9 @@ interpreter, so it's mostly CSS. The full-screen TUI monitor (§6.8) is the T3 f
   `.ans` **ANSI/CP437 export** of the packet log — a "↓ .ans" affordance on the **packet terminal**
   (monitor pane as phosphor lines; a connected channel with its ANSI colour preserved), backed by
   `packages/packet` `toAnsi`/`cp437Bytes` (tested). A standalone full-screen **TUI monitor** app was
-  built then removed by owner decision (overlapped Nearby/Activity/ports). Deferred: the bundled CP437
-  webfont binary and the optional standalone `aprscaching-tui` read-API client.
+  built then removed by owner decision (overlapped Nearby/Activity/ports). The bundled CP437/VGA
+  webfont (T1 §1a·4) is now in place (PxPlus IBM VGA 8x16, CC BY-SA 4.0), lazy-loaded in Cogmind only.
+  Deferred: the optional standalone `aprscaching-tui` read-API client.
 
 Ship T1 first (high impact, low risk), then T2 (closes the "map looks wrong" gap), then T3 as polish.
 

@@ -37,6 +37,9 @@ export function Panel(props: {
         {props.actions}
         {onClose && <button className="icon" aria-label="Close" onClick={onClose}>✕</button>}
       </div>
+      {/* Workbench apps are desktop-density; on a narrow viewport show a one-line hint (CSS-gated, so
+          it's free on desktop). Not blocking — the app still works. */}
+      {props.wide && <p className="wide-hint" role="note">Best on a wider screen — this workbench app is built for desktop.</p>}
       {props.children}
     </aside>
   );

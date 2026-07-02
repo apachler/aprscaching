@@ -20,3 +20,12 @@ IBMPlexMono-400.woff2 / IBMPlexMono-500.woff2 / IBMPlexMono-600.woff2
 
 Used for the "operator" data surfaces (callsigns, grids, coordinates, cache ids)
 alongside Fredoka, per the M8 operator-UI design pass. OFL permits self-hosting.
+
+WebPlus_IBM_VGA_8x16.woff
+  Family : PxPlus IBM VGA8 (declared @font-face name; file = "WebPlus IBM VGA 8x16")
+  Author : VileR — from "The Ultimate Oldschool PC Font Pack" v2.2
+  License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+  Source : https://int10h.org/oldschool-pc-fonts/
+  Use    : the authentic CP437/VGA face (box-drawing + block glyphs) for the Cogmind theme only —
+           referenced solely by the [data-theme="cogmind"] --font-mono stack, so it is never fetched
+           on the Modern / field path (docs/24 §1a·4). CC BY-SA 4.0 requires this attribution.

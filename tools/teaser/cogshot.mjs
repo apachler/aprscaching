@@ -12,8 +12,8 @@ const browser = await chromium.launch({
   args: ["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 
-async function shoot(demo, theme, file, crt = false) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
+async function shoot(demo, theme, file, crt = false, vw = 1280) {
+  const ctx = await browser.newContext({ viewport: { width: vw, height: 860 }, deviceScaleFactor: 2 });
   await ctx.addInitScript(([th, c]) => {
     localStorage.setItem("acs.call", "OE8APR");
     localStorage.setItem("acs.locale", JSON.stringify({ theme: th, crt: c }));
@@ -31,5 +31,6 @@ await shoot("app-packet", "modern", "packet-modern.png");
 await shoot("app-bbs", "cogmind", "bbs-cogmind.png");
 await shoot("app-remote", "cogmind", "remote-cogmind.png");
 await shoot("app-packet", "cogmind", "packet-cogmind-crt.png", true);
+await shoot("app-bbs", "cogmind", "bbs-cogmind-narrow.png", false, 560);
 
 await browser.close();
