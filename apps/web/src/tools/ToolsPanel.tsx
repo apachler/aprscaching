@@ -1,9 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { sanitizePanel, type Capability, type Colouriser, type Tool, type ToolManifest } from "@aprsweb/tools";
+import { sanitizePanel, checkManifestSignature, resolveTrust, verifyRegistry, type Capability, type Colouriser, type RegistryEntry, type SignedRegistry, type Tool, type ToolManifest, type ToolTrust } from "@aprsweb/tools";
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
 import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost, TOOLS_TOAST_EVENT } from "./host.js";
+import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
+
+// ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
+const TOFU_KEY = "acs.tool.keys";
+function tofuMap(): Record<string, string> { try { return JSON.parse(localStorage.getItem(TOFU_KEY) || "{}"); } catch { return {}; } }
+function tofuPin(author: string, pubkey: string): void { try { const m = tofuMap(); m[author.toUpperCase()] = pubkey; localStorage.setItem(TOFU_KEY, JSON.stringify(m)); } catch { /* ignore */ } }
+
+/** A short, human trust line + whether the import may proceed. `invalid`/`key-changed` are hard-refused. */
+function trustInfo(t: ToolTrust): { label: string; kind: "found" | "warn" | "dnf"; blocked: boolean } {
+  switch (t) {
+    case "verified": return { label: "Verified · registry-listed author key", kind: "found", blocked: false };
+    case "known": return { label: "Signed · matches the key you trusted before", kind: "found", blocked: false };
+    case "self-signed": return { label: "Signed · unknown author key (trust-on-first-use)", kind: "warn", blocked: false };
+    case "unsigned": return { label: "Unsigned · you're trusting the URL only", kind: "warn", blocked: false };
+    case "key-changed": return { label: "Author key CHANGED since you last trusted it — refused", kind: "dnf", blocked: true };
+    case "invalid": return { label: "Signature INVALID — refused", kind: "dnf", blocked: true };
+  }
+}
 
 /** Compile an imported tool's declarative colour rules into a sync colouriser (no per-line Worker call). */
 function compileRules(rules: ColourRule[]): Colouriser {
@@ -56,10 +74,26 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const [cmdOut, setCmdOut] = useState<string[]>([]);
   const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer (docs/28 D)
   const [importUrl, setImportUrl] = useState("");
-  const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string } | null>(null);
+  const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string; trust: ToolTrust } | null>(null);
   const [imported, setImported] = useState<Imported[]>([]);
+  const [registry, setRegistry] = useState<RegistryEntry[]>([]);   // verified marketplace entries (empty until loaded)
   const promptRef = useRef<HTMLDivElement>(null);
   useModalDialog(promptRef, () => setPrompt(null), !!prompt); // focus-trap + Escape + focus-restore
+
+  // Load + verify the signed tool registry once. We trust ONLY the pinned authority key — a forged or
+  // re-hosted registry (wrong authority / edited entries) fails verifyRegistry and is dropped.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const res = await fetch(TOOL_REGISTRY_URL, { credentials: "omit" });
+        if (!res.ok) return;
+        const doc = (await res.json()) as SignedRegistry;
+        if (live && (await verifyRegistry(doc, TOOL_REGISTRY_AUTHORITY))) setRegistry(doc.entries);
+      } catch { /* no/invalid registry → browse just shows empty */ }
+    })();
+    return () => { live = false; };
+  }, []);
 
   // Surface beacon/TX feedback the shared host emits (it can't hold a React toast itself).
   useEffect(() => {
@@ -95,15 +129,22 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     for (const im of imported) if (im.enabled && im.sandbox.commands.includes(word)) { setCmdOut(await im.sandbox.runCommand(word, args)); setCmd(""); return; }
     setCmdOut([`no such command "${word}"`]);
   }
-  async function startImport() {
-    if (!importUrl.trim()) return;
-    const r = await fetchToolManifest(importUrl.trim());
+  async function startImport(url = importUrl) {
+    if (!url.trim()) return;
+    const r = await fetchToolManifest(url.trim());
     if (!r.ok) { toast(r.error); return; }
-    setPrompt({ manifest: r.manifest, base: r.base });
+    // Verify the signature (integrity) and resolve overall trust against the registry + TOFU pin (identity).
+    const sig = await checkManifestSignature(r.manifest);
+    const regEntry = registry.find((e) => e.name === r.manifest.name);
+    const trust = resolveTrust(sig, { registryPubkey: regEntry?.pubkey, pinnedPubkey: tofuMap()[r.manifest.author.toUpperCase()], pubkey: r.manifest.pubkey });
+    if (trustInfo(trust).blocked) { toast(`Refused: ${trustInfo(trust).label}`); return; }   // never even prompt
+    setPrompt({ manifest: r.manifest, base: r.base, trust });
   }
   async function approveImport() {
     if (!prompt) return;
-    const { manifest, base } = prompt;
+    const { manifest, base, trust } = prompt;
+    if (trustInfo(trust).blocked) { setPrompt(null); return; }
+    if ((trust === "self-signed" || trust === "known" || trust === "verified") && manifest.pubkey) tofuPin(manifest.author, manifest.pubkey); // pin on trust
     setPrompt(null);
     try {
       const scriptUrl = new URL(manifest.entry ?? "tool.js", base).href;
@@ -188,29 +229,46 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         </div>
       )}
 
+      {registry.length > 0 && (
+        <div className="tool-sub">
+          <div className="ulabel">Registry <span className="muted fine">(signed marketplace — {registry.length})</span></div>
+          {registry.map((e) => (
+            <div key={e.name} className="tool-row">
+              <div className="tool-meta">
+                <strong>{e.title}</strong> <span className="muted fine">v{e.version} · {e.author}</span> <Badge kind="found">verified</Badge>
+                {e.description && <div className="muted fine">{e.description}</div>}
+              </div>
+              <button onClick={() => { setImportUrl(e.entry); startImport(e.entry); }}>Import…</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="tool-sub">
         <div className="ulabel">Import a tool <span className="muted fine">(by tool.json URL)</span></div>
         <div className="row gap-2">
           <input value={importUrl} onChange={(e) => setImportUrl(e.target.value)} placeholder="https://…/tool.json" aria-label="Tool manifest URL" />
-          <button onClick={startImport}>Import…</button>
+          <button onClick={() => startImport()}>Import…</button>
         </div>
+        <p className="muted fine">Signed tools are verified against their author key; unsigned tools import with a warning. An invalid signature or a changed author key is refused.</p>
         {imported.map((im) => (
           <div key={im.manifest.name} className="muted fine">✓ {im.manifest.title} — /{im.sandbox.commands.join(" /")}</div>
         ))}
       </div>
 
-      {prompt && (
+      {prompt && (() => { const ti = trustInfo(prompt.trust); return (
         <div className="tool-prompt" role="dialog" aria-modal="true" aria-label="Approve tool permissions" ref={promptRef}>
           <p><strong>{prompt.manifest.title}</strong> by <span className="mono">{prompt.manifest.author}</span> requests:</p>
           <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
           <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
+          <p><Badge kind={ti.kind}>{ti.label}</Badge></p>
           <p className="muted fine">It will run sandboxed in a Worker. Network access is blocked unless it requested (and you approve) the <code>network</code> capability. TX still requires your verified callsign.</p>
           <div className="row gap-2 end">
             <button onClick={() => setPrompt(null)}>Cancel</button>
             <button className="primary" onClick={approveImport}>Approve + run</button>
           </div>
         </div>
-      )}
+      ); })()}
     </div>
   );
 }

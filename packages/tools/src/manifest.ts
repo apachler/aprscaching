@@ -16,7 +16,8 @@ export interface ToolManifest {
   remote?: boolean;          // its /commands may be invoked by a REMOTE connected peer (PMS; docs/28 D)
   description?: string;
   entry?: string;            // imported tools: the script URL/path the sandbox runs (built-ins omit it)
-  signature?: string;        // optional detached signature over the manifest (author key)
+  pubkey?: string;           // author's raw Ed25519 public key (base64url) — the key `signature` verifies against
+  signature?: string;        // optional detached Ed25519 signature over the canonical manifest (docs/28 §7)
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
@@ -32,6 +33,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
   if (!Array.isArray(m.permissions) || !m.permissions.every(isCapability)) return { ok: false, error: "permissions must be a list of known capabilities" };
   if (m.surfaces !== undefined && (!Array.isArray(m.surfaces) || !m.surfaces.every(isSurface))) return { ok: false, error: "surfaces must be a list of known surfaces (web/terminal/bbs/node/map)" };
   if (m.entry !== undefined && typeof m.entry !== "string") return { ok: false, error: "entry must be a string URL/path" };
+  if (m.pubkey !== undefined && typeof m.pubkey !== "string") return { ok: false, error: "pubkey must be a base64url string" };
   const surfaces = Array.isArray(m.surfaces) && m.surfaces.length ? [...new Set(m.surfaces as Surface[])] : (["web"] as Surface[]);
   return {
     ok: true,
@@ -42,6 +44,7 @@ export function validateManifest(input: unknown): { ok: true; manifest: ToolMani
       remote: m.remote === true || undefined,
       description: typeof m.description === "string" ? m.description : undefined,
       entry: typeof m.entry === "string" ? m.entry : undefined,
+      pubkey: typeof m.pubkey === "string" ? m.pubkey : undefined,
       signature: typeof m.signature === "string" ? m.signature : undefined,
     },
   };

@@ -249,8 +249,36 @@ The step DSL (`connect`/`send`/`waitfor [timeout]`/`wait`/`disconnect`, `#`/`REM
 service could drive any scripted connect flow. That is the invariant: the surface offers a capability, the
 tool decides the script.
 
+## 7. Signed manifests + the tool registry (marketplace)
+Importing a tool by URL means running someone else's code (sandboxed, but still). Signing lets the user tell
+*who* wrote it and that it wasn't tampered. Ed25519 over WebCrypto — same code in browser/Worker/Node/Bun
+(`packages/tools/registry.ts`, MIT + dependency-free).
+
+- **Manifest signature (integrity).** A `tool.json` MAY carry a raw author public key (`pubkey`, base64url)
+  and a detached `signature` (base64) over the **canonical** manifest (`stableStringify`, every field except
+  `signature`; `pubkey` is inside the signed bytes, so the key can't be swapped without breaking it).
+  `checkManifestSignature` → `unsigned | valid | invalid`.
+- **Identity via the registry.** A `registry.json` is an **authority-signed** list binding each tool
+  `name`→`pubkey` (`{ entries, authority, sig }`; `sig` covers the canonical `entries`). The app pins ONE
+  authority key (`apps/web/tools/registry-config.ts` — `TOOL_REGISTRY_AUTHORITY`, overridable via
+  `VITE_TOOL_REGISTRY*`), so a forged / re-hosted / edited registry fails `verifyRegistry` and is dropped.
+- **Trust resolution** (`resolveTrust`) combines the signature result + a registry match + a per-author
+  **trust-on-first-use** pin (`localStorage acs.tool.keys`): `verified` (registry key matches) · `known`
+  (matches your earlier pin) · `self-signed` (valid sig, new key — pinned on approve) · `unsigned`
+  (URL-trust only) · **`invalid`** / **`key-changed`** → **hard-refused, never even prompted**.
+- **UX.** The Tools console shows a signed **Registry** list (one-click *verified* import) + the manual
+  URL import; the permission prompt carries the trust badge; approving a signed tool pins its key.
+- **Authoring** (`tools/toolkey/`): `genkey.mjs` makes an Ed25519 key; `sign.mjs manifest tool.json` and
+  `sign.mjs registry registry.json` sign with the **exact** canonicalisation `registry.ts` verifies. Private
+  keys never enter the repo — only the signed artifacts + the pinned public authority constant. A worked
+  example ships at `apps/web/public/tools/hello/` (a signed tool: command + colour rule + panel + ROT13
+  decoder) listed in `public/tools/registry.json`.
+
+Still open: a hosted community registry with multiple authorities + key rotation, and moving the pinned
+authority to a `/.well-known` doc (pairs `docs/15` F7 governance).
+
 ## 6. Follow-ons (not v1)
-Signed-manifest verification + a community **registry/marketplace** (the real gate before third-party tools
-are shareable); a `map` layer host surface (capability declared, no host surface yet); the browser Web Audio
-DSP front-ends that feed the CW/PSK31 decoders live signal (pairs `docs/16` H4). Imported-tool parity is now
-**closed** — commands, IPC, colourisers, panels, and decoders all cross the worker boundary (§5f).
+A `map` layer host surface (capability declared, no host surface yet); the browser Web Audio DSP front-ends
+that feed the CW/PSK31 decoders live signal (pairs `docs/16` H4). Imported-tool parity is **closed** —
+commands, IPC, colourisers, panels, and decoders all cross the worker boundary (§5f) — and signing +
+a registry now gate third-party imports (§7).
