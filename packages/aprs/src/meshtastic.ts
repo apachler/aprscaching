@@ -78,22 +78,16 @@ const sub = (b: Uint8Array, want: number): Uint8Array | null => {
   return null;
 };
 
-/**
- * Parse a Meshtastic FromRadio frame into a position fix, or null. Path:
- * FromRadio.packet(2) → MeshPacket{ from(1,fixed32), decoded(4) } → Data{ portnum(1)==POSITION_APP(3),
- * payload(2) } → Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3) } (×1e-7 deg).
- */
-export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
-  const packet = sub(frame, 2); if (!packet) return null;
-  let from = 0;
-  for (const [f, w, v] of walk(packet)) if (f === 1 && w === 5) from = (v as number) >>> 0;
-  const data = sub(packet, 4); if (!data) return null;
-  let portnum = 0; let payload: Uint8Array | null = null;
-  for (const [f, w, v] of walk(data)) {
-    if (f === 1 && w === 0) portnum = v as number;
-    else if (f === 2 && w === 2 && v instanceof Uint8Array) payload = v;
-  }
-  if (portnum !== 3 || !payload) return null;                          // POSITION_APP only
+const nodeId = (from: number): string => `!${(from >>> 0).toString(16).padStart(8, "0")}`;
+
+/** A typed Meshtastic event decoded from a MeshPacket's application payload (docs/16 Path A). */
+export type MeshEvent =
+  | { kind: "position"; fix: MeshFix }
+  | { kind: "text"; node: string; text: string }
+  | { kind: "nodeinfo"; node: string; longName?: string; shortName?: string };
+
+/** Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3) } → a fix (×1e-7 deg), or null. */
+function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
   let latI: number | null = null, lonI: number | null = null, alt = 0;
   for (const [f, w, v] of walk(payload)) {
     if (f === 1 && w === 5) latI = v as number;
@@ -104,8 +98,58 @@ export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
   const lat = latI / 1e7, lon = lonI / 1e7;
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-  const node = `!${(from >>> 0).toString(16).padStart(8, "0")}`;
   const fix: MeshFix = { node, lat, lon };
   if (alt) fix.altitudeM = Math.round(alt);
   return fix;
+}
+
+/**
+ * Decode one MeshPacket (the shared message inside both FromRadio.packet and ServiceEnvelope.packet) into a
+ * typed event. MeshPacket{ from(1,fixed32), decoded(4) } → Data{ portnum(1), payload(2) }; we dispatch the
+ * three portnums that matter to us: POSITION_APP(3), TEXT_MESSAGE_APP(1), NODEINFO_APP(4→User). Encrypted
+ * packets (no `decoded`) return null. Canonical field numbers from meshtastic/protobufs.
+ */
+export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
+  let from = 0;
+  for (const [f, w, v] of walk(packet)) if (f === 1 && w === 5) from = (v as number) >>> 0;
+  const data = sub(packet, 4); if (!data) return null;                 // decoded Data; encrypted → skip
+  let portnum = 0; let payload: Uint8Array | null = null;
+  for (const [f, w, v] of walk(data)) {
+    if (f === 1 && w === 0) portnum = v as number;
+    else if (f === 2 && w === 2 && v instanceof Uint8Array) payload = v;
+  }
+  if (!payload) return null;
+  const node = nodeId(from);
+  if (portnum === 3) { const fix = positionFrom(payload, node); return fix ? { kind: "position", fix } : null; }
+  if (portnum === 1) { const text = new TextDecoder().decode(payload).replace(/\0+$/, ""); return text ? { kind: "text", node, text } : null; }
+  if (portnum === 4) {                                                  // NODEINFO_APP → User{ long_name(2), short_name(3) }
+    let longName: string | undefined, shortName: string | undefined;
+    for (const [f, w, v] of walk(payload)) {
+      if (f === 2 && w === 2 && v instanceof Uint8Array) longName = new TextDecoder().decode(v);
+      else if (f === 3 && w === 2 && v instanceof Uint8Array) shortName = new TextDecoder().decode(v);
+    }
+    return { kind: "nodeinfo", node, longName, shortName };
+  }
+  return null;
+}
+
+/**
+ * Parse a Meshtastic FromRadio frame (serial/BLE, docs/16 H3) into a position fix, or null — the original
+ * browser-direct path. FromRadio.packet(2) → MeshPacket. Non-position events yield null here (position is
+ * what the map consumes); use `parseMeshPacket` directly for text/nodeinfo.
+ */
+export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
+  const packet = sub(frame, 2); if (!packet) return null;
+  const ev = parseMeshPacket(packet);
+  return ev?.kind === "position" ? ev.fix : null;
+}
+
+/**
+ * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf, docs/16 Path A) into a typed event, or null.
+ * ServiceEnvelope{ packet(1,MeshPacket), channel_id(2), gateway_id(3) } → `parseMeshPacket`. This is the
+ * native protobuf MQTT path (many brokers publish protobuf, not the JSON `parseMeshtasticJson` handles).
+ */
+export function parseMeshServiceEnvelope(bytes: Uint8Array): MeshEvent | null {
+  const packet = sub(bytes, 1); if (!packet) return null;
+  return parseMeshPacket(packet);
 }

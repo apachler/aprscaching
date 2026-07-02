@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deframeMeshtastic, parseMeshtasticProto } from "../src/index.js";
+import { deframeMeshtastic, parseMeshtasticProto, parseMeshPacket, parseMeshServiceEnvelope } from "../src/index.js";
 
 // --- tiny protobuf builder (mirrors the canonical Meshtastic field numbers) ---
 const u8 = (...a: number[]) => Uint8Array.from(a);
@@ -43,5 +43,40 @@ describe("meshtastic — browser-direct serial frames (docs/16 H3)", () => {
     expect(parseMeshtasticProto(f1[0]!)).toBeNull();
     const { frames: f2 } = deframeMeshtastic(frame(fromRadioPosition(0, 0, 0, 1)));
     expect(parseMeshtasticProto(f2[0]!)).toBeNull();
+  });
+});
+
+// --- native MQTT protobuf ServiceEnvelope + typed events (docs/16 Path A) ---
+const str = (s: string) => [...new TextEncoder().encode(s)];
+/** Build a MeshPacket body (from + decoded Data{portnum, payload}). */
+function meshPacket(from: number, portnum: number, payload: number[]): number[] {
+  const data = [...vfield(1, portnum), ...lenDelim(2, payload)];
+  return [...fixed32(1, from), ...lenDelim(4, data)];
+}
+/** Wrap a MeshPacket in a ServiceEnvelope (packet = field 1) — the MQTT protobuf shape. */
+const serviceEnvelope = (packet: number[]) => u8(...lenDelim(1, packet), ...lenDelim(2, str("LongFast")), ...lenDelim(3, str("!gw000001")));
+
+describe("meshtastic — native MQTT ServiceEnvelope + typed events (docs/16 Path A)", () => {
+  it("decodes a POSITION packet from a ServiceEnvelope", () => {
+    const pos = [...fixed32(1, Math.round(47.05 * 1e7)), ...fixed32(2, Math.round(15.44 * 1e7)), ...vfield(3, 400)];
+    const ev = parseMeshServiceEnvelope(serviceEnvelope(meshPacket(0xdeadbeef, 3, pos)));
+    expect(ev?.kind).toBe("position");
+    if (ev?.kind === "position") { expect(ev.fix.node).toBe("!deadbeef"); expect(ev.fix.lat).toBeCloseTo(47.05, 4); expect(ev.fix.altitudeM).toBe(400); }
+  });
+
+  it("decodes a TEXT_MESSAGE_APP packet", () => {
+    const ev = parseMeshPacket(u8(...meshPacket(0x0000abcd, 1, str("hi from mesh"))));
+    expect(ev).toEqual({ kind: "text", node: "!0000abcd", text: "hi from mesh" });
+  });
+
+  it("decodes a NODEINFO_APP (User) packet into long/short names", () => {
+    const user = [...lenDelim(1, str("!0000abcd")), ...lenDelim(2, str("Base Camp")), ...lenDelim(3, str("BC"))];
+    const ev = parseMeshPacket(u8(...meshPacket(0x0000abcd, 4, user)));
+    expect(ev).toEqual({ kind: "nodeinfo", node: "!0000abcd", longName: "Base Camp", shortName: "BC" });
+  });
+
+  it("returns null for an encrypted packet (no decoded Data)", () => {
+    const encrypted = [...fixed32(1, 0x11223344), ...lenDelim(8, [1, 2, 3, 4])]; // field 8 = encrypted
+    expect(parseMeshPacket(u8(...encrypted))).toBeNull();
   });
 });

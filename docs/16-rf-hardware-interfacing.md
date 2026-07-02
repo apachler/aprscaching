@@ -14,9 +14,11 @@ so adding a path is "wire a new byte source/sink into the existing deframer," no
 **Path A — the always-on ingest box (server-side, IMPLEMENTED).** `apps/ingest` (Node) is the 24/7 RF
 citizen: `KissTnc` (KISS-over-TCP → Direwolf or a networked hardware TNC, `KISS_TNC_HOST`), `CotListener`
 (TAK/CoT UDP), `MeshtasticReader` (JSON-over-TCP bridge), plus the **digipeater** (KISS TX) and
-bidirectional **IGate** (RF↔APRS-IS). It batches to `POST /ingest`. Native MQTT/BLE/serial + Meshtastic
-protobuf are TODO. This path owns continuous, shared, licence-bearing duties (IGate/digi) and serves
-**every** client including iOS.
+bidirectional **IGate** (RF↔APRS-IS). It batches to `POST /ingest`. The **Meshtastic protobuf decode** is now
+built (`@aprsweb/aprs` `parseMeshServiceEnvelope` / `parseMeshPacket` — MQTT `ServiceEnvelope` + `FromRadio`
+→ typed POSITION / TEXT / NODEINFO events, unit-tested; complements the existing serial `FromRadio` position
+reader); wiring the native **MQTT/BLE/serial transports** to feed it remains deploy-gated. This path owns
+continuous, shared, licence-bearing duties (IGate/digi) and serves **every** client including iOS.
 
 **Path B — browser-direct hardware (PLANNED — `docs/01` Phase 8, "stretch").** The SPA reaches local
 hardware itself via **Web Serial / Web Bluetooth / WebUSB / Web Audio**, deframes with the same
