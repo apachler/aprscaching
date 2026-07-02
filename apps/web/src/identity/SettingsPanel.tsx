@@ -85,6 +85,11 @@ export function SettingsPanel(props: {
               <button key={u} className={s.units === u ? "on" : ""} onClick={() => props.onApply({ ...s, units: u })}>{u}</button>
             ))}</div>
           </Row>
+          {s.theme === "cogmind" && (
+            <Row label="CRT effect" help="Scanlines + phosphor glow. Off by default; disabled when reduce-motion is on.">
+              <Switch label="CRT effect" checked={s.crt} onChange={(v) => props.onApply({ ...s, crt: v })} />
+            </Row>
+          )}
         </Group>
       )}
 

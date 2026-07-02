@@ -17,6 +17,15 @@ export interface LocaleSettings {
   timeZone: string;  // IANA (e.g. "Europe/Vienna"); "" => browser default
   units: "metric" | "imperial";
   theme: Theme;
+  /** Opt-in CRT flourish (scanline + phosphor glow), only meaningful in Cogmind; off by default
+   *  (docs/24 §1a·3 — the retro feel comes from layout+palette+font, FX is opt-in + reduced-motion-gated). */
+  crt: boolean;
+}
+
+/** The `data-crt` value for the document root: the scanline/glow overlay is applied ONLY when the
+ *  Cogmind theme is active AND the user opted in — Modern never gets it. */
+export function resolveCrt(s: LocaleSettings): "on" | "off" {
+  return s.theme === "cogmind" && s.crt ? "on" : "off";
 }
 
 /** Map the chosen theme to the `data-theme` attribute the token layer keys off. Modern reuses the
@@ -47,7 +56,7 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
 
 export function defaultSettings(): LocaleSettings {
   const locale = browserLocale();
-  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "modern" };
+  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "modern", crt: false };
 }
 export function loadSettings(): LocaleSettings {
   try {

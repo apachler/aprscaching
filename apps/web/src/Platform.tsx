@@ -17,7 +17,7 @@ import { aprsGlyph } from "./aprsGlyph.js";
 import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle, buildCogmindStyle } from "./offlineBasemap.js";
 import {
-  FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, type LocaleSettings,
+  FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, resolveCrt, type LocaleSettings,
 } from "./format.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import type { CacheType } from "@aprsweb/shared";
@@ -150,10 +150,12 @@ export default function Platform({ session, startTour }: { session: SessionState
     const h = () => setOp(mq.matches); mq.addEventListener("change", h); return () => mq.removeEventListener("change", h);
   }, []);
 
-  // apply the theme to the document root — modern → "dark" tokens, cogmind → the phosphor flip
+  // apply the theme to the document root — modern → "dark" tokens, cogmind → the phosphor flip.
+  // data-crt gates the opt-in scanline/glow overlay (Cogmind only; off in Modern — see resolveCrt).
   useEffect(() => {
     document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
-  }, [locSettings.theme]);
+    document.documentElement.dataset.crt = resolveCrt(locSettings);
+  }, [locSettings.theme, locSettings.crt]);
 
   // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
   // markers are overlays, not style layers, so they survive setStyle and need no re-add. Skips the

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import type { IconName } from "../ui/index.js";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
-export type WorkbenchAppId = "terminal" | "bbs" | "tools" | "decoder" | "rig" | "remote" | "node";
+export type WorkbenchAppId = "terminal" | "bbs" | "tools" | "decoder" | "monitor" | "rig" | "remote" | "node";
 
 export interface WorkbenchApp {
   id: WorkbenchAppId;
@@ -38,6 +38,7 @@ export const WORKBENCH_APPS: WorkbenchApp[] = [
   { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads", emoji: "✉", title: "BBS", wide: true },
   { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", emoji: "🔎", title: "Packet decoder", wide: true },
   { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", emoji: "🧩", title: "Tools", wide: true },
+  { id: "monitor", icon: "monitor", label: "TUI monitor", blurb: "Full-screen live HUD — heard stations, spots, RX/TX & event log", emoji: "🖥", title: "TUI monitor", wide: true },
   { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", emoji: "🎚", title: "Rig control (CAT)" },
   { id: "node", icon: "node", label: "NET/ROM node", blurb: "Run a node · digipeater · sysop console", emoji: "🗄", title: "NET/ROM node", wide: true, sysop: true },
   { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", emoji: "🛰", title: "Remote control — your box", sysop: true },

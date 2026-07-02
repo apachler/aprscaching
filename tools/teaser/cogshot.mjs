@@ -12,12 +12,12 @@ const browser = await chromium.launch({
   args: ["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 
-async function shoot(demo, theme, file) {
+async function shoot(demo, theme, file, crt = false) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
-  await ctx.addInitScript((th) => {
+  await ctx.addInitScript(([th, c]) => {
     localStorage.setItem("acs.call", "OE8APR");
-    localStorage.setItem("acs.locale", JSON.stringify({ theme: th }));
-  }, theme);
+    localStorage.setItem("acs.locale", JSON.stringify({ theme: th, crt: c }));
+  }, [theme, crt]);
   const page = await ctx.newPage();
   await page.goto(`${BASE}/?demo=${demo}`, { waitUntil: "load" });
   await page.waitForTimeout(1500);
@@ -30,5 +30,9 @@ await shoot("app-packet", "cogmind", "packet-cogmind.png");
 await shoot("app-packet", "modern", "packet-modern.png");
 await shoot("app-bbs", "cogmind", "bbs-cogmind.png");
 await shoot("app-remote", "cogmind", "remote-cogmind.png");
+await shoot("app-monitor", "cogmind", "monitor-cogmind.png");
+await shoot("app-monitor", "modern", "monitor-modern.png");
+await shoot("app-monitor", "cogmind", "monitor-cogmind-crt.png", true);
+await shoot("app-packet", "cogmind", "packet-cogmind-crt.png", true);
 
 await browser.close();

@@ -1,11 +1,15 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
-import { loadSettings, resolveTheme, makeFormatters, FormatContext } from "./format.js";
+import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext } from "./format.js";
 
 // Apply the saved theme to <html> before first paint so a Cogmind user doesn't flash the modern
 // palette while the (lazily-loaded) Platform mounts (docs/24 §8 — theme persistence vs first paint).
-document.documentElement.dataset.theme = resolveTheme(loadSettings().theme);
+{
+  const saved = loadSettings();
+  document.documentElement.dataset.theme = resolveTheme(saved.theme);
+  document.documentElement.dataset.crt = resolveCrt(saved);
+}
 
 const root = createRoot(document.getElementById("root")!);
 // `/?demo=packet|bbs|1` mounts the hardware-free design harness (real components + in-process simulator)

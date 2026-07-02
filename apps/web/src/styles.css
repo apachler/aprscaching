@@ -171,6 +171,12 @@
 
     /* terminals are sharp; all text is mono */
     --r-sm: 0px; --r-md: 0px; --r-lg: 1px; --r-pill: 2px;
+    /* Cogmind prefers an authentic CP437/VGA face when one is present (installed locally, or a future
+       bundled `Px437 IBM VGA8` drop-in — docs/24 §1a·4), then falls back to the reliable stack. Pure
+       CSS, no web-font fetch on the field path: the fallbacks already render box-drawing + block glyphs,
+       and browsers skip any family that isn't available. */
+    --font-mono: "Px437 IBM VGA8", "PxPlus IBM VGA8", "IBM VGA 8x16", "Perfect DOS VGA 437",
+                 "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
     --font-ui: var(--font-mono);
     --font-brand: var(--font-mono);
 
@@ -1154,3 +1160,63 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 :where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .pt-cmd::before {
   content: "cmd>"; align-self: center; color: var(--accent); font-family: var(--font-mono); margin-right: 4px;
 }
+
+/* ─── CRT FX — opt-in scanline + phosphor glow (docs/24 §1a·3, §5) ────────────────────────────────
+   Off by default; enabled only when the user turns it on AND Cogmind is active (data-crt="on", set by
+   resolveCrt). ONE cheap, static, compositor-friendly overlay layer (a repeating-linear-gradient +
+   vignette, pointer-events:none) — never a blur, per css.md. The optional flicker is gated behind
+   prefers-reduced-motion:no-preference, so reduce-motion users get a fully static, usable theme. */
+:root[data-crt="on"] .app::after {
+  content: ""; position: fixed; inset: 0; z-index: 2000; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg,
+      color-mix(in oklch, black 22%, transparent) 0, color-mix(in oklch, black 22%, transparent) 1px,
+      transparent 1px, transparent 3px),
+    radial-gradient(ellipse at center,
+      transparent 55%, color-mix(in oklch, black 42%, transparent) 100%);
+  mix-blend-mode: multiply;
+}
+/* a faint phosphor bloom on text — static text-shadow, cheap; skips inputs so field entry stays crisp */
+:root[data-crt="on"][data-theme="cogmind"] body {
+  text-shadow: 0 0 2px color-mix(in oklch, var(--accent) 32%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-crt="on"] .app::after { animation: crt-flicker 4s steps(60) infinite; }
+  @keyframes crt-flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.92; } 98% { opacity: 0.97; } }
+}
+
+/* ─── TUI monitor (docs/24 §6.8 / T3) — the all-info-at-once HUD workbench app ────────────────────
+   Semantic tables + an aria-live log styled as a terminal grid. Reads fine in Modern; comes alive in
+   Cogmind (box-drawing frames + phosphor). Responsive via a container query, not JS. */
+.tui { container-type: inline-size; display: flex; flex-direction: column; gap: 10px; min-height: 60vh; font-family: var(--font-mono); }
+.tui-hud { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 10px; border: 1px solid var(--hair); border-radius: var(--r-sm); }
+.tui-hud-l { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tui-hud strong { letter-spacing: .1em; }
+.tui-kv { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+.tui-kv b { color: var(--ink); }
+.tui-kv.err { color: var(--bad); }
+.tui-clock { color: var(--accent); font-variant-numeric: tabular-nums; }
+.tui-export { font-size: 12px; padding: 3px 8px; }
+.tui-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@container (min-width: 44rem) { .tui-grid { grid-template-columns: 1fr 1fr; } }
+.tui-pane { border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 8px 10px; min-height: 200px; max-height: 42vh; overflow: auto; }
+.tui-pane h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tui-empty { color: var(--muted); font-size: 12px; font-style: italic; margin: 6px 0; }
+.tui-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tui-tbl th { text-align: left; font-weight: 600; color: var(--muted); font-size: 10px; letter-spacing: .08em; padding: 0 8px 4px 0; }
+.tui-tbl td { padding: 1px 8px 1px 0; white-space: nowrap; }
+.tui-dim { color: var(--muted); }
+.tui-gly { color: var(--accent); width: 1.4em; }
+.tui-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tui-bars li { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.tui-port { min-width: 6ch; color: var(--ink); }
+.tui-bar { color: var(--accent); letter-spacing: -1px; }
+.tui-events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+.tui-events li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tui-tag { color: var(--accent); font-weight: 600; }
+
+/* Cogmind: box-drawing frames + a bracketed HUD, matching the terminal shell */
+:where(:root[data-theme="cogmind"]) .tui-pane,
+:where(:root[data-theme="cogmind"]) .tui-hud { border-color: var(--frame); box-shadow: var(--glow); }
+:where(:root[data-theme="cogmind"]) .tui-pane h3::before { content: "─ "; color: var(--accent); }
+:where(:root[data-theme="cogmind"]) .tui-tbl tbody tr:hover { background: color-mix(in oklch, var(--accent) 10%, transparent); }

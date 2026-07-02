@@ -9,6 +9,7 @@ import { PacketTerminal } from "../packet/PacketTerminal.js";
 import { BbsPanel } from "../live/BbsPanel.js";
 import { RigControl } from "../workbench/RigControl.js";
 import { RemoteControl } from "../workbench/RemoteControl.js";
+import { TuiMonitor, type MonitorData } from "../workbench/TuiMonitor.js";
 import { NavRail } from "../NavRail.js";
 import { TopBar } from "../TopBar.js";
 import { Ico } from "../ui/index.js";
@@ -20,6 +21,32 @@ import "../styles.css";
 
 const ME = "OE8APR-7";
 const noop = () => {};
+
+/** Canned live snapshot for the TUI-monitor demo surface (no gateway needed for screenshots). */
+function sampleMonitor(): MonitorData {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    stations: [
+      { callsign: "OE8XBM-7", lat: 46.82, lon: 14.31, symbol: "/#", course: null, speedKn: null, altitudeM: 920, comment: "Dobratsch digi", lastSeen: now - 42, roles: ["digipeater"] },
+      { callsign: "OE8APR-9", lat: 46.62, lon: 14.31, symbol: "/>", course: 210, speedKn: 34, altitudeM: 510, comment: "mobile", lastSeen: now - 65 },
+      { callsign: "OE3ABC", lat: 48.2, lon: 16.37, symbol: "/-", course: null, speedKn: null, altitudeM: 190, comment: "home", lastSeen: now - 130 },
+      { callsign: "OE5FLM-13", lat: 48.3, lon: 14.29, symbol: "/_", course: null, speedKn: null, altitudeM: 300, comment: "WX 7.8C 42%RH", lastSeen: now - 158, roles: ["weather"] },
+      { callsign: "DL2XYZ", lat: 48.14, lon: 11.58, symbol: "/I", course: null, speedKn: null, altitudeM: 520, comment: "iGate", lastSeen: now - 205, roles: ["igate"] },
+      { callsign: "OE8KTN-1", lat: 46.62, lon: 14.31, symbol: "/&", course: null, speedKn: null, altitudeM: 440, comment: "node", lastSeen: now - 240, roles: ["node"] },
+      { callsign: "OE9ZZZ", lat: 47.27, lon: 9.6, symbol: "/'", course: 90, speedKn: 5, altitudeM: 1200, comment: null, lastSeen: now - 320 },
+    ],
+    spots: [
+      { id: "p1", source: "pota", callsign: "OE8APR", ref: "AT-0042", name: "Nockberge", lat: 46.9, lon: 13.8, freqHz: 14_285_000, mode: "SSB", band: "20m", spottedAt: now - 90 },
+      { id: "s1", source: "sota", callsign: "OE8XBM", ref: "OE/KT-018", name: "Dobratsch", lat: 46.75, lon: 13.67, freqHz: 145_500_000, mode: "FM", band: "2m", spottedAt: now - 160 },
+      { id: "p2", source: "pota", callsign: "DL2XYZ", ref: "DE-0221", lat: 48.1, lon: 11.5, freqHz: 7_144_000, mode: "SSB", band: "40m", spottedAt: now - 300 },
+    ],
+    ports: [
+      { port: "APRS-IS", rx: 1284, tx: 0, lastBucket: now },
+      { port: "KISS-TCP", rx: 96, tx: 12, lastBucket: now },
+      { port: "Meshtastic", rx: 31, tx: 4, lastBucket: now },
+    ],
+  };
+}
 
 // The real desktop 3-pane shell (top bar + nav rail + map + docked panel), so the surfaces are shown
 // at their true docked width in context — the panel is a fixed ~392px column beside the map, by design.
@@ -85,6 +112,9 @@ export function DemoHarness({ which }: { which: string }) {
   }
   if (which === "app-remote") {
     return <AppShell active="workbench" title={<><Ico e="🛰 " />Remote control — your box</>}><RemoteControl callsign={ME} verified map={null} /></AppShell>;
+  }
+  if (which === "app-monitor") {
+    return <AppShell active="workbench" title={<><Ico e="🖥 " />TUI monitor</>} wide><TuiMonitor callsign={ME} map={null} sample={sampleMonitor()} /></AppShell>;
   }
 
   return (
