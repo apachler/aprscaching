@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { normalizePartner, fbbFromRow, inboundRow } from "../src/forward.js";
 
-describe("FBB forwarding partner normalizer (docs/29 F4)", () => {
+describe("FBB forwarding partner normalizer (docs/design/29 F4)", () => {
   it("normalizes a full partner and uppercases call/HA", () => {
     const p = normalizePartner({
       call: "oe8xbm-1", ha: "oe8xbm.oe.eu", connectScript: "C NODE1\nC 3 DB0XYZ",
@@ -42,7 +42,7 @@ describe("FBB forwarding partner normalizer (docs/29 F4)", () => {
   });
 });
 
-describe("FBB forwarding-pool mappers (docs/29 F4)", () => {
+describe("FBB forwarding-pool mappers (docs/design/29 F4)", () => {
   it("maps a local row to the FBB wire shape (subject → title, T rides as P, at = routing hint)", () => {
     const wire = fbbFromRow(
       { id: 42, bid: "42_oe.aprscaching.net", type: "T", from_call: "OE8APR", to_call: "DL1ABC", subject: "hello", body: "hi there" },

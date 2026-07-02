@@ -17,7 +17,7 @@ const LINK_LABEL: Record<LinkKind, string> = { serial: "USB radio", ble: "Blueto
 
 /**
  * Workbench → RF (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE) and
- * decode live RF here, no server (docs/16 H1 + H2). Optionally forward to a gateway — signed with
+ * decode live RF here, no server (docs/design/16 H1 + H2). Optionally forward to a gateway — signed with
  * your device key for a public gateway (H1.5), or with an ingest secret for self-host. Chromium-only.
  */
 export function RfBrowser(props: { callsign: string; verified: boolean }) {
@@ -54,7 +54,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   useEffect(() => () => { void linkRef.current?.disconnect(); }, []);
 
-  // Field station (docs/16 A/D): re-render when the local sink updates (live stations + inbox).
+  // Field station (docs/design/16 A/D): re-render when the local sink updates (live stations + inbox).
   const [, forceField] = useReducer((n: number) => n + 1, 0);
   useEffect(() => fieldStation.subscribe(() => forceField()), []);
 
@@ -85,7 +85,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   function onFrame(f: RfFrame) {
     setFrames((prev) => [f, ...prev].slice(0, 100));
     setCount((n) => n + 1);
-    fieldStation.feed(f);        // off-grid sink (docs/16 A): live stations + local inbox, gateway-independent
+    fieldStation.feed(f);        // off-grid sink (docs/design/16 A): live stations + local inbox, gateway-independent
     const c = fwd.current;
     if (!c.on) return;
     const p = [f.packet];
@@ -235,7 +235,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
         </div>
       )}
 
-      {/* Field station (docs/16 A/B/D): local RF -> live stations + inbox, no gateway needed. */}
+      {/* Field station (docs/design/16 A/B/D): local RF -> live stations + inbox, no gateway needed. */}
       {(() => { const stations = fieldStation.liveStations(); const inbox = fieldStation.inbox(); const heardN = fieldStation.heardForSync().length;
         return (stations.length > 0 || inbox.length > 0) ? (
         <div className="field-station">

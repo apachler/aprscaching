@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * node.ts (gateway) — NET/ROM node read surface + sysop admin (docs/25 P4). Backs the pure NodeSession
+ * node.ts (gateway) — NET/ROM node read surface + sysop admin (docs/design/25 P4). Backs the pure NodeSession
  * CLI (@aprsweb/packet) and the workbench node view with the NODES table + the per-port MHeard list.
  * recordMheard is called from ingest for every heard packet. Driving the node over actual AX.25
  * connects + advertising NODES on RF is validate-at-deploy; this is the table + admin.

@@ -34,7 +34,7 @@ function driveBytes(a: FbbForwarder, b: FbbForwarder): void {
   if (guard <= 0) throw new Error("byte-level FBB exchange did not terminate");
 }
 
-describe("FBB byte-stream forwarder (docs/29 F4)", () => {
+describe("FBB byte-stream forwarder (docs/design/29 F4)", () => {
   it("forwards a message each way over a raw byte link (CR framing + line buffering)", () => {
     const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", at: "DB0XYZ", bid: "1_OE8", title: "Hi", body: "hello DL\nline two" })]);
     const B = makeStore([msg({ type: "B", from: "DB0XYZ", to: "ALL", at: "WW", bid: "9_DB0", title: "Net", body: "net on 144.800" })]);

@@ -7,7 +7,7 @@ const HOUR = 3600;
 // a fixed UTC instant: 2024-01-01T05:30:00Z → UTC hour 5
 const AT_0530Z = Date.UTC(2024, 0, 1, 5, 30, 0) / 1000;
 
-describe("FBB forwarding schedule (docs/29 F4)", () => {
+describe("FBB forwarding schedule (docs/design/29 F4)", () => {
   it("matches simple and multi UTC hour bands, empty = any time", () => {
     expect(hourInBands(5, "")).toBe(true);
     expect(hourInBands(5, "0-6")).toBe(true);

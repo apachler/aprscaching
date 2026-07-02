@@ -13,7 +13,7 @@ export interface TermTransport extends Transport { connect(baud?: number): Promi
 export type MakeTransport = (onFrame: (f: Ax25Frame) => void, onClose: (e?: Error) => void) => TermTransport;
 
 /**
- * PacketTerminal (docs/25 P1) — the Graphic-Packet-reborn web terminal: multi-channel connected-mode
+ * PacketTerminal (docs/design/25 P1) — the Graphic-Packet-reborn web terminal: multi-channel connected-mode
  * over Web Serial/KISS, a monitor pane, a per-channel status line, a function-key macro bar and a
  * command line. Built from semantic elements + theme tokens so the Stage-3 Cogmind flip is a token
  * swap (the channel windows become box-drawing green-screen panes, the monitor colourises by the
@@ -30,7 +30,7 @@ const DEFAULT_MACROS: { key: string; label: string; text: string }[] = [
   { key: "F4", label: "Help", text: "help" },
 ];
 
-// Macro expansion is the shared Graphic-Packet/LinPac expander (docs/28 C) — same {token} set everywhere.
+// Macro expansion is the shared Graphic-Packet/LinPac expander (docs/design/28 C) — same {token} set everywhere.
 function expand(text: string, vars: { call: string; chan: string }): string {
   return expandMacros(text, withNow({ call: vars.call, mycall: vars.call, chan: vars.chan, peer: vars.chan }));
 }
@@ -60,7 +60,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const transportRef = useRef<TermTransport | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const namesRef = useRef(new StationRegistry());
-  const runnerRef = useRef<ScriptRunner | null>(null);          // GPAUTO scripted-session engine (docs/28 §5h)
+  const runnerRef = useRef<ScriptRunner | null>(null);          // GPAUTO scripted-session engine (docs/design/28 §5h)
   const disposeScriptSvc = useRef<null | (() => void)>(null);   // teardown for the session.script host-service
 
   const [portOpen, setPortOpen] = useState(false);
@@ -99,7 +99,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
       await transport.connect(9600);
       transportRef.current = transport; sessionRef.current = session;
 
-      // GPAUTO scripted-session engine (docs/28 §5h): the terminal OWNS the connection and offers a generic
+      // GPAUTO scripted-session engine (docs/design/28 §5h): the terminal OWNS the connection and offers a generic
       // `session.script` service to tools; the sched-query tool supplies the steps + shows progress. The
       // host only routes — it has no idea what the script is (the §5f invariant applied to automation).
       const port: ScriptSession = {
@@ -167,7 +167,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 
-  // Feed every newly-heard frame to the tool host as a heard-frame source (docs/28 tool 2, #2) — so
+  // Feed every newly-heard frame to the tool host as a heard-frame source (docs/design/28 tool 2, #2) — so
   // mheard/watch-alert record RF traffic even when the Monitor pane isn't the active view.
   const fedMon = useRef(0);
   useEffect(() => {
@@ -176,7 +176,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
     fedMon.current = monitor.length;
   }, [monitor.length]);
 
-  // Export the current pane as classic colour ANSI art (.ans, docs/24 T3): the monitor as plain
+  // Export the current pane as classic colour ANSI art (.ans, docs/design/24 T3): the monitor as plain
   // phosphor lines, a connected channel with its ANSI colour preserved (parse → re-emit as SGR).
   function exportAns() {
     const lines: AnsiLine[] = viewMon
@@ -291,7 +291,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         </>
       )}
 
-      {/* panels contributed by enabled `panel`-tools that target the terminal surface (docs/28) */}
+      {/* panels contributed by enabled `panel`-tools that target the terminal surface (docs/design/28) */}
       <ToolPanels host={host} surface="terminal" />
     </div>
   );

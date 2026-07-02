@@ -1,6 +1,6 @@
 # deploy/
 
-Provisioning assets for the four deployment topologies (see `docs/14-deployment.md`). Principle:
+Provisioning assets for the four deployment topologies (see `docs/design/14-deployment.md`). Principle:
 the **RF ingest always runs on the operator's own equipment** — a local process *or* the browser
 (Web Serial/BLE); the gateway/core is the variable.
 

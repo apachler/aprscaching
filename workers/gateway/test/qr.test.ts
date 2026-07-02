@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { rsEncode, qrMatrix, qrSvg } from "../src/qr.js";
 
-describe("QR encoder (docs/11 M4)", () => {
+describe("QR encoder (docs/design/11 M4)", () => {
   it("Reed–Solomon matches the ISO/IEC 18004 worked example", () => {
     const data = [16, 32, 12, 86, 97, 128, 236, 17, 236, 17, 236, 17, 236, 17, 236, 17];
     expect(rsEncode(data, 10)).toEqual([165, 36, 212, 193, 237, 54, 199, 135, 44, 85]);

@@ -20,7 +20,7 @@ function ipv4Proto93(payload: Uint8Array, ihlWords = 5): Uint8Array {
   return out;
 }
 
-describe("AXIP ingest — IP proto-93 encapsulation (docs/22 reserved seam)", () => {
+describe("AXIP ingest — IP proto-93 encapsulation (docs/design/22 reserved seam)", () => {
   it("strips a 20-byte IPv4 header to expose the AX.25 payload", () => {
     const frame = ax25Frame("OE8APR-9", "APRS", "!4703.00N/01526.00E>x");
     const stripped = stripIpv4Header(ipv4Proto93(frame))!;

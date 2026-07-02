@@ -2,7 +2,7 @@
 import { webSerialSupported } from "./kiss.js";
 
 /**
- * Web Serial line reader for a USB weather station (docs/17 W4). Opens the chosen serial port,
+ * Web Serial line reader for a USB weather station (docs/design/17 W4). Opens the chosen serial port,
  * decodes the byte stream to text, and emits complete CR/LF-terminated lines — the caller decodes
  * each line (e.g. Ultimeter `!!` / `$ULTW`). Mirrors the WebSerialKiss plumbing but ASCII/line-based.
  * Chromium-only and session-bound, like the rest of the browser hardware path; provide a fallback.

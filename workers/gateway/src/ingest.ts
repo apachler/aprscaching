@@ -74,7 +74,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
 
-    // workbench raw packet view (docs/26 Stage 0.2): a short, TTL-pruned ring of raw frames per
+    // workbench raw packet view (docs/design/26 Stage 0.2): a short, TTL-pruned ring of raw frames per
     // station — every heard packet, not only position fixes (status, telemetry, messages too).
     stmts.push(
       env.DB.prepare(
@@ -107,7 +107,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, igate),
     );
     // Keep a registered operated-station's location live: if this callsign is in someone's registry,
-    // an APRS position fix updates its stored coordinates (docs/13 — "updated via APRS if heard").
+    // an APRS position fix updates its stored coordinates (docs/design/13 — "updated via APRS if heard").
     stmts.push(
       env.DB.prepare("UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ?")
         .bind(fix.lat, fix.lon, p.ts, p.src),

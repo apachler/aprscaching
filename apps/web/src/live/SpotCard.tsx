@@ -5,7 +5,7 @@ import { Badge, useToast, Ico } from "../ui/index.js";
 import { cat, useCatConnected } from "../rf/cat.js";
 
 /**
- * SpotCard — the detail for a tapped live activity spot (docs/20 S2). A lightweight floating card
+ * SpotCard — the detail for a tapped live activity spot (docs/design/20 S2). A lightweight floating card
  * (spots are ephemeral), not a docked panel. Links to a coincident cache when one is nearby.
  */
 export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?: () => void }) {

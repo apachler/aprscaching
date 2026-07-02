@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- FBB forwarding partners (docs/29 F4). Per-partner config the ingest forwarding scheduler consumes:
+-- FBB forwarding partners (docs/design/29 F4). Per-partner config the ingest forwarding scheduler consumes:
 -- who to connect to, how to reach them (connect script through nodes), when (interval + UTC time-bands),
 -- and what to exchange (msgtypes, block/size caps, reverse-forward). This extends bbs_forward_rules
 -- (route → partner) with the partner's *transport-level* settings; a rule names a partner, a partner row

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * ptt.ts — RTS/DTR push-to-talk over a serial port (docs/27 B.1, Graphic Packet's BayCom-style keying).
+ * ptt.ts — RTS/DTR push-to-talk over a serial port (docs/design/27 B.1, Graphic Packet's BayCom-style keying).
  * For the no-TNC / soundcard TX path (pairs H4/H5), the operator keys the radio by asserting a serial
  * control line. We load `serialport` dynamically so it stays an OPTIONAL dependency — without it the
  * box still runs (KISS/AGWPE/hostmode TNCs do their own keying); only soundcard-PTT is unavailable.

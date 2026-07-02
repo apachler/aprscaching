@@ -42,7 +42,7 @@ the real benefit, not novelty.
 
 - **Responsive component layout MUST use container queries** (`container-type: inline-size` +
   `@container`) for anything that can appear in more than one slot (cache sheet, Nearby list,
-  detail panel). The sheet/panel IA in `docs/06` depends on this.
+  detail panel). The sheet/panel IA in `docs/design/06` depends on this.
 - **Theming MUST be token-driven**, with dark/light via `color-scheme` + `light-dark()` (or a
   `[data-theme]` layer) — **no JS theme recomputation, no inline color math.**
 - **State-driven appearance MUST use CSS** where the state is expressible in the DOM

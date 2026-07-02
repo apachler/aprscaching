@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * forward.ts — FBB hierarchical addressing + forward routing + the proposal/accept protocol (docs/25
+ * forward.ts — FBB hierarchical addressing + forward routing + the proposal/accept protocol (docs/design/25
  * P3). Pure + unit-tested: the parser turns an FBB H-address ("TO @ BBS.#REGION.STATE.COUNTRY.CONT.WW")
  * into components, the router does longest-/most-specific-prefix matching against a forward table to
  * pick a partner, and the proposal codec builds the "FB …" proposal block + parses the "FS …" reply.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * cached-bbs-store.ts — a synchronous `MessageStore` (docs/29 F1) over an async backend, so an inbound
+ * cached-bbs-store.ts — a synchronous `MessageStore` (docs/design/29 F1) over an async backend, so an inbound
  * connected-mode `BbsSession` (which reads the store one line at a time, synchronously) can be served from
  * the cloud gateway. The caller's mail snapshot is loaded ONCE at connect (`refresh()`), then every
  * list/read is served from that in-memory cache; `post()`/`kill()` update the cache optimistically and

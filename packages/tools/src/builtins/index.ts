@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * builtins/index.ts — the curated built-in Tools (docs/27 B.3). Each is a plain module implementing the
+ * builtins/index.ts — the curated built-in Tools (docs/design/27 B.3). Each is a plain module implementing the
  * Tool interface (no sandbox needed — they're first-party + trusted), demonstrating every extension
  * point: a monitor colouriser (off the NAMES.GP registry), a CTEXT macro pack (/commands), an
  * auto-responder (on_connect greeting), a beacon scheduler (TX-gated), and the F-5 PSK31 + CW decoders.
@@ -42,7 +42,7 @@ export function macroPackTool(): Tool {
 }
 
 /** Auto-responder — GP PMS-style: greet an incoming connect, personalised with the peer's callsign
- *  (docs/28 A — the event now carries peerCall/myCall/station + a reply sink). */
+ *  (docs/design/28 A — the event now carries peerCall/myCall/station + a reply sink). */
 export function autoResponderTool(): Tool {
   return {
     manifest: { name: "auto-responder", title: "Auto-responder", author: AUTHOR, version: v, permissions: ["event"], surfaces: ["terminal", "bbs", "node"], description: "Greets an incoming connect (QTEXT/PMS style)." },
@@ -234,7 +234,7 @@ export function cwEncoderTool(): Tool {
 }
 
 /** (GP autoname/NAMES.GP) Station DB — classifies every heard station and PUBLISHES it on the IPC bus:
- *  emits `station.seen` {call,type} and provides the `station.type` service other tools call (docs/28 §5f).
+ *  emits `station.seen` {call,type} and provides the `station.type` service other tools call (docs/design/28 §5f).
  *  A pure IPC *producer* — it renders nothing itself; consumers (info-responder, panels) use the bus. */
 export function stationDbTool(registry = new StationRegistry()): Tool {
   return {
@@ -281,7 +281,7 @@ export function infoResponderTool(): Tool {
 }
 
 /** (GP msg) Away-note responder — when the operator flags away, greet a connecting peer and let them
- *  leave a short note (NOT a mailbox — see docs/28 §5d BBS/PMS divergence; ephemeral, capped, local). */
+ *  leave a short note (NOT a mailbox — see docs/design/28 §5d BBS/PMS divergence; ephemeral, capped, local). */
 export function awayNoteTool(): Tool {
   const KEY = "away.notes";
   return {
@@ -355,7 +355,7 @@ export function linkPingTool(): Tool {
 
 /** (GP GPAUTO) Scheduled query — batch a connect→waitfor→send→disconnect script against a BBS/cluster and
  *  capture the reply. The tool holds the SCRIPT + the progress panel; the packet terminal owns the actual
- *  connection and offers the `session.script` host-service the tool calls (docs/28 §5f/§5h). Operator-only. */
+ *  connection and offers the `session.script` host-service the tool calls (docs/design/28 §5f/§5h). Operator-only. */
 export function schedQueryTool(): Tool {
   return {
     manifest: { name: "sched-query", title: "Scheduled query (GPAUTO)", author: AUTHOR, version: v, permissions: ["command", "event", "ipc", "panel"], surfaces: ["terminal", "node"], description: "/gpauto <steps> — run/schedule a connect/waitfor/send/disconnect batch (GP GPAUTO)." },
@@ -394,7 +394,7 @@ export function schedQueryTool(): Tool {
   };
 }
 
-/** (docs/28 map surface) Map waypoints — `/wp <locator|lat,lon> [label]` drops a marker on the map via
+/** (docs/design/28 map surface) Map waypoints — `/wp <locator|lat,lon> [label]` drops a marker on the map via
  *  the declarative `map` layer; `/wpclear` empties it. Demonstrates the `map` capability end-to-end. */
 export function mapWaypointsTool(): Tool {
   return {
@@ -504,7 +504,7 @@ export function builtinTools(): Tool[] {
   return [
     colouriserTool(), macroPackTool(), autoResponderTool(), beaconSchedulerTool(), decoderTools(), ssidReferenceTool(),
     watchAlertTool(), mheardTool(), autoStatusTool(), gridTool(), sevenPlusTool(),
-    // GP-archive additions (docs/28 §5g): remote responders + IPC producer/consumers.
+    // GP-archive additions (docs/design/28 §5g): remote responders + IPC producer/consumers.
     unitConverterTool(), cwEncoderTool(), stationDbTool(), infoResponderTool(), awayNoteTool(), connectBellTool(), linkPingTool(),
     schedQueryTool(), blockArtTool(), mapWaypointsTool(),
   ];

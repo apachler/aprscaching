@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Generate an Ed25519 tool-author (or registry-authority) signing key — the key used to sign a tool.json
-// manifest (docs/28 §7) or a signed tool registry. WebCrypto Ed25519, same algorithm as everywhere else.
+// manifest (docs/design/28 §7) or a signed tool registry. WebCrypto Ed25519, same algorithm as everywhere else.
 //
 //   node tools/toolkey/genkey.mjs           # human-readable (private base64 + public base64url)
 //   node tools/toolkey/genkey.mjs --raw     # just the private base64 value (feed to sign.mjs)

@@ -74,7 +74,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     "SELECT COUNT(*) AS n FROM caches WHERE owner_call=? AND source='native' AND status!='archived'",
   ).bind(cs).first<{ n: number }>();
   // "Infrastructure" contribution: Tier-A finds this operator's IGate(s) helped corroborate — locally
-  // or, via a revealing peer, on another instance (cross-instance credit, docs/13 + docs/15).
+  // or, via a revealing peer, on another instance (cross-instance credit, docs/design/13 + docs/design/15).
   const corr = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM cache_logs l
       WHERE l.tier='A' AND l.verified=1 AND (l.corroborator_igate = ? OR l.corroborator_igate LIKE ?)`,
@@ -86,7 +86,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
        FROM accounts WHERE callsign=?`,
   ).bind(cs).first<{ verified: number; tier: string | null; displayName: string | null; homeGrid: string | null; avatarUrl: string | null; bio: string | null; links: string | null; publicContact: string | null; profilePublic: number }>();
 
-  // opt-in profile (docs/13): surfaced only when the master switch is on; empty fields omitted
+  // opt-in profile (docs/design/13): surfaced only when the master switch is on; empty fields omitted
   let profile: Record<string, unknown> | undefined;
   if (acct && (acct.profilePublic ?? 1) === 1) {
     const links = acct.links ? (JSON.parse(acct.links) as unknown[]) : [];
@@ -102,9 +102,9 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
 
   return json({
     callsign: cs,
-    homeInstance: env.INSTANCE,               // where this operator is homed (docs/15 T3.2)
+    homeInstance: env.INSTANCE,               // where this operator is homed (docs/design/15 T3.2)
     accountVerified: (acct?.verified ?? 0) === 1,
-    supporter: acct?.tier === "supporter",   // recognition only (docs/12); never gates anything
+    supporter: acct?.tier === "supporter",   // recognition only (docs/design/12); never gates anything
     finds: stat?.finds ?? 0, points: Math.round(stat?.points ?? 0),
     firstFind: stat?.firstFind ?? null, lastFind: stat?.lastFind ?? null,
     hides: hides?.n ?? 0,
@@ -116,7 +116,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   });
 }
 
-// ---------------------------------------------------------------- corroborator leaderboard (docs/13)
+// ---------------------------------------------------------------- corroborator leaderboard (docs/design/13)
 // Rank the IGates that helped verify finds to Tier A — the gating IGate on each verified RF find.
 // Running infrastructure becomes a visible contribution to the commons.
 export async function handleCorroborators(req: Request, env: Env): Promise<Response> {
@@ -125,7 +125,7 @@ export async function handleCorroborators(req: Request, env: Env): Promise<Respo
   const bb = bboxClause(u);
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 50) || 50, 1), 200);
   // Credit the IGate stored on each Tier-A find — local OR a federated peer's revealed IGate
-  // (cross-instance corroborator credit, docs/13 + docs/15).
+  // (cross-instance corroborator credit, docs/design/13 + docs/design/15).
   const rows = (await env.DB.prepare(
     `SELECT l.corroborator_igate AS igate, COUNT(*) AS corroborations
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id

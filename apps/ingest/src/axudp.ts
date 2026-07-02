@@ -18,7 +18,7 @@ export function frameToAxudp(f: Ax25Frame): Uint8Array { return encodeFrame(f); 
  * PURE: normalize one AXUDP datagram (a bare AX.25 frame over UDP) into a Tier-C ingest Packet, or null if
  * it isn't a decodable UI/APRS frame. The trust decision lives here and is deliberately fixed:
  * `heardVia: "aprs_is"` + `port: "axudp"` → the gateway's provenance derivation stamps
- * `firstPartyAttested = false`, so a tunnelled frame can NEVER reach Tier A ("transport ≠ trust", docs/22).
+ * `firstPartyAttested = false`, so a tunnelled frame can NEVER reach Tier A ("transport ≠ trust", docs/design/22).
  * Factored out of the socket handlers so this invariant is unit-testable without a live UDP socket.
  */
 export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now() / 1000)): Packet | null {
@@ -33,7 +33,7 @@ export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now()
 
 /**
  * AXUDP listener — AX.25 frames tunnelled over UDP (the BPQ node mesh, port 10093). RESERVED seam
- * (docs/22): wired but feature-flagged off; start only when AXUDP_PORT is set.
+ * (docs/design/22): wired but feature-flagged off; start only when AXUDP_PORT is set.
  *
  * Trust note: a tunnelled frame is just a transport — it carries no proof it touched RF at a site we
  * operate. So we forward it as `heardVia: "aprs_is"` on the `axudp` port; the gateway's provenance
@@ -58,7 +58,7 @@ export class AxudpListener {
 }
 
 /**
- * AXUDP as a bidirectional KISS-equivalent PORT (docs/29 F5): the same raw AX.25 frames a KISS TNC
+ * AXUDP as a bidirectional KISS-equivalent PORT (docs/design/29 F5): the same raw AX.25 frames a KISS TNC
  * carries, but over UDP, so NET/ROM crosslinks *and* FBB forwarding run over the Internet leg of the
  * bridge. `send()` datagrams a full frame to each configured peer; `onRaw`/`onFrame` deliver inbound
  * frames to the connected-mode consumers (the same interface shape as KissTnc). The Tier-C ingest path

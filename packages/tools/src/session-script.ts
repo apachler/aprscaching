@@ -6,7 +6,7 @@
  * DX-cluster and capture the reply. We keep that as a **generic session-scripting mechanism**, not a
  * GP-specific feature: the engine drives an abstract `ScriptSession` (implemented by whatever surface owns
  * the AX.25 connection — the packet terminal, the node). The engine holds NO transport, NO tool knowledge;
- * a tool supplies the steps + renders progress. This is the docs/28 §5f invariant applied to automation:
+ * a tool supplies the steps + renders progress. This is the docs/design/28 §5f invariant applied to automation:
  * the surface offers a `session.script` service, the tool decides what the script is.
  */
 

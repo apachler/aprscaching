@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * prefs.ts (client) — sync the device-independent UI preferences to the signed-in account so a second
- * device restores them (docs/13). The prefs themselves live in localStorage (single source of truth
+ * device restores them (docs/design/13). The prefs themselves live in localStorage (single source of truth
  * for the app); this layer mirrors a known subset to the account on change, and pulls them back on
  * sign-in. Guests are unaffected — the server endpoint is session-gated, so a 401 just leaves the
  * localStorage values in place. Synced keys: locale/units/theme, pinned apps, basemap.

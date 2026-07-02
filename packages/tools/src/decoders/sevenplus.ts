@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 /**
- * sevenplus.ts — a tolerant 7PLUS parser/reassembler (docs/28 tool 8). 7PLUS was the packet-BBS way to
+ * sevenplus.ts — a tolerant 7PLUS parser/reassembler (docs/design/28 tool 8). 7PLUS was the packet-BBS way to
  * shuttle binary files as 7-bit text split across numbered message parts. This decoder recognises the
  * `go_7+.` / `stop_7+` markers + the `part N of M` header, reports the file/part/completeness, and
  * concatenates the encoded bodies so scattered parts can be stitched. Byte-exact reconstruction of the
- * original binary is intentionally left to a follow-on (see docs/28 §6) — this is the collect/summarise
+ * original binary is intentionally left to a follow-on (see docs/design/28 §6) — this is the collect/summarise
  * step that's useful in the browser. Pure + dependency-free.
  */
 export function decode7plus(input: string): string {

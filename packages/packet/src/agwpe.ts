@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * agwpe.ts — the AGW Packet Engine (AGWPE) frame codec (docs/27 B.1). AGWPE is the de-facto TCP TNC
+ * agwpe.ts — the AGW Packet Engine (AGWPE) frame codec (docs/design/27 B.1). AGWPE is the de-facto TCP TNC
  * protocol spoken by Direwolf, SoundModem and UZ7HO — the single highest-leverage interop after KISS,
  * letting any AGWPE modem feed us (and us key it) over a socket. This is the pure wire codec (a fixed
  * 36-byte little-endian header + payload); the TCP client that uses it lives in apps/ingest and is

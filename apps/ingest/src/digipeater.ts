@@ -26,7 +26,7 @@ export class Digipeater {
 }
 
 /**
- * Connected-mode AX.25 digipeater (docs/29 F3). Repeats ANY frame type (SABM/I/RR/…) whose next
+ * Connected-mode AX.25 digipeater (docs/design/29 F3). Repeats ANY frame type (SABM/I/RR/…) whose next
  * un-repeated via-hop is our call or an alias — so NET/ROM crosslinks and FBB forwarding relay through
  * us. Wire to KissTnc.onRaw. Duplicate-suppressed; a viscous delay (`viscousMs`) lets a better-placed
  * digi win first (we cancel if we hear the same frame already repeated).

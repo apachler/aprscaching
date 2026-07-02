@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * support.ts — supporter recognition + the public transparency ledger (docs/12 M4).
+ * support.ts — supporter recognition + the public transparency ledger (docs/design/12 M4).
  *
  * RECOGNITION ONLY. A donation sets accounts.tier='supporter' purely for a badge + the ability to
  * hide the support prompt. NOTHING here gates a feature, and no core handler reads tier to restrict

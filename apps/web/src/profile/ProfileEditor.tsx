@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getProfile, updateProfile, type ProfileEdit } from "../api.js";
 import { Row, Switch, useToast } from "../ui/index.js";
 
-/** Settings → Profile: edit the thin, opt-in ham profile (docs/13). Sanitised + validated server-side. */
+/** Settings → Profile: edit the thin, opt-in ham profile (docs/design/13). Sanitised + validated server-side. */
 export function ProfileEditor(props: { callsign: string }) {
   const toast = useToast();
   const [p, setP] = useState<ProfileEdit>({ profilePublic: true, links: [] });

@@ -4,7 +4,7 @@ import { json } from "./app.js";
 import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from "@aprsweb/shared";
 
 /**
- * search.ts — enriched as-you-type suggestions (docs/11 M2). A single portable endpoint that
+ * search.ts — enriched as-you-type suggestions (docs/design/11 M2). A single portable endpoint that
  * matches caches (by code / title / owner) and stations (by callsign) with prefix-first ranking.
  * Deliberately LIKE-based, NOT FTS5: Cloudflare D1 forbids virtual tables (see 0001_init.sql), so a
  * plain indexed LIKE keeps the query identical across all three runtimes (Worker/D1, Node, Bun) and

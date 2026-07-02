@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * spots.ts — live activity-spots aggregation (docs/20 §1, milestone S1). Polls read-only spot
+ * spots.ts — live activity-spots aggregation (docs/design/20 §1, milestone S1). Polls read-only spot
  * sources (POTA now; SOTA/WWBOTA/GMA next), normalizes to the shared `Spot` shape, dedupes across
  * sources, and serves `GET /api/spots?bbox=&bands=&modes=&sources=`.
  *
- * Cost (docs/20 §4): aggregation is lazy + TTL-cached in-process (default 60 s) so we never run a
+ * Cost (docs/design/20 §4): aggregation is lazy + TTL-cached in-process (default 60 s) so we never run a
  * per-client firehose; nothing is persisted. Disabled by default (SPOTS_ENABLED) so CI/offline never
  * makes outbound calls — the pure normalize/dedup/filter logic is unit-tested with fixtures instead.
  */
@@ -126,7 +126,7 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
 /** Test seam: clear the cached SOTA summit coordinates. */
 export function _resetSotaSummits(): void { sotaSummits.clear(); }
 
-// ---- reception networks (docs/20 S3): "who heard whom". Mappable only with a grid/coords; a station
+// ---- reception networks (docs/design/20 S3): "who heard whom". Mappable only with a grid/coords; a station
 // without a locatable position is dropped (we don't carry a callsign→geo table). These never touch the
 // A/B/C find tiers — they're a separate live-activity layer.
 const recvSpot = (src: SpotSource, r: Record<string, unknown>, callKeys: string[], extra: Partial<Spot>): Spot | null => {

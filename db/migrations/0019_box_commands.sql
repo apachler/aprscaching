@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Remote station control (docs/20 §2, R1): a per-box command queue the operator's ingest box pulls
+-- Remote station control (docs/design/20 §2, R1): a per-box command queue the operator's ingest box pulls
 -- over its existing outbound connection (no inbound ports). TX-capable commands are control-verified
--- (H5, docs/19); RX-only boxes only ever receive read commands. Distinct from federation peer identity.
+-- (H5, docs/design/19); RX-only boxes only ever receive read commands. Distinct from federation peer identity.
 CREATE TABLE IF NOT EXISTS box_commands (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   box_id     TEXT NOT NULL,

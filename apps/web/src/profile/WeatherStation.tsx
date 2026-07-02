@@ -7,7 +7,7 @@ import { WxTxToggles } from "./WxTxToggles.js";
 import { SerialWeather } from "./SerialWeather.js";
 
 /**
- * Settings → Weather station (PWS): user-origination of their own weather (docs/17 W1). Issues a
+ * Settings → Weather station (PWS): user-origination of their own weather (docs/design/17 W1). Issues a
  * push key and shows ready-to-paste URLs for the two formats consumer stations already speak —
  * Ecowitt "customized" push and Weather Underground "Rapidfire". Readings land under <call>-13.
  * Platform-only ingest: no RF licence needed (the licence gate is only for TX/CWOP).

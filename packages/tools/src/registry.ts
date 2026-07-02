@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * registry.ts — signed-manifest verification + the signed tool registry (docs/28 §7). A tool.json MAY be
+ * registry.ts — signed-manifest verification + the signed tool registry (docs/design/28 §7). A tool.json MAY be
  * Ed25519-signed by its author: the manifest carries a raw public key (`pubkey`, base64url) and a detached
  * `signature` (base64) over the canonical manifest (every field except `signature`). Verifying proves the
  * manifest wasn't tampered and was signed by whoever holds that key — INTEGRITY. IDENTITY comes from the

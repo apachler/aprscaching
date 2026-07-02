@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
  * link.ts — the AX.25 v2.2 connected-mode data-link state machine (LAPB-derived), modulo-8 AND
- * modulo-128 (docs/25 P0 + P0.b). Event-driven and PURE: feed it received frames and a clock, and it
+ * modulo-128 (docs/design/25 P0 + P0.b). Event-driven and PURE: feed it received frames and a clock, and it
  * emits frames to transmit, delivers received info to layer 3, and announces state changes — no I/O,
  * no real timers, so it is exhaustively unit-testable by scripted exchange. The host owns the byte
  * transport (KISS / Web Serial / audio) and a periodic clock that calls poll().

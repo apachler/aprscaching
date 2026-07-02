@@ -57,13 +57,13 @@ const STYLE: string | StyleSpecification =
     : "https://demotiles.maplibre.org/style.json";
 
 /** The base map style for the active theme: Cogmind always uses its keyless phosphor graticule so the
- *  map matches the terminal chrome; Modern uses the configured basemap. (docs/24 §4.2 T2) */
+ *  map matches the terminal chrome; Modern uses the configured basemap. (docs/design/24 §4.2 T2) */
 const baseStyle = (): string | StyleSpecification =>
   document.documentElement.dataset.theme === "cogmind" ? buildCogmindStyle() : STYLE;
 
 type Mode = "view" | "hide";
 
-// Quick-tour steps are config-driven and DEFERRED to the content pass (docs/18) — one neutral
+// Quick-tour steps are config-driven and DEFERRED to the content pass (docs/design/18) — one neutral
 // placeholder so the framework is live and testable without committing copy.
 const TOUR_STEPS: TourStep[] = [
   { title: "Quick tour", body: "Guided tour coming soon. For now you're browsing in read-only mode — explore the map and caches freely. Sign in to log finds, hide caches, and unlock the workbench." },
@@ -116,7 +116,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [stationsOn, setStationsOn] = useState(false);
   const [stations, setStations] = useState<StationSummary[]>([]);
   const [pickedStation, setPickedStation] = useState<string | null>(null);
-  // live activity spots (docs/20 S2) — opt-in overlay, off by default like raster layers
+  // live activity spots (docs/design/20 S2) — opt-in overlay, off by default like raster layers
   const [spotsOn, setSpotsOn] = useState(false);
   const [spots, setSpots] = useState<Spot[]>([]);
   const [pickedSpot, setPickedSpot] = useState<Spot | null>(null);
@@ -133,7 +133,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => { setLocSettings(s); saveSettings(s); notePrefChange(); }, []);
 
-  // Account UI-prefs sync (docs/13): on sign-in, pull the account's theme/units/pins/basemap and
+  // Account UI-prefs sync (docs/design/13): on sign-in, pull the account's theme/units/pins/basemap and
   // apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
   // untouched (the endpoint is session-gated). localStorage stays the source of truth.
   useEffect(() => { if (session.signedIn) void pullPrefs(); }, [session.signedIn]);
@@ -220,7 +220,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     } catch { /* ignore */ }
   }, [navigate]);
 
-  // capture / restore a shareable map view (docs/11 M1)
+  // capture / restore a shareable map view (docs/design/11 M1)
   const getViewState = useCallback((): MapViewState => {
     const c = map.current?.getCenter();
     return {
@@ -453,7 +453,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
   }, [stations, stationsOn, locSettings.theme]);
 
-  // ---- feed heard callsigns from the live APRS layer into the tool host (docs/28 tool 2, #2) ----
+  // ---- feed heard callsigns from the live APRS layer into the tool host (docs/design/28 tool 2, #2) ----
   // mheard/watch-alert are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
   // per-callsign lastSeen cursor avoids re-dispatching the same beacon on every refresh.
   const fedStations = useRef(new Map<string, number>());
@@ -464,7 +464,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
   }, [stations]);
 
-  // ---- live activity-spots layer (docs/20 S2): opt-in overlay, distinct marker class ----
+  // ---- live activity-spots layer (docs/design/20 S2): opt-in overlay, distinct marker class ----
   useEffect(() => {
     if (spotsOn) { refresh(); }
     else { for (const [, mk] of spotMarkers.current) mk.remove(); spotMarkers.current.clear(); setSpots([]); setPickedSpot(null); }
@@ -661,7 +661,7 @@ export default function Platform({ session, startTour }: { session: SessionState
 
         <div className="mapwrap">
           <div ref={setMapNode} className="map" />
-          <ToolMapLayers map={map.current} />{/* docs/28 §6 — `map`-capability tools render markers here */}
+          <ToolMapLayers map={map.current} />{/* docs/design/28 §6 — `map`-capability tools render markers here */}
           {ready && center && (
             <div className="coordreadout">
               <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>

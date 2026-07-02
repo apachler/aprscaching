@@ -25,7 +25,7 @@ function harness(cfg: Partial<LinkConfig> = {}) {
   return { a, b, got, pump, advance, clk };
 }
 
-describe("ax25 connected-mode link (docs/25 P0)", () => {
+describe("ax25 connected-mode link (docs/design/25 P0)", () => {
   it("SABM/UA handshake connects both ends", () => {
     const h = harness();
     h.a.connect(); h.pump();
@@ -88,7 +88,7 @@ describe("ax25 connected-mode link (docs/25 P0)", () => {
   });
 });
 
-describe("ax25 modulo-128 (SABME) + SREJ (docs/25 P0.b)", () => {
+describe("ax25 modulo-128 (SABME) + SREJ (docs/design/25 P0.b)", () => {
   it("connects with SABME and reports the extended modulus on both ends", () => {
     const h = harness({ modulo: 128 });
     h.a.connect(); h.pump();

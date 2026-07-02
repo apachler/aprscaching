@@ -196,7 +196,7 @@ export interface CacheDetail extends CacheSummary {
   finds: number;       // count of verified found logs
   findsByMonth?: { month: string; n: number }[];  // monthly verified-find counts (sparkline), oldest→newest
   logs: CacheLogEntry[];           // first keyset page, newest first
-  logsCursor?: string | null;      // cursor for the next logbook page (docs/11), null if none
+  logsCursor?: string | null;      // cursor for the next logbook page (docs/design/11), null if none
   logsHasMore?: boolean;           // true when older logs exist beyond the embedded page
   // M4 community
   favorites: number;
@@ -224,7 +224,7 @@ export interface CacheStage {
   lon: number | null;
 }
 
-// ---- M2 enriched search (docs/11): as-you-type suggestions across caches + stations ----
+// ---- M2 enriched search (docs/design/11): as-you-type suggestions across caches + stations ----
 export interface SearchHitCache {
   kind: "cache";
   id: number; code: string; title: string; ownerCall: string; type: CacheType;
@@ -246,12 +246,12 @@ export interface ProfileCard {
 }
 export interface Profile {
   callsign: string; accountVerified: boolean;
-  homeInstance?: string;  // the instance this operator is homed at (docs/15 T3.2); shown as "homed at …"
-  supporter?: boolean;  // recognition badge (docs/12); never affects functionality
+  homeInstance?: string;  // the instance this operator is homed at (docs/design/15 T3.2); shown as "homed at …"
+  supporter?: boolean;  // recognition badge (docs/design/12); never affects functionality
   finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
-  corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify (docs/13)
+  corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify (docs/design/13)
   byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];
-  profile?: ProfileCard; // opt-in self-curated card (docs/13)
+  profile?: ProfileCard; // opt-in self-curated card (docs/design/13)
 }
 
 /** A row in the corroborator leaderboard — an IGate ranked by Tier-A finds it helped verify. */
@@ -266,7 +266,7 @@ export interface StationSummary {
   callsign: string; lat: number; lon: number; symbol: string | null;
   course: number | null; speedKn: number | null; altitudeM: number | null;
   comment: string | null; lastSeen: number;
-  roles?: StationRole[];   // operated-station roles, when this callsign is in the registry (docs/13)
+  roles?: StationRole[];   // operated-station roles, when this callsign is in the registry (docs/design/13)
 }
 export interface StationTrackPoint { ts: number; lat: number; lon: number; heardVia: string }
 export interface WxReading {
@@ -279,7 +279,7 @@ export interface StationDetail extends StationSummary {
   packets: number;
 }
 
-// ---- operated-stations registry (docs/13 M5 + docs/17): the operator's own stations ----
+// ---- operated-stations registry (docs/design/13 M5 + docs/design/17): the operator's own stations ----
 /** The roles a user's operated station can carry. Weather is one capability; the rest are RF infra. */
 export const STATION_ROLES = ["weather", "digipeater", "igate", "node", "relay"] as const;
 export type StationRole = (typeof STATION_ROLES)[number];

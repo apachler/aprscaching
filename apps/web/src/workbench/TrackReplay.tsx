@@ -5,7 +5,7 @@ import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
 
 /**
- * Track history + time-replay (docs/11 M3). Browse a station's / living-cache's past positions by
+ * Track history + time-replay (docs/design/11 M3). Browse a station's / living-cache's past positions by
  * date window, drawn as a polyline with each fix coloured by how it was heard — and scrub/play the
  * track. This doubles as a trust visualization: RF-heard fixes (green) vs IS-only (grey) make the
  * corroboration that powers Tier A visible. Pure client geo over the existing map (cheap line/circle

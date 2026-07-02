@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import type { ToolHost, PanelNode, Surface } from "@aprsweb/tools";
 
 /**
- * ToolPanels — the host-side renderer for `panel`-capability tools (docs/28). A tool emits a declarative
+ * ToolPanels — the host-side renderer for `panel`-capability tools (docs/design/28). A tool emits a declarative
  * PanelSpec (typed nodes, never DOM); this turns it into real semantic elements + theme tokens for the
  * given surface. Mounted on every surface that wants tool UI (Tools app = web, packet terminal, BBS,
  * node), it renders exactly the enabled tools whose declared `surfaces` include that surface.

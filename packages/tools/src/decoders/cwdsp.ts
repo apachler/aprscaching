@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * cwdsp.ts — the CW (Morse) audio FRONT-END (docs/28 §6 / docs/16 H4). `decodeMorse`/`morseFromTiming`
+ * cwdsp.ts — the CW (Morse) audio FRONT-END (docs/design/28 §6 / docs/design/16 H4). `decodeMorse`/`morseFromTiming`
  * (morse.ts) are pure but need a keyed on/off envelope; this turns raw PCM audio (the Web Audio mic
  * samples) into that envelope by measuring tone energy at the CW pitch with a Goertzel single-bin detector
  * and thresholding it. Output feeds `morseFromTiming` → `decodeMorse`, so the F-5 CW decoder works on a

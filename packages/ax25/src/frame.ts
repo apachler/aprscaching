@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * frame.ts — AX.25 v2.2 frame codec for CONNECTED mode (docs/25 P0). Unlike the APRS UI-only path in
+ * frame.ts — AX.25 v2.2 frame codec for CONNECTED mode (docs/design/25 P0). Unlike the APRS UI-only path in
  * @aprsweb/aprs, this handles every frame type and the full control field (N(S)/N(R)/P-F), so the
  * LAPB state machine in link.ts can speak real packet. Pure + runtime-neutral. Supports BOTH the
  * modulo-8 control field (1 octet, 3-bit sequence numbers) and — when `extended` is set — the

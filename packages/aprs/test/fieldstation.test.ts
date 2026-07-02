@@ -5,7 +5,7 @@ import {
   decodeAprs, type ParsedFrame,
 } from "../src/index.js";
 
-describe("APRS-IS passcode (docs/19)", () => {
+describe("APRS-IS passcode (docs/design/19)", () => {
   it("is the public hash, SSID-independent, and never authorization", () => {
     expect(aprsPasscode("N0CALL")).toBe(13023);          // widely-cited reference vector
     expect(aprsPasscode("N0CALL-9")).toBe(aprsPasscode("N0CALL")); // base call only
@@ -14,7 +14,7 @@ describe("APRS-IS passcode (docs/19)", () => {
   });
 });
 
-describe("third-party encapsulation (path A, docs/19 P3)", () => {
+describe("third-party encapsulation (path A, docs/design/19 P3)", () => {
   it("wraps the user's info under the peer's login with a leading }", () => {
     const line = thirdPartyEncap({ gateCall: "OE8APR-10", userCall: "OE3ABC-7", info: ":OE1XYZ   :hi{1", dst: "APAC01" });
     expect(line).toBe("OE8APR-10>APRS,TCPIP*:}OE3ABC-7>APAC01,TCPIP*::OE1XYZ   :hi{1");
@@ -31,7 +31,7 @@ function parse(raw: string) {
   return { frame, data: decodeAprs(frame) };
 }
 
-describe("field-station local events (docs/16 A)", () => {
+describe("field-station local events (docs/design/16 A)", () => {
   it("maps a position frame to a local station", () => {
     const { frame, data } = parse("OE8XBM-7>APRS,WIDE1-1:!4703.55N/01527.30E>heading home");
     const ev = localEvent(frame, data, 1000);
@@ -67,7 +67,7 @@ describe("field-station local events (docs/16 A)", () => {
   });
 });
 
-describe("sync-back batching (docs/16 D)", () => {
+describe("sync-back batching (docs/design/16 D)", () => {
   it("dedupes, drops our own frames, and caps", () => {
     const heard = [
       { raw: "OE1AAA>APRS:!x", at: 1 },

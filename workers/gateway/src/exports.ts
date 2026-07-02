@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * exports.ts — public read-API exports (docs/11 §6, M3): caches as GPX (GPS devices) / KML (Earth),
+ * exports.ts — public read-API exports (docs/design/11 §6, M3): caches as GPX (GPS devices) / KML (Earth),
  * and a callsign's finds as ADIF (standard logbooks — Log4OM/N1MM/DXLab). Pure builders + read-only
  * queries; served under /api/v1 behind the same rate-limit gate. Runtime-neutral.
  */
@@ -87,7 +87,7 @@ export async function handleCacheGpx(req: Request, env: Env, code: string): Prom
   if (!c) return new Response(JSON.stringify({ error: "cache not found" }), { status: 404, headers: { "content-type": "application/json" } });
   return download(cachesToGpx([c]), "application/gpx+xml", `${code}.gpx`);
 }
-// ---- station tracks (docs/11 §6): position history as JSON + KML LineString ----
+// ---- station tracks (docs/design/11 §6): position history as JSON + KML LineString ----
 interface TrackPt { lat: number; lon: number; ts: number; heardVia: string }
 
 async function stationTrack(env: Env, call: string, from: number, until: number): Promise<TrackPt[]> {

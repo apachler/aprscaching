@@ -3,7 +3,7 @@
  * federation.ts — F1: read-only, mirrorable, signed feeds.
  *
  * An instance publishes its caches and find logs so peers can mirror them and build a global
- * catalog (see docs/06). Records are Ed25519-signed by the instance (WebCrypto — same code on
+ * catalog (see docs/design/06). Records are Ed25519-signed by the instance (WebCrypto — same code on
  * Cloudflare Workers and Node) so a mirror can verify provenance + integrity. The envelope is
  * shaped so per-callsign signing can slot in later (signer becomes a callsign, not the instance).
  *
@@ -138,7 +138,7 @@ export async function importActiveKeys(publicKeys: FedPublicKey[] | undefined, f
 export interface RegistryEntry {
   instance: string; url?: string; key?: string; operator?: string; aprsCall?: string; since?: number;
   /**
-   * Reserved seam (docs/22): an optional 44net / HAMNET address or ampr.org hostname for this node,
+   * Reserved seam (docs/design/22): an optional 44net / HAMNET address or ampr.org hostname for this node,
    * so a peer can be reached over amateur space without coupling the serverless front-end to any IP
    * space. Trust-neutral — reachability/addressing only, never a trust uplift.
    */

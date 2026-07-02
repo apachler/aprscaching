@@ -27,7 +27,7 @@ export function parseMeshtasticJson(input: string | Record<string, unknown>): Me
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Browser-direct Meshtastic (docs/16 H3): the node's serial/BLE stream is the protobuf framing
+// Browser-direct Meshtastic (docs/design/16 H3): the node's serial/BLE stream is the protobuf framing
 // `0x94 0xC3 <len16-be> <FromRadio…>`. We deframe the stream and pull POSITION_APP fixes out with a
 // minimal protobuf reader (canonical field numbers from meshtastic/protobufs). RX-only; no TX here.
 
@@ -81,7 +81,7 @@ const sub = (b: Uint8Array, want: number): Uint8Array | null => {
 
 const nodeId = (from: number): string => `!${(from >>> 0).toString(16).padStart(8, "0")}`;
 
-/** A typed Meshtastic event decoded from a MeshPacket's application payload (docs/16 Path A). */
+/** A typed Meshtastic event decoded from a MeshPacket's application payload (docs/design/16 Path A). */
 export type MeshEvent =
   | { kind: "position"; fix: MeshFix }
   | { kind: "text"; node: string; text: string }
@@ -135,7 +135,7 @@ export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
 }
 
 /**
- * Parse a Meshtastic FromRadio frame (serial/BLE, docs/16 H3) into a position fix, or null — the original
+ * Parse a Meshtastic FromRadio frame (serial/BLE, docs/design/16 H3) into a position fix, or null — the original
  * browser-direct path. FromRadio.packet(2) → MeshPacket. Non-position events yield null here (position is
  * what the map consumes); use `parseMeshPacket` directly for text/nodeinfo.
  */
@@ -146,7 +146,7 @@ export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
 }
 
 /**
- * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf, docs/16 Path A) into a typed event, or null.
+ * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf, docs/design/16 Path A) into a typed event, or null.
  * ServiceEnvelope{ packet(1,MeshPacket), channel_id(2), gateway_id(3) } → `parseMeshPacket`. This is the
  * native protobuf MQTT path (many brokers publish protobuf, not the JSON `parseMeshtasticJson` handles).
  */

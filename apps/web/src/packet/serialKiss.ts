@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * serialKiss.ts — a Web Serial KISS transport for connected-mode packet (docs/25 P1). Bridges the
+ * serialKiss.ts — a Web Serial KISS transport for connected-mode packet (docs/design/25 P1). Bridges the
  * serial byte stream ⇄ raw AX.25 frames: incoming bytes are de-KISS'd + decoded into typed frames for
  * the TerminalSession, and outgoing frames are encoded + KISS-wrapped. It implements @aprsweb/packet's
  * synchronous Transport.send by queueing the write (fire-and-forget). Chromium-only + session-bound,
- * exactly like the RX-only browser ingest (docs/16 H1, ingest-locality) — operator-local RF.
+ * exactly like the RX-only browser ingest (docs/design/16 H1, ingest-locality) — operator-local RF.
  */
 import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprsweb/ax25";
 import { kissFrames, kissWrap } from "@aprsweb/aprs";

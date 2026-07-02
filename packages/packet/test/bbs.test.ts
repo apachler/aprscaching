@@ -25,7 +25,7 @@ function run(s: BbsSession, lines: string[]): { out: string[]; disconnected: boo
   return { out, disconnected };
 }
 
-describe("FBB BBS command interpreter (docs/25 P2)", () => {
+describe("FBB BBS command interpreter (docs/design/25 P2)", () => {
   it("greets with the new-message count and a prompt", () => {
     const s = new BbsSession("OE8APR", makeStore(), "OE8BBS");
     const g = s.greeting();

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * bbs.ts — the FBB/MBL-style connected-mode BBS command interpreter (docs/25 P2). This is the pure
+ * bbs.ts — the FBB/MBL-style connected-mode BBS command interpreter (docs/design/25 P2). This is the pure
  * "brain" a connected AX.25 session talks to: it takes one input line at a time and returns the lines
  * to send back (and whether to disconnect), operating on an injected MessageStore. No I/O, so it's
  * exhaustively unit-testable; the ingest wires it to incoming connects (validate-at-deploy), and the

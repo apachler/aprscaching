@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { encodeAgwpe, parseAgwpe } from "../src/index.js";
 
-describe("AGWPE frame codec (docs/27 B.1)", () => {
+describe("AGWPE frame codec (docs/design/27 B.1)", () => {
   it("round-trips a frame through encode → parse", () => {
     const data = new TextEncoder().encode("hello agw");
     const bytes = encodeAgwpe({ port: 1, kind: "K", pid: 0xf0, from: "OE8APR-7", to: "OE8XBM-1", data });

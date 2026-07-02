@@ -9,7 +9,7 @@ import { useFmt } from "../format.js";
 import { Ico } from "../ui/index.js";
 
 /**
- * Map field-navigation tools (docs/11 M2): a Maidenhead/lat-lon grid overlay, concentric range rings
+ * Map field-navigation tools (docs/design/11 M2): a Maidenhead/lat-lon grid overlay, concentric range rings
  * around the view centre, a two-point ruler (distance + bearing), a day/night terminator, and a
  * great-circle bearing arc from your home QTH to the selected cache. Pure client geo over the
  * existing MapLibre map — no tiles, no backend. Labels/readouts live in the DOM (no glyph dependency);

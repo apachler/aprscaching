@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * LoadMore — the cacher-surface pagination control (docs/11 / ui-ux.md). An explicit, accessible
+ * LoadMore — the cacher-surface pagination control (docs/design/11 / ui-ux.md). An explicit, accessible
  * button (not infinite scroll: that fights the map for the main thread and has no end for assistive
  * tech). Renders nothing when there is no next page, so a list cleanly bottoms out.
  */

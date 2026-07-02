@@ -4,7 +4,7 @@ import { searchSuggest, type SearchHitCache, type SearchHitStation } from "../ap
 import { Icon } from "../ui/index.js";
 
 /**
- * Enriched as-you-type search (docs/11 M2). A real ARIA combobox over the existing top-bar search:
+ * Enriched as-you-type search (docs/design/11 M2). A real ARIA combobox over the existing top-bar search:
  * debounced server suggestions (caches + stations) in an accessible listbox, keyboard-navigable
  * (↑/↓/Enter/Esc). Typing still drives the live in-view text filter (onChange); Enter with no active
  * suggestion falls back to the grid / lat-lon fly-to (onSubmitRaw). In-flight requests are aborted so

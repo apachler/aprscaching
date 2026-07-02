@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { parseRelayQuery, answerRelayQuery } from "../src/relay.js";
 
-describe("federation rendezvous relay — pure core (docs/15 T2.3 path 2)", () => {
+describe("federation rendezvous relay — pure core (docs/design/15 T2.3 path 2)", () => {
   it("parses a valid feed query and rejects unknown/malformed kinds", () => {
     expect(parseRelayQuery({ kind: "feed", params: { feed: "caches", since: 5 } })).toEqual({ kind: "feed", params: { feed: "caches", since: 5 } });
     expect(parseRelayQuery({ kind: "corroborate" })).toEqual({ kind: "corroborate", params: {} });

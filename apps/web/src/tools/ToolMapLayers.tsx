@@ -4,7 +4,7 @@ import maplibregl from "maplibre-gl";
 import { useToolHost } from "./host.js";
 
 /**
- * ToolMapLayers — the host renderer for `map`-capability tools (docs/28 §6). Enabled tools that target the
+ * ToolMapLayers — the host renderer for `map`-capability tools (docs/design/28 §6). Enabled tools that target the
  * `map` surface contribute a declarative `MapLayerSpec` (points only, no MapLibre access); this syncs them
  * to markers on the shared map. Mounted once by Platform with the live map. Re-reads on tool changes +
  * ticks so a tool that mutates its layer from a background event still shows. Tokens, not raw colour.

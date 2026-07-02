@@ -8,7 +8,7 @@ import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.j
 
 /**
  * extralinks.ts — two more browser-direct RF ingests behind the same RfLink contract as the KISS
- * reader (docs/16):
+ * reader (docs/design/16):
  *   H4  WebAudioAfsk      — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
  *   H3  WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → POSITION_APP → fix.
  * Both stay RX-only and Tier C (no independent IGate); send() is gated off (H5). Chromium-only.

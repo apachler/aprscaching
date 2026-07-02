@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * panel.ts — the declarative panel model a `panel`-capability Tool contributes (docs/28). A tool NEVER
+ * panel.ts — the declarative panel model a `panel`-capability Tool contributes (docs/design/28). A tool NEVER
  * touches the DOM; it emits a typed node tree and the host renders it with real semantic elements +
  * theme tokens. This keeps the sandbox safe (no styled-div/script injection) while still letting a tool
  * present a real UI region — a readout, a small table, status bars — on whatever surface(s) it targets.
@@ -16,7 +16,7 @@ export type PanelNode =
   | { kind: "badge"; text: string; tone?: PanelTone }
   | { kind: "bar"; label: string; value: number; max: number; tone?: PanelTone } // an ASCII/▁ bar meter
   | { kind: "table"; head: string[]; rows: string[][] }
-  // A monospace CP437/ANSI cell grid — the Graphic-Packet "GIP" imagery primitive (docs/28 §5g). Each
+  // A monospace CP437/ANSI cell grid — the Graphic-Packet "GIP" imagery primitive (docs/design/28 §5g). Each
   // cell is a single glyph with an optional ANSI colour index (0–15 → --ansi-N); the host renders it as
   // a `grid` of spans. Function-agnostic: a tool decides the cells are an image, a spectrum, a game board.
   | { kind: "blocks"; cols: number; cells: { ch: string; c?: number }[] };

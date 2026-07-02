@@ -9,7 +9,7 @@ const markSeen = () => { try { localStorage.setItem(SEEN_KEY, "1"); } catch { /*
 
 /**
  * Quick-tour framework — MECHANICS ONLY. Step content/targets are config-driven and deferred
- * (docs/18). An accessible (focus-trapped, keyboard-operable, reduced-motion) bottom-anchored
+ * (docs/design/18). An accessible (focus-trapped, keyboard-operable, reduced-motion) bottom-anchored
  * dialog; element-anchored coach-marks land with the real steps. Renders nothing for empty steps.
  */
 export function Tour(props: { steps: TourStep[]; onDone: () => void }) {

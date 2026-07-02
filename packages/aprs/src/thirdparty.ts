@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
- * thirdparty.ts — APRS-IS passcode + third-party (path-A) injection helpers (docs/19). Pure; runs in
- * Worker/Node/browser. The passcode is NOT authorization (public hash) — see docs/19; it's here for
+ * thirdparty.ts — APRS-IS passcode + third-party (path-A) injection helpers (docs/design/19). Pure; runs in
+ * Worker/Node/browser. The passcode is NOT authorization (public hash) — see docs/design/19; it's here for
  * ops convenience + the direct-TX path. The third-party encapsulation is what a peer emits when gating
  * a *control-verified* user's traffic into APRS-IS under the user's own call.
  */
@@ -18,7 +18,7 @@ export function aprsPasscode(call: string): number {
 }
 
 /**
- * Build the third-party encapsulated line a peer injects into APRS-IS on behalf of a user (docs/19 A):
+ * Build the third-party encapsulated line a peer injects into APRS-IS on behalf of a user (docs/design/19 A):
  *   `GATECALL>APRS,TCPIP*:}USERCALL>DST,TCPIP*:<info>`
  * The `}` marks third-party traffic; the inner source is the USER's call (gated by the peer's login).
  * `info` is the raw APRS info field (position/message/status) — build it with encodeAprs* helpers.

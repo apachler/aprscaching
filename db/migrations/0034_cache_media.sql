@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Cache media attachments (docs/26 F-3): the original APRSCaching let owners attach photos, audio and
+-- Cache media attachments (docs/design/26 F-3): the original APRSCaching let owners attach photos, audio and
 -- data files (hints, circuit diagrams, the audio sample) to a cache. Stored in the MEDIA object store
 -- (R2 on CF, filesystem on Node/Bun) like the stage clues; this table is the per-cache index. Owner-
 -- managed, size/type-limited at the handler. All three runtimes.

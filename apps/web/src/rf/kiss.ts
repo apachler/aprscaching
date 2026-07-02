@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * kiss.ts — browser-direct RF ingest over Web Serial (docs/16 H1, ingest-locality.md).
+ * kiss.ts — browser-direct RF ingest over Web Serial (docs/design/16 H1, ingest-locality.md).
  *
  * A USB KISS TNC (DigiRig, NinoTNC, Mobilinkd, Kenwood TH-D74/75, …) plugged into Chromium becomes
  * a first-class RF ingest with no server and no install. We reuse the pure @aprsweb/aprs codec
@@ -8,13 +8,13 @@
  * frame heard here decodes identically. Chromium-only + session-bound; callers MUST feature-detect
  * and provide a non-RF fallback.
  *
- * Trust note (docs/22): a frame heard directly on the operator's own radio has no independent IGate,
+ * Trust note (docs/design/22): a frame heard directly on the operator's own radio has no independent IGate,
  * so the provenance derivation keeps it Tier C — a browser receiver can't self-corroborate to Tier A.
  */
 import { kissFrames, decodeAx25, decodeAprs, encodeAx25, kissWrap, type ParsedFrame, type AprsData } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
 
-/** A frame to transmit (docs/16 H5). src is the operator's verified callsign+SSID; dst is the TOCALL. */
+/** A frame to transmit (docs/design/16 H5). src is the operator's verified callsign+SSID; dst is the TOCALL. */
 export interface TxFrame { src: string; dst: string; path?: string[]; payload: string }
 
 /** Is browser-direct RF available here? (Web Serial — Chromium desktop, secure context.) */

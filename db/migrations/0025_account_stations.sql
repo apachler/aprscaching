@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Operated-stations registry (docs/13 M5 + docs/17). An account owns many stations — a home PWS, a
+-- Operated-stations registry (docs/design/13 M5 + docs/design/17). An account owns many stations — a home PWS, a
 -- mountain-top digipeater / igate / node — each with its own callsign+SSID, an EXPLICIT location
 -- (not just the operator's home grid), a description and roles. Weather is one capability among
 -- several; a weather-capable station carries its own PWS push key (wx_keys.station_id).

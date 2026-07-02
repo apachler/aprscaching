@@ -11,7 +11,7 @@ function loopback(frame: Uint8Array, sampleRate: number): Uint8Array[] {
   return got;
 }
 
-describe("afsk — Bell-202 1200-baud modem (docs/16 H4)", () => {
+describe("afsk — Bell-202 1200-baud modem (docs/design/16 H4)", () => {
   it("CRC-16/X.25 matches the known check value for \"123456789\"", () => {
     expect(crc16X25(new TextEncoder().encode("123456789"))).toBe(0x906e);
   });

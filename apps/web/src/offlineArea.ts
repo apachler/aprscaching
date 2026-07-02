@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * offlineArea.ts — "download this area" for off-grid caching (docs/16 C). Persists the last-fetched map
+ * offlineArea.ts — "download this area" for off-grid caching (docs/design/16 C). Persists the last-fetched map
  * caches so Nearby / the map / cache detail / Log-find all render with **no network**; the logged find
  * still queues + syncs when back online (`flushLogQueue`). `listCaches` write-throughs here on every
  * successful fetch (so browsing an area caches it) and reads back here when the network is down. Tiles are

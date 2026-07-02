@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * field.ts — the pure "field station" core (docs/16 A/B/D). Off-grid, the browser is a first-class LOCAL
+ * field.ts — the pure "field station" core (docs/design/16 A/B/D). Off-grid, the browser is a first-class LOCAL
  * APRS engine: decoded RF frames become live stations on the map + messages in a local inbox, with online
  * an enhancement, not a requirement. This module is I/O-free — it maps a decoded frame to a local event
  * (A), builds an ACK for a message addressed to us (B), and shapes locally-heard receptions for sync-back

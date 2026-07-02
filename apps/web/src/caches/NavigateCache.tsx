@@ -5,7 +5,7 @@ import { useFmt } from "../format.js";
 import { bearingDeg, bearing8, haversine } from "../map/geo.js";
 
 /**
- * Navigate-to-cache (docs/26 Stage 0.3) — a one-tap field action. Hand-off links open the cache in the
+ * Navigate-to-cache (docs/design/26 Stage 0.3) — a one-tap field action. Hand-off links open the cache in the
  * device's own maps/navigation app (these need no permission and route from the phone's location), and
  * an on-demand bearing/compass readout uses a one-shot geolocation fix when the cacher wants the
  * heading + distance in the field. Real links/buttons; nothing here animates.

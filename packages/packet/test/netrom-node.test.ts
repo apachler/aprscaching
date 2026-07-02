@@ -11,7 +11,7 @@ function bcastFrom(senderAlias: string, dests: NodesDest[]): Uint8Array {
   return encodeNodesBroadcast(senderAlias, dests)[0]!;
 }
 
-describe("NET/ROM node routing engine (docs/29 F2)", () => {
+describe("NET/ROM node routing engine (docs/design/29 F2)", () => {
   it("learns the neighbour directly and each advertised dest at combined quality", () => {
     const node = new NetromNode(ME, { pathQuality: 200 });
     // OE9SRC advertises a route to OE3FAR at broadcast quality 180

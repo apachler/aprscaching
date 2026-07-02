@@ -4,7 +4,7 @@ import { parseWx, wxUrls, makeWxKey } from "../src/wx.js";
 
 const bag = (o: Record<string, string>) => (k: string) => o[k.toLowerCase()];
 
-describe("weather W1 — Ecowitt/WU parse (docs/17)", () => {
+describe("weather W1 — Ecowitt/WU parse (docs/design/17)", () => {
   it("converts an Ecowitt 'customized' push (imperial → metric)", () => {
     const wx = parseWx(bag({ tempf: "68", humidity: "55", baromrelin: "29.92", windspeedmph: "10", windgustmph: "15", winddir: "180", hourlyrainin: "0.1", dailyrainin: "0.5", solarradiation: "500" }));
     expect(wx.temp_c).toBe(20);

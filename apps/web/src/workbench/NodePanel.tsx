@@ -6,7 +6,7 @@ import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
 /**
- * NodePanel (docs/25 P4) — the read-only NET/ROM node view: the NODES routing table this node knows +
+ * NodePanel (docs/design/25 P4) — the read-only NET/ROM node view: the NODES routing table this node knows +
  * the per-port MHeard list (recently heard stations). Loaded on demand. The node CLI + advertising
  * NODES on RF run operator-local on the ingest; this surfaces the tables the gateway keeps.
  */

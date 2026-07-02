@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
  * mgrs.ts — WGS84 lat/lon → MGRS (Military Grid Reference System), for the map's grid/coord readout
- * (docs/11 M2). Standard UTM forward projection + 100 km square lettering. The rare UTM zone
+ * (docs/design/11 M2). Standard UTM forward projection + 100 km square lettering. The rare UTM zone
  * exceptions (Norway 31V/32V, Svalbard) are not special-cased — fine for a display readout.
  */
 const COLS = ["ABCDEFGH", "JKLMNPQR", "STUVWXYZ"]; // 100km column letters by (zone-1)%3

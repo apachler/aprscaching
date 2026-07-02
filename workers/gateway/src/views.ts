@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * views.ts — save / share map views (docs/11 M1). A signed-in user saves the current map state and
+ * views.ts — save / share map views (docs/design/11 M1). A signed-in user saves the current map state and
  * gets a short permalink; anyone can resolve a public view to restore it. The app applies the state.
  *
  *   POST   /api/views          save { name?, state, public? } → { slug }

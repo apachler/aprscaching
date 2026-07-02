@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-session.ts — the NET/ROM L4 inbound session server (docs/29 F2). The AX.25 `SessionServer` answers
+ * netrom-session.ts — the NET/ROM L4 inbound session server (docs/design/29 F2). The AX.25 `SessionServer` answers
  * connects that arrive as a raw AX.25 link; this answers connects that arrive as a NET/ROM *circuit*
  * terminating at us (a station reaching our node/BBS from across the network, multi-hop). `serveNetromApp`
  * binds a `LineApp` (the node CLI or BBS) to an accepting `NetromCircuit` via the shared `makeLineDriver`,

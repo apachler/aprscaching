@@ -9,7 +9,7 @@ export interface HostmodeOpts { host: string; port: number; mycall?: string; rad
 export interface HostmodeHandlers { onPacket: (p: Packet) => void; onFrame?: (f: ParsedFrame) => void }
 
 /**
- * WA8DED host-mode TNC client (docs/27 B.1) over TCP — a TF-firmware TNC or TFPCX exposed on a socket
+ * WA8DED host-mode TNC client (docs/design/27 B.1) over TCP — a TF-firmware TNC or TFPCX exposed on a socket
  * (the classic serial link is wired at deploy with a serial→TCP bridge or the `serialport` adapter).
  * Enables monitor mode, polls channel 0, and forwards monitored frames as `rf` packets on the
  * `hostmode` port. The wire codec (@aprsweb/packet) is unit-tested; the TNC handshake + the exact

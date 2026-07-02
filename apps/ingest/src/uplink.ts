@@ -27,7 +27,7 @@ export class AprsUplink {
   /**
    * Publish a queued outbox item via third-party format. kind 'status'|'message'|'wx' — the payload
    * is the full APRS info field (a status `>…`, a message `:…`, or a WX report `!…_…`), so a WX
-   * beacon (docs/17 W2) flows through unchanged. The user's callsign stays the inner source.
+   * beacon (docs/design/17 W2) flows through unchanged. The user's callsign stays the inner source.
    */
   publish(item: { src_call: string; tocall: string; payload: string }): boolean {
     if (!this.ready || !this.sock) return false;

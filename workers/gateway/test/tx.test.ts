@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { buildTxPayload } from "../src/tx.js";
 import { thirdPartyEncap } from "@aprsweb/aprs";
 
-describe("gated user TX payload (docs/19 P3)", () => {
+describe("gated user TX payload (docs/design/19 P3)", () => {
   it("builds a message info field", () => {
     const r = buildTxPayload({ kind: "message", addressee: "OE1XYZ", text: "hi there" });
     expect(r.ok && r.kind).toBe("message");

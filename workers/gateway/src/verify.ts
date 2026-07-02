@@ -8,7 +8,7 @@
  *                        an IGate that is NOT the logger's own, with a plausible track.
  *                        Strongest. Gated on attestation ALONE, never on transport: a
  *                        packet that merely arrived over an RF-ish tunnel (AXIP/HAMNET)
- *                        without a site we attest stays Tier C (docs/22).
+ *                        without a site we attest stays Tier C (docs/design/22).
  *   B  App-corroborated: a first-party device-Geolocation reading taken in-app at log
  *                        time matches the cache. This is the path for phone-app loggers
  *                        with no radio. A bare APRS-IS beacon CANNOT reach tier B on its
@@ -44,7 +44,7 @@ export interface PositionRow {
   id: number; callsign: string; ts: number; lat: number; lon: number;
   heard_via: "rf" | "aprs_is" | "app"; igate_call?: string | null;
   /**
-   * Provenance seam (docs/22): set by the boundary (see provenance.ts) when this fix was heard at a
+   * Provenance seam (docs/design/22): set by the boundary (see provenance.ts) when this fix was heard at a
    * site we operate + attest. Tier A is gated on THIS flag alone — never on transport. A packet that
    * merely arrived over some RF-ish transport (AXIP/HAMNET tunnel) without attestation stays Tier C.
    */
@@ -89,7 +89,7 @@ function rank(t: TrustTier): number { return t === "A" ? 3 : t === "B" ? 2 : 1; 
 function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (cache.lat == null || cache.lon == null) return null;
   for (const p of deps.loggerPositions) {
-    if (!p.firstPartyAttested) continue;   // transport-vs-trust seam (docs/22): the ONLY Tier-A gate
+    if (!p.firstPartyAttested) continue;   // transport-vs-trust seam (docs/design/22): the ONLY Tier-A gate
     if (policy.requireIndependentIgate) {
       const ig = p.igate_call ?? "";
       if (!ig || deps.loggerOwnIgates?.has(ig)) continue; // self-gated => not corroborated
@@ -107,7 +107,7 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
   const cs = deps.cacheStationPositions ?? [];
   if (!cs.length) return null;
   for (const p of deps.loggerPositions) {
-    if (!p.firstPartyAttested) continue;   // Tier A demands an attested first-party fix (docs/22)
+    if (!p.firstPartyAttested) continue;   // Tier A demands an attested first-party fix (docs/design/22)
     // nearest cache-station fix in time
     let best: PositionRow | null = null, bestSkew = Infinity;
     for (const c of cs) {

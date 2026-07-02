@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Supporter recognition + transparency ledger (docs/12 M4). RECOGNITION ONLY — never a feature gate.
--- (Migration number pinned to 0012 per docs/14; lands after 0011_account_callsigns, fills the
+-- Supporter recognition + transparency ledger (docs/design/12 M4). RECOGNITION ONLY — never a feature gate.
+-- (Migration number pinned to 0012 per docs/design/14; lands after 0011_account_callsigns, fills the
 --  reserved gap. The migrator applies by filename, so this is safe to add after later migrations.)
 
 -- accounts.tier is a thank-you level (free | supporter); hide_nag suppresses the support prompt.
@@ -8,7 +8,7 @@
 ALTER TABLE accounts ADD COLUMN tier     TEXT    NOT NULL DEFAULT 'free';
 ALTER TABLE accounts ADD COLUMN hide_nag INTEGER NOT NULL DEFAULT 0;
 
--- Public transparency ledger (docs/12 §2): what came in and how it was spent, per bucket.
+-- Public transparency ledger (docs/design/12 §2): what came in and how it was spent, per bucket.
 CREATE TABLE IF NOT EXISTS ledger (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   ts           INTEGER NOT NULL,

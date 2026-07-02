@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom.ts — NET/ROM node logic (docs/25 P4): the NODES routing table (learn / best-route / quality
+ * netrom.ts — NET/ROM node logic (docs/design/25 P4): the NODES routing table (learn / best-route / quality
  * decay), reversible learned digi paths (the Graphic Packet autorouting feature — build a return path
  * from a heard one), and the node user CLI (Nodes/Routes/Connect/Users/MHeard/CQ/Bye) a connected
  * session talks to. All pure + unit-tested; the ingest wires the CLI to incoming AX.25 connects and the

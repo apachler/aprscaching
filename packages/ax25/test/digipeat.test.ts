@@ -8,7 +8,7 @@ const A = (call: string, ssid = 0) => ({ call, ssid });
 const base = (digis: ReturnType<typeof A>[], digisRepeated?: boolean[]): Ax25Frame =>
   ({ dst: A("OE8NOD", 1), src: A("OE1SND"), digis, digisRepeated, command: true, type: "SABM", pf: true });
 
-describe("connected-mode AX.25 digipeat (docs/29 F3)", () => {
+describe("connected-mode AX.25 digipeat (docs/design/29 F3)", () => {
   it("repeats a frame whose next via-hop is us and sets the H-bit", () => {
     const f = base([A("OE8DGI"), A("OE9OTH")]);
     const out = digipeatAx25(f, [A("OE8DGI")]);
@@ -45,7 +45,7 @@ describe("connected-mode AX.25 digipeat (docs/29 F3)", () => {
   });
 });
 
-describe("viscous-digi bookkeeping (docs/29 F3)", () => {
+describe("viscous-digi bookkeeping (docs/design/29 F3)", () => {
   it("content key ignores the via path so a re-digied copy matches the original", () => {
     const a = frameContentKey(base([A("OE8DGI"), A("OE9OTH")]));                     // fresh
     const b = frameContentKey(base([A("OE8DGI"), A("OE9OTH")], [true, false]));      // our hop now repeated

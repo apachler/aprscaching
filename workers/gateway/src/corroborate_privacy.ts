@@ -3,7 +3,7 @@
  * corroborate_privacy.ts — F4/T1.2 hardening + privacy coarsening for cross-instance corroboration.
  *
  * The corroboration endpoint must NOT become a precise "where was <callsign> at time T" oracle
- * (docs/06 #4). Two defenses, both pure + unit-tested:
+ * (docs/design/06 #4). Two defenses, both pure + unit-tested:
  *   • the ASKER coarsens its query — snaps the center to a grid square and buckets the time window,
  *     so peers (and any middlebox) never receive exact lat/lon/second. The search radius is widened
  *     by the grid's half-diagonal so snapping can never miss a real hit (proof: a real point within

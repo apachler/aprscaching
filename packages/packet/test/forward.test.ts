@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { parseHierAddr, ForwardRouter, buildProposal, parseFS } from "../src/index.js";
 
-describe("FBB hierarchical addressing + forward routing (docs/25 P3)", () => {
+describe("FBB hierarchical addressing + forward routing (docs/design/25 P3)", () => {
   it("parses a full H-address into bbs + hierarchy", () => {
     expect(parseHierAddr("OE8APR @ OE8XBM.#OE3.OE.EU")).toEqual({ to: "OE8APR", bbs: "OE8XBM", hier: ["#OE3", "OE", "EU"] });
     expect(parseHierAddr("ALL")).toEqual({ to: "ALL", bbs: null, hier: [] });

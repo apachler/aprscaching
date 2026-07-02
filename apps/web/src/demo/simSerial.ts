@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * simSerial.ts — a fake `navigator.serial` for the design harness, so the Web-Serial-only surfaces
- * (CAT rig control, docs/16 H6) render their CONNECTED state with no hardware. The fake port accepts
+ * (CAT rig control, docs/design/16 H6) render their CONNECTED state with no hardware. The fake port accepts
  * `open()`/`close()` and exposes a `writable` that sinks CAT frames (we don't decode them — the point
  * is to screenshot the working tune UI). Chromium-gated in production; this only runs under `?demo=`.
  */

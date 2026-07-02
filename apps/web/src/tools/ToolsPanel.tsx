@@ -57,7 +57,7 @@ function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
 }
 
 /**
- * ToolsPanel (docs/27 B.3 / docs/28) — manage the sandboxed, capability-gated Tools. It drives the ONE
+ * ToolsPanel (docs/design/27 B.3 / docs/design/28) — manage the sandboxed, capability-gated Tools. It drives the ONE
  * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
  * (packet terminal, BBS, node, or this web console) — not just here. Built-ins run in-process under the
  * capability model (off by default); imported tools are fetched by URL, permission-prompted, and run in
@@ -74,7 +74,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
   const [decodeKind, setDecodeKind] = useState("cw");
   const [cmd, setCmd] = useState("");
   const [cmdOut, setCmdOut] = useState<string[]>([]);
-  const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer (docs/28 D)
+  const [asRemote, setAsRemote] = useState(false); // simulate a remote connected peer (docs/design/28 D)
   const [importUrl, setImportUrl] = useState("");
   const [prompt, setPrompt] = useState<{ manifest: ToolManifest; base: string; trust: ToolTrust } | null>(null);
   const [imported, setImported] = useState<Imported[]>([]);
@@ -113,7 +113,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
   }
-  // Web Audio mic capture → the CW/PSK31 front-ends (docs/28 §6; Chromium + mic). Live text arrives via
+  // Web Audio mic capture → the CW/PSK31 front-ends (docs/design/28 §6; Chromium + mic). Live text arrives via
   // onText as the signal decodes; the pure pipeline is unit- and Chromium-e2e-tested.
   const [listening, setListening] = useState(false);
   const [liveText, setLiveText] = useState("");
@@ -167,7 +167,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     setPrompt(null);
     try {
       const scriptUrl = new URL(manifest.entry ?? "tool.js", base).href;
-      // Bridge the sandboxed tool to the shared bus (docs/28 §5f) — only if it was granted 'ipc'. The
+      // Bridge the sandboxed tool to the shared bus (docs/design/28 §5f) — only if it was granted 'ipc'. The
       // host routes emit/subscribe/call; the worker never holds a host or another-tool reference.
       const bridge = {
         emit: (t: string, d: unknown) => host.hostEmit(t, d),

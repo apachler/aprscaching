@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 /**
- * fbb-session.ts — the FBB ASCII forwarding session (docs/29 F4), reimplemented from the F6FBB protocol
+ * fbb-session.ts — the FBB ASCII forwarding session (docs/design/29 F4), reimplemented from the F6FBB protocol
  * spec. Two BBSes exchange personal/bulletin mail over a connected AX.25 link with **reverse forwarding**:
  * after each block the send direction flips. Pure + line-oriented (no I/O) — the ingest drives it over a
  * real ConnectedLink; the loopback harness drives it headlessly. ASCII-first; the binary B0/B1 (LZHUF)
- * modes are a documented follow-on (`docs/29`). This is the interop bridge to the classic packet network.
+ * modes are a documented follow-on (`docs/design/29`). This is the interop bridge to the classic packet network.
  *
  * Wire recap (F6FBB): SID advertises the `F` flag; proposal `FB <type> <FROM> <@AT> <TO> <BID> <size>`
  * (≤5/block) then `F>`; reply `FS ±=…` (+ accept, - reject, = defer); each accepted message is sent as

@@ -6,10 +6,10 @@ import { isCallsignVerified } from "./callsign.js";
 import { encodeAprsMessage, encodeAprsPosition } from "@aprsweb/aprs";
 
 /**
- * tx.ts — path-A gated user TX (docs/19 P3). A signed-in, control-verified user asks the peer to inject
+ * tx.ts — path-A gated user TX (docs/design/19 P3). A signed-in, control-verified user asks the peer to inject
  * a beacon or message into APRS-IS **under the user's own call** as third-party traffic (`}USERCALL>…`;
  * the ingest box does the encapsulation on drain — see announce.ts). The gate is our control-verification
- * (H5) — never a passcode (transport ≠ authorization, docs/19). We enqueue to `aprs_outbox` with
+ * (H5) — never a passcode (transport ≠ authorization, docs/design/19). We enqueue to `aprs_outbox` with
  * `src_call` = the verified user call; the box drains + injects (validate-at-deploy). RF legality holds:
  * the wire source is a real, control-verified licensed call.
  */
@@ -23,7 +23,7 @@ export interface UserTxBody {
  */
 export function buildTxPayload(body: UserTxBody): { ok: true; kind: string; payload: string; tocall: string } | { ok: false; error: string } {
   const kind = String(body.kind ?? "").toLowerCase();
-  const tocall = String(body.tocall ?? "APZACG").toUpperCase();   // TOCALL config lands with docs/19 P1
+  const tocall = String(body.tocall ?? "APZACG").toUpperCase();   // TOCALL config lands with docs/design/19 P1
   if (kind === "message") {
     const to = String(body.addressee ?? "").toUpperCase().trim();
     const text = String(body.text ?? "").trim();

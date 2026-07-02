@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Multiple verified base calls per account (the ham-correct identity model, docs/10 §19).
+-- Multiple verified base calls per account (the ham-correct identity model, docs/design/10 §19).
 -- An account (person) is not one callsign: it holds one or more *base* callsigns, each verified
 -- independently (the APRS message-challenge proves control of the license = the base call). The
 -- active operating callsign (accounts.callsign) is just whichever held call the session is bound to.

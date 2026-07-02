@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * watch.ts — watchlist + alerts (docs/20 §4, W1). An operator watches callsigns (per account); when a
+ * watch.ts — watchlist + alerts (docs/design/20 §4, W1). An operator watches callsigns (per account); when a
  * watched call is heard on the network — and especially near a cache — an in-app alert is recorded.
  * That in-app feed is the ADR-4b fallback; push/email delivery layers on top later. Watched calls are
  * keyed by account (ADR-2), so they survive a callsign change.

@@ -12,7 +12,7 @@ are shared (`@aprsweb/gateway/app`); only the bindings differ:
 | Cron | `scheduled()` | `setInterval` nightly TTL |
 
 This is the **self-host story** for hams and clubs who want to run their own node and join the
-federated network (see `docs/06-federation-and-open-network.md`) instead of standing up an island.
+federated network (see `docs/design/06-federation-and-open-network.md`) instead of standing up an island.
 
 ## Run it
 

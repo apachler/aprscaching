@@ -110,7 +110,7 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
 }
 
 /**
- * Time-series for the workbench station graphs (docs/26 Stage 0.1). Two windowed series — the weather
+ * Time-series for the workbench station graphs (docs/design/26 Stage 0.1). Two windowed series — the weather
  * readings and the motion telemetry (speed/altitude/course, historized on positions since 0029). Both
  * are ascending-by-ts (uPlot wants sorted x). The window is clamped so a busy station can't return an
  * unbounded set; default 24 h.
@@ -140,7 +140,7 @@ export async function handleStationSeries(req: Request, env: Env, callsign: stri
 }
 
 /**
- * Recent raw frames heard from a station (docs/26 Stage 0.2) — a workbench diagnostic. Reconstructs
+ * Recent raw frames heard from a station (docs/design/26 Stage 0.2) — a workbench diagnostic. Reconstructs
  * the TNC2 line (`src>dst,path:payload`) from the short-lived packets_recent ring. Newest first,
  * capped; the ring itself is TTL-pruned by the scheduled job, so this is inherently bounded.
  */

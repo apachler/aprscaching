@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * notify.ts — push + email-digest delivery (ADR-4b, docs/11 M4) over the W1 watch alerts. The email
+ * notify.ts — push + email-digest delivery (ADR-4b, docs/design/11 M4) over the W1 watch alerts. The email
  * digest is the MANDATORY fallback (iOS/no-push); web push is the enhancement. In-app alerts (W1)
  * remain the always-on baseline.
  *

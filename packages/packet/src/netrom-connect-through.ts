@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-connect-through.ts — NET/ROM connect-through (docs/29 F2): when a user connected to our node
+ * netrom-connect-through.ts — NET/ROM connect-through (docs/design/29 F2): when a user connected to our node
  * types `C <dest>`, resolve the best route and bridge the inbound user link to an onward L4 circuit, so
  * data flows transparently user ↔ node ↔ destination. Pure: the outbound circuit is created by an injected
  * `CircuitDialer` (the ingest wires a real `NetromCircuit` over KISS to the neighbour; the loopback harness

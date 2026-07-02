@@ -28,7 +28,7 @@ export function Panel(props: {
     : undefined;
   return (
     // Wide surfaces are the workbench apps (terminal, BBS, node, tools…). Mark them with the terminal
-    // shell so the Cogmind theme can transform them into bordered CRT windows (docs/24 §6a); the CSS
+    // shell so the Cogmind theme can transform them into bordered CRT windows (docs/design/24 §6a); the CSS
     // gates on [data-theme="cogmind"], so the attribute is inert in Modern.
     <aside ref={ref} tabIndex={-1} onKeyDown={onKeyDown} data-shell={props.wide ? "terminal" : undefined}
            className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}>

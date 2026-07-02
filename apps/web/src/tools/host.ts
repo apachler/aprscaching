@@ -2,7 +2,7 @@
 /**
  * host.ts (web) — the ONE shared ToolHost for the whole app. Tools are enabled once (in the Tools app)
  * and their contributions then reach every surface that consults the host — the packet terminal, BBS,
- * the NET/ROM node, and the Tools console — filtered by each tool's declared `surfaces` (docs/28). A
+ * the NET/ROM node, and the Tools console — filtered by each tool's declared `surfaces` (docs/design/28). A
  * module singleton (not per-panel) is what makes a plugin work beyond the packet terminal.
  */
 import { useEffect, useReducer } from "react";
@@ -27,12 +27,12 @@ export const toolHost = new ToolHost({
 });
 for (const t of builtinTools()) { try { toolHost.register(t); } catch { /* already registered (HMR) */ } }
 
-// Drive the periodic on_tick event (docs/28 B) so timer tools (auto-status, watchdogs) fire. Cheap:
+// Drive the periodic on_tick event (docs/design/28 B) so timer tools (auto-status, watchdogs) fire. Cheap:
 // dispatch is a no-op unless a tool hooked on_tick. Once per module load.
 if (typeof window !== "undefined") setInterval(() => toolHost.dispatch("on_tick", {}), 60_000);
 
 /**
- * Feed a heard callsign into the tool host from ANY source (docs/28 tool 2, #2) — the packet terminal
+ * Feed a heard callsign into the tool host from ANY source (docs/design/28 tool 2, #2) — the packet terminal
  * (RF/TNC), the live APRS layer, or a future feeder. Dispatches `on_frame` so mheard/watch-alert record
  * it regardless of which surface is on screen. `source` is a short provenance label ("RF", "APRS", …).
  */

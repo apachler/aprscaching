@@ -5,7 +5,7 @@ import { useFmt } from "../format.js";
 import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast } from "../ui/index.js";
 
 /**
- * Watchlist (docs/20 W1) — watch callsigns and see in-app alerts when one is heard, especially near a
+ * Watchlist (docs/design/20 W1) — watch callsigns and see in-app alerts when one is heard, especially near a
  * cache. Per-account; the alert generation lives at ingest, this is the read/manage surface.
  */
 export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: number) => void }) {

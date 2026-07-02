@@ -33,7 +33,7 @@ export interface CorroborationQuery {
 function baseCall(c: string): string { return c.split("-")[0]!.toUpperCase(); }
 
 /**
- * Which IGate (if any) to credit for a Tier-A find (docs/13 corroborator board). For a locally
+ * Which IGate (if any) to credit for a Tier-A find (docs/design/13 corroborator board). For a locally
  * verified find it's the gating IGate of the matched RF position; for a peer-corroborated find it's
  * the peer's revealed IGate (only present when both peers opt into FED_REVEAL_IGATE) — that's the
  * cross-instance credit. Never the logger's own call (no self-credit). Pure / testable.

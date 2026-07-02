@@ -57,7 +57,7 @@ function converse(server: SessionServer, service: Ax25Address, me: Ax25Address, 
   return { rx, client };
 }
 
-describe("connected-mode session server (docs/29 F1)", () => {
+describe("connected-mode session server (docs/design/29 F1)", () => {
   it("answers an inbound connect to the BBS and drives L / R / B", () => {
     const events: string[] = [];
     const server = new SessionServer({

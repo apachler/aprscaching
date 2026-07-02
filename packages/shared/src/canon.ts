@@ -34,7 +34,7 @@ export function accountActionMessage(a: { action: string; callsign: string; inst
 
 /**
  * The exact bytes a browser RF station signs to push an ingest batch to a public gateway without the
- * shared ingest secret (docs/16 H1.5). Binds the operator's callsign, a freshness timestamp, and the
+ * shared ingest secret (docs/design/16 H1.5). Binds the operator's callsign, a freshness timestamp, and the
  * batch count + digest of the canonical packets, so a signature can't be replayed for other content.
  * The gateway verifies the signature against a key registered to `callsign` (callsign_keys).
  */

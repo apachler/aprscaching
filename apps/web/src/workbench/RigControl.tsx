@@ -5,7 +5,7 @@ import { cat, catSupported, useCatConnected, type RigProfile } from "../rf/cat.j
 import { useToast } from "../ui/index.js";
 
 /**
- * Rig control (docs/16 H6): connect a transceiver over Web Serial CAT and one-click tune it — the
+ * Rig control (docs/design/16 H6): connect a transceiver over Web Serial CAT and one-click tune it — the
  * APRS calling frequency, or any frequency. Tuning only sets the VFO (no transmit), so it isn't
  * H5-gated. Spot cards reuse the same shared controller to tune to a spot's freq+mode. Chromium-only.
  */
@@ -26,7 +26,7 @@ export function RigControl() {
   const [busy, setBusy] = useState(false);
 
   if (!catSupported())
-    return <p className="muted fine">CAT control needs Web Serial — use Chromium on desktop. Other browsers can use a Hamlib <span className="mono">rigctld</span> companion (docs/21).</p>;
+    return <p className="muted fine">CAT control needs Web Serial — use Chromium on desktop. Other browsers can use a Hamlib <span className="mono">rigctld</span> companion (docs/design/21).</p>;
 
   async function connect() {
     setBusy(true);

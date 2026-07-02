@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * stations_mine.ts — the operator's own stations registry (docs/13 M5 + docs/17). A signed-in user
+ * stations_mine.ts — the operator's own stations registry (docs/design/13 M5 + docs/design/17). A signed-in user
  * manages many stations: a home PWS, a mountain-top digipeater / igate / node — each with its own
  * callsign+SSID, an explicit location, a description and roles. Weather is one role; a weather-capable
  * station carries its own PWS push key. Stations fold into the existing GDPR export/erase.
@@ -203,7 +203,7 @@ function createVia(req: Request, env: Env, body: Record<string, unknown>): Promi
 
 /**
  * POST /api/my/stations/:id/cache — turn an operated station into an APRScache at its location
- * (docs/13). A single cache by default; `{ living: true }` makes it an aprs_living cache that follows
+ * (docs/design/13). A single cache by default; `{ living: true }` makes it an aprs_living cache that follows
  * the station's beacon. Owned by the signed-in operator.
  */
 export async function handleStationToCache(req: Request, env: Env, id: number): Promise<Response> {
@@ -226,7 +226,7 @@ export async function handleStationToCache(req: Request, env: Env, id: number): 
 }
 
 /**
- * POST /api/me/cache — "become a cache" (docs/13): an aprs_living cache that follows the operator's
+ * POST /api/me/cache — "become a cache" (docs/design/13): an aprs_living cache that follows the operator's
  * own beacon. Placed at their latest beacon fix, else their home grid. stationCall is the most recent
  * SSID heard (so the living-cache match works), else the base call.
  */

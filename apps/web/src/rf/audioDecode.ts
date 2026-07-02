@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * audioDecode.ts — the thin Web Audio mic capture that drives the CW + PSK31 front-ends (docs/28 §6). It
+ * audioDecode.ts — the thin Web Audio mic capture that drives the CW + PSK31 front-ends (docs/design/28 §6). It
  * taps mono PCM off the microphone (or line-in) and streams it into the pure `StreamDecoder`
  * (`@aprsweb/tools`), which re-runs the robust batch decoder over a bounded window and returns the text so
  * far — so callers get LIVE text via `onText`, not just a result on stop. The DSP is all pure + unit-tested

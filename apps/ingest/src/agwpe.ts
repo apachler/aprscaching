@@ -9,7 +9,7 @@ export interface AgwpeOpts { host: string; port: number; radioPort?: number }
 export interface AgwpeHandlers { onPacket: (p: Packet) => void; onFrame?: (f: ParsedFrame) => void }
 
 /**
- * AGWPE TCP client (docs/27 B.1) — connects to an AGW Packet Engine (Direwolf/SoundModem/UZ7HO on
+ * AGWPE TCP client (docs/design/27 B.1) — connects to an AGW Packet Engine (Direwolf/SoundModem/UZ7HO on
  * :8000), enables raw-frame monitoring, and forwards each heard AX.25 frame as an `rf` packet on the
  * `agwpe` port. send() keys the modem with a raw AX.25 frame. The wire codec (@aprsweb/packet) is
  * unit-tested; the engine handshake + frame semantics are validate-at-deploy against a real engine.

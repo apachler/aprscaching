@@ -9,7 +9,7 @@
 import { createContext, useContext } from "react";
 
 /**
- * v1 ships exactly two themes, both DARK-ONLY (docs/26 / docs/24): "modern" (the default visual
+ * v1 ships exactly two themes, both DARK-ONLY (docs/design/26 / docs/design/24): "modern" (the default visual
  * language) and "cogmind" (the late-90s green-phosphor flip). There is no light mode.
  */
 export type Theme = "modern" | "cogmind";
@@ -19,7 +19,7 @@ export interface LocaleSettings {
   units: "metric" | "imperial";
   theme: Theme;
   /** Opt-in CRT flourish (scanline + phosphor glow), only meaningful in Cogmind; off by default
-   *  (docs/24 §1a·3 — the retro feel comes from layout+palette+font, FX is opt-in + reduced-motion-gated). */
+   *  (docs/design/24 §1a·3 — the retro feel comes from layout+palette+font, FX is opt-in + reduced-motion-gated). */
   crt: boolean;
 }
 

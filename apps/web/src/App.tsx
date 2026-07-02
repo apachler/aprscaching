@@ -8,7 +8,7 @@ import { SignIn } from "./identity/SignIn.js";
 import { ASSET } from "./brand.js";
 
 // The signed-in / explore platform owns MapLibre (~800 KB) plus all the map code. Lazy-load it so the
-// signed-out marketing landing paints without ever fetching the map bundle (docs/18 landing gate): the
+// signed-out marketing landing paints without ever fetching the map bundle (docs/design/18 landing gate): the
 // import() only fires once the user signs in or taps Explore.
 const Platform = lazy(() => import("./Platform.js"));
 
@@ -22,7 +22,7 @@ const Splash = () => <div className="splash"><img src={ASSET.wordmark} alt="APRS
 export function App() {
   const session = useSession();
   const [showSignIn, setShowSignIn] = useState(false);
-  // landing gate (docs/18): signed-in skips the landing; signed-out sees it until they Explore
+  // landing gate (docs/design/18): signed-in skips the landing; signed-out sees it until they Explore
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
   const [explored, setExplored] = useState(() => { try { return sessionStorage.getItem("acs.explore") === "1"; } catch { return false; } });
   const [startTour, setStartTour] = useState(false);

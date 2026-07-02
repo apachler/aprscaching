@@ -33,5 +33,5 @@ Nothing here ships in the production app path: the `?demo=` code-splits into its
 
 The protocol cores (`packages/ax25`, `packages/packet`) are testable without hardware, but the **UI
 shells were not** — the terminal only rendered with a live TNC. This harness closes that gap and is the
-bench the **Stage-3 Cogmind "flip"** (`docs/24` + `docs/25` P5) — the late-90s green-screen terminal
+bench the **Stage-3 Cogmind "flip"** (`docs/design/24` + `docs/design/25` P5) — the late-90s green-screen terminal
 shell — will be built and reviewed on.

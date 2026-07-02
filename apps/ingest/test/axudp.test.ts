@@ -11,7 +11,7 @@ function axudpDatagram(src: string, dst: string, aprs: string): Uint8Array {
   });
 }
 
-describe("AXUDP ingest normalize (docs/22 reserved seam)", () => {
+describe("AXUDP ingest normalize (docs/design/22 reserved seam)", () => {
   it("decodes a tunnelled AX.25 frame into a Packet", () => {
     const p = axudpToPacket(axudpDatagram("OE8APR-9", "APRS", "!4703.00N/01526.00E>test"), 1000)!;
     expect(p).not.toBeNull();

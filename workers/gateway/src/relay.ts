@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * relay.ts — federation rendezvous relay (docs/15 T2.3 path 2). Lets a NAT'd / firewalled peer that
+ * relay.ts — federation rendezvous relay (docs/design/15 T2.3 path 2). Lets a NAT'd / firewalled peer that
  * cannot be dialled inbound STILL serve its feed to the commons, by reusing the **poll-based rendezvous
  * seam** the remote-control box already uses (box.ts — the ECHOCAT pattern), NOT a persistent WebSocket.
  * That keeps it tri-runtime-clean (plain D1 + HTTP, no runtime-divergent socket infra):
@@ -11,7 +11,7 @@
  *   The requester collects the answer                                     → GET  /federation/relay/result/:id
  *
  * Trust is unchanged: a relayed answer is a signed feed page, verified exactly like a pulled one — the
- * relay is pure transport (docs/22 "transport convenience ≠ trust uplift"). The spoke answers `feed`
+ * relay is pure transport (docs/design/22 "transport convenience ≠ trust uplift"). The spoke answers `feed`
  * queries in v1 (restoring downstream re-serving of a firewalled peer's feed); `corroborate` is a
  * reserved kind (live cross-instance quorum is the deploy-gated extension). Gated by `FED_RELAY_SECRET`.
  */
