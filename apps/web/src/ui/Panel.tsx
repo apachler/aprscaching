@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Panel — the shared docked-drawer / bottom-sheet surface every overlay uses (ui-ux.md §3
  * "Drawer / side panel" + "Bottom sheet"). One header anatomy: title left, optional actions and a

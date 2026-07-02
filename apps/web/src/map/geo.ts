@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Maidenhead pair bases (lon and lat share them): field=18 letters, square=10 digits,
 // subsquare=24 letters, then extended digit/letter pairs for higher precision (F-7).
 const MH_BASES = [18, 10, 24, 10, 24];

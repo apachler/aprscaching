@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Operator data primitives (M8) — the trust-model made glanceable, in OUR palette (A=green /
  * B=blue / C=neutral; C is unverified, not an error). Token-driven, real semantics.

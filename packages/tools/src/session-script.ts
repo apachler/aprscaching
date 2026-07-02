@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * session-script.ts — a pure, tick-driven scripted-session engine (Graphic Packet GPAUTO / `.gpa`).
  *

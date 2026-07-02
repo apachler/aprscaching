@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom.ts — NET/ROM node logic (docs/25 P4): the NODES routing table (learn / best-route / quality
  * decay), reversible learned digi paths (the Graphic Packet autorouting feature — build a return path

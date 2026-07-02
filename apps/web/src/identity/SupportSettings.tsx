@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
 import { getSupport, getSupportPrefs, setSupportPrefs, supportUrl, type SupportInfo, type SupportPrefs } from "../api.js";
 import { Row, Switch } from "../ui/index.js";

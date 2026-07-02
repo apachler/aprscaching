@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * live.ts — M2 real-time layer. As positions arrive at /ingest we compute, per position, a live
  * envelope (a station delta + any geofence prompts for caches within radius) and dispatch it to the

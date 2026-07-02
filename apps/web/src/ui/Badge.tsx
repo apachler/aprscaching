@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Badge / TierBadge — the one compact status chip (ui-ux.md §3). Colours derive from tokens in
  * styles.css (color-mix over the tier/status bases); pass the class suffix as `kind`

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * mgrs.ts — WGS84 lat/lon → MGRS (Military Grid Reference System), for the map's grid/coord readout
  * (docs/11 M2). Standard UTM forward projection + 100 km square lettering. The rare UTM zone

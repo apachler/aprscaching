@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * rigctld.ts — a pure client for Hamlib's `rigctld` TCP text protocol (docs/21 Backend B). This is the
  * second CAT backend: where cat.ts (Backend A) drives a handful of rig families directly over Web Serial,

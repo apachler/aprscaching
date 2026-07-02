@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Capture the M4 community leaderboard + a profile card (desktop).
 import { chromium } from "playwright";
 import fs from "node:fs";

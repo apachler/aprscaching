@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- BBS forwarding + hierarchical routing (docs/25 P3). bbs_forward_rules is the forward table the
 -- ForwardRouter consumes: each row maps a hierarchical route token (or '*' catch-all) to a partner +
 -- transport. white_pages steers personal mail by mapping a callsign to its home BBS (FBB WP). The

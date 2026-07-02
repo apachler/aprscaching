@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Apply db/migrations/*.sql in order under bun:sqlite (Bun analogue of servers/node/migrate.ts). */
 import type { Database } from "bun:sqlite";
 import { readdirSync, readFileSync } from "node:fs";

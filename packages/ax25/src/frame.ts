@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * frame.ts — AX.25 v2.2 frame codec for CONNECTED mode (docs/25 P0). Unlike the APRS UI-only path in
  * @aprsweb/aprs, this handles every frame type and the full control field (N(S)/N(R)/P-F), so the

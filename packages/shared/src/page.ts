@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Keyset (cursor) pagination contract (docs/11). Linear, append-heavy lists (logbook, activity,
  * messages, alerts) page by an opaque cursor over (orderingKey, id) — never OFFSET, which is slow

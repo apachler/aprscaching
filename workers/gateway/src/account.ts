@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * account.ts — account data lifecycle: GDPR data export + erasure (right of access / erasure), and
  * account portability across federation peers. Sensitive actions are authorised by a signature from

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * readapi.ts — the public read API (docs/11 §6, ADR-4a). A versioned, documented, read-only surface
  * under /api/v1 that reuses the existing read handlers behind a rate-limit gate. Free + per-IP

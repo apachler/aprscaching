@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Capture the M5 workbench: live stations layer + packet decoder + station inspector.
 import { chromium } from "playwright";
 import fs from "node:fs";

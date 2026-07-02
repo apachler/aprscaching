@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * prefs.ts — account-level UI preferences (docs/13). A person's device-independent UI settings —
  * theme, locale/units, pinned workbench apps, basemap — follow the ACCOUNT so a second device

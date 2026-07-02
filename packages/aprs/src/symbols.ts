@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * symbols.ts — APRS symbol catalog (APRS101 §appendix "Symbol Tables").
  * A symbol is a (table, code) pair: table '/' = primary, '\' = alternate, or a digit/letter

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { ConnectedLink, type Ax25Address } from "@aprsweb/ax25";
 import { LoopbackChannel } from "../src/loopback.js";

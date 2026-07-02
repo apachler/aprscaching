@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0012_peer_trust.sql — F4/T1.1: peer trust tiers + quarantine (launch-gating).
 --
 -- Federation becomes peer-approved by default, open-pull opt-in. Each peer carries a trust level and

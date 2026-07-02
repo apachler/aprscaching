@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Full UI tour: drive the live app through a sane step-by-step journey at desktop / tablet / mobile,
 // screenshotting every page + dialog. Frames are numbered in journey order for the teaser video.
 // Desktop (≥1024) navigates via the NavRail (.rail); tablet/mobile via the top-bar nav / bottom TabBar.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * fbb-session.ts — the FBB ASCII forwarding session (docs/29 F4), reimplemented from the F6FBB protocol
  * spec. Two BBSes exchange personal/bulletin mail over a connected AX.25 link with **reverse forwarding**:

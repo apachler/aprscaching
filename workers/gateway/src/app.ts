@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Runtime-neutral request handling: routing, CORS, JSON helper, and the scheduled job.
  * Imported by index.ts (Cloudflare Worker) and by the portable Node server — so both runtimes

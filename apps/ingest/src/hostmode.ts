@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { parseTNC2 } from "@aprsweb/aprs";
 import { hostmodeCommand, parseHostmode, type HostmodeEvent } from "@aprsweb/packet";

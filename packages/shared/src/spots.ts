@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * spots.ts — the live activity-spots contract (docs/20 §1). A Spot is a normalized "who is on the air
  * right now, where" record aggregated read-only from POTA/SOTA/WWBOTA/GMA (and later DX-cluster/RBN/

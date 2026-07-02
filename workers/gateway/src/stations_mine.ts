@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * stations_mine.ts — the operator's own stations registry (docs/13 M5 + docs/17). A signed-in user
  * manages many stations: a home PWS, a mountain-top digipeater / igate / node — each with its own

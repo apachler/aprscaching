@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * paging.ts — keyset (cursor) pagination for linear list endpoints (docs/11).
  *

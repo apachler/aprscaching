@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { typeMeta } from "../cacheTypes.js";
 import { Panel, Badge } from "../ui/index.js";
 import type { MapCache } from "../api.js";

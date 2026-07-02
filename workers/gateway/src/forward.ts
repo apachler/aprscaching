@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing (docs/25 P3). Loads the forward table
  * into the pure ForwardRouter (@aprsweb/packet), resolves a destination to a partner, keeps the FBB

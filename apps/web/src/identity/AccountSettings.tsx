@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 import { startAprsVerify, confirmAprsVerify, changeCallsign, addCallsign, listCallsigns, type HeldCallsign } from "../api.js";
 import { Group, Badge, Icon, Advanced } from "../ui/index.js";

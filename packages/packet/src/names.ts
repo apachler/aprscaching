@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * names.ts — the NAMES.GP station-type registry (docs/27 B.2). Graphic Packet shipped a user-editable
  * table that tagged heard callsigns by type (B> BBS, N> node, D> DX-cluster, …) and colourised them in

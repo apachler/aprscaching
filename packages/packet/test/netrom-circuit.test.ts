@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { NetromCircuit, NR_MAX_INFO, type NrTpPacket } from "../src/netrom-circuit.js";
 

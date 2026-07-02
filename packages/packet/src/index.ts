@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export * from "./names.js";
 export * from "./ansi.js";
 export * from "./ansi-export.js";

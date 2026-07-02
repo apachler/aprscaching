@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Rotate an instance's federation signing key (T4.1). Given the CURRENT FED_PRIVATE_KEY, mint a NEW
 // signing key plus the continuity artifacts so peers keep verifying across the rotation:
 //   • FED_PRIVATE_KEY — the NEW signing key (set this; retire the old one)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * NavRail — the operator nav rail shown beside the map at ≥1024px (the denser workbench context).
  * Real <nav>/<button> with the inline-SVG Icon set. Hidden below the breakpoint (CSS). Core

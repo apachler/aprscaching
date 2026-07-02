@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * encode.ts — minimal APRS info-string encoders for ORIGINATING traffic (APRS101). The decoder is
  * the bulk of this package; these let a licensed operator beacon a position or send a message

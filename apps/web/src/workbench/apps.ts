@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Workbench app registry — the launchable "apps" the workbench drawer offers. Each has a dedicated
  * symbol so it can be launched from the workbench AND pinned to the left nav rail. Some apps open a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { activeFedKeys, verifyRotationRecord, stableStringify, type FedPublicKey } from "../src/federation.js";
 

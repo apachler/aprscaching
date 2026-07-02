@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * fbb-scheduler.ts — the FBB forwarding scheduler brain (docs/29 F4), pure + I/O-free. On each tick it
  * asks the gateway (`ForwardApi`) for partners, picks the due ones (`partnerDue`), and per partner runs an

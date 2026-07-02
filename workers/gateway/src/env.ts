@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { SqlDatabase, ObjectStore, MediaStore, RoomNamespace } from "./runtime.js";
 
 /** Bindings the gateway needs, in runtime-neutral terms (see runtime.ts). */

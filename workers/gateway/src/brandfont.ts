@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * brandfont.ts — Fredoka (weight 600), the wordmark font, as a base64 woff2 data URI.
  * Embedded so the badge SVG renders in the brand font even as an <img> (where external

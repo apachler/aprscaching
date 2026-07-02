@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * serialKiss.ts — a Web Serial KISS transport for connected-mode packet (docs/25 P1). Bridges the
  * serial byte stream ⇄ raw AX.25 frames: incoming bytes are de-KISS'd + decoded into typed frames for

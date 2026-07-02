@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Apply db/migrations/*.sql in order (the Node analogue of `wrangler d1 migrations apply`). */
 import fs from "node:fs";
 import path from "node:path";

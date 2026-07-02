@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Classify APRS-IS entry from the q-construct in the path.
  *  RF-gated  (qAR/qAr/qAo/qAO) => "rf"      (heard on air, gated)

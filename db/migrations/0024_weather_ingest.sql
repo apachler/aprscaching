@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Weather user-origination (docs/17 W1): a PWS pushes directly to the platform, stored in
 -- sensor_readings under the user's -13 weather SSID. Extend the reading to the fuller APRS field set
 -- (rain_mm stays = last-hour for back-compat) and add per-user push keys.

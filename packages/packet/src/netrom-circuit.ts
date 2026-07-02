@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom-circuit.ts — the NET/ROM L4 transport circuit state machine (docs/29 F2), from the open
  * NET/ROM protocol spec. A "conventional sliding-window protocol" for end-to-end flow/error control

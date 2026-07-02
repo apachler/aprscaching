@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const R = 6371000;
   const dLat = ((bLat - aLat) * Math.PI) / 180;

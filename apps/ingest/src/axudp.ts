@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import dgram from "node:dgram";
 import { decodeAx25 } from "@aprsweb/aprs";
 import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprsweb/ax25";

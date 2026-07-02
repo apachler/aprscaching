@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { decodeUltimeter, type UltimeterReading } from "@aprsweb/aprs";
 import { WebSerialWeather, webSerialSupported } from "../rf/serialWeather.js";

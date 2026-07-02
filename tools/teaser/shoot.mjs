@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Crawl the running app and capture the page states (desktop + mobile).
 import { chromium } from "playwright";
 import fs from "node:fs";

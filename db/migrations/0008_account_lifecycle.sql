@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Account data lifecycle: a small ledger of erasures and migrations. Used to honour GDPR
 -- right-to-erasure (tombstone) and account portability across federation peers, and to drive
 -- redirects ("this callsign moved to <instance>") + downstream mirror purges.

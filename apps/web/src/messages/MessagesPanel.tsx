@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { getMessages } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Ico } from "../ui/index.js";

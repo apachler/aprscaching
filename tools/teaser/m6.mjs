@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Capture the M6 workbench Network section: transports + TAK/CoT feed + messages.
 import { chromium } from "playwright";
 import fs from "node:fs";

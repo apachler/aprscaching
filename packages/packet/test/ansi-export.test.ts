@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { toAnsi, cp437Bytes, parseAnsi, stripAnsi } from "../src/index.js";
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * forward.ts — FBB hierarchical addressing + forward routing + the proposal/accept protocol (docs/25
  * P3). Pure + unit-tested: the parser turns an FBB H-address ("TO @ BBS.#REGION.STATE.COUNTRY.CONT.WW")

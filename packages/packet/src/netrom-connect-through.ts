@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom-connect-through.ts — NET/ROM connect-through (docs/29 F2): when a user connected to our node
  * types `C <dest>`, resolve the best route and bridge the inbound user link to an onward L4 circuit, so

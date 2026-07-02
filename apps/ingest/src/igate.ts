@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { parseTNC2, shouldRxIgate, rxIgateLine, txIgateTarget } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";

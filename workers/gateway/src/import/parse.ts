@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Format parsers for the importers (M3). Pure + unit-tested with fixtures (live fetch is in sources.ts). */
 
 // ---------- CSV (RFC-4180-ish: quoted fields, embedded commas/newlines, "" escapes) ----------

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState, type CSSProperties } from "react";
 import { toggleFavorite, rateCache, getCacheLogs, cacheShareUrl, cacheQrUrl, type CacheDetail, type CacheRating, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * keys.ts — F0: per-callsign device keys. A logger holds an Ed25519 keypair on their device and
  * registers the public key against their callsign. Find logs are then signed by that key, so the

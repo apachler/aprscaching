@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0016_account_moves.sql — F6/T3.2: account-move as a signed federation record (pairs with ADR-2).
 --
 -- When an account moves instances (proven by the device-key migration assertion at the target), the

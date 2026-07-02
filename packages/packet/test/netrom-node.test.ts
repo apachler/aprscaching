@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { NetromNode } from "../src/netrom-node.js";
 import { encodeNodesBroadcast, decodeNodesBroadcast, combineQuality, type NodesDest } from "../src/netrom-wire.js";

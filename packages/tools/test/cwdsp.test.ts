@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { goertzel, cwKeyEvents, morseFromTiming, decodeMorse, encodeMorse } from "../src/index.js";
 

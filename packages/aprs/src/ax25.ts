@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * ax25.ts — AX.25 UI-frame + KISS framing (APRS over RF/TNC). Pure and reversible so the ingest
  * box can decode KISS from a TNC and (later) encode for TX. Reimplemented from the AX.25 v2.2 and

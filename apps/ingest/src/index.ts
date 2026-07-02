@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
 import { CotListener } from "./cotlisten.js";

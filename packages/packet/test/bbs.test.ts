@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { BbsSession, type MessageStore, type BbsMsgFull } from "../src/index.js";
 

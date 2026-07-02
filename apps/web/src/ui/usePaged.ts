@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 
 export interface PageResult<T> { items: T[]; nextCursor: string | null; hasMore: boolean }

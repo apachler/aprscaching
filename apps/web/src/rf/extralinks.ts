@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   decodeAx25, decodeAprs, deframeMeshtastic, parseMeshtasticProto, type ParsedFrame, type AprsData, type MeshFix,
 } from "@aprsweb/aprs";

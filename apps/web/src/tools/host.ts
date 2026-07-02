@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * host.ts (web) — the ONE shared ToolHost for the whole app. Tools are enabled once (in the Tools app)
  * and their contributions then reach every surface that consults the host — the packet terminal, BBS,

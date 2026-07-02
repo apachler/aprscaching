@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * cat.ts — CAT (Computer-Aided Transceiver) command encoders for browser-direct rig control over
  * Web Serial (docs/16 H6 / docs/21 Backend A). Three protocol families cover most popular radios:

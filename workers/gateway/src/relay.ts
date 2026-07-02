@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * relay.ts — federation rendezvous relay (docs/15 T2.3 path 2). Lets a NAT'd / firewalled peer that
  * cannot be dialled inbound STILL serve its feed to the commons, by reusing the **poll-based rendezvous

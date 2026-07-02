@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * afsk.ts — a Bell-202 1200-baud AFSK modem (docs/16 H4, soundcard / no-TNC mode). The modulator
  * turns an AX.25 frame into PCM (also the basis for gated AFSK TX); the demodulator turns PCM back

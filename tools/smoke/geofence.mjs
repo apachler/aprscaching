@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Real-time geofencing smoke (M2): subscribe over WebSocket, ingest a position near a cache, and
 // assert a "near_cache" prompt arrives — and that prompts are addressed to the right callsign.
 // Uses Node's global WebSocket (Node 22+). Works against the Worker (DO) or Node (rooms).

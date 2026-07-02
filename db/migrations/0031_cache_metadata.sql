@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Cache metadata from the original APRSCaching concept (docs/26 F-8): a car-accessible "Drive-In"
 -- flag, a country, and free-form tags. All additive/optional; tags are stored comma-joined (the
 -- gateway dedupes + lowercases). Country is owner-set (a coordinate-derived default can follow once a

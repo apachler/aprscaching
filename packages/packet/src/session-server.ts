@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * session-server.ts — the connected-mode session server (docs/29 F1): answer inbound AX.25 connects to
  * our service SSIDs (BBS, NET/ROM node) and bind each to a fresh line app (`BbsSession`/`NodeSession`) via

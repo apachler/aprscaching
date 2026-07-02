@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * A D1-compatible adapter over better-sqlite3. Presents the same `SqlDatabase` surface the
  * gateway handlers use (prepare → bind → run/first/all, plus batch), so the *exact same*

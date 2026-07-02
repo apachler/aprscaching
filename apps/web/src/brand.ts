@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** APRScaching brand palette (from the original 2016 identity, colors.txt). */
 export const BRAND = {
   blue: "#2D8BAB",   // primary / chrome

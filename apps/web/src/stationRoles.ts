@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { StationRole } from "@aprsweb/shared";
 import { BRAND } from "./brand.js";
 

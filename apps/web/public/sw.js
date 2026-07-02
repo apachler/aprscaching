@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /* aprscaching service worker — Web Push (ADR-4b). Push-only (no fetch/caching): it shows a
    notification on push and focuses the app on click. Pushes are payload-less by default, so the
    body is generic; the detail lives in the in-app watchlist + the email digest. */

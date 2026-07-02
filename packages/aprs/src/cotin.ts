@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * cotin.ts — inbound Cursor-on-Target: parse a TAK <event> XML into a position fix so CoT senders
  * (ATAK/WinTAK) can be ingested alongside APRS. Pure, regex-based (no XML dep); the gateway's

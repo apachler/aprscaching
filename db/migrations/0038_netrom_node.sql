@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- NET/ROM node (docs/25 P4): the NODES routing table the node advertises + consumes, and a per-port
 -- MHeard list (recently-heard stations, the classic node `MH` command). netrom_nodes is keyed by
 -- destination (best route per node); node_mheard counts heard calls per radio port. The node CLI +

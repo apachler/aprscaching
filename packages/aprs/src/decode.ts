@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * decode.ts — top-level APRS payload decoder (APRS101). Dispatches on the data-type identifier
  * (first payload byte) to produce a typed `AprsData`. Builds on parsePosition (uncompressed),

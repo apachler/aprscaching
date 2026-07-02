@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Per-callsign device key (F0): an Ed25519 keypair held in the browser. The public key is
 // registered to the callsign; finds are signed with the private key so authorship is portable and
 // verifiable network-wide. Best-effort: on a browser without Ed25519 WebCrypto, signing is skipped

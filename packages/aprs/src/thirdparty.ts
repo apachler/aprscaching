@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * thirdparty.ts — APRS-IS passcode + third-party (path-A) injection helpers (docs/19). Pure; runs in
  * Worker/Node/browser. The passcode is NOT authorization (public hash) — see docs/19; it's here for

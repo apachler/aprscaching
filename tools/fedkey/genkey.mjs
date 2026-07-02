@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Generate an Ed25519 federation signing key (WebCrypto; same algorithm the gateway uses).
 // The key is emitted as base64(JWK) — the JWK carries both the private (d) and public (x) parts,
 // so the instance can sign and publish its public key from one value.

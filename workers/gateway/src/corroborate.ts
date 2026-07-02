@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * corroborate.ts — F3: cross-instance presence verification (the network effect).
  *

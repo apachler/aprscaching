@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { handleApiV1 } from "../src/readapi.js";
 import type { Env } from "../src/env.js";

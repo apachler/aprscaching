@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * macros.ts — Graphic-Packet / LinPac-style macro variable expansion (docs/28 C). One shared expander
  * so every surface (packet terminal, BBS, tools console) and every command Tool substitutes the same

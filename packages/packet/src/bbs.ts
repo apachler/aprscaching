@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * bbs.ts — the FBB/MBL-style connected-mode BBS command interpreter (docs/25 P2). This is the pure
  * "brain" a connected AX.25 session talks to: it takes one input line at a time and returns the lines

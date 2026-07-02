@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 export * from "./capabilities.js";
 export * from "./surfaces.js";
 export * from "./panel.js";

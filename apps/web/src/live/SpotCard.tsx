@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Spot } from "../api.js";
 import { useFmt } from "../format.js";
 import { Badge, useToast, Ico } from "../ui/index.js";

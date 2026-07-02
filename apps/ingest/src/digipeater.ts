@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { digipeat, dedupeKey } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
 import { digipeatAx25, decodeFrame, addrStr, parseAddr, frameContentKey, ViscousDigi, type Ax25Address } from "@aprsweb/ax25";

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { chromium } from "playwright";
 const EXE = process.env.PW_CHROMIUM;
 const V = process.env.VIEW === "tablet" ? {w:834,h:1112,dsf:1} : process.env.VIEW==="mobile"?{w:390,h:844,dsf:2}:{w:1440,h:900,dsf:1};

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Illustrate the mheard-tool ↔ terminal-Monitor overlap: capture channel-0 Monitor and the mheard panel.
 import { chromium } from "playwright";
 import fs from "node:fs";

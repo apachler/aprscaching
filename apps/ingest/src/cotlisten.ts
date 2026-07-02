@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import dgram from "node:dgram";
 import { parseCot, splitCotEvents, formatPosition } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";

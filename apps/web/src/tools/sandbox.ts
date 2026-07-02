@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * sandbox.ts — the Web Worker sandbox for IMPORTED (third-party) Tools (docs/27 B.3 / docs/28 §6). Built-in
  * tools run in-process (trusted); an imported tool's script runs in a Worker with the dangerous globals

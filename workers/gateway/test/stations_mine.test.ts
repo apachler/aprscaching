@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { parseRoles, validStationCallsign } from "../src/stations_mine.js";
 

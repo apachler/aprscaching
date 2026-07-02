@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * maplayer.ts — the declarative map-layer a `map`-capability Tool contributes (docs/28 §6 — the last
  * capability that had no host surface). A tool NEVER touches MapLibre; it emits a typed list of points and

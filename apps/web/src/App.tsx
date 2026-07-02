@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import "./styles.css";
 import { ToastProvider, tourSeen } from "./ui/index.js";

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * psk31.ts — a pure PSK31 varicode codec (docs/26 F-5). BPSK31 sends each character as a varicode bit
  * pattern (every code starts + ends with '1' and contains no "00"), and characters are separated by

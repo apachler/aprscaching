@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Grouped, collapsible config containers — the ui-ux.md §2 "anti-big-fat-list" architecture.
  * A Group can be toggle-gated (master switch): when off, the body collapses to a one-line reason

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Capture the locale & units settings panel (imperial preview).
 import { chromium } from "playwright";
 import fs from "node:fs";

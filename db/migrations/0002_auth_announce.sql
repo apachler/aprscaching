@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0002_auth_announce.sql
 -- Auth layer (passkey identity + async callsign-control badge) and the APRS-IS announce outbox.
 

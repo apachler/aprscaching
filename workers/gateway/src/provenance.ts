@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * provenance.ts — derive a packet's {@link Provenance} from how it reached us (docs/22).
  *

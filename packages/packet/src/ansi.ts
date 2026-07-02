@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * ansi.ts — a small, safe ANSI-subset parser (docs/27 B.2). F6FBB/BPQ BBS menus came alive with ANSI
  * colour + box-drawing; the terminal pane must render that. We parse SGR colour/bold into spans and

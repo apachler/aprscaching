@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { bandForHz, freqToHz, gridToLatLon, dedupeSpots, filterSpots, type Spot } from "@aprsweb/shared";
 import { normalizePota, normalizeGma, normalizeSota, normalizePsk, normalizeDxCluster, normalizeRbn, handleSpots, _resetSpotsCache, _resetSotaSummits } from "../src/spots.js";

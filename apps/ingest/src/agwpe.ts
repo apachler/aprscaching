@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { decodeAx25, encodeAx25 } from "@aprsweb/aprs";
 import { parseAgwpe, encodeAgwpe } from "@aprsweb/packet";

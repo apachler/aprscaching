@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { TerminalSession, parseAnsi, toAnsi, cp437Bytes, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport, type AnsiLine } from "@aprsweb/packet";
 import { expand as expandMacros, withNow, ScriptRunner, type ScriptSession, type SessionStep } from "@aprsweb/tools";

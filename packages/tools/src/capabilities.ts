@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * capabilities.ts — the Tool permission model (docs/27 B.3). A Tool declares the capabilities it needs
  * in its manifest; the host grants them (the user approves imported tools). A Tool can ONLY reach a

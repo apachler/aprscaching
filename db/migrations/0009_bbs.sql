@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- BBS store-and-forward message base (Stage 1: connectionless / APRS-message delivery).
 -- Personal mail is held until the addressee is heard, then forwarded as an APRS message with
 -- ack tracking + retry. Bulletins are retrievable and deduped by BID across forwarding. The

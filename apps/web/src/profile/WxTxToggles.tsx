@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { setWxTx } from "../api.js";
 import { Switch } from "../ui/Switch.js";

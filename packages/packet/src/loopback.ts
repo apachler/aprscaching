@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * loopback.ts — an in-memory simulated radio channel for exercising the connected-mode packet stack
  * (BBS / NET/ROM node / forwarding) with NO hardware (docs/29). The sim analogue of a real KISS link:

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * cot.ts — M6 interop: a Cursor-on-Target (CoT) bridge so TAK clients (ATAK/WinTAK/iTAK) can
  * consume our live APRS station registry. CoT is an open MITRE schema; we map each station to an

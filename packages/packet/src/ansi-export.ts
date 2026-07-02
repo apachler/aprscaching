@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * ansi-export.ts — the inverse of `ansi.ts` (docs/24 T3): serialise styled terminal lines back into a
  * classic **`.ans`** artwork stream (CP437 bytes + ANSI SGR colour). Used to export the packet monitor

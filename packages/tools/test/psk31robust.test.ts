@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { encodeVaricode, decodeVaricode, psk31DemodRobust } from "../src/index.js";
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * admin.ts — instance-operator (sysop) authorization. Instance-wide configuration — federation peers +
  * trust, FBB forwarding partners/rules, NET/ROM node routes — belongs to the ham who DEPLOYED this

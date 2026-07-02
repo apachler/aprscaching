@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * aprscaching bun-gateway — the Bun-runtime self-host / single-binary core (Topology 0).
  *

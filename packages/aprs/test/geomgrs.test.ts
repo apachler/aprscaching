@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { initialBearing, destinationPoint, haversineMeters, toMgrs } from "../src/index.js";
 

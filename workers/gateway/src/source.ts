@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * source.ts — AGPL §13 "Source" link (ADR-3, docs/14). A network user of the running instance can
  * reach the exact source it is running. Runtime-neutral (Worker / Node / Bun); the host resolves the

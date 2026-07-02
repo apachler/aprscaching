@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Operated-stations registry (docs/13 M5 + docs/17). An account owns many stations — a home PWS, a
 -- mountain-top digipeater / igate / node — each with its own callsign+SSID, an EXPLICIT location
 -- (not just the operator's home grid), a description and roles. Weather is one capability among

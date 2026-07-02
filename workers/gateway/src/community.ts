@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * community.ts — M4: profiles, leaderboards, badges, favorites/watches, activity feed, cache health.
  * Built on the existing tables (cache_logs, caches, achievements, favorites, watches, accounts).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * forward-schedule.ts — the pure scheduling decision for the FBB forwarding scheduler (docs/29 F4).
  * Given a partner's config (poll interval + optional UTC time-bands) and when it last ran, decide

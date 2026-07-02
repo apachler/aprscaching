@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Runtime-neutral interfaces. The gateway's business logic is written against these so it runs
  * unchanged on Cloudflare (D1 / Durable Objects / R2) and on the portable Node/SQLite server.

@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Weather TX (docs/17 W2 APRS WX beacon + W3 CWOP relay). Per-PWS opt-in flags (off by default,
 -- gated on a control-verified callsign) and a beacon throttle, plus an outbox target so the ingest
 -- box routes a queued WX report to standard APRS-IS (W2) or to CWOP/NOAA (W3).

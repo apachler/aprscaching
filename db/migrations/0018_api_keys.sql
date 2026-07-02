@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Public read API (docs/11 §6, ADR-4a): free, per-IP rate-limited; free api_keys raise the limit
 -- (recognition model — keys are never paywalled). Read-only; keys carry no scopes beyond the
 -- public read surface today.

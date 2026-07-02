@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * link-app.ts — the connected-mode session-server core (docs/29 F1): bind an AX.25 connected-mode link
  * (server side) to a line-oriented packet application (the BBS or the NET/ROM node CLI). On connect it

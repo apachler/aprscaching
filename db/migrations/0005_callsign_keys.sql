@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0005: per-callsign signing (F0). Device keys bound to callsigns; finds carry the logger's signature.
 
 CREATE TABLE callsign_keys (

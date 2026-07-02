@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom-session.ts — the NET/ROM L4 inbound session server (docs/29 F2). The AX.25 `SessionServer` answers
  * connects that arrive as a raw AX.25 link; this answers connects that arrive as a NET/ROM *circuit*

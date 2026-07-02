@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * sitemap.ts — machine- and human-readable map of the app, generated from the shared SURFACES
  * manifest (packages/shared). One source of truth feeds the standalone /sitemap page, crawlers, and

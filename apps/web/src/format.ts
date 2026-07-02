@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * format.ts — locale & units. The server speaks SI (metres, knots, °C, unix seconds); the client
  * presents it in the user's locale + unit system. Settings default to the browser locale/timezone

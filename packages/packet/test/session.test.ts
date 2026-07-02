@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { TerminalSession, type Transport } from "../src/index.js";
 import type { Ax25Frame } from "@aprsweb/ax25";

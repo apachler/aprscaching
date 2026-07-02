@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * forwarder.ts — the ingest adapters for the FBB forwarding scheduler (docs/29 F4). The scheduler brain
  * (`BbsForwarder`) is pure and lives in `@aprsweb/packet`; here we supply its two I/O dependencies: a

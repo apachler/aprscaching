@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * surfaces.ts — the canonical map of the app's pages/tools (the single source of truth for the
  * gateway's standalone `/sitemap` page, `/sitemap.xml` + `/api/sitemap`, and any dynamic tooling

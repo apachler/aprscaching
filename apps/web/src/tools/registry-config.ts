@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * registry-config.ts — where the Tools console finds the signed tool registry + the PINNED authority key it
  * verifies against (docs/28 §7). The registry is authority-signed; the app trusts ONLY this key, so a

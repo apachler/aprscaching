@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Runtime-agnostic conformance smoke test for the aprscaching gateway.
 // Runs the same end-to-end flow against ANY base URL (Cloudflare Worker or Node/SQLite),
 // so CI can prove the two runtimes behave identically. Exits non-zero on the first failure.

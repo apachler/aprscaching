@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { searchSuggest, type SearchHitCache, type SearchHitStation } from "../api.js";
 import { Icon } from "../ui/index.js";

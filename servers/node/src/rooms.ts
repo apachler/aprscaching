@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * In-memory region rooms — the Node analogue of the RegionRoom Durable Object. No hibernation
  * (a self-host process is always up), but the same subscribe/broadcast fan-out so the live layer

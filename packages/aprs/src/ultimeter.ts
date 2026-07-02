@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * ultimeter.ts — decoder for Peet Bros Ultimeter weather-station serial output (docs/17 W4, the
  * browser-direct PWS over Web Serial). Two ASCII packet formats:

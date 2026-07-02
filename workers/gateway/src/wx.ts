@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * wx.ts — weather user-origination (docs/17 W1). A personal weather station pushes directly to the
  * platform; the reading is stored in sensor_readings under the user's <call>-13 weather SSID. We

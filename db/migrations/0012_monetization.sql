@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Supporter recognition + transparency ledger (docs/12 M4). RECOGNITION ONLY — never a feature gate.
 -- (Migration number pinned to 0012 per docs/14; lands after 0011_account_callsigns, fills the
 --  reserved gap. The migrator applies by filename, so this is safe to add after later migrations.)

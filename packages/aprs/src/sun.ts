@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * sun.ts — solar geometry for the day/night terminator overlay (docs/11 M2). Low-precision but
  * map-accurate: the subsolar point (where the sun is overhead) and the terminator latitude at a

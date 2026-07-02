@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * panel.ts — the declarative panel model a `panel`-capability Tool contributes (docs/28). A tool NEVER
  * touches the DOM; it emits a typed node tree and the host renders it with real semantic elements +

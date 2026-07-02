@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * DemoHarness — a hardware-free design surface for the packet/BBS shells. Reached at `/?demo=packet`,
  * `/?demo=bbs`, or `/?demo=1` (both). Renders the REAL components wired to the in-process simulator

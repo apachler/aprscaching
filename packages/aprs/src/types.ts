@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import type { SymbolInfo } from "./symbols.js";
 
 export interface ParsedFrame {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * stream.ts — a pure, incremental decoder for a LIVE audio stream (docs/28 §6). The batch decoders
  * (`psk31DemodRobust`, `cwKeyEvents`) take a whole PCM buffer; a live mic hands you the signal in small

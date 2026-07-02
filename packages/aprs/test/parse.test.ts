@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { parseTNC2, classifyQ, parsePosition, haversineMeters } from "../src/index.js";
 

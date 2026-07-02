@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * support.ts — supporter recognition + the public transparency ledger (docs/12 M4).
  *

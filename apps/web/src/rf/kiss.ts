@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * kiss.ts — browser-direct RF ingest over Web Serial (docs/16 H1, ingest-locality.md).
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * offlineArea.ts — "download this area" for off-grid caching (docs/16 C). Persists the last-fetched map
  * caches so Nearby / the map / cache detail / Log-find all render with **no network**; the logged find

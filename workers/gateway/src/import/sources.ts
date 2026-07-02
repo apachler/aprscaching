@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Import source adapters (M3). Each loads a third-party dataset and normalizes it to ImportedCache.
  * Bulk/keyless ham programs (SOTA/POTA/WWFF/WWBOTA), the keyed OpenCaching OKAPI, Geocaching

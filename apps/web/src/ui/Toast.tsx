@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Toast — transient, non-blocking confirmation (ui-ux.md §3, §7). A provider holds the queue and
  * exposes useToast(); the live region is announced to assistive tech. The entrance animates

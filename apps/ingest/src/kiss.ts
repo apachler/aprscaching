@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { kissFrames, kissWrap, decodeAx25, encodeAx25 } from "@aprsweb/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprsweb/ax25";

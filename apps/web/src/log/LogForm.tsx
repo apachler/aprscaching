@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "../api.js";
 import { signAuthorship } from "../crypto.js";

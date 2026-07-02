@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * meshtastic.ts — parse a Meshtastic MQTT JSON envelope (the gateway's "JSON output" mode) into a
  * position fix. Pure; the connector (apps/ingest) handles the MQTT transport. Protobuf/BLE/serial

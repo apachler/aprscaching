@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { modulateAfsk1200, Afsk1200Rx, crc16X25, encodeAx25, decodeAx25, decodeAprs } from "../src/index.js";
 

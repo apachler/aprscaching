@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * digipeat.ts — APRS "New n-N paradigm" digipeating (pure). Given a heard frame and our callsign +
  * served aliases (WIDE1, WIDE2, …), decide whether/how to repeat it: consume our own callsign, or

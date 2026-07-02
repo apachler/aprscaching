@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * digipeat.ts — connected-mode AX.25 digipeating (docs/29 F3). Unlike the APRS UI n-N digipeater
  * (@aprsweb/aprs), this repeats ANY frame type (SABM/I/RR/…) so a NET/ROM crosslink or an FBB forward can

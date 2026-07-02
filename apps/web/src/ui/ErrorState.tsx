@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * ErrorState — a fetch/action failed. Distinct from EmptyState (ui-ux.md §4): it says something went
  * wrong and offers a retry, so an outage/500 is never misread as "nothing here". Muted-error body text

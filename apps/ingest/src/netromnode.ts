@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * netromnode.ts — the operator-local NET/ROM node RF wiring (docs/29 F2). Drives the pure `NetromNode`
  * engine over a KISS TNC: periodically transmits our NODES broadcast (UI → "NODES", PID 0xCF), consumes

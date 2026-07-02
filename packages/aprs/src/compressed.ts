@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * compressed.ts — APRS base-91 compressed position (APRS101 §9 "Compressed Position Report Format").
  * Layout (13 bytes): /YYYYXXXX$csT

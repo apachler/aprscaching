@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // CI guard (docs Stage 3 / Cogmind): keep colour emoji out of rendered UI so the ASCII Cogmind theme
 // stays emoji-free. Emoji are legal ONLY where they get swapped for a CP437/ASCII glyph at render:
 //   • inside an <Ico e="…" c="…" /> element (Modern emoji → Cogmind ASCII),

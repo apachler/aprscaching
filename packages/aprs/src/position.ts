@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /** Minimal uncompressed APRS position parser (lat/lon). MIC-E/compressed/weather = M1+. */
 export interface PositionFix { lat: number; lon: number; symbol?: string }
 const POS_RE = /(\d{2})(\d{2}\.\d{2})([NS]).(\d{3})(\d{2}\.\d{2})([EW])(.)/;

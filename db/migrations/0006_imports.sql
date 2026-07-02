@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0006: import / heritage (M3). Imported caches carry a source attribution + deep link, and
 -- re-importing updates in place (dedup on source + external_id).
 

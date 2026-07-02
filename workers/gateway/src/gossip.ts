@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * gossip.ts — F5/T2.1: gossip ping (push-to-pull). A tiny notify that turns the 5-minute poll into
  * near-real-time mirroring without any new always-on connection (stays inside the cost rules).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * workbench.ts — M5 platform depth: a live APRS station registry + a packet inspector.
  * Stations and weather are enriched at ingest time (see ingest.ts) using the @aprsweb/aprs

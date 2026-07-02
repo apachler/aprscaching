@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Import engine (M3): upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
 import { json } from "../app.js";

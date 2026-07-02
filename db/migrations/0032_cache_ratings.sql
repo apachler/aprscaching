@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Owner-gated cache rating (docs/26 F-6): a 1–5 star rating, distinct from favourites. The owner
 -- chooses WHO may rate via caches.rating_policy: 'finders' (default — only those who logged a verified
 -- find), 'all' (any signed-in callsign), or 'off' (disabled). One rating per callsign per cache (an

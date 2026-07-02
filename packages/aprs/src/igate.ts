@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * igate.ts — APRS IGate decision logic (pure). An IGate bridges RF and APRS-IS both ways:
  *   RX-IGate (RF -> IS): relay frames heard on RF up to the internet, with a qAR construct.

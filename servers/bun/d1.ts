@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * D1-compatible adapter over Bun's built-in `bun:sqlite` — the Bun-runtime analogue of
  * `servers/node/src/d1.ts` (which wraps better-sqlite3). Presents the exact `SqlDatabase` surface the

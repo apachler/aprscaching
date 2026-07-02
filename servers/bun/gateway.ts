@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Re-export of the runtime-neutral gateway surface, resolved from this package's node_modules
  * (servers/bun depends on @aprsweb/gateway). Lets the desktop launcher (deploy/desktop/, which has

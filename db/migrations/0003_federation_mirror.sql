@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0003: federation mirror (F2) — peers we pull from, and the records we mirror locally.
 -- Mirrored rows are display-only: never treated as our own, never re-published in our feeds.
 

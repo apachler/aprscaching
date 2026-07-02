@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * sevenplus.ts — a tolerant 7PLUS parser/reassembler (docs/28 tool 8). 7PLUS was the packet-BBS way to
  * shuttle binary files as 7-bit text split across numbered message parts. This decoder recognises the

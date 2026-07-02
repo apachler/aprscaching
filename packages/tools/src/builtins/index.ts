@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * builtins/index.ts — the curated built-in Tools (docs/27 B.3). Each is a plain module implementing the
  * Tool interface (no sandbox needed — they're first-party + trusted), demonstrating every extension

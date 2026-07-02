@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * box.ts — remote control of an operator's own ingest box (docs/20 §2, R1). The web app enqueues
  * commands; the box pulls them over its existing outbound connection (no inbound ports), executes,

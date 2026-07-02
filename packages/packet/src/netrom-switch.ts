@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom-switch.ts — the NET/ROM node's L3 switch role (docs/29 F2): decide what to do with an inbound
  * network-layer packet. A real node doesn't just originate/terminate circuits — it *transits* other

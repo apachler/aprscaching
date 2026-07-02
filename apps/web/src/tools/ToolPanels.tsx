@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { CSSProperties } from "react";
 import type { ToolHost, PanelNode, Surface } from "@aprsweb/tools";
 

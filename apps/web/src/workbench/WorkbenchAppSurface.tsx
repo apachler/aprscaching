@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type maplibregl from "maplibre-gl";
 import { Panel, Ico } from "../ui/index.js";
 import { appById, type WorkbenchAppId } from "./apps.js";

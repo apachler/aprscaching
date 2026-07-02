@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Raw per-station packet history for the workbench (docs/26 Stage 0.2). A short, hard-TTL ring of the
 -- raw TNC2 frames we've heard, so an operator can inspect a station's recent traffic verbatim. This is
 -- a workbench-only diagnostic, NOT a long-term log — pruned aggressively by the scheduled job (cost

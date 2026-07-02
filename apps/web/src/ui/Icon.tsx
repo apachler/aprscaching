@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Icon — inline-SVG glyphs (no Google Material Symbols / web-font dependency: perf + offline,
  * per css.md). 24-unit stroke icons coloured by `currentColor`; size in px. Grow the map as

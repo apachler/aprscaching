@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * exports.ts — public read-API exports (docs/11 §6, M3): caches as GPX (GPS devices) / KML (Earth),
  * and a callsign's finds as ADIF (standard logbooks — Log4OM/N1MM/DXLab). Pure builders + read-only

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Button — a real <button> with a token-styled variant (ui-ux.md §3). Variants map to the CSS in
  * styles.css; "secondary" is the unstyled default. Use this so every button shares one component.

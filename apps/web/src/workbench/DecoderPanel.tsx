@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { decodePacket, type DecodedPacket } from "../api.js";
 import { Badge } from "../ui/index.js";

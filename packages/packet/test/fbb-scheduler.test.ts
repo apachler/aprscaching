@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { BbsForwarder, type ForwardApi, type ForwardLink, type GwPartner } from "../src/fbb-scheduler.js";
 import { FbbForwarder } from "../src/fbb-forward.js";

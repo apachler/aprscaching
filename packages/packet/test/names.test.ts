@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { StationRegistry, classifyStation, baseCall, TYPE_TAG } from "../src/index.js";
 

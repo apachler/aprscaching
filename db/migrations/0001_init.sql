@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- aprscaching.com — D1 schema (SQLite)
 -- Greenfield. APRScaching is the core; positions power presence verification.
 

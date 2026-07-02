@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * manifest.ts — a Tool's signed descriptor (`tool.json`). Kept dependency-free (no zod) so the package
  * stays MIT-clean + embeddable. A built-in tool has no `entry`; an imported tool points `entry` at a

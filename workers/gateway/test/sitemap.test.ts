@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots, surfaceUrl } from "../src/sitemap.js";
 import { SURFACES, FEEDS } from "@aprsweb/shared";

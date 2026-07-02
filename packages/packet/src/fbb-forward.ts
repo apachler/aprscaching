@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * fbb-forward.ts — a byte-stream driver around FbbSession (docs/29 F4). The FbbSession is line-oriented
  * (one CR/LF-terminated command per feed); a real connected-mode AX.25 link (or an AXUDP tunnel) carries

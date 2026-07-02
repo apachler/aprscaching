@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- M9 identity & auth: durable accounts (surrogate id) + email magic-link recovery.
 -- Additive only — nothing here gates logging yet (that lands with the web sign-in UI). The
 -- surrogate account_id makes the callsign a mutable, uniquely-held attribute (rename + re-verify).

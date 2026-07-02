@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Seed a realistic demo dataset (Graz/Styria) for the teaser crawl.
 // Idempotent-ish: skips caches whose title already exists.
 const API = process.env.API_BASE ?? "http://127.0.0.1:8787";

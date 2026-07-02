@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Push + email-digest delivery (ADR-4b, docs/11 M4). Web-push subscriptions (the enhancement) and
 -- the email digest of unseen watch alerts (the MANDATORY fallback). In-app alerts already exist (W1).
 CREATE TABLE IF NOT EXISTS push_subs (

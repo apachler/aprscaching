@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import type { ExecCtx, MediaStore } from "./runtime.js";
 import { handle, runScheduled } from "./app.js";

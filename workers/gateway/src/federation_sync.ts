@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * federation_sync.ts — F2: the consumer side. Pull peers' /federation feeds, verify each record's
  * Ed25519 signature against the public key they publish at /.well-known/aprscaching, and mirror

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { getActivity, getLeaderboard, getCorroborators, type LeaderboardEntry, type Corroborator, type BBox } from "../api.js";

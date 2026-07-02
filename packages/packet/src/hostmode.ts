@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * hostmode.ts — the WA8DED / "TheFirmware" host-mode codec (docs/27 B.1). Host mode is the classic
  * multi-channel TNC protocol Graphic Packet leaned on (and TFPCX emulates in software): the host

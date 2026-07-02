@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * netrom-node.ts — the NET/ROM node routing engine (docs/29 F2), from the open NET/ROM spec's
  * "Automatic Routing Table Updates". Maintains learned routes from heard NODES broadcasts, builds our

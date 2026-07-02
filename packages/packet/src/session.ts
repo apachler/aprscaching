@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * session.ts — the multi-channel packet-terminal session core (docs/25 P1, "Graphic Packet reborn").
  * Holds N connected-mode channels (each a ConnectedLink from @aprsweb/ax25), a monitor of all heard

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Two-instance federation conformance (F2): a PUBLISHER and a SUBSCRIBER, both already running.
 // Seeds the publisher, triggers a pull-sync on the subscriber, and asserts the subscriber mirrored
 // the publisher's (signature-verified) cache onto its own map.

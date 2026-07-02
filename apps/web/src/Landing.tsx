@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
 

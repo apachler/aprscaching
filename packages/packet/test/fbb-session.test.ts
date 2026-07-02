@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { FbbSession, type FbbMessage, type FbbStore } from "../src/fbb-session.js";
 

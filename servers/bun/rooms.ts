@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * In-memory region rooms over Bun.serve's native WebSocket (Bun analogue of servers/node/rooms.ts,
  * which uses the `ws` package). Same subscribe/broadcast fan-out so the M2 geofence live layer works

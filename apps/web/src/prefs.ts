@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * prefs.ts (client) — sync the device-independent UI preferences to the signed-in account so a second
  * device restores them (docs/13). The prefs themselves live in localStorage (single source of truth

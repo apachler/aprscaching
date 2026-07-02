@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * simBoxApi.ts — a scoped `fetch` shim that serves a canned remote-box command log for the design
  * harness, so the real `RemoteControl` surface (docs/20 R2) renders populated (queued/sent/done

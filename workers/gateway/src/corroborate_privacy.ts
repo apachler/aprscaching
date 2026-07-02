@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * corroborate_privacy.ts — F4/T1.2 hardening + privacy coarsening for cross-instance corroboration.
  *

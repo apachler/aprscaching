@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * profile.ts — the thin, opt-in ham profile (docs/13). Self-curated fields (display name, locator,
  * avatar, bio, links, public contact) with a master show/hide. Server-side sanitizes bio + links and

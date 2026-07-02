@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- Account UI-preferences sync. A person's device-independent UI settings (theme, units/locale,
 -- pinned workbench apps, basemap choice) follow the ACCOUNT, not the browser — so signing in on a
 -- second device restores them. One small JSON blob per account (validated + size-capped server-side);

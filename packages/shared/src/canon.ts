@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * Canonical JSON + the authorship message, shared by every party that must agree byte-for-byte:
  * the web (signs), the gateway (verifies), and federation consumers (re-verify). Keep this tiny

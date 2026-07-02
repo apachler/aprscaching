@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
 import { getProfile, updateProfile, type ProfileEdit } from "../api.js";
 import { Row, Switch, useToast } from "../ui/index.js";

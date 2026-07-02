@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { BULLETIN_FEED } from "../src/bbs.js";
 import { negotiateFeeds } from "../src/federation_sync.js";

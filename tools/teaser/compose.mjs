@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Compose the tour frames into a captioned teaser video — entirely in the browser.
 // The Playwright-bundled ffmpeg is a minimal screencast build (no PNG decode, no drawtext/fade,
 // VP8-only), so instead we drive Chromium's canvas + MediaRecorder: letterbox each frame onto a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { NodesTable, reversePath, NodeSession, type NodeStore } from "../src/index.js";
 

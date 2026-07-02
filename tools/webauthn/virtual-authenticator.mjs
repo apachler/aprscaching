@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Manual S2 verification: drives a real passkey ceremony (register + login + a tampered-signature
  * negative case) against a running gateway using a Playwright CHROMIUM virtual authenticator.

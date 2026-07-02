@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { hostmodeCommand, hostmodeData, parseHostmode, type HostmodeEvent } from "../src/index.js";
 

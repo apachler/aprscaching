@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { TYPE_ORDER, TYPE_META, typeGlyph } from "../cacheTypes.js";
 import { useTheme } from "../format.js";
 import { Panel, useToast, Ico } from "../ui/index.js";

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import {
   encodeAx25, decodeAx25, kissWrap, kissFrames, parseCot, splitCotEvents, parseMeshtasticJson,

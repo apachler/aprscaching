@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { parseMeshtasticJson, formatPosition } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";

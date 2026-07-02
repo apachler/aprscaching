@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * tombstones.ts — F4/T1.3 + ADR-5: signed, PII-free delete propagation.
  *

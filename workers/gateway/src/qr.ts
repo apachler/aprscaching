@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * qr.ts — a small, dependency-free QR encoder (byte mode, ECC level M, versions 1–6) rendering SVG.
  * Enough for cache deep-links / share URLs (v6-M holds 106 bytes). Pure + runtime-neutral.

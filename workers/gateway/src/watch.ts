@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * watch.ts — watchlist + alerts (docs/20 §4, W1). An operator watches callsigns (per account); when a
  * watched call is heard on the network — and especially near a cache — an in-app alert is recorded.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * surfaces.ts — a Tool's *type*: which host surface(s) it plugs into (docs/28). Capabilities say what a
  * tool may DO; surfaces say WHERE its contributions appear. A colouriser targeting `terminal` recolours

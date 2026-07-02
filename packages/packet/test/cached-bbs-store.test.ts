@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { CachedBbsStore, type CachedBbsBackend } from "../src/cached-bbs-store.js";
 import type { BbsMsgFull } from "../src/bbs.js";

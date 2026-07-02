@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { encodeFrame, decodeFrame, parseAddr, addrStr, type Ax25Frame } from "../src/index.js";
 

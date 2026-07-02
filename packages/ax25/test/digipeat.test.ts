@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { digipeatAx25 } from "../src/digipeat.js";
 import { frameContentKey, ViscousDigi } from "../src/digipeat.js";

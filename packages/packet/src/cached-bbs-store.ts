@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * cached-bbs-store.ts — a synchronous `MessageStore` (docs/29 F1) over an async backend, so an inbound
  * connected-mode `BbsSession` (which reads the store one line at a time, synchronously) can be served from

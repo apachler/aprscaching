@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Capture the Cogmind (ASCII/CP437) flip on hardware-free demo surfaces.
 import { chromium } from "playwright";
 import fs from "node:fs";

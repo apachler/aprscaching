@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * stages.ts — M2 audio-cache: staged multi-caches. A cache can have ordered stages; stage 0 is the
  * published start, and each later stage's coordinates stay hidden until the finder unlocks the

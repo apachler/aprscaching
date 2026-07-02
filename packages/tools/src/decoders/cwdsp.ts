@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * cwdsp.ts — the CW (Morse) audio FRONT-END (docs/28 §6 / docs/16 H4). `decodeMorse`/`morseFromTiming`
  * (morse.ts) are pure but need a keyed on/off envelope; this turns raw PCM audio (the Web Audio mic

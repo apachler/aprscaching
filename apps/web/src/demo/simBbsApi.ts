@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * simBbsApi.ts — a scoped `fetch` shim that serves canned BBS data for the design harness, so the real
  * `BbsPanel` renders populated (inbox / sent / bulletins / thread) with no gateway or DB. Install once

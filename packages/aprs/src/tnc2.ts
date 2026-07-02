@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import type { ParsedFrame } from "./types.js";
 
 /** Parse a TNC2 APRS-IS line: SRC>DST,PATH1,PATH2:payload. null on comment/malformed. */

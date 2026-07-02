@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * audio-mic.mjs — a headless Chromium end-to-end test for the LIVE mic decode path (docs/28 §6). It closes
  * the "validate-at-deploy" gap on `apps/web/src/rf/audioDecode.ts`: the pure DSP is unit-tested, but the

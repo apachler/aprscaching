@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0015_fed_scope.sql — F6/T3.3: owner-controlled federation scope + spoiler protection.
 --
 -- Owners choose how far a cache travels on the network:

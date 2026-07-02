@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useSyncExternalStore } from "react";
 import { catSetFrequency, catSetMode, type CatRig } from "@aprsweb/aprs";
 

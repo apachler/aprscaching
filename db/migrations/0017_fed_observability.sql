@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0017_fed_observability.sql — F7/T4.3: federation observability.
 --
 -- Per-peer sync metrics so an operator can see the health of the network: successful/failed sync

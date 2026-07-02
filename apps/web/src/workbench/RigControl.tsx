@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { APRS_FREQ, type CatRig } from "@aprsweb/aprs";
 import { cat, catSupported, useCatConnected, type RigProfile } from "../rf/cat.js";

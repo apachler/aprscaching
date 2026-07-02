@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * feeds.ts — RSS 2.0 feeds over the public data. Platform feeds (activity, new caches, bulletins,
  * leaderboard) and user-centric feeds (a callsign's finds, badge awards and scoring). Runtime-neutral

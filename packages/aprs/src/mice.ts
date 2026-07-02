@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * mice.ts — MIC-E decode (APRS101 §10 "Mic-E Data Format").
  * MIC-E packs latitude + message bits into the AX.25 *destination* address, and

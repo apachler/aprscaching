@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * badge.ts — an embeddable SVG badge for QRZ.com / forum signatures / other ham networks.
  * GET /badge/:callsign.svg renders the operator's standing in the aprscaching network (network

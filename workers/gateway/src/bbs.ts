@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * bbs.ts — store-and-forward message BBS (Stage 1, connectionless). A message base of personal mail
  * + bulletins. Personal mail is *held* until the addressee is next *heard* (deliverHeld, called from

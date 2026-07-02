@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Sign a tool.json manifest OR a tool registry with a TOOL_PRIVATE_KEY (from genkey.mjs). The canonical
 // bytes match packages/tools/src/registry.ts EXACTLY (stableStringify; manifest omits `signature`, registry
 // signs its `entries`) so the app verifies what this signs.

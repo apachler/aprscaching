@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * TopBar — the cacher/operator top chrome: logo, type filter, search, in-view count, identity chip,
  * desktop nav and the primary "Hide a cache" action. The header is identical in every app mode —

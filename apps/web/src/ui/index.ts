@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Shared UI primitives (governed by .claude/rules/ui-ux.md + css.md). Import from here. */
 export { Switch } from "./Switch.js";
 export { Group, Row, Advanced } from "./Group.js";

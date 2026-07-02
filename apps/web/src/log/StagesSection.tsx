@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";

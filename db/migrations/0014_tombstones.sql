@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 -- 0014_tombstones.sql — F4/T1.3 + ADR-5: signed tombstones for GDPR delete propagation.
 --
 -- A delete on one instance must remove the PII-bearing mirrored copies on peers. Anonymising a find

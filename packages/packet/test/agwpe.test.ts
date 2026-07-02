@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import { encodeAgwpe, parseAgwpe } from "../src/index.js";
 

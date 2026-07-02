@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * TerminalPanel — the packet terminal as a dedicated WIDE workspace surface (docs/25 P1, "Graphic
  * Packet reborn"). Opened from the workbench; fills the content area at ≥1024px (the map hides) so the

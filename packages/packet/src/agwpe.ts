@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * agwpe.ts — the AGW Packet Engine (AGWPE) frame codec (docs/27 B.1). AGWPE is the de-facto TCP TNC
  * protocol spoken by Direwolf, SoundModem and UZ7HO — the single highest-leverage interop after KISS,

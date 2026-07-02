@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * host.ts — the Tool host (docs/27 B.3). Registers tools, activates enabled ones with a capability-
  * limited ToolContext, dispatches events, and collects their contributions (commands, monitor

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Sign a federation instance registry (T4.2). Reads the entries JSON array on argv[2] (or stdin) and
 // signs it with a registry-AUTHORITY key, emitting the values consumers set:
 //   • FED_REGISTRY     — the signed document {entries,at,sig,signer}

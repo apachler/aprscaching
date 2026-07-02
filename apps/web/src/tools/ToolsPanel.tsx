@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { sanitizePanel, checkManifestSignature, resolveTrust, verifyRegistry, type Capability, type Colouriser, type RegistryEntry, type SignedRegistry, type Tool, type ToolManifest, type ToolTrust } from "@aprsweb/tools";
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";

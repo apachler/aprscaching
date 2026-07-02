@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * field.ts — the pure "field station" core (docs/16 A/B/D). Off-grid, the browser is a first-class LOCAL
  * APRS engine: decoded RF frames become live stations on the map + messages in a local inbox, with online

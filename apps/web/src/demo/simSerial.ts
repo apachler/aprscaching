@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * simSerial.ts — a fake `navigator.serial` for the design harness, so the Web-Serial-only surfaces
  * (CAT rig control, docs/16 H6) render their CONNECTED state with no hardware. The fake port accepts
