@@ -152,6 +152,12 @@ if (env.AXUDP_PORT) {
     console.log("[axudp] listener enabled");
   }
 }
+// AXIP tunnel (docs/22 reserved seam) — AX.25 in raw IP proto 93 (vs AXUDP's UDP). Opt-in; needs a raw
+// socket (CAP_NET_RAW) + the optional `raw-socket` package. Tunnelled frames stay Tier C, never first-party.
+if (env.AXIP_ENABLE) {
+  const { AxipListener } = await import("./axip.js");
+  await new AxipListener({ bind: env.AXIP_BIND }, enqueue).start();
+}
 
 aprs.on("up", () => console.log("[aprs-is] connected + filter sent"));
 aprs.on("down", () => console.log("[aprs-is] disconnected, retrying..."));

@@ -380,9 +380,17 @@ incl. an explicit AXUDP-can-never-attest case); (4) the **AXUDP listener/port** 
 in `apps/ingest` (`axudp.ts` — the datagram→Tier-C-Packet normalize is now factored into the pure
 `axudpToPacket` and unit-tested, so the "transport ≠ trust" invariant has a regression guard); (5) the ADR
 is `docs/decisions/0001-transport-vs-trust.md`; (6) the hybrid-topology sketch is §5A above; (7) the
-`amateurEndpoint?` seam is on the node model (`FED_AMATEUR_ENDPOINT`). What remains is exactly the
-**explicitly-deferred, non-code** work: owned-RF Tier-A hardware, the 44net PoP/subnet standup, IPIP Mesh /
-BGP — none built by design.
+`amateurEndpoint?` seam is on the node model (`FED_AMATEUR_ENDPOINT`).
+
+**AXIP too (Phase-2 seam, decision #2) is now built** as an ingest RX path (`apps/ingest/src/axip.ts`,
+feature-flagged on `AXIP_ENABLE`): AX.25 in **raw IP proto 93** (vs AXUDP's UDP 10093). Its one genuinely
+distinct piece — a raw proto-93 socket delivers the whole IP datagram, so we **strip the IPv4 header**
+(`stripIpv4Header`) before decoding — plus the `axipToPacket` normalize are pure + unit-tested; the raw
+socket itself uses the optional `raw-socket` package and is validate-at-deploy (needs `CAP_NET_RAW`).
+Tunnelled AXIP frames land at Tier C (`port:"axip"`, `firstPartyAttested:false`), same rule as AXUDP.
+
+What remains is exactly the **explicitly-deferred, non-code** work: owned-RF Tier-A hardware, the 44net PoP/
+subnet standup, IPIP Mesh / BGP — none built by design.
 
 These are scaffolding tasks that keep options open without committing to any
 transport prematurely:

@@ -36,8 +36,8 @@ export type IngestBatch = z.infer<typeof IngestBatch>;
 export const Transport = z.enum([
   "aprs-is",        // APRS-IS firehose (the only wired transport today)
   "app",            // first-party in-app device geolocation (the Tier-B path)
-  "axudp",          // AX.25 over UDP (BPQ node mesh) — reserved, listener stubbed off
-  "axip",           // AX.25 over IP — reserved
+  "axudp",          // AX.25 over UDP (BPQ node mesh) — ingest listener/port built, feature-flagged off
+  "axip",           // AX.25 over raw IP proto 93 — ingest listener built (raw socket), feature-flagged off
   "hamnet-kiss",    // KISS-over-IP from a HAMNET site — reserved
   "first-party-rf", // a receiver we operate + attest — the only Tier-A origin
 ]);
