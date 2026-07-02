@@ -46,14 +46,16 @@ async function shot(page, vid, name, label) {
   manifest.push({ file, viewport: vid, name, label });
   console.log("  ✓", file, "—", label);
 }
+const THEME = process.env.THEME || ""; // "cogmind" → capture the whole tour in the green-phosphor flip
 async function ctxFor(v, app = true) {
   const ctx = await browser.newContext({ viewport: { width: v.w, height: v.h }, deviceScaleFactor: v.dsf });
-  await ctx.addInitScript((isApp) => {
+  await ctx.addInitScript(([isApp, theme]) => {
     try {
       if (isApp) { localStorage.setItem("acs.call", "OE8APR"); sessionStorage.setItem("acs.explore", "1"); }
       else { localStorage.removeItem("acs.call"); sessionStorage.removeItem("acs.explore"); }
+      if (theme) localStorage.setItem("acs.locale", JSON.stringify({ theme }));
     } catch { /* ignore */ }
-  }, app);
+  }, [app, THEME]);
   return ctx;
 }
 async function ready(page) {
