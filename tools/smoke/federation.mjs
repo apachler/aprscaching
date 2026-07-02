@@ -409,6 +409,25 @@ ok("an instance self-publishes its operator + APRS service address",
   wkk.data?.operator === "OE8APR" && wkk.data?.aprsCall === "OE8APR-12",
   JSON.stringify({ operator: wkk.data?.operator, aprsCall: wkk.data?.aprsCall }));
 
+// ---- F5/T2.3 path 2: the rendezvous relay queue (poll-based, box-command seam) ----
+// Only asserted when the instances were started with a relay secret (CI sets it); proves the transport:
+// a requester enqueues a feed query for a spoke instance, the spoke leases + answers, the requester reads it.
+const RELAY_SECRET = process.env.RELAY_SECRET;
+if (RELAY_SECRET) {
+  const rh = { "x-relay-secret": RELAY_SECRET };
+  const spoke = "oe.spoke";
+  const enq = await call(PUB, "POST", `/federation/relay/${spoke}/query`, { kind: "feed", params: { feed: "caches", since: 0 } }, rh);
+  ok("relay: a feed query is enqueued for a spoke instance", enq.status === 201 && typeof enq.data?.id === "number", JSON.stringify(enq.data));
+  const lease = await call(PUB, "GET", `/federation/relay/lease?instance=${spoke}`, undefined, rh);
+  ok("relay: the spoke leases queries addressed to it", (lease.data?.queries ?? []).some((q) => q.id === enq.data.id && q.kind === "feed"), JSON.stringify(lease.data));
+  const ans = await call(PUB, "POST", "/federation/relay/answer", { id: enq.data.id, result: { ok: true, kind: "feed", data: { items: [] } } }, rh);
+  ok("relay: the spoke posts an answer", ans.data?.ok === true, JSON.stringify(ans.data));
+  const res = await call(PUB, "GET", `/federation/relay/result/${enq.data.id}`, undefined, rh);
+  ok("relay: the requester collects the answered result", res.data?.status === "answered" && res.data?.answer?.ok === true, JSON.stringify(res.data));
+  const noauth = await call(PUB, "GET", "/federation/relay/lease?instance=oe.spoke", undefined, { "x-relay-secret": "wrong" });
+  ok("relay: a bad secret is rejected", noauth.status === 401, String(noauth.status));
+}
+
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 const probe = await call(PUB, "POST", "/federation/corroborate",

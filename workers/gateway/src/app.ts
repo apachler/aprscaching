@@ -27,6 +27,7 @@ import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
+import { handleRelayEnqueue, handleRelayLease, handleRelayAnswer, handleRelayResult, relayPoll } from "./relay.js";
 import { handleUserTx } from "./tx.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
@@ -72,10 +73,13 @@ export async function runScheduled(env: Env): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM tombstones WHERE ts < ?").bind(nowS - tombTtl),
     env.DB.prepare("DELETE FROM remote_tombstones WHERE ts < ?").bind(nowS - tombTtl),
+    env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?").bind(nowS - 3600), // relay rows are ephemeral
   ]);
   try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
   // push-to-hub (T2.3): a NAT'd spoke contributes its records to a reachable hub (no-op unless configured)
   try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
+  // rendezvous relay (T2.3 path 2): a NAT'd spoke answers relay queries from its hub (no-op unless configured)
+  try { await relayPoll(env); } catch (e) { console.error("relay poll:", (e as Error).message); }
   // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
   try { await runDigests(env); } catch (e) { console.error("digests:", (e as Error).message); }
 }
@@ -153,6 +157,14 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (op === "commands/ack" && m === "POST") return handleBoxAck(req, env, boxId);
     if (op === "log" && m === "GET") return handleBoxLog(req, env, boxId);
   }
+
+  // federation rendezvous relay (docs/15 T2.3 path 2) — a NAT'd spoke serves its feed via a hub, poll-based
+  const relayQ = /^\/federation\/relay\/([A-Za-z0-9_.-]+)\/query$/.exec(p);
+  if (relayQ && m === "POST") return handleRelayEnqueue(req, env, relayQ[1]!);
+  const relayR = /^\/federation\/relay\/result\/(\d+)$/.exec(p);
+  if (relayR && m === "GET") return handleRelayResult(req, env, relayR[1]!);
+  if (p === "/federation/relay/lease" && m === "GET") return handleRelayLease(req, env);
+  if (p === "/federation/relay/answer" && m === "POST") return handleRelayAnswer(req, env);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

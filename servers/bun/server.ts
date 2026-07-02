@@ -80,6 +80,7 @@ const env: Env = {
   FED_SUBMIT_SECRET: process.env.FED_SUBMIT_SECRET,
   FED_SUBMIT_INSTANCES: process.env.FED_SUBMIT_INSTANCES,
   FED_HUB_URL: process.env.FED_HUB_URL,
+  FED_RELAY_SECRET: process.env.FED_RELAY_SECRET,
   OKAPI_BASE: process.env.OKAPI_BASE,
   OKAPI_KEY: process.env.OKAPI_KEY,
   BBS_CALL: process.env.BBS_CALL,

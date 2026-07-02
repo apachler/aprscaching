@@ -170,11 +170,17 @@ corroboration** — nobody can reach it. So today it's a read/verify-only leaf, 
 caches/finds + independent IGate hearings never reach the commons. Three ways to let it fully join,
 in increasing effort — the first needs **no code** and already meets the requirement for most operators:
 
-**Status — paths (0) + (1) DONE; (2) deferred.** (0) is documented (`docs/23` Topology 1). (1) push-to-hub
-shipped: `POST /federation/submit` (`federation_sync.ts`) + the spoke-side `pushToHub` (wired into
-`runScheduled`), `test`-covered by the federation smoke (+6 assertions). (2) the persistent-WS rendezvous
-relay — the only tunnel-free path that restores *corroboration* contribution — remains deferred (large,
-runtime-divergent infra; needs the instance-key registry T4.2 for downstream re-serving).
+**Status — paths (0) + (1) DONE; (2) feed-relay BUILT, corroboration-relay deferred.** (0) is documented
+(`docs/23` Topology 1). (1) push-to-hub shipped: `POST /federation/submit` (`federation_sync.ts`) + the
+spoke-side `pushToHub` (wired into `runScheduled`), `test`-covered by the federation smoke (+6 assertions).
+(2) the rendezvous relay is now built for **feeds** — but as a **poll-based** channel over the box-command
+seam (`relay.ts`, migration 0042, `/federation/relay/{:instance/query,lease,answer,result/:id}` gated by
+`FED_RELAY_SECRET`; the spoke leg `relayPoll` runs in `runScheduled`), NOT the persistent WS this note first
+assumed. That keeps it tri-runtime-clean (plain D1 + HTTP; no runtime-divergent socket infra). A NAT'd
+spoke's signed feed is now re-servable through a hub with no tunnel and no inbound port. Pure core is
+unit-tested (`relay.test.ts`) and the enqueue→lease→answer→result round-trip is asserted in the federation
+smoke. **Still deferred:** *corroboration*-over-relay (live cross-instance quorum makes it deploy-gated) and
+the hub re-serving submitted records to its own downstream pull-peers (needs the instance-key registry T4.2).
 
 - **(0) Reverse tunnel — supported today, zero new code.** A free **Cloudflare Tunnel** (`cloudflared`,
   already the `docs/23` Topology 1 recipe), Tailscale Funnel, or ngrok gives the box a stable public

@@ -74,12 +74,12 @@ jobs:
           FED_REGISTRY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$REG")
           FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
           DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
-            FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 \
+            FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
             pnpm --filter @aprsweb/node-gateway start &
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
             FED_SUBMIT_SECRET=submitsecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
             pnpm --filter @aprsweb/node-gateway start &
-          PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
+          PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 RELAY_SECRET=relaysecret node tools/smoke/federation.mjs
 
   conformance-bun:
     name: conformance (Bun + bun:sqlite)
