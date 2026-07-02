@@ -15,7 +15,7 @@ import { typeMeta } from "./cacheTypes.js";
 import { roleMeta } from "./stationRoles.js";
 import { aprsGlyph } from "./aprsGlyph.js";
 import { ASSET, MAP_MARKER } from "./brand.js";
-import { buildGraticuleStyle } from "./offlineBasemap.js";
+import { buildGraticuleStyle, buildCogmindStyle } from "./offlineBasemap.js";
 import {
   FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, type LocaleSettings,
 } from "./format.js";
@@ -52,6 +52,11 @@ const STYLE: string | StyleSpecification =
   import.meta.env.VITE_BASEMAP === "offline"
     ? buildGraticuleStyle()
     : "https://demotiles.maplibre.org/style.json";
+
+/** The base map style for the active theme: Cogmind always uses its keyless phosphor graticule so the
+ *  map matches the terminal chrome; Modern uses the configured basemap. (docs/24 §4.2 T2) */
+const baseStyle = (): string | StyleSpecification =>
+  document.documentElement.dataset.theme === "cogmind" ? buildCogmindStyle() : STYLE;
 
 type Mode = "view" | "hide";
 
@@ -148,6 +153,17 @@ export default function Platform({ session, startTour }: { session: SessionState
   // apply the theme to the document root — modern → "dark" tokens, cogmind → the phosphor flip
   useEffect(() => {
     document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
+  }, [locSettings.theme]);
+
+  // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
+  // markers are overlays, not style layers, so they survive setStyle and need no re-add. Skips the
+  // mount run so we don't redundantly re-parse the style the map just initialised with.
+  const themeAtMount = useRef(locSettings.theme);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || themeAtMount.current === locSettings.theme) { themeAtMount.current = locSettings.theme; return; }
+    themeAtMount.current = locSettings.theme;
+    m.setStyle(baseStyle());
   }, [locSettings.theme]);
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
@@ -310,7 +326,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     if (!mapNode || map.current) return;
     const m = new maplibregl.Map({
-      container: mapNode, style: STYLE, center: DEFAULT_CENTER, zoom: 9, hash: true,
+      container: mapNode, style: baseStyle(), center: DEFAULT_CENTER, zoom: 9, hash: true,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
