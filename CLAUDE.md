@@ -78,7 +78,7 @@ hold the ui-ux/css rules — progressive disclosure, opt-in raster, reduced-moti
   recognition-only, never feature-gating): Now (no code) donation links + transparency page (the
   open-source LICENSE that unlocks the ARDC grant is **done** — AGPL-3.0 app/gateway · MIT libraries
   · CC-BY-SA-4.0 docs); M4 supporter badge + hide-nag + `/support` ledger; M5 peer cost-reimbursement
-  (Open Collective). Monetization schema lands as migration **`0012`** (``), not the `0003`
+  (Open Collective). Support/recognition schema lands as migration **`0012`** (``), not the `0003`
   the doc names retrospectively; `entitlements`/`api_keys` are recognition-only, never feature gates.
 - Profiles — ``: a thin, opt-in ham profile (display name, locator, avatar, bio,
   links, operated SSIDs, opt-in public contact) — borrow QRZ's self-curated profile, reject its

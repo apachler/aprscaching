@@ -19,7 +19,7 @@ The schema groups into a handful of domains:
 | **Verification** | Corroboration state and the corroborating-IGate credit | `0004`, `0026` |
 | **Federation** | Mirrored remote caches/finds/keys, peers + trust + reputation, sync observability, tombstones, federation scope, account-moves, the relay queue | `0003`, `0013`–`0017`, `0028`, `0042` |
 | **BBS & node** | Store-and-forward mail, bulletins, threads, FBB forwarding partners/rules/log, White Pages, the NET/ROM node table | `0009`, `0036`–`0038`, `0040`, `0041` |
-| **Engagement** | Watchlists, saved map views, notifications, API keys, recognition/monetization | `0018`–`0022` |
+| **Engagement** | Watchlists, saved map views, notifications, API keys, supporter recognition | `0018`–`0022` |
 
 ## First and current
 

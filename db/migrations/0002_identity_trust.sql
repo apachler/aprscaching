@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS account_callsigns (
 -- a base call is held by at most one account (prevents two accounts claiming the same license)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_account_callsigns_call ON account_callsigns(callsign);
 
--- ─── monetization ───
+-- ─── supporter recognition ───
 -- Supporter recognition + transparency ledger. RECOGNITION ONLY — never a feature gate.
 -- (Migration number pinned to 0012 per; lands after 0011_account_callsigns, fills the
 --  reserved gap. The migrator applies by filename, so this is safe to add after later migrations.)
