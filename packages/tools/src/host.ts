@@ -26,8 +26,9 @@ export interface BeaconSpec { comment: string; intervalSec: number }
 export interface ToolEventPayload {
   surface?: Surface;
   channel?: number;
-  peerCall?: string;                       // the far station (GP {chan})
+  peerCall?: string;                       // the far station (GP {chan}); on_frame → the heard callsign
   myCall?: string;                         // the local station in use
+  source?: string;                         // on_frame provenance label — "RF" (terminal/TNC), "APRS", …
   station?: { roles?: string[]; [k: string]: unknown } | null; // per-callsign context (account_stations)
   reply?: (text: string) => void;          // send a line back on this channel (PMS/auto-answer)
   [k: string]: unknown;

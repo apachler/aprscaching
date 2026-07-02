@@ -30,6 +30,15 @@ for (const t of builtinTools()) { try { toolHost.register(t); } catch { /* alrea
 // dispatch is a no-op unless a tool hooked on_tick. Once per module load.
 if (typeof window !== "undefined") setInterval(() => toolHost.dispatch("on_tick", {}), 60_000);
 
+/**
+ * Feed a heard callsign into the tool host from ANY source (docs/28 tool 2, #2) — the packet terminal
+ * (RF/TNC), the live APRS layer, or a future feeder. Dispatches `on_frame` so mheard/watch-alert record
+ * it regardless of which surface is on screen. `source` is a short provenance label ("RF", "APRS", …).
+ */
+export function feedHeard(call: string, source: string): void {
+  if (call && call.length >= 3) toolHost.dispatch("on_frame", { peerCall: call, source });
+}
+
 /** Enable/disable a tool and notify every mounted surface to re-read the host. */
 export function setToolEnabled(name: string, on: boolean): { ok: boolean; error?: string } {
   const r = toolHost.setEnabled(name, on);

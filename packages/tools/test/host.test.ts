@@ -151,6 +151,20 @@ describe("Tool surfaces — a tool's type routes its contributions (docs/28)", (
     expect(out).toMatch(/incomplete/);
   });
 
+  it("(tool 2, #2) mheard records heard stations from on_frame across sources, deduped", () => {
+    const host = new ToolHost();
+    host.register(builtinTools().find((t) => t.manifest.name === "mheard")!);
+    host.setEnabled("mheard", true);
+    host.dispatch("on_frame", { peerCall: "OE8XBM-7", source: "RF" });
+    host.dispatch("on_frame", { peerCall: "OE8XBM-7", source: "RF" });   // dup collapses
+    host.dispatch("on_frame", { peerCall: "OE1XDS-1", source: "APRS" });
+    const panel = host.panels("web")[0]!.spec;
+    const table = panel.nodes.find((n) => n.kind === "table") as { rows: string[][] };
+    expect(table.rows.map((r) => r[0]).sort()).toEqual(["OE1XDS-1", "OE8XBM-7"]); // 2 unique (dup collapsed)
+    expect(table.rows.find((r) => r[0] === "OE1XDS-1")![1]).toBe("APRS");         // source label carried through
+    expect(table.rows.find((r) => r[0] === "OE8XBM-7")![1]).toBe("RF");
+  });
+
   it("panel capability: setPanel is gated + panels() returns the spec for the surface", () => {
     const host = new ToolHost();
     host.register(builtinTools().find((t) => t.manifest.name === "aprs-ssid-guide")!); // panel, web

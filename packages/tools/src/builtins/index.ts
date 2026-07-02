@@ -87,12 +87,15 @@ function ago(ms: number): string {
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
 }
 
-/** (Tool 1) Watch/alert — highlight + log heard callsigns you `/watch` (GP/LinPac WATCH/CATCH). */
+/** (Tool 1) Watch/alert — highlight + log heard callsigns you `/watch` (GP/LinPac WATCH/CATCH). Records
+ *  from the `on_frame` feed (every source — terminal RF, APRS, …), so alerts fire even off the Monitor
+ *  tab; the colouriser only highlights the line when the monitor pane is visible. */
 export function watchAlertTool(): Tool {
   return {
-    manifest: { name: "watch-alert", title: "Watch & alert", author: AUTHOR, version: v, permissions: ["command", "monitor", "panel"], surfaces: ["terminal", "web"], description: "Highlight + log heard callsigns you /watch; see hits in a panel." },
+    manifest: { name: "watch-alert", title: "Watch & alert", author: AUTHOR, version: v, permissions: ["command", "monitor", "panel"], surfaces: ["terminal", "web"], description: "Highlight + log heard callsigns you /watch (any source); see hits in a panel." },
     activate(ctx) {
       const watched = () => ctx.store.keys().filter((k) => k.startsWith("watch.") && ctx.store.get(k)).map((k) => k.slice(6));
+      const isWatched = (call: string) => !!(ctx.store.get("watch." + call) || ctx.store.get("watch." + call.split("-")[0]!));
       const rebuild = () => {
         const rows = watched().map((c) => [c, (() => { const h = ctx.store.get("watchhit." + c); return h ? `${ago(Number(h))} ago` : "—"; })()]);
         ctx.setPanel({ title: "Watch", nodes: rows.length ? [{ kind: "table", head: ["Call", "Last heard"], rows }] : [{ kind: "text", text: "No calls watched — /watch <CALL>", tone: "muted" }] });
@@ -103,27 +106,30 @@ export function watchAlertTool(): Tool {
         ctx.store.set("watch." + c, "1"); rebuild(); return [`Watching ${c}.`];
       });
       ctx.registerCommand("unwatch", (args) => { const c = args.trim().toUpperCase(); ctx.store.set("watch." + c, ""); rebuild(); return [`Unwatched ${c}.`]; });
-      ctx.addColouriser((line) => {
-        const call = line.src.toUpperCase(), base = call.split("-")[0]!;
-        if (ctx.store.get("watch." + call) || ctx.store.get("watch." + base)) { ctx.store.set("watchhit." + call, String(Date.now())); return { colorVar: "--warn" }; }
-        return null;
-      });
+      // record a hit from any heard-frame source (works regardless of the active terminal view)
+      ctx.on("on_frame", (p) => { const c = String(p.peerCall ?? "").toUpperCase(); if (c && isWatched(c)) { ctx.store.set("watchhit." + c, String(Date.now())); rebuild(); } });
+      // colour the matched line while the monitor is on screen
+      ctx.addColouriser((line) => (isWatched(line.src.toUpperCase()) ? { colorVar: "--warn" } : null));
       rebuild();
     },
   };
 }
 
-/** (Tool 2) MHeard — a rolling recently-heard-stations panel (GP/LinPac MHEARD). */
+/** (Tool 2) MHeard — a rolling recently-heard-stations panel (GP/LinPac MHEARD), aggregated across ALL
+ *  sources that feed `on_frame`: the packet terminal (RF/TNC) and the live APRS layer today, plus any
+ *  future source (a second TNC, DX cluster, …). Source-agnostic: a feeder just dispatches on_frame with
+ *  a `source` label — see apps/web `feedHeard`. Works whatever terminal view is active. */
 export function mheardTool(): Tool {
   return {
-    manifest: { name: "mheard", title: "MHeard", author: AUTHOR, version: v, permissions: ["monitor", "event", "panel"], surfaces: ["terminal", "web"], description: "Rolling list of recently heard stations (updates as traffic arrives + each minute)." },
+    manifest: { name: "mheard", title: "MHeard", author: AUTHOR, version: v, permissions: ["monitor", "event", "panel"], surfaces: ["terminal", "web"], description: "Rolling recently-heard stations, aggregated across sources (RF terminal, APRS, …)." },
     activate(ctx) {
       const rebuild = () => {
-        const rows = ctx.store.keys().filter((k) => k.startsWith("mh.")).map((k) => ({ call: k.slice(3), ts: Number(ctx.store.get(k)) }))
-          .sort((a, b) => b.ts - a.ts).slice(0, 12).map((x) => [x.call, `${ago(x.ts)} ago`]);
-        ctx.setPanel({ title: "MHeard", nodes: rows.length ? [{ kind: "table", head: ["Station", "Heard"], rows }] : [{ kind: "text", text: "Nothing heard yet.", tone: "muted" }] });
+        const rows = ctx.store.keys().filter((k) => k.startsWith("mh."))
+          .map((k) => { const [ts, src = ""] = String(ctx.store.get(k)).split("\t"); return { call: k.slice(3), ts: Number(ts), src }; })
+          .sort((a, b) => b.ts - a.ts).slice(0, 14).map((x) => [x.call, x.src || "—", `${ago(x.ts)} ago`]);
+        ctx.setPanel({ title: "MHeard", nodes: rows.length ? [{ kind: "table", head: ["Station", "Src", "Heard"], rows }] : [{ kind: "text", text: "Nothing heard yet.", tone: "muted" }] });
       };
-      ctx.addColouriser((line) => { const c = line.src.toUpperCase(); const had = !!ctx.store.get("mh." + c); ctx.store.set("mh." + c, String(Date.now())); if (!had) rebuild(); return null; });
+      ctx.on("on_frame", (p) => { const c = String(p.peerCall ?? "").toUpperCase(); if (c) { ctx.store.set("mh." + c, `${Date.now()}\t${p.source ?? ""}`); rebuild(); } });
       ctx.on("on_tick", rebuild);
       rebuild();
     },

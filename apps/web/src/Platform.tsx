@@ -20,7 +20,7 @@ import {
   FormatContext, makeFormatters, loadSettings, saveSettings, resolveTheme, resolveCrt, type LocaleSettings,
 } from "./format.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
-import { setToolTxVerified } from "./tools/host.js";
+import { setToolTxVerified, feedHeard } from "./tools/host.js";
 import type { CacheType } from "@aprsweb/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
@@ -450,6 +450,17 @@ export default function Platform({ session, startTour }: { session: SessionState
       if (!seen.has(cs)) { mk.remove(); stationMarkers.current.delete(cs); }
     }
   }, [stations, stationsOn, locSettings.theme]);
+
+  // ---- feed heard callsigns from the live APRS layer into the tool host (docs/28 tool 2, #2) ----
+  // mheard/watch-alert are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
+  // per-callsign lastSeen cursor avoids re-dispatching the same beacon on every refresh.
+  const fedStations = useRef(new Map<string, number>());
+  useEffect(() => {
+    for (const s of stations) {
+      const prev = fedStations.current.get(s.callsign) ?? 0;
+      if (s.lastSeen > prev) { fedStations.current.set(s.callsign, s.lastSeen); feedHeard(s.callsign, "APRS"); }
+    }
+  }, [stations]);
 
   // ---- live activity-spots layer (docs/20 S2): opt-in overlay, distinct marker class ----
   useEffect(() => {

@@ -4,7 +4,7 @@ import { expand as expandMacros, withNow } from "@aprsweb/tools";
 import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
-import { useToolHost } from "../tools/host.js";
+import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
 /** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
@@ -138,6 +138,15 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const active = session?.channels.find((c) => c.id === activeId) ?? session?.channels[0];
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
+
+  // Feed every newly-heard frame to the tool host as a heard-frame source (docs/28 tool 2, #2) — so
+  // mheard/watch-alert record RF traffic even when the Monitor pane isn't the active view.
+  const fedMon = useRef(0);
+  useEffect(() => {
+    if (monitor.length < fedMon.current) fedMon.current = 0; // TNC closed/reopened → monitor reset
+    for (let i = fedMon.current; i < monitor.length; i++) feedHeard(monitor[i]!.src, "RF");
+    fedMon.current = monitor.length;
+  }, [monitor.length]);
 
   // Export the current pane as classic colour ANSI art (.ans, docs/24 T3): the monitor as plain
   // phosphor lines, a connected channel with its ANSI colour preserved (parse → re-emit as SGR).

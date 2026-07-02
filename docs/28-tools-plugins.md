@@ -74,8 +74,11 @@ Adopted from the GP/LinPac extension model (their macros, event bus, per-station
 commands, shared vars, external "channel apps"):
 
 - **A · Typed event context.** `ToolEventPayload` carries `{ surface, channel, peerCall, myCall, station,
-  reply }` (LinPac's per-channel `_call`/`_state` vars + station DB). `on()` handlers and `dispatch()`
-  are typed; the auto-responder now greets the *peer* by callsign. (`host.ts`.)
+  source, reply }` (LinPac's per-channel `_call`/`_state` vars + station DB). `on()` handlers and
+  `dispatch()` are typed; the auto-responder now greets the *peer* by callsign. `on_frame` is
+  **source-agnostic**: any feeder can dispatch a heard callsign with a `source` provenance label — the
+  packet terminal feeds `"RF"` (TNC frames), the live APRS map layer feeds `"APRS"` — so mheard/watch-alert
+  digest *all* heard traffic regardless of which surface is on screen (`apps/web` `feedHeard(call, source)`). (`host.ts`.)
 - **B · `on_tick` timer event.** A periodic lifecycle event (the web host fires it every 60 s) for auto-
   status / watchdog / auto-ident tools — GP/LinPac timed macros. TX stays gated.
 - **C · Macro variable expansion.** One shared `expand(text, vars)` (`macros.ts`) with the GP `{token}`
@@ -106,7 +109,7 @@ GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-sid
 | digimode-decoders | decoder | web | CW + PSK31 codecs |
 | aprs-ssid-guide | panel | web,terminal,bbs | reference — conventional -SSID table |
 | **watch-alert** | command,monitor,panel | terminal,web | **WATCH/CATCH** — highlight + log `/watch`-ed calls |
-| **mheard** | monitor,event,panel | terminal,web | **MHEARD** — rolling recently-heard list |
+| **mheard** | monitor,event,panel | terminal,web | **MHEARD** — rolling recently-heard list, source-agnostic (RF + APRS + …) |
 | **auto-status** | command,event,tx | terminal | timed macro — `/autostatus <min> <text>`, TX-gated |
 | **grid-bearing** | command,panel | web,terminal | locator util — `/grid <A> [B]` distance + bearing |
 | **sevenplus** | decoder | web | **7PLUS** — parse/reassemble multi-part 7plus messages |
