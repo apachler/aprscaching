@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * forward-schedule.ts — the pure scheduling decision for the FBB forwarding scheduler (docs/design/29 F4).
+ * forward-schedule.ts — the pure scheduling decision for the FBB forwarding scheduler.
  * Given a partner's config (poll interval + optional UTC time-bands) and when it last ran, decide
  * whether a forwarding session is due now. No I/O, no clock — the ingest passes `nowSec`. Time-bands
  * are BPQ-style UTC hour windows ("0-6,22-23"); a window whose start > end wraps past midnight

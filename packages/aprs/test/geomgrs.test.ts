@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { initialBearing, destinationPoint, haversineMeters, toMgrs } from "../src/index.js";
 
-describe("geo — bearing + destination (docs/design/11 ruler/rings)", () => {
+describe("geo — bearing + destination", () => {
   it("bearing due north / east", () => {
     expect(initialBearing(0, 0, 1, 0)).toBeCloseTo(0, 1);
     expect(initialBearing(0, 0, 0, 1)).toBeCloseTo(90, 1);
@@ -23,7 +23,7 @@ describe("geo — bearing + destination (docs/design/11 ruler/rings)", () => {
   });
 });
 
-describe("mgrs — lat/lon → MGRS (docs/design/11 grid readout)", () => {
+describe("mgrs — lat/lon → MGRS", () => {
   it("the canonical (0,0) reference is 31N AA 66021 00000", () => {
     expect(toMgrs(0, 0)).toBe("31N AA 66021 00000");
   });

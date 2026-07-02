@@ -3,7 +3,7 @@
  * DemoHarness — a hardware-free design surface for the packet/BBS shells. Reached at `/?demo=packet`,
  * `/?demo=bbs`, or `/?demo=1` (both). Renders the REAL components wired to the in-process simulator
  * (loopback KISS peer + canned BBS API) so the UI can be designed and screenshotted without a TNC,
- * gateway, or sign-in. This is the bench the Stage-3 Cogmind "flip" (docs/design/24 / docs/design/25 P5) is built on.
+ * gateway, or sign-in. This is the bench the Stage-3 Cogmind "flip" is built on.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { PacketTerminal } from "../packet/PacketTerminal.js";

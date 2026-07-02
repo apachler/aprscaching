@@ -59,7 +59,7 @@ function loopbackLinkFactory(farStore: FbbStore): ForwardLink {
   };
 }
 
-describe("FBB forwarding scheduler end-to-end (docs/design/29 F4)", () => {
+describe("FBB forwarding scheduler end-to-end", () => {
   it("forwards our pool to a partner and stores what the partner sends back", async () => {
     const ours = msg({ from: "OE8APR", to: "DL1ABC", at: "DB0XYZ.DL.EU", bid: "1_oe", title: "hi", body: "hello DL\nline two" });
     const theirs = msg({ type: "B", from: "DB0XYZ", to: "ALL", at: "WW", bid: "9_db0", title: "Net", body: "net on 144.800" });

@@ -28,7 +28,7 @@ export function DetailPanel(props: {
   const toast = useToast();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
-  // logbook paging: detail embeds the first page; older entries load on demand (docs/design/11)
+  // logbook paging: detail embeds the first page; older entries load on demand
   const [moreLogs, setMoreLogs] = useState<CacheLogEntry[]>([]);
   const [logCursor, setLogCursor] = useState<string | null>(c.logsCursor ?? null);
   const [logsMore, setLogsMore] = useState<boolean>(!!c.logsHasMore);
@@ -188,7 +188,7 @@ function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheR
   );
 }
 
-/** Share funnel (docs/design/11 M4): copy the deep-link or print a QR for visitors to scan at the site. */
+/** Share funnel: copy the deep-link or print a QR for visitors to scan at the site. */
 function ShareCache(props: { code: string; title: string; onToast: (m: string) => void }) {
   const [open, setOpen] = useState(false);
   const url = cacheShareUrl(props.code);

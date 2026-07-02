@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { sanitizePrefs } from "../src/prefs.js";
 
-describe("account UI-prefs sanitizer (docs/design/13)", () => {
+describe("account UI-prefs sanitizer", () => {
   it("keeps only known keys and coerces each to a safe shape", () => {
     const out = sanitizePrefs({
       locale: { locale: "de-AT", timeZone: "Europe/Vienna", units: "metric", theme: "dark", junk: 1 },

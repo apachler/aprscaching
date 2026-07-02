@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * session.ts — the multi-channel packet-terminal session core (docs/design/25 P1, "Graphic Packet reborn").
+ * session.ts — the multi-channel packet-terminal session core.
  * Holds N connected-mode channels (each a ConnectedLink from @aprsweb/ax25), a monitor of all heard
  * traffic, and per-channel status. Pure + I/O-free: it talks to a injected Transport (KISS/Web Serial
  * in the browser, a fake in tests) and an injected clock, exactly like the ax25 link tests. The React

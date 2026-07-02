@@ -20,7 +20,7 @@ function nodeWithRoute(dest: Ax25Address, neighbor: Ax25Address): NetromNode {
   return n;
 }
 
-describe("NET/ROM L3 switch (docs/design/29 F2 — transit routing)", () => {
+describe("NET/ROM L3 switch", () => {
   it("delivers a packet addressed to us locally", () => {
     const d = routeNetrom(pkt(ME, 20), new NetromNode({ call: ME, alias: "X" }), ME);
     expect(d).toEqual({ action: "local" });

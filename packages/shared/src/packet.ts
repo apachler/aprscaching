@@ -25,7 +25,7 @@ export const IngestBatch = z.object({ packets: z.array(Packet) });
 export type IngestBatch = z.infer<typeof IngestBatch>;
 
 /**
- * Provenance — the transport-vs-trust seam (docs/design/22).
+ * Provenance — the transport-vs-trust seam.
  *
  * The wire a packet arrives on is NOT proof it touched RF. APRS-IS, an AXIP/AXUDP
  * tunnel and a HAMNET-bridged KISS link are all just transports; none of them, on

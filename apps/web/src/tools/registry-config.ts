@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * registry-config.ts — where the Tools console finds the signed tool registry + the PINNED authority key it
- * verifies against (docs/design/28 §7). The registry is authority-signed; the app trusts ONLY this key, so a
+ * verifies against. The registry is authority-signed; the app trusts ONLY this key, so a
  * forged/re-hosted registry is rejected. Point at your own registry + authority via Vite env at build time.
  */
 export const TOOL_REGISTRY_URL: string = import.meta.env.VITE_TOOL_REGISTRY ?? "/tools/registry.json";

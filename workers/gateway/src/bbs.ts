@@ -89,7 +89,7 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
   return json({ ok: true });
 }
 
-// -------------------------------------- connected-mode BBS session (docs/design/29 F1; x-ingest-secret gated)
+// -------------------------------------- connected-mode BBS session
 const ingestOk = (req: Request, env: Env) => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
 
 /**

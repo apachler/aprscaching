@@ -19,7 +19,7 @@ function fromRadioPosition(lat: number, lon: number, alt: number, from: number, 
 }
 const frame = (body: number[]) => u8(0x94, 0xc3, (body.length >> 8) & 0xff, body.length & 0xff, ...body);
 
-describe("meshtastic — browser-direct serial frames (docs/design/16 H3)", () => {
+describe("meshtastic — browser-direct serial frames", () => {
   it("deframes 0x94/0xC3-headed frames and leaves an incomplete tail in `rest`", () => {
     const a = fromRadioPosition(47.0735, 15.4378, 350, 0x12345678);
     const b = fromRadioPosition(48, 16, 0, 0x000000ff);
@@ -47,7 +47,7 @@ describe("meshtastic — browser-direct serial frames (docs/design/16 H3)", () =
   });
 });
 
-// --- native MQTT protobuf ServiceEnvelope + typed events (docs/design/16 Path A) ---
+// --- native MQTT protobuf ServiceEnvelope + typed events ---
 const str = (s: string) => [...new TextEncoder().encode(s)];
 /** Build a MeshPacket body (from + decoded Data{portnum, payload}). */
 function meshPacket(from: number, portnum: number, payload: number[]): number[] {
@@ -57,7 +57,7 @@ function meshPacket(from: number, portnum: number, payload: number[]): number[] 
 /** Wrap a MeshPacket in a ServiceEnvelope (packet = field 1) — the MQTT protobuf shape. */
 const serviceEnvelope = (packet: number[]) => u8(...lenDelim(1, packet), ...lenDelim(2, str("LongFast")), ...lenDelim(3, str("!gw000001")));
 
-describe("meshtastic — native MQTT ServiceEnvelope + typed events (docs/design/16 Path A)", () => {
+describe("meshtastic — native MQTT ServiceEnvelope + typed events", () => {
   it("decodes a POSITION packet from a ServiceEnvelope", () => {
     const pos = [...fixed32(1, Math.round(47.05 * 1e7)), ...fixed32(2, Math.round(15.44 * 1e7)), ...vfield(3, 400)];
     const ev = parseMeshServiceEnvelope(serviceEnvelope(meshPacket(0xdeadbeef, 3, pos)));

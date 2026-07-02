@@ -5,7 +5,7 @@ import { encodeFrame, decodeFrame, parseAddr, addrStr, type Ax25Frame } from "..
 const roundtrip = (f: Ax25Frame) => decodeFrame(encodeFrame(f))!;
 const A = parseAddr("OE8APR-1"), B = parseAddr("OE8XBM-7");
 
-describe("ax25 frame codec (docs/design/25 P0)", () => {
+describe("ax25 frame codec", () => {
   it("round-trips a SABM command (P=1)", () => {
     const d = roundtrip({ dst: B, src: A, command: true, type: "SABM", pf: true });
     expect(d.type).toBe("SABM"); expect(d.command).toBe(true); expect(d.pf).toBe(true);

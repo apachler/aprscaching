@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
  * cat.ts — CAT (Computer-Aided Transceiver) command encoders for browser-direct rig control over
- * Web Serial (docs/design/16 H6 / docs/design/21 Backend A). Three protocol families cover most popular radios:
+ * Web Serial. Three protocol families cover most popular radios:
  *   - "kenwood"   ASCII `FA…;` (Kenwood TS-*, and modern Yaesu FT-991/FTDX which speak Kenwood CAT)
  *   - "icom"      CI-V binary `FE FE <addr> E0 05 <freq BCD LE> FD`
  *   - "yaesu-bin" classic 5-byte binary CAT (FT-817/857/897): BCD freq (10 Hz units) + opcode

@@ -4,7 +4,7 @@ import { summarizeLedger } from "../src/support.js";
 
 const T = (ym: string) => Math.floor(Date.parse(`${ym}T00:00:00Z`) / 1000);
 
-describe("support — ledger summary (docs/design/12 M4)", () => {
+describe("support — ledger summary", () => {
   it("totals in/out, balance, per-bucket and monthly series", () => {
     const s = summarizeLedger([
       { ts: T("2026-05-10"), direction: "in", bucket: "development", amount_cents: 5000, currency: "EUR" },

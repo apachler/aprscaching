@@ -5,7 +5,7 @@ import {
   NrOp, NR_MORE, NR_CHOKE, NETROM_PID,
 } from "../src/netrom-wire.js";
 
-describe("NET/ROM wire codec (docs/design/29 F2)", () => {
+describe("NET/ROM wire codec", () => {
   it("round-trips an inter-node packet (15-byte net + 5-byte transport header)", () => {
     const pkt = {
       net: { origin: { call: "OE8XBM", ssid: 7 }, dest: { call: "DB0XYZ", ssid: 0 }, ttl: 25 },

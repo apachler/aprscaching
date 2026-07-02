@@ -13,7 +13,7 @@ describe("Tool manifest validation", () => {
   });
 });
 
-describe("ToolHost — capability enforcement + dispatch (docs/design/27 B.3)", () => {
+describe("ToolHost — capability enforcement + dispatch", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
@@ -72,7 +72,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/design/27 B.3)", 
   });
 });
 
-describe("Tool surfaces — a tool's type routes its contributions (docs/design/28)", () => {
+describe("Tool surfaces — a tool's type routes its contributions", () => {
   it("defaults surfaces to ['web'] and validates the enum", () => {
     const r = validateManifest({ name: "tt", title: "T", author: "X", version: "1", permissions: ["panel"] });
     expect(r.ok && r.manifest.surfaces).toEqual(["web"]);
@@ -202,7 +202,7 @@ describe("Tool surfaces — a tool's type routes its contributions (docs/design/
   });
 });
 
-describe("Inter-tool IPC bus (docs/design/28 §5f) — the host routes, never interprets", () => {
+describe("Inter-tool IPC bus — the host routes, never interprets", () => {
   const producer = (): Tool => ({
     manifest: { name: "prod", title: "P", author: "X", version: "1", permissions: ["ipc", "command"], surfaces: ["web"] },
     activate(ctx) {

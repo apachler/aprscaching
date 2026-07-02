@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Weather user-origination (docs/design/17 W1): a PWS pushes directly to the platform, stored in
+-- Weather user-origination: a PWS pushes directly to the platform, stored in
 -- sensor_readings under the user's -13 weather SSID. Extend the reading to the fuller APRS field set
 -- (rain_mm stays = last-hour for back-compat) and add per-user push keys.
 ALTER TABLE sensor_readings ADD COLUMN gust_kn        REAL;

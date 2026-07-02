@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Living-cache rendezvous (docs/design/26 F-4): in the original APRSCaching, two *living* caches (beaconing
+-- Living-cache rendezvous: in the original APRSCaching, two *living* caches (beaconing
 -- stations that ARE caches) who meet both log each other — a deliberately social "make new
 -- acquaintances" mechanic. Opt-in per living cache (caches.rendezvous). A meeting is recorded when two
 -- opted-in living caches are co-located and both beaconed within a short window. This is a SOCIAL

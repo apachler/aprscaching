@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * fbb-forward.ts — a byte-stream driver around FbbSession (docs/design/29 F4). The FbbSession is line-oriented
+ * fbb-forward.ts — a byte-stream driver around FbbSession. The FbbSession is line-oriented
  * (one CR/LF-terminated command per feed); a real connected-mode AX.25 link (or an AXUDP tunnel) carries
  * an opaque byte stream. This wraps the session with the line buffering + CR framing so the ingest can
  * pump raw I-frame payloads in and get raw payloads out, exactly like link-app.ts wraps a LineApp for the

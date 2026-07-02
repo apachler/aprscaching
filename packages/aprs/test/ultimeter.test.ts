@@ -6,7 +6,7 @@ import { decodeUltimeter } from "../src/index.js";
 const hex = (n: number) => n.toString(16).toUpperCase().padStart(4, "0");
 const body = (vals: (number | string)[]) => vals.map((v) => (typeof v === "string" ? v : hex(v))).join("");
 
-describe("ultimeter — Peet Bros PWS serial decode (docs/design/17 W4)", () => {
+describe("ultimeter — Peet Bros PWS serial decode", () => {
   it("decodes a $ULTW data-logger packet to metric", () => {
     // wind 10.0 kph, dir 180°, 77.0 °F, rainTot 12.34 in, 1013.2 hPa, (delta/corr×3), 55.0 %RH, date, time, rainToday 0.50 in, avg
     const pkt = "$ULTW" + body([100, 128, 770, 1234, 10132, 0, 0, 0, 550, 100, 720, 50, 80]);

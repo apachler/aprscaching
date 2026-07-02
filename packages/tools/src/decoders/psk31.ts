@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * psk31.ts — a pure PSK31 varicode codec (docs/design/26 F-5). BPSK31 sends each character as a varicode bit
+ * psk31.ts — a pure PSK31 varicode codec. BPSK31 sends each character as a varicode bit
  * pattern (every code starts + ends with '1' and contains no "00"), and characters are separated by
  * "00". This encodes/decodes that bitstream; the audio front-end (differential BPSK demod → bits) is
  * browser-side Web Audio (validate-at-deploy). Values are the standard PSK31 varicode table.
@@ -39,7 +39,7 @@ export function decodeVaricode(bits: string): string {
 export interface Psk31Opts { carrierHz?: number; baud?: number }
 
 /**
- * PSK31 differential BPSK demodulator (docs/design/28 §6) — the audio FRONT-END that turns PCM into the varicode
+ * PSK31 differential BPSK demodulator — the audio FRONT-END that turns PCM into the varicode
  * bitstream `decodeVaricode` consumes. Downmix to I/Q at the carrier, integrate over each 31.25-baud symbol,
  * and emit a bit per phase transition: a ~180° reversal is a binary **0**, no reversal a **1** (PSK31
  * convention). Pure + unit-tested against a synthesised signal; it assumes symbol alignment from sample 0
@@ -67,7 +67,7 @@ export function psk31Demod(samples: ArrayLike<number>, sampleRate: number, opts:
 }
 
 /**
- * Robust PSK31 demod for weak / off-tuned signals (docs/design/28 §6). Three classic stages make it immune to an
+ * Robust PSK31 demod for weak / off-tuned signals. Three classic stages make it immune to an
  * unknown tuning, an unknown symbol phase, and noise:
  *   1. **AGC** → unit RMS (weak-signal normalisation; makes the search scores comparable).
  *   2. **Carrier recovery by squaring.** Squaring a BPSK signal doubles the phase, so the ±180° data

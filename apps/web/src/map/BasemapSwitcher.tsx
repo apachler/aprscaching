@@ -4,7 +4,7 @@ import type maplibregl from "maplibre-gl";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
 /**
- * Basemap layer switcher (docs/design/11 M2): Vector (default) · Topo · Satellite. Raster is OPT-IN per
+ * Basemap layer switcher: Vector (default) · Topo · Satellite. Raster is OPT-IN per
  * css.md — vector is the default and raster tiles load only when the operator picks them. Both
  * defaults are keyless and free: Topo = OpenTopoMap, Satellite = EOX Sentinel-2 cloudless (CC-BY).
  * A licensed high-res provider (MapTiler / Mapbox / Esri) can be dropped in via VITE_SAT_TILES +

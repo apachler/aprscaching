@@ -111,7 +111,7 @@ shapes, proven byte-for-byte identical by one conformance suite that runs agains
 | **Bun + bun:sqlite** (`servers/bun`) | a single-file desktop build | `bun:sqlite` |
 
 Deployment recipes (Pi-at-home with a Cloudflare Tunnel, an all-in-one OCI VM with Caddy, a desktop
-single-binary, …) live in `docs/design/23-deployment.md` and `deploy/`.
+single-binary, …) live in `` and `deploy/`.
 
 ### Source link (AGPL §13)
 

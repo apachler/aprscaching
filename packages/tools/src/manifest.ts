@@ -14,11 +14,11 @@ export interface ToolManifest {
   version: string;
   permissions: Capability[]; // requested capabilities
   surfaces: Surface[];       // the tool's TYPE — which host surface(s) it plugs into (defaults to ["web"])
-  remote?: boolean;          // its /commands may be invoked by a REMOTE connected peer (PMS; docs/design/28 D)
+  remote?: boolean;          // its /commands may be invoked by a REMOTE connected peer (PMS; D)
   description?: string;
   entry?: string;            // imported tools: the script URL/path the sandbox runs (built-ins omit it)
   pubkey?: string;           // author's raw Ed25519 public key (base64url) — the key `signature` verifies against
-  signature?: string;        // optional detached Ed25519 signature over the canonical manifest (docs/design/28 §7)
+  signature?: string;        // optional detached Ed25519 signature over the canonical manifest
 }
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;

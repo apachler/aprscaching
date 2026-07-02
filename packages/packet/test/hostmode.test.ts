@@ -5,7 +5,7 @@ import { hostmodeCommand, hostmodeData, parseHostmode, type HostmodeEvent } from
 const bytes = (...n: number[]) => Uint8Array.from(n);
 const str = (s: string) => Array.from(s, (c) => c.charCodeAt(0));
 
-describe("WA8DED host-mode codec (docs/design/27 B.1)", () => {
+describe("WA8DED host-mode codec", () => {
   it("encodes a NUL-terminated command on a channel", () => {
     expect([...hostmodeCommand(0, "I OE8APR")]).toEqual([0, 0, ...str("I OE8APR"), 0]);
   });

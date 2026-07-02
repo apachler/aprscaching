@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * link-app.ts — the connected-mode session-server core (docs/design/29 F1): bind an AX.25 connected-mode link
+ * link-app.ts — the connected-mode session-server core: bind an AX.25 connected-mode link
  * (server side) to a line-oriented packet application (the BBS or the NET/ROM node CLI). On connect it
  * sends the app's greeting; received bytes are buffered and split into CR/LF-delimited command lines,
  * each handed to `app.handle()`, whose reply lines are sent back as I-frames. Pure — the ingest supplies

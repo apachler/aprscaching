@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * names.ts — the NAMES.GP station-type registry (docs/design/27 B.2). Graphic Packet shipped a user-editable
+ * names.ts — the NAMES.GP station-type registry. Graphic Packet shipped a user-editable
  * table that tagged heard callsigns by type (B> BBS, N> node, D> DX-cluster, …) and colourised them in
  * the monitor + connect lists. We reincarnate it as: a user-overridable map (callsign → type) plus a
  * conservative auto-classifier from APRS hints, and a theme-token per type so the terminal/monitor

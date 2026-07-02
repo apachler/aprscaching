@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * provenance.ts — derive a packet's {@link Provenance} from how it reached us (docs/design/22).
+ * provenance.ts — derive a packet's {@link Provenance} from how it reached us.
  *
  * This is the single place that decides `firstPartyAttested`. The verification engine consumes only
  * that boolean (never the transport), so the transport-vs-trust rule lives here and cannot leak into

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 /**
- * host.ts — the Tool host (docs/design/27 B.3). Registers tools, activates enabled ones with a capability-
+ * host.ts — the Tool host. Registers tools, activates enabled ones with a capability-
  * limited ToolContext, dispatches events, and collects their contributions (commands, monitor
  * colourisers, decoders). Every context method enforces the tool's granted capabilities; the gated
  * 'tx'/'beacon' surfaces additionally pass an injected TX gate (the H5 / control-verification check) at
  * call time — a Tool can never transmit without it, and never touches verify.ts trust.
  *
- * INVARIANT (docs/design/28 §5f): the host ROUTES, it never interprets. Every method here is a generic verb
+ * INVARIANT: the host ROUTES, it never interprets. Every method here is a generic verb
  * (register / on / emit / subscribe / store / panel / tx-gate) — none is named after a domain function.
  * All tool BEHAVIOUR lives in builtins/ or imported tools; cross-tool cooperation happens only over the
  * IPC bus below, whose payloads are opaque to the host. Never add a `getMheard()`/`getWeather()`-style
@@ -27,7 +27,7 @@ export interface Decoder { id: string; label: string; kind: string; decode(input
 export interface BeaconSpec { comment: string; intervalSec: number }
 
 /**
- * The context an event carries (docs/design/28 A — LinPac's channel/station model). Every field is optional so
+ * The context an event carries. Every field is optional so
  * a caller supplies what its surface knows; a connected-mode surface fills peerCall/myCall/channel and a
  * `reply` sink, and looks the peer up in the station registry for `station`.
  */
@@ -61,7 +61,7 @@ export interface ToolContext {
   setMapLayer(spec: MapLayerSpec | null): void;                               // 'map' — declarative marker layer
   scheduleBeacon(spec: BeaconSpec): void;                                     // 'beacon' + TX gate
   requestTx(info: string): boolean;                                          // 'tx' + TX gate; false if denied
-  // ---- inter-tool IPC ('ipc'): the host ROUTES, it never interprets the payload (docs/design/28 §5f) ----
+  // ---- inter-tool IPC ('ipc'): the host ROUTES, it never interprets the payload ----
   emit(topic: string, data?: unknown): void;                                  // publish to every subscriber of `topic`
   subscribe(topic: string, handler: IpcHandler): void;                        // receive opaque payloads on `topic`
   provideService(name: string, fn: (args: unknown) => unknown): void;         // offer a named request/response service
@@ -103,7 +103,7 @@ interface Registered {
 export class ToolHost {
   private tools = new Map<string, Registered>();
   private vars = new Map<string, string>();   // cooperative shared store (LinPac vars); bounded below
-  // Inter-tool bus (docs/design/28 §5f). The host only ROUTES between tools; payloads are opaque to it.
+  // Inter-tool bus. The host only ROUTES between tools; payloads are opaque to it.
   private busSubs = new Map<string, { tool: string; fn: IpcHandler }[]>();   // topic → subscribers
   private busSvcs = new Map<string, { tool: string; fn: (args: unknown) => unknown }>(); // name → provider
   private busDepth = 0;                          // re-entrancy guard so a topic loop can't run away
@@ -158,7 +158,7 @@ export class ToolHost {
 
   /**
    * Run a registered /command (optionally scoped to `surface`); output lines, or null if none owns it.
-   * `opts.remote` marks the caller as a *remote connected peer* (LinPac colon-commands, docs/design/28 D): only
+   * `opts.remote` marks the caller as a *remote connected peer* (LinPac colon-commands D): only
    * tools whose manifest opted in with `remote: true` answer — a peer can never invoke operator-only ones.
    */
   runCommand(word: string, args = "", surface?: Surface, opts: { remote?: boolean } = {}): string[] | null {
@@ -235,11 +235,11 @@ export class ToolHost {
     finally { this.busDepth--; }
   }
 
-  /** Introspection for the Tools console: currently-live bus topics + service names (docs/design/28). */
+  /** Introspection for the Tools console: currently-live bus topics + service names. */
   ipcTopics(): string[] { return [...this.busSubs.keys()].filter((t) => (this.busSubs.get(t)?.length ?? 0) > 0).sort(); }
   ipcServices(): string[] { return [...this.busSvcs.keys()].sort(); }
 
-  // ---- surface participation on the bus (docs/design/28 §5f): the trusted app (a surface like the packet
+  // ---- surface participation on the bus: the trusted app (a surface like the packet
   // terminal) may offer a SERVICE to tools and PUBLISH to them — GPRI's model where GP the host exposed
   // getQsoData/transmit to plugins. Still route-only: the host never interprets the payload. Not
   // capability-gated (the app is trusted); each registration returns a disposer for teardown. ----

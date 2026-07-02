@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * ansi.ts — a small, safe ANSI-subset parser (docs/design/27 B.2). F6FBB/BPQ BBS menus came alive with ANSI
+ * ansi.ts — a small, safe ANSI-subset parser. F6FBB/BPQ BBS menus came alive with ANSI
  * colour + box-drawing; the terminal pane must render that. We parse SGR colour/bold into spans and
  * drop every other control sequence (cursor moves, clears) so a remote BBS can't drive our cursor.
  * Colours are returned as 0–15 palette indices; the web layer maps them to theme tokens (so the

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * ultimeter.ts — decoder for Peet Bros Ultimeter weather-station serial output (docs/design/17 W4, the
+ * ultimeter.ts — decoder for Peet Bros Ultimeter weather-station serial output ( W4, the
  * browser-direct PWS over Web Serial). Two ASCII packet formats:
  *   - Packet Mode      `!!` + 4-hex fields  (wind, dir, temp, rain-total, baro, indoor-T, RH, …)
  *   - Data Logger Mode `$ULTW` + 4-hex fields (peak wind, dir, temp, rain-total, baro, …, RH, …)

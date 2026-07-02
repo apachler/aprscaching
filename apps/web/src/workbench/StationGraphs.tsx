@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { getStationSeries, type StationSeries } from "../api.js";
 
 /**
- * Telemetry & weather graphs for a station (docs/design/26 Stage 0.1). uPlot is heavy-ish (canvas + its own
+ * Telemetry & weather graphs for a station. uPlot is heavy-ish (canvas + its own
  * CSS), so it and the data are loaded ONLY when the operator opens this disclosure — the cacher
  * surface never pays for it (css.md: lazy, no charting on the default view). uPlot doesn't animate, so
  * it's reduced-motion-safe by construction. Colours come from the theme tokens, not hard-coded hues.

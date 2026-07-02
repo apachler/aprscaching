@@ -16,7 +16,7 @@ function manifest(input: Record<string, unknown>): ToolManifest {
   return r.manifest;
 }
 
-describe("manifest signing (docs/design/28 §7)", () => {
+describe("manifest signing", () => {
   it("signs + verifies; tampering or the wrong key invalidates it; no sig = unsigned", async () => {
     const { priv, pubB64url } = await genKeys();
     const base = manifest({ name: "sig-tool", title: "Signed", author: "OE8APR", version: "1.0", permissions: ["command"], pubkey: pubB64url });

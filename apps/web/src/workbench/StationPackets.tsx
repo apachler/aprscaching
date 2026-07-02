@@ -4,7 +4,7 @@ import { getStationPackets, type RawPacket } from "../api.js";
 import { useFmt } from "../format.js";
 
 /**
- * Recent raw frames heard from a station (docs/design/26 Stage 0.2) — a workbench-only diagnostic. Loads on
+ * Recent raw frames heard from a station — a workbench-only diagnostic. Loads on
  * demand (the cacher surface never sees raw packets); the data is a short, TTL-pruned ring server-side
  * so it's inherently bounded. Shows the reconstructed TNC2 line, monospaced.
  */

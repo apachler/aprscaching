@@ -4,7 +4,7 @@ import { encodeAprsPosition, encodeAprsMessage, encodeAprsWeather, decodeAprs, e
 
 const decode = (payload: string) => decodeAprs({ src: "OE8APR-9", dst: "APRS", path: [], payload, raw: "" });
 
-describe("APRS encoders (docs/design/16 H5 originating traffic)", () => {
+describe("APRS encoders", () => {
   it("encodes a position that round-trips through the decoder", () => {
     const info = encodeAprsPosition(47.0735, 15.4378, "/>", "on the air");
     expect(info.startsWith("!4704.41N/")).toBe(true);
@@ -34,7 +34,7 @@ describe("APRS encoders (docs/design/16 H5 originating traffic)", () => {
     expect(encodeAprsMessage("X", "a|b~c{d\ne")).toBe(":X        :abcde");
   });
 
-  it("encodes a weather report in APRS wire units that round-trips through the decoder (docs/design/17 W2)", () => {
+  it("encodes a weather report in APRS wire units that round-trips through the decoder", () => {
     // 20 °C, 55 %, 1013.2 hPa, wind 180° @ ~8.7 kn (10 mph), gust ~13 kn (15 mph), 2.54 mm/h rain
     const info = encodeAprsWeather(47.0735, 15.4378, {
       tempC: 20, humidity: 55, pressureHpa: 1013.2, windDirDeg: 180,

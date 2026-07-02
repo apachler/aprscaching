@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * session-server.ts — the connected-mode session server (docs/design/29 F1): answer inbound AX.25 connects to
+ * session-server.ts — the connected-mode session server: answer inbound AX.25 connects to
  * our service SSIDs (BBS, NET/ROM node) and bind each to a fresh line app (`BbsSession`/`NodeSession`) via
  * `serveApp`. Pure — it consumes raw inbound frames and emits frames through an injected `send`, so the
  * ingest wires it to a KISS TNC (or an AXUDP port) and the loopback harness drives it headlessly. This is

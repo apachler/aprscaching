@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * fieldStation.ts — the off-grid "field station" client store (docs/design/16 A + D). A radio + browser is a
+ * fieldStation.ts — the off-grid "field station" client store. A radio + browser is a
  * self-contained APRS station: decoded RF frames become live stations + a local inbox, entirely in-memory,
  * independent of any gateway. The same decoded `RfFrame` that feeds the forward-to-gateway path feeds this
  * local view. It also queues locally-heard raw frames so they can replay ("sync-back") when connectivity

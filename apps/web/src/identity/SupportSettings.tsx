@@ -4,7 +4,7 @@ import { getSupport, getSupportPrefs, setSupportPrefs, supportUrl, type SupportI
 import { Row, Switch } from "../ui/index.js";
 
 /**
- * Settings → Support (docs/design/12 M4). Recognition only — donations gate nothing. Shows donation links,
+ * Settings → Support. Recognition only — donations gate nothing. Shows donation links,
  * the public ledger summary, your supporter status, and the hide-the-nag toggle.
  */
 export function SupportSettings(props: { signedIn: boolean }) {

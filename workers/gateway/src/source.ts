@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * source.ts — AGPL §13 "Source" link (ADR-3, docs/design/14). A network user of the running instance can
+ * source.ts — AGPL §13 "Source" link (ADR-3). A network user of the running instance can
  * reach the exact source it is running. Runtime-neutral (Worker / Node / Bun); the host resolves the
  * commit (env or git) and passes SOURCE_* in Env. **Launch-blocking before the first public deploy.**
  *

@@ -4,7 +4,7 @@ import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMed
 import { Ico } from "../ui/index.js";
 
 /**
- * Cache media gallery (docs/design/26 F-3) — photos, audio and files an owner attaches to a cache (hints,
+ * Cache media gallery — photos, audio and files an owner attaches to a cache (hints,
  * circuit diagrams, the audio sample). Public to view; the owner gets upload + delete. Images render
  * as thumbnails, audio as players, anything else as a download link. Lazy: only fetched when mounted
  * on the cache sheet.

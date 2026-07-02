@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * ansi-export.ts — the inverse of `ansi.ts` (docs/design/24 T3): serialise styled terminal lines back into a
+ * ansi-export.ts — the inverse of `ansi.ts`: serialise styled terminal lines back into a
  * classic **`.ans`** artwork stream (CP437 bytes + ANSI SGR colour). Used to export the packet monitor
  * / TUI-monitor log the way a late-90s BBS would have saved it, so it opens correctly in ansilove,
  * PabloDraw, SyncTERM, etc. Pure + dependency-free (runs in Worker/Node/Bun/browser).

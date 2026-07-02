@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Cross-instance corroborator credit (docs/design/13 + docs/design/15). Persist the IGate that corroborated each
+-- Cross-instance corroborator credit. Persist the IGate that corroborated each
 -- Tier-A find directly on the log, so the corroborator leaderboard credits the operator who actually
 -- did the RF corroboration — whether it happened on THIS instance (the matched position's gating
 -- IGate) or on a federated peer that revealed its IGate (FED_REVEAL_IGATE, both-opt-in). Peer-

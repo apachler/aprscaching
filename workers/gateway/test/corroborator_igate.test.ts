@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { corroboratorIgate } from "../src/corroborate.js";
 
-describe("corroboratorIgate — who to credit for a Tier-A find (docs/design/13 + docs/design/15)", () => {
+describe("corroboratorIgate — who to credit for a Tier-A find", () => {
   it("credits the gating IGate of a locally verified find", () => {
     expect(corroboratorIgate({ method: "aprs_rf", matchedIgate: "OE8XXX", loggerCall: "OE3RF" })).toBe("OE8XXX");
   });

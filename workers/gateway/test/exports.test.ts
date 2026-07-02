@@ -4,7 +4,7 @@ import { cachesToGpx, cachesToKml, findsToAdif, trackToKml, type ExpCache, type 
 
 const cache: ExpCache = { code: "AC-0001", title: "Schlossberg Clock Tower", type: "single", difficulty: 1.5, terrain: 2, lat: 47.0735, lon: 15.4378, ownerCall: "OE8APR" };
 
-describe("read-API exports (docs/design/11 M3)", () => {
+describe("read-API exports", () => {
   it("cachesToGpx emits valid GPX waypoints", () => {
     const gpx = cachesToGpx([cache]);
     expect(gpx).toContain('<?xml version="1.0"');

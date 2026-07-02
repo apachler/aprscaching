@@ -14,9 +14,9 @@ const ROLE_LABEL: Record<StationRole, string> = {
 };
 
 /**
- * Settings → My stations (docs/design/13 M5). Manage the operator's own stations — a home weather PWS, a
+ * Settings → My stations. Manage the operator's own stations — a home weather PWS, a
  * mountain-top digipeater / igate / node — each with its own callsign+SSID, explicit location,
- * description and roles. Weather-capable stations carry their own PWS push key. Paginated (docs/design/11).
+ * description and roles. Weather-capable stations carry their own PWS push key. Paginated.
  */
 export function MyStations(props: { callsign: string }) {
   const toast = useToast();

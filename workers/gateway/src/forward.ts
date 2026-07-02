@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * forward.ts (gateway) — BBS forwarding + hierarchical routing (docs/design/25 P3). Loads the forward table
+ * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
  * into the pure ForwardRouter (@aprsweb/packet), resolves a destination to a partner, keeps the FBB
  * White Pages (callsign → home BBS) for personal-mail steering, and exposes sysop CRUD for the rules.
  * The existing bulletin federation is the default 'ip-fed' catch-all partner; actually delivering to an
@@ -88,7 +88,7 @@ export async function handleForwardRuleDelete(req: Request, env: Env, id: number
   return json({ ok: true });
 }
 
-// ---- FBB forwarding partners (docs/design/29 F4) ----
+// ---- FBB forwarding partners ----
 const PARTNER_PROTOS = ["rf-fbb", "axudp", "ip-fed"] as const;
 export interface ForwardPartner {
   call: string; ha: string | null; connectScript: string; proto: (typeof PARTNER_PROTOS)[number];
@@ -163,7 +163,7 @@ export async function handleForwardPartnerDelete(req: Request, env: Env, id: num
   return json({ ok: true });
 }
 
-// ---- FBB forwarding pool (docs/design/29 F4) — the ingest scheduler pulls outbound / pushes inbound here ----
+// ---- FBB forwarding pool — the ingest scheduler pulls outbound / pushes inbound here ----
 /** An FBB message on the wire (matches @aprsweb/packet FbbMessage; the ingest feeds these to FbbSession). */
 export interface FbbWireMsg { type: "P" | "B"; from: string; at: string; to: string; bid: string; title: string; body: string }
 interface PoolRow { id: number; bid: string | null; type: string; from_call: string; to_call: string; subject: string | null; body: string }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * box.ts — remote control of an operator's own ingest box (docs/design/20 §2, R1). The web app enqueues
+ * box.ts — remote control of an operator's own ingest box. The web app enqueues
  * commands; the box pulls them over its existing outbound connection (no inbound ports), executes,
  * and acks. The ECHOCAT pattern with the gateway as the rendezvous.
  *
@@ -9,7 +9,7 @@
  *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
  *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
  *
- * Gating (non-negotiable, docs/design/16 H5 + docs/design/19): every TX-capable command requires a *verified*
+ * Gating (non-negotiable H5 +): every TX-capable command requires a *verified*
  * callsign; RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
  * from the federation/APRS service identity.
  */

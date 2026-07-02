@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { NodesTable, reversePath, NodeSession, type NodeStore } from "../src/index.js";
 
-describe("NET/ROM node logic (docs/design/25 P4)", () => {
+describe("NET/ROM node logic", () => {
   it("NODES table keeps the best-quality route and finds by call or alias", () => {
     const t = new NodesTable();
     t.learn({ dest: "OE8XBM-7", alias: "GRAZ", neighbor: "OE8REL-7", quality: 120 });

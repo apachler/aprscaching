@@ -5,7 +5,7 @@ import { App } from "./App.js";
 import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext } from "./format.js";
 
 // Apply the saved theme to <html> before first paint so a Cogmind user doesn't flash the modern
-// palette while the (lazily-loaded) Platform mounts (docs/design/24 §8 — theme persistence vs first paint).
+// palette while the (lazily-loaded) Platform mounts.
 {
   const saved = loadSettings();
   document.documentElement.dataset.theme = resolveTheme(saved.theme);

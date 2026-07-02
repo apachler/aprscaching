@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-circuit.ts — the NET/ROM L4 transport circuit state machine (docs/design/29 F2), from the open
+ * netrom-circuit.ts — the NET/ROM L4 transport circuit state machine, from the open
  * NET/ROM protocol spec. A "conventional sliding-window protocol" for end-to-end flow/error control
  * between two nodes, riding the transport header (netrom-wire.ts). Pure + line-free; the host routes the
  * emitted packets (wrapping them with a network header) and feeds inbound transport packets in.

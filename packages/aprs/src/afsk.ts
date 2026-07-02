@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * afsk.ts — a Bell-202 1200-baud AFSK modem (docs/design/16 H4, soundcard / no-TNC mode). The modulator
+ * afsk.ts — a Bell-202 1200-baud AFSK modem. The modulator
  * turns an AX.25 frame into PCM (also the basis for gated AFSK TX); the demodulator turns PCM back
  * into AX.25 frames via a non-coherent mark/space correlator + DPLL bit recovery + HDLC deframing
  * with an X.25 FCS check. Pure DSP — the browser supplies the audio (Web Audio); no hardware here.

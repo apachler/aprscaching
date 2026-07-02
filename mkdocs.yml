@@ -9,9 +9,8 @@ copyright: >-
 
 docs_dir: docs
 
-# The engineering design record + the licence file are kept in the repo but are not part of the manual.
+# The docs LICENSE file lives beside the pages but is not itself a manual page.
 exclude_docs: |
-  design/
   LICENSE
 
 theme:

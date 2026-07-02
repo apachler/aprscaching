@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * embed.ts — embeddable map widget + QR (docs/design/11 M4). A self-contained HTML map for iframes, and a
+ * embed.ts — embeddable map widget + QR. A self-contained HTML map for iframes, and a
  * QR SVG for cache deep-links / share URLs. Both are public, CORS-open, and read-only.
  *
  *   GET /embed?cache=:code        iframe map centred on a cache

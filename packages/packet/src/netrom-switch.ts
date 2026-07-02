@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-switch.ts — the NET/ROM node's L3 switch role (docs/design/29 F2): decide what to do with an inbound
+ * netrom-switch.ts — the NET/ROM node's L3 switch role: decide what to do with an inbound
  * network-layer packet. A real node doesn't just originate/terminate circuits — it *transits* other
  * stations' NET/ROM traffic toward its destination (the "switch"). Pure decision core: given a decoded
  * `NrPacket`, our own call, and the learned routing table, return whether to deliver it locally, forward

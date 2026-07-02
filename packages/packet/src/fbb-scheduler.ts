@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * fbb-scheduler.ts — the FBB forwarding scheduler brain (docs/design/29 F4), pure + I/O-free. On each tick it
+ * fbb-scheduler.ts — the FBB forwarding scheduler brain, pure + I/O-free. On each tick it
  * asks the gateway (`ForwardApi`) for partners, picks the due ones (`partnerDue`), and per partner runs an
  * FBB session (`FbbForwarder`) over a connected-mode `ForwardLink`, reconciling the results back: pull the
  * pool, push inbound, mark sent. Both the gateway API and the link are injected, so the whole loop is

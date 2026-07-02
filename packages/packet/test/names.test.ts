@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { StationRegistry, classifyStation, baseCall, TYPE_TAG } from "../src/index.js";
 
-describe("NAMES.GP station-type registry (docs/design/27)", () => {
+describe("NAMES.GP station-type registry", () => {
   it("auto-classifies common APRS hints", () => {
     expect(classifyStation("OE8WX-13", { symbol: "/_" })).toBe("weather");
     expect(classifyStation("OE8DIGI", { symbol: "/#" })).toBe("digi");

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-node.ts — the NET/ROM node routing engine (docs/design/29 F2), from the open NET/ROM spec's
+ * netrom-node.ts — the NET/ROM node routing engine, from the open NET/ROM spec's
  * "Automatic Routing Table Updates". Maintains learned routes from heard NODES broadcasts, builds our
  * own periodic NODES broadcast, and picks the best next hop for a connect-through. Pure — the ingest
  * (`apps/ingest/src/netromnode.ts`) wires it to KISS: periodic UI-to-"NODES" TX + inbound consume + the

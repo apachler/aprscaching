@@ -95,7 +95,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
   if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
 
-  // supporter recognition + public transparency ledger (docs/design/12 M4) — recognition only, gates nothing
+  // supporter recognition + public transparency ledger — recognition only, gates nothing
   if (p === "/support" && m === "GET") return handleSupportPage(req, env);
   if (p === "/api/support" && m === "GET") return handleSupport(req, env);
   if (p === "/api/support/prefs" && (m === "GET" || m === "POST")) return handleSupportPrefs(req, env);
@@ -113,17 +113,17 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const userFeed = /^\/feeds\/u\/([A-Za-z0-9-]+)\.xml$/.exec(p);
   if (userFeed && m === "GET") return handleUserFeed(req, env, userFeed[1]!);
 
-  // live activity spots (docs/design/20 S1) — read-only aggregation, edge/TTL-cached, off by default
+  // live activity spots — read-only aggregation, edge/TTL-cached, off by default
   if (p === "/api/spots" && m === "GET") return handleSpots(req, env);
 
-  // public read API (docs/design/11 §6, ADR-4a) — versioned, rate-limited, free keys; read-only
+  // public read API — versioned, rate-limited, free keys; read-only
   if (p === "/api/v1" || p.startsWith("/api/v1/")) return handleApiV1(req, env, p.slice("/api/v1".length));
 
-  // embeddable map widget + QR (docs/design/11 M4) — public, CORS-open, read-only
+  // embeddable map widget + QR — public, CORS-open, read-only
   if (p === "/embed/qr.svg" && m === "GET") return handleQr(req, env);
   if (p === "/embed" && m === "GET") return handleEmbed(req, env);
 
-  // save / share map views (docs/design/11 M1)
+  // save / share map views
   if (p === "/api/views" && m === "POST") return handleViewCreate(req, env);
   if (p === "/api/views" && m === "GET") return handleViewList(req, env);
   const viewDel = /^\/api\/views\/([a-z0-9]+)$/.exec(p);
@@ -131,7 +131,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const viewGet = /^\/v\/([a-z0-9]+)$/.exec(p);
   if (viewGet && m === "GET") return handleViewResolve(req, env, viewGet[1]!);
 
-  // account-level UI preferences sync (docs/design/13): theme, units/locale, pinned apps, basemap
+  // account-level UI preferences sync: theme, units/locale, pinned apps, basemap
   if (p === "/api/prefs" && m === "GET") return handlePrefsGet(req, env);
   if (p === "/api/prefs" && m === "PUT") return handlePrefsPut(req, env);
 
@@ -141,7 +141,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/push/unsubscribe" && m === "POST") return handlePushUnsubscribe(req, env);
   if (p === "/api/notify/prefs" && (m === "GET" || m === "POST")) return handleNotifyPrefs(req, env);
 
-  // watchlist + alerts (docs/design/20 §4, W1) — session-scoped, per account
+  // watchlist + alerts — session-scoped, per account
   if (p === "/api/watch" && m === "GET") return handleWatchList(req, env);
   if (p === "/api/watch" && m === "POST") return handleWatchAdd(req, env);
   if (p === "/api/watch/alerts" && m === "GET") return handleWatchAlerts(req, env);
@@ -149,7 +149,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const watchDel = /^\/api\/watch\/([A-Za-z0-9-]+)$/.exec(p);
   if (watchDel && m === "DELETE") return handleWatchRemove(req, env, watchDel[1]!);
 
-  // remote control of the operator's own ingest box (docs/design/20 §2, R1) — gateway-as-relay
+  // remote control of the operator's own ingest box — gateway-as-relay
   const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log)$/.exec(p);
   if (box) {
     const [boxId, op] = [box[1]!, box[2]!];
@@ -159,7 +159,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (op === "log" && m === "GET") return handleBoxLog(req, env, boxId);
   }
 
-  // federation rendezvous relay (docs/design/15 T2.3 path 2) — a NAT'd spoke serves its feed via a hub, poll-based
+  // federation rendezvous relay — a NAT'd spoke serves its feed via a hub, poll-based
   const relayQ = /^\/federation\/relay\/([A-Za-z0-9_.-]+)\/query$/.exec(p);
   if (relayQ && m === "POST") return handleRelayEnqueue(req, env, relayQ[1]!);
   const relayR = /^\/federation\/relay\/result\/(\d+)$/.exec(p);
@@ -227,12 +227,12 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
 
-  // weather user-origination (docs/design/17 W1) — PWS push (Ecowitt / WU) under <call>-13
+  // weather user-origination — PWS push (Ecowitt / WU) under <call>-13
   if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST")) return handleWxSubmit(req, env);
   if (p === "/api/wx/key" && (m === "GET" || m === "POST")) return handleWxKey(req, env);
   if (p === "/api/wx/tx" && m === "POST") return handleWxTx(req, env);
 
-  // operated-stations registry (docs/design/13 M5) — manage your own stations (PWS / digi / igate / node)
+  // operated-stations registry — manage your own stations (PWS / digi / igate / node)
   if (p === "/api/my/stations" && (m === "GET" || m === "POST")) return handleMyStations(req, env);
   if (p === "/api/me/cache" && m === "POST") return handleMeCache(req, env);  // "become a cache" yourself
   const myStationMatch = /^\/api\/my\/stations\/(\d+)(\/wx-key|\/cache)?$/.exec(p);
@@ -257,7 +257,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
   if (p === "/api/caches" && m === "POST") return handleCreateCache(req, env);
 
-  // enriched as-you-type search across caches + stations (docs/design/11 M2)
+  // enriched as-you-type search across caches + stations
   if (p === "/api/search" && m === "GET") return handleSearch(req, env);
 
   // community / gamification (M4)
@@ -297,7 +297,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const partnerDel = /^\/api\/bbs\/partners\/(\d+)$/.exec(p);
   if (partnerDel && m === "DELETE") return handleForwardPartnerDelete(req, env, Number(partnerDel[1]));
   // F4 forwarding pool (ingest scheduler ↔ gateway store; x-ingest-secret gated)
-  // connected-mode BBS session snapshot + kill (docs/design/29 F1; ingest-secret gated)
+  // connected-mode BBS session snapshot + kill
   if (p === "/api/bbs/session" && m === "GET") return handleBbsSession(req, env);
   if (p === "/api/bbs/kill" && m === "POST") return handleBbsKill(req, env);
   if (p === "/api/bbs/forward/pool" && m === "GET") return handleForwardPool(req, env);
@@ -311,7 +311,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
-  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env);   // docs/design/19 P3 — gated user TX (path A)
+  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env);   // P3 — gated user TX (path A)
 
   // audio-cache: stages + media (M2)
   if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { subsolarPoint, terminatorLatitude, greatCircleArc, haversineMeters } from "../src/index.js";
 
-describe("sun — subsolar point (docs/design/11 terminator)", () => {
+describe("sun — subsolar point", () => {
   it("subsolar latitude ≈ +23.44° at the June solstice", () => {
     const t = Date.UTC(2024, 5, 20, 20, 51, 0) / 1000; // 2024 June solstice
     expect(subsolarPoint(t).lat).toBeCloseTo(23.44, 0); // max northern declination
@@ -34,7 +34,7 @@ describe("sun — terminator latitude", () => {
   });
 });
 
-describe("geo — great-circle arc (docs/design/11 bearing arc)", () => {
+describe("geo — great-circle arc", () => {
   it("returns steps+1 points with exact endpoints", () => {
     const arc = greatCircleArc(47.07, 15.42, 40.7128, -74.006, 32); // Graz → NYC
     expect(arc).toHaveLength(33);

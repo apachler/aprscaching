@@ -45,7 +45,7 @@ if (env.KISS_TNC_HOST) {
     frameSubs.push((f) => digi.onFrame(f));
     console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
 
-    // connected-mode digipeater (docs/design/29 F3) — repeat SABM/I/… for NET/ROM + FBB relay through us
+    // connected-mode digipeater — repeat SABM/I/… for NET/ROM + FBB relay through us
     if (env.DIGI_CONNECTED === "1") {
       const cdigi = new ConnectedDigipeater(kiss, {
         mycall: env.DIGI_CALL, aliases: [...aliases],
@@ -56,7 +56,7 @@ if (env.KISS_TNC_HOST) {
     }
   }
 
-  // Connected-mode session server (docs/design/29 F1/F2) — answer inbound connects to our NET/ROM node and/or
+  // Connected-mode session server — answer inbound connects to our NET/ROM node and/or
   // BBS SSIDs. The NODE runs the NET/ROM CLI over the live routing table; the BBS runs the FBB command
   // interpreter over a per-caller gateway mail snapshot. NODE also broadcasts/consumes NODES over KISS.
   const gwBase = INGEST_URL.replace(/\/ingest$/, "");
@@ -119,7 +119,7 @@ if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: Number(env.MESH_PORT ?? 1883) }, enqueue).start();
   console.log("[mesh] enabled");
 }
-// AGWPE TNC (docs/design/27 B.1) — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
+// AGWPE TNC — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
 if (env.AGWPE_HOST) {
   const { AgwpeTnc } = await import("./agwpe.js");
   new AgwpeTnc(
@@ -128,7 +128,7 @@ if (env.AGWPE_HOST) {
   ).start();
   console.log("[agwpe] enabled");
 }
-// WA8DED host-mode TNC (docs/design/27 B.1) — opt-in; a TF-firmware TNC / TFPCX over TCP (serial at deploy).
+// WA8DED host-mode TNC — opt-in; a TF-firmware TNC / TFPCX over TCP (serial at deploy).
 if (env.HOSTMODE_HOST) {
   const { HostmodeTnc } = await import("./hostmode.js");
   new HostmodeTnc(
@@ -137,7 +137,7 @@ if (env.HOSTMODE_HOST) {
   ).start();
   console.log("[hostmode] enabled");
 }
-// AXUDP tunnel (docs/design/22 reserved seam; docs/design/29 F5) — opt-in; tunnelled frames stay Tier C, never
+// AXUDP tunnel — opt-in; tunnelled frames stay Tier C, never
 // first-party RF. With AXUDP_PEERS it's a bidirectional KISS-equivalent port (carries NET/ROM
 // crosslinks + FBB over the Internet leg); without, a plain RX-only listener.
 if (env.AXUDP_PORT) {
@@ -153,7 +153,7 @@ if (env.AXUDP_PORT) {
     console.log("[axudp] listener enabled");
   }
 }
-// AXIP tunnel (docs/design/22 reserved seam) — AX.25 in raw IP proto 93 (vs AXUDP's UDP). Opt-in; needs a raw
+// AXIP tunnel — AX.25 in raw IP proto 93 (vs AXUDP's UDP). Opt-in; needs a raw
 // socket (CAP_NET_RAW) + the optional `raw-socket` package. Tunnelled frames stay Tier C, never first-party.
 // With AXIP_PEERS it's a bidirectional port (RX + TX for NET/ROM + FBB crosslinks); without, RX-only.
 if (env.AXIP_ENABLE || env.AXIP_PEERS) {
@@ -199,7 +199,7 @@ setInterval(async () => {
 aprs.start();
 console.log(`[ingest] started -> ${INGEST_URL}`);
 
-// ---- FBB forwarding scheduler (docs/design/29 F4) — connect out to partner BBSes and exchange mail over RF.
+// ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
 // Opt-in: needs a KISS TNC + a station call. Partners + routing are configured in the gateway
 // (Settings → Network); this box runs the sessions (ingest-locality). Off by default.
 if (env.BBS_FORWARD === "1" && env.KISS_TNC_HOST && env.BBS_FORWARD_CALL) {

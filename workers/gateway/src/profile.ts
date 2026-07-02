@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * profile.ts — the thin, opt-in ham profile (docs/design/13). Self-curated fields (display name, locator,
+ * profile.ts — the thin, opt-in ham profile. Self-curated fields (display name, locator,
  * avatar, bio, links, public contact) with a master show/hide. Server-side sanitizes bio + links and
  * validates the grid; everything is account-owned and inside the GDPR export/erase.
  *

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * stream.ts — a pure, incremental decoder for a LIVE audio stream (docs/design/28 §6). The batch decoders
+ * stream.ts — a pure, incremental decoder for a LIVE audio stream. The batch decoders
  * (`psk31DemodRobust`, `cwKeyEvents`) take a whole PCM buffer; a live mic hands you the signal in small
  * chunks and wants text to appear as it arrives. `StreamDecoder` bridges the two: it accumulates chunks into
  * a bounded window and, at a throttled cadence, re-runs the batch decoder over the retained window and

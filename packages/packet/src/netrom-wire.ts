@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * netrom-wire.ts — the NET/ROM L3/L4 wire codec (docs/design/29 F2), reimplemented from the open NET/ROM
+ * netrom-wire.ts — the NET/ROM L3/L4 wire codec, reimplemented from the open NET/ROM
  * protocol spec ("The NET/ROM Protocol"). Pure, zero-I/O, unit-tested; the ingest wires it to real RF
  * (validate-at-deploy). This is only the framing + the NODES-broadcast codec — the L4 circuit state
  * machine lives in netrom-circuit.ts, and route maths in netrom.ts.

@@ -6,7 +6,7 @@ import type { Packet } from "@aprsweb/shared";
 /**
  * axip.ts — AXIP listener: AX.25 frames encapsulated directly in **IP protocol 93** (the JNOS/BPQ AXIP
  * mode), as opposed to AXUDP (axudp.ts), which wraps the same frames in UDP port 10093. RESERVED seam
- * (docs/design/22 §1A #2 — "AXIP is Phase 2+"): wired but feature-flagged off; start only when AXIP_ENABLE is set.
+ *: wired but feature-flagged off; start only when AXIP_ENABLE is set.
  *
  * The one thing genuinely different from AXUDP: a raw proto-93 socket delivers the **whole IP datagram
  * including the IP header** (a UDP socket hands you just the payload), so we strip the IPv4 header before
@@ -87,7 +87,7 @@ export class AxipListener {
 }
 
 /**
- * Bidirectional AXIP PORT (RX + TX) — the raw-IP twin of `AxudpPort` (docs/design/22 / docs/design/29 F5). Inbound frames
+ * Bidirectional AXIP PORT (RX + TX) — the raw-IP twin of `AxudpPort`. Inbound frames
  * feed the Tier-C ingest AND the connected-mode consumers (`onRaw`/`onFrame`), so NET/ROM crosslinks + FBB
  * forwarding can run over the AXIP internet leg; `sendFrame` egresses a full AX.25 frame to each configured
  * peer. TX here is **operator-config-gated** (the sysop sets `AXIP_PEERS`) internet node-transport, NOT

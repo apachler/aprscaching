@@ -50,7 +50,7 @@ function bbsOverLoopback(clientCall: string) {
   };
 }
 
-describe("connected-mode BBS over the loopback harness (docs/design/29 F1)", () => {
+describe("connected-mode BBS over the loopback harness", () => {
   it("completes the SABM/UA handshake and greets the caller", () => {
     const h = bbsOverLoopback("OE1TEST");
     h.connect();

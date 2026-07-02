@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { provenanceOf, qConstructOf, parseAttestedSites } from "../src/provenance.js";
 
-describe("provenance — derive firstPartyAttested (docs/design/22)", () => {
+describe("provenance — derive firstPartyAttested", () => {
   it("attests an RF fix with a qAR construct and an independent gating site", () => {
     const pv = provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX", ts: 5 });
     expect(pv.firstPartyAttested).toBe(true);
@@ -39,7 +39,7 @@ describe("provenance — derive firstPartyAttested (docs/design/22)", () => {
     expect(qConstructOf("WIDE1-1")).toBeUndefined();
   });
 
-  it("does NOT attest an AXUDP-tunnelled frame — transport laundering blocked (docs/design/22 reserved seam)", () => {
+  it("does NOT attest an AXUDP-tunnelled frame — transport laundering blocked", () => {
     // apps/ingest normalises an AXUDP datagram to heard_via:'aprs_is' with a bare AX.25 path (no qAR)
     // and no gating igate → the tunnelled frame can never reach Tier A, however it was transported.
     const pv = provenanceOf({ heard_via: "aprs_is", igate_call: null, path: "WIDE1-1,WIDE2-1" });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * paging.ts — keyset (cursor) pagination for linear list endpoints (docs/design/11).
+ * paging.ts — keyset (cursor) pagination for linear list endpoints.
  *
  * Lists ordered by a time/serial key page by an opaque cursor over (primary, id) DESC, not OFFSET.
  * Keyset is O(log n) on an index and is immune to row drift when new items are inserted between

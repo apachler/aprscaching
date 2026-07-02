@@ -95,7 +95,7 @@ describe("verifyFind — tier C (IS-only) and policy", () => {
   });
 });
 
-describe("verifyFind — provenance seam: transport ≠ trust (docs/design/22)", () => {
+describe("verifyFind — provenance seam: transport ≠ trust", () => {
   it("an RF-ish fix that is NOT first-party attested stays tier C even within radius", () => {
     // e.g. an AXIP/HAMNET-tunnelled frame: looks 'rf' but no site we attest → no Tier-A uplift.
     const r = verifyFind(CACHE, undefined, {

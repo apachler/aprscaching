@@ -28,7 +28,7 @@ export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: numb
 export async function listCaches(bbox: BBox, includeUnvetted = false): Promise<{ caches: MapCache[]; offline?: boolean }> {
   try {
     const r = await call<{ caches: MapCache[] }>(`/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`);
-    saveArea(r.caches, bbox);                       // write-through: browsing an area caches it (docs/design/16 C)
+    saveArea(r.caches, bbox);                       // write-through: browsing an area caches it
     return r;
   } catch (e) {
     const off = loadArea();                          // offline: render the last-downloaded area, no network
@@ -60,13 +60,13 @@ export function getProfile(callsign: string): Promise<Profile> {
 }
 import type { SearchResults } from "@aprsweb/shared";
 export type { SearchResults, SearchHitCache, SearchHitStation } from "@aprsweb/shared";
-/** Enriched as-you-type suggestions across caches + stations (docs/design/11 M2). */
+/** Enriched as-you-type suggestions across caches + stations. */
 export function searchSuggest(q: string, signal?: AbortSignal, limit = 8): Promise<SearchResults> {
   return call(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
 }
 import type { ActivityItem, PageInfo } from "@aprsweb/shared";
 export type { ActivityItem };
-/** Keyset-paginated recent finds (docs/design/11). Pass nextCursor back as `cursor` for older pages. */
+/** Keyset-paginated recent finds. Pass nextCursor back as `cursor` for older pages. */
 export function getActivity(bbox?: BBox, cursor?: string | null, limit = 30): Promise<{ activity: ActivityItem[] } & PageInfo> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (bbox) q.set("bbox", bbox.join(","));
@@ -88,7 +88,7 @@ export function rateCache(cacheId: number, stars: number, callsign?: string): Pr
   return call(`/api/caches/${cacheId}/rate`, { method: "POST", body: JSON.stringify({ stars, callsign }) });
 }
 
-// ---- live activity spots (docs/design/20 S2) — read-only overlay, opt-in ----
+// ---- live activity spots — read-only overlay, opt-in ----
 export function getSpots(bbox: BBox, opts: { bands?: string[]; modes?: string[]; sources?: string[] } = {}):
   Promise<{ enabled: boolean; count: number; fetchedAt: number | null; spots: Spot[] }> {
   const q = new URLSearchParams({ bbox: bbox.join(",") });
@@ -108,19 +108,19 @@ export function getStation(callsign: string): Promise<{ station: StationDetail }
 export interface WxPoint { ts: number; tempC: number | null; humidity: number | null; pressureHpa: number | null; windKn: number | null; gustKn: number | null; rainMm: number | null; rain24hMm: number | null }
 export interface MotionPoint { ts: number; speedKn: number | null; altitudeM: number | null; course: number | null }
 export interface StationSeries { callsign: string; windowSec: number; wx: WxPoint[]; motion: MotionPoint[] }
-/** Windowed telemetry + weather series for the workbench graphs (docs/design/26 Stage 0.1). */
+/** Windowed telemetry + weather series for the workbench graphs. */
 export function getStationSeries(callsign: string, windowSec = 86400, signal?: AbortSignal): Promise<StationSeries> {
   return call(`/api/stations/${encodeURIComponent(callsign)}/series?window=${Math.floor(windowSec)}`, { signal });
 }
 export interface RawPacket { ts: number; dst: string | null; path: string | null; payload: string | null; heardVia: string | null; port: string | null; tnc2: string }
-/** Recent raw TNC2 frames heard from a station (docs/design/26 Stage 0.2) — workbench diagnostic. */
+/** Recent raw TNC2 frames heard from a station — workbench diagnostic. */
 export function getStationPackets(callsign: string, limit = 50, signal?: AbortSignal): Promise<{ callsign: string; count: number; packets: RawPacket[] }> {
   return call(`/api/stations/${encodeURIComponent(callsign)}/packets?limit=${Math.floor(limit)}`, { signal });
 }
 import type { StationTrackPoint } from "@aprsweb/shared";
 export type { StationTrackPoint };
 export interface StationTrack { callsign: string; from: number; until: number; count: number; positions: StationTrackPoint[] }
-/** Date-windowed position history (docs/design/11 M3) via the public read API — free, rate-limited. */
+/** Date-windowed position history via the public read API — free, rate-limited. */
 export function getStationTrack(callsign: string, fromSec: number, toSec: number, signal?: AbortSignal): Promise<StationTrack> {
   return call(`/api/v1/station/${encodeURIComponent(callsign)}/track?from=${Math.floor(fromSec)}&to=${Math.floor(toSec)}`, { signal });
 }
@@ -137,7 +137,7 @@ export function getMessages(bulletins = false, cursor?: string | null, limit = 3
   return call(`/api/messages?${q.toString()}`);
 }
 
-// ---- remote control of your own ingest box (docs/design/20 R2) ----
+// ---- remote control of your own ingest box ----
 export interface BoxCommand {
   id: number; callsign?: string; kind: string; payload?: unknown;
   status: "queued" | "sent" | "done" | "failed"; result?: string;
@@ -151,7 +151,7 @@ export function getBoxLog(boxId: string): Promise<{ boxId: string; commands: Box
   return call(`/api/box/${encodeURIComponent(boxId)}/log`);
 }
 
-// ---- watchlist + alerts (docs/design/20 W1) ----
+// ---- watchlist + alerts ----
 export interface WatchEntry { callsign: string; addedAt: number; }
 export interface WatchAlert { id: number; callsign: string; kind: "heard" | "near_cache" | "cache_found" | "corroborated"; detail?: string; cacheId?: number | null; lat?: number | null; lon?: number | null; ts: number; seen: boolean; }
 export function listWatch(): Promise<{ watching: WatchEntry[]; unseen: number }> { return call(`/api/watch`); }
@@ -163,7 +163,7 @@ export function getWatchAlerts(cursor?: string | null, limit = 50): Promise<{ al
 }
 export function markWatchSeen(): Promise<{ ok: boolean }> { return call(`/api/watch/seen`, { method: "POST" }); }
 
-// ---- save / share map views (docs/design/11 M1) ----
+// ---- save / share map views ----
 export interface MapViewState {
   center?: [number, number]; zoom?: number;
   layers?: { spots?: boolean; stations?: boolean };
@@ -178,7 +178,7 @@ export function resolveView(slug: string): Promise<{ slug: string; name: string 
   return call(`/v/${encodeURIComponent(slug)}`);
 }
 
-// ---- account-level UI preferences sync (docs/design/13): theme, units/locale, pinned apps, basemap ----
+// ---- account-level UI preferences sync: theme, units/locale, pinned apps, basemap ----
 export type AccountPrefs = Record<string, unknown>;
 export function getPrefs(): Promise<{ prefs: AccountPrefs }> { return call(`/api/prefs`); }
 export function putPrefs(prefs: AccountPrefs): Promise<{ ok: boolean; prefs: AccountPrefs }> {
@@ -195,7 +195,7 @@ export function subscribePush(sub: { endpoint?: string; keys?: { p256dh?: string
 export function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
   return call(`/api/push/unsubscribe`, { method: "POST", body: JSON.stringify({ endpoint }) });
 }
-// ---- weather user-origination: a personal weather station (docs/design/17 W1) ----
+// ---- weather user-origination: a personal weather station ----
 export interface WxKeyInfo {
   callsign: string; station: string; key: string | null; lastSeen: number | null;
   ecowittPath: string | null; wuUrl: string | null;
@@ -205,7 +205,7 @@ export interface WxKeyInfo {
 export function getWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`); }
 /** (Re)issue the PWS push key — invalidates any previous one. */
 export function issueWxKey(): Promise<WxKeyInfo> { return call(`/api/wx/key`, { method: "POST" }); }
-/** Submit one in-browser-decoded PWS reading (docs/design/17 W4) to the W1 ingest, using the caller's key.
+/** Submit one in-browser-decoded PWS reading to the W1 ingest, using the caller's key.
  *  Metric → the imperial query params parseWx already understands, so it reuses the whole W1 path. */
 export function submitWxReading(
   key: string,
@@ -224,12 +224,12 @@ export function submitWxReading(
 }
 
 export interface WxTxState { txIs: boolean; txCwop: boolean; verified: boolean }
-/** Toggle APRS-IS beacon (W2) / CWOP relay (W3) for the home or a registry-station PWS (docs/design/17). */
+/** Toggle APRS-IS beacon (W2) / CWOP relay (W3) for the home or a registry-station PWS. */
 export function setWxTx(body: { stationId?: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
   return call(`/api/wx/tx`, { method: "POST", body: JSON.stringify(body) });
 }
 
-// ---- operated-stations registry: manage your own stations (docs/design/13 M5) ----
+// ---- operated-stations registry: manage your own stations ----
 import type { OperatedStation, StationRole, StationWxKey } from "@aprsweb/shared";
 export type { OperatedStation, StationRole, StationWxKey };
 export interface StationInput { callsign?: string; lat?: number | null; lon?: number | null; symbol?: string | null; description?: string | null; roles?: StationRole[] }
@@ -257,7 +257,7 @@ export function becomeACache(opts: { title?: string } = {}): Promise<{ cache: Ca
   return call(`/api/me/cache`, { method: "POST", body: JSON.stringify(opts) });
 }
 
-// ---- supporter recognition + public ledger (docs/design/12 M4) — recognition only, gates nothing ----
+// ---- supporter recognition + public ledger — recognition only, gates nothing ----
 export interface SupportLedger {
   currency: string; totalInCents: number; totalOutCents: number; balanceCents: number;
   buckets: Record<string, { inCents: number; outCents: number }>;
@@ -276,7 +276,7 @@ export function setSupportPrefs(hideNag: boolean): Promise<SupportPrefs> {
 /** The public transparency ledger page (server-rendered on the gateway). */
 export const supportUrl = `${API_BASE}/support`;
 
-// ---- browser-direct RF ingest (docs/design/16 H1) — forward Web Serial KISS frames to a gateway ----
+// ---- browser-direct RF ingest — forward Web Serial KISS frames to a gateway ----
 import type { Packet } from "@aprsweb/shared";
 import { signIngest } from "./crypto.js";
 export type { Packet };
@@ -297,7 +297,7 @@ export async function ingestPackets(packets: Packet[], secret: string, base = AP
 
 /**
  * Forward decoded RF to a PUBLIC gateway, authenticated by the operator's device-key signature
- * (docs/design/16 H1.5) — no shared secret. The key must be registered to `callsign` (registerKey).
+ * — no shared secret. The key must be registered to `callsign` (registerKey).
  * Browser-heard frames are stored IGate-less and stay Tier C.
  */
 export async function ingestSigned(packets: Packet[], callsign: string, base = API_BASE): Promise<{ ok: boolean; stored: number }> {
@@ -318,7 +318,7 @@ export function cotUrl(bbox: BBox): string {
 /** A federation peer with its T4.3 health metrics (operator observability). */
 export interface FedPeer {
   url: string; instance: string | null; signed: number; trust: "trusted" | "unvetted" | "blocked";
-  added_via?: string | null;   // manual | registry | discovered | auto-promoted (docs/design/15 T1.1)
+  added_via?: string | null;   // manual | registry | discovered | auto-promoted
   health: "ok" | "error" | "new" | "blocked"; errorRate: number;
   last_sync: number | null; last_ok: number | null; last_error: string | null;
   sync_ok: number; sync_err: number; mirrored_total: number;
@@ -363,7 +363,7 @@ export function setStages(cacheId: number, ownerCall: string, stages: Array<Part
 /** Absolute URL for a media clue path returned by the API. */
 export const mediaUrl = (path: string): string => API_BASE + path;
 
-// ---- cache media gallery (docs/design/26 F-3): owner-managed photos/audio/files on a cache ----
+// ---- cache media gallery: owner-managed photos/audio/files on a cache ----
 export interface CacheMediaItem { id: number; kind: "image" | "audio" | "file"; contentType: string; title: string | null; url: string; bytes: number; createdAt?: number }
 export function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
   return call(`/api/caches/${cacheId}/media`);
@@ -383,7 +383,7 @@ export function deleteCacheMedia(cacheId: number, mediaId: number): Promise<{ ok
   return call(`/api/caches/${cacheId}/media/${mediaId}`, { method: "DELETE" });
 }
 
-// ---- per-cache share funnel (docs/design/11 M4): print a QR on your station so visitors can find it ----
+// ---- per-cache share funnel: print a QR on your station so visitors can find it ----
 /** The public deep-link a QR encodes (opens the cache in the app — the current origin). */
 export const cacheShareUrl = (code: string): string =>
   `${typeof window !== "undefined" ? window.location.origin : ""}/?cache=${encodeURIComponent(code)}`;
@@ -406,12 +406,12 @@ export function postBbsMessage(body: { fromCall: string; toCall: string; subject
 export function getBbsThread(id: number): Promise<{ threadId: number; messages: BbsMessage[] }> {
   return call(`/api/bbs/thread/${id}`);
 }
-// ---- NET/ROM node read surface (docs/design/25 P4) ----
+// ---- NET/ROM node read surface ----
 export interface NodeRouteRow { dest: string; alias: string; neighbor: string; quality: number; port: string | null }
 export interface MheardRow { callsign: string; port: string; lastHeard: number; count: number }
 export function getNodes(): Promise<{ nodes: NodeRouteRow[] }> { return call(`/api/node/nodes`); }
 
-// ---- FBB forwarding partners (docs/design/29 F4) — sysop transport-level partner config ----
+// ---- FBB forwarding partners — sysop transport-level partner config ----
 export interface ForwardPartner {
   id: number; call: string; ha: string | null; connectScript: string;
   proto: "rf-fbb" | "axudp" | "ip-fed"; intervalMin: number; timebands: string;
@@ -425,7 +425,7 @@ export function deleteForwardPartner(id: number): Promise<{ ok: boolean }> {
   return call(`/api/bbs/partners/${id}`, { method: "DELETE" });
 }
 export function getMheard(limit = 50): Promise<{ mheard: MheardRow[] }> { return call(`/api/node/mheard?limit=${limit}`); }
-/** Personal mail you SENT, with its store-and-forward delivery state (docs/design/17 BBS). */
+/** Personal mail you SENT, with its store-and-forward delivery state. */
 export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {
   return call(`/api/bbs/sent?from=${encodeURIComponent(callsign)}`);
 }

@@ -5,7 +5,7 @@ import {
   parseRprt, parseFreqReply, parseModeReply, RigctldClient, type RigctldTransport,
 } from "../src/index.js";
 
-describe("Hamlib rigctld client (docs/design/21 Backend B)", () => {
+describe("Hamlib rigctld client", () => {
   it("builds the wire command lines", () => {
     expect(rigctldSetFreq(14_074_000)).toBe("F 14074000\n");
     expect(rigctldGetFreq()).toBe("f\n");

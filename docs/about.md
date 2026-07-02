@@ -30,9 +30,3 @@ Bruninga or his estate. The APRScaching game and this application are the author
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL. Imported heritage data carries its
 source's own licence and disclaimer. The same credits appear in-app under *Settings → About & credits*.
-
-## Design record
-
-The engineering design notes and decision records that predate this manual are kept in the repository under
-`docs/design/` for provenance. They are not part of the product manual — this manual describes the platform
-as it is.

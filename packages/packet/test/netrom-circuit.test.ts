@@ -20,7 +20,7 @@ function pair() {
   return { a, b, rxA, rxB, pump };
 }
 
-describe("NET/ROM L4 circuit (docs/design/29 F2)", () => {
+describe("NET/ROM L4 circuit", () => {
   it("connects (ConnReq/ConnAck) and negotiates the window", () => {
     const { a, b, pump } = pair();
     a.connect(4);

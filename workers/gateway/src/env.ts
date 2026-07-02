@@ -25,8 +25,8 @@ export interface Env {
   FED_REGISTRY_DNS?: string; // alt source (T4.2): a DNS TXT record name carrying `url=…;key=…` to the signed registry
   FED_OPERATOR?: string;     // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string;    // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
-  FED_AMATEUR_ENDPOINT?: string; // reserved (docs/design/22): optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral
-  FIRST_PARTY_SITES?: string;    // provenance seam (docs/design/22): allowlist of IGate/site calls we operate + attest → Tier-A origin
+  FED_AMATEUR_ENDPOINT?: string; // reserved: optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral
+  FIRST_PARTY_SITES?: string;    // provenance seam: allowlist of IGate/site calls we operate + attest → Tier-A origin
   FED_PEERS?: string;       // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string;    // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)
@@ -53,13 +53,13 @@ export interface Env {
   // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
   BBS_CALL?: string;        // e.g. "OE8APR-5"; defaults to "APRSCG"
 
-  // ---- public read API (docs/design/11 §6, ADR-4a) — free, per-IP rate-limited; free keys raise the cap ----
+  // ---- public read API — free, per-IP rate-limited; free keys raise the cap ----
   API_RATE_WINDOW_SEC?: string; // rate-limit window seconds (default 60)
   API_RATE_ANON?: string;       // anonymous requests/window (default 60)
   API_RATE_KEYED?: string;      // with a free key: requests/window (default 600)
   API_MAX_BBOX_DEG?: string;    // max bbox side in degrees for /api/v1 reads (default 20)
 
-  // ---- live activity spots (docs/design/20 S1) — read-only aggregation, off unless explicitly enabled ----
+  // ---- live activity spots — read-only aggregation, off unless explicitly enabled ----
   SPOTS_ENABLED?: string;   // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)
   SPOTS_SOURCES?: string;   // optional comma-separated allowlist of sources (else all built-in: pota…)
   SPOTS_TTL_SEC?: string;   // aggregation cache TTL seconds (default 60; spots are ephemeral)
@@ -82,7 +82,7 @@ export interface Env {
   VAPID_PRIVATE?: string;   // VAPID private key 'd' (base64url)
   VAPID_SUBJECT?: string;   // contact for the push service, e.g. "mailto:admin@aprscaching.net"
 
-  // ---- supporter recognition (docs/design/12 M4) — donation links surfaced on /support; recognition only ----
+  // ---- supporter recognition — donation links surfaced on /support; recognition only ----
   SUPPORT_LIBERAPAY?: string; SUPPORT_KOFI?: string; SUPPORT_PATREON?: string;
   SUPPORT_GITHUB?: string; SUPPORT_OPENCOLLECTIVE?: string;
 

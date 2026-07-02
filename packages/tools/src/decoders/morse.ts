@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * morse.ts — a pure CW (Morse) decoder (docs/design/26 F-5). Two layers: `decodeMorse` maps dot/dash tokens
+ * morse.ts — a pure CW (Morse) decoder. Two layers: `decodeMorse` maps dot/dash tokens
  * to text, and `morseFromTiming` turns a keyed on/off envelope (the front-end a Web Audio tone
  * detector produces) into those tokens by classifying element/gap lengths against an estimated unit.
  * Both pure + unit-tested; the audio tone detection itself is browser-side (validate-at-deploy).

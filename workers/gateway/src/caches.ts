@@ -360,7 +360,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     cacheStationPositions = cs.results;
   }
 
-  // Provenance seam (docs/design/22): stamp each fix with firstPartyAttested at the boundary so the verify
+  // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
   // engine branches on attestation alone, never on transport. FIRST_PARTY_SITES narrows attestation.
   const attestedSites = parseAttestedSites((env as { FIRST_PARTY_SITES?: string }).FIRST_PARTY_SITES);
   const attest = (rows: PositionRow[]): PositionRow[] =>
@@ -414,7 +414,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   // M4: award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
 
-  // Cache-owner loop (docs/design/11): tell the owner their cache was found (in-app alert + push), unless
+  // Cache-owner loop: tell the owner their cache was found (in-app alert + push), unless
   // they found it themselves. Reuses the watchlist alert channel.
   const ownerCall = (cache as { owner_call?: string }).owner_call;
   if (ownerCall && baseCall(ownerCall) !== baseCall(loggerCall)) {
@@ -429,7 +429,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     }
   }
 
-  // Infrastructure loop (docs/design/13): tell the operator whose IGate corroborated this find — their
+  // Infrastructure loop: tell the operator whose IGate corroborated this find — their
   // station made the Tier-A verification possible. Closes the corroborator-credit loop.
   if (corrIgate) {
     const igAcct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")

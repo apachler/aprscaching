@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * digipeat.ts — connected-mode AX.25 digipeating (docs/design/29 F3). Unlike the APRS UI n-N digipeater
+ * digipeat.ts — connected-mode AX.25 digipeating. Unlike the APRS UI n-N digipeater
  * (@aprsweb/aprs), this repeats ANY frame type (SABM/I/RR/…) so a NET/ROM crosslink or an FBB forward can
  * be relayed hop-by-hop through us. Pure: the ingest supplies decoded frames (with H-bits) and transmits
  * whatever this returns. The rule (AX.25 §6.1.2): find the first via-hop not yet repeated; if it addresses
@@ -34,7 +34,7 @@ export function frameContentKey(f: Ax25Frame): string {
 }
 
 /**
- * Viscous-delay bookkeeping for a digipeater (docs/design/29 F3). A viscous digi holds each repeat for a short
+ * Viscous-delay bookkeeping for a digipeater. A viscous digi holds each repeat for a short
  * delay and *cancels* it if it hears the same frame again in the window — meaning a better-placed digi
  * already carried it, so we stay quiet (the classic fill-in behaviour). Pure + timer-agnostic: the caller
  * owns the real timer and passes its token as `T`; this only tracks which content keys have a repeat pending.

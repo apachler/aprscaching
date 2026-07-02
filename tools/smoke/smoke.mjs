@@ -222,7 +222,7 @@ ok("detail: logbook has 3 entries", (detail.data?.cache?.logs ?? []).length === 
   `len=${(detail.data?.cache?.logs ?? []).length}`);
 ok("detail: carries a finds-over-time series", Array.isArray(detail.data?.cache?.findsByMonth) && detail.data.cache.findsByMonth.some((m) => m.n > 0), JSON.stringify(detail.data?.cache?.findsByMonth));
 
-// keyset pagination (docs/design/11): page the logbook 2 at a time and follow the cursor with no overlap
+// keyset pagination: page the logbook 2 at a time and follow the cursor with no overlap
 const lp1 = await call("GET", `/api/caches/${id}/logs?limit=2`);
 ok("logbook page 1 returns 2 + a nextCursor", (lp1.data?.logs ?? []).length === 2 && lp1.data?.hasMore === true && !!lp1.data?.nextCursor, JSON.stringify({ n: lp1.data?.logs?.length, more: lp1.data?.hasMore }));
 const lp2 = await call("GET", `/api/caches/${id}/logs?limit=2&cursor=${encodeURIComponent(lp1.data.nextCursor)}`);
@@ -280,7 +280,7 @@ const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEnco
 const signed = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "DL1ABC", logType: "found", author: { authorKey: pubRaw, authorSig: sig, signedAt: at } });
 ok("signed find accepted; signerKey echoed", signed.data?.logged === true && signed.data?.signerKey === pubRaw, JSON.stringify(signed.data));
 
-// signed browser RF ingest (docs/design/16 H1.5): push to a public gateway with the device key, no secret
+// signed browser RF ingest: push to a public gateway with the device key, no secret
 const sha256hex = async (s) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const rfPkts = [{ src: "OE5SIG", dst: "APRS", path: ["WIDE1-1"], payload: "!4704.41N/01526.27E>RF", kind: "position", heardVia: "rf", port: "webserial-kiss", ts: now() }];
 const iat = now();
@@ -348,7 +348,7 @@ ok("station detail carries a track", (stDetail.data?.station?.track ?? []).lengt
 const wxDetail = await call("GET", "/api/stations/OE1WX");
 ok("weather station detail carries a wx reading", wxDetail.data?.station?.wx && Math.abs((wxDetail.data?.station?.wx?.tempC ?? 0) - 25) < 1, JSON.stringify(wxDetail.data?.station?.wx));
 
-// telemetry/weather time-series for the workbench graphs (docs/design/26 Stage 0.1)
+// telemetry/weather time-series for the workbench graphs
 const mobSeries = await call("GET", "/api/stations/OE1MOB-9/series?window=86400");
 ok("station series carries motion telemetry (speed historized on positions)",
   mobSeries.status === 200 && (mobSeries.data?.motion ?? []).some((p) => p.speedKn != null),
@@ -358,7 +358,7 @@ ok("station series carries the weather series",
   wxSeries.status === 200 && (wxSeries.data?.wx ?? []).some((p) => p.tempC != null),
   JSON.stringify({ wx: wxSeries.data?.wx }));
 
-// raw per-station packet view (docs/design/26 Stage 0.2) — verbatim TNC2 frames from the TTL ring
+// raw per-station packet view — verbatim TNC2 frames from the TTL ring
 const rawPkts = await call("GET", "/api/stations/OE1MOB-9/packets?limit=10");
 ok("station raw packets reconstruct the TNC2 line",
   rawPkts.status === 200 && (rawPkts.data?.packets ?? []).some((p) => typeof p.tnc2 === "string" && p.tnc2.startsWith("OE1MOB-9>")),
@@ -581,11 +581,11 @@ ok("leaderboard RSS is a valid channel", lbFeed.body.includes("<rss") && lbFeed.
 const userFeed = await text("/feeds/u/OE8APR.xml");
 ok("user RSS feed renders for a callsign", userFeed.body.includes("<rss") && userFeed.body.includes("OE8APR"), `${userFeed.status}`);
 
-// ---- live activity spots (docs/design/20 S1): read-only, off by default, well-formed empty payload ----
+// ---- live activity spots: read-only, off by default, well-formed empty payload ----
 const spots = await call("GET", "/api/spots?bbox=14,46,16,48&bands=20m");
 ok("/api/spots responds with the spots envelope (disabled by default → empty)", spots.status === 200 && spots.data?.enabled === false && Array.isArray(spots.data?.spots) && spots.data.spots.length === 0, JSON.stringify(spots.data));
 
-// ---- public read API (docs/design/11 §6, ADR-4a): versioned, rate-limited, free keys, read-only ----
+// ---- public read API: versioned, rate-limited, free keys, read-only ----
 const apiIdx = await call("GET", "/api/v1");
 ok("/api/v1 index lists version + limits + endpoints", apiIdx.status === 200 && apiIdx.data?.version === "v1" && apiIdx.data?.rateLimits?.with_key > apiIdx.data?.rateLimits?.anonymous && Array.isArray(apiIdx.data?.endpoints), JSON.stringify(apiIdx.data?.rateLimits));
 const apiKeyRes = await call("POST", "/api/v1/keys", { label: "smoke" });
@@ -601,7 +601,7 @@ ok("GET /api/v1 caps an oversized bbox (400)", v1big.status === 400, JSON.string
 const v1write = await call("POST", "/api/v1/caches", {});
 ok("/api/v1 is read-only (write → 405)", v1write.status === 405, String(v1write.status));
 
-// read-API exports (docs/design/11 §6): GPX / KML / ADIF
+// read-API exports: GPX / KML / ADIF
 const gpx = await text("/api/v1/caches.gpx?bbox=14,46,16,48");
 ok("GET /api/v1/caches.gpx exports GPX waypoints", gpx.status === 200 && /gpx\+xml/.test(gpx.ct) && gpx.body.includes("<wpt lat="), `${gpx.status} ${gpx.ct}`);
 const kml = await text("/api/v1/caches.kml?bbox=14,46,16,48");
@@ -614,7 +614,7 @@ const v1corr = await call("GET", "/api/v1/corroborators");
 ok("GET /api/v1/corroborators ranks the gating IGate", v1corr.status === 200 && (v1corr.data?.corroborators ?? []).some((c) => c.igate === "OE8XXX"), JSON.stringify(v1corr.data?.corroborators));
 ok("GET /api/v1 index lists corroborators", (apiIdx.data?.endpoints ?? []).some((e) => e.path.startsWith("/api/v1/corroborators")), "index missing corroborators");
 
-// station tracks + embed widget + QR (docs/design/11 M4)
+// station tracks + embed widget + QR
 const track = await call("GET", "/api/v1/station/OE7BBS/track");
 ok("GET /api/v1/station/:call/track returns position history", track.status === 200 && Array.isArray(track.data?.positions), JSON.stringify({ count: track.data?.count }));
 const tkml = await text("/api/v1/station/OE7BBS.kml");
@@ -624,7 +624,7 @@ ok("GET /embed serves an HTML map widget", embed.status === 200 && /text\/html/.
 const qr = await text("/embed/qr.svg?cache=" + (v1code || "AC-0001"));
 ok("GET /embed/qr.svg returns an SVG QR", qr.status === 200 && /svg\+xml/.test(qr.ct) && qr.body.startsWith("<svg"), `${qr.status} ${qr.ct}`);
 
-// remote station control (docs/design/20 R1): the box command channel
+// remote station control: the box command channel
 const boxRx = await call("POST", "/api/box/smoke-box/command", { kind: "status" });
 ok("POST /api/box/:id/command enqueues a read command", boxRx.status === 201 && boxRx.data?.status === "queued", JSON.stringify(boxRx.data));
 const boxTxUnver = await call("POST", "/api/box/smoke-box/command", { kind: "beacon", callsign: "OE5XYZ", payload: { lat: 47, lon: 15 } });
@@ -643,7 +643,7 @@ ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, 
 const boxLog = await call("GET", "/api/box/smoke-box/log");
 ok("the operator sees the box command log", boxLog.status === 200 && (boxLog.data?.commands ?? []).some((c) => c.status === "done"), JSON.stringify((boxLog.data?.commands ?? []).map((c) => `${c.kind}:${c.status}`)));
 
-// watchlist + alerts (docs/design/20 W1) — fresh session, watch a call, hear it near the smoke cache
+// watchlist + alerts — fresh session, watch a call, hear it near the smoke cache
 const wStart = await call("POST", "/auth/email/start", { email: `w${now()}@example.com`, callsign: "OE9WL" });
 const wVer = await fetch(`${BASE}/auth/email/verify?token=${wStart.data?.devToken}`, { headers: { accept: "application/json" } });
 const wcookie = (wVer.headers.get("set-cookie") ?? "").split(";")[0];
@@ -658,7 +658,7 @@ ok("a watched callsign heard near a cache raises an alert", (wAlerts.alerts ?? [
 ok("mark alerts seen", (await (await fetch(`${BASE}/api/watch/seen`, { method: "POST", headers: { cookie: wcookie } })).json()).ok === true);
 ok("DELETE /api/watch/:call removes it", (await (await fetch(`${BASE}/api/watch/OE9WX`, { method: "DELETE", headers: { cookie: wcookie } })).json()).ok === true);
 
-// save / share map views (docs/design/11 M1)
+// save / share map views
 const vStart = await call("POST", "/auth/email/start", { email: `v${now()}@example.com`, callsign: "OE9VW" });
 const vVer = await fetch(`${BASE}/auth/email/verify?token=${vStart.data?.devToken}`, { headers: { accept: "application/json" } });
 const vcookie = (vVer.headers.get("set-cookie") ?? "").split(";")[0];
@@ -681,7 +681,7 @@ ok("GET /api/notify/prefs reports the digest opt-in (default on)", (await (await
 await fetch(`${BASE}/api/notify/prefs`, { method: "POST", headers: { "content-type": "application/json", cookie: wcookie }, body: JSON.stringify({ digest: false }) });
 ok("POST /api/notify/prefs toggles the email digest off", (await (await fetch(`${BASE}/api/notify/prefs`, { headers: { cookie: wcookie } })).json()).digest === false);
 
-// editable ham profile (docs/design/13)
+// editable ham profile
 const prStart = await call("POST", "/auth/email/start", { email: `p${now()}@example.com`, callsign: "OE9PROF" });
 const prVer = await fetch(`${BASE}/auth/email/verify?token=${prStart.data?.devToken}`, { headers: { accept: "application/json" } });
 const prcookie = (prVer.headers.get("set-cookie") ?? "").split(";")[0];
@@ -694,7 +694,7 @@ ok("invalid Maidenhead locator rejected (400)", (await fetch(`${BASE}/auth/profi
 await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ profilePublic: false }) });
 ok("profile hidden when profile_public is off", (await call("GET", "/api/profile/OE9PROF")).data?.profile === undefined);
 
-// weather user-origination (docs/design/17 W1) — set a home grid so the -13 station is placed on the map
+// weather user-origination — set a home grid so the -13 station is placed on the map
 await fetch(`${BASE}/auth/profile`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ displayName: "Andreas", homeGrid: "JN77" }) });
 const wxKey = await (await fetch(`${BASE}/api/wx/key`, { method: "POST", headers: { cookie: prcookie } })).json();
 ok("POST /api/wx/key issues a PWS key + -13 station", /^wx_/.test(wxKey.key ?? "") && wxKey.station === "OE9PROF-13", JSON.stringify({ key: (wxKey.key ?? "").slice(0, 6), station: wxKey.station }));
@@ -704,7 +704,7 @@ ok("wx submit (Ecowitt) stores a reading", wxSub.status === 200 && (await wxSub.
 const wxStation = await call("GET", "/api/stations/OE9PROF-13");
 ok("the -13 weather station carries the pushed reading", wxStation.data?.station?.wx && Math.abs((wxStation.data.station.wx.tempC ?? 0) - 20) < 1, JSON.stringify(wxStation.data?.station?.wx));
 
-// operated-stations registry (docs/design/13 M5) — manage multiple own stations with explicit locations
+// operated-stations registry — manage multiple own stations with explicit locations
 ok("my-stations list requires a session (401)", (await call("GET", "/api/my/stations")).status === 401);
 const stBad = await fetch(`${BASE}/api/my/stations`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({ callsign: "not valid!" }) });
 ok("creating a station with a bad callsign is rejected (400)", stBad.status === 400);
@@ -725,20 +725,20 @@ ok("a weather-capable station issues its own PWS key + URLs", /^wx_/.test(stWx.k
 await fetch(`${BASE}/api/wx/submit?key=${stWx.key}&tempf=41&humidity=70&stationtype=EasyWeather`);
 const stDet = await call("GET", "/api/stations/OE9PROF-2");
 ok("the remote station's reading lands at ITS coords (not the home grid)", stDet.data?.station?.wx && Math.abs((stDet.data.station.lat ?? 0) - 47.62) < 0.01 && Math.abs((stDet.data.station.wx.tempC ?? 0) - 5) < 0.5, JSON.stringify({ lat: stDet.data?.station?.lat, wx: stDet.data?.station?.wx }));
-// become-a-cache flows (docs/design/13): turn a station into a cache, and put yourself on the map
+// become-a-cache flows: turn a station into a cache, and put yourself on the map
 const s2c = await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}/cache`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({}) })).json();
 ok("turn a station into a cache at its location", s2c.cache?.type === "single" && Math.abs((s2c.cache?.lat ?? 0) - 47.62) < 0.01 && s2c.cache?.ownerCall === "OE9PROF", JSON.stringify(s2c.cache));
 const meC = await (await fetch(`${BASE}/api/me/cache`, { method: "POST", headers: { "content-type": "application/json", cookie: prcookie }, body: JSON.stringify({}) })).json();
 ok("become a cache → a living cache that follows your beacon", meC.cache?.type === "aprs_living" && (meC.cache?.stationCall ?? "").startsWith("OE9PROF"), JSON.stringify(meC.cache));
 ok("DELETE /api/my/stations/:id removes it", (await (await fetch(`${BASE}/api/my/stations/${stMk.station.id}`, { method: "DELETE", headers: { cookie: prcookie } })).json()).ok === true);
 
-// corroborator leaderboard (docs/design/13): the IGate (OE8XXX) that gated the Tier-A find earlier ranks
+// corroborator leaderboard: the IGate (OE8XXX) that gated the Tier-A find earlier ranks
 const board = await call("GET", "/api/corroborators");
 ok("corroborator board ranks the gating IGate", (board.data?.corroborators ?? []).some((c) => c.igate === "OE8XXX" && c.corroborations >= 1), JSON.stringify(board.data?.corroborators));
 const igProf = await call("GET", "/api/profile/OE8XXX");
 ok("an operator's profile shows its Infrastructure corroborations", (igProf.data?.corroborations ?? 0) >= 1, JSON.stringify(igProf.data?.corroborations));
 
-// supporter recognition + public ledger (docs/design/12 M4) — recognition only, gates nothing
+// supporter recognition + public ledger — recognition only, gates nothing
 ok("confirm a donation (ingest secret) marks supporter + ledgers it", (await call("POST", "/api/support/confirm", { callsign: "OE9PROF", amountCents: 500, bucket: "hosting", source: "manual" })).data?.supporter === "OE9PROF");
 ok("the supporter flag shows on the profile (recognition)", (await call("GET", "/api/profile/OE9PROF")).data?.supporter === true);
 const support = await call("GET", "/api/support");

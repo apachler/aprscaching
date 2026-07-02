@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { encodeCursor, decodeCursor, parsePage, keyset, paginate } from "../src/paging.js";
 
-describe("paging — keyset cursor (docs/design/11)", () => {
+describe("paging — keyset cursor", () => {
   it("round-trips a cursor through opaque base64url", () => {
     const c = { primary: 1719600000, id: 4242 };
     const enc = encodeCursor(c);

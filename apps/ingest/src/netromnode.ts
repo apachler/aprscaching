@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * netromnode.ts — the operator-local NET/ROM node RF wiring (docs/design/29 F2). Drives the pure `NetromNode`
+ * netromnode.ts — the operator-local NET/ROM node RF wiring. Drives the pure `NetromNode`
  * engine over a KISS TNC: periodically transmits our NODES broadcast (UI → "NODES", PID 0xCF), consumes
  * inbound NODES broadcasts to learn routes, decays obsolescence, and mirrors the learned table + MHeard
  * up to the gateway (the workbench node view reads them). The connected-mode node *session* (a user
@@ -38,10 +38,10 @@ export class NetromNodeRunner {
   /** Enable the L4 inbound session server: bind a station's inbound circuit to this app (the node CLI). */
   serveInbound(app: (user: Ax25Address) => LineApp): void { this.inboundApp = app; }
 
-  /** The node's connect-through handler (docs/design/29 F2): `C <dest>` → route + bridge to an onward circuit. */
+  /** The node's connect-through handler: `C <dest>` → route + bridge to an onward circuit. */
   connectThrough(): (dest: string, relay: RelayController) => void { return nodeConnectThrough(this.node, this.dialer); }
 
-  /** Accept an inbound NET/ROM circuit terminating at us (docs/design/29 F2) and bind it to the node CLI. Replies
+  /** Accept an inbound NET/ROM circuit terminating at us and bind it to the node CLI. Replies
    *  route back to the reverse-path neighbour; the user gets full node behaviour incl. onward connect. */
   private acceptInbound(pkt: import("@aprsweb/packet").NrPacket, neighbor: Ax25Address): void {
     const origin = NetromCircuit.originOf(pkt.info);
@@ -104,7 +104,7 @@ export class NetromNodeRunner {
     if (f.type !== "UI" || f.pid !== PID_NETROM || !f.info) return;
 
     // A directed NET/ROM frame (not the "NODES" broadcast): switch it — deliver locally to its circuit,
-    // transit-forward it toward its destination, or drop (TTL/no-route/loop). docs/design/29 F2.
+    // transit-forward it toward its destination, or drop (TTL/no-route/loop). F2.
     if (f.dst.call !== NODES_DST.call) {
       const pkt = decodeNetrom(f.info);
       if (!pkt) return;

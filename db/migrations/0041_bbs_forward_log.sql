@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- FBB forwarding log (docs/design/29 F4). Tracks which message BIDs have already been forwarded to which
+-- FBB forwarding log. Tracks which message BIDs have already been forwarded to which
 -- partner so the ingest forwarding scheduler never re-offers the same message on the next session
 -- (the FBB BID dedup handles the *inbound* side; this is the *outbound* per-partner memory). All runtimes.
 CREATE TABLE bbs_forward_log (

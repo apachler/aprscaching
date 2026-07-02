@@ -27,7 +27,7 @@ function streamChunks(signal: number[], chunk: number, mk = () => makeStreamDeco
   return { last, final: dec.flush() };
 }
 
-describe("makeStreamDecoder — incremental live decode (docs/design/28 §6)", () => {
+describe("makeStreamDecoder — incremental live decode", () => {
   const preamble = "0".repeat(48);
 
   it("decodes text fed in small chunks (streaming, not batch)", () => {

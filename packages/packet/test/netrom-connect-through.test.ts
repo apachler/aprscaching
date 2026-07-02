@@ -32,7 +32,7 @@ const echoDialer: CircuitDialer = (_route, hooks) => {
   return { send: (bytes) => { near.send(bytes); pump(); }, disconnect: () => { near.disconnect(); pump(); } };
 };
 
-describe("NET/ROM connect-through (docs/design/29 F2)", () => {
+describe("NET/ROM connect-through", () => {
   function setup(dialer: CircuitDialer) {
     const node = new NetromNode({ call: A("OE8NOD", 1), alias: "OENODE" }, { pathQuality: 200 });
     node.consume(encodeNodesBroadcast("FAR", [{ dest: A("OE3FAR"), alias: "FAR", neighbor: A("OE2NBR"), quality: 180 }])[0]!, A("OE2NBR"));

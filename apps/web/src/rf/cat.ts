@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 import { catSetFrequency, catSetMode, type CatRig } from "@aprsweb/aprs";
 
 /**
- * cat.ts — browser-direct CAT rig control over Web Serial (docs/design/16 H6). A single shared controller so
+ * cat.ts — browser-direct CAT rig control over Web Serial. A single shared controller so
  * any surface (the Workbench rig panel, a spot card) can one-click tune the connected radio. Tuning
  * is RX-side (set VFO frequency/mode) — not transmitting — so it is NOT H5-gated. Chromium-only.
  */

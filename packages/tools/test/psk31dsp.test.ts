@@ -15,7 +15,7 @@ function modBpsk(bits: string): number[] {
   return out;
 }
 
-describe("PSK31 BPSK demod → decodeVaricode (docs/design/28 §6)", () => {
+describe("PSK31 BPSK demod → decodeVaricode", () => {
   it("recovers text through modulate → demod → decode", () => {
     const bits = encodeVaricode("hi ok");
     const samples = modBpsk(bits);

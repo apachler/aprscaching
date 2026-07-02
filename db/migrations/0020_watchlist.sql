@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Watchlist alerts (docs/design/20 §4, W1; extends docs/design/11 / ADR-4b). Watch callsigns per ACCOUNT (survives
+-- Watchlist alerts. Watch callsigns per ACCOUNT (survives
 -- callsign changes, ADR-2); raise an in-app alert when a watched call is heard on the network or heard
 -- near a cache. Push/email delivery is the ADR-4b layer on top; this is the in-app fallback + store.
 CREATE TABLE IF NOT EXISTS watch_calls (

@@ -6,7 +6,7 @@ import { useFmt } from "../format.js";
 import { Row, Badge, EmptyState, useToast, Ico } from "../ui/index.js";
 
 /**
- * Remote control of your own ingest box (docs/design/20 R2). The web app enqueues commands; the box pulls
+ * Remote control of your own ingest box. The web app enqueues commands; the box pulls
  * them over its existing outbound connection. TX is gated on callsign control-verification (H5):
  * unverified operators get RX/status only, with the transmit controls disabled + a reason.
  */

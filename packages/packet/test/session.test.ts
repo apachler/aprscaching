@@ -16,7 +16,7 @@ function harness() {
   return { A, B, pump, advance };
 }
 
-describe("terminal session core (docs/design/25 P1)", () => {
+describe("terminal session core", () => {
   it("connect() opens a channel and the peer auto-accepts the incoming call", () => {
     const h = harness();
     const id = h.A.connect("OE8XBM-7"); h.pump();

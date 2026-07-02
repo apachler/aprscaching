@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * surfaces.ts — a Tool's *type*: which host surface(s) it plugs into (docs/design/28). Capabilities say what a
+ * surfaces.ts — a Tool's *type*: which host surface(s) it plugs into. Capabilities say what a
  * tool may DO; surfaces say WHERE its contributions appear. A colouriser targeting `terminal` recolours
  * the packet-terminal monitor; a `panel` targeting `web` renders in the Tools app; a `/command` targeting
  * `bbs` is offered on the BBS command line. This lets the same plugin system serve every surface, not

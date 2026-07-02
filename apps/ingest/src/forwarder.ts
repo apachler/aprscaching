@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * forwarder.ts — the ingest adapters for the FBB forwarding scheduler (docs/design/29 F4). The scheduler brain
+ * forwarder.ts — the ingest adapters for the FBB forwarding scheduler. The scheduler brain
  * (`BbsForwarder`) is pure and lives in `@aprsweb/packet`; here we supply its two I/O dependencies: a
  * `GatewayApi` (the forwarding-pool REST client, x-ingest-secret gated) and `kissForwardLink` (a real
  * connected-mode AX.25 link over KISS-TCP). `startForwarder` wires them together from env. The message
@@ -37,7 +37,7 @@ export class GatewayApi implements ForwardApi {
   }
 }
 
-/** A gateway-backed CachedBbsBackend for an inbound connected-mode BBS session (docs/design/29 F1). */
+/** A gateway-backed CachedBbsBackend for an inbound connected-mode BBS session. */
 export function gatewayBbsBackend(base: string, secret: string): CachedBbsBackend {
   const h = () => ({ "content-type": "application/json", "x-ingest-secret": secret });
   return {

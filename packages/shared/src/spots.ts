@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 /**
- * spots.ts — the live activity-spots contract (docs/design/20 §1). A Spot is a normalized "who is on the air
+ * spots.ts — the live activity-spots contract. A Spot is a normalized "who is on the air
  * right now, where" record aggregated read-only from POTA/SOTA/WWBOTA/GMA (and later DX-cluster/RBN/
  * PSKReporter). Pure + dependency-free so the gateway, the web map, and tooling all share one shape.
  *
- * Spots are ephemeral and NEVER touch the A/B/C find tiers (docs/design/20 §4).
+ * Spots are ephemeral and NEVER touch the A/B/C find tiers.
  */
 
 export type SpotSource = "pota" | "sota" | "wwbota" | "gma" | "dxcluster" | "rbn" | "pskreporter";

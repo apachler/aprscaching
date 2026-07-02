@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * prefs.ts — account-level UI preferences (docs/design/13). A person's device-independent UI settings —
+ * prefs.ts — account-level UI preferences. A person's device-independent UI settings —
  * theme, locale/units, pinned workbench apps, basemap — follow the ACCOUNT so a second device
  * restores them on sign-in. One small validated JSON blob per account; guests keep the same in
  * localStorage only. Keyed by account_id (person), per ADR-1/ADR-2. Inside the GDPR export/erase.
@@ -14,7 +14,7 @@ import { sessionAccountId } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const UNITS = new Set(["metric", "imperial"]);
-// v1 themes are "modern"/"cogmind" (docs/design/24); the legacy dark/light/auto are still accepted so old
+// v1 themes are "modern"/"cogmind"; the legacy dark/light/auto are still accepted so old
 // stored prefs validate (the client's normalizeTheme folds anything non-cogmind → modern).
 const THEMES = new Set(["modern", "cogmind", "dark", "light", "auto"]);
 const MAX_BYTES = 4096;

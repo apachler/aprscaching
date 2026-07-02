@@ -2,7 +2,7 @@
 /**
  * encode.ts — minimal APRS info-string encoders for ORIGINATING traffic (APRS101). The decoder is
  * the bulk of this package; these let a licensed operator beacon a position or send a message
- * (docs/design/16 H5 gated browser TX). Pure + runtime-neutral; pair with encodeAx25 + kissWrap to frame.
+ *. Pure + runtime-neutral; pair with encodeAx25 + kissWrap to frame.
  */
 
 /** Degrees → APRS ddmm.mmH (lat: 2°+2'+.+2; lon: 3°+2'+.+2). */
@@ -38,7 +38,7 @@ export function encodeAprsMessage(addressee: string, text: string, msgNo?: strin
   return `:${to}:${body}${msgNo ? `{${msgNo.slice(0, 5)}` : ""}`;
 }
 
-/** Metric weather fields for a WX beacon (docs/design/17 W2/W3). All optional; missing → APRS placeholders. */
+/** Metric weather fields for a WX beacon. All optional; missing → APRS placeholders. */
 export interface WxEncodeFields {
   tempC?: number; humidity?: number; pressureHpa?: number;
   windDirDeg?: number; windKn?: number; gustKn?: number;

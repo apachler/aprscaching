@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /**
  * loopback.ts — an in-memory simulated radio channel for exercising the connected-mode packet stack
- * (BBS / NET/ROM node / forwarding) with NO hardware (docs/design/29). The sim analogue of a real KISS link:
+ * (BBS / NET/ROM node / forwarding) with NO hardware. The sim analogue of a real KISS link:
  * two AX.25 endpoints are wired so a frame one side transmits is delivered to the other's `onReceive`.
  * Delivery is deferred and FIFO — a transmitted frame is queued, not handed to the peer inside the same
  * `send()` call — so it can't re-enter the sender's state machine mid-transition (exactly like a real

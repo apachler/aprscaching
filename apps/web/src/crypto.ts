@@ -45,7 +45,7 @@ export async function devicePublicKey(): Promise<string | null> {
 }
 
 export type SignedIngestHeaders = { "x-acs-callsign": string; "x-acs-key": string; "x-acs-sig": string; "x-acs-at": string };
-/** Sign a browser RF ingest batch with the device key (docs/design/16 H1.5) → headers, or undefined. */
+/** Sign a browser RF ingest batch with the device key → headers, or undefined. */
 export async function signIngest(callsign: string, packets: unknown[]): Promise<SignedIngestHeaders | undefined> {
   try {
     const { publicKey, priv } = await deviceKey();

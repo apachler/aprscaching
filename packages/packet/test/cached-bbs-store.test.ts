@@ -22,7 +22,7 @@ function fakeBackend(rows: BbsMsgFull[]) {
   return { backend, posted, killed, read };
 }
 
-describe("CachedBbsStore (docs/design/29 F1 — sync store over async gateway)", () => {
+describe("CachedBbsStore", () => {
   it("serves new / bulletins / mine from the snapshot after refresh", async () => {
     const { backend } = fakeBackend(snapshot());
     const store = new CachedBbsStore("OE1USR", backend);

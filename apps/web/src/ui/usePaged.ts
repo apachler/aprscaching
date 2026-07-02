@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 export interface PageResult<T> { items: T[]; nextCursor: string | null; hasMore: boolean }
 
 /**
- * Drive a keyset-paginated list (docs/design/11): fetch the first page on mount/dep-change, then append
+ * Drive a keyset-paginated list: fetch the first page on mount/dep-change, then append
  * older pages via loadMore() following the server's opaque cursor. The fetcher maps a wire response
  * (named array + nextCursor/hasMore) into a PageResult. Behavior, not appearance — pairs with the
  * <LoadMore> button (a CSS-styled real <button>).

@@ -4,7 +4,7 @@ import { parseAnsi, stripAnsi } from "../src/index.js";
 
 const E = "\x1b";
 
-describe("ANSI-subset parser (docs/design/27)", () => {
+describe("ANSI-subset parser", () => {
   it("parses SGR colour + bold and coalesces unstyled text", () => {
     const spans = parseAnsi(`plain ${E}[31mred${E}[1m bold-red${E}[0m back`);
     expect(spans).toEqual([

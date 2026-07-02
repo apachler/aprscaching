@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * maplayer.ts — the declarative map-layer a `map`-capability Tool contributes (docs/design/28 §6 — the last
+ * maplayer.ts — the declarative map-layer a `map`-capability Tool contributes ( §6 — the last
  * capability that had no host surface). A tool NEVER touches MapLibre; it emits a typed list of points and
  * the host renders them as markers on the `map` surface with theme tokens. Kept small + serialisable so an
  * imported (sandboxed) tool can emit it too — same posture as the panel model.

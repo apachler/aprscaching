@@ -31,7 +31,7 @@ function drive(a: FbbSession, b: FbbSession): void {
 const msg = (o: Partial<FbbMessage> & Pick<FbbMessage, "from" | "to" | "bid" | "title" | "body">): FbbMessage =>
   ({ type: "P", at: "WW", ...o });
 
-describe("FBB forwarding session over the loopback (docs/design/29 F4)", () => {
+describe("FBB forwarding session over the loopback", () => {
   it("forwards a message each way with reverse forwarding", () => {
     const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", at: "DB0XYZ", bid: "1_OE8", title: "Hi from OE", body: "hello DL\nline two" })]);
     const B = makeStore([msg({ type: "B", from: "DB0XYZ", to: "ALL", at: "WW", bid: "9_DB0", title: "Net Sat", body: "net on 144.800" })]);

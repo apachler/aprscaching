@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Thin, opt-in ham profile (docs/design/13). display_name + home_grid already exist (0001); add the rest.
+-- Thin, opt-in ham profile. display_name + home_grid already exist (0001); add the rest.
 -- All fields are opt-in and self-curated; they live inside the existing GDPR export/erase.
 ALTER TABLE accounts ADD COLUMN avatar_url     TEXT;     -- opt-in image URL
 ALTER TABLE accounts ADD COLUMN bio            TEXT;     -- short plain text, length-capped + tag-stripped server-side

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * readapi.ts — the public read API (docs/design/11 §6, ADR-4a). A versioned, documented, read-only surface
+ * readapi.ts — the public read API. A versioned, documented, read-only surface
  * under /api/v1 that reuses the existing read handlers behind a rate-limit gate. Free + per-IP
  * limited; a free api_key raises the limit (recognition model — keys are never paywalled). The app's
  * internal /api/* endpoints are untouched, so this can't regress the app.
@@ -135,7 +135,7 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   const g = await gate(req, env);
   if (g instanceof Response) return g;
 
-  // exports (docs/design/11 §6) — GPX / KML / ADIF
+  // exports — GPX / KML / ADIF
   if (rest === "/caches.gpx") return bboxTooLarge(req, env) ?? handleCachesGpx(req, env);
   if (rest === "/caches.kml") return bboxTooLarge(req, env) ?? handleCachesKml(req, env);
   const gpxCode = /^\/caches\/([A-Za-z0-9-]+)\.gpx$/.exec(rest);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * capabilities.ts — the Tool permission model (docs/design/27 B.3). A Tool declares the capabilities it needs
+ * capabilities.ts — the Tool permission model. A Tool declares the capabilities it needs
  * in its manifest; the host grants them (the user approves imported tools). A Tool can ONLY reach a
  * host-API surface it was granted — no ambient network/DOM/FS. The three GATED capabilities carry extra
  * weight: 'tx' additionally passes the existing H5 / control-verification TX gate at call time, and a

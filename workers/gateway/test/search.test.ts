@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { likeEscape } from "../src/search.js";
 
-describe("search — LIKE-wildcard escaping (docs/design/11 M2)", () => {
+describe("search — LIKE-wildcard escaping", () => {
   it("neutralizes % and _ so they match literally, not as wildcards", () => {
     expect(likeEscape("100%")).toBe("100\\%");
     expect(likeEscape("a_b")).toBe("a\\_b");

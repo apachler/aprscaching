@@ -14,7 +14,7 @@ const nodeStore: NodeStore = {
   routes: () => [], users: () => [{ call: "OE1USR" }], mheard: () => [], info: () => "APRScaching NET/ROM node",
 };
 
-describe("NET/ROM L4 inbound session server (docs/design/29 F2)", () => {
+describe("NET/ROM L4 inbound session server", () => {
   it("accepts an inbound circuit and drives the node CLI over it", () => {
     // the far station's originating circuit; the near circuit is our accepting node session
     const q: Array<{ to: "near" | "far"; p: NrTpPacket }> = [];

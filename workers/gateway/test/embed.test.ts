@@ -5,7 +5,7 @@ import type { Env } from "../src/env.js";
 
 const env = { APP_URL: "https://app.example" } as unknown as Env;
 
-describe("embed widget + QR (docs/design/11 M4)", () => {
+describe("embed widget + QR", () => {
   it("/embed?cache= serves a self-contained HTML map referencing the read API", async () => {
     const res = handleEmbed(new Request("https://api.example/embed?cache=ac-0001"), env);
     expect(res.headers.get("content-type")).toMatch(/text\/html/);

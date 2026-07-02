@@ -11,7 +11,7 @@
  *
  * The far-end BBS logic is the REAL `@aprsweb/packet` `BbsSession` interpreter driven over a canned
  * in-memory store — not a reimplemented L/R/S/B grammar. So the harness exercises the same FBB command
- * parser the ingest runs, and the Stage-3 Cogmind terminal shell (docs/design/24) drives one command model.
+ * parser the ingest runs, and the Stage-3 Cogmind terminal shell drives one command model.
  */
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, PID_NO_L3, type Ax25Frame } from "@aprsweb/ax25";
 import { BbsSession, type MessageStore, type BbsMsgMeta, type BbsMsgFull } from "@aprsweb/packet";

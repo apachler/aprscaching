@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- Federation rendezvous relay queue (docs/design/15 T2.3 path 2). A hub holds relay queries addressed to a
+-- Federation rendezvous relay queue. A hub holds relay queries addressed to a
 -- NAT'd spoke instance; the spoke leases them over its outbound poll, answers from its own DB, and posts
 -- the (signed) result back — reusing the poll-based box-command seam, so it stays tri-runtime-clean.
 -- Rows are ephemeral request/response state, TTL'd by the scheduled cleanup. All runtimes.

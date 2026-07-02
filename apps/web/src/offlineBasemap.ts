@@ -48,7 +48,7 @@ export function buildGraticuleStyle(stepDeg = 0.1): StyleSpecification {
   return graticule({ bg: "#e9f2f6", line: BRAND.blue, minorOp: 0.22, majorOp: 0.55, minorW: 0.7, majorW: 1.3 }, stepDeg);
 }
 
-/** The Cogmind map (docs/design/24 §4.2): near-black phosphor field + a dim green grid, glowing on the whole
+/** The Cogmind map: near-black phosphor field + a dim green grid, glowing on the whole
  *  degrees. Keyless/offline like the graticule so the map matches the terminal chrome everywhere. */
 export function buildCogmindStyle(stepDeg = 0.1): StyleSpecification {
   return graticule({ bg: "#0b130e", line: "#41ffa0", minorOp: 0.16, majorOp: 0.6, minorW: 0.7, majorW: 1.4, glow: 0.8 }, stepDeg);

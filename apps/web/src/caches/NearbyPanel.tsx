@@ -36,7 +36,7 @@ export function NearbyPanel(props: {
       <div className="nearby-h">
         <span className="muted">nearest first</span>
         {grid && <span className="nearby-grid">{grid}</span>}
-        <button className="fine" title="Cache these caches for offline / field use (docs/design/16 C)"
+        <button className="fine" title="Cache these caches for offline / field use"
           onClick={() => {
             const b = props.map?.getBounds();
             if (!b || !props.caches.length) return;

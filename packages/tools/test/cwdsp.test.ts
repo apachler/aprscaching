@@ -18,7 +18,7 @@ function synth(morse: string, unitMs: number): number[] {
   return out;
 }
 
-describe("Goertzel tone detector (docs/design/28 §6)", () => {
+describe("Goertzel tone detector", () => {
   it("responds to a tone at pitch and rejects silence / off-pitch", () => {
     const n = 800;
     const tone: number[] = []; for (let i = 0; i < n; i++) tone.push(Math.sin((2 * Math.PI * PITCH * i) / SR));

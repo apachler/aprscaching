@@ -5,7 +5,7 @@ import { catSetFrequency, catSetMode, APRS_FREQ } from "../src/index.js";
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, "0")).join(" ");
 const ascii = (b: Uint8Array) => new TextDecoder().decode(b);
 
-describe("cat — set frequency (docs/design/16 H6 one-click tune)", () => {
+describe("cat — set frequency", () => {
   it("Kenwood ASCII FA + 11 digits + ; (EU APRS 144.800)", () => {
     expect(ascii(catSetFrequency("kenwood", APRS_FREQ.eu))).toBe("FA00144800000;");
     expect(ascii(catSetFrequency("kenwood", 14_074_000))).toBe("FA00014074000;");

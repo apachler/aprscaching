@@ -55,7 +55,7 @@ export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
 }
 
 /**
- * Signed browser ingest (docs/design/16 H1.5). Lets a browser RF station push to a PUBLIC gateway without
+ * Signed browser ingest. Lets a browser RF station push to a PUBLIC gateway without
  * the shared ingest secret: the batch is signed by the operator's device key (registered to their
  * callsign). Verifies signature + digest + freshness + key registration. Returns the attributed
  * callsign, or null. Trust is unaffected — callers strip the IGate so browser RF stays Tier C.

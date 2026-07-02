@@ -20,7 +20,7 @@ function modBpsk(bits: string, carrierHz: number, timingPrefix: number, noiseAmp
   return out.map((v) => v + noiseAmp * rnd());
 }
 
-describe("robust PSK31 demod — squaring carrier recovery + AGC + timing recovery (docs/design/28 §6)", () => {
+describe("robust PSK31 demod — squaring carrier recovery + AGC + timing recovery", () => {
   const preamble = "0".repeat(64);                              // PSK31 idle (continuous reversals)
 
   it("recovers text through an OFF-TUNED carrier + timing offset", () => {
