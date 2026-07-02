@@ -35,7 +35,7 @@ function AppShell({ active, title, children, childIsPanel, wide }: { active: str
                  onWorkbench={noop} onProfile={noop} onSettings={noop} />
         <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
         {childIsPanel ? children : (
-          <aside className={`panel right${wide ? " panel-wide" : ""}`}>
+          <aside className={`panel right${wide ? " panel-wide" : ""}`} data-shell={wide ? "terminal" : undefined}>
             <div className="row between"><h2>{title}</h2><span className="spacer" /><button className="icon" aria-label="Close">✕</button></div>
             {children}
           </aside>
@@ -98,7 +98,7 @@ export function DemoHarness({ which }: { which: string }) {
       </header>
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
         {showPacket && (
-          <aside className="panel right demo-surface">
+          <aside className="panel right demo-surface" data-shell="terminal">
             <div className="row between"><h2>📻 Packet terminal</h2><span className="spacer" /></div>
             <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
           </aside>

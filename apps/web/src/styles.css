@@ -1120,3 +1120,37 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
   content: "▸"; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
   color: var(--accent); font-size: 12px;
 }
+
+/* ─── Cogmind [data-shell="terminal"]: workbench apps become bordered CRT windows (docs/24 §6a) ───
+   Same DOM, same components — only presentation flips. The wide workbench Panels (terminal, BBS,
+   node, tools, decoder, rig, remote) get a phosphor frame + a full-width title bar; the app's own
+   status/command rows already read as a terminal. Scoped to the theme, so Modern is untouched. */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 22%, transparent),
+              0 0 18px color-mix(in oklch, var(--accent) 12%, transparent);
+}
+/* the panel header → a CRT window title bar (bleeds to the frame; the 16px panel padding is offset) */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child {
+  margin: -16px -16px 10px; padding: 5px 12px;
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  border-bottom: 1px solid var(--accent);
+}
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2 { font-size: 14px; letter-spacing: .04em; }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::before { content: "┌─ "; color: var(--accent); }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::after  { content: " ─┐"; color: var(--accent); }
+/* the title-bar close button reads as the window's ✕ control */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child .icon { color: var(--accent); }
+
+/* app tab / function rows → a terminal function bar (BBS tabs, packet channel bar) */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .bbs-tabs,
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .pt-chanbar {
+  border-bottom: 1px solid var(--hair); padding-bottom: 8px;
+}
+/* the packet terminal already ships a status line + cmd input — make them read as the window's footer */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .pt-status {
+  border-top: 1px solid var(--hair); color: var(--muted);
+}
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .pt-cmd::before {
+  content: "cmd>"; align-self: center; color: var(--accent); font-family: var(--font-mono); margin-right: 4px;
+}
