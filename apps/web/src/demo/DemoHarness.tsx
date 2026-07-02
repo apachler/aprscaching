@@ -11,6 +11,7 @@ import { RigControl } from "../workbench/RigControl.js";
 import { RemoteControl } from "../workbench/RemoteControl.js";
 import { NavRail } from "../NavRail.js";
 import { TopBar } from "../TopBar.js";
+import { Ico } from "../ui/index.js";
 import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
@@ -22,7 +23,7 @@ const noop = () => {};
 
 // The real desktop 3-pane shell (top bar + nav rail + map + docked panel), so the surfaces are shown
 // at their true docked width in context — the panel is a fixed ~392px column beside the map, by design.
-function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: string; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
+function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: ReactNode; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
   return (
     <div className="app" style={{ height: "100dvh" }}>
       {/* the REAL top bar with the demo operator's chip, matching the signed-in teaser frames so every
@@ -69,7 +70,7 @@ export function DemoHarness({ which }: { which: string }) {
   // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
   if (which === "app-packet") {
     return (
-      <AppShell active="workbench" title="📻 Packet terminal" wide>
+      <AppShell active="workbench" title={<><Ico e="📻 " />Packet terminal</>} wide>
         <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
       </AppShell>
     );
@@ -80,10 +81,10 @@ export function DemoHarness({ which }: { which: string }) {
   if (which === "app-rig") {
     // A demo operator with a control-verified callsign, so the connected tune UI is shown (RX-side,
     // no H5 gate on tuning). The fake serial port is already installed above.
-    return <AppShell active="workbench" title="🎚 Rig control (CAT)"><RigControl /></AppShell>;
+    return <AppShell active="workbench" title={<><Ico e="🎚 " />Rig control (CAT)</>}><RigControl /></AppShell>;
   }
   if (which === "app-remote") {
-    return <AppShell active="workbench" title="🛰 Remote control — your box"><RemoteControl callsign={ME} verified map={null} /></AppShell>;
+    return <AppShell active="workbench" title={<><Ico e="🛰 " />Remote control — your box</>}><RemoteControl callsign={ME} verified map={null} /></AppShell>;
   }
 
   return (
@@ -99,7 +100,7 @@ export function DemoHarness({ which }: { which: string }) {
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
         {showPacket && (
           <aside className="panel right demo-surface" data-shell="terminal">
-            <div className="row between"><h2>📻 Packet terminal</h2><span className="spacer" /></div>
+            <div className="row between"><h2><Ico e="📻 " />Packet terminal</h2><span className="spacer" /></div>
             <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
           </aside>
         )}

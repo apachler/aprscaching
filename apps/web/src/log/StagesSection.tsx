@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
+import { Ico } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
 
 // Minimal WebNFC shapes (lib.dom doesn't ship them): just what we read off a tag.
@@ -77,19 +78,19 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
           <li key={s.stageNo} className={s.unlocked ? "open" : "locked"}>
             <div className="row between">
               <strong>{s.stageNo === 0 ? "Start" : `Stage ${s.stageNo}`}</strong>
-              <span className="muted">{s.unlocked ? "✓ unlocked" : `🔒 ${s.unlock}`}</span>
+              <span className="muted">{s.unlocked ? "✓ unlocked" : <><Ico e="🔒 " c="LOCK " />{s.unlock}</>}</span>
             </div>
             {s.clue && <div className="comment">{s.clue}</div>}
             {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} />}
             {s.unlocked && s.lat != null && s.lon != null && (
               <div className="muted mt-1">
-                📍 <span className="mono">{fmt.coord(s.lat, s.lon)}</span> · <a href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`} target="_blank" rel="noreferrer noopener">map ↗</a>
+                <Ico e="📍 " /><span className="mono">{fmt.coord(s.lat, s.lon)}</span> · <a href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`} target="_blank" rel="noreferrer noopener">map ↗</a>
               </div>
             )}
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && s.unlock === "nfc" && (
               <div className="nfc-unlock mt-2">
                 <div className="row gap-2">
-                  <button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}>📶 Scan NFC tag</button>
+                  <button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}><Ico e="📶 " />Scan NFC tag</button>
                 </div>
                 <div className="row gap-2 mt-2">
                   <input value={code} placeholder="…or enter the tag code" aria-label="Stage tag code" onChange={(e) => setCode(e.target.value)} />

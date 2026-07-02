@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "../api.js";
 import { signAuthorship } from "../crypto.js";
 import { useFmt } from "../format.js";
-import { TierBadge } from "../ui/index.js";
+import { TierBadge, Ico } from "../ui/index.js";
 import type { LogType } from "@aprsweb/shared";
 
 /** One-tap log (the core action). The trust badge IS the feedback shown after the tap. */
@@ -60,10 +60,10 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
       <div className="logresult">
         <div className="big">{result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
         {result.queued
-          ? <div className="muted mt-1">📴 offline — will sync when you're back online</div>
+          ? <div className="muted mt-1"><Ico e="📴 " />offline — will sync when you're back online</div>
           : <div className="tier">{tierBadge(result)}</div>}
         {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
-        {result.signerKey && <div className="muted">signed with your device key ✍</div>}
+        {result.signerKey && <div className="muted">signed with your device key <Ico e="✍" /></div>}
         {result.logType === "found" && (noteOpen ? (
           <div className="mt-3">
             <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />

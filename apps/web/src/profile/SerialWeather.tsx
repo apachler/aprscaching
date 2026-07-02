@@ -3,7 +3,7 @@ import { decodeUltimeter, type UltimeterReading } from "@aprsweb/aprs";
 import { WebSerialWeather, webSerialSupported } from "../rf/serialWeather.js";
 import { submitWxReading } from "../api.js";
 import { useFmt } from "../format.js";
-import { useToast } from "../ui/index.js";
+import { useToast, Ico } from "../ui/index.js";
 
 /**
  * Browser-direct PWS over Web Serial (docs/17 W4): read a Peet Bros / Ultimeter station on USB in the
@@ -78,11 +78,11 @@ export function SerialWeather(props: { wxKey: string | null }) {
         <div className="serial-live mono">
           {reading ? (
             <>
-              {reading.tempC != null && <span>🌡 {fmt.temp(reading.tempC)}</span>}
-              {reading.humidity != null && <span>💧 {reading.humidity}%</span>}
-              {reading.windKn != null && <span>🌬 {fmt.speed(reading.windKn)}{reading.windDirDeg != null ? ` @ ${reading.windDirDeg}°` : ""}</span>}
+              {reading.tempC != null && <span><Ico e="🌡 " c="T " />{fmt.temp(reading.tempC)}</span>}
+              {reading.humidity != null && <span><Ico e="💧 " c="RH " />{reading.humidity}%</span>}
+              {reading.windKn != null && <span><Ico e="🌬 " c="WND " />{fmt.speed(reading.windKn)}{reading.windDirDeg != null ? ` @ ${reading.windDirDeg}°` : ""}</span>}
               {reading.pressureHpa != null && <span>{reading.pressureHpa} hPa</span>}
-              {reading.rainTodayMm != null && <span>☔ {reading.rainTodayMm} mm</span>}
+              {reading.rainTodayMm != null && <span><Ico e="☔ " c="RN " />{reading.rainTodayMm} mm</span>}
             </>
           ) : <span className="muted">waiting for a packet…</span>}
         </div>

@@ -7,7 +7,7 @@ import { encodeAprsPosition, encodeAprsMessage } from "@aprsweb/aprs";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
-import { Row, Switch, EmptyState, Advanced, useToast } from "../ui/index.js";
+import { Row, Switch, EmptyState, Advanced, useToast, Ico } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-secret) path
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
@@ -188,7 +188,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                   <div className="row gap-2">
                     <input className="mono field-sm" placeholder="lat" aria-label="Latitude" value={bcn.lat} onChange={(e) => setBcn((b) => ({ ...b, lat: e.target.value }))} />
                     <input className="mono field-sm" placeholder="lon" aria-label="Longitude" value={bcn.lon} onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))} />
-                    <button onClick={useMyLocation} title="Use my location" aria-label="Use my location">📍</button>
+                    <button onClick={useMyLocation} title="Use my location" aria-label="Use my location"><Ico e="📍" c="@" /></button>
                   </div>
                   <input placeholder="comment (optional)" aria-label="Beacon comment" maxLength={43} value={bcn.comment} onChange={(e) => setBcn((b) => ({ ...b, comment: e.target.value }))} />
                   <div className="row end"><button className="primary" onClick={beacon} disabled={txBusy}>Beacon</button></div>

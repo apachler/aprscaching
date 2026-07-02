@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, ErrorState } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState, Ico } from "../ui/index.js";
 
 /** Enter/Space activate a role="button" row so it's keyboard-operable (ui-ux.md §7). */
 const rowKey = (fn: () => void) => (e: React.KeyboardEvent) => {
@@ -84,7 +84,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
     } catch (e) { setMsg((e as Error).message); }
   }
 
-  const DELIVERY: Record<string, string> = { held: "⏳ held", sent: "📡 sent", acked: "✓ delivered", expired: "✕ expired" };
+  const DELIVERY: Record<string, string> = { held: "held", sent: "sent", acked: "✓ delivered", expired: "✕ expired" };
   const tabBtn = (key: Tab, label: string, badge?: number) => (
     <button className={tab === key ? "primary" : ""} onClick={() => { setTab(key); setSelected(null); }}>
       {label}{badge ? <Badge className="ml-1">{badge}</Badge> : null}
@@ -146,7 +146,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   };
 
   return (
-    <Panel title="✉ BBS" onClose={props.onClose} wide>
+    <Panel title={<><Ico e="✉ " />BBS</>} onClose={props.onClose} wide>
       <div className="row gap-2 bbs-tabs">
         {tabBtn("inbox", "Inbox", unread)}
         {tabBtn("sent", "Sent")}
@@ -167,7 +167,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
         <ul className="logs">{sent.map((m) => (
           <li key={m.id}>
             <span className="muted">to</span> <strong>{m.toCall}</strong> <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
-            <Badge className="ml-2">{DELIVERY[m.delivery ?? "held"] ?? "⏳ held"}</Badge>
+            <Badge className="ml-2">{DELIVERY[m.delivery ?? "held"] ?? "held"}</Badge>
             {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
             <div className="comment">{m.body}</div>
           </li>

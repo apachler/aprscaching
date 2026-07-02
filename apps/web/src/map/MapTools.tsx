@@ -5,6 +5,7 @@ import {
   greatCircleArc, subsolarPoint, terminatorLatitude,
 } from "@aprsweb/aprs";
 import { useFmt } from "../format.js";
+import { Ico } from "../ui/index.js";
 
 /**
  * Map field-navigation tools (docs/11 M2): a Maidenhead/lat-lon grid overlay, concentric range rings
@@ -173,7 +174,7 @@ export function MapTools(props: {
       <div className="maptools-bar" role="group" aria-label="Map tools">
         <button className={grid ? "on" : ""} aria-pressed={grid} title="Grid overlay" onClick={() => setGrid((v) => !v)}>▦</button>
         <button className={rings ? "on" : ""} aria-pressed={rings} title="Range rings" onClick={() => setRings((v) => !v)}>◎</button>
-        <button className={ruler ? "on" : ""} aria-pressed={ruler} title="Ruler (distance + bearing)" onClick={() => { setRuler((v) => !v); if (ruler) clearRuler(); }}>📏</button>
+        <button className={ruler ? "on" : ""} aria-pressed={ruler} title="Ruler (distance + bearing)" onClick={() => { setRuler((v) => !v); if (ruler) clearRuler(); }}><Ico e="📏" c="∟" /></button>
         <button className={term ? "on" : ""} aria-pressed={term} title="Day/night terminator" onClick={() => setTerm((v) => !v)}>☾</button>
         <button className={arc ? "on" : ""} aria-pressed={arc} disabled={!home} title={home ? "Bearing from home QTH to the selected cache" : "Set your home locator in your profile to enable"} onClick={() => setArc((v) => !v)}>➶</button>
       </div>

@@ -8,7 +8,7 @@ import {
   type SearchHitCache, type SearchHitStation,
 } from "./api.js";
 import { TopBar } from "./TopBar.js";
-import { Tour, type TourStep } from "./ui/index.js";
+import { Tour, Ico, type TourStep } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprsweb/shared";
 import { surfaceByView } from "@aprsweb/shared";
 import { typeMeta } from "./cacheTypes.js";
@@ -357,6 +357,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   // ---- render cache markers (diffed against the live map) ----
   useEffect(() => {
     const m = map.current; if (!m) return;
+    const cogmind = locSettings.theme === "cogmind";
     const seen = new Set<string>();
     for (const c of shown) {
       if (c.lat == null || c.lon == null) continue;
@@ -366,8 +367,11 @@ export default function Platform({ session, startTour }: { session: SessionState
       const existing = markers.current.get(c.globalId);
       if (existing) {
         el = existing.getElement();
-        // keep the class in sync if a cache flips mirrored↔native (glyph pins only)
-        if (c.type !== "aprs_living") el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
+        // keep the class + glyph in sync if a cache flips mirrored↔native or the theme flips
+        if (c.type !== "aprs_living") {
+          el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
+          const span = el.querySelector("span"); if (span) span.textContent = cogmind ? meta.cog : meta.glyph;
+        }
       } else {
         let anchor: maplibregl.PositionAnchor = "bottom";
         if (c.type === "aprs_living") {
@@ -378,7 +382,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         } else {
           const btn = document.createElement("button");
           btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`; btn.style.background = meta.color;
-          btn.innerHTML = `<span>${meta.glyph}</span>`;
+          btn.innerHTML = `<span>${cogmind ? meta.cog : meta.glyph}</span>`;
           el = btn;
         }
         markers.current.set(c.globalId, new maplibregl.Marker({ element: el, anchor }).setLngLat([c.lon, c.lat]).addTo(m));
@@ -395,7 +399,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     for (const [gid, mk] of markers.current) {
       if (!seen.has(gid)) { mk.remove(); markers.current.delete(gid); }
     }
-  }, [shown]);
+  }, [shown, locSettings.theme]);
 
   // ---- live APRS stations layer (toggled from the workbench) ----
   useEffect(() => {
@@ -406,6 +410,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     const m = map.current; if (!m) return;
     if (!stationsOn) return;
+    const cogmind = locSettings.theme === "cogmind";
     const seen = new Set<string>();
     for (const s of stations) {
       if (s.lat == null || s.lon == null) continue;
@@ -432,14 +437,14 @@ export default function Platform({ session, startTour }: { session: SessionState
       el.style.color = role ? "var(--ink-tier)" : "";
       const moving = s.course != null && !!s.speedKn;
       const span = el.querySelector("span") as HTMLElement;
-      span.textContent = role ? role.glyph : aprs ? aprs.glyph : moving ? "➤" : "•";
+      span.textContent = role ? (cogmind ? role.cog : role.glyph) : aprs ? (cogmind ? aprs.cog : aprs.glyph) : moving ? (cogmind ? "→" : "➤") : "•";
       // only the bare directional dot rotates with course; a concrete symbol glyph stays upright
       span.style.transform = !role && !aprs && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
     }
     for (const [cs, mk] of stationMarkers.current) {
       if (!seen.has(cs)) { mk.remove(); stationMarkers.current.delete(cs); }
     }
-  }, [stations, stationsOn]);
+  }, [stations, stationsOn, locSettings.theme]);
 
   // ---- live activity-spots layer (docs/20 S2): opt-in overlay, distinct marker class ----
   useEffect(() => {
@@ -650,7 +655,7 @@ export default function Platform({ session, startTour }: { session: SessionState
           {!ready && <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>}
           {nearPrompt && mode === "view" && (
             <div className="geo-banner">
-              <span>📍 You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
+              <span><Ico e="📍 " />You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
                 <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span></span>
               <span className="spacer" />
               <button className="primary" onClick={() => {
@@ -705,20 +710,20 @@ function TabBar(props: {
   onMap: () => void; onNearby: () => void; onActivity: () => void; onProfile: () => void;
   onFab: () => void; fabLabel: string; active: string;
 }) {
-  const tab = (key: string, ic: string, label: string, onClick: () => void) => (
+  const tab = (key: string, ic: React.ReactNode, label: string, onClick: () => void) => (
     <button className={props.active === key ? "on" : ""} onClick={onClick}>
       <span className="ic">{ic}</span><span>{label}</span>
     </button>
   );
   return (
     <nav className="tabbar">
-      {tab("map", "🗺", "Map", props.onMap)}
-      {tab("nearby", "📍", "Nearby", props.onNearby)}
+      {tab("map", <Ico e="🗺" c="▦" />, "Map", props.onMap)}
+      {tab("nearby", <Ico e="📍" c="@" />, "Nearby", props.onNearby)}
       <button className="fab" onClick={props.onFab}>
         <span className="ic">{props.fabLabel === "Log" ? "✓" : "＋"}</span><span>{props.fabLabel}</span>
       </button>
-      {tab("activity", "⚡", "Activity", props.onActivity)}
-      {tab("profile", "👤", "You", props.onProfile)}
+      {tab("activity", <Ico e="⚡" c="↯" />, "Activity", props.onActivity)}
+      {tab("profile", <Ico e="👤" c="☺" />, "You", props.onProfile)}
     </nav>
   );
 }

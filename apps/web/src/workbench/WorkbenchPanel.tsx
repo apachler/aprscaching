@@ -1,4 +1,4 @@
-import { Panel, Icon } from "../ui/index.js";
+import { Panel, Icon, Ico } from "../ui/index.js";
 import type { WorkbenchApp, WorkbenchAppId } from "./apps.js";
 
 /**
@@ -13,10 +13,10 @@ export function WorkbenchPanel(props: {
   onTogglePin: (id: WorkbenchAppId) => void;
 }) {
   return (
-    <Panel title="📡 Workbench" onClose={props.onClose}>
+    <Panel title={<><Ico e="📡 " />Workbench</>} onClose={props.onClose}>
       <p className="muted">Your <strong>field station</strong>: these apps drive a radio straight from this
         browser (Web Serial / Bluetooth / audio) or run on the platform — so you can operate off-grid with
-        just a laptop and a rig, no server box. Launch one, or pin it (📌) to the left rail.</p>
+        just a laptop and a rig, no server box. Launch one, or pin it to the left rail.</p>
 
       <div className="wb-apps" role="list">
         {props.apps.map((app) => {

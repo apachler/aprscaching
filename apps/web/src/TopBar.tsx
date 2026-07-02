@@ -5,7 +5,7 @@
  * teaser shows the same chrome everywhere (ui-ux §6: one component, no bespoke one-offs).
  */
 import { ASSET } from "./brand.js";
-import { Icon } from "./ui/index.js";
+import { Icon, Ico } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
 import type { SearchHitCache, SearchHitStation } from "@aprsweb/shared";
 
@@ -25,7 +25,7 @@ export function TopBar(props: {
       <SearchSuggest q={props.q} onChange={props.onSearch} onSubmitRaw={props.onSearchSubmit}
                      onPickCache={props.onPickCache} onPickStation={props.onPickStation} />
       <span className="muted">· {props.count} caches{props.filtered ? " (filtered)" : " in view"}</span>
-      {props.queued > 0 && <span className="muted" title="finds saved offline">· 📴 {props.queued} queued</span>}
+      {props.queued > 0 && <span className="muted" title="finds saved offline">· <Ico e="📴 " />{props.queued} queued</span>}
       <span className="spacer" />
       <button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
         {props.callsign
@@ -36,9 +36,9 @@ export function TopBar(props: {
         <button onClick={props.onNearby}>Nearby</button>
         <button onClick={props.onActivity}>Activity</button>
         {props.sysop && props.onAdmin && (
-          <button onClick={props.onAdmin} title="Instance admin — operator only">🛡</button>
+          <button onClick={props.onAdmin} title="Instance admin — operator only"><Ico e="🛡" c="ADM" /></button>
         )}
-        <button onClick={props.onProfile} title="Profile — identity & advanced tools">👤</button>
+        <button onClick={props.onProfile} title="Profile — identity & advanced tools"><Ico e="👤" c="ME" /></button>
       </span>
       <button className="primary hide-cta" onClick={props.onHide}>+ Hide a cache</button>
     </header>

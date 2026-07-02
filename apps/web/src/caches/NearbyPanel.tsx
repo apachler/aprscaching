@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import maplibregl from "maplibre-gl";
-import { useFmt } from "../format.js";
-import { typeMeta } from "../cacheTypes.js";
+import { useFmt, useTheme } from "../format.js";
+import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";
 import { Panel, EmptyState, Icon } from "../ui/index.js";
 import type { MapCache, StationSummary } from "../api.js";
@@ -14,6 +14,7 @@ export function NearbyPanel(props: {
   selectedId: number | null; onPick: (id: number) => void; onClose: () => void;
 }) {
   const fmt = useFmt();
+  const cogmind = useTheme() === "cogmind";
   const [filter, setFilter] = useState<Filter>("all");
   const c = props.map?.getCenter();
   const here = c ? { lat: c.lat, lon: c.lng } : null;
@@ -47,7 +48,7 @@ export function NearbyPanel(props: {
                 <li key={m.globalId}>
                   <button className={`ccard${m.id === props.selectedId ? " active" : ""}`} disabled={m.id == null}
                           onClick={() => m.id != null && props.onPick(m.id)}>
-                    <span className="ccard-ico" style={{ ["--tc"]: meta.color } as CSSProperties}>{meta.glyph}</span>
+                    <span className="ccard-ico" style={{ ["--tc"]: meta.color } as CSSProperties}>{typeGlyph(meta, cogmind)}</span>
                     <span className="ccard-b">
                       <span className="ccard-name">{m.title}</span>
                       <span className="ccard-sub">{m.code} · {src}</span>

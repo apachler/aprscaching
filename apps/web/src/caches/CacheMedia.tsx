@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMediaItem } from "../api.js";
+import { Ico } from "../ui/index.js";
 
 /**
  * Cache media gallery (docs/26 F-3) — photos, audio and files an owner attaches to a cache (hints,
@@ -44,7 +45,7 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
             <figure key={it.id} className="media-item">
               {it.kind === "image" ? <a href={mediaUrl(it.url)} target="_blank" rel="noreferrer noopener"><img src={mediaUrl(it.url)} alt={it.title ?? "cache photo"} loading="lazy" /></a>
                 : it.kind === "audio" ? <audio controls preload="none" src={mediaUrl(it.url)} />
-                : <a className="media-file" href={mediaUrl(it.url)} target="_blank" rel="noreferrer noopener">📎 {it.title ?? "file"}</a>}
+                : <a className="media-file" href={mediaUrl(it.url)} target="_blank" rel="noreferrer noopener"><Ico e="📎 " />{it.title ?? "file"}</a>}
               {props.isOwner && <button className="media-del" aria-label="Delete media" onClick={() => remove(it.id)}>✕</button>}
             </figure>
           ))}

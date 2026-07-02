@@ -11,6 +11,7 @@ export { LoadMore } from "./LoadMore.js";
 export { usePaged, type PageResult } from "./usePaged.js";
 export { ToastProvider, useToast } from "./Toast.js";
 export { Icon, type IconName } from "./Icon.js";
+export { Ico } from "./Ico.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";
 export { useModalDialog } from "./useModalDialog.js";
 export { TierChip, MinTier, DtBars, Stat, VerifyPanel, VerifyRow, type Tier } from "./operator.js";

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, useToast } from "../ui/index.js";
+import { Row, Badge, EmptyState, useToast, Ico } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box (docs/20 R2). The web app enqueues commands; the box pulls
@@ -46,7 +46,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
 
       <div className="row wrap gap-2">
         <button onClick={() => send("status")} disabled={!signedIn || !boxId}>↻ Status</button>
-        <button onClick={beacon} disabled={!canTx || !boxId} title={canTx ? "Beacon the map centre" : "verify callsign to transmit"}>📍 Beacon here</button>
+        <button onClick={beacon} disabled={!canTx || !boxId} title={canTx ? "Beacon the map centre" : "verify callsign to transmit"}><Ico e="📍 " />Beacon here</button>
         <button onClick={() => send("igate", { on: true })} disabled={!canTx || !boxId}>IGate on</button>
         <button onClick={() => send("igate", { on: false })} disabled={!canTx || !boxId}>IGate off</button>
         <button onClick={() => send("digi", { on: true })} disabled={!canTx || !boxId}>Digi on</button>

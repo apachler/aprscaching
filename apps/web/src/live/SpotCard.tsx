@@ -1,6 +1,6 @@
 import type { Spot } from "../api.js";
 import { useFmt } from "../format.js";
-import { Badge, useToast } from "../ui/index.js";
+import { Badge, useToast, Ico } from "../ui/index.js";
 import { cat, useCatConnected } from "../rf/cat.js";
 
 /**
@@ -34,7 +34,7 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
       </div>
       {s.comment && <p className="spot-comment muted">{s.comment}</p>}
       {rigOn && s.freqHz != null && (
-        <button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot">📻 Tune rig to {freqMHz} MHz{s.mode ? ` ${s.mode}` : ""}</button>
+        <button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot"><Ico e="📻 " />Tune rig to {freqMHz} MHz{s.mode ? ` ${s.mode}` : ""}</button>
       )}
       {props.onViewCache && (
         <button className="primary spot-cta" onClick={props.onViewCache}>This cache is being activated — open it →</button>

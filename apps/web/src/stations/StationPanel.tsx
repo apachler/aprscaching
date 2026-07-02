@@ -4,7 +4,7 @@ import { getStation, createStation, type StationDetail } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprsweb/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, useToast } from "../ui/index.js";
+import { Panel, Badge, ErrorState, Ico, useToast } from "../ui/index.js";
 import { TrackReplay } from "../workbench/TrackReplay.js";
 import { StationGraphs } from "../workbench/StationGraphs.js";
 import { StationPackets } from "../workbench/StationPackets.js";
@@ -29,7 +29,7 @@ export function StationPanel(props: { callsign: string; picked: string; map: map
 
   const retry = () => { setErr(null); setStation(null); getStation(props.picked).then((r) => setStation(r.station)).catch((e) => setErr((e as Error).message)); };
   return (
-    <Panel title={<>📡 <span className="mono">{props.picked}</span></>} onClose={props.onClose}>
+    <Panel title={<><Ico e="📡 " /><span className="mono">{props.picked}</span></>} onClose={props.onClose}>
       {err ? <ErrorState onRetry={retry}>Couldn't load {props.picked}.</ErrorState> : !station ? <p className="muted">Loading station…</p> : (
         <div className="logform">
           <div className="muted">{station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}</div>
@@ -42,9 +42,9 @@ export function StationPanel(props: { callsign: string; picked: string; map: map
           </div>
           {station.wx && (
             <div className="wx">
-              {station.wx.tempC != null && <>🌡 {fmt.temp(station.wx.tempC)} · </>}
-              💧 {station.wx.humidity ?? "—"}% ·{" "}
-              {station.wx.windKn != null && <>🌬 {fmt.speed(station.wx.windKn)} · </>}
+              {station.wx.tempC != null && <><Ico e="🌡 " c="T " />{fmt.temp(station.wx.tempC)} · </>}
+              <Ico e="💧 " c="RH " />{station.wx.humidity ?? "—"}% ·{" "}
+              {station.wx.windKn != null && <><Ico e="🌬 " c="WND " />{fmt.speed(station.wx.windKn)} · </>}
               {station.wx.pressureHpa ?? "—"} hPa</div>
           )}
           <div className="row between mt-3">

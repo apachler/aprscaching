@@ -127,3 +127,6 @@ export function makeFormatters(settings: LocaleSettings): Formatters {
 
 export const FormatContext = createContext<Formatters>(makeFormatters(defaultSettings()));
 export const useFmt = (): Formatters => useContext(FormatContext);
+/** The active theme, reactively (from the settings in context). Cogmind is emoji-free, so components
+ *  gate decorative glyphs on this (see ui/Ico). */
+export const useTheme = (): Theme => normalizeTheme(useContext(FormatContext).settings.theme);

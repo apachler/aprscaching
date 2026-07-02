@@ -1,5 +1,5 @@
 import type maplibregl from "maplibre-gl";
-import { Panel } from "../ui/index.js";
+import { Panel, Ico } from "../ui/index.js";
 import { appById, type WorkbenchAppId } from "./apps.js";
 import { TerminalPanel } from "../packet/TerminalPanel.js";
 import { BbsPanel } from "../live/BbsPanel.js";
@@ -30,5 +30,9 @@ export function WorkbenchAppSurface(props: {
     : app === "node" ? (<><p className="muted">Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal connects to it.</p><NodePanel /></>)
     : null;
 
-  return <Panel title={meta?.title ?? "Workbench"} onClose={onClose} wide={meta?.wide}>{inner}</Panel>;
+  return (
+    <Panel title={<><Ico e={meta ? `${meta.emoji} ` : ""} />{meta?.title ?? "Workbench"}</>} onClose={onClose} wide={meta?.wide}>
+      {inner}
+    </Panel>
+  );
 }

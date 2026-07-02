@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState } from "../ui/index.js";
+import { Panel, Badge, EmptyState, Ico } from "../ui/index.js";
 
 /** Community — area leaderboard, drill into a finder's profile. */
 export function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void }) {
@@ -38,7 +38,7 @@ export function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () 
     );
   }
   return (
-    <Panel title="🏆 Leaderboard" onClose={props.onClose}>
+    <Panel title={<><Ico e="🏆 " />Leaderboard</>} onClose={props.onClose}>
       <div className="row">
         <button className={metric === "points" ? "primary" : ""} onClick={() => setMetric("points")}>Points</button>
         <button className={metric === "finds" ? "primary" : ""} onClick={() => setMetric("finds")}>Finds</button>

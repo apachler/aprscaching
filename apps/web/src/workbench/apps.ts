@@ -14,8 +14,10 @@ export interface WorkbenchApp {
   icon: IconName;
   label: string;
   blurb: string;
-  /** Surface header title (with glyph) shown when the app is launched into its own workspace. */
+  /** Surface header title (emoji-free) shown when the app is launched into its own workspace. */
   title: string;
+  /** Modern-theme leading emoji for the title/launcher; dropped in Cogmind (emoji-free). */
+  emoji: string;
   /** Wide workspace (fills the content area, hides the map) vs. a normal docked side panel. */
   wide?: boolean;
   /** Operator-only: this app drives the instance's always-on server RF infrastructure (the ingest box /
@@ -32,13 +34,13 @@ export interface WorkbenchApp {
 // functionality, so a solo op with just a laptop + radio can operate off-grid with no server box. The
 // `sysop` apps (NET/ROM node, remote box) administer the instance's always-on server ingest — operator-only.
 export const WORKBENCH_APPS: WorkbenchApp[] = [
-  { id: "terminal", icon: "radio", label: "Packet terminal", blurb: "Graphic-Packet multi-channel connected-mode terminal (Web Serial / BLE)", title: "📻 Packet terminal", wide: true },
-  { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads", title: "✉ BBS", wide: true },
-  { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", title: "🔎 Packet decoder", wide: true },
-  { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", title: "🧩 Tools", wide: true },
-  { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", title: "🎚 Rig control (CAT)" },
-  { id: "node", icon: "node", label: "NET/ROM node", blurb: "Run a node · digipeater · sysop console", title: "🗄 NET/ROM node", wide: true, sysop: true },
-  { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", title: "🛰 Remote control — your box", sysop: true },
+  { id: "terminal", icon: "radio", label: "Packet terminal", blurb: "Graphic-Packet multi-channel connected-mode terminal (Web Serial / BLE)", emoji: "📻", title: "Packet terminal", wide: true },
+  { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads", emoji: "✉", title: "BBS", wide: true },
+  { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", emoji: "🔎", title: "Packet decoder", wide: true },
+  { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", emoji: "🧩", title: "Tools", wide: true },
+  { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", emoji: "🎚", title: "Rig control (CAT)" },
+  { id: "node", icon: "node", label: "NET/ROM node", blurb: "Run a node · digipeater · sysop console", emoji: "🗄", title: "NET/ROM node", wide: true, sysop: true },
+  { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", emoji: "🛰", title: "Remote control — your box", sysop: true },
 ];
 
 export const appById = (id: WorkbenchAppId): WorkbenchApp | undefined => WORKBENCH_APPS.find((a) => a.id === id);

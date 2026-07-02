@@ -5,7 +5,7 @@ import { signAccountAction } from "../crypto.js";
 import {
   useFmt, browserLocale, browserTimeZone, type LocaleSettings,
 } from "../format.js";
-import { Panel, Group, Row, Advanced, Switch } from "../ui/index.js";
+import { Panel, Group, Row, Advanced, Switch, Ico } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../workbench/Watchlist.js";
@@ -64,7 +64,7 @@ export function SettingsPanel(props: {
   const [q, setQ] = useState("");
   const match = (title: string, ...kw: string[]) => !q || (title + " " + kw.join(" ")).toLowerCase().includes(q.toLowerCase());
   return (
-    <Panel title="⚙ Settings" onClose={props.onClose}>
+    <Panel title={<><Ico e="⚙ " />Settings</>} onClose={props.onClose}>
       <label className="srch"><span className="srch-ic">⌕</span>
         <input value={q} placeholder="Search settings…" onChange={(e) => setQ(e.target.value)} aria-label="Search settings" />
       </label>

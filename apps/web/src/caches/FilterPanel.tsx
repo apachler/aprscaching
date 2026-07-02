@@ -1,5 +1,6 @@
-import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
-import { Panel, useToast } from "../ui/index.js";
+import { TYPE_ORDER, TYPE_META, typeGlyph } from "../cacheTypes.js";
+import { useTheme } from "../format.js";
+import { Panel, useToast, Ico } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
 import { saveView, type MapViewState } from "../api.js";
 import type { CacheType } from "@aprsweb/shared";
@@ -21,6 +22,7 @@ export function FilterPanel(props: {
 }) {
   const { filters, setFilters } = props;
   const toast = useToast();
+  const cogmind = useTheme() === "cogmind";
   async function share() {
     try {
       const { slug } = await saveView(props.getViewState());
@@ -43,7 +45,7 @@ export function FilterPanel(props: {
       <div className="badges">
         {TYPE_ORDER.map((t) => {
           const m = TYPE_META[t]; const on = filters.types.includes(t);
-          return <button key={t} className={`chip-btn${on ? " primary" : ""}`} onClick={() => toggle(t)}>{m.glyph} {m.label}</button>;
+          return <button key={t} className={`chip-btn${on ? " primary" : ""}`} onClick={() => toggle(t)}>{typeGlyph(m, cogmind)} {m.label}</button>;
         })}
       </div>
       <h4>Network data</h4>
@@ -85,7 +87,7 @@ export function FilterPanel(props: {
       <h4>Share</h4>
       <div className="row between">
         <span className="muted">Save this map view (centre, layers, filters) as a link.</span>
-        <button onClick={share}>🔗 Share this view</button>
+        <button onClick={share}><Ico e="🔗 " />Share this view</button>
       </div>
       <div className="row between mt-5">
         <button className="link" onClick={() => setFilters({ types: [], q: "" })}>clear all</button>

@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
-import { loadSettings, resolveTheme } from "./format.js";
+import { loadSettings, resolveTheme, makeFormatters, FormatContext } from "./format.js";
 
 // Apply the saved theme to <html> before first paint so a Cogmind user doesn't flash the modern
 // palette while the (lazily-loaded) Platform mounts (docs/24 §8 — theme persistence vs first paint).
@@ -12,8 +12,9 @@ const root = createRoot(document.getElementById("root")!);
 // instead of the app — a durable bench for the packet/BBS shells (and the Stage-3 Cogmind flip).
 const demo = new URLSearchParams(location.search).get("demo");
 if (demo) {
+  // the harness renders components directly (no Platform), so provide the format/theme context Ico needs
   import("./demo/DemoHarness.js").then(({ DemoHarness }) =>
-    root.render(<React.StrictMode><DemoHarness which={demo} /></React.StrictMode>));
+    root.render(<React.StrictMode><FormatContext.Provider value={makeFormatters(loadSettings())}><DemoHarness which={demo} /></FormatContext.Provider></React.StrictMode>));
 } else {
   root.render(<React.StrictMode><App /></React.StrictMode>);
 }

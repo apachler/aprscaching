@@ -6,7 +6,7 @@ import {
   type FedPeer, type ForwardPartner, type ForwardRuleRow, type PortStat,
 } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge, EmptyState, Switch, useToast } from "../ui/index.js";
+import { Panel, Group, Badge, EmptyState, Switch, Ico, useToast } from "../ui/index.js";
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -17,7 +17,7 @@ import { Panel, Group, Badge, EmptyState, Switch, useToast } from "../ui/index.j
  */
 export function AdminPanel(props: { callsign: string; map: maplibregl.Map | null; onClose: () => void }) {
   return (
-    <Panel title="🛡 Instance admin" onClose={props.onClose}>
+    <Panel title={<><Ico e="🛡 " />Instance admin</>} onClose={props.onClose}>
       <p className="muted">Operator-only. These settings govern the whole instance, not your account — you see
         this because <span className="mono">{props.callsign}</span> is configured as an operator.</p>
 

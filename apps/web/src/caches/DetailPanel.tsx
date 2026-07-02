@@ -1,10 +1,10 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { toggleFavorite, rateCache, getCacheLogs, cacheShareUrl, cacheQrUrl, type CacheDetail, type CacheRating, type Spot } from "../api.js";
 import type { CacheLogEntry } from "@aprsweb/shared";
-import { typeMeta } from "../cacheTypes.js";
-import { useFmt } from "../format.js";
+import { typeMeta, typeGlyph } from "../cacheTypes.js";
+import { useFmt, useTheme } from "../format.js";
 import { maidenhead } from "../map/geo.js";
-import { Panel, Badge, Icon, TierChip, MinTier, DtBars, Stat, LoadMore, useToast, type Tier } from "../ui/index.js";
+import { Panel, Badge, Icon, Ico, TierChip, MinTier, DtBars, Stat, LoadMore, useToast, type Tier } from "../ui/index.js";
 import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
@@ -23,6 +23,7 @@ export function DetailPanel(props: {
   const c = props.detail;
   const meta = typeMeta(c.type);
   const fmt = useFmt();
+  const cogmind = useTheme() === "cogmind";
   const toast = useToast();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
   useEffect(() => { setFav({ on: c.favorited, count: c.favorites }); }, [c.id, c.favorited, c.favorites]);
@@ -62,7 +63,7 @@ export function DetailPanel(props: {
         </div>
       )}
       <div className="detail-meta">
-        <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>{meta.glyph} {meta.label}</span>
+        <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>{typeGlyph(meta, cogmind)} {meta.label}</span>
         <span className="srcchip">{c.source === "native" ? "APRScaching" : `imported · ${c.sourceName ?? c.source}`}</span>
         <span className="dataval">{c.code}</span>
       </div>
@@ -70,7 +71,7 @@ export function DetailPanel(props: {
 
       {(c.driveIn || c.country || c.tags.length > 0) && (
         <div className="badges cache-tags">
-          {c.driveIn && <span className="chip">🚗 Drive-in</span>}
+          {c.driveIn && <span className="chip"><Ico e="🚗 " />Drive-in</span>}
           {c.country && <span className="chip">{c.country}</span>}
           {c.tags.map((t) => <span key={t} className="chip">#{t}</span>)}
         </div>
@@ -119,7 +120,7 @@ export function DetailPanel(props: {
           <ul className="rdv-list">
             {c.rendezvous.map((r, i) => (
               <li key={`${r.withCacheId}-${r.ts}-${i}`}>
-                🤝 met <span className="mono">{r.withCall}</span> <span className="muted">· {fmt.ago(r.ts)}</span>
+                <Ico e="🤝 " />met <span className="mono">{r.withCall}</span> <span className="muted">· {fmt.ago(r.ts)}</span>
               </li>
             ))}
           </ul>

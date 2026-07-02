@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { getProfile, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge } from "../ui/index.js";
+import { Panel, Group, Badge, Ico } from "../ui/index.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
@@ -16,7 +16,7 @@ export function ProfilePanel(props: {
     else setProfile(null);
   }, [props.callsign]);
   return (
-    <Panel onClose={props.onClose} title={<>👤 <span className="mono">{props.callsign || "Profile"}</span></>}>
+    <Panel onClose={props.onClose} title={<><Ico e="👤 " /><span className="mono">{props.callsign || "Profile"}</span></>}>
       {props.callsign.length < 3 ? <p className="muted">Set your callsign in the top bar to claim your finds.</p> : (<>
         {profile?.profile && (
           <div className="profile-card">
@@ -53,9 +53,9 @@ export function ProfilePanel(props: {
       <Group title="Advanced — APRS workbench" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
         <div className="row wrap">
-          <button onClick={props.onWorkbench}>📡 Workbench</button>
-          <button onClick={props.onMail}>✉ BBS</button>
-          <button onClick={props.onSettings}>⚙ Settings</button>
+          <button onClick={props.onWorkbench}><Ico e="📡 " />Workbench</button>
+          <button onClick={props.onMail}><Ico e="✉ " />BBS</button>
+          <button onClick={props.onSettings}><Ico e="⚙ " />Settings</button>
         </div>
       </Group>
     </Panel>
