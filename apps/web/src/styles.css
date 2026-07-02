@@ -1062,3 +1062,61 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 .tour-actions { margin-top: 14px; gap: 8px; }
 @keyframes tour-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tour-scrim { animation: none; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   COGMIND chrome reskins (docs/24 §4.3) — PRESENTATION ONLY, scoped to [data-theme="cogmind"] via
+   :where() so specificity stays low and the Modern theme is completely untouched. The palette/font/
+   radius already flipped through tokens (T1a); this adds the terminal *character*: framed CRT
+   surfaces, bracketed badges, terminal load/input affordances. No DOM changes, no a11y regressions.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* framed "CRT window" surfaces — phosphor edge + faint glow instead of a soft drop-shadow */
+:where(:root[data-theme="cogmind"]) .panel,
+:where(:root[data-theme="cogmind"]) .card,
+:where(:root[data-theme="cogmind"]) .group,
+:where(:root[data-theme="cogmind"]) .logform,
+:where(:root[data-theme="cogmind"]) .ccard,
+:where(:root[data-theme="cogmind"]) .spot-card {
+  border-color: var(--frame);
+  box-shadow: var(--glow);
+}
+/* the panel header becomes a terminal title rule (┌─ style, drawn with a border not a glyph hack) */
+:where(:root[data-theme="cogmind"]) .panel > .row.between:first-child {
+  border-bottom: 1px solid var(--frame); padding-bottom: 6px; margin-bottom: 8px;
+}
+:where(:root[data-theme="cogmind"]) .panel h2::before { content: "> "; color: var(--accent); }
+
+/* section labels read like terminal headings */
+:where(:root[data-theme="cogmind"]) h4,
+:where(:root[data-theme="cogmind"]) .ulabel { text-transform: uppercase; letter-spacing: .08em; }
+
+/* badges → bracketed tokens: [RF] [App] [unvetted] — no pill, colour carries the tier (+ the text) */
+:where(:root[data-theme="cogmind"]) .badge {
+  background: none; border-radius: 0; padding: 0 1px; margin-right: 6px; letter-spacing: .02em;
+}
+:where(:root[data-theme="cogmind"]) .badge::before { content: "["; }
+:where(:root[data-theme="cogmind"]) .badge::after  { content: "]"; }
+
+/* pagination affordance → "-- Load more --" */
+:where(:root[data-theme="cogmind"]) .loadmore button::before { content: "-- "; }
+:where(:root[data-theme="cogmind"]) .loadmore button::after  { content: " --"; }
+
+/* buttons: terminal outline; the Modern brightness-hover reads wrong on phosphor → phosphor tint */
+:where(:root[data-theme="cogmind"]) button { border-color: var(--frame); }
+:where(:root[data-theme="cogmind"]) button:hover { filter: none; background: color-mix(in oklch, var(--accent) 15%, transparent); }
+:where(:root[data-theme="cogmind"]) button.primary { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--accent); }
+:where(:root[data-theme="cogmind"]) button.primary:hover { background: color-mix(in oklch, var(--accent) 32%, transparent); }
+
+/* focused fields glow rather than draw a soft outline */
+:where(:root[data-theme="cogmind"]) input:focus-visible,
+:where(:root[data-theme="cogmind"]) select:focus-visible,
+:where(:root[data-theme="cogmind"]) textarea:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: var(--glow);
+}
+
+/* nav rail: the active destination gets a terminal cursor marker (paired with the existing .on tint) */
+:where(:root[data-theme="cogmind"]) .rail button.on { position: relative; }
+:where(:root[data-theme="cogmind"]) .rail button.on::before {
+  content: "▸"; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  color: var(--accent); font-size: 12px;
+}
