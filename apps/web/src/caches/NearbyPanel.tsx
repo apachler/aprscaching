@@ -18,7 +18,7 @@ export function NearbyPanel(props: {
   const [filter, setFilter] = useState<Filter>("all");
   const c = props.map?.getCenter();
   const here = c ? { lat: c.lat, lon: c.lng } : null;
-  const grid = here ? maidenhead(here.lat, here.lon) : null;
+  const grid = here ? maidenhead(here.lat, here.lon, 10) : null;
   const dist = (m: { lat: number | null; lon: number | null }) =>
     (here && m.lat != null && m.lon != null) ? haversine(here.lat, here.lon, m.lat, m.lon) : Infinity;
   const caches = [...props.caches].filter((m) => m.lat != null && m.lon != null).sort((a, b) => dist(a) - dist(b)).slice(0, 100);

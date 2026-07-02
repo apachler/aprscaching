@@ -41,17 +41,25 @@ const BANDS: ReadonlyArray<[number, number, string]> = [
   [1_240_000_000, 1_300_000_000, "23cm"],
 ];
 
-/** Maidenhead grid locator → lat/lon (centre of the square/subsquare). Accepts 4- or 6-char grids. */
+// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24 (F-7).
+const MH_BASES = [18, 10, 24, 10, 24];
+/**
+ * Maidenhead grid locator → lat/lon (centre of the smallest cell). Accepts 4/6/8/10-char grids — the
+ * canonical parser shared by the gateway (profile locator validation), spots and tools, so the 10-char
+ * locator (F-7) is honoured everywhere, not just in the web `gridCenter`.
+ */
 export function gridToLatLon(grid: string | undefined | null): { lat: number; lon: number } | null {
   const g = String(grid ?? "").trim().toUpperCase();
-  if (!/^[A-R]{2}[0-9]{2}([A-X]{2})?$/.test(g)) return null;
-  let lon = (g.charCodeAt(0) - 65) * 20 - 180 + (g.charCodeAt(2) - 48) * 2;
-  let lat = (g.charCodeAt(1) - 65) * 10 - 90 + (g.charCodeAt(3) - 48) * 1;
-  if (g.length >= 6) {
-    lon += (g.charCodeAt(4) - 65) * (2 / 24) + (2 / 24) / 2;
-    lat += (g.charCodeAt(5) - 65) * (1 / 24) + (1 / 24) / 2;
-  } else { lon += 1; lat += 0.5; } // centre of the 2°×1° square
-  return { lat, lon };
+  if (!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2}([A-X]{2})?)?)?$/.test(g)) return null;
+  const pairs = g.match(/../g)!;
+  let lon = -180, lat = -90, lonCell = 360, latCell = 180;
+  for (let p = 0; p < pairs.length; p++) {
+    lonCell /= MH_BASES[p]!; latCell /= MH_BASES[p]!;
+    const base = p === 0 || p % 2 === 0 ? 65 : 48; // letters A-X (field/subsquare) or digits 0-9
+    lon += (pairs[p]!.charCodeAt(0) - base) * lonCell;
+    lat += (pairs[p]!.charCodeAt(1) - base) * latCell;
+  }
+  return { lat: lat + latCell / 2, lon: lon + lonCell / 2 }; // centre of the smallest cell
 }
 
 /** Band label for a dial frequency in Hz (undefined if outside the plan or absent). */

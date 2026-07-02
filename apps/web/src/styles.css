@@ -1172,17 +1172,31 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 22%, transparent),
               0 0 18px color-mix(in oklch, var(--accent) 12%, transparent);
 }
-/* the panel header → a CRT window title bar (bleeds to the frame; the 16px panel padding is offset) */
+/* the panel header draws the window's TOP frame line — full width:  ┌─ Title ─────── ✕ ─┐
+   The corners sit at the window edges (title-bar ::before/::after); the flex spacer becomes the
+   horizontal fill rule; the close ✕ is the top-right control. (bleeds to the frame; padding offset) */
 :where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child {
-  margin: -16px -16px 10px; padding: 5px 12px;
+  margin: -16px -16px 10px; padding: 4px 10px; gap: 8px; align-items: center; flex-wrap: nowrap;
   background: color-mix(in oklch, var(--accent) 12%, transparent);
   border-bottom: 1px solid var(--accent);
 }
-:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2 { font-size: 14px; letter-spacing: .04em; }
-:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::before { content: "┌─ "; color: var(--accent); }
-:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::after  { content: " ─┐"; color: var(--accent); }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child::before { content: "┌─"; color: var(--accent); flex: 0 0 auto; }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child::after  { content: "─┐"; color: var(--accent); flex: 0 0 auto; }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2 { font-size: 14px; letter-spacing: .04em; flex: 0 0 auto; }
+/* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame now */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::before,
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] h2::after { content: ""; margin: 0; }
+/* the flex spacer becomes the ─── fill running to the right corner */
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child .spacer {
+  flex: 1 1 auto; align-self: center; height: 0; border-top: 1px solid var(--frame);
+}
 /* the title-bar close button reads as the window's ✕ control */
-:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child .icon { color: var(--accent); }
+:where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] > .row.between:first-child .icon { color: var(--accent); flex: 0 0 auto; }
+
+/* float the CRT window inside the shell on desktop so ALL FOUR borders (not just the flush edges) show */
+@media (min-width: 1024px) {
+  :where(:root[data-theme="cogmind"]) .shell > .panel[data-shell="terminal"] { margin: 8px; }
+}
 
 /* app tab / function rows → a terminal function bar (BBS tabs, packet channel bar) */
 :where(:root[data-theme="cogmind"]) .panel[data-shell="terminal"] .bbs-tabs,

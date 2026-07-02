@@ -54,17 +54,21 @@ export function autoResponderTool(): Tool {
 }
 
 // ---- small pure helpers for the tools below ----
-/** Maidenhead locator → lat/lon (centre of the square/subsquare). Null on a malformed locator. */
+// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24 (F-7).
+const MH_BASES = [18, 10, 24, 10, 24];
+/** Maidenhead locator → lat/lon (centre of the smallest cell); accepts 4/6/8/10-char. Null if malformed. */
 function gridToLatLon(loc: string): { lat: number; lon: number } | null {
   const g = loc.trim().toUpperCase();
-  if (!/^[A-R]{2}[0-9]{2}([A-X]{2})?$/.test(g)) return null;
-  let lon = (g.charCodeAt(0) - 65) * 20 - 180 + (g.charCodeAt(2) - 48) * 2;
-  let lat = (g.charCodeAt(1) - 65) * 10 - 90 + (g.charCodeAt(3) - 48) * 1;
-  if (g.length >= 6) {
-    lon += (g.charCodeAt(4) - 65) * (5 / 60) + (5 / 120);   // 5' per subsquare, centre
-    lat += (g.charCodeAt(5) - 65) * (2.5 / 60) + (2.5 / 120);
-  } else { lon += 1; lat += 0.5; }                            // centre of the 2°×1° square
-  return { lat, lon };
+  if (!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2}([A-X]{2})?)?)?$/.test(g)) return null;
+  const pairs = g.match(/../g)!;
+  let lon = -180, lat = -90, lonCell = 360, latCell = 180;
+  for (let p = 0; p < pairs.length; p++) {
+    lonCell /= MH_BASES[p]!; latCell /= MH_BASES[p]!;
+    const base = p === 0 || p % 2 === 0 ? 65 : 48;
+    lon += (pairs[p]!.charCodeAt(0) - base) * lonCell;
+    lat += (pairs[p]!.charCodeAt(1) - base) * latCell;
+  }
+  return { lat: lat + latCell / 2, lon: lon + lonCell / 2 };
 }
 /** Great-circle distance (km) + initial bearing (°) between two points. */
 function distBearing(a: { lat: number; lon: number }, b: { lat: number; lon: number }): { km: number; bearing: number } {

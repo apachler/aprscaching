@@ -35,7 +35,7 @@ export function ProfileEditor(props: { callsign: string }) {
         <Switch label="Show my profile publicly" checked={p.profilePublic !== false} onChange={(v) => setP((s) => ({ ...s, profilePublic: v }))} />
       </Row>
       <label>Display name <input value={p.displayName ?? ""} maxLength={60} placeholder={props.callsign} onChange={(e) => setP((s) => ({ ...s, displayName: e.target.value }))} /></label>
-      <label>Locator (Maidenhead) <input className="mono" value={p.homeGrid ?? ""} maxLength={8} placeholder="JN77" onChange={(e) => setP((s) => ({ ...s, homeGrid: e.target.value }))} /></label>
+      <label>Locator (Maidenhead) <input className="mono" value={p.homeGrid ?? ""} maxLength={10} placeholder="JN77bc12de" onChange={(e) => setP((s) => ({ ...s, homeGrid: e.target.value }))} /></label>
       <label>Avatar URL <input value={p.avatarUrl ?? ""} placeholder="https://…/me.png" onChange={(e) => setP((s) => ({ ...s, avatarUrl: e.target.value }))} /></label>
       <label>Bio <textarea value={p.bio ?? ""} rows={3} maxLength={500} placeholder="A line or two about your station / operating." onChange={(e) => setP((s) => ({ ...s, bio: e.target.value }))} /></label>
       <label>Public contact email <span className="muted">(optional; your sign-in email stays private)</span>

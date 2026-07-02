@@ -651,7 +651,7 @@ export default function Platform({ session, startTour }: { session: SessionState
           {ready && center && (
             <div className="coordreadout">
               <div><div className="crl">Lat / Lon</div><div className="crv">{center[0].toFixed(4)}° {center[1].toFixed(4)}°</div></div>
-              <div><div className="crl">Grid</div><div className="crv">{maidenhead(center[0], center[1])}</div></div>
+              <div><div className="crl">Grid</div><div className="crv">{maidenhead(center[0], center[1], 10)}</div></div>
               <div><div className="crl">MGRS</div><div className="crv">{toMgrs(center[0], center[1], 4) || "—"}</div></div>
             </div>
           )}
