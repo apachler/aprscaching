@@ -45,10 +45,11 @@ function FederationAdmin() {
         <li key={p.url}>
           <Badge kind={p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"} title={`trust: ${p.trust}`}>{p.health}</Badge>
           <span className="mono">{p.instance ?? p.url}</span>
-          <span className="muted"> · {p.trust}{p.signed ? " · signed" : ""}</span>
+          <span className="muted"> · {p.trust}{p.added_via ? ` (${p.added_via})` : ""}{p.signed ? " · signed" : ""}</span>
           <div className="comment">
             {p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · {p.mirrored_total} mirrored
-            {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} corroborations`}
+            {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
+            {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
             {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
           </div>
           {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}

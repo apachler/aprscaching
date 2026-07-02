@@ -317,6 +317,7 @@ export function cotUrl(bbox: BBox): string {
 /** A federation peer with its T4.3 health metrics (operator observability). */
 export interface FedPeer {
   url: string; instance: string | null; signed: number; trust: "trusted" | "unvetted" | "blocked";
+  added_via?: string | null;   // manual | registry | discovered | auto-promoted (docs/15 T1.1)
   health: "ok" | "error" | "new" | "blocked"; errorRate: number;
   last_sync: number | null; last_ok: number | null; last_error: string | null;
   sync_ok: number; sync_err: number; mirrored_total: number;

@@ -286,6 +286,10 @@ renders markers on the shared map; `map-waypoints` is the built-in producer); an
 ship — **CW** (`cwdsp.ts` Goertzel → `cwKeyEvents`) and **PSK31** (`psk31.ts` `psk31Demod`, differential
 BPSK I/Q per symbol → varicode bits), both unit-tested end-to-end against a synthesised signal, driven by a
 **Web Audio mic capture** (`apps/web` `audioDecode.ts` + a "Listen (mic)" button in the Tools decode box) —
-so the F-5 CW/PSK31 decoders work on a live signal. **Remaining refinement (validate-at-deploy):** a
-Costas/AGC + symbol-timing recovery loop for weak/off-tuned signals (the pure decoders assume a known
-carrier + clean alignment; the mic path has no headless test).
+so the F-5 CW/PSK31 decoders work on a live signal. The **weak/off-tuned refinement** now ships too:
+`psk31DemodRobust` adds an **AGC** (unit-RMS), **carrier recovery by squaring** (x² doubles the phase so the
+±180° data modulation vanishes, leaving a clean 2·carrier tone a fine DFT locks onto — immune to the reversal
+sidebands that defeat a plain energy search over an idle preamble), and **symbol-timing recovery** (max-energy
+sampling offset), then decodes differentially after de-rotating the residual carrier error θ (estimated from
+`mean(z²)`). Unit-tested through a carrier offset + timing offset + additive noise (`psk31robust.test.ts`).
+**Remaining (validate-at-deploy):** the live mic path itself has no headless test.
