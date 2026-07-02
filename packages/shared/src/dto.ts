@@ -245,6 +245,7 @@ export interface ProfileCard {
 }
 export interface Profile {
   callsign: string; accountVerified: boolean;
+  homeInstance?: string;  // the instance this operator is homed at (docs/15 T3.2); shown as "homed at …"
   supporter?: boolean;  // recognition badge (docs/12); never affects functionality
   finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
   corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify (docs/13)

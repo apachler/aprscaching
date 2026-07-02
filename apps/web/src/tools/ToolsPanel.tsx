@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sanitizePanel, checkManifestSignature, resolveTrust, verifyRegistry, type Capability, type Colouriser, type RegistryEntry, type SignedRegistry, type Tool, type ToolManifest, type ToolTrust } from "@aprsweb/tools";
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
+import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/audioDecode.js";
 import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost, TOOLS_TOAST_EVENT } from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
@@ -111,6 +112,20 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
   }
+  // Web Audio mic capture → the CW/PSK31 front-ends (docs/28 §6; Chromium + mic, validate-at-deploy).
+  const [listening, setListening] = useState(false);
+  const capRef = useRef<AudioCapture | null>(null);
+  async function listenToggle() {
+    if (listening && capRef.current) {
+      const text = await capRef.current.stop().catch(() => "");
+      capRef.current = null; setListening(false);
+      setDecodeIn((v) => `${v}\n→ ${text || "(nothing decoded)"}`);
+      return;
+    }
+    try { capRef.current = await listenDecode(decodeKind as "cw" | "psk31", { pitchHz: 700, carrierHz: 1000 }); setListening(true); }
+    catch (e) { toast(`Mic: ${(e as Error).message}`); }
+  }
+
   async function runDecode() {
     const dec = host.decoders().find((d) => d.id === decodeKind);
     if (dec) { setDecodeIn((v) => `${v}\n→ ${dec.decode(v.trim())}`); return; }
@@ -211,6 +226,8 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
               {allDecoders.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
             </select>
             <button onClick={runDecode}>Decode</button>
+            {audioDecodeSupported() && (decodeKind === "cw" || decodeKind === "psk31") &&
+              <button onClick={listenToggle} className={listening ? "primary" : ""}>{listening ? "Stop" : "Listen (mic)"}</button>}
           </div>
           <textarea value={decodeIn} onChange={(e) => setDecodeIn(e.target.value)} rows={3}
             placeholder={decodeKind === "cw" ? "…. . .-.. .-.. ---" : "00…11…00 varicode bits"} className="mono" />

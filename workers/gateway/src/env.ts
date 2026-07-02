@@ -21,6 +21,7 @@ export interface Env {
   // ---- signed instance registry / namespace authority (T4.2) — all optional ----
   FED_REGISTRY?: string;     // signed registry doc {entries:[{instance,url?,key?,operator?,aprsCall?}],at,sig,signer}
   FED_REGISTRY_KEY?: string; // the registry authority's Ed25519 public key (base64url) used to verify FED_REGISTRY
+  FED_REGISTRY_DNS?: string; // alt source (T4.2): a DNS TXT record name carrying `url=…;key=…` to the signed registry
   FED_OPERATOR?: string;     // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string;    // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
   FED_AMATEUR_ENDPOINT?: string; // reserved (docs/22): optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral

@@ -52,9 +52,12 @@ contradictions (`shouldAutoPromote`). Default behaviour + cost are unchanged (tr
 operator opts in. **Contradiction signal — DONE:** a peer that answers the same (coarsened) corroboration
 query with `corroborated:false` while the trusted quorum nonetheless confirms it earns `rep_failed++`
 (`contradictors()` pure + tested; unavailable/timeout peers are NOT penalised) — which also blocks
-`shouldAutoPromote`. **Still deferred:** a dedicated Settings → Federation UI (Settings → Network already
-shows trust + health + reputation) + live re-homing of mirrored find attribution (T3.2) + the DNS-`TXT`
-registry anchor (T4.2).
+`shouldAutoPromote`. **"homed at" (T3.2) — DONE:** the profile response carries `homeInstance` (= `INSTANCE`)
+and the profile UI shows "homed at `<instance>`" (mirrored-cache origin was already shown by
+`RemoteCachePanel`). **DNS-`TXT` anchor (T4.2) — DONE:** `loadRegistry` falls back to a `FED_REGISTRY_DNS`
+TXT record (`url=…;key=…` via DoH → fetch + `verifyRegistry`); `parseRegistryTxt` pure + tested. **Still
+deferred:** a dedicated Settings → Federation UI (Settings → Network already shows trust + health +
+reputation).
 
 - **Schema** — extend `fed_peers`:
   ```sql

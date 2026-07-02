@@ -282,7 +282,10 @@ authority to a `/.well-known` doc (pairs `docs/15` F7 governance).
 The Tools platform is now feature-complete: imported-tool parity is **closed** (commands, IPC, colourisers,
 panels, decoders all cross the worker boundary, §5f); signing + a registry gate third-party imports (§7);
 the **`map` host surface** ships (a `map`-capability tool emits a declarative `MapLayerSpec` → `ToolMapLayers`
-renders markers on the shared map; `map-waypoints` is the built-in producer); and the **CW audio front-end**
-ships (`cwdsp.ts` Goertzel tone detector → `cwKeyEvents` → `morseFromTiming` → `decodeMorse`, so the F-5 CW
-decoder works on a live signal). **Remaining seam:** the **PSK31 BPSK demod** (carrier + phase recovery at
-31.25 baud) and the thin Web Audio mic capture that drives both front-ends (validate-at-deploy).
+renders markers on the shared map; `map-waypoints` is the built-in producer); and the **audio front-ends**
+ship — **CW** (`cwdsp.ts` Goertzel → `cwKeyEvents`) and **PSK31** (`psk31.ts` `psk31Demod`, differential
+BPSK I/Q per symbol → varicode bits), both unit-tested end-to-end against a synthesised signal, driven by a
+**Web Audio mic capture** (`apps/web` `audioDecode.ts` + a "Listen (mic)" button in the Tools decode box) —
+so the F-5 CW/PSK31 decoders work on a live signal. **Remaining refinement (validate-at-deploy):** a
+Costas/AGC + symbol-timing recovery loop for weak/off-tuned signals (the pure decoders assume a known
+carrier + clean alignment; the mic path has no headless test).

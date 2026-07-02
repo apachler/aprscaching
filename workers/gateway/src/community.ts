@@ -101,6 +101,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
 
   return json({
     callsign: cs,
+    homeInstance: env.INSTANCE,               // where this operator is homed (docs/15 T3.2)
     accountVerified: (acct?.verified ?? 0) === 1,
     supporter: acct?.tier === "supporter",   // recognition only (docs/12); never gates anything
     finds: stat?.finds ?? 0, points: Math.round(stat?.points ?? 0),

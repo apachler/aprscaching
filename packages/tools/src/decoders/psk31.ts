@@ -34,3 +34,33 @@ export function encodeVaricode(text: string): string {
 export function decodeVaricode(bits: string): string {
   return bits.split("00").map((code) => (code ? REV[code] ?? "" : "")).join("");
 }
+
+export interface Psk31Opts { carrierHz?: number; baud?: number }
+
+/**
+ * PSK31 differential BPSK demodulator (docs/28 §6) — the audio FRONT-END that turns PCM into the varicode
+ * bitstream `decodeVaricode` consumes. Downmix to I/Q at the carrier, integrate over each 31.25-baud symbol,
+ * and emit a bit per phase transition: a ~180° reversal is a binary **0**, no reversal a **1** (PSK31
+ * convention). Pure + unit-tested against a synthesised signal; it assumes symbol alignment from sample 0
+ * and a KNOWN carrier — live-signal **carrier + symbol-timing recovery** (a Costas/DPLL loop) is the thin
+ * browser wrapper's job (validate-at-deploy). Feed the result to `decodeVaricode`.
+ */
+export function psk31Demod(samples: ArrayLike<number>, sampleRate: number, opts: Psk31Opts = {}): string {
+  const carrier = opts.carrierHz ?? 1000;
+  const sps = sampleRate / (opts.baud ?? 31.25);
+  const phases: number[] = [];
+  for (let s = 0; ; s++) {
+    const start = Math.floor(s * sps), end = Math.floor((s + 1) * sps);
+    if (end > samples.length) break;
+    let I = 0, Q = 0;
+    for (let i = start; i < end; i++) { const t = i / sampleRate; I += samples[i]! * Math.cos(2 * Math.PI * carrier * t); Q += samples[i]! * Math.sin(2 * Math.PI * carrier * t); }
+    phases.push(Math.atan2(Q, I));
+  }
+  let bits = "";
+  for (let i = 1; i < phases.length; i++) {
+    let d = Math.abs(phases[i]! - phases[i - 1]!);
+    if (d > Math.PI) d = 2 * Math.PI - d;              // wrap to [0, π]
+    bits += d < Math.PI / 2 ? "1" : "0";               // small change = no reversal = 1; ~π = reversal = 0
+  }
+  return bits;
+}

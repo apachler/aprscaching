@@ -155,15 +155,61 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
   } catch { return false; }
 }
 
-/** Load + verify FED_REGISTRY against FED_REGISTRY_KEY → instance→entry map (empty if absent/invalid). */
-export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
-  if (!env.FED_REGISTRY || !env.FED_REGISTRY_KEY) return new Map();
-  let doc: SignedRegistry;
-  try { doc = JSON.parse(env.FED_REGISTRY); } catch { return new Map(); }
-  if (!(await verifyRegistry(doc, env.FED_REGISTRY_KEY))) return new Map(); // reject an unsigned/forged registry
+/** Verify a signed registry doc against a pinned key → instance→entry map (empty if invalid). */
+async function registryToMap(doc: SignedRegistry, key: string): Promise<Map<string, RegistryEntry>> {
   const m = new Map<string, RegistryEntry>();
+  if (!(await verifyRegistry(doc, key))) return m;    // reject an unsigned / forged registry
   for (const e of doc.entries) if (e?.instance) m.set(e.instance, e);
   return m;
+}
+
+/**
+ * Parse a federation-registry DNS `TXT` record (T4.2, pure) — a `k=v;k=v` string that anchors the signed
+ * registry off DNS instead of an env var: `url=<https URL to the signed registry JSON>; key=<authority
+ * base64url>`. Later keys win; unknown tokens ignored. Returns `{}` when neither field is present.
+ */
+export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
+  const out: { url?: string; key?: string } = {};
+  for (const tok of String(txt).replace(/^"|"$/g, "").split(";")) {
+    const i = tok.indexOf("=");
+    if (i < 0) continue;
+    const k = tok.slice(0, i).trim().toLowerCase(), v = tok.slice(i + 1).trim();
+    if (k === "url" && /^https:\/\//.test(v)) out.url = v;
+    else if (k === "key" && v) out.key = v;
+  }
+  return out;
+}
+
+/** Fetch the registry via a DNS `TXT` anchor (T4.2): DoH-resolve FED_REGISTRY_DNS, follow its url+key. */
+async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
+  const name = env.FED_REGISTRY_DNS;
+  if (!name) return new Map();
+  try {
+    const doh = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`, {
+      headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(3000),
+    });
+    if (!doh.ok) return new Map();
+    const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
+    for (const a of answers) {
+      const { url, key } = parseRegistryTxt(a.data);
+      if (!url || !key) continue;
+      const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (!r.ok) continue;
+      const map = await registryToMap((await r.json()) as SignedRegistry, key);
+      if (map.size) return map;
+    }
+  } catch { /* DoH / fetch / parse failure → no registry */ }
+  return new Map();
+}
+
+/** Load + verify the federation registry → instance→entry map. Source: FED_REGISTRY env, else a DNS TXT
+ *  anchor (FED_REGISTRY_DNS, T4.2). Empty when absent/invalid/forged. */
+export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
+  if (env.FED_REGISTRY && env.FED_REGISTRY_KEY) {
+    try { return await registryToMap(JSON.parse(env.FED_REGISTRY) as SignedRegistry, env.FED_REGISTRY_KEY); }
+    catch { return new Map(); }
+  }
+  return registryFromDns(env);
 }
 
 /** Anti-spoof (T4.2, pure): if the registry binds this instance to a key, its published keys MUST

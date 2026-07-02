@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { verifyRegistry, registryKeyAllowed, stableStringify, type SignedRegistry } from "../src/federation.js";
+import { verifyRegistry, registryKeyAllowed, stableStringify, parseRegistryTxt, type SignedRegistry } from "../src/federation.js";
 
 const b64u = (buf: ArrayBuffer) => {
   let s = ""; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };
+
+describe("DNS TXT registry anchor (T4.2)", () => {
+  it("parses url + key from a k=v;k=v TXT string; ignores junk + non-https", () => {
+    expect(parseRegistryTxt('"url=https://oe.aprscaching.net/reg.json; key=ABC123"')).toEqual({ url: "https://oe.aprscaching.net/reg.json", key: "ABC123" });
+    expect(parseRegistryTxt("key=ONLYKEY")).toEqual({ key: "ONLYKEY" });
+    expect(parseRegistryTxt("url=http://insecure; noise; =x")).toEqual({}); // http rejected, junk ignored
+    expect(parseRegistryTxt("")).toEqual({});
+  });
+});
 
 describe("signed instance registry (F7/T4.2)", () => {
   it("verifies an authority-signed registry, rejects tampering + a wrong authority", async () => {
