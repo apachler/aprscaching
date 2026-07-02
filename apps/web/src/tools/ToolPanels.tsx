@@ -35,6 +35,15 @@ function Node({ n }: { n: PanelNode }) {
           <tbody>{n.rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c}</td>)}</tr>)}</tbody>
         </table>
       );
+    case "blocks":
+      // CP437/ANSI cell grid (GP GIP). A monospace grid of spans; colour from the ANSI token when set.
+      return (
+        <div className="tp-blocks" style={{ "--tp-cols": n.cols } as CSSProperties} role="img" aria-label="block art">
+          {n.cells.map((cell, i) => (
+            <span key={i} style={cell.c != null ? ({ color: `var(--ansi-${cell.c})` } as CSSProperties) : undefined}>{cell.ch === " " ? " " : cell.ch}</span>
+          ))}
+        </div>
+      );
     default:
       return null;
   }

@@ -14,12 +14,26 @@ export type PanelNode =
   | { kind: "kv"; key: string; value: string; tone?: PanelTone }         // a labelled value row
   | { kind: "badge"; text: string; tone?: PanelTone }
   | { kind: "bar"; label: string; value: number; max: number; tone?: PanelTone } // an ASCII/▁ bar meter
-  | { kind: "table"; head: string[]; rows: string[][] };
+  | { kind: "table"; head: string[]; rows: string[][] }
+  // A monospace CP437/ANSI cell grid — the Graphic-Packet "GIP" imagery primitive (docs/28 §5g). Each
+  // cell is a single glyph with an optional ANSI colour index (0–15 → --ansi-N); the host renders it as
+  // a `grid` of spans. Function-agnostic: a tool decides the cells are an image, a spectrum, a game board.
+  | { kind: "blocks"; cols: number; cells: { ch: string; c?: number }[] };
 
 /** A tool's panel: an optional title + an ordered list of nodes. Replaced wholesale on each setPanel. */
 export interface PanelSpec {
   title?: string;
   nodes: PanelNode[];
+}
+
+/** Turn a block of monospace text (CP437/ANSI art — e.g. a `.ans` export) into a `blocks` node. Monochrome
+ *  (green phosphor) by default; `cols` = the widest line, rows padded so the grid is rectangular. */
+export function parseBlocks(text: string, cap = 4000): Extract<PanelNode, { kind: "blocks" }> {
+  const lines = String(text).replace(/\r/g, "").split("\n").slice(0, 64);
+  const cols = Math.max(1, Math.min(200, lines.reduce((m, l) => Math.max(m, l.length), 0)));
+  const cells: { ch: string; c?: number }[] = [];
+  for (const line of lines) for (let x = 0; x < cols && cells.length < cap; x++) cells.push({ ch: line[x] ?? " " });
+  return { kind: "blocks", cols, cells };
 }
 
 const TONES = new Set<PanelTone>(["default", "muted", "accent", "ok", "warn", "bad"]);
@@ -47,6 +61,17 @@ export function sanitizePanel(input: unknown): PanelSpec {
         const rows = (Array.isArray(d.rows) ? d.rows : []).slice(0, 100)
           .map((r) => (Array.isArray(r) ? r : []).slice(0, 8).map((c) => str(c, 80)));
         nodes.push({ kind: "table", head, rows });
+        break;
+      }
+      case "blocks": {
+        const cols = Math.max(1, Math.min(200, Math.floor(Number(d.cols) || 1)));
+        const cells = (Array.isArray(d.cells) ? d.cells : []).slice(0, 4000).map((cell) => {
+          const o = cell && typeof cell === "object" ? (cell as Record<string, unknown>) : {};
+          const ch = (typeof o.ch === "string" ? o.ch : " ").slice(0, 1) || " ";
+          const c = Number(o.c);
+          return Number.isInteger(c) && c >= 0 && c <= 15 ? { ch, c } : { ch };
+        });
+        nodes.push({ kind: "blocks", cols, cells });
         break;
       }
       default: /* unknown kind → dropped */ break;

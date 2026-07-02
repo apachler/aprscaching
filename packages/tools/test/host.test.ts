@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ToolHost, validateManifest, builtinTools, expand, withNow, type Tool } from "../src/index.js";
+import { ToolHost, validateManifest, builtinTools, expand, withNow, parseBlocks, sanitizePanel, type Tool } from "../src/index.js";
 
 describe("Tool manifest validation", () => {
   it("accepts a good manifest and normalises the callsign", () => {
@@ -16,7 +16,7 @@ describe("ToolHost — capability enforcement + dispatch (docs/27 B.3)", () => {
   it("built-in tools register, enable, and contribute commands/colourisers/decoders", () => {
     const host = new ToolHost();
     for (const t of builtinTools()) host.register(t);
-    expect(host.list()).toHaveLength(19);
+    expect(host.list()).toHaveLength(20);
     expect(host.list().every((t) => !t.enabled)).toBe(true);          // OFF by default
     host.setEnabled("ctext-macros", true);
     expect(host.runCommand("cq")).toEqual(["CQ CQ CQ de {call} k"]);
@@ -300,6 +300,23 @@ describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
     expect(host.runCommand("notes", "", "bbs")![0]).toBe("back at 1900z");
   });
 
+  it("(GP GIP) block-art renders text into a blocks panel + accepts a render.blocks push", () => {
+    const host = new ToolHost();
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("block-art", true);
+    // /art renders the arg into a blocks node
+    expect(host.runCommand("art", "AB\\nCD", "web")![0]).toBe("Rendered.");
+    let panel = host.panels("web")[0]!.spec;
+    let blocks = panel.nodes.find((n) => n.kind === "blocks") as { cols: number; cells: { ch: string }[] };
+    expect(blocks.cols).toBe(2);
+    expect(blocks.cells.map((c) => c.ch).join("")).toBe("ABCD");
+    // anything can push an image on the bus (here the host stands in for another tool) → panel updates
+    host.hostEmit("render.blocks", { text: "XY" });
+    panel = host.panels("web")[0]!.spec;
+    blocks = panel.nodes.find((n) => n.kind === "blocks") as { cols: number; cells: { ch: string }[] };
+    expect(blocks.cells.map((c) => c.ch).join("")).toBe("XY");
+  });
+
   it("sched-query (GPAUTO) calls the terminal's session.script service; reports when absent", () => {
     const host = new ToolHost();
     host.register(builtinTools().find((t) => t.manifest.name === "sched-query")!);
@@ -311,6 +328,23 @@ describe("GP-archive tools — remote gating + IPC producer/consumer", () => {
     host.registerHostService("session.script", (a) => { got = a; return { ok: true }; });
     expect(host.runCommand("gpauto", "connect HB9W-8; send sh/dx; disconnect", "terminal")![0]).toMatch(/Running 3 steps/);
     expect((got as { steps: unknown[] }).steps).toHaveLength(3);
+  });
+});
+
+describe("(GP GIP) blocks panel node", () => {
+  it("parseBlocks pads ragged lines to a rectangular grid; cols = widest line", () => {
+    const b = parseBlocks("ABC\nD");
+    expect(b.kind).toBe("blocks");
+    expect(b.cols).toBe(3);
+    expect(b.cells.map((c) => c.ch).join("")).toBe("ABCD  "); // second row padded to 3
+  });
+  it("sanitizePanel bounds a blocks node (cols clamp, single-char cells, ANSI colour 0–15)", () => {
+    const s = sanitizePanel({ nodes: [{ kind: "blocks", cols: 999, cells: [{ ch: "XY", c: 3 }, { ch: "!", c: 99 }] }] });
+    const b = s.nodes[0] as { kind: string; cols: number; cells: { ch: string; c?: number }[] };
+    expect(b.kind).toBe("blocks");
+    expect(b.cols).toBe(200);                 // clamped
+    expect(b.cells[0]).toEqual({ ch: "X", c: 3 }); // truncated to 1 char, colour kept
+    expect(b.cells[1]).toEqual({ ch: "!" });       // out-of-range colour dropped
   });
 });
 

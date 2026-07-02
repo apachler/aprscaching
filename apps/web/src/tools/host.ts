@@ -42,9 +42,12 @@ export function feedHeard(call: string, source: string): void {
 /** Enable/disable a tool and notify every mounted surface to re-read the host. */
 export function setToolEnabled(name: string, on: boolean): { ok: boolean; error?: string } {
   const r = toolHost.setEnabled(name, on);
-  try { window.dispatchEvent(new Event(CHANGED)); } catch { /* SSR */ }
+  notifyToolsChanged();
   return r;
 }
+
+/** Tell every mounted surface to re-read the host (e.g. after an imported tool pushes a new panel). */
+export function notifyToolsChanged(): void { try { window.dispatchEvent(new Event(CHANGED)); } catch { /* SSR */ } }
 
 /** Subscribe a component to tool enable/disable changes so it re-renders with the current contributions. */
 export function useToolHost(): ToolHost {

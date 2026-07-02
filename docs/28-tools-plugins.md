@@ -131,12 +131,21 @@ chars, re-entrancy depth ≤16 so a topic loop can't run away), both torn down w
   generalised to plugin↔plugin. Services are host-global (cross-surface) by design — that is the point of a
   bus. The Tools console can introspect live topics/services via `host.ipcTopics()` / `host.ipcServices()`.
 
-**Imported (Worker-sandboxed) tools** reach the bus over the `postMessage` bridge in `sandbox.ts`: the
-worker exposes `register({ commands, ipc })`, and when the tool was granted `ipc` the host relays its
-`ipc.emit(topic,data)` / `ipc.subscribe(topic,cb)` / `ipc.call(name,args)` (async) to the in-process bus via
-`hostEmit`/`hostSubscribe`/`hostCallService`. So a sandboxed third-party tool cooperates over the same bus
-as the built-ins **without ever holding a host or another-tool reference** — the bridge is the only seam,
-and subscriptions are torn down on `destroy()`.
+**Imported (Worker-sandboxed) tools** reach every surface with the SAME contribution set as built-ins, over
+the `postMessage` bridge in `sandbox.ts`: the worker exposes `register({ commands, colourRules, panel,
+decoders })` + an `ipc` object. Contributions split by whether they carry code:
+- **Declarative → registered into the ToolHost** (reach terminal/BBS/node like a built-in): `colourRules`
+  (compiled host-side into a sync monitor colouriser — no per-line Worker round-trip; `colorVar` is
+  allow-listed to `--…`), and `panel` (an initial PanelSpec, plus live updates via `ipc.setPanel` →
+  sanitised → re-rendered). ToolsPanel wraps the import as a host **adapter Tool** (carrying `entry`, so the
+  built-in list filters it out — no duplicate row) and gates each contribution on the tool's grants.
+- **Code-bearing → async worker round-trip**: `commands` (the existing path) and `decoders` (the Tools
+  console `await`s `sandbox.decode(id, input)`).
+- **IPC** (when granted `ipc`): `ipc.emit/subscribe/call` relayed to the bus via `hostEmit`/`hostSubscribe`/
+  `hostCallService`.
+So a sandboxed third-party tool cooperates over the same bus and contributes colourisers/decoders/panels
+**without ever holding a host or another-tool reference** — the bridge is the only seam, subscriptions are
+torn down on `destroy()`.
 
 ### Surface-provided services (GPRI generalised)
 A **surface** (a trusted part of the app that owns a resource — the packet terminal owns the AX.25 link) may
@@ -168,6 +177,7 @@ GP/LinPac-inspired built-ins mapped to our capabilities/surfaces (all client-sid
 | **connect-bell** | event,panel | terminal,bbs,node | **GP bimmel** — rings/logs when a station connects |
 | **link-ping** | command,ipc,panel | terminal,node | **GP rtt** — rolling round-trip time (samples over the `link.rtt` bus topic) |
 | **sched-query** | command,event,ipc,panel | terminal,node | **GP GPAUTO** — `/gpauto <steps>` batch connect/waitfor/send/disconnect (drives the terminal's `session.script` service) |
+| **block-art** | command,panel,ipc | web,terminal,bbs | **GP GIP** — render CP437/ANSI block art (`/art <text>`, or push `render.blocks` on the bus) |
 
 ## 5d. We do NOT build an APRS PMS (deliberate divergence)
 Graphic Packet / LinPac ship a **PMS** (Personal Message System / personal mailbox) that a *connected*
@@ -206,10 +216,6 @@ Evaluated from the GP/LinPac catalog; parked with the reason + what each needs:
 From the full GP distribution (`gpri` spec + `remotes/` + `tools/`). Built ones are in §5c; the rest:
 
 **Deferred (documented, not built):**
-- **Graphic-Packet imagery / GIP** (`gip`, `gipdisp`, `gppaint`, `gif2gip`) — the literal "graphic" in
-  Graphic Packet: inline block/ANSI images. On-theme for Cogmind. Needs a new **generic `blocks`/`canvas`
-  panel node** (a grid of glyph+colour cells the tool fills — function-agnostic, per §5f) + a GIP decoder.
-  Parked behind that panel-node addition.
 - **ELIZA auto-chat** (`gp_eliza`) — a remote chatbot responder. Trivial to build on `remote` + `event`;
   low priority, kept as a demo/teaser candidate.
 
@@ -244,9 +250,7 @@ service could drive any scripted connect flow. That is the invariant: the surfac
 tool decides the script.
 
 ## 6. Follow-ons (not v1)
-Signed-manifest verification + a community **registry/marketplace**; **imported** (Worker-sandboxed)
-tools contributing colourisers/decoders/panels across the postMessage bridge (today `/commands` **and IPC**
-— emit/subscribe/call — cross the worker boundary; colouriser/decoder/panel contributions from imported
-tools are the remaining seam; built-ins get the full set); a `map` layer host surface (capability declared,
-no host surface yet); the browser Web Audio DSP front-ends that feed the CW/PSK31 decoders live signal
-(pairs `docs/16` H4).
+Signed-manifest verification + a community **registry/marketplace** (the real gate before third-party tools
+are shareable); a `map` layer host surface (capability declared, no host surface yet); the browser Web Audio
+DSP front-ends that feed the CW/PSK31 decoders live signal (pairs `docs/16` H4). Imported-tool parity is now
+**closed** — commands, IPC, colourisers, panels, and decoders all cross the worker boundary (§5f).

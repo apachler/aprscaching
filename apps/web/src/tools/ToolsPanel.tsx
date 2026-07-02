@@ -1,9 +1,40 @@
 import { useEffect, useRef, useState } from "react";
-import { type Capability, type ToolManifest } from "@aprsweb/tools";
-import { fetchToolManifest, loadSandbox, type Sandbox } from "./sandbox.js";
-import { useToolHost, setToolEnabled, TOOLS_TOAST_EVENT } from "./host.js";
+import { sanitizePanel, type Capability, type Colouriser, type Tool, type ToolManifest } from "@aprsweb/tools";
+import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
+import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost, TOOLS_TOAST_EVENT } from "./host.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
+
+/** Compile an imported tool's declarative colour rules into a sync colouriser (no per-line Worker call). */
+function compileRules(rules: ColourRule[]): Colouriser {
+  const safeVar = (v?: string) => (v && /^--[a-z0-9-]+$/i.test(v) ? v : undefined);
+  return (line) => {
+    for (const r of rules) {
+      if (!r.srcPrefix && !r.dstPrefix && !r.textIncludes) continue;      // a rule must match on something
+      if (r.srcPrefix && !line.src.toUpperCase().startsWith(r.srcPrefix.toUpperCase())) continue;
+      if (r.dstPrefix && !line.dst.toUpperCase().startsWith(r.dstPrefix.toUpperCase())) continue;
+      if (r.textIncludes && !line.text.includes(r.textIncludes)) continue;
+      return { colorVar: safeVar(r.colorVar), hidden: !!r.hidden };
+    }
+    return null;
+  };
+}
+
+/** Wrap an imported (Worker) tool as a host adapter Tool so its DECLARATIVE contributions (colour rules,
+ *  panel) reach every surface exactly like a built-in. Commands + decoders stay on the async worker path.
+ *  `entry` is forced so ToolsPanel's built-in list can filter imported adapters out (no duplicate row). */
+function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
+  return {
+    manifest: { ...manifest, entry: manifest.entry ?? "tool.js" },
+    activate(ctx) {
+      if (sandbox.colourRules.length && ctx.granted("monitor")) ctx.addColouriser(compileRules(sandbox.colourRules));
+      if (ctx.granted("panel")) {
+        if (sandbox.panel) ctx.setPanel(sanitizePanel(sandbox.panel));
+        sandbox.onPanel((spec) => { try { ctx.setPanel(sanitizePanel(spec)); notifyToolsChanged(); } catch { /* bad spec */ } });
+      }
+    },
+  };
+}
 
 /**
  * ToolsPanel (docs/27 B.3 / docs/28) — manage the sandboxed, capability-gated Tools. It drives the ONE
@@ -46,10 +77,15 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");
   }
-  function runDecode() {
+  async function runDecode() {
     const dec = host.decoders().find((d) => d.id === decodeKind);
-    if (!dec) { toast("Enable the PSK31/CW decoders tool first."); return; }
-    setDecodeIn((v) => `${v}\n→ ${dec.decode(v.trim())}`);
+    if (dec) { setDecodeIn((v) => `${v}\n→ ${dec.decode(v.trim())}`); return; }
+    // an imported (Worker) decoder — decode runs in the sandbox, so await the round-trip
+    for (const im of imported) if (im.enabled && im.sandbox.decoders.some((d) => d.id === decodeKind)) {
+      const out = await im.sandbox.decode(decodeKind, decodeIn.trim());
+      setDecodeIn((v) => `${v}\n→ ${out}`); return;
+    }
+    toast("Enable a decoder tool first.");
   }
   async function runCmd() {
     const word = cmd.replace(/^\//, "").split(/\s+/)[0] ?? "";
@@ -79,13 +115,28 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         call: (n: string, a: unknown) => host.hostCallService(n, a),
       };
       const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge);
+      // Register the imported tool into the shared host so its colour rules + panel reach every surface
+      // (terminal/BBS/node), just like a built-in. Commands + decoders stay on the async worker path below.
+      try {
+        toolHost.register(importedAdapter(manifest, sandbox));
+        const en = setToolEnabled(manifest.name, true);
+        if (!en.ok) toast(`${manifest.title}: ${en.error ?? "some contributions disabled"}`);
+      } catch { /* name already registered (dup import / HMR) — commands still work via the worker path */ }
       setImported((xs) => [...xs, { manifest, sandbox, enabled: true }]);
-      toast(`Imported ${manifest.title} (${sandbox.commands.length} commands).`);
+      const extras = [sandbox.colourRules.length && "colours", sandbox.panel && "panel", sandbox.decoders.length && "decoders"].filter(Boolean).join(", ");
+      toast(`Imported ${manifest.title} (${sandbox.commands.length} commands${extras ? `, ${extras}` : ""}).`);
     } catch (e) { toast(`Import failed: ${(e as Error).message}`); }
   }
 
   const perms = (p: Capability[]) => p.join(", ") || "none";
-  const decodersOn = host.decoders().length > 0;
+  // decoders + commands merge built-in (host) + imported (worker) contributions; imported adapters are
+  // filtered out of the built-in LIST (they carry `entry`) so they don't render as a duplicate row.
+  const builtinList = host.list().filter((t) => !t.manifest.entry);
+  const allDecoders = [
+    ...host.decoders().map((d) => ({ id: d.id, label: d.label })),
+    ...imported.filter((i) => i.enabled).flatMap((i) => i.sandbox.decoders.map((d) => ({ id: d.id, label: `${d.label} (imported)` }))),
+  ];
+  const decodersOn = allDecoders.length > 0;
   const cmds = [...host.commandNames(), ...imported.filter((i) => i.enabled).flatMap((i) => i.sandbox.commands)];
 
   return (
@@ -94,7 +145,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       {!props.verified && <p className="muted fine">Your callsign isn't verified yet — TX/beacon tools stay gated until it is.</p>}
 
       <div className="tools-list">
-        {host.list().map((t) => (
+        {builtinList.map((t) => (
           <div key={t.manifest.name} className="tool-row">
             <div className="tool-meta">
               <strong>{t.manifest.title}</strong> <span className="muted fine">v{t.manifest.version} · {t.manifest.author}</span>
@@ -116,7 +167,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
           <div className="ulabel">Decode (F-5)</div>
           <div className="row gap-2">
             <select value={decodeKind} onChange={(e) => setDecodeKind(e.target.value)}>
-              {host.decoders().map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+              {allDecoders.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
             </select>
             <button onClick={runDecode}>Decode</button>
           </div>

@@ -64,7 +64,7 @@ export function DemoHarness({ which }: { which: string }) {
   useState(() => {
     if (which === "app-rig") installSerialSim();
     if (which === "app-remote") { installBoxSim(); try { localStorage.setItem("acs.boxId", "pi-home"); } catch { /* ignore */ } }
-    if (which === "app-packet-tools") { setToolEnabled("mheard", true); setToolEnabled("watch-alert", true); }
+    if (which === "app-packet-tools") { setToolEnabled("mheard", true); setToolEnabled("watch-alert", true); setToolEnabled("block-art", true); }
     return null;
   });
   useEffect(() => { installBbsSim(); setBbsReady(true); }, []);

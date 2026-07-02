@@ -7,7 +7,7 @@
  */
 import { StationRegistry } from "@aprsweb/packet";
 import type { Tool } from "../host.js";
-import type { PanelSpec } from "../panel.js";
+import { parseBlocks, sanitizePanel, type PanelSpec } from "../panel.js";
 import { decodeMorse, encodeMorse } from "../decoders/morse.js";
 import { decodeVaricode } from "../decoders/psk31.js";
 import { decode7plus } from "../decoders/sevenplus.js";
@@ -393,6 +393,37 @@ export function schedQueryTool(): Tool {
   };
 }
 
+/** (GP GIP) Block art — render CP437/ANSI art as a `blocks` panel (the "graphic" in Graphic Packet).
+ *  `/art <text>` renders text as a monochrome phosphor grid; any tool can also push an image by emitting
+ *  `render.blocks` on the bus ({text} or a full blocks spec) — a generic renderer, function-agnostic. */
+export function blockArtTool(): Tool {
+  const SAMPLE = [
+    "  .-\"\"\"-.",
+    " / .===. \\",
+    " \\/ 6 6 \\/",
+    " ( \\___/ )   APRScaching",
+    "  \\_____/    de OE8APR",
+  ].join("\n");
+  return {
+    manifest: { name: "block-art", title: "Block art (GIP)", author: AUTHOR, version: v, permissions: ["command", "panel", "ipc"], surfaces: ["web", "terminal", "bbs"], description: "Render CP437/ANSI block art (GP GIP). /art <text>, or push render.blocks on the bus." },
+    activate(ctx) {
+      const showText = (text: string) => ctx.setPanel({ title: "Block art", nodes: [parseBlocks(text)] });
+      ctx.registerCommand("art", (args) => {
+        if (!args.trim()) { showText(SAMPLE); return ["Rendered the sample. /art <text> to render your own CP437/ANSI art."]; }
+        showText(args.replace(/\\n/g, "\n")); return ["Rendered."];
+      });
+      // Any tool (incl. a sandboxed import) can push an image: emit("render.blocks", { text }) or a full
+      // { cols, cells } spec. Sanitised before display since the payload may be third-party.
+      ctx.subscribe("render.blocks", (data) => {
+        const d = (data ?? {}) as { text?: unknown; cols?: unknown; cells?: unknown };
+        if (typeof d.text === "string") showText(d.text);
+        else if (Array.isArray(d.cells)) ctx.setPanel(sanitizePanel({ title: "Block art", nodes: [{ kind: "blocks", cols: d.cols, cells: d.cells }] }));
+      });
+      showText(SAMPLE);
+    },
+  };
+}
+
 /** Beacon scheduler — a /beacon command that schedules a comment beacon (TX-gated by the host). */
 export function beaconSchedulerTool(): Tool {
   return {
@@ -452,6 +483,6 @@ export function builtinTools(): Tool[] {
     watchAlertTool(), mheardTool(), autoStatusTool(), gridTool(), sevenPlusTool(),
     // GP-archive additions (docs/28 §5g): remote responders + IPC producer/consumers.
     unitConverterTool(), cwEncoderTool(), stationDbTool(), infoResponderTool(), awayNoteTool(), connectBellTool(), linkPingTool(),
-    schedQueryTool(),
+    schedQueryTool(), blockArtTool(),
   ];
 }
