@@ -87,8 +87,11 @@ mobile (Capacitor shell)       ── native: USB-serial · BLE-KISS · backgrou
 ## 6. Milestones
 - **C1 — rig-control API + browser CAT (Backend A):** Kenwood/Icom-CIV/Yaesu over Web Serial; one-click
   tune to APRS freq. (Pairs `docs/16` H6.)
-- **C2 — Hamlib companion (Backend B):** `apps/ingest` wraps `rigctld`; rig-control API over the
-  gateway channel; capability negotiation.
+- **C2 — Hamlib companion (Backend B):** the pure **`rigctld` TCP-protocol client is BUILT**
+  (`@aprsweb/aprs` `rigctld.ts` — `RigctldClient` + set/get freq/mode/PTT line builders + reply parsers,
+  unit-tested; MIT-clean, carries no Hamlib code — we only speak its wire protocol over a separate process).
+  Remaining (deploy-gated): the `apps/ingest` socket adapter that opens the TCP connection to a live
+  `rigctld` and bridges it to the gateway command channel, plus `\dump_state` capability negotiation.
 - **C3 — companion packaging:** `docker run` / `.deb` / AppImage for the Linux/Pi box.
 - **C4 — Capacitor mobile shell:** USB-serial + BLE-KISS + background; iOS via BLE; reuses the web app.
 - **C5 — remote rig control:** drive Backend B from the web app (folds into `docs/20` R2).
