@@ -5,10 +5,13 @@
 **Status:** BUILT (T1–T3). One of **exactly two dark-only themes** (Modern + Cogmind); the roadmap
 (`docs/26` Stage 3) merges this with the retro terminal shell — **selecting Cogmind *is* the late-90s
 flip**. Light mode is dropped from scope. T1 (token spine + chrome + terminal shell), T2 (Cogmind map
-style), and T3 (TUI monitor · opt-in CRT FX · CP437 glyph variants + `.ans` export) are all shipped.
-Remaining polish: a bundled CP437/VGA webfont binary (T1 §1a·4 — the Cogmind `--font-mono` stack
-already prefers such a face when present and falls back to a box-drawing-capable system mono) and the
-optional standalone `aprscaching-tui` read-API client (pairs with the Bun desktop topology).
+style), and T3 (opt-in CRT FX · CP437 glyph variants · `.ans` export on the packet terminal) are all
+shipped. The **standalone full-screen TUI monitor** (§6.8) was built and then **removed by owner
+decision** (2026-07 — it overlapped the existing Nearby/Activity/ports surfaces); its `.ans` export
+lives on where the doc actually intends it, the **packet terminal**. Remaining polish: a bundled
+CP437/VGA webfont binary (T1 §1a·4 — the Cogmind `--font-mono` stack already prefers such a face when
+present and falls back to a box-drawing-capable system mono) and the optional standalone
+`aprscaching-tui` read-API client (pairs with the Bun desktop topology).
 **Owner:** OE8APR
 **Reads with:** `.claude/rules/ui-ux.md`, `.claude/rules/css.md`, `docs/06-ui-ia-m1.md`, `docs/27`
 (Graphic Packet heritage).
@@ -252,14 +255,14 @@ interpreter, so it's mostly CSS. The full-screen TUI monitor (§6.8) is the T3 f
   badge/button/list reskins, boot splash, Settings toggle. Whole app shifts; map still default style.
 - **T2 — Map style (medium).** `buildCogmindStyle()` + `setStyle` swap + marker re-attach + boxed
   marker variants + persistence. This is what makes it "fully styled."
-- **T3 — HUD + flourishes (medium/large). ✅ DONE.** TUI monitor workbench app (`TuiMonitor.tsx` —
-  a full-screen HUD of heard stations, live spots, port RX/TX bars + a rolling aria-live event log,
-  fed by the data we already serve, injectable for the demo/tests); an **opt-in** scanline+glow CRT
-  toggle (`crt` setting → `data-crt`, Cogmind-only, one cheap static overlay, `prefers-reduced-motion`-
-  gated, off the map style); CP437 glyph variants (the `cog` data-glyph set, shipped with the emoji→
-  ASCII sweep); and `.ans` **ANSI/CP437 export** of the monitor/packet log (`packages/packet`
-  `toAnsi`/`cp437Bytes`, tested). Deferred: the bundled CP437 webfont binary and the optional
-  standalone `aprscaching-tui` read-API client.
+- **T3 — HUD + flourishes (medium/large). ✅ DONE.** An **opt-in** scanline+glow CRT toggle (`crt`
+  setting → `data-crt`, Cogmind-only, one cheap static overlay, `prefers-reduced-motion`-gated, off the
+  map style); CP437 glyph variants (the `cog` data-glyph set, shipped with the emoji→ASCII sweep); and
+  `.ans` **ANSI/CP437 export** of the packet log — a "↓ .ans" affordance on the **packet terminal**
+  (monitor pane as phosphor lines; a connected channel with its ANSI colour preserved), backed by
+  `packages/packet` `toAnsi`/`cp437Bytes` (tested). A standalone full-screen **TUI monitor** app was
+  built then removed by owner decision (overlapped Nearby/Activity/ports). Deferred: the bundled CP437
+  webfont binary and the optional standalone `aprscaching-tui` read-API client.
 
 Ship T1 first (high impact, low risk), then T2 (closes the "map looks wrong" gap), then T3 as polish.
 

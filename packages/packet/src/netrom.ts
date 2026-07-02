@@ -60,7 +60,7 @@ export class NodeSession {
   }
 
   greeting(): string[] {
-    return [`${this.nodeCall}:${this.nodeAlias} — APRScaching NET/ROM node`, `Welcome ${this.call}. ? for help.`, this.prompt()];
+    return [`${this.nodeCall}:${this.nodeAlias} - APRScaching NET/ROM node`, `Welcome ${this.call}. ? for help.`, this.prompt()];
   }
   private prompt(): string { return this.expert ? `${this.nodeAlias}>` : `${this.call} de ${this.nodeAlias}>`; }
   private out(...lines: string[]): { lines: string[]; connect?: string; disconnect?: boolean } { return { lines: [...lines, this.prompt()] }; }
@@ -94,7 +94,7 @@ export class NodeSession {
       }
       case "C": case "CONNECT": {
         if (!arg) return this.out("Usage: C <call|alias>");
-        return { lines: [`Connecting to ${arg.toUpperCase()}…`], connect: arg.toUpperCase() };
+        return { lines: [`Connecting to ${arg.toUpperCase()}...`], connect: arg.toUpperCase() };
       }
       case "CQ": return this.out(`CQ de ${this.call}: ${arg}`);
       default: return this.out(`Invalid command "${w}". ? for help.`);

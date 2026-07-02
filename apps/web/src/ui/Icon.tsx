@@ -10,7 +10,7 @@ export type IconName =
   | "hide" | "log" | "navigation" | "flag" | "summit" | "park" | "castle" | "copy" | "share"
   | "bookmark" | "locate" | "layers" | "plus" | "minus" | "check" | "check-circle" | "bell"
   | "shield-check" | "more" | "chevron" | "alert" | "info" | "near" | "radio" | "filter"
-  | "tools" | "decode" | "dial" | "server" | "pin" | "pin-off" | "node" | "message" | "monitor";
+  | "tools" | "decode" | "dial" | "server" | "pin" | "pin-off" | "node" | "message";
 
 const D: Record<IconName, string> = {
   close: "M18 6 6 18 M6 6l12 12",
@@ -55,7 +55,6 @@ const D: Record<IconName, string> = {
   "pin-off": "M9 3h6l-1 7 4 3v2h-5v6l-1 2-1-2v-6H5v-2l4-3z M3 3l18 18",
   node: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M12 3v3 M12 18v3 M4 6l3.5 3.5 M20 6l-3.5 3.5 M4 18l3.5-3.5 M20 18l-3.5-3.5",
   message: "M4 4h16v16H4z M4 7l8 6 8-6",
-  monitor: "M3 4h18v12H3z M8 20h8 M12 16v4 M6 8l2 2-2 2 M11 12h4",
 };
 
 const FILLED = new Set<IconName>(["navigation", "near"]);

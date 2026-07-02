@@ -30,9 +30,6 @@ await shoot("app-packet", "cogmind", "packet-cogmind.png");
 await shoot("app-packet", "modern", "packet-modern.png");
 await shoot("app-bbs", "cogmind", "bbs-cogmind.png");
 await shoot("app-remote", "cogmind", "remote-cogmind.png");
-await shoot("app-monitor", "cogmind", "monitor-cogmind.png");
-await shoot("app-monitor", "modern", "monitor-modern.png");
-await shoot("app-monitor", "cogmind", "monitor-cogmind-crt.png", true);
 await shoot("app-packet", "cogmind", "packet-cogmind-crt.png", true);
 
 await browser.close();

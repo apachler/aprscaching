@@ -29,7 +29,7 @@ const HELP = [
   "Commands:",
   "  L            list new        LA  list all      LB  bulletins",
   "  LM           list mine       LL n  last n",
-  "  R n [n…]     read message(s)",
+  "  R n [n...]   read message(s)",
   "  S/SP call    send personal   SB cat  bulletin   ST call  traffic",
   "  SR [n]       reply to message n (or the last read)",
   "  K n          kill a message  A   abort a send",
@@ -52,7 +52,7 @@ export class BbsSession {
     const n = this.store.listNew(this.call).length;
     return [
       `[APRScaching BBS ${this.bbsCall}]`,
-      `Hello ${this.call} — ${n} new message${n === 1 ? "" : "s"}. Type H for help.`,
+      `Hello ${this.call} - ${n} new message${n === 1 ? "" : "s"}. Type H for help.`,
       this.prompt(),
     ];
   }
@@ -74,7 +74,7 @@ export class BbsSession {
       case "B": case "BYE": return { lines: [`73 de ${this.bbsCall}`], disconnect: true };
       case "H": case "?": return this.out(...HELP);
       case "X": this.expert = !this.expert; return this.out(`Expert mode ${this.expert ? "on" : "off"}.`);
-      case "I": return this.out(`${this.bbsCall} — APRScaching connected-mode BBS. You are ${this.call}.`);
+      case "I": return this.out(`${this.bbsCall} - APRScaching connected-mode BBS. You are ${this.call}.`);
       case "L": return this.list(this.store.listNew(this.call), "New");
       case "LA": return this.list(this.store.listAll(), "All");
       case "LB": return this.list(this.store.listBulletins(), "Bulletins");
@@ -98,7 +98,7 @@ export class BbsSession {
   }
   private read(ids: string[]): { lines: string[]; disconnect?: boolean } {
     const nums = ids.map(Number).filter((n) => n > 0);
-    if (nums.length === 0) return this.out("Usage: R <id> [id…]");
+    if (nums.length === 0) return this.out("Usage: R <id> [id...]");
     const lines: string[] = [];
     for (const id of nums) {
       const m = this.store.read(id);
@@ -121,10 +121,10 @@ export class BbsSession {
   }
   private startReply(id: number): { lines: string[]; disconnect?: boolean } {
     const m = id ? this.store.read(id) : null;
-    if (!m) return this.out("Nothing to reply to — read a message first or pass an id (SR <id>).");
+    if (!m) return this.out("Nothing to reply to - read a message first or pass an id (SR <id>).");
     const subject = m.subject && /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject ?? ""}`.trim();
     this.pending = { type: m.type === "P" ? "P" : m.type, to: m.from, subject, replyTo: m.id, body: [], stage: "body" };
-    return { lines: [`Reply to ${m.from} — "${subject}". Enter message, end with /EX or a lone "." :`] };
+    return { lines: [`Reply to ${m.from} - "${subject}". Enter message, end with /EX or a lone "." :`] };
   }
   private collect(line: string): { lines: string[]; disconnect?: boolean } {
     const p = this.pending!;

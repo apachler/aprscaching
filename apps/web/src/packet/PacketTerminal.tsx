@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { TerminalSession, parseAnsi, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport } from "@aprsweb/packet";
+import { TerminalSession, parseAnsi, toAnsi, cp437Bytes, StationRegistry, TYPE_TAG, TYPE_COLOR_VAR, type StationType, type Transport, type AnsiLine } from "@aprsweb/packet";
 import type { Ax25Frame } from "@aprsweb/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
@@ -21,7 +21,7 @@ const LS_CTEXT = "acs.packet.ctext";
 
 const DEFAULT_MACROS: { key: string; label: string; text: string }[] = [
   { key: "F1", label: "CQ", text: "cq cq de {call} k" },
-  { key: "F2", label: "Hello", text: "Hello from {call} — {date}" },
+  { key: "F2", label: "Hello", text: "Hello from {call} - {date}" },
   { key: "F3", label: "Bye", text: "73 de {call}, bye" },
   { key: "F4", label: "Help", text: "help" },
 ];
@@ -135,6 +135,19 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
   const activeIx = active && session ? session.channels.findIndex((c) => c.id === active.id) + 1 : 0; // GP channel #
   const monitor = session?.monitor ?? [];
 
+  // Export the current pane as classic colour ANSI art (.ans, docs/24 T3): the monitor as plain
+  // phosphor lines, a connected channel with its ANSI colour preserved (parse → re-emit as SGR).
+  function exportAns() {
+    const lines: AnsiLine[] = viewMon
+      ? monitor.slice(-500).map((m) => `${TYPE_TAG[namesRef.current.classify(m.src, { dest: m.dst }) as StationType]} ${m.src}>${m.dst}  ${m.text}`)
+      : (active?.lines ?? []).map((l) => parseAnsi(l.text).map((s) => ({ text: s.text, fg: s.fg ?? undefined, bg: s.bg ?? undefined, bold: s.bold })));
+    const bytes = cp437Bytes(toAnsi(lines, { fg: 10 }));
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" }));
+    const name = viewMon ? "monitor" : (active?.remoteCall ?? "channel").toLowerCase();
+    const a = document.createElement("a"); a.href = url; a.download = `aprscaching-${name}.ans`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (!props.makeTransport && !webSerialSupported()) {
     return <p className="muted">The packet terminal needs Web Serial (Chromium desktop). On other devices, run the operator-local ingest.</p>;
   }
@@ -143,6 +156,8 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
     <div className="packet-term" data-shell="terminal">
       <div className="row between pt-bar">
         <span className="muted">Station <span className="mono">{myCall}</span></span>
+        <span className="spacer" />
+        {portOpen && <button className="pt-ans" onClick={exportAns} title="Export this pane as ANSI art (.ans)">↓ .ans</button>}
         {portOpen
           ? <button onClick={closePort}>Close TNC</button>
           : <button className="primary" onClick={openPort}>Open KISS TNC…</button>}
@@ -220,7 +235,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
             </div>
             <details className="pt-ctext">
               <summary>CTEXT</summary>
-              <input value={ctext} placeholder="Connect-text auto-sent on connect, e.g. Welcome — {call}"
+              <input value={ctext} placeholder="Connect-text auto-sent on connect, e.g. Welcome {call}"
                 onChange={(e) => { setCtext(e.target.value); localStorage.setItem(LS_CTEXT, e.target.value); }} />
             </details>
           </div>

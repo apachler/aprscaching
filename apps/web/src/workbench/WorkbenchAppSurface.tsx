@@ -8,7 +8,6 @@ import { ToolsPanel } from "../tools/ToolsPanel.js";
 import { RigControl } from "./RigControl.js";
 import { RemoteControl } from "./RemoteControl.js";
 import { NodePanel } from "./NodePanel.js";
-import { TuiMonitor } from "./TuiMonitor.js";
 
 /**
  * WorkbenchAppSurface — renders the launched workbench app in its OWN surface. Every workbench app
@@ -25,7 +24,6 @@ export function WorkbenchAppSurface(props: {
   const meta = appById(app);
   const inner =
     app === "decoder" ? <DecoderPanel />
-    : app === "monitor" ? <TuiMonitor callsign={callsign} map={map} />
     : app === "tools" ? <ToolsPanel callsign={callsign} verified={verified} />
     : app === "rig" ? (<><p className="muted">Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).</p><RigControl /></>)
     : app === "remote" ? <RemoteControl callsign={callsign} verified={verified} map={map} />
