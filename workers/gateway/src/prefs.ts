@@ -13,7 +13,9 @@ import { sessionAccountId } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const UNITS = new Set(["metric", "imperial"]);
-const THEMES = new Set(["dark", "light", "auto"]);
+// v1 themes are "modern"/"cogmind" (docs/24); the legacy dark/light/auto are still accepted so old
+// stored prefs validate (the client's normalizeTheme folds anything non-cogmind → modern).
+const THEMES = new Set(["modern", "cogmind", "dark", "light", "auto"]);
 const MAX_BYTES = 4096;
 
 /**

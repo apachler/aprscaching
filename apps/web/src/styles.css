@@ -1063,6 +1063,14 @@ button.danger:hover { background: color-mix(in oklch, var(--bad) 14%, transparen
 .landing-footer a:hover { color: var(--chrome-ink); text-decoration: underline; }
 .landing-footer a:focus-visible { outline: 2px solid var(--chrome-ink); outline-offset: 3px; border-radius: 3px; }
 
+/* Cogmind: the marketing hero drops the colour photo + teal wash for a near-black phosphor field
+   (docs/24 — every surface is themed, incl. the landing). The wordmark is white text + a green icon,
+   so it reads cleanly on black; text + the explore button go phosphor. */
+:where(:root[data-theme="cogmind"]) .landing { background: var(--page-bg); color: var(--ink); }
+:where(:root[data-theme="cogmind"]) .landing::before {
+  background: radial-gradient(ellipse at 50% 42%, transparent 45%, color-mix(in oklch, black 55%, transparent)); }
+:where(:root[data-theme="cogmind"]) .landing-explore { color: var(--accent); border-color: var(--frame); }
+
 /* quick-tour framework (docs/18 — mechanics; steps deferred). Bottom-anchored accessible dialog. */
 .tour-scrim { position: fixed; inset: 0; z-index: 60; display: grid; align-items: end; justify-items: center;
   padding: 0 16px calc(24px + env(safe-area-inset-bottom)); background: color-mix(in oklch, black 50%, transparent);
