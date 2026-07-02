@@ -37,4 +37,11 @@ describe("provenance — derive firstPartyAttested (docs/22)", () => {
     expect(qConstructOf("TCPIP*,qAC,T2")).toBe("qAC");
     expect(qConstructOf("WIDE1-1")).toBeUndefined();
   });
+
+  it("does NOT attest an AXUDP-tunnelled frame — transport laundering blocked (docs/22 reserved seam)", () => {
+    // apps/ingest normalises an AXUDP datagram to heard_via:'aprs_is' with a bare AX.25 path (no qAR)
+    // and no gating igate → the tunnelled frame can never reach Tier A, however it was transported.
+    const pv = provenanceOf({ heard_via: "aprs_is", igate_call: null, path: "WIDE1-1,WIDE2-1" });
+    expect(pv.firstPartyAttested).toBe(false);
+  });
 });

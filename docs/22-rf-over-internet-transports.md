@@ -373,6 +373,17 @@ Trust-neutral throughout — never feeds the verification engine.
 
 ## 10. Concrete next steps for Claude Code
 
+**Status (post-1.0 pass): all seven scaffolding tasks are BUILT.** (1) the `Transport` enum + (2) the
+`provenance` object live in `packages/shared/src/packet.ts`; (3) the verify engine consumes `provenance`
+only, Tier A gated solely on `firstPartyAttested` (`workers/gateway/src/provenance.ts` + `provenance.test.ts`,
+incl. an explicit AXUDP-can-never-attest case); (4) the **AXUDP listener/port** is wired + feature-flagged
+in `apps/ingest` (`axudp.ts` — the datagram→Tier-C-Packet normalize is now factored into the pure
+`axudpToPacket` and unit-tested, so the "transport ≠ trust" invariant has a regression guard); (5) the ADR
+is `docs/decisions/0001-transport-vs-trust.md`; (6) the hybrid-topology sketch is §5A above; (7) the
+`amateurEndpoint?` seam is on the node model (`FED_AMATEUR_ENDPOINT`). What remains is exactly the
+**explicitly-deferred, non-code** work: owned-RF Tier-A hardware, the 44net PoP/subnet standup, IPIP Mesh /
+BGP — none built by design.
+
 These are scaffolding tasks that keep options open without committing to any
 transport prematurely:
 

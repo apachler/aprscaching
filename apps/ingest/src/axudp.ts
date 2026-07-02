@@ -8,6 +8,23 @@ export interface AxudpOpts { port: number; bind?: string }
 export interface AxudpPeer { host: string; port: number }
 
 /**
+ * PURE: normalize one AXUDP datagram (a bare AX.25 frame over UDP) into a Tier-C ingest Packet, or null if
+ * it isn't a decodable UI/APRS frame. The trust decision lives here and is deliberately fixed:
+ * `heardVia: "aprs_is"` + `port: "axudp"` → the gateway's provenance derivation stamps
+ * `firstPartyAttested = false`, so a tunnelled frame can NEVER reach Tier A ("transport ≠ trust", docs/22).
+ * Factored out of the socket handlers so this invariant is unit-testable without a live UDP socket.
+ */
+export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now() / 1000)): Packet | null {
+  const f = decodeAx25(datagram);
+  if (!f) return null;
+  return {
+    src: f.src, dst: f.dst, path: f.path, payload: f.payload,
+    kind: "other", heardVia: "aprs_is", port: "axudp",   // tunnelled → never first-party attested
+    ts: nowS, raw: f.raw,
+  };
+}
+
+/**
  * AXUDP listener — AX.25 frames tunnelled over UDP (the BPQ node mesh, port 10093). RESERVED seam
  * (docs/22): wired but feature-flagged off; start only when AXUDP_PORT is set.
  *
@@ -24,13 +41,8 @@ export class AxudpListener {
     const s = dgram.createSocket("udp4");
     this.sock = s;
     s.on("message", (msg: Buffer) => {
-      const f = decodeAx25(Uint8Array.from(msg));
-      if (!f) return;
-      this.onPacket({
-        src: f.src, dst: f.dst, path: f.path, payload: f.payload,
-        kind: "other", heardVia: "aprs_is", port: "axudp",  // tunnelled → never first-party attested
-        ts: Math.floor(Date.now() / 1000), raw: f.raw,
-      });
+      const p = axudpToPacket(Uint8Array.from(msg));
+      if (p) this.onPacket(p);
     });
     s.on("error", (e) => console.error("[axudp] socket error:", e.message));
     s.bind(this.o.port, this.o.bind);
@@ -59,12 +71,8 @@ export class AxudpPort {
       for (const cb of this.rawCbs) cb(bytes);
       const f = decodeFrame(bytes);
       if (f) for (const cb of this.frameCbs) cb(f);
-      const ui = decodeAx25(bytes);                       // also feed the Tier-C ingest (positions/etc.)
-      if (ui && this.onPacket) this.onPacket({
-        src: ui.src, dst: ui.dst, path: ui.path, payload: ui.payload,
-        kind: "other", heardVia: "aprs_is", port: "axudp",
-        ts: Math.floor(Date.now() / 1000), raw: ui.raw,
-      });
+      const p = axudpToPacket(bytes);                     // also feed the Tier-C ingest (positions/etc.)
+      if (p && this.onPacket) this.onPacket(p);
     });
     s.on("error", (e) => console.error("[axudp] socket error:", e.message));
     s.bind(this.o.port, this.o.bind);
