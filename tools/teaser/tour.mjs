@@ -209,6 +209,16 @@ async function advancedTools(page) {
 // each one — exhaustive + self-maintaining, so a new disclosure section is captured without editing
 // this script. Used for Settings and the Instance-admin drawer; any multi-group drawer can reuse it.
 async function captureGroups(page, vid, prefix, panelLabel) {
+  // Start from a clean slate: collapse EVERY group so exactly ONE is ever open per shot (some groups —
+  // e.g. Display — default open). Without this the first non-default group would be shot with the
+  // default-open one still expanded. Iterate to a fixed point since collapsing can't re-open others.
+  const allToggles = page.locator(".panel .group-toggle");
+  const nAll = await allToggles.count().catch(() => 0);
+  for (let i = 0; i < nAll; i++) {
+    const g = allToggles.nth(i);
+    if ((await g.getAttribute("aria-expanded").catch(() => null)) === "true") { await g.click().catch(() => {}); await page.waitForTimeout(120); }
+  }
+  await page.waitForTimeout(200);
   const titles = await page.$$eval(".panel .group-toggle", (els) =>
     els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean)).catch(() => []);
   for (const t of titles) {
