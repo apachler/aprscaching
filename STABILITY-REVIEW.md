@@ -154,14 +154,14 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   compare by base call in `tryRf`/`tryLiving`, mirroring `corroborate.ts:localCorroboration`. *Test:*
   position `OE8APR-9` gated by `OE8APR-10` (both the logger's) → assert tier ≠ A. **Touches trust
   model — confirm before implementing.**
-- [ ] **SR-TRUST-02 (High) — "plausible track" is not implemented.** `verify.ts:89-103` (`tryRf`) is
+- [x] **SR-TRUST-02 (High) — "plausible track" is not implemented.** `verify.ts:89-103` (`tryRf`) is
   only `firstPartyAttested` + haversine radius; there is no inter-fix speed/teleport/consistency
   check anywhere (`speed_kn` is stored in `positions` but never read). The README's third A-tier leg
   does not exist, so one forged beacon near the cache mints A. *Fix:* reject a matched fix whose
   implied speed from neighbouring same-callsign fixes exceeds a bound (~300 km/h) and require ≥2
   consistent fixes for A. *Test:* two fixes 1000 km / 60 s apart, second at the cache → tier ≠ A.
   **Touches trust model — confirm before implementing.**
-- [ ] **SR-TRUST-03 (High) — Tier B ignores `appGeo.ts`.** `verify.ts:127-136` (`tryApp`) never reads
+- [x] **SR-TRUST-03 (High) — Tier B ignores `appGeo.ts`.** `verify.ts:127-136` (`tryApp`) never reads
   the required `ts` field; `accuracyM` is attacker-chosen JSON. Tier B is the default `minTier`, so
   any signed-in user can replay a days-old/fabricated reading at the cache coords and reach verified-B
   without being present. *Fix:* reject when `abs(now − appGeo.ts) > ~120 s` (pass `now` in) and clamp

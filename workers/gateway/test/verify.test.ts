@@ -75,11 +75,69 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
   });
 });
 
+// SR-TRUST-02: a Tier-A match must be reachable from the logger's own neighbouring fixes at a sane
+// speed — a single forged beacon dropped at the cache while the real track is 111 km away is a teleport.
+describe("verifyFind — tier A plausible track (SR-TRUST-02)", () => {
+  it("rejects a matched fix a neighbouring fix cannot reach in the elapsed time (teleport)", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [
+        pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 42 }), // 'at' the cache
+        pos({ ...FAR,  heard_via: "rf", igate_call: "OE8YYY", ts: 1000, id: 43 }), // 111 km away, same instant
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).not.toBe("A");
+    expect(r.verified).toBe(false);
+  });
+
+  it("still grants tier A for a consistent track (two nearby fixes 60 s apart)", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [
+        pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1060, id: 42 }),
+        pos({ lat: 47.0705, lon: 15.42, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 43 }),
+      ],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A" });
+  });
+
+  it("grants tier A on a lone fix (no neighbour to contradict — benign single beacon)", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", id: 42 })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r).toMatchObject({ verified: true, tier: "A" });
+  });
+});
+
 describe("verifyFind — tier B (first-party app geolocation)", () => {
   it("verifies an in-app reading near the cache", () => {
     const appGeo: AppGeo = { ...NEAR, accuracyM: 20, ts: 1000 };
     const r = verifyFind(CACHE, appGeo, { loggerPositions: [] });
     expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
+  });
+
+  // SR-TRUST-03: when the request time is known, a stale/fabricated app reading must not reach B.
+  it("rejects a stale app reading when log time is known", () => {
+    const nowT = 1_800_000_000;
+    const stale: AppGeo = { ...NEAR, accuracyM: 20, ts: nowT - 86_400 };  // a day old
+    const r = verifyFind(CACHE, stale, { loggerPositions: [], now: nowT });
+    expect(r.tier).not.toBe("B");
+    expect(r.verified).toBe(false);
+  });
+
+  it("accepts a contemporaneous app reading when log time is known", () => {
+    const nowT = 1_800_000_000;
+    const fresh: AppGeo = { ...NEAR, accuracyM: 20, ts: nowT - 5 };
+    const r = verifyFind(CACHE, fresh, { loggerPositions: [], now: nowT });
+    expect(r).toMatchObject({ verified: true, tier: "B" });
+  });
+
+  it("clamps a bogus (negative/NaN) accuracy instead of trusting it", () => {
+    const nowT = 1_800_000_000;
+    const bogus: AppGeo = { ...FAR, accuracyM: -1e9, ts: nowT };  // attacker tries a huge negative
+    const r = verifyFind(CACHE, bogus, { loggerPositions: [], now: nowT });
+    expect(r.verified).toBe(false);   // FAR is 111 km away; a bogus accuracy can't stretch tolerance
   });
 
   it("a poor-accuracy reading is tolerated up to the accuracy cap", () => {

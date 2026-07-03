@@ -385,6 +385,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     loggerPositions: attest(lp.results),
     cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
     loggerOwnIgates,
+    now,   // SR-TRUST-03: app-reading freshness is judged against log time
   });
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the

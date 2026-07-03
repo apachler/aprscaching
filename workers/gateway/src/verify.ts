@@ -30,6 +30,8 @@ export interface VerifyPolicy {
   windowSec: number;           // how far back to look for a matching position
   livingSkewSec: number;       // max time skew when matching a moving cache-station
   requireIndependentIgate: boolean; // tier A demands a gater != logger's own IGate
+  maxSpeedKmh: number;         // tier A "plausible track": reject a fix reached from a neighbour faster than this
+  appMaxAgeSec: number;        // tier B: reject an app reading whose timestamp is older/newer than this vs log time
 }
 
 export const DEFAULT_POLICY: VerifyPolicy = {
@@ -38,6 +40,8 @@ export const DEFAULT_POLICY: VerifyPolicy = {
   windowSec: 30 * 60,
   livingSkewSec: 5 * 60,
   requireIndependentIgate: true,
+  maxSpeedKmh: 300,            // ~faster than any ground travel; a matched fix a track can't reach is a teleport
+  appMaxAgeSec: 120,           // the in-app reading must be roughly contemporaneous with the log
 };
 
 export interface PositionRow {
@@ -78,6 +82,8 @@ export interface VerifyDeps {
   /** BASE callsigns the logger controls (own call, held account calls, registered stations) —
    *  a fix gated by any of these can never corroborate the logger's own find (SR-TRUST-01) */
   loggerOwnIgates?: Set<string>;
+  /** request/log time (unix s) — Tier-B app-reading freshness is checked against this (SR-TRUST-03) */
+  now?: number;
 }
 
 function effectiveMinTier(cache: CacheRow, policy: VerifyPolicy): TrustTier {
@@ -95,6 +101,26 @@ function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
   return !!ig && !deps.loggerOwnIgates?.has(igBase(ig));
 }
 
+/**
+ * SR-TRUST-02 "plausible track": a matched Tier-A fix must be reachable from the logger's own
+ * neighbouring fixes at a sane ground speed. A single forged/replayed beacon dropped at the cache
+ * while the real track is elsewhere implies an impossible speed → not a real presence. With no other
+ * fix in the window there is nothing to contradict (benign single-beacon case) → allowed.
+ */
+function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPolicy): boolean {
+  const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
+  let nearest: PositionRow | null = null, bestDt = Infinity;
+  for (const p of deps.loggerPositions) {
+    if (p === match || p.id === match.id) continue;
+    const dt = Math.abs(p.ts - match.ts);
+    if (dt < bestDt) { bestDt = dt; nearest = p; }
+  }
+  if (!nearest) return true;                                  // no track to contradict the fix
+  const dt = Math.max(1, Math.abs(nearest.ts - match.ts));   // avoid /0; sub-second gaps clamp to 1 s
+  const dist = haversineMeters(nearest.lat, nearest.lon, match.lat, match.lon);
+  return dist / dt <= maxMps;                                 // reachable at a plausible speed
+}
+
 /** Tier A: heard at a first-party-attested site, independently gated, near the target. */
 function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (cache.lat == null || cache.lon == null) return null;
@@ -102,7 +128,7 @@ function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyR
     if (!p.firstPartyAttested) continue;   // transport-vs-trust seam: the ONLY Tier-A gate
     if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // self-gated => not corroborated
     const d = haversineMeters(p.lat, p.lon, cache.lat, cache.lon);
-    if (d <= policy.radiusM) {
+    if (d <= policy.radiusM && plausibleTrack(p, deps, policy)) {   // near AND reachable (SR-TRUST-02)
       return { verified: true, tier: "A", method: "aprs_rf", matchedPositionId: p.id, distanceM: d };
     }
   }
@@ -124,7 +150,7 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
     }
     if (!best || bestSkew > policy.livingSkewSec) continue;
     const d = haversineMeters(p.lat, p.lon, best.lat, best.lon);
-    if (d <= policy.radiusM) {
+    if (d <= policy.radiusM && plausibleTrack(p, deps, policy)) {   // SR-TRUST-02
       return { verified: true, tier: "A", method: "aprs_rf", matchedPositionId: p.id, distanceM: d };
     }
   }
@@ -132,11 +158,18 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
 }
 
 /** Tier B: first-party app geolocation at log time matches the cache. */
-function tryApp(cache: CacheRow, appGeo: AppGeo | undefined, policy: VerifyPolicy): VerifyResult | null {
+function tryApp(cache: CacheRow, appGeo: AppGeo | undefined, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (!appGeo || cache.lat == null || cache.lon == null) return null;
+  // SR-TRUST-03: the reading must be contemporaneous with the log — an attacker-supplied `ts` that is
+  // stale or fabricated (a days-old/replayed reading at the cache coords) must NOT reach Tier B. When
+  // `now` is known (the request boundary passes it), require the reading within ±appMaxAgeSec.
+  if (deps.now != null) {
+    if (!Number.isFinite(appGeo.ts) || Math.abs(deps.now - appGeo.ts) > policy.appMaxAgeSec) return null;
+  }
   const d = haversineMeters(appGeo.lat, appGeo.lon, cache.lat, cache.lon);
-  // require the reading to be near AND not absurdly imprecise
-  const tolerance = policy.radiusM + Math.min(appGeo.accuracyM, 200);
+  // require the reading to be near AND not absurdly imprecise (clamp a bogus/negative accuracy)
+  const acc = Number.isFinite(appGeo.accuracyM) ? Math.max(0, Math.min(appGeo.accuracyM, 200)) : 200;
+  const tolerance = policy.radiusM + acc;
   if (d <= tolerance) {
     return { verified: true, tier: "B", method: "app_geo", distanceM: d };
   }
@@ -160,7 +193,7 @@ export function verifyFind(
   const rf = cache.type === "aprs_living"
     ? tryLiving(cache, deps, policy)
     : tryRf(cache, deps, policy);
-  const app = tryApp(cache, appGeo, policy);
+  const app = tryApp(cache, appGeo, deps, policy);
 
   const best = rf ?? app ?? null;
   if (best) {
