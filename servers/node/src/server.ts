@@ -111,7 +111,7 @@ const server = http.createServer(async (nreq, nres) => {
     response.headers.forEach((value, key) => nres.setHeader(key, value));
     nres.end(Buffer.from(await response.arrayBuffer()));
   } catch (e) {
-    nres.statusCode = 500;
+    nres.statusCode = e instanceof BodyTooLarge ? 413 : 500;
     nres.setHeader("content-type", "application/json");
     nres.end(JSON.stringify({ error: (e as Error).message }));
   }
@@ -144,11 +144,55 @@ if (env.FED_PEERS && FED_SYNC_MS > 0) {
   setInterval(() => void syncAllPeers(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
 }
 
+/** SR-RT-10: the bridge buffers the whole body BEFORE routing/auth, so without a ceiling one
+ *  multi-GB anonymous POST OOMs the Pi. 20 MB clears every legitimate payload (the largest is a
+ *  cache-media upload); past it the socket is destroyed and the request answered 413. */
+const BODY_MAX_BYTES = 20 * 1024 * 1024;
+class BodyTooLarge extends Error {
+  constructor() {
+    super("request body too large");
+  }
+}
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c) => chunks.push(c as Buffer));
+    let total = 0;
+    req.on("data", (c) => {
+      total += (c as Buffer).length;
+      if (total > BODY_MAX_BYTES) {
+        req.destroy();
+        reject(new BodyTooLarge());
+        return;
+      }
+      chunks.push(c as Buffer);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }
+
+// ---- SR-RT-11: 24/7 process resilience ----
+// One stray rejection must not kill an unattended gateway (there is no supervisor on a Pi by
+// default): log and keep serving. SIGTERM/SIGINT close the listener, checkpoint SQLite (WAL) and
+// exit cleanly so systemd/docker stops are never data-lossy.
+process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
+process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received — closing gateway`);
+  server.close(() => {
+    try {
+      sqlite.pragma("wal_checkpoint(TRUNCATE)");
+      sqlite.close();
+    } catch (e) {
+      console.error("db close:", e);
+    }
+    process.exit(0);
+  });
+  // a hung in-flight request must not block shutdown forever
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

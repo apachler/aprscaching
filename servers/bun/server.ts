@@ -119,3 +119,21 @@ const FED_SYNC_MS = Number(process.env.FED_SYNC_INTERVAL_MS ?? 5 * 60 * 1000);
 if (env.FED_PEERS && FED_SYNC_MS > 0) {
   setInterval(() => void syncAllPeers(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
 }
+
+// ---- SR-RT-11: 24/7 process resilience (mirrors servers/node) ----
+process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
+process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received — closing gateway`);
+  try {
+    server.stop();
+  } catch (e) {
+    console.error("server stop:", e);
+  }
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

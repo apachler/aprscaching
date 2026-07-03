@@ -183,9 +183,19 @@ export async function runFrequentSync(env: Env): Promise<void> {
  */
 export async function runScheduled(env: Env): Promise<void> {
   const nowS = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?")
-    .bind(nowS - 7 * 24 * 3600)
-    .run();
+  // SR-RT-07: prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
+  // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
+  // Node runtime a single mega-DELETE stalls every request until it finishes. 40 × 5000 caps one
+  // nightly run at 200k rows; any remainder simply ages into the next night. Range-scanned via
+  // idx_pos_source_ts (migration 0006).
+  for (let i = 0; i < 40; i++) {
+    const r = await env.DB.prepare(
+      "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source = 'firehose' AND ts < ? LIMIT 5000)",
+    )
+      .bind(nowS - 7 * 24 * 3600)
+      .run();
+    if ((r.meta?.changes ?? 0) < 5000) break;
+  }
   // raw packet ring (Stage 0.2) is a short-lived workbench diagnostic — prune hard (default 24h)
   const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
   // SR-RT-05: bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
