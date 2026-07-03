@@ -1,0 +1,12 @@
+# Code owners — automatically requested for review on matching paths.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything.
+*                       @apachler
+
+# Load-bearing invariants — extra scrutiny.
+/workers/gateway/src/verify.ts      @apachler
+/workers/gateway/src/federation*.ts @apachler
+/.claude/rules/                     @apachler
+/db/migrations/                     @apachler
+/.github/                           @apachler

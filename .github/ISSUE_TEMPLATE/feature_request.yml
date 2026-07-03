@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an improvement. (1.0 is feature-complete — new features are weighed carefully.)
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The platform is feature-complete for 1.0; the roadmap beyond that is deliberately conservative.
+        Proposals that fit the mission (amateur-radio-first, free-in-full, trust-follows-corroboration)
+        and don't add commercial/telemetry surface are most welcome. Check `TODO.md` / `HAPPY-CODING.md`
+        first — it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that's hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? How does it fit the existing architecture and invariants?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Fit check
+      options:
+        - label: This keeps the app free-in-full (no feature gating, no telemetry, nothing commercial).
+        - label: This does not weaken the trust model (transport ≠ trust) or force cloud-only ingest.

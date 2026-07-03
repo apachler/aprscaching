@@ -1,0 +1,49 @@
+name: Bug report
+description: Something is broken or behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For **security** issues use the private advisory flow (see SECURITY.md),
+        not this form. For **RF hardware** issues use the *RF hardware report* template instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: A clear, concise description + the smallest reproduction you can manage.
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime / topology
+      description: Where did it happen?
+      options:
+        - Web app (browser PWA)
+        - Node self-host (servers/node)
+        - Bun desktop binary (servers/bun)
+        - Cloudflare Worker + D1 (workers/gateway)
+        - Ingest box (apps/ingest)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Release tag or `git rev-parse --short HEAD`, and what `/.well-known/source` reports if hosted.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste logs or errors. **Scrub secrets** (INGEST_SECRET, FED_PRIVATE_KEY, tokens, passcodes).
+      render: shell
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, browser (if web), Node/Bun version, deployment topology (0–4) if relevant.

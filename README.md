@@ -1,5 +1,9 @@
 # aprscaching
 
+[![CI](https://github.com/apachler/aprscaching/actions/workflows/ci.yml/badge.svg)](https://github.com/apachler/aprscaching/actions/workflows/ci.yml)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/apachler/aprscaching?sort=semver)](https://github.com/apachler/aprscaching/releases)
+
 **Find real places on the air.** aprscaching is an APRS-caching game wrapped around a full amateur-radio
 **APRS workbench** — hide a cache, go find it, and log the find *verified by radio*, not just by tapping a
 button. It runs in your browser, self-hosts on a Raspberry Pi, and federates with other instances into one
@@ -193,3 +197,26 @@ field in every `package.json` are the machine-readable source of truth. **Contri
 outbound** — opening a pull request licenses your change under the same licence as the files it touches.
 
 Being open under these licences also satisfies **ARDC's** open-access requirement for grant funding.
+
+### Running a public instance? (AGPL §13)
+
+Because the app and gateway are **AGPL-3.0-or-later**, if you host a **modified** instance for others
+you must offer those users your modified source. The app makes this easy and it is **not optional**:
+every instance exposes a machine-readable descriptor at **`GET /.well-known/source`** and a visible
+*Source* link. Set `SOURCE_REPO` (and, if you can, `SOURCE_COMMIT`) to point at your fork before you
+deploy. Unmodified deployments can point at this upstream repository.
+
+## Contributing & community
+
+Contributions from hams, developers, and cachers are welcome.
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — dev setup, the test/smoke commands, the load-bearing
+  invariants, Conventional Commits, and DCO sign-off.
+- **[SECURITY.md](SECURITY.md)** — how to report a vulnerability privately.
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** · **[SUPPORT.md](SUPPORT.md)** ·
+  **[CHANGELOG.md](CHANGELOG.md)**
+- **[STABILITY-REVIEW.md](STABILITY-REVIEW.md)** — the living reliability/security audit;
+  **[HAPPY-CODING.md](HAPPY-CODING.md)** — the engineering backlog.
+
+aprscaching is **free in full** — every feature, forever. Donations (when available) are
+recognition-only and never gate functionality.
