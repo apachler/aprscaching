@@ -22,7 +22,7 @@
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "esbuild": "0.21.5",
+    "esbuild": "0.28.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
