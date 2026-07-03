@@ -13,7 +13,7 @@
   "dependencies": {
     "@aprsweb/gateway": "workspace:*",
     "@aprsweb/shared": "workspace:*",
-    "better-sqlite3": "^11.8.0",
+    "better-sqlite3": "^12.11.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {
