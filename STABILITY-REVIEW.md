@@ -9,14 +9,26 @@
 > were re-verified line-by-line against source before inclusion (marked ✓verified). Baseline at audit
 > time: `pnpm -r build` + `pnpm -r test` green; 79 unit-test files across the workspace.
 
-## Production Readiness Score: 58 / 100
+## Production Readiness Score: 58 → 84 / 100
 
-> **Update — all 8 Criticals AND all 27 High findings fixed**, each with a regression test; ticked in
-> the detail sections below. A few adjacent Mediums fell out for free (SR-PKT-12 window clamp,
-> SR-RT-13 DO close/error, SR-SEC-14 unauth challenge). The Medium/Low sets are otherwise open.
+> **Update (2026-07-03) — all 8 Criticals AND all 27 High findings fixed**, each with a regression
+> test; ticked in the detail sections below. A few adjacent Mediums fell out for free (SR-PKT-12
+> window clamp, SR-RT-13 DO close/error, SR-SEC-14 unauth challenge). **The remaining Medium/Low sets
+> are open and now tracked in `HAPPY-CODING.md`** (the persistent post-1.0 engineering backlog), each
+> with priority / rationale / impact / effort — this document stays the record of *what was found*,
+> HAPPY-CODING.md is the record of *what is left to do*.
+>
 > Green across `pnpm -r build`, `pnpm -r test` (workspace, incl. the new regression suites + emoji
 > guard), and the Node/SQLite smoke + geofence conformance; the two-instance federation e2e passes its
-> sync/submit/move/namespace/trust assertions. Schema additions ride in `0005_hardening.sql`.
+> sync/submit/move/namespace/trust assertions. Schema additions ride in `0005_hardening.sql`. The
+> repo has also been professionalized for going public (community-health files, hardened + SHA-pinned
+> CI, CodeQL, Dependabot, DCO, release-please, ESLint+Prettier with CI enforcement) — see the exec
+> summary in the go-public audit.
+>
+> Score 84 (not the projected 82–85 ceiling's top) reflects the two deep-read passes still **PENDING**
+> — `SR-WEB-*` (web-app WS/marker/offline-cache leaks) and `SR-CFG-*` (env-drift + observability +
+> deploy) — plus the deferred, genuinely-needs-a-live-peer F4 quorum work. Neither pending pass has
+> surfaced a Critical; both are scoped in HAPPY-CODING.md.
 
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live
