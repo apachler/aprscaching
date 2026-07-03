@@ -44,3 +44,20 @@ describe("SR-ING-01 — reconnect is linear, never a storm", () => {
     expect(srv.count()).toBeLessThanOrEqual(20);
   });
 });
+
+// SR-ING-02: a server that accepts the connection but then sends nothing (a half-dead uplink) must be
+// detected via the idle timeout — the client tears the socket down and reconnects.
+describe("SR-ING-02 — a silently-dead uplink is detected and recycled", () => {
+  it("AprsIs recycles a connection that goes idle", async () => {
+    let conns = 0;
+    const srv = net.createServer((s) => { conns++; /* accept, then send nothing, ever */ void s; });
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", () => r()));
+    const port = (srv.address() as net.AddressInfo).port;
+    const is = new AprsIs({ host: "127.0.0.1", port, callsign: "N0CALL", passcode: "-1", filter: "t/m", retryMs: 20, idleMs: 60 });
+    is.on("down", () => {});
+    is.start();
+    await sleep(300);                       // ~ several idle cycles (60 ms idle + 20 ms retry)
+    srv.close();
+    expect(conns).toBeGreaterThanOrEqual(2); // it did NOT sit forever on the first dead socket
+  });
+});

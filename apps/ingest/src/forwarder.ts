@@ -106,7 +106,7 @@ export function kissForwardLink(o: { host: string; port: number; mycall: string;
         rxBuf = rxBuf.slice(lastFend + 1);
         for (const raw of kissFrames(ready)) { const f = decodeFrame(raw); if (f) link.onReceive(f); }
       });
-      s.on("error", (e) => reject(e));
+      s.on("error", (e) => { clearInterval(poll); s.destroy(); reject(e); });   // SR-ING-05: don't leak the socket/timer
       s.on("close", () => { clearInterval(poll); fireClose(); });
       const settle = () => {                            // AX.25 link to the first hop is up
         if (steps.length <= 1) return resolve();         // direct partner → ready
@@ -119,7 +119,9 @@ export function kissForwardLink(o: { host: string; port: number; mycall: string;
         seq.start();
       };
       const wait = setInterval(() => { if (link.state === "connected") { clearInterval(wait); settle(); } }, 200);
-      setTimeout(() => { clearInterval(wait); if (link.state !== "connected") reject(new Error("connect timeout")); }, 30_000);
+      // SR-ING-05: on connect timeout, tear down the KISS socket + poll timer (else Direwolf's few
+      // slots fill and lock out the main ingest); destroying triggers `close` which clears `poll`.
+      setTimeout(() => { clearInterval(wait); if (link.state !== "connected") { s.destroy(); reject(new Error("connect timeout")); } }, 30_000);
     }),
     send: (bytes: Uint8Array) => link.send(bytes),
     onData: (cb) => { dataCbs.push(cb); },

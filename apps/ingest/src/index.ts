@@ -26,6 +26,8 @@ const aprs = new AprsIs({
 
 let batch: Packet[] = [];
 const enqueue = (p: Packet) => batch.push(p);
+let spool: Packet[] = [];                          // SR-ING-03: undelivered packets, retried next tick
+const MAX_SPOOL = Number(env.INGEST_SPOOL_MAX ?? 5000);   // bounded (drop-oldest) so a long outage can't OOM the Pi
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
@@ -184,16 +186,28 @@ aprs.on("line", (line: string) => {
   batch.push(pkt);
 });
 
+let spoolLoggedAt = 0;
 setInterval(async () => {
-  if (!batch.length) return;
-  const packets = batch; batch = [];
+  const packets = spool.concat(batch);   // retry anything spooled from a prior failure, then the new batch
+  batch = []; spool = [];
+  if (!packets.length) return;
   try {
-    await fetch(INGEST_URL, {
+    const res = await fetch(INGEST_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
       body: JSON.stringify({ packets }),
     });
-  } catch (e) { console.error("[forward] failed, dropping batch:", (e as Error).message); }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);   // SR-ING-04: a 401/413/500 is NOT success
+  } catch (e) {
+    // SR-ING-03: keep the packets and retry next tick, bounded (drop-oldest) so an hours-long gateway
+    // outage can't grow memory without limit. Rate-limit the log so a dead gateway can't flood the SD card.
+    spool = packets.slice(-MAX_SPOOL);
+    const nowMs = Date.now();
+    if (nowMs - spoolLoggedAt > 30_000) {
+      console.error(`[forward] gateway unreachable (${(e as Error).message}); spooled ${spool.length}/${MAX_SPOOL}`);
+      spoolLoggedAt = nowMs;
+    }
+  }
 }, BATCH_MS);
 
 aprs.start();

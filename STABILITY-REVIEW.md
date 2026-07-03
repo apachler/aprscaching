@@ -368,15 +368,15 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
   `uplink.ts:23-24`. *Fix:* reconnect only on `close`; generation counter; `destroy()` +
   `removeAllListeners()` before a new socket. *Test:* fake server that drops on accept → exactly one
   outstanding attempt after 3 cycles. **Touches ingest behavior — confirm.**
-- [ ] **SR-ING-02 (High) — no stale-connection detection** (`aprsis.ts:17-33`): no `setTimeout`/
+- [x] **SR-ING-02 (High) — no stale-connection detection** (`aprsis.ts:17-33`): no `setTimeout`/
   `setKeepAlive`; a half-dead server keeps TCP up and no event fires. *Fix:* `s.setTimeout(90_000,
   destroy)` reset on data (the `#` keepalives make 90 s safe).
-- [ ] **SR-ING-03 (High) — gateway outage drops every batch** (`index.ts:196`): on fetch failure the
+- [x] **SR-ING-03 (High) — gateway outage drops every batch** (`index.ts:196`): on fetch failure the
   batch is discarded (no retry/spool). *Fix:* prepend back onto a bounded buffer (~5000, drop-oldest).
-- [ ] **SR-ING-04 (High) — HTTP errors treated as success** (`index.ts:191-195`): `res.ok`/`status`
+- [x] **SR-ING-04 (High) — HTTP errors treated as success** (`index.ts:191-195`): `res.ok`/`status`
   never checked; a 401/413/500 loses the batch with no log line. *Fix:* `if (!r.ok) throw` → engages
   the retry buffer.
-- [ ] **SR-ING-05 (High) — forwarder leaks KISS socket + timer** (`forwarder.ts:122`): connect timeout
+- [x] **SR-ING-05 (High) — forwarder leaks KISS socket + timer** (`forwarder.ts:122`): connect timeout
   rejects without `sock.destroy()` or `clearInterval(poll)`; Direwolf's few KISS slots fill, locking
   out the main ingest. *Fix:* `clearInterval(poll); sock?.destroy()` in the timeout + `onFail` paths.
 - [ ] **SR-ING-06 (Medium) — no backoff/jitter** (all transports, fixed 3 s). *Fix:* shared

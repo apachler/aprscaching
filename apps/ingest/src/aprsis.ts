@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 export interface AprsIsOpts {
   host: string; port: number; callsign: string; passcode: string; filter: string;
   retryMs?: number;
+  idleMs?: number;   // SR-ING-02: no bytes (not even the server's ~20 s '#' keepalive) for this long ⇒ dead
 }
 
 /** Persistent APRS-IS client: connects, logs in with a filter, auto-reconnects, emits lines. */
@@ -33,6 +34,9 @@ export class AprsIs extends EventEmitter {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
+    // SR-ING-02: a half-dead server keeps the TCP session up but stops sending. setTimeout fires when
+    // no bytes arrive within idleMs (reset on every read) → destroy → `close` → one reconnect.
+    s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {
       s.write(`user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching 0.0 filter ${this.o.filter}\r\n`);
       this.emit("up");

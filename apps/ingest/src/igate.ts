@@ -9,6 +9,7 @@ export interface IgateOpts {
   filter?: string;        // APRS-IS server-side filter for the IS->RF direction (default messages)
   localTtlSec?: number;   // how long a station counts as "heard locally"
   retryMs?: number;
+  idleMs?: number;        // SR-ING-02: destroy a silently-dead uplink after this long with no bytes
 }
 
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
@@ -61,6 +62,7 @@ export class Igate {
     this.ready = false; this.buf = "";
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s; s.setEncoding("utf8");
+    s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());   // SR-ING-02: detect a silently-dead uplink
     s.on("connect", () => {
       s.write(`user ${this.o.call} pass ${this.o.pass} vers aprscaching-igate 0.0 filter ${this.o.filter ?? "t/m"}\r\n`);
       this.ready = true; console.log("[igate] APRS-IS connected");
