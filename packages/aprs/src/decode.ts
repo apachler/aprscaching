@@ -161,8 +161,11 @@ function decodePosition(body: string, timestamp?: string): AprsData {
   return { kind: "position", ...fix };
 }
 
-function posFields(pos: AprsData): DecodedPosition {
-  if (pos.kind !== "position") return { lat: 0, lon: 0 };
+// SR-PARSE-03: a non-position object/item (e.g. `;SHORT` with no fix) must NOT be spread with
+// {lat:0,lon:0} — that plants a phantom station on null island. Return no coords unless a real
+// position decoded; the object/item variants carry Partial<DecodedPosition> for exactly this.
+function posFields(pos: AprsData): Partial<DecodedPosition> {
+  if (pos.kind !== "position") return {};
   const { kind, ...fields } = pos;
   return fields;
 }

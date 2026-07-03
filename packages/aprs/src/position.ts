@@ -33,9 +33,14 @@ export interface FormatPositionOpts {
 export function formatPosition(lat: number, lon: number, o: FormatPositionOpts = {}): string {
   const dm = (v: number, deg: number) => {
     const a = Math.abs(v);
-    const d = Math.floor(a);
-    const min = (a - d) * 60;
-    return `${String(d).padStart(deg, "0")}${min.toFixed(2).padStart(5, "0")}`;
+    let d = Math.floor(a);
+    // SR-PARSE-04: carry a `60.00'` rounding overflow into degrees so we never emit e.g. `4560.00N`.
+    let cm = Math.round((a - d) * 60 * 100);
+    if (cm >= 6000) {
+      d += 1;
+      cm -= 6000;
+    }
+    return `${String(d).padStart(deg, "0")}${(cm / 100).toFixed(2).padStart(5, "0")}`;
   };
   const ns = lat >= 0 ? "N" : "S",
     ew = lon >= 0 ? "E" : "W";

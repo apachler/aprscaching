@@ -799,8 +799,23 @@ ok(
 // a requester enqueues a feed query for a spoke instance, the spoke leases + answers, the requester reads it.
 const RELAY_SECRET = process.env.RELAY_SECRET;
 if (RELAY_SECRET) {
-  const rh = { "x-relay-secret": RELAY_SECRET };
   const spoke = "oe.spoke";
+  // SR-FED-12: lease/answer are bound to a per-spoke token = HMAC(RELAY_SECRET, "relay-spoke:<instance>"),
+  // so a secret-holder can't drain another instance's queue by naming it. The requester side (enqueue,
+  // result) still uses the flat secret.
+  const spokeToken = async (instance) => {
+    const k = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(RELAY_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`relay-spoke:${instance.toLowerCase()}`));
+    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  };
+  const rh = { "x-relay-secret": RELAY_SECRET };
+  const sh = { "x-relay-secret": RELAY_SECRET, "x-relay-token": await spokeToken(spoke) };
   const enq = await call(
     PUB,
     "POST",
@@ -813,7 +828,7 @@ if (RELAY_SECRET) {
     enq.status === 201 && typeof enq.data?.id === "number",
     JSON.stringify(enq.data),
   );
-  const lease = await call(PUB, "GET", `/federation/relay/lease?instance=${spoke}`, undefined, rh);
+  const lease = await call(PUB, "GET", `/federation/relay/lease?instance=${spoke}`, undefined, sh);
   ok(
     "relay: the spoke leases queries addressed to it",
     (lease.data?.queries ?? []).some((q) => q.id === enq.data.id && q.kind === "feed"),
@@ -823,8 +838,8 @@ if (RELAY_SECRET) {
     PUB,
     "POST",
     "/federation/relay/answer",
-    { id: enq.data.id, result: { ok: true, kind: "feed", data: { items: [] } } },
-    rh,
+    { id: enq.data.id, instance: spoke, result: { ok: true, kind: "feed", data: { items: [] } } },
+    sh,
   );
   ok("relay: the spoke posts an answer", ans.data?.ok === true, JSON.stringify(ans.data));
   const res = await call(PUB, "GET", `/federation/relay/result/${enq.data.id}`, undefined, rh);
@@ -837,6 +852,13 @@ if (RELAY_SECRET) {
     "x-relay-secret": "wrong",
   });
   ok("relay: a bad secret is rejected", noauth.status === 401, String(noauth.status));
+  // SR-FED-12: a spoke's token for its OWN instance cannot lease a DIFFERENT instance's queue.
+  const wrongInstance = await call(PUB, "GET", "/federation/relay/lease?instance=oe.other", undefined, sh);
+  ok(
+    "relay: a per-spoke token can't lease another instance",
+    wrongInstance.status === 401,
+    String(wrongInstance.status),
+  );
 }
 
 // ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----

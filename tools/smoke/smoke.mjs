@@ -467,17 +467,30 @@ const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
 const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw });
 ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data));
 
+// SR-TRUST-04: a found is now idempotent per (cache, logger). DL1ABC already found `id` above, so the
+// signed-find + tamper checks below run against their OWN fresh cache (a duplicate would short-circuit
+// before echoing signerKey; a tampered *replay* is still rejected by the signature check, tested here).
+const sfCache = await call("POST", "/api/caches", {
+  title: "Signed Find Cache",
+  type: "single",
+  lat: 47.074,
+  lon: 15.438,
+  difficulty: 1,
+  terrain: 1,
+  ownerCall: "OE8APR",
+});
+const sfId = sfCache.data?.cache?.id;
 const at = now();
 const amsg = stableStringify({
   v: 1,
-  cache: created.data?.cache?.code,
+  cache: sfCache.data?.cache?.code,
   instance: wk.data?.instance,
   logger: "DL1ABC",
   logType: "found",
   at,
 });
 const sig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(amsg)));
-const signed = await call("POST", `/api/caches/${id}/logs`, {
+const signed = await call("POST", `/api/caches/${sfId}/logs`, {
   loggerCall: "DL1ABC",
   logType: "found",
   author: { authorKey: pubRaw, authorSig: sig, signedAt: at },
@@ -540,7 +553,7 @@ ok(
 );
 // flip the first (fully-significant) base64url char so the signature is guaranteed to differ
 const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
-const tampered = await call("POST", `/api/caches/${id}/logs`, {
+const tampered = await call("POST", `/api/caches/${sfId}/logs`, {
   loggerCall: "DL1ABC",
   logType: "found",
   author: { authorKey: pubRaw, authorSig: badSig, signedAt: at },

@@ -9,10 +9,17 @@
 function degMin(deg: number, isLat: boolean): string {
   const hemi = isLat ? (deg < 0 ? "S" : "N") : deg < 0 ? "W" : "E";
   const v = Math.abs(deg);
-  const d = Math.floor(v);
-  const m = (v - d) * 60;
+  let d = Math.floor(v);
+  // SR-PARSE-04: round the whole minutes value to hundredths as an integer and carry a `60.00`
+  // overflow into the degrees — `m.toFixed(2)` alone yields e.g. `0460.00N`, which strict
+  // APRS-IS / CWOP / NOAA parsers reject.
+  let cm = Math.round((v - d) * 60 * 100); // hundredth-minutes
+  if (cm >= 6000) {
+    d += 1;
+    cm -= 6000;
+  }
   const dd = String(d).padStart(isLat ? 2 : 3, "0");
-  const mm = m.toFixed(2).padStart(5, "0"); // "MM.mm"
+  const mm = (cm / 100).toFixed(2).padStart(5, "0"); // "MM.mm"
   return `${dd}${mm}${hemi}`;
 }
 

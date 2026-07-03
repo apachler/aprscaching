@@ -49,8 +49,8 @@ export interface DecodedMessage {
 
 export type AprsData =
   | ({ kind: "position" } & DecodedPosition)
-  | ({ kind: "object"; name: string; alive: boolean } & DecodedPosition)
-  | ({ kind: "item"; name: string; alive: boolean } & DecodedPosition)
+  | ({ kind: "object"; name: string; alive: boolean } & Partial<DecodedPosition>)
+  | ({ kind: "item"; name: string; alive: boolean } & Partial<DecodedPosition>)
   | ({ kind: "weather" } & DecodedWeather & Partial<DecodedPosition>)
   | ({ kind: "telemetry" } & DecodedTelemetry)
   | ({ kind: "message" } & DecodedMessage)

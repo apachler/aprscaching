@@ -148,13 +148,21 @@ let keyCache: Promise<FedKey | null> | undefined;
  */
 function loadKey(env: Env): Promise<FedKey | null> {
   if (keyCache) return keyCache;
-  keyCache = (async () => {
-    if (!env.FED_PRIVATE_KEY) return null;
+  const p: Promise<FedKey | null> = (async () => {
+    if (!env.FED_PRIVATE_KEY) return null; // legitimately unconfigured → a cacheable null
     const { pkcs8, pub } = JSON.parse(new TextDecoder().decode(fromB64(env.FED_PRIVATE_KEY)));
     const key = await crypto.subtle.importKey("pkcs8", fromB64(pkcs8), { name: "Ed25519" }, false, ["sign"]);
     return { key, publicX: pub, jwk: { kty: "OKP", crv: "Ed25519", x: pub } };
-  })().catch(() => null);
-  return keyCache;
+  })().catch((e) => {
+    // SR-FED-13: a configured key that fails to import is a TRANSIENT error — memoizing it as null
+    // would make the instance silently serve unsigned feeds for its whole life. Log it and clear the
+    // cache so the next call retries instead of sticking on the failure.
+    console.error("federation signing key load failed (will retry):", (e as Error).message);
+    if (keyCache === p) keyCache = undefined;
+    return null;
+  });
+  keyCache = p;
+  return p;
 }
 async function sign(fk: FedKey, type: string, id: string, data: unknown): Promise<string> {
   const msg = new TextEncoder().encode(stableStringify({ type, id, data }));

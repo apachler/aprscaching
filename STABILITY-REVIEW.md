@@ -185,7 +185,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   any signed-in user can replay a days-old/fabricated reading at the cache coords and reach verified-B
   without being present. *Fix:* reject when `abs(now − appGeo.ts) > ~120 s` (pass `now` in) and clamp
   `accuracyM`. *Test:* log with `appGeo.ts = now − 86400` → tier ≠ B. **Touches trust model — confirm.**
-- [ ] **SR-TRUST-04 (Medium) — no find-log idempotency.** `cache_logs` has no unique constraint
+- [x] **SR-TRUST-04 (Medium) — no find-log idempotency.** `cache_logs` has no unique constraint
   (`0001_core.sql:62-76`) and `handleLog` does no already-found check; racing/replayed POSTs both run
   verify + insert + owner-alert + announce + gossip. *Fix:* partial unique index
   `ON cache_logs(cache_id, logger_call) WHERE log_type='found'`; return the existing log on conflict.
@@ -318,9 +318,9 @@ quorum) is explicitly launch-gating in `` and is the right home for most of thes
   erased PII. *Fix:* keep `remote_tombstones` indefinitely (PII-free) or never prune `find`/`account` kinds.
 - [x] **SR-FED-11 (Medium) — `rlBuckets` unbounded** (`corroborate_privacy.ts:67-77`): expired windows
   overwritten, never deleted, no cap (unlike `negMemo`'s 5000). *Fix:* sweep when `size` exceeds a cap.
-- [ ] **SR-FED-12 (Low) — relay lease/answer not bound to spoke** (`relay.ts:88-106`): client-chosen
+- [x] **SR-FED-12 (Low) — relay lease/answer not bound to spoke** (`relay.ts:88-106`): client-chosen
   `?instance=`, flat `FED_RELAY_SECRET`. *Fix:* per-spoke tokens.
-- [ ] **SR-FED-13 (Low) — signing-key load memoized as `null`** (`federation.ts:92-101`): one transient
+- [x] **SR-FED-13 (Low) — signing-key load memoized as `null`** (`federation.ts:92-101`): one transient
   error caches `null` for the process lifetime → instance silently serves unsigned feeds. *Fix:* don't
   memoize rejections; log.
 
@@ -473,15 +473,15 @@ Text decoders are hardened (length guards, null-returning); exposure is in the b
 - [x] **SR-PARSE-02 (High) — AFSK HDLC unbounded accumulator** (`afsk.ts:63-67`): a steady `0101` tone
   hits neither the >6-ones reset nor a flag → `this.bits` grows ~1200/s forever on a soundcard IGate.
   *Fix:* drop when `bits.length > 4096`.
-- [ ] **SR-PARSE-03 (Medium) — object/item null-island** (`decode.ts:106-124`): `posFields` returns
+- [x] **SR-PARSE-03 (Medium) — object/item null-island** (`decode.ts:106-124`): `posFields` returns
   `{lat:0,lon:0}` for non-position, spread unconditionally → `;SHORT` becomes a station at 0,0.
   *Fix:* omit coords unless `decodePosition` returned a position (mesh/cot already reject 0,0).
-- [ ] **SR-PARSE-04 (Medium) — encoder emits `60.00` minutes** (`encode.ts:14-16`, `position.ts:26-27`):
+- [x] **SR-PARSE-04 (Medium) — encoder emits `60.00` minutes** (`encode.ts:14-16`, `position.ts:26-27`):
   rounding at 2 dp yields `0460.00N`; strict APRS-IS/CWOP/NOAA reject it. *Fix:* round total
   hundredth-minutes and carry into degrees.
-- [ ] **SR-PARSE-05 (Medium) — CoT recompiles RegExp per attribute** (`cotin.ts:12-14`, ~7×/event):
+- [x] **SR-PARSE-05 (Medium) — CoT recompiles RegExp per attribute** (`cotin.ts:12-14`, ~7×/event):
   GC churn on the hot path (no ReDoS). *Fix:* hoist precompiled module-level regexes.
-- [ ] **SR-PARSE-06 (Low) — MGRS band wrong 80–84°** (`mgrs.ts:14-17`): `BANDS[20]` undefined → `"Z"`.
+- [x] **SR-PARSE-06 (Low) — MGRS band wrong 80–84°** (`mgrs.ts:14-17`): `BANDS[20]` undefined → `"Z"`.
   Display-only. *Fix:* `if (lat >= 72) return "X";`.
 
 ## Detail — Web app (`apps/web`) — PENDING (final agent)

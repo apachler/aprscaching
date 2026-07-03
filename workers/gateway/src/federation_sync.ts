@@ -152,11 +152,11 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
 }
 
 // SR-RT-14: Node/Bun drive a periodic federation-sync interval AND the nightly `runScheduled` (which
-// also calls this) — near boot they can overlap and double-pull every peer. Guard per-env so a second
-// caller returns immediately while one run is in flight; sequential (awaited) calls are unaffected.
-const inFlightSync = new WeakSet<object>();
-
-export async function syncAllPeers(env: Env): Promise<{
+// also calls this) — near boot they can overlap and double-pull every peer. Coalesce per-env: a caller
+// arriving while a run is in flight *joins* it and gets the same real result rather than starting a
+// second concurrent pull. An explicit /federation/sync therefore still returns real counts even if it
+// races a background run. Sequential (awaited) calls are unaffected.
+type SyncResult = {
   peers: number;
   caches: number;
   finds: number;
@@ -165,24 +165,15 @@ export async function syncAllPeers(env: Env): Promise<{
   moves: number;
   bulletins: number;
   errors: string[];
-}> {
-  if (inFlightSync.has(env))
-    return {
-      peers: 0,
-      caches: 0,
-      finds: 0,
-      keys: 0,
-      tombstones: 0,
-      moves: 0,
-      bulletins: 0,
-      errors: ["sync in progress"],
-    };
-  inFlightSync.add(env);
-  try {
-    return await syncAllPeersInner(env);
-  } finally {
-    inFlightSync.delete(env);
-  }
+};
+const inFlightSync = new WeakMap<object, Promise<SyncResult>>();
+
+export async function syncAllPeers(env: Env): Promise<SyncResult> {
+  const existing = inFlightSync.get(env);
+  if (existing) return existing;
+  const p = syncAllPeersInner(env).finally(() => inFlightSync.delete(env));
+  inFlightSync.set(env, p);
+  return p;
 }
 
 async function syncAllPeersInner(env: Env): Promise<{

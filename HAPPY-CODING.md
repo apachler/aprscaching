@@ -45,7 +45,14 @@ the record of what the batch covered.
 | SR-RT-10 | runtime | Node request body size cap | The Node bridge buffers the whole body before auth → a multi-GB POST OOMs the Pi. Track total; `destroy()` + 413 past ~20 MB. | S |
 | SR-RT-07 | runtime | Index + batch the firehose TTL delete | `DELETE … WHERE source='firehose' AND ts<?` full-scans; on synchronous better-sqlite3 it stalls the event loop once `positions` is large. Add `idx_pos_source_ts` (migration) + batched delete. | M |
 
-## P2 — early 1.0.x hardening
+## P2 — early 1.0.x hardening — ✅ DONE (2026-07-03)
+
+**The entire P2 batch is implemented and tested** across four sub-batches: **P2a** packet-stack
+robustness (SR-PKT-08/09/10/11/13/14), **P2b** ingest resilience (SR-ING-06..12), **P2c** tri-runtime
+parity + growth (SR-RT-08/09/12/14), **P2d** federation edges + parsers + find idempotency
+(SR-FED-12/13, SR-PARSE-03..06, SR-TRUST-04 · migration `0008`). Full suite green (packet 114, aprs
+106, gateway 207, node 24, ingest 18, …) plus the Node/SQLite conformance smoke + geofence + the
+two-instance federation e2e. The prose below is kept as the record of what the batch covered.
 
 Open Mediums that degrade gracefully today but should be closed before the instance runs for months
 unattended or under a hostile packet peer.

@@ -499,6 +499,28 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     signedAt = a.signedAt;
   }
 
+  // SR-TRUST-04: a found is idempotent per (cache, logger). Checked AFTER author-signature
+  // verification (a tampered replay still 400s), BEFORE re-running verify + insert + owner-alert +
+  // announce + gossip. A racing pair that both miss this is caught by the INSERT OR IGNORE below.
+  if (logType === "found") {
+    const prior = await env.DB.prepare(
+      "SELECT verified, tier, verify_method FROM cache_logs WHERE cache_id=? AND logger_call=? AND log_type='found' LIMIT 1",
+    )
+      .bind(cacheId, loggerCall)
+      .first<{ verified: number; tier: string | null; verify_method: string | null }>();
+    if (prior)
+      return json({
+        logged: true,
+        logType: "found",
+        duplicate: true,
+        accountVerified,
+        signerKey,
+        verified: prior.verified === 1,
+        tier: prior.tier,
+        method: prior.verify_method,
+      });
+  }
+
   // Only `found` logs are presence-verified; DNF/note/maintenance are plain records.
   if (logType !== "found") {
     await env.DB.prepare(
@@ -597,8 +619,10 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
       : null;
 
-  await env.DB.prepare(
-    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
+  // SR-TRUST-04: INSERT OR IGNORE against the partial unique index (0008). If a concurrent found for
+  // the same (cache, logger) beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
+  const ins = await env.DB.prepare(
+    `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
      VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
@@ -618,6 +642,16 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       signedAt,
     )
     .run();
+  if ((ins.meta?.changes ?? 1) === 0)
+    return json({
+      logged: true,
+      logType: "found",
+      duplicate: true,
+      accountVerified,
+      verified: result.verified,
+      tier: result.tier,
+      method: result.method,
+    });
 
   // M4: award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
