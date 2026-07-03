@@ -45,8 +45,13 @@ interface Pending {
   subject: string | null;
   replyTo: number | null;
   body: string[];
+  bodyBytes: number; // running size of the collected body (SR-PKT-11 OOM guard)
   stage: "subject" | "body";
 }
+
+/** SR-PKT-11: a message body a peer streams (never sending /EX) must be bounded. 32 KiB is far
+ *  beyond any real packet-BBS message; past it we abort the send rather than buffer without limit. */
+const MAX_BODY_BYTES = 32 * 1024;
 
 const pad = (s: string, n: number) => (s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length));
 const fmtRow = (m: BbsMsgMeta) =>
@@ -182,14 +187,30 @@ export class BbsSession {
   // ---- sending (subject then body collection) ----
   private startSend(type: BbsType, to: string): { lines: string[]; disconnect?: boolean } {
     if (!to) return this.out(`Usage: S${type === "B" ? "B <category>" : type === "T" ? "T <call>" : "P <call>"}`);
-    this.pending = { type, to: to.toUpperCase(), subject: null, replyTo: null, body: [], stage: "subject" };
+    this.pending = {
+      type,
+      to: to.toUpperCase(),
+      subject: null,
+      replyTo: null,
+      body: [],
+      bodyBytes: 0,
+      stage: "subject",
+    };
     return { lines: ["Subject:"] };
   }
   private startReply(id: number): { lines: string[]; disconnect?: boolean } {
     const m = id ? this.store.read(id) : null;
     if (!m) return this.out("Nothing to reply to - read a message first or pass an id (SR <id>).");
     const subject = m.subject && /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject ?? ""}`.trim();
-    this.pending = { type: m.type === "P" ? "P" : m.type, to: m.from, subject, replyTo: m.id, body: [], stage: "body" };
+    this.pending = {
+      type: m.type === "P" ? "P" : m.type,
+      to: m.from,
+      subject,
+      replyTo: m.id,
+      body: [],
+      bodyBytes: 0,
+      stage: "body",
+    };
     return { lines: [`Reply to ${m.from} - "${subject}". Enter message, end with /EX or a lone "." :`] };
   }
   private collect(line: string): { lines: string[]; disconnect?: boolean } {
@@ -210,6 +231,11 @@ export class BbsSession {
       });
       this.pending = null;
       return this.out(`Message ${id} stored (${p.type} to ${p.to}).`);
+    }
+    p.bodyBytes += line.length + 1;
+    if (p.bodyBytes > MAX_BODY_BYTES) {
+      this.pending = null; // SR-PKT-11: over the body ceiling → abort the send, don't buffer forever
+      return this.out("Message too large - send aborted.");
     }
     p.body.push(line);
     return { lines: [] }; // silent while collecting, like a real BBS

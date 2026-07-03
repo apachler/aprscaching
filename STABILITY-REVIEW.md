@@ -354,25 +354,25 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-PKT-07 (High) — forwarder connect has no timeout.** `fbb-scheduler.ts:97-98`: `await
   link.connect()` before the session timer starts; `busy.add` is only cleared in `finally`, which never
   runs if connect never settles → partner blocked forever. *Fix:* race `connect()` against a timeout.
-- [ ] **SR-PKT-08 (Medium) — warming slot never expires** (`session-server.ts:66-93`): a never-settling
+- [x] **SR-PKT-08 (Medium) — warming slot never expires** (`session-server.ts:66-93`): a never-settling
   factory leaves a `warming` slot forever, swallowing SABMs and consuming `maxSessions`. *Fix:* warm-up
   deadline checked in `poll()`.
-- [ ] **SR-PKT-09 (Medium) — unbounded channels + scrollback** (`session.ts:99-112`): inbound SABM
+- [x] **SR-PKT-09 (Medium) — unbounded channels + scrollback** (`session.ts:99-112`): inbound SABM
   auto-opens a channel (removed only by UI `close()`); `ch.lines` uncapped. *Fix:* cap lines + channels;
   auto-remove disconnected.
-- [ ] **SR-PKT-10 (Medium) — NODES table unbounded + poisonable** (`netrom-node.ts:33,52-58`):
+- [x] **SR-PKT-10 (Medium) — NODES table unbounded + poisonable** (`netrom-node.ts:33,52-58`):
   `maxRoutes` optional with no default; `learn` replaces on `quality >= cur` → forged 255 hijacks
   `best()`. *Fix:* default `maxRoutes` (~500) + rate-limit learns.
-- [ ] **SR-PKT-11 (Medium) — hostile-peer OOM** (`link-app.ts:60-62`, `bbs.ts:141`, `fbb-session.ts:131`,
+- [x] **SR-PKT-11 (Medium) — hostile-peer OOM** (`link-app.ts:60-62`, `bbs.ts:141`, `fbb-session.ts:131`,
   `netrom-connect-through.ts:74`): `buf += dec(info)` uncapped; body pushes uncapped; FBB ignores its
   proposed `size`. *Fix:* cap `buf` (8 KiB → disconnect), cap body bytes, abort over-size recv-blocks.
 - [x] **SR-PKT-12 (Medium) — ConnReq in any state + window=0** (`netrom-circuit.ts:87-101`): forged
   ConnReq mid-transfer rewrites peer ids; `window = Math.min(info[0] ?? window, window)` → 0 wedges
   `pump()`. *Fix:* state/id check on ConnReq; clamp window ≥ 1.
-- [ ] **SR-PKT-13 (Medium) — CachedBbsStore silent discard** (`cached-bbs-store.ts:56`): tells the RF
+- [x] **SR-PKT-13 (Medium) — CachedBbsStore silent discard** (`cached-bbs-store.ts:56`): tells the RF
   user "stored" then `.catch(() => {})` on backend failure; also `postedAt: Math.floor(id)` is negative.
   *Fix:* retry queue or mark the cached message failed.
-- [ ] **SR-PKT-14 (Medium) — `hasBid()` stubbed false** (`fbb-scheduler.ts:47`): always answers `+`,
+- [x] **SR-PKT-14 (Medium) — `hasBid()` stubbed false** (`fbb-scheduler.ts:47`): always answers `+`,
   so partners retransmit full bodies every session and A→B→A loops persist. *Fix:* carry a BID set from
   the pool; answer `-` for known BIDs.
 - [ ] **SR-PKT-15 (Low) — silent link reset on peer SABM** (`ax25/link.ts:111-117`): `reset()` discards

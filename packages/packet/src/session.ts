@@ -74,6 +74,10 @@ export class TerminalSession {
     private cfg: Partial<LinkConfig> = {},
     private clock: () => number = () => Date.now(),
     private monitorCap = 500,
+    // SR-PKT-09: bound per-channel scrollback and the live channel count so a hostile peer spamming
+    // SABMs / a flood of RX lines can't grow memory without limit.
+    private lineCap = 2000,
+    private channelCap = 64,
   ) {
     this.local = parseAddr(myCall);
   }
@@ -137,14 +141,29 @@ export class TerminalSession {
     this.notify();
   }
 
+  /** SR-PKT-09: reclaim channels whose link is disconnected (used to bound growth under a SABM flood). */
+  private reapDisconnected(): void {
+    for (const c of this.channels.filter((c) => c.state === "disconnected")) {
+      this.links.delete(c.id);
+    }
+    this.channels = this.channels.filter((c) => c.state !== "disconnected");
+  }
+
   /** Feed an inbound frame from the transport: route to its channel + record in the monitor. */
   onFrame(f: Ax25Frame): void {
     this.recordMonitor(f);
     // a connected-mode frame addressed to us → the matching channel's link
     if (f.type !== "UI" && sameAddr(f.dst, this.local)) {
       let ch = this.channels.find((c) => sameAddr(c.remote, f.src));
-      // an incoming SABM from a station we have no channel for → accept the call (auto-open a channel)
+      // an incoming SABM from a station we have no channel for → accept the call (auto-open a channel).
+      // SR-PKT-09: bound the live channel count — at the cap, first reap any disconnected channels
+      // (the UI keeps a just-closed one; only stale ones are collected); if still full, drop the SABM.
       if (!ch && f.type === "SABM") {
+        if (this.channels.length >= this.channelCap) this.reapDisconnected();
+        if (this.channels.length >= this.channelCap) {
+          this.notify();
+          return; // at capacity — the peer's SABM retransmit / eventual timeout handles it
+        }
         const id = this.makeChannel(f.src);
         ch = this.channels.find((c) => c.id === id);
       }
@@ -159,11 +178,16 @@ export class TerminalSession {
   }
 
   // ---- internals ----
+  /** Push a line into a channel, trimming the oldest to keep scrollback bounded (SR-PKT-09). */
+  private pushLine(ch: Channel, line: TermLine): void {
+    ch.lines.push(line);
+    if (ch.lines.length > this.lineCap) ch.lines.splice(0, ch.lines.length - this.lineCap);
+  }
   private append(ch: Channel, dir: TermLine["dir"], text: string): void {
-    for (const line of text.split(/\r\n|\r|\n/)) ch.lines.push({ dir, text: line, at: this.clock() });
+    for (const line of text.split(/\r\n|\r|\n/)) this.pushLine(ch, { dir, text: line, at: this.clock() });
   }
   private sys(ch: Channel, text: string): void {
-    ch.lines.push({ dir: "sys", text, at: this.clock() });
+    this.pushLine(ch, { dir: "sys", text, at: this.clock() });
   }
   private recordMonitor(f: Ax25Frame): void {
     const src = addrStr(f.src),

@@ -31,6 +31,10 @@ export interface RelayController {
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
+/** SR-PKT-11: a single un-terminated "line" must not grow the receive buffer without bound. A real
+ *  command line is a handful of bytes; 8 KiB with no CR/LF is a hostile/broken peer → drop the link. */
+const MAX_LINE_BUF = 8 * 1024;
+
 /** The transport-agnostic side of a line session: feed bytes/up/down, it drives the app. */
 export interface LineDriver {
   onData(info: Uint8Array): void;
@@ -76,6 +80,11 @@ export function makeLineDriver(
         return;
       } // transparent relay (connect-through) — no line-splitting
       buf += dec(info);
+      if (buf.length > MAX_LINE_BUF) {
+        buf = "";
+        io.disconnect(); // SR-PKT-11: no line terminator in 8 KiB → hostile/garbage stream, tear down
+        return;
+      }
       let i: number;
       while ((i = buf.search(/[\r\n]/)) >= 0) {
         const line = buf.slice(0, i);

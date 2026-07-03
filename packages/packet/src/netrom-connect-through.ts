@@ -53,6 +53,10 @@ export interface SequencerHooks {
 
 const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
+/** SR-PKT-11: a hop that streams bytes with no CR/LF must not grow the sequencer buffer forever;
+ *  8 KiB without a line break is a hostile/broken node → fail the connect-through. */
+const MAX_SEQ_BUF = 8 * 1024;
+
 export class ConnectSequencer {
   private buf = "";
   private idx = 0; // steps[0] is already connected by the link; we drive steps[1..]
@@ -81,6 +85,11 @@ export class ConnectSequencer {
   feed(bytes: Uint8Array): void {
     if (this.done) return;
     this.buf += dec(bytes);
+    if (this.buf.length > MAX_SEQ_BUF) {
+      this.done = true;
+      this.h.onFail("no line terminator from node"); // SR-PKT-11: bound the sequencer buffer
+      return;
+    }
     let i: number;
     while (!this.done && (i = this.buf.search(/[\r\n]/)) >= 0) {
       const line = this.buf.slice(0, i).trim();

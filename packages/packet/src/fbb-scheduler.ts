@@ -31,6 +31,9 @@ export interface ForwardApi {
   pool(call: string): Promise<FbbMessage[]>;
   inbound(message: FbbMessage, origin: string): Promise<void>;
   markSent(partner: string, bids: string[]): Promise<void>;
+  /** SR-PKT-14: BIDs we already hold (recent window). Lets a session answer `-` to a re-proposal so a
+   *  partner stops resending bodies we already have and A→B→A loops die. Optional — omitted → pool-only. */
+  heldBids?(call: string): Promise<string[]>;
 }
 
 /** A connected-mode byte duplex to a partner: connect, exchange bytes, close. */
@@ -51,14 +54,23 @@ const CONNECT_TIMEOUT_MS = 30_000; // SR-PKT-07: a partner that never answers mu
 export class SessionStore implements FbbStore {
   readonly inbox: FbbMessage[] = [];
   readonly sentBids: string[] = [];
-  constructor(private queue: FbbMessage[]) {}
+  private held: Set<string>;
+  constructor(
+    private queue: FbbMessage[],
+    heldBids: Iterable<string> = [],
+  ) {
+    // SR-PKT-14: a BID we already hold (or are about to forward) is answered `-` so the partner
+    // stops resending its body every session and A→B→A forward loops terminate.
+    this.held = new Set([...heldBids, ...queue.map((m) => m.bid)]);
+  }
   outbound(): FbbMessage[] {
     return this.queue;
   }
-  hasBid(): boolean {
-    return false;
-  } // accept inbound; the gateway INSERT-OR-IGNORE dedups by BID
+  hasBid(bid: string): boolean {
+    return this.held.has(bid);
+  }
   accept(m: FbbMessage): void {
+    this.held.add(m.bid); // within a session, don't re-accept the same BID twice
     this.inbox.push(m);
   }
   sent(bid: string): void {
@@ -125,7 +137,11 @@ export class BbsForwarder {
 
   /** Run one FBB forwarding session with a partner and reconcile the results back to the gateway. */
   async runSession(p: GwPartner): Promise<{ forwarded: number; received: number }> {
-    const store = new SessionStore(await this.o.api.pool(p.call));
+    const [pool, held] = await Promise.all([
+      this.o.api.pool(p.call),
+      this.o.api.heldBids ? this.o.api.heldBids(p.call) : Promise.resolve<string[]>([]),
+    ]);
+    const store = new SessionStore(pool, held);
     const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid });
     const link = this.o.linkFactory(p);
 

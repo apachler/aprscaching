@@ -35,13 +35,19 @@ export interface SessionServerOpts {
   clock?: () => number;
   cfg?: Partial<LinkConfig>;
   maxSessions?: number; // refuse new connects past this (a station can still be served)
+  /** Drop a slot still warming after this long (SR-PKT-08); default 30 s. A hung/never-settling app
+   *  factory must not pin the key (swallowing the peer's SABM retransmits) or eat a `maxSessions` slot. */
+  warmupDeadlineMs?: number;
   onEvent?: (e: { kind: "connect" | "disconnect" | "refused"; service: string; remote: string }) => void;
 }
+
+const WARMUP_DEADLINE_MS_DEFAULT = 30_000;
 
 interface Live {
   link?: ConnectedLink;
   service: Service;
   warming: boolean;
+  warmingSince?: number; // clock() at slot reservation; used to reap a never-settling warm-up
 }
 
 export class SessionServer {
@@ -88,7 +94,8 @@ export class SessionServer {
    *  warm-up) reserves the slot and wires when it resolves — the peer's SABM retransmit covers the window. */
   private open(svc: Service, sabm: Ax25Frame, key: string): void {
     const remote = sabm.src;
-    const slot: Live = { service: svc, warming: true };
+    const now = (this.o.clock ?? Date.now)();
+    const slot: Live = { service: svc, warming: true, warmingSince: now };
     this.sessions.set(key, slot); // reserve the key so a retransmitted SABM doesn't double-open
     const wire = (app: LineApp) => {
       if (!this.sessions.has(key)) return; // torn down while warming
@@ -119,9 +126,25 @@ export class SessionServer {
     }
   }
 
-  /** Drive T1/T3 timers on every live link (the ingest calls this on a ~1s interval). */
+  /** Drive T1/T3 timers on every live link (the ingest calls this on a ~1s interval). Also reaps any
+   *  slot still `warming` past the deadline (SR-PKT-08) so a hung factory can't pin the key forever. */
   poll(): void {
-    for (const { link } of this.sessions.values()) link?.poll();
+    const deadline = this.o.warmupDeadlineMs ?? WARMUP_DEADLINE_MS_DEFAULT;
+    const now = (this.o.clock ?? Date.now)();
+    for (const [key, slot] of this.sessions) {
+      if (slot.warming) {
+        if (slot.warmingSince != null && now - slot.warmingSince > deadline) {
+          this.sessions.delete(key); // never settled → free the slot; a late resolve sees the key gone
+          this.o.onEvent?.({
+            kind: "refused",
+            service: slot.service.name ?? addrStr(slot.service.addr),
+            remote: key.split(">")[0] ?? "",
+          });
+        }
+        continue; // no link yet
+      }
+      slot.link?.poll();
+    }
   }
 
   /** Number of active (incl. warming) sessions (observability / tests). */

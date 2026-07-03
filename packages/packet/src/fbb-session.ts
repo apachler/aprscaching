@@ -32,6 +32,10 @@ export interface FbbStore {
 
 const CTRLZ = "\x1a";
 const MAX_BLOCK = 5;
+/** SR-PKT-11: a peer that streams a body and never sends ^Z must not grow `rxAcc` without bound.
+ *  Cap the received body at the larger of the peer's own proposed `size` (with slack) and a floor,
+ *  but never past this hard ceiling — beyond it the block is hostile/broken and we abort the session. */
+const MAX_RECV_BYTES = 64 * 1024;
 
 type Phase = "await-sid" | "await-fs" | "recv-block" | "await-proposals" | "done";
 
@@ -43,6 +47,7 @@ export class FbbSession {
   private accepting: Proposal[] = []; // inbound proposals we accepted, awaiting their bodies
   private rxAcc: string[] = []; // body lines of the message currently being received
   private rxTitle: string | null = null;
+  private rxBytes = 0; // running size of the current inbound body (SR-PKT-11 OOM guard)
   private pendingRx: Proposal[] = []; // accepted inbound proposals whose bodies we're awaiting
 
   constructor(
@@ -171,6 +176,7 @@ export class FbbSession {
       if (!p) {
         this.rxTitle = null;
         this.rxAcc = [];
+        this.rxBytes = 0;
         this.phase = "await-proposals";
         return { out: [] };
       }
@@ -185,8 +191,21 @@ export class FbbSession {
       });
       this.rxTitle = null;
       this.rxAcc = [];
+      this.rxBytes = 0;
       if (this.pendingRx.length === 0) return { out: this.turnToPropose() }; // block done → reverse
       return { out: [] };
+    }
+    // SR-PKT-11: enforce the peer's own proposed size (with slack), never past the hard ceiling —
+    // a never-terminated body must not buffer without bound.
+    this.rxBytes += raw.length + 1;
+    const proposed = this.pendingRx[0]?.size ?? 0;
+    const limit = Math.min(MAX_RECV_BYTES, Math.max(proposed * 2 + 1024, 4096));
+    if (this.rxBytes > limit) {
+      this.rxTitle = null;
+      this.rxAcc = [];
+      this.rxBytes = 0;
+      this.phase = "done";
+      return { out: ["FQ"], done: true }; // over-size recv-block → abort the forwarding session
     }
     this.rxAcc.push(raw);
     return { out: [] };
