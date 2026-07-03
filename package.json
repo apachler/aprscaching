@@ -19,7 +19,10 @@
     "dev:gateway": "pnpm --filter @aprsweb/gateway dev",
     "dev:ingest": "pnpm --filter @aprsweb/ingest dev"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "esbuild": "0.28.1",
