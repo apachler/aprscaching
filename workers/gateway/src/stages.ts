@@ -61,6 +61,16 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   if (!who || who !== owner) return json({ error: "only the owner may set stages" }, { status: 403 });
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
+  // SR-RT-12: replacing the stage list drops rows that point at stored audio clues — collect those
+  // media keys first so we can free the objects afterwards instead of orphaning them in R2/FS forever.
+  const orphaned = env.MEDIA
+    ? (
+        await env.DB.prepare("SELECT media_key FROM cache_stages WHERE cache_id=? AND media_key IS NOT NULL")
+          .bind(cacheId)
+          .all<{ media_key: string }>()
+      ).results
+    : [];
+
   const stmts = [env.DB.prepare("DELETE FROM cache_stages WHERE cache_id=?").bind(cacheId)];
   for (const s of b.stages) {
     const unlock = ["geo", "audio", "open", "nfc"].includes(s.unlock ?? "") ? s.unlock : "geo";
@@ -82,6 +92,14 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
     );
   }
   await env.DB.batch(stmts);
+  // free the now-orphaned clue objects (best-effort; the rows are already gone)
+  for (const m of orphaned) {
+    try {
+      await env.MEDIA!.delete?.(m.media_key);
+    } catch {
+      /* best-effort */
+    }
+  }
   return json({ ok: true, stages: b.stages.length });
 }
 

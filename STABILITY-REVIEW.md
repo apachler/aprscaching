@@ -441,9 +441,9 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-RT-07 (Medium) — TTL delete unindexed** (`app.ts:68`, schema `0001:91`): `DELETE ... WHERE
   source='firehose' AND ts<?` scans the whole table; on synchronous better-sqlite3 this stalls the event
   loop. *Fix:* migration `idx_pos_source_ts (source, ts)` + batched delete.
-- [ ] **SR-RT-08 (Medium) — shims accept `undefined` binds** (`d1.ts:14-17`): coerce `undefined→null`
+- [x] **SR-RT-08 (Medium) — shims accept `undefined` binds** (`d1.ts:14-17`): coerce `undefined→null`
   while real D1 throws `D1_TYPE_ERROR` → green on Node/Bun, 500 on Workers. *Fix:* throw from `norm()`.
-- [ ] **SR-RT-09 (Medium) — shim `meta` zeroed for readers** (`d1.ts:29-31`): `last_row_id:0,changes:0`
+- [x] **SR-RT-09 (Medium) — shim `meta` zeroed for readers** (`d1.ts:29-31`): `last_row_id:0,changes:0`
   for row-returning statements; latent `RETURNING` parity break. *Fix:* populate from
   `last_insert_rowid()`/`changes()`.
 - [x] **SR-RT-10 (Medium) — Node body has no size cap** (`server.ts:147-154`): buffers the whole body
@@ -451,13 +451,13 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-RT-11 (Medium) — no process failure/shutdown handlers** (`server.ts`): no
   `unhandledRejection`/`uncaughtException`/SIGTERM; one stray rejection kills the gateway. *Fix:* add
   log-don't-die + graceful close/checkpoint.
-- [ ] **SR-RT-12 (Low) — stage media orphaned; FS store blacklist sanitizer** (`stages.ts:38`,
+- [x] **SR-RT-12 (Low) — stage media orphaned; FS store blacklist sanitizer** (`stages.ts:38`,
   `media.ts:9`): `DELETE cache_stages` never calls `MEDIA.delete`; the `..`-strip guard is unsafe for
   any future raw-key caller. *Fix:* delete media on stage replace; allowlist regex + `path.resolve`
   containment.
 - [x] **SR-RT-13 (Low) — DO close/error handlers** (`room.ts:45`): `close()` with no code/reason; no
   `webSocketError`. *Fix:* echo `close(code, reason)` + add `webSocketError`.
-- [ ] **SR-RT-14 (Low) — Bun backpressure drop + double-scheduled sync** (`rooms.ts:38`, `server.ts:139`
+- [x] **SR-RT-14 (Low) — Bun backpressure drop + double-scheduled sync** (`rooms.ts:38`, `server.ts:139`
   vs `app.ts:79`): Bun `send()` backpressure return ignored → dropped geofence prompts; `syncAllPeers`
   runs on the interval and inside `runScheduled`. *Fix:* check `send()`; dedupe sync.
 

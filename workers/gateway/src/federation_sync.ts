@@ -151,7 +151,41 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
   }
 }
 
+// SR-RT-14: Node/Bun drive a periodic federation-sync interval AND the nightly `runScheduled` (which
+// also calls this) — near boot they can overlap and double-pull every peer. Guard per-env so a second
+// caller returns immediately while one run is in flight; sequential (awaited) calls are unaffected.
+const inFlightSync = new WeakSet<object>();
+
 export async function syncAllPeers(env: Env): Promise<{
+  peers: number;
+  caches: number;
+  finds: number;
+  keys: number;
+  tombstones: number;
+  moves: number;
+  bulletins: number;
+  errors: string[];
+}> {
+  if (inFlightSync.has(env))
+    return {
+      peers: 0,
+      caches: 0,
+      finds: 0,
+      keys: 0,
+      tombstones: 0,
+      moves: 0,
+      bulletins: 0,
+      errors: ["sync in progress"],
+    };
+  inFlightSync.add(env);
+  try {
+    return await syncAllPeersInner(env);
+  } finally {
+    inFlightSync.delete(env);
+  }
+}
+
+async function syncAllPeersInner(env: Env): Promise<{
   peers: number;
   caches: number;
   finds: number;

@@ -10,10 +10,18 @@
 import { Database } from "bun:sqlite";
 import type { SqlDatabase, SqlStatement, SqlResult } from "@aprsweb/gateway/runtime";
 
-/** D1 accepts null/number/string/blob; normalise `undefined`→null and booleans→0/1 (as d1.ts does). */
+/** D1 accepts null/number/string/blob. SR-RT-08: real D1 throws `D1_TYPE_ERROR` on an `undefined`
+ *  bind — throw the same instead of coercing to null, so a parity bug fails on Bun too, not only on
+ *  Workers. Booleans stay coerced to 0/1 for convenience. */
 function norm(values: unknown[]): unknown[] {
-  return values.map((v) => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v));
+  return values.map((v) => {
+    if (v === undefined) throw new Error("D1_TYPE_ERROR: undefined bind value (use null) — Cloudflare D1 parity");
+    return typeof v === "boolean" ? (v ? 1 : 0) : v;
+  });
 }
+
+/** A `… RETURNING` writer reads back rows yet still needs real changes()/last_insert_rowid() meta. */
+const isDml = (sql: string): boolean => /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
 
 class Stmt implements SqlStatement {
   constructor(
@@ -31,7 +39,11 @@ class Stmt implements SqlStatement {
     const q = this.db.query(this.sql);
     // a row-returning statement (SELECT / PRAGMA table_info / … / INSERT … RETURNING) has columns.
     if (q.columnNames.length > 0) {
-      return { results: q.all(...(this.params as never[])) as unknown[], meta: { last_row_id: 0, changes: 0 } };
+      const results = q.all(...(this.params as never[])) as unknown[];
+      // SR-RT-09: SELECT → zeroed meta (as D1); a `… RETURNING` writer carries real rows-affected/rowid.
+      if (!isDml(this.sql)) return { results, meta: { last_row_id: 0, changes: 0 } };
+      const m = this.db.query("SELECT changes() AS c, last_insert_rowid() AS r").get() as { c: number; r: number };
+      return { results, meta: { last_row_id: Number(m.r), changes: Number(m.c) } };
     }
     const info = q.run(...(this.params as never[]));
     return { results: [], meta: { last_row_id: Number(info.lastInsertRowid), changes: info.changes } };

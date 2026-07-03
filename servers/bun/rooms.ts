@@ -39,12 +39,21 @@ export class BunRooms {
     const set = this.rooms.get(region);
     if (!set) return;
     for (const ws of set) {
+      // SR-RT-14: Bun's send() returns -1 when the message was dropped under backpressure (a slow or
+      // stalled consumer). Once that happens, stop piling more frames onto the same socket this
+      // dispatch — continuing just grows the backpressure buffer; the consumer resyncs on its next poll.
+      let backpressured = false;
       for (const env of envelopes) {
+        if (backpressured) break;
         for (const msg of deliveriesFor(ws.data.sub, env)) {
           try {
-            ws.send(JSON.stringify(msg));
+            if (ws.send(JSON.stringify(msg)) === -1) {
+              backpressured = true;
+              break;
+            }
           } catch {
-            /* dropped */
+            backpressured = true; // socket closing/closed — stop sending to it
+            break;
           }
         }
       }

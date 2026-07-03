@@ -11,10 +11,19 @@ import type { SqlDatabase, SqlStatement, SqlResult } from "@aprsweb/gateway/runt
 
 type DB = BetterSqlite3.Database;
 
-/** D1 accepts null/number/string; better-sqlite3 rejects `undefined` and booleans. */
+/** D1 accepts null/number/string; better-sqlite3 rejects `undefined` and booleans. SR-RT-08: real D1
+ *  throws `D1_TYPE_ERROR` on an `undefined` bind — silently coercing it to null here hides the bug on
+ *  Node/Bun and lets it 500 only on Workers. Throw the same way so parity failures surface in CI. */
 function norm(values: unknown[]): unknown[] {
-  return values.map((v) => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v));
+  return values.map((v) => {
+    if (v === undefined) throw new Error("D1_TYPE_ERROR: undefined bind value (use null) — Cloudflare D1 parity");
+    return typeof v === "boolean" ? (v ? 1 : 0) : v;
+  });
 }
+
+/** A DML statement (the only kind that reports rows-affected). A `… RETURNING` is DML but reads back
+ *  rows, so it lands in the reader branch yet still needs real `changes()`/`last_insert_rowid()` meta. */
+const isDml = (sql: string): boolean => /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
 
 class Stmt implements SqlStatement {
   constructor(
@@ -31,7 +40,12 @@ class Stmt implements SqlStatement {
   execSync(): SqlResult {
     const s = this.db.prepare(this.sql);
     if (s.reader) {
-      return { results: s.all(...this.params) as unknown[], meta: { last_row_id: 0, changes: 0 } };
+      const results = s.all(...this.params) as unknown[];
+      // SR-RT-09: a plain SELECT reports zeroed meta (as D1 does); a `… RETURNING` writer must carry
+      // real rows-affected / last rowid so handlers that read `meta.changes` behave the same on D1.
+      if (!isDml(this.sql)) return { results, meta: { last_row_id: 0, changes: 0 } };
+      const m = this.db.prepare("SELECT changes() AS c, last_insert_rowid() AS r").get() as { c: number; r: number };
+      return { results, meta: { last_row_id: Number(m.r), changes: Number(m.c) } };
     }
     const info = s.run(...this.params);
     return { results: [], meta: { last_row_id: Number(info.lastInsertRowid), changes: info.changes } };

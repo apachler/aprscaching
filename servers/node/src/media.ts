@@ -6,7 +6,15 @@ import type { MediaStore } from "@aprsweb/gateway/runtime";
 /** Filesystem-backed MediaStore (the Node analogue of an R2 bucket). Content-type kept in a sidecar. */
 export function makeFsMedia(root: string): MediaStore {
   fs.mkdirSync(root, { recursive: true });
-  const safe = (key: string) => path.join(root, key.replace(/\.\./g, "").replace(/^\/+/, ""));
+  const base = path.resolve(root);
+  // SR-RT-12: don't rely on a `..`-strip (defeatable by `....//`); allowlist the key shape our server
+  // builds AND assert path.resolve containment so no key can ever escape the media root.
+  const safe = (key: string): string => {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) || key.includes("..")) throw new Error(`unsafe media key: ${key}`);
+    const file = path.resolve(base, key);
+    if (file !== base && !file.startsWith(base + path.sep)) throw new Error(`media key escapes store: ${key}`);
+    return file;
+  };
   return {
     async put(key, bytes, contentType) {
       const file = safe(key);
