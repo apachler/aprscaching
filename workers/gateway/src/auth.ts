@@ -244,21 +244,38 @@ export async function handleLogout(): Promise<Response> {
 }
 
 // --- minimal signed session (HMAC). Replace with your preferred session strategy. ---
-async function key(env: Env): Promise<CryptoKey> {
-  const secret = new TextEncoder().encode(env.INGEST_SECRET + ":session");
-  return crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+
+/** SR-SEC-01: a session signed with a known/default secret is forgeable for ANY callsign —
+ *  including ADMIN_CALLSIGNS. Never mint or honor sessions on such a key. */
+export function weakSecret(s: string | undefined): boolean {
+  return !s || s === "change-me";
+}
+/** The session-signing secret: a dedicated SESSION_SECRET when configured, else derived from
+ *  INGEST_SECRET (single-operator self-host convenience). Weak ⇒ null: no sessions at all. */
+function sessionSecret(env: Env): string | null {
+  if (env.SESSION_SECRET) return weakSecret(env.SESSION_SECRET) ? null : env.SESSION_SECRET;
+  return weakSecret(env.INGEST_SECRET) ? null : env.INGEST_SECRET + ":session";
+}
+async function key(env: Env): Promise<CryptoKey | null> {
+  const raw = sessionSecret(env);
+  if (raw == null) return null;
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(raw), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 async function signSession(callsign: string, env: Env): Promise<string> {
+  const k = await key(env);
+  if (!k) throw new Error("refusing to mint a session: INGEST_SECRET is unset or the 'change-me' default — set a strong secret (or a dedicated SESSION_SECRET)");
   const payload = `${callsign}.${Date.now()}`;
-  const sig = await crypto.subtle.sign("HMAC", await key(env), new TextEncoder().encode(payload));
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
   return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
 }
 async function verifySession(token: string, env: Env): Promise<string | null> {
   try {
+    const k = await key(env);
+    if (!k) return null;                                 // default secret ⇒ no session is ever valid
     const [p, s] = token.split(".");
     const payload = atob(p!);
     const sig = Uint8Array.from(atob(s!), (c) => c.charCodeAt(0));
-    const ok = await crypto.subtle.verify("HMAC", await key(env), sig, new TextEncoder().encode(payload));
+    const ok = await crypto.subtle.verify("HMAC", k, sig, new TextEncoder().encode(payload));
     return ok ? payload.split(".")[0]! : null;
   } catch { return null; }
 }

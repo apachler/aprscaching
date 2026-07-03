@@ -26,7 +26,7 @@ Or with Docker (build from the repo root):
 
 ```bash
 docker build -f servers/node/Dockerfile -t aprscaching-node .
-docker run -p 8787:8787 -v aprscaching-data:/data -e INGEST_SECRET=change-me aprscaching-node
+docker run -p 8787:8787 -v aprscaching-data:/data -e INGEST_SECRET=$(openssl rand -hex 24) aprscaching-node
 ```
 
 Point the web app at it: `VITE_API_BASE=http://127.0.0.1:8787 pnpm --filter @aprsweb/web dev`.
@@ -39,7 +39,7 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 | `PORT` | `8787` | HTTP + WS port |
 | `DB_PATH` | `./data/aprscaching.db` | SQLite file (WAL mode) |
 | `MIGRATIONS_DIR` | `../../db/migrations` | the shared schema (same files D1 uses) |
-| `INGEST_SECRET` | `change-me` | bearer for `/ingest`, `/outbox` (set this!) |
+| `INGEST_SECRET` | *(required)* | bearer for `/ingest`, `/outbox` — the server refuses to boot when unset or `change-me` |
 
 Migrations are applied automatically on boot and tracked in a `_migrations` table.
 

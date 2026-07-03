@@ -366,10 +366,25 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   const attest = (rows: PositionRow[]): PositionRow[] =>
     rows.map((p) => ({ ...p, firstPartyAttested: provenanceOf(p, attestedSites).firstPartyAttested }));
 
+  // SR-TRUST-01: Tier-A independence — every base callsign the logger controls (their own call,
+  // all base calls held by their account, their registered stations). A beacon gated by any of
+  // these is self-gated and can never corroborate the logger's own find.
+  const loggerOwnIgates = new Set<string>([baseCall(loggerCall)]);
+  const acct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
+    .bind(baseCall(loggerCall)).first<{ account_id: string }>();
+  if (acct) {
+    const held = await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id = ?")
+      .bind(acct.account_id).all<{ callsign: string }>();
+    for (const r of held.results) loggerOwnIgates.add(baseCall(r.callsign));
+    const stations = await env.DB.prepare("SELECT callsign FROM account_stations WHERE account_id = ?")
+      .bind(acct.account_id).all<{ callsign: string }>();
+    for (const r of stations.results) loggerOwnIgates.add(baseCall(r.callsign));
+  }
+
   const result = verifyFind(cache, appGeo, {
     loggerPositions: attest(lp.results),
     cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
-    loggerOwnIgates: new Set(),
+    loggerOwnIgates,
   });
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the

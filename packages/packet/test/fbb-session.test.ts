@@ -69,4 +69,30 @@ describe("FBB forwarding session over the loopback", () => {
     expect(A.inbox).toHaveLength(0);
     expect(B.inbox).toHaveLength(0);
   });
+
+  // SR-PKT-01: a hostile peer sending lines after FQ (e.g. "FQ\r\x1a\r") must not crash the
+  // session — the ^Z used to hit pendingRx.shift() on an empty queue and throw in the socket callback.
+  it("ignores any line after FQ — no throw, nothing stored", () => {
+    const A = makeStore([]);
+    const s = new FbbSession(A, { initiator: true });
+    s.start();
+    s.feed("[PEER-1.0-F$]");                       // their SID
+    s.feed("FF");                                  // both empty → we answer FQ, phase=done
+    expect(s.feed("FQ").out).toEqual([]);          // trailing FQ after done
+    expect(() => s.feed("\x1a")).not.toThrow();    // the crashing line
+    expect(s.feed("\x1a").out).toEqual([]);
+    expect(s.feed("junk title").out).toEqual([]);
+    expect(A.inbox).toHaveLength(0);
+  });
+
+  it("survives a bare ^Z in recv-block with no pending message", () => {
+    const B = makeStore([]);
+    const s = new FbbSession(B, { initiator: false });
+    s.feed("[PEER-1.0-F$]");                       // SID → await-proposals
+    s.feed("FB P OE8APR WW OE1AAA 1_OE8 5");       // one proposal
+    s.feed("F>");                                  // we accept → recv-block
+    s.feed("title");                               // title line
+    expect(() => { s.feed("\x1a"); s.feed("\x1a"); s.feed("\x1a"); }).not.toThrow();  // extra ^Z beyond the block
+    expect(B.inbox).toHaveLength(1);               // only the real message landed
+  });
 });

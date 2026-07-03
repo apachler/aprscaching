@@ -8,6 +8,12 @@ export interface Env {
   MEDIA?: MediaStore;       // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
   INGEST_SECRET: string;
+  // Dedicated session-signing secret (SR-SEC-01). Optional: absent ⇒ derived from INGEST_SECRET
+  // (single-operator self-host convenience) — but that couples the ingest-box credential to user
+  // sessions, so shared gateways SHOULD set it. Sessions are refused entirely while the effective
+  // secret is unset/'change-me' (auth.ts weakSecret): a default deploy can never mint a forgeable
+  // admin cookie.
+  SESSION_SECRET?: string;
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
   // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin

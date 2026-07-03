@@ -27,7 +27,18 @@ const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
-const INGEST_SECRET = process.env.INGEST_SECRET ?? "change-me";
+const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
+
+// SR-SEC-01 boot guard: the session-signing key derives from this secret; booting with the
+// known default would let anyone forge a session cookie for any callsign (incl. the sysop).
+if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
+  console.error(
+    "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
+    "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
+    "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
+  );
+  process.exit(1);
+}
 
 // ---- storage ----
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -70,6 +81,7 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
+  SESSION_SECRET: process.env.SESSION_SECRET,
   ADMIN_CALLSIGNS: process.env.ADMIN_CALLSIGNS,
   INSTANCE: process.env.INSTANCE,
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,

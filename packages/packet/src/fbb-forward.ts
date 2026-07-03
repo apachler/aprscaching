@@ -37,7 +37,7 @@ export class FbbForwarder {
       if (line === "" ) continue;                       // skip blank separators between CR/LF pairs
       const r = this.session.feed(line);
       out.push(...r.out);
-      if (r.done) this.done = true;
+      if (r.done) { this.done = true; break; }          // FQ ends the session — never feed trailing lines
     }
     return this.frame(out);
   }

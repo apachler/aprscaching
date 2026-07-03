@@ -20,7 +20,8 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `INGEST_SECRET` | Shared secret for `/ingest` and operator backend calls (`x-ingest-secret`) | `change-me` |
+| `INGEST_SECRET` | Shared secret for `/ingest` and operator backend calls (`x-ingest-secret`). **Required** — the Node/Bun servers refuse to boot, and no session is ever minted or honored, while it is unset or `change-me` | *(required)* |
+| `SESSION_SECRET` | Dedicated session-signing secret. Recommended on shared gateways so the ingest-box credential cannot forge user sessions; absent ⇒ sessions derive from `INGEST_SECRET` | — |
 | `INSTANCE` | Canonical federation instance id / domain | `aprscaching.local` |
 | `APP_URL` | App origin for magic-link redirects *(Worker)* | — |
 | `RP_ID` | WebAuthn relying-party id (registrable domain) *(Worker)* | — |

@@ -11,6 +11,11 @@
 
 ## Production Readiness Score: 58 / 100
 
+> **Update — all 8 Criticals fixed** (SR-TRUST-01, SR-SEC-01/02, SR-FED-01/02, SR-PKT-01, SR-ING-01,
+> SR-PARSE-01), each with a regression test; ticked in the detail sections below. The High/Medium/Low
+> sets remain open. `pnpm -r build` + `pnpm -r test` + the Node/SQLite smoke + geofence conformance
+> are green.
+
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live
 layer, and defensively-coded text parsers with broad test coverage. But it is **not yet fit to run
@@ -139,7 +144,7 @@ The trust engine is server-side and transport-blind (Tier A branches only on `fi
 browser ingest strips the IGate, no code path lifts a bare IS packet to B). The breaches are in the
 *corroboration legs*, not the transport rule.
 
-- [ ] **SR-TRUST-01 (Critical) — Tier A self-corroboration.** `caches.ts:372` calls `verifyFind`
+- [x] **SR-TRUST-01 (Critical) — Tier A self-corroboration.** `caches.ts:372` calls `verifyFind`
   with `loggerOwnIgates: new Set()` (always empty), and `verify.ts:93-95` only skips a fix when
   `deps.loggerOwnIgates?.has(ig)`. With no `FIRST_PARTY_SITES` set (launch default), `provenanceOf`
   gives `siteOk = !!igate`, so any RF-heard beacon with any gating IGate is `firstPartyAttested`. A
@@ -168,7 +173,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
 
 ## Detail — Security surface (gateway HTTP/WS + crypto + tools)
 
-- [ ] **SR-SEC-01 (Critical) — `change-me` default is the session key, no boot guard.** `wrangler.toml:35`
+- [x] **SR-SEC-01 (Critical) — `change-me` default is the session key, no boot guard.** `wrangler.toml:35`
   ships `INGEST_SECRET = "change-me"` as a plaintext `[vars]` default; `servers/{node,bun}/src/server.ts:30`
   default to `"change-me"`; and `auth.ts:248` derives the session HMAC key from `env.INGEST_SECRET + ":session"`.
   A default deploy has session key `"change-me:session"` → an attacker forges an `acs` cookie for any
@@ -177,7 +182,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   operator can forge any user's session. *Fix:* refuse boot when the secret is unset/`"change-me"`; make
   it a `wrangler secret`, not `[vars]`; derive the session key from a **separate** `SESSION_SECRET`. *Test:*
   boot with default → refuses; cookie signed with `"change-me:session"` → rejected.
-- [ ] **SR-SEC-02 (Critical) — unauthenticated device-key registration.** `keys.ts:19-24`:
+- [x] **SR-SEC-02 (Critical) — unauthenticated device-key registration.** `keys.ts:19-24`:
   `const callsign = (session ?? parsed.data.callsign).toUpperCase();` — with no session, the body
   callsign is accepted, and `verified` is set from the *callsign's* badge, so an attacker's key is
   stored `verified:1` under a victim callsign and federated. `account.ts:authorize()` then accepts any
@@ -244,7 +249,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
 Federation is **not safe against a malicious peer**. F4 (peer trust tiers + quarantine + corroboration
 quorum) is explicitly launch-gating in `` and is the right home for most of these.
 
-- [ ] **SR-FED-01 (Critical) — signer/id outside the signature.** ✓verified: `federation.ts:269`
+- [x] **SR-FED-01 (Critical) — signer/id outside the signature.** ✓verified: `federation.ts:269`
   signs `{type,id,data}` only; `signer` is unsigned metadata. `federation_sync.ts:204-234` applies a
   record without checking that `rec.id` is namespaced to the serving peer or that `rec.signer` equals
   its verified identity, then `upsertRemoteCache` does `INSERT OR REPLACE ... keyed by rec.id`. Any
@@ -252,7 +257,7 @@ quorum) is explicitly launch-gating in `` and is the right home for most of thes
   the genuine mirror, and inherits the victim's `trusted` origin on the map. *Fix:* require
   `rec.id.startsWith(wk.instance + ":")` and `(rec.signer ?? feed.instance) === wk.instance`; pass
   `wk.instance` (never `rec.signer`) as `origin`. **Touches federation semantics — confirm.**
-- [ ] **SR-FED-02 (Critical) — tombstones purge arbitrary targets.** `federation_sync.ts:241-251`
+- [x] **SR-FED-02 (Critical) — tombstones purge arbitrary targets.** `federation_sync.ts:241-251`
   deletes `remote_caches`/`remote_finds WHERE global_id = d.targetId` with no check that `targetId`
   belongs to the emitting peer's namespace; tombstones are synced from every enabled peer incl.
   `unvetted`. A hostile peer censors any instance's records network-wide (180-day suppression) and
@@ -305,7 +310,7 @@ quorum) is explicitly launch-gating in `` and is the right home for most of thes
 Architecture is good (pure, clock-injected timers that can't pile up); the defects are in the abnormal
 / hostile-peer paths the loopback tests don't exercise.
 
-- [ ] **SR-PKT-01 (Critical) — FBB crash after `FQ`.** `fbb-session.ts:122-126` runs the recv-block
+- [x] **SR-PKT-01 (Critical) — FBB crash after `FQ`.** `fbb-session.ts:122-126` runs the recv-block
   code even when `phase === "done"`; `fbb-forward.ts:34-42` keeps feeding lines after `r.done`. A peer
   sending `FQ\r\x1a\r` makes `pendingRx.shift()` return `undefined` → `p.type` throws in the socket
   data callback (`fbb-scheduler.ts:105-109`), an uncaught exception that kills the daemon remotely.
@@ -357,7 +362,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 
 ## Detail — Ingest daemon (`apps/ingest`)
 
-- [ ] **SR-ING-01 (Critical) — reconnect storm.** ✓verified: `aprsis.ts:34-36` registers `retry` on
+- [x] **SR-ING-01 (Critical) — reconnect storm.** ✓verified: `aprsis.ts:34-36` registers `retry` on
   both `error` and `close`; a socket failure emits both → one failure spawns two reconnects (2ⁿ), no
   dup-connection guard, old sockets keep emitting duplicate packets. Same in `igate.ts:67-68`,
   `uplink.ts:23-24`. *Fix:* reconnect only on `close`; generation counter; `destroy()` +
@@ -441,7 +446,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 
 Text decoders are hardened (length guards, null-returning); exposure is in the binary/DSP surfaces.
 
-- [ ] **SR-PARSE-01 (Critical) — Meshtastic `fixed32` OOB.** `meshtastic.ts:62`: `i32le` reads a
+- [x] **SR-PARSE-01 (Critical) — Meshtastic `fixed32` OOB.** `meshtastic.ts:62`: `i32le` reads a
   4-byte `DataView` with no bounds check; a truncated fixed32 throws `RangeError` (tears down the
   browser mesh link via the read loop's catch), or — when the frame is a subarray — silently reads
   into the adjacent frame and plants a bogus station. *Fix:* `p+4 > b.length ? 0 : …` and `break` in

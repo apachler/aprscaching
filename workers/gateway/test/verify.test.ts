@@ -39,6 +39,26 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
     expect(r.verified).toBe(false);
   });
 
+  // SR-TRUST-01: self-gating is judged by BASE call — running your IGate under another SSID
+  // (OE8APR-9 beacon gated by OE8APR-10) is still self-gating and must never mint Tier A.
+  it("does NOT grant tier A when the fix was gated by another SSID of the logger's own call", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8APR-10" })],
+      loggerOwnIgates: new Set(["OE8APR"]),
+    });
+    expect(r.tier).toBe("C");
+    expect(r.verified).toBe(false);
+  });
+
+  it("does NOT grant tier A when the gater is a station the logger registered", () => {
+    const r = verifyFind(CACHE, undefined, {
+      loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8ZZZ-1" })],
+      loggerOwnIgates: new Set(["OE8APR", "OE8ZZZ"]),   // OE8ZZZ = the logger's account_stations entry
+    });
+    expect(r.tier).toBe("C");
+    expect(r.verified).toBe(false);
+  });
+
   it("does NOT grant tier A when there is no gating IGate at all", () => {
     const r = verifyFind(CACHE, undefined, {
       loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: null })],

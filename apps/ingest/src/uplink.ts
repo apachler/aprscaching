@@ -10,9 +10,24 @@ import net from "node:net";
 export class AprsUplink {
   private sock?: net.Socket;
   private ready = false;
-  constructor(private o: { host: string; port: number; serviceCall: string; servicePass: string }) {}
+  private gen = 0;                    // connection generation — a replaced socket can never reconnect
+  private timer?: ReturnType<typeof setTimeout>;
+  constructor(private o: { host: string; port: number; serviceCall: string; servicePass: string; retryMs?: number }) {}
 
-  start() {
+  start() { this.connect(); }
+
+  /** One reconnect per failure: only `close` schedules (it always follows `error`), stale sockets
+   *  and already-scheduled timers are ignored (SR-ING-01). */
+  private retry(gen: number) {
+    if (gen !== this.gen || this.timer) return;
+    this.timer = setTimeout(() => { this.timer = undefined; this.connect(); }, this.o.retryMs ?? 3000);
+  }
+
+  private connect() {
+    const gen = ++this.gen;
+    this.sock?.removeAllListeners();
+    this.sock?.destroy();
+    this.ready = false;
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
@@ -20,8 +35,8 @@ export class AprsUplink {
       s.write(`user ${this.o.serviceCall} pass ${this.o.servicePass} vers aprscaching 0.0\r\n`);
       this.ready = true;
     });
-    const retry = () => { this.ready = false; setTimeout(() => this.start(), 3000); };
-    s.on("error", retry); s.on("close", retry);
+    s.on("error", () => { /* close always follows — reconnect handled there */ });
+    s.on("close", () => { this.ready = false; this.retry(gen); });
   }
 
   /**

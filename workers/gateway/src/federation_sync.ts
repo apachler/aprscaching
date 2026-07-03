@@ -202,8 +202,10 @@ async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, ve
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
     const feed = (await res.json()) as Feed;
     for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKeys))) continue;
-      await def.apply(env, rec, rec.signer ?? feed.instance ?? instance);
+      if (!(await accept(env, rec, verifyKeys, instance))) continue;
+      // SR-FED-01: the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
+      // feed.instance (both attacker-controlled). A peer inherits only its own namespace + trust.
+      await def.apply(env, rec, instance);
       applied++;
     }
     const next = feed.nextCursor ?? cursor;
@@ -212,6 +214,15 @@ async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, ve
     cursor = next;
   }
   return applied;
+}
+
+/**
+ * SR-FED-01/02: a federated global id (record id or tombstone target) belongs to exactly one
+ * instance — its namespace prefix `<instance>:`. A peer may only serve/overwrite/tombstone ids in
+ * ITS OWN namespace; anything else is an impersonation/censorship attempt. Pure + exported for test.
+ */
+export function idInNamespace(globalId: string | undefined | null, instance: string): boolean {
+  return typeof globalId === "string" && globalId.startsWith(instance + ":");
 }
 
 /** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
@@ -226,8 +237,13 @@ async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boo
   return false;
 }
 
-async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[]): Promise<boolean> {
+async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instance: string): Promise<boolean> {
   if (!(await verifiesUnderAny(verifyKeys, rec))) return false;            // bad/unrecognised signature
+  // SR-FED-01: the signature covers {type,id,data} but NOT signer — so a peer could serve a record
+  // in another instance's namespace, signed with its own key, and overwrite that instance's genuine
+  // mirror (inheriting its trust). A peer may only serve records IN ITS OWN namespace, self-signed.
+  if (!idInNamespace(rec.id, instance)) return false;                       // id must be the serving peer's namespace
+  if (rec.signer && rec.signer !== instance) return false;                 // and self-attested as that peer
   if (rec.signer && rec.signer === ours(env)) return false;                // never mirror our own
   if (await isTombstoned(env, rec.id)) return false;                       // purged by a peer tombstone
   return true;
@@ -242,6 +258,10 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   const d = rec.data as { kind?: string; targetId?: string; ts?: number };
   const target = d.targetId;
   if (!target) return;
+  // SR-FED-02: a peer may only tombstone records in ITS OWN namespace. Without this a hostile peer
+  // deletes ("censors") any instance's mirrored records network-wide and forges ADR-5 GDPR deletes.
+  // `origin` is the verified serving peer (wk.instance), passed by syncFeed.
+  if (!idInNamespace(target, origin)) return;
   await env.DB.batch([
     env.DB.prepare("DELETE FROM remote_caches WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
@@ -397,6 +417,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   for (const rec of b.records) {
     const apply = APPLIERS[rec.type];
     if (!apply || rec.signer !== b.instance) { rejected++; continue; }   // unknown type / wrong (or absent) signer
+    if (!idInNamespace(rec.id, b.instance)) { rejected++; continue; }       // SR-FED-01: only the submitter's own namespace
     if (!(await verifyRecordSig(key, rec))) { rejected++; continue; }     // integrity
     if (await isTombstoned(env, rec.id)) { rejected++; continue; }        // already purged by a tombstone
     await apply(env, rec, b.instance);

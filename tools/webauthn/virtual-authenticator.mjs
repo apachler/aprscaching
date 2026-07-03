@@ -5,7 +5,7 @@
  * NOT part of the node-fetch CI smoke (that runtime has no authenticator). Run locally:
  *
  *   # 1) start a gateway whose APP_URL matches this harness origin:
- *   APP_URL=http://localhost:4300 RP_ID=localhost PORT=8803 INGEST_SECRET=change-me \
+ *   APP_URL=http://localhost:4300 RP_ID=localhost PORT=8803 INGEST_SECRET=dev-webauthn-secret \
  *     pnpm --filter @aprsweb/node-gateway start
  *   # 2) with playwright + chromium available:
  *   node tools/webauthn/virtual-authenticator.mjs        # expects "RESULT: PASS"

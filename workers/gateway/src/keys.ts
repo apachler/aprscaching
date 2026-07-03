@@ -16,8 +16,21 @@ import { sessionCallsign } from "./auth.js";
 export async function handleRegisterKey(req: Request, env: Env): Promise<Response> {
   const parsed = RegisterKeyRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
+  // SR-SEC-02: registering a key BINDS it to a callsign, and account.ts authorises destructive
+  // account actions (delete/bundle/move) by "any registered key" — so registration itself must be
+  // authenticated. A signed-in session registers for its own base call (any SSID of it); the
+  // trusted ingest daemon (shared secret) registers for the callsign it heard. Never an anonymous body.
   const session = await sessionCallsign(req, env);
-  const callsign = (session ?? parsed.data.callsign).toUpperCase();
+  const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
+  let callsign: string;
+  if (session) {
+    callsign = (parsed.data.callsign ?? session).toUpperCase();
+    if (base(callsign) !== base(session)) return json({ error: "callsign is not yours" }, { status: 403 });
+  } else if ((req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET && parsed.data.callsign) {
+    callsign = parsed.data.callsign.toUpperCase();
+  } else {
+    return json({ error: "sign in to register a device key" }, { status: 401 });
+  }
   const verified = await isCallsignVerified(env, callsign);
   await env.DB.prepare(
     "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)",

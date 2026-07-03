@@ -8,6 +8,7 @@ export interface IgateOpts {
   host: string; port: number; call: string; pass: string;
   filter?: string;        // APRS-IS server-side filter for the IS->RF direction (default messages)
   localTtlSec?: number;   // how long a station counts as "heard locally"
+  retryMs?: number;
 }
 
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
@@ -24,6 +25,8 @@ export class Igate {
   private buf = "";
   private heard = new Map<string, number>(); // base callsign -> last heard ts(ms)
   private localTtl: number;
+  private gen = 0;                    // connection generation — a replaced socket can never reconnect
+  private timer?: ReturnType<typeof setTimeout>;
 
   constructor(private kiss: KissTnc, private o: IgateOpts) { this.localTtl = (o.localTtlSec ?? 1800) * 1000; }
 
@@ -44,7 +47,18 @@ export class Igate {
     if (this.ready && this.sock) { try { this.sock.write(line + "\r\n"); } catch { /* dropped */ } }
   }
 
+  /** One reconnect per failure: only `close` schedules (it always follows `error`), stale sockets
+   *  and already-scheduled timers are ignored (SR-ING-01). */
+  private retry(gen: number): void {
+    if (gen !== this.gen || this.timer) return;
+    this.timer = setTimeout(() => { this.timer = undefined; this.connect(); }, this.o.retryMs ?? 3000);
+  }
+
   private connect(): void {
+    const gen = ++this.gen;
+    this.sock?.removeAllListeners();
+    this.sock?.destroy();
+    this.ready = false; this.buf = "";
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s; s.setEncoding("utf8");
     s.on("connect", () => {
@@ -64,7 +78,7 @@ export class Igate {
           console.log(`[igate] TX->RF message for ${addr}`);
       }
     });
-    const retry = () => { this.ready = false; setTimeout(() => this.connect(), 3000); };
-    s.on("error", retry); s.on("close", retry);
+    s.on("error", () => { /* close always follows — reconnect handled there */ });
+    s.on("close", () => { this.ready = false; this.retry(gen); });
   }
 }

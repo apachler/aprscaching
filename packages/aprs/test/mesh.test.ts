@@ -80,4 +80,19 @@ describe("meshtastic — native MQTT ServiceEnvelope + typed events", () => {
     const encrypted = [...fixed32(1, 0x11223344), ...lenDelim(8, [1, 2, 3, 4])]; // field 8 = encrypted
     expect(parseMeshPacket(u8(...encrypted))).toBeNull();
   });
+
+  // SR-PARSE-01: a truncated fixed32 must neither throw (RangeError tore down the mesh read
+  // loop) nor read past the frame boundary into an adjacent frame's bytes.
+  it("survives a truncated fixed32 — no throw, null result", () => {
+    expect(parseMeshPacket(u8(0x0d, 0x01, 0x02))).toBeNull();       // tag(1,fixed32) + only 2 of 4 bytes
+    expect(parseMeshPacket(u8(0x0d))).toBeNull();                   // tag alone
+    expect(parseMeshPacket(u8(0x12, 0x0a, 0x01))).toBeNull();       // len-delim declaring 10 bytes, 1 present
+  });
+
+  it("never reads a fixed32 across a subarray's end into the parent buffer", () => {
+    // parent buffer: [frameA = tag+2 bytes][0xff 0xff 0xff 0xff adjacent garbage]
+    const parent = u8(0x0d, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff);
+    const frameA = parent.subarray(0, 3);                           // truncated inside its own frame
+    expect(parseMeshPacket(frameA)).toBeNull();                     // must not decode 0xffffff00 from the neighbour
+  });
 });

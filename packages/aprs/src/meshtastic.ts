@@ -68,9 +68,9 @@ function* walk(b: Uint8Array): Generator<[number, number, number | Uint8Array]> 
     let tag: number; [tag, p] = varint(b, p);
     const field = tag >>> 3, wire = tag & 7;
     if (wire === 0) { let v: number; [v, p] = varint(b, p); yield [field, wire, v]; }
-    else if (wire === 5) { yield [field, wire, i32le(b, p)]; p += 4; }
+    else if (wire === 5) { if (p + 4 > b.length) break; yield [field, wire, i32le(b, p)]; p += 4; }   // truncated fixed32 → stop, never read past the frame
     else if (wire === 1) { p += 8; }                                   // 64-bit (unused) — skip
-    else if (wire === 2) { let len: number; [len, p] = varint(b, p); yield [field, wire, b.subarray(p, p + len)]; p += len; }
+    else if (wire === 2) { let len: number; [len, p] = varint(b, p); if (p + len > b.length) break; yield [field, wire, b.subarray(p, p + len)]; p += len; }
     else break;                                                        // groups/unknown — stop
   }
 }

@@ -75,7 +75,8 @@ export interface VerifyDeps {
   loggerPositions: PositionRow[];
   /** for aprs_living: the cache-station's positions in the same window */
   cacheStationPositions?: PositionRow[];
-  /** the logger's own IGate callsign(s), to enforce independence in tier A */
+  /** BASE callsigns the logger controls (own call, held account calls, registered stations) —
+   *  a fix gated by any of these can never corroborate the logger's own find (SR-TRUST-01) */
   loggerOwnIgates?: Set<string>;
 }
 
@@ -85,15 +86,21 @@ function effectiveMinTier(cache: CacheRow, policy: VerifyPolicy): TrustTier {
 
 function rank(t: TrustTier): number { return t === "A" ? 3 : t === "B" ? 2 : 1; }
 
+const igBase = (c: string): string => c.split("-")[0]!.toUpperCase();
+
+/** True when this fix was gated by an IGate independent of the logger (compared by BASE call —
+ *  OE8APR-10 gating OE8APR-9 is still self-gating). No gater or a controlled gater ⇒ not independent. */
+function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
+  const ig = p.igate_call ?? "";
+  return !!ig && !deps.loggerOwnIgates?.has(igBase(ig));
+}
+
 /** Tier A: heard at a first-party-attested site, independently gated, near the target. */
 function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (cache.lat == null || cache.lon == null) return null;
   for (const p of deps.loggerPositions) {
     if (!p.firstPartyAttested) continue;   // transport-vs-trust seam: the ONLY Tier-A gate
-    if (policy.requireIndependentIgate) {
-      const ig = p.igate_call ?? "";
-      if (!ig || deps.loggerOwnIgates?.has(ig)) continue; // self-gated => not corroborated
-    }
+    if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // self-gated => not corroborated
     const d = haversineMeters(p.lat, p.lon, cache.lat, cache.lon);
     if (d <= policy.radiusM) {
       return { verified: true, tier: "A", method: "aprs_rf", matchedPositionId: p.id, distanceM: d };
@@ -108,6 +115,7 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
   if (!cs.length) return null;
   for (const p of deps.loggerPositions) {
     if (!p.firstPartyAttested) continue;   // Tier A demands an attested first-party fix
+    if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // same rule as tryRf (SR-TRUST-01)
     // nearest cache-station fix in time
     let best: PositionRow | null = null, bestSkew = Infinity;
     for (const c of cs) {

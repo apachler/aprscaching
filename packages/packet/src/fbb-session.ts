@@ -119,10 +119,15 @@ export class FbbSession {
       return { out: [] };
     }
 
+    // any line after FQ (or in an unexpected state) is ignored — a hostile peer sending
+    // "FQ\r^Z\r" must not reach the recv-block code below (SR-PKT-01: pendingRx is empty there)
+    if (this.phase !== "recv-block") return { out: [] };
+
     // phase === "recv-block": read title / body / ^Z for each accepted message, in order
     if (this.rxTitle === null && t !== CTRLZ && raw !== CTRLZ) { this.rxTitle = raw; return { out: [] }; }
     if (raw === CTRLZ || t === CTRLZ) {
-      const p = this.pendingRx.shift()!;
+      const p = this.pendingRx.shift();
+      if (!p) { this.rxTitle = null; this.rxAcc = []; this.phase = "await-proposals"; return { out: [] }; }
       this.store.accept({ type: p.type === "T" ? "P" : p.type, from: p.from, at: p.atBbs, to: p.to, bid: p.bid, title: this.rxTitle ?? "", body: this.rxAcc.join("\n") });
       this.rxTitle = null; this.rxAcc = [];
       if (this.pendingRx.length === 0) return { out: this.turnToPropose() }; // block done → reverse

@@ -12,7 +12,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 SUITES="${*:-${SUITES:-smoke geofence}}"
-SECRET="${INGEST_SECRET:-change-me}"
+# SR-SEC-01: the gateway refuses to boot on the 'change-me' default — generate a per-run secret.
+SECRET="${INGEST_SECRET:-smoke-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')}"
 fail=0
 
 run_suite() {

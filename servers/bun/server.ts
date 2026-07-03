@@ -27,7 +27,18 @@ const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? join(HERE, "data/media");
-const INGEST_SECRET = process.env.INGEST_SECRET ?? "change-me";
+const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
+
+// SR-SEC-01 boot guard: the session-signing key derives from this secret; booting with the
+// known default would let anyone forge a session cookie for any callsign (incl. the sysop).
+if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
+  console.error(
+    "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
+    "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
+    "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
+  );
+  process.exit(1);
+}
 function gitHead(): string | undefined {
   try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || undefined; }
   catch { return undefined; }
@@ -60,6 +71,7 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
+  SESSION_SECRET: process.env.SESSION_SECRET,
   INSTANCE: process.env.INSTANCE,
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_KEY_HISTORY: process.env.FED_KEY_HISTORY,

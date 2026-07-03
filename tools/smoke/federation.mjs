@@ -304,6 +304,21 @@ ok("a tampered submission is rejected (signature integrity)", sub2.data?.applied
 const sub3 = await call(SUB, "POST", "/federation/submit", { instance: "oe.sub", publicKey: spub, records: [] }, { "x-fed-secret": SUBMIT_SECRET });
 ok("a spoke cannot submit as the hub's own instance -> 400", sub3.status === 400, JSON.stringify(sub3.data));
 
+// SR-FED-01: a spoke may only submit records IN ITS OWN namespace. A record whose id targets ANOTHER
+// instance (here the publisher's) — signed by the spoke — must be rejected, never overwriting the
+// genuine mirror. The signature is valid (spoke-signed), so ONLY the namespace check stops it.
+const evilTitle = "HIJACKED " + now();
+const evilData = { ...spokeData, title: evilTitle };
+const evilId = `${pubInstance}:cache:999999`;                                 // the PUBLISHER's namespace
+const evilSig = b64u(await crypto.subtle.sign("Ed25519", skp.privateKey, new TextEncoder().encode(stableStringify({ type: "cache", id: evilId, data: evilData }))));
+const evilRec = { type: "cache", id: evilId, cursor: now(), data: evilData, sig: evilSig, signer: "oe.spoke" };
+const subEvil = await call(SUB, "POST", "/federation/submit", { instance: "oe.spoke", publicKey: spub, records: [evilRec] }, { "x-fed-secret": SUBMIT_SECRET });
+ok("SR-FED-01: a cross-namespace submission is rejected (no origin spoof / overwrite)",
+  subEvil.data?.applied === 0 && subEvil.data?.rejected === 1, JSON.stringify(subEvil.data));
+const evilMap = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
+ok("SR-FED-01: the hijack record never lands on the map",
+  !(evilMap.data?.caches ?? []).some((c) => c.title === evilTitle), evilTitle);
+
 // ---- F6/T3.1: federated catalog on the map (origin + trust tagging; unvetted hidden by default) ----
 const GBBOX = "15,46,16,48"; // covers the gossip cache (47.09,15.44) mirrored from the trusted publisher
 const m0 = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);

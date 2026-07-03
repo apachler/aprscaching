@@ -32,7 +32,10 @@ bucket_name = "aprscaching-media"   # audio-cache clue storage
 crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-sync every 15 min
 
 [vars]
-INGEST_SECRET = "change-me"   # prefer: wrangler secret put INGEST_SECRET
+# INGEST_SECRET is a SECRET, never a [vars] default (SR-SEC-01) — set it before first deploy:
+#   wrangler secret put INGEST_SECRET          (required; sessions are refused while it is unset/'change-me')
+#   wrangler secret put SESSION_SECRET         (recommended: decouples user sessions from the ingest credential)
+# For local `wrangler dev`, put both in workers/gateway/.dev.vars (gitignored).
 INSTANCE = "aprscaching.local"   # canonical federation instance id (use your domain in prod)
 # FED_PEERS = "https://peer.example/"          # advertised peer instances
 # Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
