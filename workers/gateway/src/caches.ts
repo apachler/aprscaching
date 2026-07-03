@@ -512,15 +512,18 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   const since = now - DEFAULT_POLICY.windowSec;
   const lp = await env.DB.prepare(
-    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
+    // SR-FED-09: `ts <= now+60` — without the upper bound a future-dated fix sits inside the window forever
+    "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
   )
-    .bind(loggerCall, since)
+    .bind(loggerCall, since, now + 60)
     .all<PositionRow>();
 
   let cacheStationPositions: PositionRow[] | undefined;
   if (cache.type === "aprs_living" && cache.station_call) {
-    const cs = await env.DB.prepare("SELECT * FROM positions WHERE callsign = ? AND ts >= ? ORDER BY ts DESC LIMIT 500")
-      .bind(cache.station_call, since)
+    const cs = await env.DB.prepare(
+      "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
+    )
+      .bind(cache.station_call, since, now + 60)
       .all<PositionRow>();
     cacheStationPositions = cs.results;
   }

@@ -489,13 +489,24 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
     .run();
 }
 
-async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
+export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
+  // SR-FED-08: version-monotonic — a replayed OLDER signed record (stale cursor, hostile replay)
+  // must never roll a mirror back, e.g. to pre-redaction content. Only a record at least as new
+  // (by the origin's own updated_at) may overwrite.
   await env.DB.prepare(
-    `INSERT OR REPLACE INTO remote_caches
+    `INSERT INTO remote_caches
        (global_id, origin, code, owner_call, title, type, status, difficulty, terrain, lat, lon,
         station_call, source, external_id, hint, description, min_trust, created_at, updated_at, mirrored_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(global_id) DO UPDATE SET
+       origin=excluded.origin, code=excluded.code, owner_call=excluded.owner_call,
+       title=excluded.title, type=excluded.type, status=excluded.status,
+       difficulty=excluded.difficulty, terrain=excluded.terrain, lat=excluded.lat, lon=excluded.lon,
+       station_call=excluded.station_call, source=excluded.source, external_id=excluded.external_id,
+       hint=excluded.hint, description=excluded.description, min_trust=excluded.min_trust,
+       created_at=excluded.created_at, updated_at=excluded.updated_at, mirrored_at=excluded.mirrored_at
+     WHERE COALESCE(excluded.updated_at, 0) >= COALESCE(remote_caches.updated_at, 0)`,
   )
     .bind(
       rec.id,
@@ -522,13 +533,21 @@ async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Pro
     .run();
 }
 
-async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Promise<void> {
+export async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
+  // SR-FED-08: finds are events keyed by the origin's own ts — same monotonic rule as caches so a
+  // replayed older copy (e.g. with a since-redacted comment) can't overwrite the current mirror.
   await env.DB.prepare(
-    `INSERT OR REPLACE INTO remote_finds
+    `INSERT INTO remote_finds
        (global_id, origin, cache_global_id, cache_code, logger_call, ts, log_type,
         verified, tier, verify_method, distance_m, comment, mirrored_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(global_id) DO UPDATE SET
+       origin=excluded.origin, cache_global_id=excluded.cache_global_id, cache_code=excluded.cache_code,
+       logger_call=excluded.logger_call, ts=excluded.ts, log_type=excluded.log_type,
+       verified=excluded.verified, tier=excluded.tier, verify_method=excluded.verify_method,
+       distance_m=excluded.distance_m, comment=excluded.comment, mirrored_at=excluded.mirrored_at
+     WHERE COALESCE(excluded.ts, 0) >= COALESCE(remote_finds.ts, 0)`,
   )
     .bind(
       rec.id,

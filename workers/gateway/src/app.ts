@@ -190,7 +190,7 @@ export async function runScheduled(env: Env): Promise<void> {
   // idx_pos_source_ts (migration 0006).
   for (let i = 0; i < 40; i++) {
     const r = await env.DB.prepare(
-      "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source = 'firehose' AND ts < ? LIMIT 5000)",
+      "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ? LIMIT 5000)",
     )
       .bind(nowS - 7 * 24 * 3600)
       .run();
@@ -209,13 +209,12 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
     env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
   ]);
-  // tombstones are tiny + PII-free; retain long enough for every peer to converge (T1.3, default 180d)
-  const tombTtl = (Number(env.TOMBSTONE_TTL_DAYS) || 180) * 24 * 3600;
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM tombstones WHERE ts < ?").bind(nowS - tombTtl),
-    env.DB.prepare("DELETE FROM remote_tombstones WHERE ts < ?").bind(nowS - tombTtl),
-    env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?").bind(nowS - 3600), // relay rows are ephemeral
-  ]);
+  // SR-FED-10: tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
+  // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
+  // erased record with nothing left to suppress it (ADR-5). Only the ephemeral relay queue is pruned.
+  await env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?")
+    .bind(nowS - 3600)
+    .run();
   await runFrequentSync(env);
   // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
   try {

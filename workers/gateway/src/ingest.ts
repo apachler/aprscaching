@@ -74,7 +74,13 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   let maxTs = 0;
+  // SR-FED-09: never trust a client timestamp verbatim. A future-dated fix would sit permanently
+  // inside the verify window and an ancient one dodges the TTL — clamp every packet to
+  // [now − 7 d, now + 60 s] before anything is persisted.
+  const nowS = Math.floor(Date.now() / 1000);
+  const clampTs = (t: number) => Math.min(Math.max(t, nowS - 7 * 24 * 3600), nowS + 60);
   for (const p of body.data.packets) {
+    p.ts = clampTs(p.ts);
     portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
     if (p.ts > maxTs) maxTs = p.ts;
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
