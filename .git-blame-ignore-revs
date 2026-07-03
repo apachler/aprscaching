@@ -1,0 +1,6 @@
+# Revisions ignored by `git blame` (bulk, non-behavioural reformats).
+# Enable locally once:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub honours this file automatically in its blame view.
+
+# style: apply Prettier formatting baseline across the repo
+dbf0b7cb3a638807a35dbd0fe25d1f316eafa3dc
