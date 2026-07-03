@@ -195,13 +195,13 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   `<`/`/`, so `?bbox=</script><script>…</script>` breaks out (uppercased `cache` too — HTML tags are
   case-insensitive). No CSP; `x-frame-options: ALLOWALL`. Runs same-origin as the `acs` cookie. *Fix:*
   escape `<`/`>`/`&`/U+2028/2029 in the serialized JSON, validate `bbox` as four numbers, add a CSP.
-- [ ] **SR-SEC-04 (High) — box remote-control IDOR.** `box.ts:32-49` authorizes `handleBoxEnqueue`
+- [x] **SR-SEC-04 (High) — box remote-control IDOR.** `box.ts:32-49` authorizes `handleBoxEnqueue`
   with "a session exists OR box secret" and no check that the session owns `boxId`; the TX callsign is
   `body.callsign`. Any signed-in user who guesses a `boxId` can queue `beacon/message/igate/digi/tx` to
   another operator's box → remote keying of someone else's radio. *Fix:* bind boxes to an owning
   account; require `session ∈ owners(boxId)`; derive the TX callsign from the session. **Touches ingest/TX
   — confirm before implementing.**
-- [ ] **SR-SEC-05 (High) — forgeable account-migration bundle.** `account.ts:132-167` validates only
+- [x] **SR-SEC-05 (High) — forgeable account-migration bundle.** `account.ts:132-167` validates only
   that the assertion key is *in* the attacker-supplied bundle; `callsign`, `verified`, and `keys[]` are
   unsigned by any source instance. On an instance where the callsign is new, an attacker imports
   `{callsign:"W1AW", verified:true, keys:[theirKey]}` → a verified account they don't hold, device key

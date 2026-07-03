@@ -16,15 +16,36 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { actor } from "./caches.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionCallsign, sessionAccountId } from "./auth.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
 const now = () => Math.floor(Date.now() / 1000);
 const boxAuth = (req: Request, env: Env) => (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
+const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
 
 async function isVerified(env: Env, call: string): Promise<boolean> {
   const r = await env.DB.prepare("SELECT 1 AS x FROM callsign_verifications WHERE callsign = ? AND status = 'verified'").bind(call.toUpperCase()).first();
+  return !!r;
+}
+
+/**
+ * SR-SEC-04: authorize a session to control `boxId`. TOFU — the first account to control a box claims
+ * ownership; thereafter only that account may enqueue to it. Returns the owning accountId, or null if
+ * this session is not allowed to control the box.
+ */
+async function ownBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
+  const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?").bind(boxId).first<{ account_id: string }>();
+  if (!row) {
+    await env.DB.prepare("INSERT OR IGNORE INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)").bind(boxId, accountId, now()).run();
+    return true;
+  }
+  return row.account_id === accountId;
+}
+/** Does `accountId` hold the given base callsign (so it may transmit as it)? */
+async function accountHoldsCall(env: Env, accountId: string, call: string): Promise<boolean> {
+  const r = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id = ? AND callsign = ?")
+    .bind(accountId, base(call)).first();
   return !!r;
 }
 
@@ -33,13 +54,19 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   const body = (await req.json().catch(() => ({}))) as { kind?: string; payload?: unknown; callsign?: string; sig?: string };
   const kind = String(body.kind ?? "").toLowerCase();
   if (!ALL_KINDS.has(kind)) return json({ error: `unknown command kind; one of ${[...ALL_KINDS].join(", ")}` }, { status: 400 });
-  // authorize: a signed-in operator session, or the box secret (trusted backend). Read commands need
-  // no callsign; TX commands require a verified one (control-verification, H5).
-  const sess = await sessionCallsign(req, env);
-  if (!sess && !boxAuth(req, env)) return json({ error: "sign in (or provide the box secret) to control a box" }, { status: 401 });
-  const callsign = (body.callsign ?? sess ?? "").toUpperCase();
+  // authorize: a signed-in operator session that OWNS this box (SR-SEC-04), or the box secret (trusted
+  // backend / the operator's own box). Read commands need no callsign; TX commands require a verified one.
+  const me = await sessionAccountId(req, env);
+  const trusted = boxAuth(req, env);
+  if (!me && !trusted) return json({ error: "sign in (or provide the box secret) to control a box" }, { status: 401 });
+  if (me && !trusted && !(await ownBox(env, boxId, me.accountId)))
+    return json({ error: "this box belongs to another operator" }, { status: 403 });
+  // A session may only transmit as a callsign its own account holds; the trusted backend may name any.
+  const callsign = (body.callsign ?? me?.callsign ?? "").toUpperCase();
   if (TX_KINDS.has(kind)) {
     if (!callsign) return json({ error: "a licensed callsign is required to transmit" }, { status: 400 });
+    if (me && !trusted && !(await accountHoldsCall(env, me.accountId, callsign)))
+      return json({ error: `${callsign} is not held by your account` }, { status: 403 });
     if (!(await isVerified(env, callsign))) return json({ error: `verify ${callsign} to transmit — control-verification required (H5)` }, { status: 403 });
   }
 
@@ -74,8 +101,15 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
 
 /** GET /api/box/:id/log — operator view of recent commands + their status (for the R2 UI). */
 export async function handleBoxLog(req: Request, env: Env, boxId: string): Promise<Response> {
-  const who = await actor(req, env);
-  if (!who && !boxAuth(req, env)) return json({ error: "sign in to view box activity" }, { status: 401 });
+  const me = await sessionAccountId(req, env);
+  const trusted = boxAuth(req, env);
+  if (!me && !trusted) return json({ error: "sign in to view box activity" }, { status: 401 });
+  // SR-SEC-04: a box's activity is visible only to its owner (or the trusted backend). An unclaimed
+  // box has no owner yet → only the box secret can read it until someone claims it by controlling it.
+  if (me && !trusted) {
+    const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?").bind(boxId).first<{ account_id: string }>();
+    if (!row || row.account_id !== me.accountId) return json({ error: "this box belongs to another operator" }, { status: 403 });
+  }
   const rows = (await env.DB.prepare(
     "SELECT id, callsign, kind, payload, status, result, created_at AS createdAt, sent_at AS sentAt, acked_at AS ackedAt FROM box_commands WHERE box_id = ? ORDER BY created_at DESC LIMIT 50",
   ).bind(boxId).all<{ payload: string | null }>()).results;

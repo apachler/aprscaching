@@ -151,9 +151,15 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   const exists = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
   if (exists) return json({ error: "callsign already exists here" }, { status: 409 });
 
+  // SR-SEC-05: the bundle is CLIENT-supplied and unsigned by any source instance — the device-key
+  // assertion only proves the mover controls a key THEY put in the bundle, which says nothing about the
+  // callsign. So we must NOT trust `bundle.verified` (that would let anyone import W1AW as "verified").
+  // The account + its keys land UNVERIFIED; the operator re-proves control on this instance via the APRS
+  // control-challenge. (A source-instance-signed bundle could restore verified status — a federation
+  // follow-on once cross-instance bundle signing exists.)
   const stmts = [
-    env.DB.prepare("INSERT INTO accounts (callsign, verified, verify_method, created_at) VALUES (?,?,?,?)")
-      .bind(cs, bundle.verified ? 1 : 0, "migrated", now()),
+    env.DB.prepare("INSERT INTO accounts (callsign, verified, verify_method, created_at) VALUES (?, 0, 'migrated', ?)")
+      .bind(cs, now()),
     env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)")
       .bind(cs, `from:${bundle.instance ?? "?"}`, now()),
     // T3.2: announce the move to the network — the target attests "this callsign now homes here",
@@ -162,8 +168,8 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
       .bind(cs, bundle.instance ?? null, instanceOf(env, req), now()),
   ];
   for (const k of bundle.keys)
-    stmts.push(env.DB.prepare("INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)")
-      .bind(cs, k.publicKey, k.label ?? null, k.verified ? 1 : 0, now()));
+    stmts.push(env.DB.prepare("INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?, 0, ?)")
+      .bind(cs, k.publicKey, k.label ?? null, now()));
   await env.DB.batch(stmts);
   return json({ ok: true, callsign: cs, importedKeys: bundle.keys.length, from: bundle.instance ?? null });
 }

@@ -12,3 +12,12 @@ ALTER TABLE callsign_verifications ADD COLUMN created_at  INTEGER NOT NULL DEFAU
 -- SR-RT-05: the firehose/workbench message log grew unbounded and was scanned without an index
 -- (workbench.ts). Index it so the TTL delete and the per-station reads are cheap.
 CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages (ts);
+
+-- SR-SEC-04: bind a remote-control box to an owning account (claimed TOFU on first control from a
+-- session). Without this, any signed-in user could enqueue TX commands to another operator's box —
+-- remote-keying someone else's radio. The box itself still leases/acks with the ingest secret.
+CREATE TABLE IF NOT EXISTS boxes (
+  box_id     TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,             -- the account that controls this box
+  created_at INTEGER NOT NULL
+);
