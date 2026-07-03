@@ -9,26 +9,31 @@
 > were re-verified line-by-line against source before inclusion (marked ✓verified). Baseline at audit
 > time: `pnpm -r build` + `pnpm -r test` green; 79 unit-test files across the workspace.
 
-## Production Readiness Score: 58 → 84 / 100
+## Production Readiness Score: 58 → 88 / 100
 
-> **Update (2026-07-03) — all 8 Criticals AND all 27 High findings fixed**, each with a regression
-> test; ticked in the detail sections below. A few adjacent Mediums fell out for free (SR-PKT-12
-> window clamp, SR-RT-13 DO close/error, SR-SEC-14 unauth challenge). **The remaining Medium/Low sets
-> are open and now tracked in `HAPPY-CODING.md`** (the persistent post-1.0 engineering backlog), each
-> with priority / rationale / impact / effort — this document stays the record of *what was found*,
-> HAPPY-CODING.md is the record of *what is left to do*.
+> **Update 2 (2026-07-03, P1 batch) — the entire go-public P1 set from HAPPY-CODING.md is fixed**,
+> each with tests: SR-SEC-08/09/10/11/12/13 (timing-safe compares · durable un-spoofable rate
+> limiting + migration 0007 · ingest caps · server-side session expiry/epoch · register/finish-only
+> accounts · WebAuthn fail-closed), SR-FED-07/08/09/10/11 (quorum + matched-evidence reputation —
+> the F4 launch gate · monotonic mirror upserts · ingest ts clamp + browser-rf TTL + bounded verify
+> window · tombstones retained indefinitely · rlBuckets sweep), SR-RT-07/10/11 (indexed + batched
+> TTL via migration 0006 · Node body cap · process failure/SIGTERM handlers on Node+Bun). The
+> toolchain was also modernized (pnpm 11 + supply-chain floor, Node 24 CI, TS 6, vitest 4,
+> wrangler 4, better-sqlite3 12, React 19, MapLibre 5, zod 4, Vite 8) — all CI-green.
 >
-> Green across `pnpm -r build`, `pnpm -r test` (workspace, incl. the new regression suites + emoji
-> guard), and the Node/SQLite smoke + geofence conformance; the two-instance federation e2e passes its
-> sync/submit/move/namespace/trust assertions. Schema additions ride in `0005_hardening.sql`. The
-> repo has also been professionalized for going public (community-health files, hardened + SHA-pinned
-> CI, CodeQL, Dependabot, DCO, release-please, ESLint+Prettier with CI enforcement) — see the exec
-> summary in the go-public audit.
+> **Update 1 — all 8 Criticals AND all 27 High findings fixed**, each with a regression test;
+> ticked in the detail sections below. Remaining open items (P2/P3 Mediums + Lows) stay tracked in
+> `HAPPY-CODING.md` — this document is the record of *what was found*, HAPPY-CODING.md of *what is
+> left to do*.
 >
-> Score 84 (not the projected 82–85 ceiling's top) reflects the two deep-read passes still **PENDING**
-> — `SR-WEB-*` (web-app WS/marker/offline-cache leaks) and `SR-CFG-*` (env-drift + observability +
-> deploy) — plus the deferred, genuinely-needs-a-live-peer F4 quorum work. Neither pending pass has
-> surfaced a Critical; both are scoped in HAPPY-CODING.md.
+> Green across `pnpm -r build`, `pnpm -r test` (230+ tests incl. the new P1 suites), the Node/SQLite
+> smoke + geofence conformance, and the two-instance federation e2e (92 assertions). Schema:
+> migrations 0005–0007. The repo is professionalized for going public (community-health files,
+> hardened + SHA-pinned CI, CodeQL, Dependabot, DCO, release-please, ESLint+Prettier enforced).
+>
+> Score 88: the remaining gap is the two deep-read passes still **PENDING** (`SR-WEB-*`, `SR-CFG-*`),
+> the open P2/P3 Mediums/Lows, and owned-RF Tier A / hardware validation, which genuinely need a
+> live site. Neither pending pass has surfaced a Critical; both are scoped in HAPPY-CODING.md.
 
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live
@@ -231,25 +236,25 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   `Math.random()` (`:9`). ~10⁶ unthrottled tries mark any callsign control-verified, defeating the H5
   TX gate. *Fix:* bind confirm to the session that started the challenge; rate-limit + lock after N
   failures; `crypto.getRandomValues`; expire challenges.
-- [ ] **SR-SEC-08 (Medium) — non-timing-safe secret compares.** `===` on `x-ingest-secret`
+- [x] **SR-SEC-08 (Medium) — non-timing-safe secret compares.** `===` on `x-ingest-secret`
   (`ingest.ts:38`), admin (`admin.ts:27`), box (`box.ts:24`), caches (`caches.ts:75`), forward, support,
   import — plus session/FED/challenge compares. *Fix:* constant-time compare (hash both sides).
-- [ ] **SR-SEC-09 (Medium) — rate limiting is per-isolate + spoofable IP.** `corroborate_privacy.ts:66-77`
+- [x] **SR-SEC-09 (Medium) — rate limiting is per-isolate + spoofable IP.** `corroborate_privacy.ts:66-77`
   is a module-level `Map`; on CF it resets per isolate, and on Node/Bun `clientIp` trusts a
   client-settable `x-forwarded-for`. The ADR-4a per-IP limit, key-issuance throttle, and signed-ingest
   limit are all bypassable. *Fix:* durable counter (DO/D1/KV TTL); on non-CF derive IP from the socket.
-- [ ] **SR-SEC-10 (Medium) — no ingest batch/body cap.** `packages/shared/src/packet.ts:24` is
+- [x] **SR-SEC-10 (Medium) — no ingest batch/body cap.** `packages/shared/src/packet.ts:24` is
   `z.array(Packet)` unbounded; `ingest.ts:31` does `req.json()` with no size limit → one POST with
   millions of packets exhausts memory + one huge `DB.batch`. *Fix:* `.max(1000)`; Content-Length cap;
   chunk the batch.
-- [ ] **SR-SEC-11 (Medium) — sessions never expire server-side.** ✓verified: `auth.ts:262`
+- [x] **SR-SEC-11 (Medium) — sessions never expire server-side.** ✓verified: `auth.ts:262`
   returns `payload.split(".")[0]` after HMAC check and ignores the embedded `Date.now()` (`:252`); the
   30-day `Max-Age` is a client hint. A captured token is valid until the secret rotates. *Fix:* reject
   tokens older than a max age; add a revocable server-side session version.
-- [ ] **SR-SEC-12 (Medium) — account squatting.** `auth.ts:58-68` inserts the account row on
+- [x] **SR-SEC-12 (Medium) — account squatting.** `auth.ts:58-68` inserts the account row on
   `register/begin` before any passkey is proven, unauthenticated + unthrottled → pre-claim `W1AW` and
   lock out the real holder. *Fix:* persist only on `register/finish`; rate-limit; reap unfinished.
-- [ ] **SR-SEC-13 (Medium) — WebAuthn origin/rpId fall back to the `Origin` header.** `auth.ts:15-23`:
+- [x] **SR-SEC-13 (Medium) — WebAuthn origin/rpId fall back to the `Origin` header.** `auth.ts:15-23`:
   `authOrigins = env.APP_URL ?? req.headers.get("Origin")` (rpId likewise). With env unset the
   origin/rpId binding validates against a client-supplied value. *Fix:* require `APP_URL`/`RP_ID`
   configured; never source the expected origin from headers.
@@ -295,23 +300,23 @@ quorum) is explicitly launch-gating in `` and is the right home for most of thes
   with no `AbortSignal.timeout` (gossip/corroborate use 3–5 s); `syncAllPeers` is sequential and runs
   before `pushToHub`/`relayPoll`/`runDigests`. One blackholed peer hangs the whole 5-min cron. *Fix:*
   `signal: AbortSignal.timeout(5000)` + per-peer budget.
-- [ ] **SR-FED-07 (Medium) — auto-promotion farmable; quorum defaults to 1.** `corroborate.ts:213`
+- [x] **SR-FED-07 (Medium) — auto-promotion farmable; quorum defaults to 1.** `corroborate.ts:213`
   credits every peer that answered "yes" incl. `unvetted`; an always-yes peer never accrues `rep_failed`,
   crosses `shouldAutoPromote`, then `FED_CORROBORATION_QUORUM ?? 1` lets its lone "yes" mint Tier A.
   *Fix:* only credit peers whose evidence independently matched; require quorum ≥ 2 when an auto-promoted
   peer is in the winning set. **F4 territory — confirm.**
-- [ ] **SR-FED-08 (Medium) — mirror upserts lack version monotonicity.** `federation_sync.ts:278-301`
+- [x] **SR-FED-08 (Medium) — mirror upserts lack version monotonicity.** `federation_sync.ts:278-301`
   `INSERT OR REPLACE` keyed only by `global_id`; a replayed older signed record rolls a mirror back
   (e.g. to pre-redaction content). *Fix:* `ON CONFLICT DO UPDATE ... WHERE excluded.updated_at >= remote_caches.updated_at`.
-- [ ] **SR-FED-09 (Medium) — browser-signed ingest ts + browser-rf TTL.** `ingest.ts:91-97` stores
+- [x] **SR-FED-09 (Medium) — browser-signed ingest ts + browser-rf TTL.** `ingest.ts:91-97` stores
   `p.ts` as-is (future/ancient); the TTL only prunes `source='firehose'`, so `browser-rf` rows are kept
   forever and future-dated rows sit permanently inside the verify window (`caches.ts:352` has no upper
   bound); signed batches are replayable for 5 min (no nonce). *Fix:* clamp `p.ts` to `[now-window, now+60]`;
   add `browser-rf` to the TTL; add `AND ts <= now` to the verify query.
-- [ ] **SR-FED-10 (Medium) — tombstone TTL resurrects deletes.** `app.ts:73-77` prunes
+- [x] **SR-FED-10 (Medium) — tombstone TTL resurrects deletes.** `app.ts:73-77` prunes
   `remote_tombstones` after 180 d; once gone, a cursor reset / new hub / submit-replay re-mirrors the
   erased PII. *Fix:* keep `remote_tombstones` indefinitely (PII-free) or never prune `find`/`account` kinds.
-- [ ] **SR-FED-11 (Medium) — `rlBuckets` unbounded** (`corroborate_privacy.ts:67-77`): expired windows
+- [x] **SR-FED-11 (Medium) — `rlBuckets` unbounded** (`corroborate_privacy.ts:67-77`): expired windows
   overwritten, never deleted, no cap (unlike `negMemo`'s 5000). *Fix:* sweep when `size` exceeds a cap.
 - [ ] **SR-FED-12 (Low) — relay lease/answer not bound to spoke** (`relay.ts:88-106`): client-chosen
   `?instance=`, flat `FED_RELAY_SECRET`. *Fix:* per-spoke tokens.
@@ -433,7 +438,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-RT-06 (High) — Node rooms no heartbeat/backpressure** (`rooms.ts:25-39`): no ping/isAlive
   sweep; `dispatch` ignores `bufferedAmount`. A half-open client (phone out of coverage) buffers the
   whole region firehose → slow OOM + leaked Set entry. *Fix:* 30 s heartbeat + `bufferedAmount` cap.
-- [ ] **SR-RT-07 (Medium) — TTL delete unindexed** (`app.ts:68`, schema `0001:91`): `DELETE ... WHERE
+- [x] **SR-RT-07 (Medium) — TTL delete unindexed** (`app.ts:68`, schema `0001:91`): `DELETE ... WHERE
   source='firehose' AND ts<?` scans the whole table; on synchronous better-sqlite3 this stalls the event
   loop. *Fix:* migration `idx_pos_source_ts (source, ts)` + batched delete.
 - [ ] **SR-RT-08 (Medium) — shims accept `undefined` binds** (`d1.ts:14-17`): coerce `undefined→null`
@@ -441,9 +446,9 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [ ] **SR-RT-09 (Medium) — shim `meta` zeroed for readers** (`d1.ts:29-31`): `last_row_id:0,changes:0`
   for row-returning statements; latent `RETURNING` parity break. *Fix:* populate from
   `last_insert_rowid()`/`changes()`.
-- [ ] **SR-RT-10 (Medium) — Node body has no size cap** (`server.ts:147-154`): buffers the whole body
+- [x] **SR-RT-10 (Medium) — Node body has no size cap** (`server.ts:147-154`): buffers the whole body
   before routing/auth → multi-GB POST OOMs the Pi. *Fix:* track total, `destroy()` + 413 past ~20 MB.
-- [ ] **SR-RT-11 (Medium) — no process failure/shutdown handlers** (`server.ts`): no
+- [x] **SR-RT-11 (Medium) — no process failure/shutdown handlers** (`server.ts`): no
   `unhandledRejection`/`uncaughtException`/SIGTERM; one stray rejection kills the gateway. *Fix:* add
   log-don't-die + graceful close/checkpoint.
 - [ ] **SR-RT-12 (Low) — stage media orphaned; FS store blacklist sanitizer** (`stages.ts:38`,

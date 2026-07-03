@@ -2,7 +2,8 @@
 # HAPPY-CODING.md — the post-1.0 engineering backlog
 
 > The persistent, prioritised worklist for aprscaching after the 1.0.0 tag. It folds together every
-> open finding from `STABILITY-REVIEW.md` (all Mediums and Lows — the Criticals and Highs are **done**)
+> open finding from `STABILITY-REVIEW.md` (the Criticals, Highs AND the P1 Mediums are **done**;
+> the open set is the P2/P3 Mediums and Lows)
 > and the intentionally-deferred capability work from `TODO.md`, each item carrying **priority**,
 > **rationale**, **impact**, and **effort** so a contributor can pull the next-most-valuable thing off
 > the top without re-deriving the audit.
@@ -20,11 +21,13 @@
 
 ---
 
-## P1 — before opening the network / facing sustained public traffic
+## P1 — before opening the network / facing sustained public traffic — ✅ DONE (2026-07-03)
 
-These are the open Mediums that sit closest to the launch-blocking invariants (abuse resistance,
-federation trust, unattended survival). None is a Critical, but each widens a real attack or
-data-loss surface once the instance is public and federating.
+**The entire P1 batch is implemented and tested** (commits c7275c9 · 7e7e4d6 · f335da8 · 1c7a59a ·
+647f549 · 7c79b9a — see STABILITY-REVIEW.md Update 2). SR-TRUST-04 (find-log idempotency, listed
+under P2 Trust hygiene) is the one launch-adjacent item deliberately left with the P2s: it needs a
+data-dedup decision on existing rows before its unique index can land. The table below is kept as
+the record of what the batch covered.
 
 | ID | Area | Item | Rationale / impact | Effort |
 |----|------|------|--------------------|--------|
