@@ -18,9 +18,13 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          maplibre: ["maplibre-gl"],
-          react: ["react", "react-dom"],
+        // Function form (not the object map): Vite 8 bundles with Rolldown, which accepts a
+        // manualChunks(id) callback but not the legacy object syntax. Same intent as before —
+        // MapLibre and React each land in their own long-term-cacheable chunk (scheduler, a
+        // react-dom dependency, rides in the react chunk).
+        manualChunks(id) {
+          if (id.includes("node_modules/maplibre-gl")) return "maplibre";
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return "react";
         },
       },
     },

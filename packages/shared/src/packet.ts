@@ -10,7 +10,7 @@ export const Packet = z.object({
   path: z.array(z.string()).default([]),
   payload: z.string(),
   kind: PacketKind.default("other"),
-  parsed: z.record(z.unknown()).optional(),
+  parsed: z.record(z.string(), z.unknown()).optional(),
   heardVia: z.enum(["rf", "aprs_is", "app"]).default("aprs_is"),
   igateCall: z.string().optional(),
   port: z.string().default("aprs-is"),
