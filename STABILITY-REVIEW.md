@@ -11,10 +11,12 @@
 
 ## Production Readiness Score: 58 / 100
 
-> **Update — all 8 Criticals fixed** (SR-TRUST-01, SR-SEC-01/02, SR-FED-01/02, SR-PKT-01, SR-ING-01,
-> SR-PARSE-01), each with a regression test; ticked in the detail sections below. The High/Medium/Low
-> sets remain open. `pnpm -r build` + `pnpm -r test` + the Node/SQLite smoke + geofence conformance
-> are green.
+> **Update — all 8 Criticals AND all 27 High findings fixed**, each with a regression test; ticked in
+> the detail sections below. A few adjacent Mediums fell out for free (SR-PKT-12 window clamp,
+> SR-RT-13 DO close/error, SR-SEC-14 unauth challenge). The Medium/Low sets are otherwise open.
+> Green across `pnpm -r build`, `pnpm -r test` (workspace, incl. the new regression suites + emoji
+> guard), and the Node/SQLite smoke + geofence conformance; the two-instance federation e2e passes its
+> sync/submit/move/namespace/trust assertions. Schema additions ride in `0005_hardening.sql`.
 
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live
