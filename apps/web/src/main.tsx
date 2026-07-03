@@ -19,7 +19,18 @@ const demo = new URLSearchParams(location.search).get("demo");
 if (demo) {
   // the harness renders components directly (no Platform), so provide the format/theme context Ico needs
   import("./demo/DemoHarness.js").then(({ DemoHarness }) =>
-    root.render(<React.StrictMode><FormatContext.Provider value={makeFormatters(loadSettings())}><DemoHarness which={demo} /></FormatContext.Provider></React.StrictMode>));
+    root.render(
+      <React.StrictMode>
+        <FormatContext.Provider value={makeFormatters(loadSettings())}>
+          <DemoHarness which={demo} />
+        </FormatContext.Provider>
+      </React.StrictMode>,
+    ),
+  );
 } else {
-  root.render(<React.StrictMode><App /></React.StrictMode>);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
 }

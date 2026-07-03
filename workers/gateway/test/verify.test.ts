@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import {
-  verifyFind, DEFAULT_POLICY,
-  type CacheRow, type PositionRow, type AppGeo, type VerifyPolicy,
+  verifyFind,
+  DEFAULT_POLICY,
+  type CacheRow,
+  type PositionRow,
+  type AppGeo,
+  type VerifyPolicy,
 } from "../src/verify.js";
 
 // Reference cache near Graz, OE.
@@ -53,7 +57,7 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
   it("does NOT grant tier A when the gater is a station the logger registered", () => {
     const r = verifyFind(CACHE, undefined, {
       loggerPositions: [pos({ ...NEAR, heard_via: "rf", igate_call: "OE8ZZZ-1" })],
-      loggerOwnIgates: new Set(["OE8APR", "OE8ZZZ"]),   // OE8ZZZ = the logger's account_stations entry
+      loggerOwnIgates: new Set(["OE8APR", "OE8ZZZ"]), // OE8ZZZ = the logger's account_stations entry
     });
     expect(r.tier).toBe("C");
     expect(r.verified).toBe(false);
@@ -82,7 +86,7 @@ describe("verifyFind — tier A plausible track (SR-TRUST-02)", () => {
     const r = verifyFind(CACHE, undefined, {
       loggerPositions: [
         pos({ ...NEAR, heard_via: "rf", igate_call: "OE8XXX", ts: 1000, id: 42 }), // 'at' the cache
-        pos({ ...FAR,  heard_via: "rf", igate_call: "OE8YYY", ts: 1000, id: 43 }), // 111 km away, same instant
+        pos({ ...FAR, heard_via: "rf", igate_call: "OE8YYY", ts: 1000, id: 43 }), // 111 km away, same instant
       ],
       loggerOwnIgates: new Set(["OE8APR"]),
     });
@@ -120,7 +124,7 @@ describe("verifyFind — tier B (first-party app geolocation)", () => {
   // SR-TRUST-03: when the request time is known, a stale/fabricated app reading must not reach B.
   it("rejects a stale app reading when log time is known", () => {
     const nowT = 1_800_000_000;
-    const stale: AppGeo = { ...NEAR, accuracyM: 20, ts: nowT - 86_400 };  // a day old
+    const stale: AppGeo = { ...NEAR, accuracyM: 20, ts: nowT - 86_400 }; // a day old
     const r = verifyFind(CACHE, stale, { loggerPositions: [], now: nowT });
     expect(r.tier).not.toBe("B");
     expect(r.verified).toBe(false);
@@ -135,9 +139,9 @@ describe("verifyFind — tier B (first-party app geolocation)", () => {
 
   it("clamps a bogus (negative/NaN) accuracy instead of trusting it", () => {
     const nowT = 1_800_000_000;
-    const bogus: AppGeo = { ...FAR, accuracyM: -1e9, ts: nowT };  // attacker tries a huge negative
+    const bogus: AppGeo = { ...FAR, accuracyM: -1e9, ts: nowT }; // attacker tries a huge negative
     const r = verifyFind(CACHE, bogus, { loggerPositions: [], now: nowT });
-    expect(r.verified).toBe(false);   // FAR is 111 km away; a bogus accuracy can't stretch tolerance
+    expect(r.verified).toBe(false); // FAR is 111 km away; a bogus accuracy can't stretch tolerance
   });
 
   it("a poor-accuracy reading is tolerated up to the accuracy cap", () => {
@@ -160,15 +164,20 @@ describe("verifyFind — tier C (IS-only) and policy", () => {
       loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is" })],
     });
     expect(r.tier).toBe("C");
-    expect(r.verified).toBe(false);          // default minTier is B
+    expect(r.verified).toBe(false); // default minTier is B
     expect(r.method).toBe("aprs_is");
   });
 
   it("a lenient site policy (minTier C) accepts the IS-only beacon", () => {
     const lenient: VerifyPolicy = { ...DEFAULT_POLICY, minTier: "C" };
-    const r = verifyFind(CACHE, undefined, {
-      loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is" })],
-    }, lenient);
+    const r = verifyFind(
+      CACHE,
+      undefined,
+      {
+        loggerPositions: [pos({ ...NEAR, heard_via: "aprs_is" })],
+      },
+      lenient,
+    );
     expect(r).toMatchObject({ verified: true, tier: "C" });
   });
 });
@@ -206,7 +215,14 @@ describe("verifyFind — per-cache min_trust override", () => {
 });
 
 describe("verifyFind — living (moving) cache", () => {
-  const living: CacheRow = { id: 2, code: "AC-0002", type: "aprs_living", lat: null, lon: null, station_call: "OE8XYZ-9" };
+  const living: CacheRow = {
+    id: 2,
+    code: "AC-0002",
+    type: "aprs_living",
+    lat: null,
+    lon: null,
+    station_call: "OE8XYZ-9",
+  };
 
   it("verifies co-location with the cache-station within the time skew", () => {
     const r = verifyFind(living, undefined, {

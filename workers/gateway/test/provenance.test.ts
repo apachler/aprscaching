@@ -29,8 +29,12 @@ describe("provenance — derive firstPartyAttested", () => {
 
   it("narrows attestation to the operator allowlist when one is set", () => {
     const sites = parseAttestedSites("OE8MINE, OE8ALSO");
-    expect(provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX" }, sites).firstPartyAttested).toBe(false);
-    expect(provenanceOf({ heard_via: "rf", igate_call: "OE8MINE", path: "WIDE1-1,qAR,OE8MINE" }, sites).firstPartyAttested).toBe(true);
+    expect(
+      provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX" }, sites).firstPartyAttested,
+    ).toBe(false);
+    expect(
+      provenanceOf({ heard_via: "rf", igate_call: "OE8MINE", path: "WIDE1-1,qAR,OE8MINE" }, sites).firstPartyAttested,
+    ).toBe(true);
   });
 
   it("pulls the q-construct out of a stored path", () => {

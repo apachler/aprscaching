@@ -16,7 +16,11 @@ import { NodePanel } from "./NodePanel.js";
  * rest are wrapped in a Panel using the app registry's title + wide flag. One component, one path.
  */
 export function WorkbenchAppSurface(props: {
-  app: WorkbenchAppId; callsign: string; verified: boolean; map: maplibregl.Map | null; onClose: () => void;
+  app: WorkbenchAppId;
+  callsign: string;
+  verified: boolean;
+  map: maplibregl.Map | null;
+  onClose: () => void;
 }) {
   const { app, callsign, verified, map, onClose } = props;
   if (app === "terminal") return <TerminalPanel callsign={callsign} onClose={onClose} />;
@@ -24,15 +28,41 @@ export function WorkbenchAppSurface(props: {
 
   const meta = appById(app);
   const inner =
-    app === "decoder" ? <DecoderPanel />
-    : app === "tools" ? <ToolsPanel callsign={callsign} verified={verified} />
-    : app === "rig" ? (<><p className="muted">Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).</p><RigControl /></>)
-    : app === "remote" ? <RemoteControl callsign={callsign} verified={verified} map={map} />
-    : app === "node" ? (<><p className="muted">Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal connects to it.</p><NodePanel /></>)
-    : null;
+    app === "decoder" ? (
+      <DecoderPanel />
+    ) : app === "tools" ? (
+      <ToolsPanel callsign={callsign} verified={verified} />
+    ) : app === "rig" ? (
+      <>
+        <p className="muted">
+          Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only
+          (no transmit).
+        </p>
+        <RigControl />
+      </>
+    ) : app === "remote" ? (
+      <RemoteControl callsign={callsign} verified={verified} map={map} />
+    ) : app === "node" ? (
+      <>
+        <p className="muted">
+          Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal
+          connects to it.
+        </p>
+        <NodePanel />
+      </>
+    ) : null;
 
   return (
-    <Panel title={<><Ico e={meta ? `${meta.emoji} ` : ""} />{meta?.title ?? "Workbench"}</>} onClose={onClose} wide={meta?.wide}>
+    <Panel
+      title={
+        <>
+          <Ico e={meta ? `${meta.emoji} ` : ""} />
+          {meta?.title ?? "Workbench"}
+        </>
+      }
+      onClose={onClose}
+      wide={meta?.wide}
+    >
       {inner}
     </Panel>
   );

@@ -2,8 +2,18 @@
 import { z } from "zod";
 
 export const CacheType = z.enum([
-  "single", "two_stage", "multi", "aprs_living", "audio", "virtual", "traditional", "sota", "pota",
-  "wwff", "bunker", "castle",
+  "single",
+  "two_stage",
+  "multi",
+  "aprs_living",
+  "audio",
+  "virtual",
+  "traditional",
+  "sota",
+  "pota",
+  "wwff",
+  "bunker",
+  "castle",
 ]);
 export type CacheType = z.infer<typeof CacheType>;
 
@@ -20,18 +30,24 @@ export const MinTrust = z.enum(["A", "B"]);
 export const FedScope = z.enum(["public", "unlisted", "local-only"]);
 export type FedScope = z.infer<typeof FedScope>;
 
-export const LogType = z.enum([
-  "found", "dnf", "note", "maintenance", "enabled", "disabled",
-]);
+export const LogType = z.enum(["found", "dnf", "note", "maintenance", "enabled", "disabled"]);
 export type LogType = z.infer<typeof LogType>;
 
 const Lat = z.number().min(-90).max(90);
 const Lon = z.number().min(-180).max(180);
 const DT = z.number().min(1).max(5);
-const Callsign = z.string().trim().min(3).max(9).regex(/^[A-Za-z0-9-]+$/);
+const Callsign = z
+  .string()
+  .trim()
+  .min(3)
+  .max(9)
+  .regex(/^[A-Za-z0-9-]+$/);
 
 export const AppGeo = z.object({
-  lat: Lat, lon: Lon, accuracyM: z.number().nonnegative(), ts: z.number(),
+  lat: Lat,
+  lon: Lon,
+  accuracyM: z.number().nonnegative(),
+  ts: z.number(),
 });
 export type AppGeo = z.infer<typeof AppGeo>;
 
@@ -45,7 +61,7 @@ export type RatingPolicy = z.infer<typeof RatingPolicy>;
 
 /** Submit a 1–5 star rating for a cache. */
 export const RateRequest = z.object({
-  callsign: Callsign.optional(),      // omitted by signed-in web (attributed to the session)
+  callsign: Callsign.optional(), // omitted by signed-in web (attributed to the session)
   stars: z.number().int().min(1).max(5),
 });
 export type RateRequest = z.infer<typeof RateRequest>;
@@ -58,23 +74,23 @@ export const CreateCacheRequest = z.object({
   difficulty: DT.default(1.5),
   terrain: DT.default(1.5),
   ownerCall: Callsign.optional(),
-  stationCall: Callsign.optional(),     // aprs_living: the beaconing station that IS the cache
+  stationCall: Callsign.optional(), // aprs_living: the beaconing station that IS the cache
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
-  fedScope: FedScope.default("public"),        // how far this cache federates (T3.3)
-  code: z.string().trim().max(32).optional(),  // explicit code (imports); else AC-#### is minted
-  driveIn: z.boolean().optional(),             // car-accessible cache (original APRSCaching "Drive-In")
+  fedScope: FedScope.default("public"), // how far this cache federates (T3.3)
+  code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
+  driveIn: z.boolean().optional(), // car-accessible cache (original APRSCaching "Drive-In")
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
-  ratingPolicy: RatingPolicy.optional(),       // who may rate (F-6); default 'finders'
-  rendezvous: z.boolean().optional(),          // living cache opts into mutual rendezvous logging (F-4)
+  ratingPolicy: RatingPolicy.optional(), // who may rate (F-6); default 'finders'
+  rendezvous: z.boolean().optional(), // living cache opts into mutual rendezvous logging (F-4)
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
 /** Owner edit. Every field optional; `status` lets an owner disable/archive a cache. */
 export const UpdateCacheRequest = z.object({
-  ownerCall: Callsign.optional(),       // advisory actor identity until passkey sessions land
+  ownerCall: Callsign.optional(), // advisory actor identity until passkey sessions land
   title: z.string().trim().min(1).max(120).optional(),
   type: CacheType.optional(),
   status: CacheStatus.optional(),
@@ -86,7 +102,7 @@ export const UpdateCacheRequest = z.object({
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
-  fedScope: FedScope.optional(),               // change federation scope (T3.3)
+  fedScope: FedScope.optional(), // change federation scope (T3.3)
   driveIn: z.boolean().optional(),
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
@@ -99,15 +115,15 @@ const B64 = z.string().trim().min(16).max(512);
 
 /** Per-callsign signature attesting the logger authored this find (F0). */
 export const AuthorSig = z.object({
-  authorKey: B64,                 // Ed25519 public key (raw, base64url)
-  authorSig: B64,                 // signature over authorshipMessage(...)
-  signedAt: z.number().int(),     // client authorship time the signature covers
+  authorKey: B64, // Ed25519 public key (raw, base64url)
+  authorSig: B64, // signature over authorshipMessage(...)
+  signedAt: z.number().int(), // client authorship time the signature covers
 });
 
 /** A log entry against a cache (found/DNF/note/…). Verification only runs for `found`. */
 export const LogRequest = z.object({
-  cacheId: z.number().int().positive().optional(),  // omitted when posted to /api/caches/:id/logs
-  loggerCall: Callsign.optional(),                  // omitted by signed-in web (attributed to the session)
+  cacheId: z.number().int().positive().optional(), // omitted when posted to /api/caches/:id/logs
+  loggerCall: Callsign.optional(), // omitted by signed-in web (attributed to the session)
   logType: LogType.default("found"),
   comment: z.string().max(2000).optional(),
   appGeo: AppGeo.optional(),
@@ -142,19 +158,19 @@ export interface CacheSummary {
   lon: number | null;
   stationCall: string | null;
   source: string;
-  sourceName: string | null;   // attribution label when imported
-  sourceUrl: string | null;    // deep link to the source page
+  sourceName: string | null; // attribution label when imported
+  sourceUrl: string | null; // deep link to the source page
   minTrust: "A" | "B" | null;
-  fedScope: FedScope;          // owner's federation scope (T3.3)
-  driveIn: boolean;            // car-accessible (original APRSCaching "Drive-In")
-  country: string | null;      // ISO code or short name (owner-set)
-  tags: string[];              // free-form tags
+  fedScope: FedScope; // owner's federation scope (T3.3)
+  driveIn: boolean; // car-accessible (original APRSCaching "Drive-In")
+  country: string | null; // ISO code or short name (owner-set)
+  tags: string[]; // free-form tags
 }
 
 /** A cache as it appears on the map — native or mirrored from a federation peer (F2). */
 export interface MapCache {
-  globalId: string;          // network-unique id, e.g. "oe.aprscaching.org:cache:42"
-  id: number | null;         // local numeric id (native only; null when mirrored)
+  globalId: string; // network-unique id, e.g. "oe.aprscaching.org:cache:42"
+  id: number | null; // local numeric id (native only; null when mirrored)
   code: string;
   ownerCall: string;
   title: string;
@@ -164,12 +180,12 @@ export interface MapCache {
   terrain: number;
   lat: number | null;
   lon: number | null;
-  origin: string;            // originating instance id
+  origin: string; // originating instance id
   mirrored: boolean;
   originTrust: "native" | "trusted" | "unvetted"; // first-party, or the origin peer's T1.1 trust tier (blocked never surfaced)
-  source: string;            // "native" or an import source ("sota","pota",…)
+  source: string; // "native" or an import source ("sota","pota",…)
   sourceName: string | null; // attribution label for imported caches
-  sourceUrl: string | null;  // deep link to the source page
+  sourceUrl: string | null; // deep link to the source page
 }
 
 export interface CacheLogEntry {
@@ -183,8 +199,8 @@ export interface CacheLogEntry {
   verifyMethod: string | null;
   distanceM: number | null;
   comment: string | null;
-  corroboratedBy?: string | null;   // peer instance that corroborated a Tier-A find (F3)
-  signerKey?: string | null;        // logger's device key that signed this find (F0)
+  corroboratedBy?: string | null; // peer instance that corroborated a Tier-A find (F3)
+  signerKey?: string | null; // logger's device key that signed this find (F0)
 }
 
 export interface CacheDetail extends CacheSummary {
@@ -193,11 +209,11 @@ export interface CacheDetail extends CacheSummary {
   externalId: string | null;
   createdAt: number;
   updatedAt: number;
-  finds: number;       // count of verified found logs
-  findsByMonth?: { month: string; n: number }[];  // monthly verified-find counts (sparkline), oldest→newest
-  logs: CacheLogEntry[];           // first keyset page, newest first
-  logsCursor?: string | null;      // cursor for the next logbook page, null if none
-  logsHasMore?: boolean;           // true when older logs exist beyond the embedded page
+  finds: number; // count of verified found logs
+  findsByMonth?: { month: string; n: number }[]; // monthly verified-find counts (sparkline), oldest→newest
+  logs: CacheLogEntry[]; // first keyset page, newest first
+  logsCursor?: string | null; // cursor for the next logbook page, null if none
+  logsHasMore?: boolean; // true when older logs exist beyond the embedded page
   // M4 community
   favorites: number;
   favorited: boolean;
@@ -220,58 +236,115 @@ export interface CacheStage {
   mediaUrl: string | null;
   radiusM: number;
   unlocked: boolean;
-  lat: number | null;   // revealed only when unlocked
+  lat: number | null; // revealed only when unlocked
   lon: number | null;
 }
 
 // ---- M2 enriched search: as-you-type suggestions across caches + stations ----
 export interface SearchHitCache {
   kind: "cache";
-  id: number; code: string; title: string; ownerCall: string; type: CacheType;
-  lat: number | null; lon: number | null;
+  id: number;
+  code: string;
+  title: string;
+  ownerCall: string;
+  type: CacheType;
+  lat: number | null;
+  lon: number | null;
 }
 export interface SearchHitStation {
   kind: "station";
-  callsign: string; symbol: string | null; comment: string | null;
-  lat: number | null; lon: number | null;
+  callsign: string;
+  symbol: string | null;
+  comment: string | null;
+  lat: number | null;
+  lon: number | null;
 }
-export interface SearchResults { caches: SearchHitCache[]; stations: SearchHitStation[] }
+export interface SearchResults {
+  caches: SearchHitCache[];
+  stations: SearchHitStation[];
+}
 
 // ---- M4 community response shapes ----
-export interface LeaderboardEntry { rank: number; loggerCall: string; finds: number; points: number }
-export interface Badge { badge: string; earnedAt: number }
+export interface LeaderboardEntry {
+  rank: number;
+  loggerCall: string;
+  finds: number;
+  points: number;
+}
+export interface Badge {
+  badge: string;
+  earnedAt: number;
+}
 export interface ProfileCard {
-  displayName?: string; homeGrid?: string; avatarUrl?: string; bio?: string;
-  links?: { label: string; url: string }[]; publicContact?: string;
+  displayName?: string;
+  homeGrid?: string;
+  avatarUrl?: string;
+  bio?: string;
+  links?: { label: string; url: string }[];
+  publicContact?: string;
 }
 export interface Profile {
-  callsign: string; accountVerified: boolean;
-  homeInstance?: string;  // the instance this operator is homed at; shown as "homed at …"
-  supporter?: boolean;  // recognition badge; never affects functionality
-  finds: number; points: number; firstFind: number | null; lastFind: number | null; hides: number;
+  callsign: string;
+  accountVerified: boolean;
+  homeInstance?: string; // the instance this operator is homed at; shown as "homed at …"
+  supporter?: boolean; // recognition badge; never affects functionality
+  finds: number;
+  points: number;
+  firstFind: number | null;
+  lastFind: number | null;
+  hides: number;
   corroborations?: number; // Tier-A finds this operator's IGate(s) helped verify
-  byTier: Record<string, number>; byType: Record<string, number>; badges: Badge[];
+  byTier: Record<string, number>;
+  byType: Record<string, number>;
+  badges: Badge[];
   profile?: ProfileCard; // opt-in self-curated card
 }
 
 /** A row in the corroborator leaderboard — an IGate ranked by Tier-A finds it helped verify. */
-export interface Corroborator { rank: number; igate: string; corroborations: number }
+export interface Corroborator {
+  rank: number;
+  igate: string;
+  corroborations: number;
+}
 export interface ActivityItem {
-  id: number; loggerCall: string; ts: number; logType: string; verified: boolean; tier: string | null;
-  cacheId: number; cacheCode: string; cacheTitle: string;
+  id: number;
+  loggerCall: string;
+  ts: number;
+  logType: string;
+  verified: boolean;
+  tier: string | null;
+  cacheId: number;
+  cacheCode: string;
+  cacheTitle: string;
 }
 
 // ---- M5 workbench: live APRS stations + packet inspector ----
 export interface StationSummary {
-  callsign: string; lat: number; lon: number; symbol: string | null;
-  course: number | null; speedKn: number | null; altitudeM: number | null;
-  comment: string | null; lastSeen: number;
-  roles?: StationRole[];   // operated-station roles, when this callsign is in the registry
+  callsign: string;
+  lat: number;
+  lon: number;
+  symbol: string | null;
+  course: number | null;
+  speedKn: number | null;
+  altitudeM: number | null;
+  comment: string | null;
+  lastSeen: number;
+  roles?: StationRole[]; // operated-station roles, when this callsign is in the registry
 }
-export interface StationTrackPoint { ts: number; lat: number; lon: number; heardVia: string }
+export interface StationTrackPoint {
+  ts: number;
+  lat: number;
+  lon: number;
+  heardVia: string;
+}
 export interface WxReading {
-  ts: number; tempC: number | null; humidity: number | null; pressureHpa: number | null;
-  windDirDeg: number | null; windKn: number | null; rainMm: number | null;
+  ts: number;
+  tempC: number | null;
+  humidity: number | null;
+  pressureHpa: number | null;
+  windDirDeg: number | null;
+  windKn: number | null;
+  rainMm: number | null;
 }
 export interface StationDetail extends StationSummary {
   track: StationTrackPoint[];
@@ -285,12 +358,17 @@ export const STATION_ROLES = ["weather", "digipeater", "igate", "node", "relay"]
 export type StationRole = (typeof STATION_ROLES)[number];
 /** A weather-capable station's PWS push key + ready-to-paste ingest URLs (null until issued). */
 export interface StationWxKey {
-  key: string | null; lastSeen: number | null; ecowittPath: string | null; wuUrl: string | null;
-  txIs?: boolean; txCwop?: boolean; verified?: boolean;   // W2/W3 TX opt-in + control-verified gate
+  key: string | null;
+  lastSeen: number | null;
+  ecowittPath: string | null;
+  wuUrl: string | null;
+  txIs?: boolean;
+  txCwop?: boolean;
+  verified?: boolean; // W2/W3 TX opt-in + control-verified gate
 }
 export interface OperatedStation {
   id: number;
-  callsign: string;                 // full callsign incl. SSID
+  callsign: string; // full callsign incl. SSID
   lat: number | null;
   lon: number | null;
   symbol: string | null;
@@ -298,7 +376,7 @@ export interface OperatedStation {
   roles: StationRole[];
   createdAt: number;
   updatedAt: number;
-  wx?: StationWxKey;                 // present only on weather-capable stations
+  wx?: StationWxKey; // present only on weather-capable stations
 }
 /** Result of POST /api/decode — the parsed frame plus the typed APRS data. */
 export interface DecodedPacket {
@@ -309,14 +387,38 @@ export interface DecodedPacket {
 }
 
 // ---- M6 interop: transports + messaging ----
-export interface PortStat { port: string; rx: number; tx: number; lastBucket: number }
-export interface MessageItem { id: number; ts: number; fromCall: string; toCall: string | null; body: string; direction: string }
+export interface PortStat {
+  port: string;
+  rx: number;
+  tx: number;
+  lastBucket: number;
+}
+export interface MessageItem {
+  id: number;
+  ts: number;
+  fromCall: string;
+  toCall: string | null;
+  body: string;
+  direction: string;
+}
 
 // ---- BBS store-and-forward ----
 export interface BbsMessage {
-  id: number; bid: string | null; type: "P" | "B" | "T"; fromCall: string; toCall: string;
-  subject: string | null; body: string; postedAt: number; origin: string; readAt: number | null;
-  replyTo?: number | null; threadId?: number | null;   // FBB thread tree (P2)
+  id: number;
+  bid: string | null;
+  type: "P" | "B" | "T";
+  fromCall: string;
+  toCall: string;
+  subject: string | null;
+  body: string;
+  postedAt: number;
+  origin: string;
+  readAt: number | null;
+  replyTo?: number | null;
+  threadId?: number | null; // FBB thread tree (P2)
   // personal-message delivery state (present on inbox listings):
-  delivery?: "held" | "sent" | "acked" | "expired"; lineNo?: number | null; attempts?: number; ackedAt?: number | null;
+  delivery?: "held" | "sent" | "acked" | "expired";
+  lineNo?: number | null;
+  attempts?: number;
+  ackedAt?: number | null;
 }

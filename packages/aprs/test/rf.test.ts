@@ -1,10 +1,23 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { digipeat, dedupeKey, shouldRxIgate, rxIgateLine, txIgateTarget, messageAddressee, pathBlocksGating } from "../src/index.js";
+import {
+  digipeat,
+  dedupeKey,
+  shouldRxIgate,
+  rxIgateLine,
+  txIgateTarget,
+  messageAddressee,
+  pathBlocksGating,
+} from "../src/index.js";
 import type { ParsedFrame } from "../src/index.js";
 
-const f = (path: string[], src = "OE1ABC", payload = "!4704.41N/01526.27E>hi", dst = "APRS"): ParsedFrame =>
-  ({ src, dst, path, payload, raw: "" });
+const f = (path: string[], src = "OE1ABC", payload = "!4704.41N/01526.27E>hi", dst = "APRS"): ParsedFrame => ({
+  src,
+  dst,
+  path,
+  payload,
+  raw: "",
+});
 
 describe("digipeater (new n-N paradigm)", () => {
   const opts = { mycall: "OE8XXX", aliases: new Set(["WIDE1", "WIDE2"]) };

@@ -29,7 +29,7 @@ describe("sun — terminator latitude", () => {
     const sub = { lat: 10, lon: 0 };
     // a point on the terminator is exactly 90° (≈10018 km) from the subsolar point
     const lat = terminatorLatitude(0, sub);
-    const quarter = Math.PI * 6371000 / 2;
+    const quarter = (Math.PI * 6371000) / 2;
     expect(haversineMeters(lat, 0, sub.lat, sub.lon)).toBeCloseTo(quarter, -4);
   });
 });
@@ -43,7 +43,8 @@ describe("geo — great-circle arc", () => {
   });
 
   it("the midpoint lies ~half the total distance from each end", () => {
-    const a = [48, 11] as const, b = [48, 31] as const; // same latitude, 20° of lon apart
+    const a = [48, 11] as const,
+      b = [48, 31] as const; // same latitude, 20° of lon apart
     const arc = greatCircleArc(a[0], a[1], b[0], b[1], 64);
     const mid = arc[32]!;
     const half = haversineMeters(a[0], a[1], b[0], b[1]) / 2;

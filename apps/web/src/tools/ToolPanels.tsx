@@ -15,7 +15,12 @@ function Node({ n }: { n: PanelNode }) {
     case "text":
       return <p className={`tp-text${toneClass(n.tone)}`}>{n.text}</p>;
     case "kv":
-      return <div className="tp-kv"><span className="tp-k">{n.key}</span><span className={`tp-v${toneClass(n.tone)}`}>{n.value}</span></div>;
+      return (
+        <div className="tp-kv">
+          <span className="tp-k">{n.key}</span>
+          <span className={`tp-v${toneClass(n.tone)}`}>{n.value}</span>
+        </div>
+      );
     case "badge":
       return <span className={`badge${toneClass(n.tone)}`}>{n.text}</span>;
     case "bar": {
@@ -32,8 +37,22 @@ function Node({ n }: { n: PanelNode }) {
     case "table":
       return (
         <table className="tp-table">
-          <thead><tr>{n.head.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-          <tbody>{n.rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci}>{c}</td>)}</tr>)}</tbody>
+          <thead>
+            <tr>
+              {n.head.map((h, i) => (
+                <th key={i}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {n.rows.map((r, ri) => (
+              <tr key={ri}>
+                {r.map((c, ci) => (
+                  <td key={ci}>{c}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         </table>
       );
     case "blocks":
@@ -41,7 +60,9 @@ function Node({ n }: { n: PanelNode }) {
       return (
         <div className="tp-blocks" style={{ "--tp-cols": n.cols } as CSSProperties} role="img" aria-label="block art">
           {n.cells.map((cell, i) => (
-            <span key={i} style={cell.c != null ? ({ color: `var(--ansi-${cell.c})` } as CSSProperties) : undefined}>{cell.ch === " " ? " " : cell.ch}</span>
+            <span key={i} style={cell.c != null ? ({ color: `var(--ansi-${cell.c})` } as CSSProperties) : undefined}>
+              {cell.ch === " " ? " " : cell.ch}
+            </span>
           ))}
         </div>
       );
@@ -58,7 +79,9 @@ export function ToolPanels({ host, surface }: { host: ToolHost; surface: Surface
       {panels.map((p) => (
         <section key={p.tool} className="tool-panel" aria-label={p.spec.title ?? p.title}>
           {p.spec.title && <h4 className="tool-panel-h">{p.spec.title}</h4>}
-          {p.spec.nodes.map((n, i) => <Node key={i} n={n} />)}
+          {p.spec.nodes.map((n, i) => (
+            <Node key={i} n={n} />
+          ))}
         </section>
       ))}
     </div>

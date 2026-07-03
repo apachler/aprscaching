@@ -26,7 +26,14 @@ import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./workbench.js";
 import { handleSpots } from "./spots.js";
-import { handleCachesGpx, handleCachesKml, handleCacheGpx, handleFindsAdif, handleStationTrack, handleStationKml } from "./exports.js";
+import {
+  handleCachesGpx,
+  handleCachesKml,
+  handleCacheGpx,
+  handleFindsAdif,
+  handleStationTrack,
+  handleStationKml,
+} from "./exports.js";
 
 const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
 const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
@@ -69,24 +76,35 @@ async function gate(req: Request, env: Env): Promise<{ tier: "anon" | "keyed"; k
   if (raw) {
     const row = await env.DB.prepare("SELECT key FROM api_keys WHERE key = ?").bind(raw).first();
     if (row) {
-      key = raw; tier = "keyed"; max = keyedMax(env);
-      try { await env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE key = ?").bind(now(), raw).run(); } catch { /* best-effort */ }
+      key = raw;
+      tier = "keyed";
+      max = keyedMax(env);
+      try {
+        await env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE key = ?").bind(now(), raw).run();
+      } catch {
+        /* best-effort */
+      }
     }
   }
   const bucket = key ? `apikey:${key}` : `apiip:${clientIp(req)}`;
   if (rateLimited(bucket, Date.now(), max, windowSec(env) * 1000)) {
-    return json({ error: "rate limit exceeded", tier, limit: max, windowSec: windowSec(env) },
-      { status: 429, headers: { "retry-after": String(windowSec(env)), "x-ratelimit-limit": String(max) } });
+    return json(
+      { error: "rate limit exceeded", tier, limit: max, windowSec: windowSec(env) },
+      { status: 429, headers: { "retry-after": String(windowSec(env)), "x-ratelimit-limit": String(max) } },
+    );
   }
   return { tier, key };
 }
 
 function apiIndex(env: Env): Response {
   return json({
-    protocol: "aprscaching-readapi/1", version: "v1", access: "read-only · free (ADR-4a)",
+    protocol: "aprscaching-readapi/1",
+    version: "v1",
+    access: "read-only · free (ADR-4a)",
     rateLimits: { window_seconds: windowSec(env), anonymous: anonMax(env), with_key: keyedMax(env) },
     keys: "POST /api/v1/keys for a free key; send it as Authorization: Bearer <key> or ?key=.",
-    pagination: "Linear lists (activity) accept ?limit= & ?cursor=; responses carry nextCursor + hasMore. Pass nextCursor back as ?cursor= for the next page (keyset, not offset).",
+    pagination:
+      "Linear lists (activity) accept ?limit= & ?cursor=; responses carry nextCursor + hasMore. Pass nextCursor back as ?cursor= for the next page (keyset, not offset).",
     bbox_max_degrees: maxBboxDeg(env),
     endpoints: ENDPOINTS,
   });
@@ -99,14 +117,25 @@ async function issueKey(req: Request, env: Env): Promise<Response> {
   const body = (await req.json().catch(() => ({}))) as { label?: string; ownerCall?: string };
   const key = "acg_" + crypto.randomUUID().replace(/-/g, "");
   await env.DB.prepare("INSERT INTO api_keys (key, owner_call, label, rate_tier, created_at) VALUES (?,?,?, 'free', ?)")
-    .bind(key, body.ownerCall?.toUpperCase() || null, body.label?.slice(0, 80) || null, now()).run();
-  return json({ key, tier: "free", limits: { window_seconds: windowSec(env), with_key: keyedMax(env) },
-    usage: "Send as 'Authorization: Bearer <key>' or '?key=<key>'. Free; raises your rate limit." }, { status: 201 });
+    .bind(key, body.ownerCall?.toUpperCase() || null, body.label?.slice(0, 80) || null, now())
+    .run();
+  return json(
+    {
+      key,
+      tier: "free",
+      limits: { window_seconds: windowSec(env), with_key: keyedMax(env) },
+      usage: "Send as 'Authorization: Bearer <key>' or '?key=<key>'. Free; raises your rate limit.",
+    },
+    { status: 201 },
+  );
 }
 
 async function keyInfo(env: Env, key: string): Promise<Response> {
-  const row = await env.DB.prepare("SELECT owner_call AS ownerCall, label, rate_tier AS tier, created_at AS createdAt, last_used_at AS lastUsedAt FROM api_keys WHERE key = ?")
-    .bind(key).first();
+  const row = await env.DB.prepare(
+    "SELECT owner_call AS ownerCall, label, rate_tier AS tier, created_at AS createdAt, last_used_at AS lastUsedAt FROM api_keys WHERE key = ?",
+  )
+    .bind(key)
+    .first();
   if (!row) return json({ error: "unknown key" }, { status: 404 });
   return json(row);
 }
@@ -116,7 +145,8 @@ function bboxTooLarge(req: Request, env: Env): Response | null {
   const raw = new URL(req.url).searchParams.get("bbox");
   if (!raw) return null;
   const p = raw.split(",").map(Number);
-  if (p.length !== 4 || !p.every(Number.isFinite)) return json({ error: "bbox must be minLon,minLat,maxLon,maxLat" }, { status: 400 });
+  if (p.length !== 4 || !p.every(Number.isFinite))
+    return json({ error: "bbox must be minLon,minLat,maxLon,maxLat" }, { status: 400 });
   const cap = maxBboxDeg(env);
   if (Math.abs(p[2]! - p[0]!) > cap || Math.abs(p[3]! - p[1]!) > cap)
     return json({ error: `bbox too large (max ${cap}° per side)` }, { status: 400 });
@@ -126,7 +156,8 @@ function bboxTooLarge(req: Request, env: Env): Response | null {
 /** Dispatch /api/v1/* . `rest` is the path after /api/v1 (e.g. "", "/caches", "/caches/AC-0001"). */
 export async function handleApiV1(req: Request, env: Env, rest: string): Promise<Response> {
   const m = req.method;
-  if (rest === "" || rest === "/") return m === "GET" ? apiIndex(env) : json({ error: "method not allowed" }, { status: 405 });
+  if (rest === "" || rest === "/")
+    return m === "GET" ? apiIndex(env) : json({ error: "method not allowed" }, { status: 405 });
   if (rest === "/keys" && m === "POST") return issueKey(req, env);
   const keyM = /^\/keys\/([A-Za-z0-9_]+)$/.exec(rest);
   if (keyM && m === "GET") return keyInfo(env, keyM[1]!);
@@ -146,7 +177,9 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (rest === "/caches") return bboxTooLarge(req, env) ?? handleCachesInBBox(req, env);
   const codeM = /^\/caches\/([A-Za-z0-9-]+)$/.exec(rest);
   if (codeM) {
-    const row = await env.DB.prepare("SELECT id FROM caches WHERE code = ?").bind(codeM[1]!.toUpperCase()).first<{ id: number }>();
+    const row = await env.DB.prepare("SELECT id FROM caches WHERE code = ?")
+      .bind(codeM[1]!.toUpperCase())
+      .first<{ id: number }>();
     if (!row) return json({ error: "cache not found" }, { status: 404 });
     return handleCacheDetail(req, env, row.id);
   }

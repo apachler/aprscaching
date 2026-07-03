@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import {
-  encodeNetrom, decodeNetrom, encodeNodesBroadcast, decodeNodesBroadcast, combineQuality,
-  NrOp, NR_MORE, NR_CHOKE, NETROM_PID,
+  encodeNetrom,
+  decodeNetrom,
+  encodeNodesBroadcast,
+  decodeNodesBroadcast,
+  combineQuality,
+  NrOp,
+  NR_MORE,
+  NR_CHOKE,
+  NETROM_PID,
 } from "../src/netrom-wire.js";
 
 describe("NET/ROM wire codec", () => {
@@ -40,8 +47,10 @@ describe("NET/ROM wire codec", () => {
 
   it("round-trips a NODES broadcast and chunks to ≤11 destinations per frame", () => {
     const dests = Array.from({ length: 25 }, (_, i) => ({
-      dest: { call: `DEST${i % 10}`, ssid: i % 16 }, alias: `AL${i}`,
-      neighbor: { call: "NB0ABC", ssid: 1 }, quality: 200 - i,
+      dest: { call: `DEST${i % 10}`, ssid: i % 16 },
+      alias: `AL${i}`,
+      neighbor: { call: "NB0ABC", ssid: 1 },
+      quality: 200 - i,
     }));
     const frames = encodeNodesBroadcast("OE8HUB", dests);
     expect(frames.length).toBe(3); // 11 + 11 + 3
@@ -50,7 +59,12 @@ describe("NET/ROM wire codec", () => {
     const all = frames.flatMap((f) => decodeNodesBroadcast(f)!.dests);
     expect(all.length).toBe(25);
     expect(decodeNodesBroadcast(frames[0]!)!.senderAlias).toBe("OE8HUB");
-    expect(all[0]).toEqual({ dest: { call: "DEST0", ssid: 0 }, alias: "AL0", neighbor: { call: "NB0ABC", ssid: 1 }, quality: 200 });
+    expect(all[0]).toEqual({
+      dest: { call: "DEST0", ssid: 0 },
+      alias: "AL0",
+      neighbor: { call: "NB0ABC", ssid: 1 },
+      quality: 200,
+    });
     expect(all[24]!.quality).toBe(176);
   });
 
@@ -58,7 +72,8 @@ describe("NET/ROM wire codec", () => {
     const [f] = encodeNodesBroadcast("OE8HUB", []);
     expect(f!.length).toBe(7);
     expect(decodeNodesBroadcast(f!)!.dests).toEqual([]);
-    const bad = new Uint8Array(7); bad[0] = 0x00;
+    const bad = new Uint8Array(7);
+    bad[0] = 0x00;
     expect(decodeNodesBroadcast(bad)).toBeNull();
   });
 

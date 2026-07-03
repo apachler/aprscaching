@@ -16,16 +16,23 @@ function tok(name: string, fallback: string): string {
   return v || fallback;
 }
 
-interface SeriesDef { label: string; color: string; unit: string; data: (number | null)[] }
+interface SeriesDef {
+  label: string;
+  color: string;
+  unit: string;
+  data: (number | null)[];
+}
 
 /** Build one uPlot chart from aligned x (sec) + a few y series; returns a disposer. */
-function makeChart(
-  U: UPlot, el: HTMLDivElement, title: string, xs: number[], defs: SeriesDef[],
-): () => void {
-  const axis = tok("--text", "#ccc"), grid = tok("--muted", "#8884");
+function makeChart(U: UPlot, el: HTMLDivElement, title: string, xs: number[], defs: SeriesDef[]): () => void {
+  const axis = tok("--text", "#ccc"),
+    grid = tok("--muted", "#8884");
   const opts = {
-    title, width: el.clientWidth || 320, height: 120,
-    cursor: { show: true }, legend: { show: true },
+    title,
+    width: el.clientWidth || 320,
+    height: 120,
+    cursor: { show: true },
+    legend: { show: true },
     scales: { x: { time: true } },
     axes: [
       { stroke: axis, grid: { stroke: grid, width: 0.5 }, ticks: { stroke: grid } },
@@ -38,11 +45,15 @@ function makeChart(
   };
   const data = [xs, ...defs.map((d) => d.data)] as unknown as (number | null)[][];
   const u = new U(opts as ConstructorParameters<UPlot>[0], data as ConstructorParameters<UPlot>[1], el);
-  const ro = typeof ResizeObserver !== "undefined"
-    ? new ResizeObserver(() => u.setSize({ width: el.clientWidth || 320, height: 120 }))
-    : null;
+  const ro =
+    typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => u.setSize({ width: el.clientWidth || 320, height: 120 }))
+      : null;
   ro?.observe(el);
-  return () => { ro?.disconnect(); u.destroy(); };
+  return () => {
+    ro?.disconnect();
+    u.destroy();
+  };
 }
 
 export function StationGraphs(props: { callsign: string }) {
@@ -55,12 +66,17 @@ export function StationGraphs(props: { callsign: string }) {
   useEffect(() => {
     if (!open || series) return;
     const ac = new AbortController();
-    getStationSeries(props.callsign, 86400, ac.signal).then(setSeries).catch((e) => setErr((e as Error).message));
+    getStationSeries(props.callsign, 86400, ac.signal)
+      .then(setSeries)
+      .catch((e) => setErr((e as Error).message));
     return () => ac.abort();
   }, [open, series, props.callsign]);
 
   // Reset when the inspected station changes.
-  useEffect(() => { setSeries(null); setErr(null); }, [props.callsign]);
+  useEffect(() => {
+    setSeries(null);
+    setErr(null);
+  }, [props.callsign]);
 
   // Render the charts once we have data + the container; dynamic-import uPlot here.
   useEffect(() => {
@@ -68,10 +84,7 @@ export function StationGraphs(props: { callsign: string }) {
     let disposers: (() => void)[] = [];
     let live = true;
     (async () => {
-      const [mod] = await Promise.all([
-        import("uplot"),
-        import("uplot/dist/uPlot.min.css"),
-      ]);
+      const [mod] = await Promise.all([import("uplot"), import("uplot/dist/uPlot.min.css")]);
       const U: UPlot = (mod as { default?: UPlot }).default ?? (mod as unknown as UPlot);
       if (!live || !host.current) return;
       const el = host.current;
@@ -86,21 +99,32 @@ export function StationGraphs(props: { callsign: string }) {
       };
 
       const wxX = series.wx.map((p) => p.ts);
-      add("Temperature", wxX, [{ label: "temp", color: tok("--bad", "#e55"), unit: "°C", data: series.wx.map((p) => p.tempC) }]);
+      add("Temperature", wxX, [
+        { label: "temp", color: tok("--bad", "#e55"), unit: "°C", data: series.wx.map((p) => p.tempC) },
+      ]);
       add("Humidity", wxX, [
         { label: "humidity", color: tok("--tier-b", "#59f"), unit: "%", data: series.wx.map((p) => p.humidity) },
       ]);
-      add("Pressure", wxX, [{ label: "pressure", color: tok("--accent", "#0bd"), unit: "hPa", data: series.wx.map((p) => p.pressureHpa) }]);
+      add("Pressure", wxX, [
+        { label: "pressure", color: tok("--accent", "#0bd"), unit: "hPa", data: series.wx.map((p) => p.pressureHpa) },
+      ]);
       add("Wind", wxX, [
         { label: "wind", color: tok("--accent", "#0bd"), unit: "kn", data: series.wx.map((p) => p.windKn) },
         { label: "gust", color: tok("--warn", "#fb0"), unit: "kn", data: series.wx.map((p) => p.gustKn) },
       ]);
 
       const mX = series.motion.map((p) => p.ts);
-      add("Speed", mX, [{ label: "speed", color: tok("--tier-a", "#3c6"), unit: "kn", data: series.motion.map((p) => p.speedKn) }]);
-      add("Altitude", mX, [{ label: "altitude", color: tok("--accent", "#0bd"), unit: "m", data: series.motion.map((p) => p.altitudeM) }]);
+      add("Speed", mX, [
+        { label: "speed", color: tok("--tier-a", "#3c6"), unit: "kn", data: series.motion.map((p) => p.speedKn) },
+      ]);
+      add("Altitude", mX, [
+        { label: "altitude", color: tok("--accent", "#0bd"), unit: "m", data: series.motion.map((p) => p.altitudeM) },
+      ]);
     })();
-    return () => { live = false; disposers.forEach((d) => d()); };
+    return () => {
+      live = false;
+      disposers.forEach((d) => d());
+    };
   }, [open, series]);
 
   const has = series && (series.wx.length || series.motion.length);
@@ -110,12 +134,16 @@ export function StationGraphs(props: { callsign: string }) {
       <button className="link" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? "▾" : "▸"} Graphs (24h)
       </button>
-      {open && (
-        err ? <p className="muted">Couldn't load graphs: {err}</p>
-        : !series ? <p className="muted">Loading…</p>
-        : !has ? <p className="muted">No telemetry or weather in the last 24h.</p>
-        : <div ref={host} className="graph-host" />
-      )}
+      {open &&
+        (err ? (
+          <p className="muted">Couldn't load graphs: {err}</p>
+        ) : !series ? (
+          <p className="muted">Loading…</p>
+        ) : !has ? (
+          <p className="muted">No telemetry or weather in the last 24h.</p>
+        ) : (
+          <div ref={host} className="graph-host" />
+        ))}
     </div>
   );
 }

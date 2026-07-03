@@ -32,7 +32,7 @@ describe("NET/ROM L3 switch", () => {
     expect(d.action).toBe("forward");
     if (d.action === "forward") {
       expect(addrStr(d.neighbor)).toBe("OE2NBR");
-      expect(d.packet.net.ttl).toBe(19);                 // decremented
+      expect(d.packet.net.ttl).toBe(19); // decremented
       expect(d.packet.info).toEqual(new Uint8Array([1, 2, 3])); // payload preserved
     }
   });
@@ -49,6 +49,9 @@ describe("NET/ROM L3 switch", () => {
 
   it("drops a self-loop (route points back at us or the origin)", () => {
     const backToOrigin = nodeWithRoute(A("OE3FAR"), A("OE1SRC")); // neighbour == the packet's origin
-    expect(routeNetrom(pkt(A("OE3FAR"), 20, A("OE1SRC")), backToOrigin, ME)).toEqual({ action: "drop", reason: "loop" });
+    expect(routeNetrom(pkt(A("OE3FAR"), 20, A("OE1SRC")), backToOrigin, ME)).toEqual({
+      action: "drop",
+      reason: "loop",
+    });
   });
 });

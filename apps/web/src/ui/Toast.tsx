@@ -21,11 +21,17 @@ export function ToastProvider(props: { children: ReactNode }) {
     <ToastCtx.Provider value={push}>
       {props.children}
       <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((t) => <div key={t.id} className="toast">{t.msg}</div>)}
+        {toasts.map((t) => (
+          <div key={t.id} className="toast">
+            {t.msg}
+          </div>
+        ))}
       </div>
     </ToastCtx.Provider>
   );
 }
 
 /** Returns push(msg) — fire-and-forget transient confirmation. */
-export function useToast() { return useContext(ToastCtx); }
+export function useToast() {
+  return useContext(ToastCtx);
+}

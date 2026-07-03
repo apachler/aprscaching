@@ -9,5 +9,9 @@ import { useTheme } from "../format.js";
  */
 export function Ico({ e, c = "" }: { e: string; c?: string }) {
   const g = useTheme() === "cogmind" ? c : e;
-  return g ? <span className="ico" aria-hidden="true">{g}</span> : null;
+  return g ? (
+    <span className="ico" aria-hidden="true">
+      {g}
+    </span>
+  ) : null;
 }

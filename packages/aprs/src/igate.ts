@@ -49,12 +49,14 @@ export function messageAddressee(payload: string): string | null {
  * this callsign direct on RF lately?". Returns the addressee to gate to, or null.
  */
 export function txIgateTarget(
-  f: ParsedFrame, gateCall: string, heardLocally: (callsign: string) => boolean,
+  f: ParsedFrame,
+  gateCall: string,
+  heardLocally: (callsign: string) => boolean,
 ): string | null {
   if (isThirdParty(f.payload) || pathBlocksGating(f.path)) return null;
   if (baseCall(f.src) === baseCall(gateCall)) return null;
   const addr = messageAddressee(f.payload);
-  if (!addr) return null;                       // only messages are TX-gated
+  if (!addr) return null; // only messages are TX-gated
   if (baseCall(addr) === baseCall(gateCall)) return null;
   if (/^(ack|rej)/i.test(f.payload.slice(11))) return null; // don't gate bare acks
   return heardLocally(addr) ? addr : null;

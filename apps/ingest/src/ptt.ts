@@ -12,22 +12,30 @@ export interface Ptt {
   close(): Promise<void>;
 }
 
-export interface PttOpts { line?: "rts" | "dtr"; invert?: boolean; baudRate?: number }
+export interface PttOpts {
+  line?: "rts" | "dtr";
+  invert?: boolean;
+  baudRate?: number;
+}
 
 /** Open serial PTT on `path` (e.g. /dev/ttyUSB0). Returns null if `serialport` isn't installed. */
 export async function openSerialPtt(path: string, opts: PttOpts = {}): Promise<Ptt | null> {
   const line = opts.line ?? "rts";
   try {
     const name = "serialport"; // non-literal so tsc doesn't require the optional dep at build time
-    const mod = (await import(name)) as { SerialPort?: new (o: unknown) => SerialLike; default?: { SerialPort?: new (o: unknown) => SerialLike } };
+    const mod = (await import(name)) as {
+      SerialPort?: new (o: unknown) => SerialLike;
+      default?: { SerialPort?: new (o: unknown) => SerialLike };
+    };
     const SerialPort = mod.SerialPort ?? mod.default?.SerialPort;
     if (!SerialPort) throw new Error("SerialPort export not found");
     const port = new SerialPort({ path, baudRate: opts.baudRate ?? 9600, autoOpen: true });
-    const set = (on: boolean) => new Promise<void>((res, rej) => {
-      const active = opts.invert ? !on : on;
-      const signals = line === "rts" ? { rts: active } : { dtr: active };
-      port.set(signals, (e: Error | null) => (e ? rej(e) : res()));
-    });
+    const set = (on: boolean) =>
+      new Promise<void>((res, rej) => {
+        const active = opts.invert ? !on : on;
+        const signals = line === "rts" ? { rts: active } : { dtr: active };
+        port.set(signals, (e: Error | null) => (e ? rej(e) : res()));
+      });
     console.log(`[ptt] serial PTT on ${path} via ${line.toUpperCase()}`);
     return {
       key: () => set(true),

@@ -8,22 +8,56 @@ import type { Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { handleIngest } from "./ingest.js";
 import {
-  handleLog, handleCachesInBBox, handleCreateCache, handleCacheDetail, handleCacheLogs, handleUpdateCache,
+  handleLog,
+  handleCachesInBBox,
+  handleCreateCache,
+  handleCacheDetail,
+  handleCacheLogs,
+  handleUpdateCache,
 } from "./caches.js";
 import { handleSearch } from "./search.js";
-import { handleClaim, handleSession, handleLogout, handleChangeCallsign, handleListCallsigns, handleAddCallsign,
-  handlePasskeyRegisterBegin, handlePasskeyRegisterFinish, handlePasskeyLoginBegin, handlePasskeyLoginFinish } from "./auth.js";
+import {
+  handleClaim,
+  handleSession,
+  handleLogout,
+  handleChangeCallsign,
+  handleListCallsigns,
+  handleAddCallsign,
+  handlePasskeyRegisterBegin,
+  handlePasskeyRegisterFinish,
+  handlePasskeyLoginBegin,
+  handlePasskeyLoginFinish,
+} from "./auth.js";
 import { handleEmailStart, handleEmailVerify } from "./email.js";
 import { handleProfileUpdate } from "./profile.js";
 import { handleWxSubmit, handleWxKey, handleWxTx } from "./wx.js";
-import { handleMyStations, handleMyStation, handleStationWxKey, handleStationToCache, handleMeCache } from "./stations_mine.js";
+import {
+  handleMyStations,
+  handleMyStation,
+  handleStationWxKey,
+  handleStationToCache,
+  handleMeCache,
+} from "./stations_mine.js";
 import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
-import { handleWellKnown, handleFederationCaches, handleFederationFinds, handleFederationKeys, handleFederationRegistry, serveFeed } from "./federation.js";
+import {
+  handleWellKnown,
+  handleFederationCaches,
+  handleFederationFinds,
+  handleFederationKeys,
+  handleFederationRegistry,
+  serveFeed,
+} from "./federation.js";
 import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
-import { handleActivityFeed, handleCachesFeed, handleBulletinsFeed, handleLeaderboardFeed, handleUserFeed } from "./feeds.js";
+import {
+  handleActivityFeed,
+  handleCachesFeed,
+  handleBulletinsFeed,
+  handleLeaderboardFeed,
+  handleUserFeed,
+} from "./feeds.js";
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
@@ -34,21 +68,80 @@ import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, 
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
-import { handleFederationSync, handleFederationPeers, handlePeerTrust, handleFederationSubmit, syncAllPeers, pushToHub } from "./federation_sync.js";
+import {
+  handleFederationSync,
+  handleFederationPeers,
+  handlePeerTrust,
+  handleFederationSubmit,
+  syncAllPeers,
+  pushToHub,
+} from "./federation_sync.js";
 import { handleAdminWhoami } from "./admin.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
-import { handleLeaderboard, handleCorroborators, handleProfile, handleActivity, handleFavorite, handleWatch, handleRate } from "./community.js";
-import { handleDecode, handleStations, handleStation, handleStationSeries, handleStationPackets, handlePorts, handleMessages } from "./workbench.js";
+import {
+  handleLeaderboard,
+  handleCorroborators,
+  handleProfile,
+  handleActivity,
+  handleFavorite,
+  handleWatch,
+  handleRate,
+} from "./community.js";
+import {
+  handleDecode,
+  handleStations,
+  handleStation,
+  handleStationSeries,
+  handleStationPackets,
+  handlePorts,
+  handleMessages,
+} from "./workbench.js";
 import { handleCot } from "./cot.js";
 import { handleBadge } from "./badge.js";
-import { handleSetStages, handleGetStages, handleUnlockStage, handleStageMedia, handleGetMedia, handleListCacheMedia, handleAddCacheMedia, handleDeleteCacheMedia } from "./stages.js";
-import { handleAccountExport, handleAccountDelete, handleAccountBundle, handleAccountMove, handleAccountImport, handleFederationAccountMoves } from "./account.js";
-import { handleBbsPost, handleBbsList, handleBbsBulletins, handleBbsRead, handleBbsSent, handleBbsThread, handleBbsSession, handleBbsKill, BULLETIN_FEED } from "./bbs.js";
-import { handleBbsRoute, handleWhitePages, handleForwardRules, handleForwardRuleDelete, handleForwardPartners, handleForwardPartnerDelete, handleForwardPool, handleForwardInbound, handleForwardSent } from "./forward.js";
+import {
+  handleSetStages,
+  handleGetStages,
+  handleUnlockStage,
+  handleStageMedia,
+  handleGetMedia,
+  handleListCacheMedia,
+  handleAddCacheMedia,
+  handleDeleteCacheMedia,
+} from "./stages.js";
+import {
+  handleAccountExport,
+  handleAccountDelete,
+  handleAccountBundle,
+  handleAccountMove,
+  handleAccountImport,
+  handleFederationAccountMoves,
+} from "./account.js";
+import {
+  handleBbsPost,
+  handleBbsList,
+  handleBbsBulletins,
+  handleBbsRead,
+  handleBbsSent,
+  handleBbsThread,
+  handleBbsSession,
+  handleBbsKill,
+  BULLETIN_FEED,
+} from "./bbs.js";
+import {
+  handleBbsRoute,
+  handleWhitePages,
+  handleForwardRules,
+  handleForwardRuleDelete,
+  handleForwardPartners,
+  handleForwardPartnerDelete,
+  handleForwardPool,
+  handleForwardInbound,
+  handleForwardSent,
+} from "./forward.js";
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
 export { syncAllPeers } from "./federation_sync.js";
 
@@ -67,9 +160,21 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
  * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
  */
 export async function runFrequentSync(env: Env): Promise<void> {
-  try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
-  try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
-  try { await relayPoll(env); } catch (e) { console.error("relay poll:", (e as Error).message); }
+  try {
+    await syncAllPeers(env);
+  } catch (e) {
+    console.error("federation sync:", (e as Error).message);
+  }
+  try {
+    await pushToHub(env);
+  } catch (e) {
+    console.error("push-to-hub:", (e as Error).message);
+  }
+  try {
+    await relayPoll(env);
+  } catch (e) {
+    console.error("relay poll:", (e as Error).message);
+  }
 }
 
 /**
@@ -78,7 +183,9 @@ export async function runFrequentSync(env: Env): Promise<void> {
  */
 export async function runScheduled(env: Env): Promise<void> {
   const nowS = Math.floor(Date.now() / 1000);
-  await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(nowS - 7 * 24 * 3600).run();
+  await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?")
+    .bind(nowS - 7 * 24 * 3600)
+    .run();
   // raw packet ring (Stage 0.2) is a short-lived workbench diagnostic — prune hard (default 24h)
   const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
   // SR-RT-05: bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
@@ -101,12 +208,17 @@ export async function runScheduled(env: Env): Promise<void> {
   ]);
   await runFrequentSync(env);
   // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
-  try { await runDigests(env); } catch (e) { console.error("digests:", (e as Error).message); }
+  try {
+    await runDigests(env);
+  } catch (e) {
+    console.error("digests:", (e as Error).message);
+  }
 }
 
 export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   const url = new URL(req.url);
-  const p = url.pathname, m = req.method;
+  const p = url.pathname,
+    m = req.method;
 
   if (p === "/health") return json({ ok: true });
 
@@ -247,19 +359,21 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
 
   // weather user-origination — PWS push (Ecowitt / WU) under <call>-13
-  if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST")) return handleWxSubmit(req, env);
+  if ((p === "/api/wx/submit" || p === "/api/wx/updateweatherstation") && (m === "GET" || m === "POST"))
+    return handleWxSubmit(req, env);
   if (p === "/api/wx/key" && (m === "GET" || m === "POST")) return handleWxKey(req, env);
   if (p === "/api/wx/tx" && m === "POST") return handleWxTx(req, env);
 
   // operated-stations registry — manage your own stations (PWS / digi / igate / node)
   if (p === "/api/my/stations" && (m === "GET" || m === "POST")) return handleMyStations(req, env);
-  if (p === "/api/me/cache" && m === "POST") return handleMeCache(req, env);  // "become a cache" yourself
+  if (p === "/api/me/cache" && m === "POST") return handleMeCache(req, env); // "become a cache" yourself
   const myStationMatch = /^\/api\/my\/stations\/(\d+)(\/wx-key|\/cache)?$/.exec(p);
   if (myStationMatch) {
     const sid = Number(myStationMatch[1]);
     if (myStationMatch[2] === "/wx-key") return handleStationWxKey(req, env, sid);
     if (myStationMatch[2] === "/cache" && m === "POST") return handleStationToCache(req, env, sid);
-    if (!myStationMatch[2] && (m === "GET" || m === "PATCH" || m === "PUT" || m === "DELETE")) return handleMyStation(req, env, sid);
+    if (!myStationMatch[2] && (m === "GET" || m === "PATCH" || m === "PUT" || m === "DELETE"))
+      return handleMyStation(req, env, sid);
     return new Response("method not allowed", { status: 405 });
   }
 
@@ -330,7 +444,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
-  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env);   // P3 — gated user TX (path A)
+  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // P3 — gated user TX (path A)
 
   // audio-cache: stages + media (M2)
   if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));
@@ -342,7 +456,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (m === "POST") return handleAddCacheMedia(req, env, id);
   }
   const cacheMediaDel = /^\/api\/caches\/(\d+)\/media\/(\d+)$/.exec(p);
-  if (cacheMediaDel && m === "DELETE") return handleDeleteCacheMedia(req, env, Number(cacheMediaDel[1]), Number(cacheMediaDel[2]));
+  if (cacheMediaDel && m === "DELETE")
+    return handleDeleteCacheMedia(req, env, Number(cacheMediaDel[1]), Number(cacheMediaDel[2]));
   const stagesMatch = /^\/api\/caches\/(\d+)\/stages$/.exec(p);
   if (stagesMatch) {
     const id = Number(stagesMatch[1]);
@@ -351,7 +466,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   }
   const stageOpMatch = /^\/api\/caches\/(\d+)\/stages\/(\d+)\/(unlock|media)$/.exec(p);
   if (stageOpMatch) {
-    const id = Number(stageOpMatch[1]), n = Number(stageOpMatch[2]);
+    const id = Number(stageOpMatch[1]),
+      n = Number(stageOpMatch[2]);
     if (stageOpMatch[3] === "unlock" && m === "POST") return handleUnlockStage(req, env, id, n);
     if (stageOpMatch[3] === "media" && m === "PUT") return handleStageMedia(req, env, id, n);
   }
@@ -383,14 +499,16 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
 export function json(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data), {
-    ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    ...init,
+    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
   });
 }
 
 /** XML/RSS/text responses (sitemap, RSS feeds, robots.txt) — content-type defaults to XML. */
 export function xml(body: string, init: ResponseInit = {}): Response {
   return new Response(body, {
-    ...init, headers: { "content-type": "application/xml; charset=utf-8", ...(init.headers ?? {}) },
+    ...init,
+    headers: { "content-type": "application/xml; charset=utf-8", ...(init.headers ?? {}) },
   });
 }
 

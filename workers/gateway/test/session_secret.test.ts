@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { issueSessionCookie, sessionCallsign, weakSecret } from "../src/auth.js";
 import type { Env } from "../src/env.js";
 
-const envWith = (o: Partial<Env>) => ({ ...o } as unknown as Env);
+const envWith = (o: Partial<Env>) => ({ ...o }) as unknown as Env;
 const cookieReq = (setCookie: string) =>
   new Request("http://gw/api/whoami", { headers: { cookie: setCookie.split(";")[0]! } });
 
@@ -40,7 +40,7 @@ describe("SR-SEC-01 — session secret must not be the default", () => {
     const a = envWith({ INGEST_SECRET: "ingest-A", SESSION_SECRET: "session-shared" });
     const b = envWith({ INGEST_SECRET: "ingest-B", SESSION_SECRET: "session-shared" });
     const setCookie = await issueSessionCookie("OE8APR", a);
-    expect(await sessionCallsign(cookieReq(setCookie), b)).toBe("OE8APR");   // same SESSION_SECRET ⇒ valid
+    expect(await sessionCallsign(cookieReq(setCookie), b)).toBe("OE8APR"); // same SESSION_SECRET ⇒ valid
     // …but not against a different session secret
     expect(await sessionCallsign(cookieReq(setCookie), envWith({ SESSION_SECRET: "other" }))).toBeNull();
   });

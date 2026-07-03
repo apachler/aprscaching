@@ -12,7 +12,11 @@ import { ASSET } from "./brand.js";
 // import() only fires once the user signs in or taps Explore.
 const Platform = lazy(() => import("./Platform.js"));
 
-const Splash = () => <div className="splash"><img src={ASSET.wordmark} alt="APRScaching" /></div>;
+const Splash = () => (
+  <div className="splash">
+    <img src={ASSET.wordmark} alt="APRScaching" />
+  </div>
+);
 
 /**
  * App — the top-level auth/landing gate. It stays deliberately thin (no map imports) so it can decide
@@ -24,12 +28,22 @@ export function App() {
   const [showSignIn, setShowSignIn] = useState(false);
   // landing gate: signed-in skips the landing; signed-out sees it until they Explore
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
-  const [explored, setExplored] = useState(() => { try { return sessionStorage.getItem("acs.explore") === "1"; } catch { return false; } });
+  const [explored, setExplored] = useState(() => {
+    try {
+      return sessionStorage.getItem("acs.explore") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [startTour, setStartTour] = useState(false);
   const active = session.signedIn || explored;
 
   const onExplore = useCallback(() => {
-    try { sessionStorage.setItem("acs.explore", "1"); } catch { /* ignore */ }
+    try {
+      sessionStorage.setItem("acs.explore", "1");
+    } catch {
+      /* ignore */
+    }
     setExplored(true);
     if (!tourSeen()) setStartTour(true);
   }, []);
@@ -38,8 +52,13 @@ export function App() {
   const prevSignedIn = useRef(session.signedIn);
   useEffect(() => {
     if (prevSignedIn.current && !session.signedIn) {
-      try { sessionStorage.removeItem("acs.explore"); } catch { /* ignore */ }
-      setExplored(false); setStartTour(false);
+      try {
+        sessionStorage.removeItem("acs.explore");
+      } catch {
+        /* ignore */
+      }
+      setExplored(false);
+      setStartTour(false);
     }
     prevSignedIn.current = session.signedIn;
   }, [session.signedIn]);
@@ -52,7 +71,13 @@ export function App() {
         <>
           <Landing onRegister={() => setShowSignIn(true)} onLogin={() => setShowSignIn(true)} onExplore={onExplore} />
           {showSignIn && (
-            <SignIn onDone={() => { session.refresh(); setShowSignIn(false); }} onClose={() => setShowSignIn(false)} />
+            <SignIn
+              onDone={() => {
+                session.refresh();
+                setShowSignIn(false);
+              }}
+              onClose={() => setShowSignIn(false)}
+            />
           )}
         </>
       ) : (

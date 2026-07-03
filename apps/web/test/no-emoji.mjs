@@ -20,7 +20,7 @@ const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
 /** True if `cp` is a colour emoji we must not render raw. */
 function isEmoji(cp) {
-  if (cp >= 0x1f000 && cp <= 0x1faff) return true;                 // SMP emoji/pictographs
+  if (cp >= 0x1f000 && cp <= 0x1faff) return true; // SMP emoji/pictographs
   return cp === 0x2708 || cp === 0x26f5 || cp === 0x2614 || cp === 0x23f3 || cp === 0x2b50; // ✈ ⛵ ☔ ⏳ ⭐
 }
 
@@ -28,9 +28,9 @@ function isEmoji(cp) {
 function lineAllowed(line, file) {
   const t = line.trim();
   if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return true; // comment
-  if (line.includes("<Ico ")) return true;                                        // <Ico e c/> wrapper
-  if (/\b(glyph|cog|emoji)\s*:/.test(line)) return true;                          // data glyph field
-  if (basename(file) === "aprsGlyph.ts") return true;                             // APRS category map
+  if (line.includes("<Ico ")) return true; // <Ico e c/> wrapper
+  if (/\b(glyph|cog|emoji)\s*:/.test(line)) return true; // data glyph field
+  if (basename(file) === "aprsGlyph.ts") return true; // APRS category map
   return false;
 }
 
@@ -38,8 +38,9 @@ function walk(dir, out) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     const s = statSync(p);
-    if (s.isDirectory()) { if (name !== "node_modules") walk(p, out); }
-    else if (/\.(ts|tsx)$/.test(name)) out.push(p);
+    if (s.isDirectory()) {
+      if (name !== "node_modules") walk(p, out);
+    } else if (/\.(ts|tsx)$/.test(name)) out.push(p);
   }
 }
 

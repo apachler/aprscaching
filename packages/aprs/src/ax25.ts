@@ -11,21 +11,29 @@
  */
 import type { ParsedFrame } from "./types.js";
 
-const FEND = 0xc0, FESC = 0xdb, TFEND = 0xdc, TFESC = 0xdd;
+const FEND = 0xc0,
+  FESC = 0xdb,
+  TFEND = 0xdc,
+  TFESC = 0xdd;
 
 // ---- KISS framing ----
 /** Split a KISS byte stream into raw AX.25 frames (strips the port/type byte + unescapes). */
 export function kissFrames(buf: Uint8Array): Uint8Array[] {
   const out: Uint8Array[] = [];
-  let cur: number[] | null = null, esc = false;
+  let cur: number[] | null = null,
+    esc = false;
   for (const b of buf) {
     if (b === FEND) {
       if (cur && cur.length > 1) out.push(Uint8Array.from(cur.slice(1))); // drop the type/port byte
-      cur = []; esc = false; continue;
+      cur = [];
+      esc = false;
+      continue;
     }
     if (cur === null) continue;
-    if (esc) { cur.push(b === TFEND ? FEND : b === TFESC ? FESC : b); esc = false; }
-    else if (b === FESC) esc = true;
+    if (esc) {
+      cur.push(b === TFEND ? FEND : b === TFESC ? FESC : b);
+      esc = false;
+    } else if (b === FESC) esc = true;
     else cur.push(b);
   }
   return out;
@@ -46,7 +54,10 @@ export function kissWrap(ax25: Uint8Array): Uint8Array {
 // ---- AX.25 address codec ----
 function decodeAddr(bytes: Uint8Array, off: number): { call: string; last: boolean; repeated: boolean } {
   let call = "";
-  for (let i = 0; i < 6; i++) { const c = bytes[off + i]! >> 1; if (c !== 0x20) call += String.fromCharCode(c); }
+  for (let i = 0; i < 6; i++) {
+    const c = bytes[off + i]! >> 1;
+    if (c !== 0x20) call += String.fromCharCode(c);
+  }
   const ssidByte = bytes[off + 6]!;
   const ssid = (ssidByte >> 1) & 0x0f;
   if (ssid) call += `-${ssid}`;
@@ -65,12 +76,17 @@ function encodeAddr(callWithSsid: string, last: boolean, cOrH = false): number[]
 export function decodeAx25(bytes: Uint8Array): ParsedFrame | null {
   if (bytes.length < 16) return null;
   const addrs: { call: string; repeated: boolean }[] = [];
-  let off = 0, last = false;
+  let off = 0,
+    last = false;
   while (!last && off + 7 <= bytes.length && addrs.length < 10) {
-    const a = decodeAddr(bytes, off); addrs.push({ call: a.call, repeated: a.repeated }); last = a.last; off += 7;
+    const a = decodeAddr(bytes, off);
+    addrs.push({ call: a.call, repeated: a.repeated });
+    last = a.last;
+    off += 7;
   }
   if (!last || addrs.length < 2) return null;
-  const control = bytes[off]!, pid = bytes[off + 1]!;
+  const control = bytes[off]!,
+    pid = bytes[off + 1]!;
   if (control !== 0x03 || pid !== 0xf0) return null; // only UI / no-layer-3
   const payload = new TextDecoder("latin1").decode(bytes.slice(off + 2));
   const dst = addrs[0]!.call;

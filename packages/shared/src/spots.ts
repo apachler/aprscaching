@@ -33,12 +33,24 @@ export interface Spot {
 
 /** Amateur band plan (Hz ranges → label). Coarse but covers HF→23cm for spot labelling. */
 const BANDS: ReadonlyArray<[number, number, string]> = [
-  [135_700, 137_800, "2200m"], [472_000, 479_000, "630m"], [1_800_000, 2_000_000, "160m"],
-  [3_500_000, 4_000_000, "80m"], [5_250_000, 5_450_000, "60m"], [7_000_000, 7_300_000, "40m"],
-  [10_100_000, 10_150_000, "30m"], [14_000_000, 14_350_000, "20m"], [18_068_000, 18_168_000, "17m"],
-  [21_000_000, 21_450_000, "15m"], [24_890_000, 24_990_000, "12m"], [28_000_000, 29_700_000, "10m"],
-  [50_000_000, 54_000_000, "6m"], [70_000_000, 70_500_000, "4m"], [144_000_000, 148_000_000, "2m"],
-  [222_000_000, 225_000_000, "1.25m"], [420_000_000, 450_000_000, "70cm"], [902_000_000, 928_000_000, "33cm"],
+  [135_700, 137_800, "2200m"],
+  [472_000, 479_000, "630m"],
+  [1_800_000, 2_000_000, "160m"],
+  [3_500_000, 4_000_000, "80m"],
+  [5_250_000, 5_450_000, "60m"],
+  [7_000_000, 7_300_000, "40m"],
+  [10_100_000, 10_150_000, "30m"],
+  [14_000_000, 14_350_000, "20m"],
+  [18_068_000, 18_168_000, "17m"],
+  [21_000_000, 21_450_000, "15m"],
+  [24_890_000, 24_990_000, "12m"],
+  [28_000_000, 29_700_000, "10m"],
+  [50_000_000, 54_000_000, "6m"],
+  [70_000_000, 70_500_000, "4m"],
+  [144_000_000, 148_000_000, "2m"],
+  [222_000_000, 225_000_000, "1.25m"],
+  [420_000_000, 450_000_000, "70cm"],
+  [902_000_000, 928_000_000, "33cm"],
   [1_240_000_000, 1_300_000_000, "23cm"],
 ];
 
@@ -50,12 +62,18 @@ const MH_BASES = [18, 10, 24, 10, 24];
  * locator (F-7) is honoured everywhere, not just in the web `gridCenter`.
  */
 export function gridToLatLon(grid: string | undefined | null): { lat: number; lon: number } | null {
-  const g = String(grid ?? "").trim().toUpperCase();
+  const g = String(grid ?? "")
+    .trim()
+    .toUpperCase();
   if (!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2}([A-X]{2})?)?)?$/.test(g)) return null;
   const pairs = g.match(/../g)!;
-  let lon = -180, lat = -90, lonCell = 360, latCell = 180;
+  let lon = -180,
+    lat = -90,
+    lonCell = 360,
+    latCell = 180;
   for (let p = 0; p < pairs.length; p++) {
-    lonCell /= MH_BASES[p]!; latCell /= MH_BASES[p]!;
+    lonCell /= MH_BASES[p]!;
+    latCell /= MH_BASES[p]!;
     const base = p === 0 || p % 2 === 0 ? 65 : 48; // letters A-X (field/subsquare) or digits 0-9
     lon += (pairs[p]!.charCodeAt(0) - base) * lonCell;
     lat += (pairs[p]!.charCodeAt(1) - base) * latCell;
@@ -83,7 +101,7 @@ export function freqToHz(value: string | number | undefined | null): number | un
 
 /** Dedup key: one activation = one callsign at one reference on one band, newest wins. */
 export function spotKey(s: Pick<Spot, "callsign" | "ref" | "band" | "freqHz">): string {
-  return `${s.callsign.toUpperCase()}|${(s.ref ?? "").toUpperCase()}|${s.band ?? (s.freqHz ?? "")}`;
+  return `${s.callsign.toUpperCase()}|${(s.ref ?? "").toUpperCase()}|${s.band ?? s.freqHz ?? ""}`;
 }
 
 /** Merge spots across sources: keep the most recently-spotted record per activation. */

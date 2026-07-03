@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import {
-  encodeAx25, decodeAx25, kissWrap, kissFrames, parseCot, splitCotEvents, parseMeshtasticJson,
-  formatPosition, decodeAprs,
+  encodeAx25,
+  decodeAx25,
+  kissWrap,
+  kissFrames,
+  parseCot,
+  splitCotEvents,
+  parseMeshtasticJson,
+  formatPosition,
+  decodeAprs,
 } from "../src/index.js";
 
 describe("AX.25 + KISS", () => {
@@ -55,7 +62,13 @@ describe("CoT inbound", () => {
 
 describe("formatPosition (CoT/Meshtastic normalisation)", () => {
   it("round-trips through the decoder", () => {
-    const payload = formatPosition(47.0735, 15.4378, { code: ">", course: 88, speedKn: 36, altitudeM: 376, comment: " test" });
+    const payload = formatPosition(47.0735, 15.4378, {
+      code: ">",
+      course: 88,
+      speedKn: 36,
+      altitudeM: 376,
+      comment: " test",
+    });
     const d = decodeAprs({ src: "X", dst: "APRS", path: [], payload, raw: "" }) as any;
     expect(d.kind).toBe("position");
     expect(d.lat).toBeCloseTo(47.0735, 3);
@@ -68,7 +81,9 @@ describe("formatPosition (CoT/Meshtastic normalisation)", () => {
 
 describe("Meshtastic JSON", () => {
   it("parses a position envelope", () => {
-    const f = parseMeshtasticJson(`{"from":305419896,"sender":"!1234abcd","type":"position","payload":{"latitude_i":470735000,"longitude_i":154378000,"altitude":376}}`)!;
+    const f = parseMeshtasticJson(
+      `{"from":305419896,"sender":"!1234abcd","type":"position","payload":{"latitude_i":470735000,"longitude_i":154378000,"altitude":376}}`,
+    )!;
     expect(f.node).toBe("!1234abcd");
     expect(f.lat).toBeCloseTo(47.0735, 4);
     expect(f.lon).toBeCloseTo(15.4378, 4);

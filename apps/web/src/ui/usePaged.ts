@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 
-export interface PageResult<T> { items: T[]; nextCursor: string | null; hasMore: boolean }
+export interface PageResult<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
 
 /**
  * Drive a keyset-paginated list: fetch the first page on mount/dep-change, then append
@@ -18,18 +22,29 @@ export function usePaged<T>(fetcher: (cursor: string | null) => Promise<PageResu
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const load = useCallback(async (from: string | null, reset: boolean) => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const r = await fetcher(from);
       setItems((prev) => (reset ? r.items : [...prev, ...r.items]));
-      setCursor(r.nextCursor); setHasMore(r.hasMore);
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
+      setCursor(r.nextCursor);
+      setHasMore(r.hasMore);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, deps);
 
-  useEffect(() => { void load(null, true); }, [load]);
+  useEffect(() => {
+    void load(null, true);
+  }, [load]);
 
-  const loadMore = useCallback(() => { if (hasMore && !loading) void load(cursor, false); }, [hasMore, loading, cursor, load]);
-  const reload = useCallback(() => { void load(null, true); }, [load]);
+  const loadMore = useCallback(() => {
+    if (hasMore && !loading) void load(cursor, false);
+  }, [hasMore, loading, cursor, load]);
+  const reload = useCallback(() => {
+    void load(null, true);
+  }, [load]);
   return { items, hasMore, loading, error, loadMore, reload };
 }

@@ -17,20 +17,42 @@ import { haversineMeters } from "@aprsweb/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers } from "./federation_sync.js";
 import {
-  coarsenConfig, snapToGrid, gridSlackM, bucketWindow, distanceBucketM, bucketTs,
-  corroborationAuthorized, clientIp, rateLimited, negCached, negStore,
+  coarsenConfig,
+  snapToGrid,
+  gridSlackM,
+  bucketWindow,
+  distanceBucketM,
+  bucketTs,
+  corroborationAuthorized,
+  clientIp,
+  rateLimited,
+  negCached,
+  negStore,
 } from "./corroborate_privacy.js";
 
 /** Cap the peers probed per find — a bounded fan-out budget (T1.2 hardening). */
 const CORROBORATION_FANOUT = 16;
 
-export interface Evidence { instance: string; igateCall?: string; distanceM: number; ts: number; corroborators?: number }
+export interface Evidence {
+  instance: string;
+  igateCall?: string;
+  distanceM: number;
+  ts: number;
+  corroborators?: number;
+}
 export interface CorroborationQuery {
-  callsign: string; lat: number; lon: number; radiusM: number; since: number; until: number;
+  callsign: string;
+  lat: number;
+  lon: number;
+  radiusM: number;
+  since: number;
+  until: number;
 }
 
 /** Base callsign without SSID, for the independence check (IGate must not be the logger). */
-function baseCall(c: string): string { return c.split("-")[0]!.toUpperCase(); }
+function baseCall(c: string): string {
+  return c.split("-")[0]!.toUpperCase();
+}
 
 /**
  * Which IGate (if any) to credit for a Tier-A find. For a locally
@@ -38,7 +60,12 @@ function baseCall(c: string): string { return c.split("-")[0]!.toUpperCase(); }
  * the peer's revealed IGate (only present when both peers opt into FED_REVEAL_IGATE) — that's the
  * cross-instance credit. Never the logger's own call (no self-credit). Pure / testable.
  */
-export function corroboratorIgate(opts: { method: string; matchedIgate?: string | null; peerIgate?: string | null; loggerCall: string }): string | null {
+export function corroboratorIgate(opts: {
+  method: string;
+  matchedIgate?: string | null;
+  peerIgate?: string | null;
+  loggerCall: string;
+}): string | null {
   const ig = (opts.method === "aprs_rf_peer" ? opts.peerIgate : opts.matchedIgate) ?? null;
   if (!ig) return null;
   return baseCall(ig) === baseCall(opts.loggerCall) ? null : ig.toUpperCase();
@@ -46,16 +73,21 @@ export function corroboratorIgate(opts: { method: string; matchedIgate?: string 
 
 /** Search THIS instance's RF positions for an independent corroboration. Returns evidence or null. */
 async function localCorroboration(
-  env: Env, q: CorroborationQuery, excludeIgates: Set<string>,
+  env: Env,
+  q: CorroborationQuery,
+  excludeIgates: Set<string>,
 ): Promise<Omit<Evidence, "instance"> | null> {
   const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
   const callBase = baseCall(q.callsign);
-  const rows = (await env.DB.prepare(
-    `SELECT lat, lon, ts, igate_call FROM positions
+  const rows = (
+    await env.DB.prepare(
+      `SELECT lat, lon, ts, igate_call FROM positions
       WHERE callsign = ? AND heard_via = 'rf' AND source != 'service' AND ts BETWEEN ? AND ?
       ORDER BY ts DESC LIMIT 500`,
-  ).bind(q.callsign.toUpperCase(), q.since, q.until)
-    .all<{ lat: number; lon: number; ts: number; igate_call: string | null }>()).results;
+    )
+      .bind(q.callsign.toUpperCase(), q.since, q.until)
+      .all<{ lat: number; lon: number; ts: number; igate_call: string | null }>()
+  ).results;
 
   for (const r of rows) {
     const ig = r.igate_call ?? "";
@@ -97,7 +129,10 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
 
   const exclude = new Set((b.excludeIgates ?? []).map(baseCall));
   const ev = await localCorroboration(env, b, exclude);
-  if (!ev) { negStore(key, nowMs); return json({ corroborated: false }); }
+  if (!ev) {
+    negStore(key, nowMs);
+    return json({ corroborated: false });
+  }
 
   const evidence: { distanceM: number; ts: number; igateCall?: string } = {
     distanceM: distanceBucketM(ev.distanceM, cfg.distBucketM),
@@ -147,7 +182,9 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
     if (threshold > 0)
       await env.DB.prepare(
         "UPDATE fed_peers SET trust='trusted', added_via='auto-promoted', approved_at=COALESCE(approved_at,?) WHERE url=? AND trust='unvetted' AND rep_failed=0 AND rep_confirmed >= ?",
-      ).bind(at, url, threshold).run();
+      )
+        .bind(at, url, threshold)
+        .run();
   }
 }
 
@@ -158,7 +195,7 @@ async function creditCorroboration(env: Env, urls: string[], threshold: number):
  * Unavailable peers (timeout / error) are NOT contradictions, only explicit deniers. Pure + testable.
  */
 export function contradictors(probes: { url: string; denied: boolean }[], hasWinner: boolean): string[] {
-  if (!hasWinner) return [];   // nothing was confirmed → a "no" isn't a contradiction
+  if (!hasWinner) return []; // nothing was confirmed → a "no" isn't a contradiction
   return [...new Set(probes.filter((p) => p.denied).map((p) => p.url))];
 }
 
@@ -186,33 +223,53 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
   const c = snapToGrid(q.lat, q.lon, cfg.gridDeg);
   const w = bucketWindow(q.since, q.until, cfg.timeBucketSec);
   const cq: CorroborationQuery = {
-    ...q, lat: c.lat, lon: c.lon,
+    ...q,
+    lat: c.lat,
+    lon: c.lon,
     radiusM: (q.radiusM || DEFAULT_POLICY.radiusM) + gridSlackM(cfg.gridDeg),
-    since: w.since, until: w.until,
+    since: w.since,
+    until: w.until,
   };
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (env.FED_CORROBORATION_SECRET) headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
 
-  const probes = await Promise.all(pool.map(async (peer): Promise<{ peer: typeof pool[number]; ev: Evidence | null; denied: boolean }> => {
-    const base = peer.url.replace(/\/+$/, "");
-    try {
-      const r = await fetch(`${base}/federation/corroborate`, {
-        method: "POST", headers, body: JSON.stringify(cq), signal: AbortSignal.timeout(3000),
-      });
-      if (!r.ok) return { peer, ev: null, denied: false };   // unavailable ≠ contradiction
-      const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };
-      const ev = data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null;
-      return { peer, ev, denied: data.corroborated === false };   // explicit "no" from a reachable peer
-    } catch { return { peer, ev: null, denied: false }; }
-  }));
+  const probes = await Promise.all(
+    pool.map(async (peer): Promise<{ peer: (typeof pool)[number]; ev: Evidence | null; denied: boolean }> => {
+      const base = peer.url.replace(/\/+$/, "");
+      try {
+        const r = await fetch(`${base}/federation/corroborate`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(cq),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!r.ok) return { peer, ev: null, denied: false }; // unavailable ≠ contradiction
+        const data = (await r.json()) as { corroborated: boolean; evidence?: Omit<Evidence, "instance"> };
+        const ev = data.corroborated && data.evidence ? { instance: peer.instance ?? base, ...data.evidence } : null;
+        return { peer, ev, denied: data.corroborated === false }; // explicit "no" from a reachable peer
+      } catch {
+        return { peer, ev: null, denied: false };
+      }
+    }),
+  );
 
   // Tier A is decided from TRUSTED hits only (quorum unchanged); unvetted hits are advisory.
   const trustedHits = probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => x.ev as Evidence);
   const winner = selectCorroboration(trustedHits, quorum);
   if (winner) {
-    await creditCorroboration(env, probes.filter((x) => x.ev).map((x) => x.peer.url), threshold);
+    await creditCorroboration(
+      env,
+      probes.filter((x) => x.ev).map((x) => x.peer.url),
+      threshold,
+    );
     // T1.1 contradiction signal: peers that DENIED a corroboration the trusted quorum confirmed lose rep.
-    await debitContradiction(env, contradictors(probes.map((x) => ({ url: x.peer.url, denied: x.denied })), true));
+    await debitContradiction(
+      env,
+      contradictors(
+        probes.map((x) => ({ url: x.peer.url, denied: x.denied })),
+        true,
+      ),
+    );
   }
   return winner;
 }

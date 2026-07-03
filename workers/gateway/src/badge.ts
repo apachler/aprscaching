@@ -8,8 +8,9 @@
 import type { Env } from "./env.js";
 import { FREDOKA_DATA_URI } from "./brandfont.js";
 
-const POINTS = "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
-const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
+const POINTS =
+  "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
+const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
 
 export async function handleBadge(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
@@ -17,8 +18,11 @@ export async function handleBadge(req: Request, env: Env, callsign: string): Pro
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
        WHERE l.logger_call=? AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
-  ).bind(cs).first<{ finds: number; points: number }>();
-  const finds = stat?.finds ?? 0, points = Math.round(stat?.points ?? 0);
+  )
+    .bind(cs)
+    .first<{ finds: number; points: number }>();
+  const finds = stat?.finds ?? 0,
+    points = Math.round(stat?.points ?? 0);
 
   // network rank by points (loggers strictly ahead + 1); only meaningful once they have finds
   let rank = 0;
@@ -29,12 +33,19 @@ export async function handleBadge(req: Request, env: Env, callsign: string): Pro
            SELECT l.logger_call, l.cache_id, MAX(${POINTS}) AS pts FROM cache_logs l JOIN caches c ON c.id=l.cache_id
            WHERE l.log_type='found' AND l.verified=1 GROUP BY l.logger_call, l.cache_id) GROUP BY logger_call)
        SELECT COUNT(*)+1 AS rank FROM agg WHERE points > ?`,
-    ).bind(points).first<{ rank: number }>();
+    )
+      .bind(points)
+      .first<{ rank: number }>();
     rank = r?.rank ?? 0;
   }
-  const hides = (await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM caches WHERE owner_call=? AND source='native' AND status!='archived'",
-  ).bind(cs).first<{ n: number }>())?.n ?? 0;
+  const hides =
+    (
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM caches WHERE owner_call=? AND source='native' AND status!='archived'",
+      )
+        .bind(cs)
+        .first<{ n: number }>()
+    )?.n ?? 0;
 
   const instance = env.INSTANCE ?? new URL(req.url).host;
   const svg = renderBadge({ callsign: cs, finds, points, rank, hides, instance });
@@ -48,8 +59,16 @@ export async function handleBadge(req: Request, env: Env, callsign: string): Pro
 }
 
 const FONT = `'Fredoka','system-ui',sans-serif`;
-function renderBadge(d: { callsign: string; finds: number; points: number; rank: number; hides: number; instance: string }): string {
-  const W = 360, H = 96;
+function renderBadge(d: {
+  callsign: string;
+  finds: number;
+  points: number;
+  rank: number;
+  hides: number;
+  instance: string;
+}): string {
+  const W = 360,
+    H = 96;
   const stat = (label: string, value: string, x: number) =>
     `<text x="${x}" y="58" font-size="22" font-weight="600" fill="#fff" font-family="${FONT}">${value}</text>` +
     `<text x="${x}" y="76" font-size="11" font-weight="500" fill="rgba(255,255,255,.85)" font-family="${FONT}">${label}</text>`;

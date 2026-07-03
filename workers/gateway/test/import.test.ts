@@ -8,7 +8,7 @@ describe("CSV parser", () => {
     const { header, rows } = parseCsv(csv);
     expect(header).toEqual(["reference", "name", "latitude", "longitude"]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]!.name).toBe("Acadia, NP");        // quoted comma preserved
+    expect(rows[0]!.name).toBe("Acadia, NP"); // quoted comma preserved
     expect(rows[0]!.reference).toBe("US-0001");
     expect(rows[1]!.latitude).toBe("37.3");
   });
@@ -26,7 +26,11 @@ describe("GeoJSON parser", () => {
     const gj = JSON.stringify({
       type: "FeatureCollection",
       features: [
-        { type: "Feature", geometry: { type: "Point", coordinates: [15.42, 47.07] }, properties: { reference: "B/G-0123", name: "Bunker" } },
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [15.42, 47.07] },
+          properties: { reference: "B/G-0123", name: "Bunker" },
+        },
         { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} }, // ignored
       ],
     });
@@ -39,7 +43,8 @@ describe("GeoJSON parser", () => {
 
 describe("GPX parser", () => {
   it("reads waypoints with lat/lon and child tags", () => {
-    const gpx = `<gpx><wpt lat="-37.8" lon="144.9"><name>GA1234</name><urlname>Flagstaff Hill</urlname>` +
+    const gpx =
+      `<gpx><wpt lat="-37.8" lon="144.9"><name>GA1234</name><urlname>Flagstaff Hill</urlname>` +
       `<type>Geocache|Traditional Cache</type><url>https://geocaching.com.au/cache/GA1234</url></wpt></gpx>`;
     const wpts = parseGpxWaypoints(gpx);
     expect(wpts).toHaveLength(1);

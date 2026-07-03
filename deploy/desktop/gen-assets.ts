@@ -8,7 +8,7 @@
 import { readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, basename, sep } from "node:path";
 
-const HERE = import.meta.dir;                 // deploy/desktop
+const HERE = import.meta.dir; // deploy/desktop
 const ROOT = join(HERE, "..", "..");
 const DIST = join(ROOT, "apps", "web", "dist");
 const MIG = join(ROOT, "db", "migrations");
@@ -26,7 +26,10 @@ const rel = (f: string) => "./" + relative(HERE, f).split(sep).join("/");
 const url = (f: string) => "/" + relative(DIST, f).split(sep).join("/");
 
 const spa = walk(DIST);
-const migs = readdirSync(MIG).filter((f) => f.endsWith(".sql")).sort().map((f) => join(MIG, f));
+const migs = readdirSync(MIG)
+  .filter((f) => f.endsWith(".sql"))
+  .sort()
+  .map((f) => join(MIG, f));
 
 let imports = "";
 let spaMap = "";

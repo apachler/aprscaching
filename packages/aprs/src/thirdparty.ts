@@ -8,7 +8,10 @@
 
 /** The public APRS-IS passcode for a callsign (base call only; SSID-independent). NOT authorization. */
 export function aprsPasscode(call: string): number {
-  const c = call.toUpperCase().replace(/-.*/, "").replace(/[^A-Z0-9]/g, "");
+  const c = call
+    .toUpperCase()
+    .replace(/-.*/, "")
+    .replace(/[^A-Z0-9]/g, "");
   let hash = 0x73e2;
   for (let i = 0; i < c.length; i += 2) {
     hash ^= c.charCodeAt(i) << 8;

@@ -8,9 +8,18 @@
 import type { PanelTone } from "./panel.js";
 
 /** One marker: a position + an optional short label/glyph + a tone (mapped by the host to a token). */
-export interface MapPoint { lat: number; lon: number; label?: string; glyph?: string; tone?: PanelTone }
+export interface MapPoint {
+  lat: number;
+  lon: number;
+  label?: string;
+  glyph?: string;
+  tone?: PanelTone;
+}
 /** A tool's map layer: a stable id + its points. Replaced wholesale on each setMapLayer. */
-export interface MapLayerSpec { id: string; points: MapPoint[] }
+export interface MapLayerSpec {
+  id: string;
+  points: MapPoint[];
+}
 
 const TONES = new Set<PanelTone>(["default", "muted", "accent", "ok", "warn", "bad"]);
 const num = (x: unknown): number | null => (typeof x === "number" && isFinite(x) ? x : null);
@@ -25,9 +34,16 @@ export function sanitizeMapLayer(input: unknown): MapLayerSpec {
   for (const p of raw) {
     if (!p || typeof p !== "object") continue;
     const d = p as Record<string, unknown>;
-    const lat = num(d.lat), lon = num(d.lon);
+    const lat = num(d.lat),
+      lon = num(d.lon);
     if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    points.push({ lat, lon, label: str(d.label, 40), glyph: str(d.glyph, 2), tone: TONES.has(d.tone as PanelTone) ? (d.tone as PanelTone) : undefined });
+    points.push({
+      lat,
+      lon,
+      label: str(d.label, 40),
+      glyph: str(d.glyph, 2),
+      tone: TONES.has(d.tone as PanelTone) ? (d.tone as PanelTone) : undefined,
+    });
   }
   return { id, points };
 }

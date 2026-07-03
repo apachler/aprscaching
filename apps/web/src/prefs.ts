@@ -10,8 +10,8 @@ import { getPrefs, putPrefs, type AccountPrefs } from "./api.js";
 
 /** pref-name → localStorage key. Each value is stored JSON-encoded under its localStorage key. */
 const SYNCED: Record<string, string> = {
-  locale: "acs.locale",   // format.ts LocaleSettings (theme, units, locale, timeZone)
-  pins: "acs.pins",       // pinned workbench app ids
+  locale: "acs.locale", // format.ts LocaleSettings (theme, units, locale, timeZone)
+  pins: "acs.pins", // pinned workbench app ids
   basemap: "acs.basemap", // basemap choice
 };
 
@@ -23,7 +23,12 @@ export const prefsSessionActive = (): boolean => sessionActive;
 export const PREFS_EVENT = "acs:prefs-synced";
 
 function readLocal(k: string): unknown | undefined {
-  try { const v = localStorage.getItem(k); return v == null ? undefined : JSON.parse(v); } catch { return undefined; }
+  try {
+    const v = localStorage.getItem(k);
+    return v == null ? undefined : JSON.parse(v);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Snapshot the synced localStorage values into a prefs object for the server. */
@@ -43,27 +48,47 @@ export function collectLocalPrefs(): AccountPrefs {
  */
 export async function pullPrefs(): Promise<void> {
   let prefs: AccountPrefs;
-  try { ({ prefs } = await getPrefs()); }
-  catch { sessionActive = false; return; }   // not signed in (401) or offline → keep local values
+  try {
+    ({ prefs } = await getPrefs());
+  } catch {
+    sessionActive = false;
+    return;
+  } // not signed in (401) or offline → keep local values
   sessionActive = true;
 
-  if (Object.keys(prefs).length === 0) { void pushPrefs(); return; } // seed the account from this device
+  if (Object.keys(prefs).length === 0) {
+    void pushPrefs();
+    return;
+  } // seed the account from this device
 
   let changed = false;
   for (const [name, key] of Object.entries(SYNCED)) {
     if (prefs[name] === undefined) continue;
     const next = JSON.stringify(prefs[name]);
     if (localStorage.getItem(key) !== next) {
-      try { localStorage.setItem(key, next); changed = true; } catch { /* ignore */ }
+      try {
+        localStorage.setItem(key, next);
+        changed = true;
+      } catch {
+        /* ignore */
+      }
     }
   }
-  if (changed) { try { window.dispatchEvent(new Event(PREFS_EVENT)); } catch { /* ignore */ } }
+  if (changed) {
+    try {
+      window.dispatchEvent(new Event(PREFS_EVENT));
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** Push the current local prefs to the account (only when a session is active). */
 export function pushPrefs(): void {
   if (!sessionActive) return;
-  putPrefs(collectLocalPrefs()).catch(() => { /* best-effort; localStorage remains the source of truth */ });
+  putPrefs(collectLocalPrefs()).catch(() => {
+    /* best-effort; localStorage remains the source of truth */
+  });
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -71,5 +96,8 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 export function notePrefChange(): void {
   if (!sessionActive) return;
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => { timer = null; pushPrefs(); }, 800);
+  timer = setTimeout(() => {
+    timer = null;
+    pushPrefs();
+  }, 800);
 }

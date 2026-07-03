@@ -34,27 +34,47 @@ export async function handleRegisterKey(req: Request, env: Env): Promise<Respons
   const verified = await isCallsignVerified(env, callsign);
   await env.DB.prepare(
     "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)",
-  ).bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, verified ? 1 : 0, Math.floor(Date.now() / 1000)).run();
+  )
+    .bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, verified ? 1 : 0, Math.floor(Date.now() / 1000))
+    .run();
   return json({ ok: true, callsign, publicKey: parsed.data.publicKey, verified });
 }
 
 export async function handleGetKeys(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
-  const rows = (await env.DB.prepare(
-    "SELECT public_key, label, verified, created_at FROM callsign_keys WHERE callsign = ? ORDER BY created_at",
-  ).bind(cs).all<{ public_key: string; label: string | null; verified: number; created_at: number }>()).results;
-  return json({ callsign: cs, keys: rows.map((r) => ({ publicKey: r.public_key, label: r.label, verified: r.verified === 1, createdAt: r.created_at })) });
+  const rows = (
+    await env.DB.prepare(
+      "SELECT public_key, label, verified, created_at FROM callsign_keys WHERE callsign = ? ORDER BY created_at",
+    )
+      .bind(cs)
+      .all<{ public_key: string; label: string | null; verified: number; created_at: number }>()
+  ).results;
+  return json({
+    callsign: cs,
+    keys: rows.map((r) => ({
+      publicKey: r.public_key,
+      label: r.label,
+      verified: r.verified === 1,
+      createdAt: r.created_at,
+    })),
+  });
 }
 
 export async function isKeyRegistered(env: Env, callsign: string, publicKey: string): Promise<boolean> {
   const r = await env.DB.prepare("SELECT 1 AS x FROM callsign_keys WHERE callsign = ? AND public_key = ?")
-    .bind(callsign.toUpperCase(), publicKey).first();
+    .bind(callsign.toUpperCase(), publicKey)
+    .first();
   return !!r;
 }
 
 export interface AuthorshipCheck {
-  cache: string; instance: string; logger: string; logType: string; at: number;
-  authorKey: string; authorSig: string;
+  cache: string;
+  instance: string;
+  logger: string;
+  logType: string;
+  at: number;
+  authorKey: string;
+  authorSig: string;
 }
 /** Verify a logger's signature over the canonical authorship message. */
 export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
@@ -64,7 +84,9 @@ export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
       authorshipMessage({ cache: a.cache, instance: a.instance, logger: a.logger, logType: a.logType, at: a.at }),
     );
     return await crypto.subtle.verify("Ed25519", key, fromB64(a.authorSig), msg);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -73,18 +95,24 @@ export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
  * callsign). Verifies signature + digest + freshness + key registration. Returns the attributed
  * callsign, or null. Trust is unaffected — callers strip the IGate so browser RF stays Tier C.
  */
-export async function verifySignedIngest(req: Request, env: Env, packets: unknown[]): Promise<{ callsign: string } | null> {
+export async function verifySignedIngest(
+  req: Request,
+  env: Env,
+  packets: unknown[],
+): Promise<{ callsign: string } | null> {
   const callsign = (req.headers.get("x-acs-callsign") ?? "").toUpperCase();
   const key = req.headers.get("x-acs-key") ?? "";
   const sig = req.headers.get("x-acs-sig") ?? "";
   const at = Number(req.headers.get("x-acs-at") ?? 0);
   if (!callsign || !key || !sig || !Number.isFinite(at)) return null;
-  if (Math.abs(Math.floor(Date.now() / 1000) - at) > 300) return null;       // 5-min freshness window
-  if (!(await isKeyRegistered(env, callsign, key))) return null;             // key must belong to the callsign
+  if (Math.abs(Math.floor(Date.now() / 1000) - at) > 300) return null; // 5-min freshness window
+  if (!(await isKeyRegistered(env, callsign, key))) return null; // key must belong to the callsign
   try {
     const digest = await sha256Hex(stableStringify(packets));
     const msg = new TextEncoder().encode(ingestMessage({ callsign, at, count: packets.length, digest }));
     const ok = await crypto.subtle.verify("Ed25519", await importVerifyKey(key), fromB64(sig), msg);
     return ok ? { callsign } : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }

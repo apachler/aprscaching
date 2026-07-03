@@ -3,7 +3,10 @@ import dgram from "node:dgram";
 import { parseCot, splitCotEvents, formatPosition } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
 
-export interface CotOpts { port: number; bind?: string }
+export interface CotOpts {
+  port: number;
+  bind?: string;
+}
 
 /**
  * TAK/CoT inbound listener (UDP, default :6969). Each <event> is parsed to a fix, normalised to an
@@ -11,7 +14,10 @@ export interface CotOpts { port: number; bind?: string }
  */
 export class CotListener {
   private sock?: dgram.Socket;
-  constructor(private o: CotOpts, private onPacket: (p: Packet) => void) {}
+  constructor(
+    private o: CotOpts,
+    private onPacket: (p: Packet) => void,
+  ) {}
 
   start() {
     const s = dgram.createSocket({ type: "udp4", reuseAddr: true });
@@ -20,14 +26,27 @@ export class CotListener {
       for (const ev of splitCotEvents(msg.toString("utf8"))) {
         const fix = parseCot(ev);
         if (!fix) continue;
-        const src = fix.callsign.replace(/[^A-Z0-9-]/gi, "").slice(0, 9).toUpperCase() || "COT";
+        const src =
+          fix.callsign
+            .replace(/[^A-Z0-9-]/gi, "")
+            .slice(0, 9)
+            .toUpperCase() || "COT";
         const payload = formatPosition(fix.lat, fix.lon, {
-          course: fix.course, speedKn: fix.speedKn, altitudeM: fix.altitudeM, comment: fix.comment ? ` ${fix.comment}` : undefined,
+          course: fix.course,
+          speedKn: fix.speedKn,
+          altitudeM: fix.altitudeM,
+          comment: fix.comment ? ` ${fix.comment}` : undefined,
         });
         this.onPacket({
-          src, dst: "APRS", path: [], payload, kind: "position",
+          src,
+          dst: "APRS",
+          path: [],
+          payload,
+          kind: "position",
           parsed: { lat: fix.lat, lon: fix.lon } as Record<string, unknown>,
-          heardVia: "aprs_is", port: "tak", ts: Math.floor(Date.now() / 1000),
+          heardVia: "aprs_is",
+          port: "tak",
+          ts: Math.floor(Date.now() / 1000),
         });
       }
     });

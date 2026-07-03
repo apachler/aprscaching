@@ -2,25 +2,43 @@
 import { describe, it, expect } from "vitest";
 import { makeStreamDecoder, encodeVaricode } from "../src/index.js";
 
-const SR = 8000, BAUD = 31.25;
+const SR = 8000,
+  BAUD = 31.25;
 
 /** Deterministic LCG noise in [-1,1] (no Math.random → reproducible). */
-function lcg(seed: number) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return (s / 4294967296) * 2 - 1; }; }
+function lcg(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return (s / 4294967296) * 2 - 1;
+  };
+}
 
 /** Synthesise a BPSK PSK31 signal (carrier offset + timing prefix + noise). */
 function modBpsk(bits: string, carrierHz: number, timingPrefix: number, noiseAmp: number): number[] {
-  const sps = SR / BAUD; const out: number[] = [];
+  const sps = SR / BAUD;
+  const out: number[] = [];
   for (let i = 0; i < timingPrefix; i++) out.push(0);
   let phase = 0;
-  const emit = (ph: number) => { const start = out.length; for (let i = 0; i < sps; i++) out.push(Math.cos(2 * Math.PI * carrierHz * (start + i) / SR + ph)); };
+  const emit = (ph: number) => {
+    const start = out.length;
+    for (let i = 0; i < sps; i++) out.push(Math.cos((2 * Math.PI * carrierHz * (start + i)) / SR + ph));
+  };
   emit(phase);
-  for (const b of bits) { if (b === "0") phase += Math.PI; emit(phase); }
+  for (const b of bits) {
+    if (b === "0") phase += Math.PI;
+    emit(phase);
+  }
   const rnd = lcg(999);
   return out.map((v) => v + noiseAmp * rnd());
 }
 
 /** Feed a signal through a StreamDecoder in fixed-size chunks (mimics AudioWorklet 128-sample frames). */
-function streamChunks(signal: number[], chunk: number, mk = () => makeStreamDecoder("psk31", SR, { carrierHz: 1000, baud: BAUD })) {
+function streamChunks(
+  signal: number[],
+  chunk: number,
+  mk = () => makeStreamDecoder("psk31", SR, { carrierHz: 1000, baud: BAUD }),
+) {
   const dec = mk();
   let last = "";
   for (let i = 0; i < signal.length; i += chunk) last = dec.push(signal.slice(i, i + chunk));

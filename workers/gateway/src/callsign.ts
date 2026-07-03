@@ -3,12 +3,12 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionAccountId } from "./auth.js";
 
-const CHALLENGE_TTL_SEC = 15 * 60;   // a code is good for 15 minutes
-const MAX_ATTEMPTS = 5;              // wrong guesses before the challenge locks (SR-SEC-07)
+const CHALLENGE_TTL_SEC = 15 * 60; // a code is good for 15 minutes
+const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks (SR-SEC-07)
 
 /** A cryptographically-random 6-digit code (Math.random is predictable → brute-forceable). */
 function sixDigitCode(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000;
+  const n = (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000) + 100000;
   return String(n);
 }
 /** Constant-time string compare so a wrong code can't be recovered by response timing (SR-SEC-08). */
@@ -38,12 +38,16 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
      VALUES (?, 'aprs_msg', 'pending', ?, ?, 0, ?)
      ON CONFLICT(callsign) DO UPDATE SET method='aprs_msg', status='pending', challenge=excluded.challenge,
        account_id=excluded.account_id, attempts=0, created_at=excluded.created_at`,
-  ).bind(cs, code, me?.accountId ?? null, now).run();
+  )
+    .bind(cs, code, me?.accountId ?? null, now)
+    .run();
   // queue an APRS message to the user's callsign via the outbox (ingest delivers it)
   await env.DB.prepare(
     `INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload)
      VALUES (?, 'APRSCG', 'APZACG', 'message', ?)`,
-  ).bind(now, `:${cs.padEnd(9)}:aprscaching code ${code}`).run();
+  )
+    .bind(now, `:${cs.padEnd(9)}:aprscaching code ${code}`)
+    .run();
   return json({ sent: true });
 }
 
@@ -55,7 +59,9 @@ export async function confirmAprsChallenge(req: Request, env: Env): Promise<Resp
   const cs = String(callsign ?? "").toUpperCase();
   const row = await env.DB.prepare(
     "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
-  ).bind(cs).first<{ challenge: string; account_id: string | null; attempts: number; created_at: number; status: string }>();
+  )
+    .bind(cs)
+    .first<{ challenge: string; account_id: string | null; attempts: number; created_at: number; status: string }>();
   const now = Math.floor(Date.now() / 1000);
   // an active challenge only — and, for a browser session, one THIS account started (the trusted
   // backend may confirm any pending challenge it drove).
@@ -68,21 +74,31 @@ export async function confirmAprsChallenge(req: Request, env: Env): Promise<Resp
   if (!timingSafeEqual(row.challenge ?? "", String(code ?? ""))) {
     await env.DB.prepare(
       "UPDATE callsign_verifications SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE status END WHERE callsign = ?",
-    ).bind(MAX_ATTEMPTS, cs).run();
+    )
+      .bind(MAX_ATTEMPTS, cs)
+      .run();
     return json({ verified: false }, { status: 400 });
   }
   await env.DB.batch([
     env.DB.prepare("UPDATE callsign_verifications SET status='verified', verified_at=? WHERE callsign=?").bind(now, cs),
-    env.DB.prepare("UPDATE accounts SET verified=1, verify_method='aprs_msg', verified_at=? WHERE callsign=?").bind(now, cs),
+    env.DB.prepare("UPDATE accounts SET verified=1, verify_method='aprs_msg', verified_at=? WHERE callsign=?").bind(
+      now,
+      cs,
+    ),
     // mirror onto the held base call (account_callsigns) so a verified call keeps its status when
     // the account later switches its active call to (or away from) this one.
-    env.DB.prepare("UPDATE account_callsigns SET verified=1, method='aprs_msg', verified_at=? WHERE callsign=?").bind(now, cs),
+    env.DB.prepare("UPDATE account_callsigns SET verified=1, method='aprs_msg', verified_at=? WHERE callsign=?").bind(
+      now,
+      cs,
+    ),
   ]);
   return json({ verified: true });
 }
 
 export async function isCallsignVerified(env: Env, callsign: string): Promise<boolean> {
-  const r = await env.DB.prepare("SELECT status FROM callsign_verifications WHERE callsign = ?").bind(callsign).first<{ status: string }>();
+  const r = await env.DB.prepare("SELECT status FROM callsign_verifications WHERE callsign = ?")
+    .bind(callsign)
+    .first<{ status: string }>();
   return r?.status === "verified";
 }
 

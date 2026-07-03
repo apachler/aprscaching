@@ -13,7 +13,10 @@ describe("sitemap (manifest-driven)", () => {
     expect(new Set(keys).size).toBe(keys.length);
     const views = SURFACES.map((s) => s.view).filter(Boolean);
     expect(new Set(views).size).toBe(views.length);
-    for (const s of SURFACES) { expect(s.label).toBeTruthy(); expect(s.summary).toBeTruthy(); }
+    for (const s of SURFACES) {
+      expect(s.label).toBeTruthy();
+      expect(s.summary).toBeTruthy();
+    }
     expect(SURFACES.filter((s) => s.view === null)).toHaveLength(1); // exactly one root (map)
   });
 
@@ -35,7 +38,7 @@ describe("sitemap (manifest-driven)", () => {
   });
 
   it("/api/sitemap exposes the full manifest + feed catalogue with absolute urls", async () => {
-    const data = await handleSitemapJson(req, env).json() as any;
+    const data = (await handleSitemapJson(req, env).json()) as any;
     expect(data.protocol).toBe("aprscaching-sitemap/1");
     expect(data.app).toBe("https://app.example");
     expect(data.surfaces).toHaveLength(SURFACES.length);

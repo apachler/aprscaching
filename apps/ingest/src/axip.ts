@@ -21,9 +21,9 @@ import type { Packet } from "@aprsweb/shared";
 
 /** Strip an IPv4 header, returning the payload (the AX.25 frame), or null if it isn't a v4 datagram. */
 export function stripIpv4Header(datagram: Uint8Array): Uint8Array | null {
-  if (datagram.length < 20) return null;               // minimum IPv4 header
-  if ((datagram[0]! >> 4) !== 4) return null;          // version must be 4
-  const ihl = (datagram[0]! & 0x0f) * 4;               // header length (32-bit words → bytes)
+  if (datagram.length < 20) return null; // minimum IPv4 header
+  if (datagram[0]! >> 4 !== 4) return null; // version must be 4
+  const ihl = (datagram[0]! & 0x0f) * 4; // header length (32-bit words → bytes)
   if (ihl < 20 || ihl > datagram.length) return null;
   return datagram.subarray(ihl);
 }
@@ -39,9 +39,15 @@ export function axipToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now() 
   const f = (stripped && decodeAx25(stripped)) || decodeAx25(datagram);
   if (!f) return null;
   return {
-    src: f.src, dst: f.dst, path: f.path, payload: f.payload,
-    kind: "other", heardVia: "aprs_is", port: "axip",   // tunnelled → never first-party attested
-    ts: nowS, raw: f.raw,
+    src: f.src,
+    dst: f.dst,
+    path: f.path,
+    payload: f.payload,
+    kind: "other",
+    heardVia: "aprs_is",
+    port: "axip", // tunnelled → never first-party attested
+    ts: nowS,
+    raw: f.raw,
   };
 }
 
@@ -50,12 +56,18 @@ export function axipToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now() 
  * — a raw proto-93 socket lets the kernel build it (it only writes the payload) — so the AXIP payload is
  * simply the bare AX.25 frame, identical to `frameToAxudp`. Symmetric with `axipToPacket`'s decode.
  */
-export function frameToAxip(f: Ax25Frame): Uint8Array { return encodeFrame(f); }
+export function frameToAxip(f: Ax25Frame): Uint8Array {
+  return encodeFrame(f);
+}
 
-const AX25_PROTO = 93;                                    // IANA IP protocol number for AX.25
-export interface AxipOpts { bind?: string }
+const AX25_PROTO = 93; // IANA IP protocol number for AX.25
+export interface AxipOpts {
+  bind?: string;
+}
 /** An AXIP peer is just an IP host (no port — AXIP rides IP proto 93 directly, not UDP). */
-export interface AxipPeer { host: string }
+export interface AxipPeer {
+  host: string;
+}
 
 /** The tiny slice of the optional `raw-socket` API we use (kept local so the dep stays out of the build). */
 interface RawSocket {
@@ -63,26 +75,42 @@ interface RawSocket {
   send(buf: Buffer, off: number, len: number, addr: string, cb?: (err: unknown) => void): void;
   close?(): void;
 }
-interface RawSocketModule { createSocket(opts: { protocol: number }): RawSocket }
+interface RawSocketModule {
+  createSocket(opts: { protocol: number }): RawSocket;
+}
 
 async function openRawSocket(): Promise<RawSocket | null> {
-  const pkg = "raw-socket";                              // dynamic + non-literal so tsc doesn't require the dep
-  try { return ((await import(pkg)) as RawSocketModule).createSocket({ protocol: AX25_PROTO }); }
-  catch { console.warn("[axip] optional 'raw-socket' package not installed — AXIP disabled (npm i raw-socket, needs CAP_NET_RAW)"); return null; }
+  const pkg = "raw-socket"; // dynamic + non-literal so tsc doesn't require the dep
+  try {
+    return ((await import(pkg)) as RawSocketModule).createSocket({ protocol: AX25_PROTO });
+  } catch {
+    console.warn(
+      "[axip] optional 'raw-socket' package not installed — AXIP disabled (npm i raw-socket, needs CAP_NET_RAW)",
+    );
+    return null;
+  }
 }
 
 /** RX-only AXIP listener over a raw IP proto-93 socket (opt-in; tunnelled frames stay Tier C). */
 export class AxipListener {
   private sock?: RawSocket;
-  constructor(private o: AxipOpts, private onPacket: (p: Packet) => void) {}
+  constructor(
+    private o: AxipOpts,
+    private onPacket: (p: Packet) => void,
+  ) {}
 
   async start(): Promise<void> {
     const s = await openRawSocket();
     if (!s) return;
     this.sock = s;
-    s.on("message", (buf: unknown) => { const p = axipToPacket(Uint8Array.from(buf as Buffer)); if (p) this.onPacket(p); });
+    s.on("message", (buf: unknown) => {
+      const p = axipToPacket(Uint8Array.from(buf as Buffer));
+      if (p) this.onPacket(p);
+    });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
-    console.log(`[axip] listening IP proto/${AX25_PROTO}${this.o.bind ? ` on ${this.o.bind}` : ""} (tunnelled AX.25 — Tier C only)`);
+    console.log(
+      `[axip] listening IP proto/${AX25_PROTO}${this.o.bind ? ` on ${this.o.bind}` : ""} (tunnelled AX.25 — Tier C only)`,
+    );
   }
 }
 
@@ -98,7 +126,10 @@ export class AxipPort {
   private sock?: RawSocket;
   private rawCbs: ((b: Uint8Array) => void)[] = [];
   private frameCbs: ((f: Ax25Frame) => void)[] = [];
-  constructor(private o: AxipOpts & { peers: AxipPeer[] }, private onPacket?: (p: Packet) => void) {}
+  constructor(
+    private o: AxipOpts & { peers: AxipPeer[] },
+    private onPacket?: (p: Packet) => void,
+  ) {}
 
   async start(): Promise<void> {
     const s = await openRawSocket();
@@ -106,7 +137,7 @@ export class AxipPort {
     this.sock = s;
     s.on("message", (buf: unknown) => {
       const bytes = Uint8Array.from(buf as Buffer);
-      const body = stripIpv4Header(bytes) ?? bytes;      // connected-mode consumers want the bare frame
+      const body = stripIpv4Header(bytes) ?? bytes; // connected-mode consumers want the bare frame
       for (const cb of this.rawCbs) cb(body);
       const f = decodeFrame(body);
       if (f) for (const cb of this.frameCbs) cb(f);
@@ -114,7 +145,9 @@ export class AxipPort {
       if (p && this.onPacket) this.onPacket(p);
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
-    console.log(`[axip] port IP proto/${AX25_PROTO} ↔ ${this.o.peers.map((p) => p.host).join(", ") || "(no peers)"} (Tier C)`);
+    console.log(
+      `[axip] port IP proto/${AX25_PROTO} ↔ ${this.o.peers.map((p) => p.host).join(", ") || "(no peers)"} (Tier C)`,
+    );
   }
 
   /** Send a full AX.25 frame to every configured peer (best-effort). The kernel adds the IP header. */
@@ -122,15 +155,30 @@ export class AxipPort {
     if (!this.sock) return false;
     const bytes = Buffer.from(frameToAxip(f));
     let ok = false;
-    for (const p of this.o.peers) { try { this.sock.send(bytes, 0, bytes.length, p.host); ok = true; } catch { /* drop */ } }
+    for (const p of this.o.peers) {
+      try {
+        this.sock.send(bytes, 0, bytes.length, p.host);
+        ok = true;
+      } catch {
+        /* drop */
+      }
+    }
     return ok;
   }
 
-  onRaw(cb: (b: Uint8Array) => void): void { this.rawCbs.push(cb); }
-  onFrame(cb: (f: Ax25Frame) => void): void { this.frameCbs.push(cb); }
+  onRaw(cb: (b: Uint8Array) => void): void {
+    this.rawCbs.push(cb);
+  }
+  onFrame(cb: (f: Ax25Frame) => void): void {
+    this.frameCbs.push(cb);
+  }
 }
 
 /** Parse "host,host" into AXIP peers (no port — AXIP is IP-proto-93, not UDP). */
 export function parseAxipPeers(spec: string): AxipPeer[] {
-  return spec.split(",").map((s) => s.trim()).filter(Boolean).map((host) => ({ host }));
+  return spec
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((host) => ({ host }));
 }

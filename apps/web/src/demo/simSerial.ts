@@ -12,11 +12,19 @@ interface FakePort {
 }
 
 function makeFakePort(): FakePort {
-  const writable = new WritableStream<Uint8Array>({ write() { /* sink the CAT bytes */ } });
+  const writable = new WritableStream<Uint8Array>({
+    write() {
+      /* sink the CAT bytes */
+    },
+  });
   return {
     writable,
-    async open() { /* no-op: the fake port is always "open" */ },
-    async close() { /* no-op */ },
+    async open() {
+      /* no-op: the fake port is always "open" */
+    },
+    async close() {
+      /* no-op */
+    },
   };
 }
 
@@ -26,9 +34,14 @@ export function installSerialSim(): void {
   if ((nav.serial as { __sim?: boolean } | undefined)?.__sim) return;
   const serial = {
     __sim: true,
-    async requestPort(): Promise<FakePort> { return makeFakePort(); },
-    async getPorts(): Promise<FakePort[]> { return []; },
-    addEventListener() {}, removeEventListener() {},
+    async requestPort(): Promise<FakePort> {
+      return makeFakePort();
+    },
+    async getPorts(): Promise<FakePort[]> {
+      return [];
+    },
+    addEventListener() {},
+    removeEventListener() {},
   };
   // navigator.serial is a getter-only accessor in real Chromium — defineProperty overrides it.
   Object.defineProperty(navigator, "serial", { configurable: true, value: serial });

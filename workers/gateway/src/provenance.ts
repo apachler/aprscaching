@@ -20,7 +20,7 @@ import type { Transport, Provenance } from "@aprsweb/shared";
 export interface RawProvenance {
   heard_via: "rf" | "aprs_is" | "app" | string;
   igate_call?: string | null;
-  path?: string | null;            // stored APRS path incl. the q-construct
+  path?: string | null; // stored APRS path incl. the q-construct
   ts?: number;
 }
 
@@ -29,13 +29,21 @@ const RF_QCONSTRUCT = /^q(AR|AO)$/;
 
 /** Pull the qXX token out of a stored comma path (e.g. "WIDE1-1,qAR,OE8XXX"). */
 export function qConstructOf(path?: string | null): string | undefined {
-  for (const t of (path ?? "").split(",")) { const s = t.trim(); if (/^q[A-Z]{2}$/.test(s)) return s; }
+  for (const t of (path ?? "").split(",")) {
+    const s = t.trim();
+    if (/^q[A-Z]{2}$/.test(s)) return s;
+  }
   return undefined;
 }
 
 /** Parse a comma/space list of attested site callsigns (uppercased); empty ⇒ no explicit allowlist. */
 export function parseAttestedSites(raw?: string | null): Set<string> {
-  return new Set((raw ?? "").split(/[,\s]+/).map((s) => s.trim().toUpperCase()).filter(Boolean));
+  return new Set(
+    (raw ?? "")
+      .split(/[,\s]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean),
+  );
 }
 
 /** Map how a stored position reached us onto the reserved transport enum. */

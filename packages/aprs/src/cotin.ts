@@ -5,15 +5,26 @@
  * cot.ts handles the outbound direction.
  */
 export interface CotFix {
-  callsign: string; lat: number; lon: number;
-  altitudeM?: number; course?: number; speedKn?: number; comment?: string;
+  callsign: string;
+  lat: number;
+  lon: number;
+  altitudeM?: number;
+  course?: number;
+  speedKn?: number;
+  comment?: string;
 }
 
 const attr = (s: string, tag: string, name: string): string | undefined => {
   const m = new RegExp(`<${tag}\\b[^>]*\\b${name}="([^"]*)"`, "i").exec(s);
   return m ? m[1] : undefined;
 };
-const unesc = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+const unesc = (s: string) =>
+  s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 const MS_TO_KN = 1 / 0.514444;
 
 /** Parse one CoT <event>. null if it carries no usable point. */
@@ -22,9 +33,11 @@ export function parseCot(xml: string): CotFix | null {
   const lon = Number(attr(xml, "point", "lon"));
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
 
-  const callsign = (attr(xml, "contact", "callsign")
-    ?? attr(xml, "event", "uid")?.replace(/^APRS\./, "")
-    ?? "CoT").toUpperCase();
+  const callsign = (
+    attr(xml, "contact", "callsign") ??
+    attr(xml, "event", "uid")?.replace(/^APRS\./, "") ??
+    "CoT"
+  ).toUpperCase();
 
   const fix: CotFix = { callsign, lat, lon };
   const hae = Number(attr(xml, "point", "hae"));

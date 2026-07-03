@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import {
-  rigctldSetFreq, rigctldGetFreq, rigctldSetMode, rigctldSetPtt, rigctldDumpState,
-  parseRprt, parseFreqReply, parseModeReply, RigctldClient, type RigctldTransport,
+  rigctldSetFreq,
+  rigctldGetFreq,
+  rigctldSetMode,
+  rigctldSetPtt,
+  rigctldDumpState,
+  parseRprt,
+  parseFreqReply,
+  parseModeReply,
+  RigctldClient,
+  type RigctldTransport,
 } from "../src/index.js";
 
 describe("Hamlib rigctld client", () => {
@@ -37,7 +45,7 @@ describe("Hamlib rigctld client", () => {
         if (line === "f\n") return "14074000\n";
         if (line === "m\n") return "USB\n2400\n";
         if (line === "t\n") return "1\n";
-        return "RPRT 0\n";                 // every set succeeds
+        return "RPRT 0\n"; // every set succeeds
       },
     };
     const rig = new RigctldClient(tx);

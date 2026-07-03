@@ -10,7 +10,11 @@ export function ErrorState(props: { children?: ReactNode; onRetry?: () => void }
   return (
     <div className="empty">
       <p className="error">{props.children ?? "Couldn't load this — check your connection and try again."}</p>
-      {props.onRetry && <div className="empty-action"><button onClick={props.onRetry}>Retry</button></div>}
+      {props.onRetry && (
+        <div className="empty-action">
+          <button onClick={props.onRetry}>Retry</button>
+        </div>
+      )}
     </div>
   );
 }

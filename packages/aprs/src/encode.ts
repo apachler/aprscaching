@@ -7,12 +7,12 @@
 
 /** Degrees → APRS ddmm.mmH (lat: 2°+2'+.+2; lon: 3°+2'+.+2). */
 function degMin(deg: number, isLat: boolean): string {
-  const hemi = isLat ? (deg < 0 ? "S" : "N") : (deg < 0 ? "W" : "E");
+  const hemi = isLat ? (deg < 0 ? "S" : "N") : deg < 0 ? "W" : "E";
   const v = Math.abs(deg);
   const d = Math.floor(v);
   const m = (v - d) * 60;
   const dd = String(d).padStart(isLat ? 2 : 3, "0");
-  const mm = m.toFixed(2).padStart(5, "0");   // "MM.mm"
+  const mm = m.toFixed(2).padStart(5, "0"); // "MM.mm"
   return `${dd}${mm}${hemi}`;
 }
 
@@ -24,7 +24,8 @@ const clean = (s: string): string => s.replace(/[\r\n\x00-\x1f\x7f]/g, "").trim(
  * table+code (default "/>" = car); comment is cleaned + length-capped.
  */
 export function encodeAprsPosition(lat: number, lon: number, symbol = "/>", comment = ""): string {
-  const table = symbol[0] ?? "/", code = symbol[1] ?? ">";
+  const table = symbol[0] ?? "/",
+    code = symbol[1] ?? ">";
   return `!${degMin(lat, true)}${table}${degMin(lon, false)}${code}${clean(comment).slice(0, 43)}`;
 }
 
@@ -40,9 +41,16 @@ export function encodeAprsMessage(addressee: string, text: string, msgNo?: strin
 
 /** Metric weather fields for a WX beacon. All optional; missing → APRS placeholders. */
 export interface WxEncodeFields {
-  tempC?: number; humidity?: number; pressureHpa?: number;
-  windDirDeg?: number; windKn?: number; gustKn?: number;
-  rainMm?: number; rain24hMm?: number; rainMidMm?: number; luminosityWm2?: number;
+  tempC?: number;
+  humidity?: number;
+  pressureHpa?: number;
+  windDirDeg?: number;
+  windKn?: number;
+  gustKn?: number;
+  rainMm?: number;
+  rain24hMm?: number;
+  rainMidMm?: number;
+  luminosityWm2?: number;
 }
 
 const KN_TO_MPH = 1.15078;
@@ -74,8 +82,15 @@ export function encodeAprsWeather(lat: number, lon: number, wx: WxEncodeFields):
   if (wx.rainMm != null) s += `r${wx3(wx.rainMm / MM_PER_HUNDREDTH_INCH)}`;
   if (wx.rain24hMm != null) s += `p${wx3(wx.rain24hMm / MM_PER_HUNDREDTH_INCH)}`;
   if (wx.rainMidMm != null) s += `P${wx3(wx.rainMidMm / MM_PER_HUNDREDTH_INCH)}`;
-  if (wx.humidity != null) { const h = Math.round(wx.humidity); s += `h${String(h >= 100 ? 0 : Math.max(0, h)).padStart(2, "0")}`; }
-  if (wx.pressureHpa != null) s += `b${String(Math.max(0, Math.min(99999, Math.round(wx.pressureHpa * 10)))).padStart(5, "0")}`;
-  if (wx.luminosityWm2 != null) { const l = Math.max(0, Math.round(wx.luminosityWm2)); s += l < 1000 ? `L${wx3(l)}` : `l${wx3(l - 1000)}`; }
+  if (wx.humidity != null) {
+    const h = Math.round(wx.humidity);
+    s += `h${String(h >= 100 ? 0 : Math.max(0, h)).padStart(2, "0")}`;
+  }
+  if (wx.pressureHpa != null)
+    s += `b${String(Math.max(0, Math.min(99999, Math.round(wx.pressureHpa * 10)))).padStart(5, "0")}`;
+  if (wx.luminosityWm2 != null) {
+    const l = Math.max(0, Math.round(wx.luminosityWm2));
+    s += l < 1000 ? `L${wx3(l)}` : `l${wx3(l - 1000)}`;
+  }
   return s;
 }

@@ -20,7 +20,12 @@ const COOLDOWN_MS = 2000;
 const lastRun = new Map<string, number>(); // "push:<instance>" | "pull:<instance>" -> last-acted ms
 
 /** Pure (injectable map/clock for tests): has `key` cooled down enough to act again? Stamps on yes. */
-export function gossipDue(key: string, nowMs: number, lastMap: Map<string, number> = lastRun, cooldownMs = COOLDOWN_MS): boolean {
+export function gossipDue(
+  key: string,
+  nowMs: number,
+  lastMap: Map<string, number> = lastRun,
+  cooldownMs = COOLDOWN_MS,
+): boolean {
   const prev = lastMap.get(key);
   if (prev != null && nowMs - prev < cooldownMs) return false;
   lastMap.set(key, nowMs);
@@ -30,10 +35,12 @@ export function gossipDue(key: string, nowMs: number, lastMap: Map<string, numbe
 /** Which write routes create/change federated records → worth a gossip ping. */
 export function isFederatedWrite(method: string, p: string): boolean {
   if (method !== "POST") return false;
-  return p === "/api/caches"                                  // new cache
-    || /^\/api\/caches\/\d+\/logs$/.test(p)                   // new find
-    || p === "/keys/register"                                 // new callsign key
-    || /^\/api\/account\/[A-Za-z0-9-]+\/delete$/.test(p);     // tombstones (delete propagation)
+  return (
+    p === "/api/caches" || // new cache
+    /^\/api\/caches\/\d+\/logs$/.test(p) || // new find
+    p === "/keys/register" || // new callsign key
+    /^\/api\/account\/[A-Za-z0-9-]+\/delete$/.test(p)
+  ); // tombstones (delete propagation)
 }
 
 /** Receiver: a peer says "come pull." Coalesce, then trigger an incremental sync off the response path. */
@@ -52,13 +59,19 @@ export async function notifyPeers(env: Env): Promise<void> {
   if (!env.INSTANCE) return;
   if (!gossipDue(`push:${env.INSTANCE}`, Date.now())) return; // coalesce a burst of writes into one round
   const peers = await listEnabledPeers(env);
-  await Promise.all(peers.map(async (p) => {
-    const base = p.url.replace(/\/+$/, "");
-    try {
-      await fetch(`${base}/federation/notify`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instance: env.INSTANCE }), signal: AbortSignal.timeout(3000),
-      });
-    } catch { /* best-effort; the 5-min poll is the backstop */ }
-  }));
+  await Promise.all(
+    peers.map(async (p) => {
+      const base = p.url.replace(/\/+$/, "");
+      try {
+        await fetch(`${base}/federation/notify`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ instance: env.INSTANCE }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch {
+        /* best-effort; the 5-min poll is the backstop */
+      }
+    }),
+  );
 }

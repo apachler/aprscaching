@@ -22,7 +22,14 @@ export async function handleDecode(req: Request): Promise<Response> {
   const data = decodeAprs(frame);
   return json({
     ok: true,
-    frame: { src: frame.src, dst: frame.dst, path: frame.path, payload: frame.payload, heardVia: q.heardVia, igateCall: q.igateCall },
+    frame: {
+      src: frame.src,
+      dst: frame.dst,
+      path: frame.path,
+      payload: frame.payload,
+      heardVia: q.heardVia,
+      igateCall: q.igateCall,
+    },
     data,
   });
 }
@@ -40,7 +47,10 @@ function bbox(u: URL): { sql: string; binds: number[] } {
 /** Split a stored roles csv into the typed array, dropping blanks/unknowns. */
 function rolesArr(csv: string | null): string[] | undefined {
   if (!csv) return undefined;
-  const arr = csv.split(",").map((s) => s.trim()).filter(Boolean);
+  const arr = csv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return arr.length ? arr : undefined;
 }
 
@@ -49,23 +59,31 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 7 * 86400);
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 500) || 500, 1), 2000);
   const bb = bbox(u);
-  const rows = (await env.DB.prepare(
-    `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
+  const rows = (
+    await env.DB.prepare(
+      `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
             s.comment, s.last_seen AS lastSeen, a.roles AS roles
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign
       WHERE s.lat IS NOT NULL AND s.last_seen >= ?${bb.sql}
       ORDER BY s.last_seen DESC LIMIT ?`,
-  ).bind(now() - maxAge, ...bb.binds, limit).all<{ roles: string | null }>()).results;
+    )
+      .bind(now() - maxAge, ...bb.binds, limit)
+      .all<{ roles: string | null }>()
+  ).results;
   return json({ stations: rows.map((r) => ({ ...r, roles: rolesArr(r.roles) })) });
 }
 
 // ------------------------------------------------------------- transports (ports)
 export async function handlePorts(_req: Request, env: Env): Promise<Response> {
   const since = now() - 24 * 3600;
-  const rows = (await env.DB.prepare(
-    `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket
+  const rows = (
+    await env.DB.prepare(
+      `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket
        FROM port_stats WHERE ts >= ? GROUP BY port ORDER BY rx DESC`,
-  ).bind(since).all<{ port: string; rx: number; tx: number; lastBucket: number }>()).results;
+    )
+      .bind(since)
+      .all<{ port: string; rx: number; tx: number; lastBucket: number }>()
+  ).results;
   return json({ window: "24h", ports: rows });
 }
 
@@ -77,11 +95,20 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   const bulletins = u.searchParams.get("bulletins") === "1";
   let sql = "SELECT id, ts, from_call AS fromCall, to_call AS toCall, body, direction FROM messages WHERE 1=1";
   const binds: (string | number)[] = [];
-  if (to) { sql += " AND to_call = ?"; binds.push(to.toUpperCase()); }
-  else if (bulletins) { sql += " AND (to_call LIKE 'BLN%' OR to_call LIKE 'NWS%' OR to_call LIKE 'SKY%')"; }
+  if (to) {
+    sql += " AND to_call = ?";
+    binds.push(to.toUpperCase());
+  } else if (bulletins) {
+    sql += " AND (to_call LIKE 'BLN%' OR to_call LIKE 'NWS%' OR to_call LIKE 'SKY%')";
+  }
   const ks = keyset(pg.cursor, "ts", "id");
-  sql += `${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`; binds.push(...ks.binds, pg.limit + 1);
-  const rows = (await env.DB.prepare(sql).bind(...binds).all()).results as any[];
+  sql += `${ks.sql} ORDER BY ts DESC, id DESC LIMIT ?`;
+  binds.push(...ks.binds, pg.limit + 1);
+  const rows = (
+    await env.DB.prepare(sql)
+      .bind(...binds)
+      .all()
+  ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
   return json({ messages: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
@@ -92,19 +119,29 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
     `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
             s.comment, s.last_seen AS lastSeen, a.roles AS roles
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
-  ).bind(cs).first<{ roles: string | null }>();
+  )
+    .bind(cs)
+    .first<{ roles: string | null }>();
   if (!st) return json({ error: "unknown station" }, { status: 404 });
   const stRoles = rolesArr(st.roles);
 
-  const track = (await env.DB.prepare(
-    "SELECT ts, lat, lon, heard_via AS heardVia FROM positions WHERE callsign = ? ORDER BY ts DESC LIMIT 50",
-  ).bind(cs).all()).results;
+  const track = (
+    await env.DB.prepare(
+      "SELECT ts, lat, lon, heard_via AS heardVia FROM positions WHERE callsign = ? ORDER BY ts DESC LIMIT 50",
+    )
+      .bind(cs)
+      .all()
+  ).results;
   const wx = await env.DB.prepare(
     `SELECT ts, temp_c AS tempC, humidity, pressure_hpa AS pressureHpa,
             wind_dir AS windDirDeg, wind_kn AS windKn, rain_mm AS rainMm
        FROM sensor_readings WHERE station = ? ORDER BY ts DESC LIMIT 1`,
-  ).bind(cs).first();
-  const pc = await env.DB.prepare("SELECT COUNT(*) AS n FROM positions WHERE callsign = ?").bind(cs).first<{ n: number }>();
+  )
+    .bind(cs)
+    .first();
+  const pc = await env.DB.prepare("SELECT COUNT(*) AS n FROM positions WHERE callsign = ?")
+    .bind(cs)
+    .first<{ n: number }>();
 
   return json({ station: { ...st, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0 } });
 }
@@ -123,18 +160,26 @@ export async function handleStationSeries(req: Request, env: Env, callsign: stri
   const cap = 2_000;
   const since = now() - windowSec;
 
-  const wx = (await env.DB.prepare(
-    `SELECT ts, temp_c AS tempC, humidity, pressure_hpa AS pressureHpa, wind_kn AS windKn,
+  const wx = (
+    await env.DB.prepare(
+      `SELECT ts, temp_c AS tempC, humidity, pressure_hpa AS pressureHpa, wind_kn AS windKn,
             gust_kn AS gustKn, rain_mm AS rainMm, rain_24h_mm AS rain24hMm
        FROM sensor_readings WHERE station = ? AND ts >= ? ORDER BY ts DESC LIMIT ?`,
-  ).bind(cs, since, cap).all()).results.reverse();
+    )
+      .bind(cs, since, cap)
+      .all()
+  ).results.reverse();
 
-  const motion = (await env.DB.prepare(
-    `SELECT ts, speed_kn AS speedKn, altitude_m AS altitudeM, course
+  const motion = (
+    await env.DB.prepare(
+      `SELECT ts, speed_kn AS speedKn, altitude_m AS altitudeM, course
        FROM positions
       WHERE callsign = ? AND ts >= ? AND (speed_kn IS NOT NULL OR altitude_m IS NOT NULL OR course IS NOT NULL)
       ORDER BY ts DESC LIMIT ?`,
-  ).bind(cs, since, cap).all()).results.reverse();
+    )
+      .bind(cs, since, cap)
+      .all()
+  ).results.reverse();
 
   return json({ callsign: cs, windowSec, wx, motion });
 }
@@ -148,11 +193,20 @@ export async function handleStationPackets(req: Request, env: Env, callsign: str
   const cs = callsign.toUpperCase();
   const u = new URL(req.url);
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit")) || 50, 1), 200);
-  const rows = (await env.DB.prepare(
-    `SELECT ts, dst, path, payload, heard_via AS heardVia, port
+  const rows = (
+    await env.DB.prepare(
+      `SELECT ts, dst, path, payload, heard_via AS heardVia, port
        FROM packets_recent WHERE callsign = ? ORDER BY ts DESC LIMIT ?`,
-  ).bind(cs, limit).all()).results as {
-    ts: number; dst: string | null; path: string | null; payload: string | null; heardVia: string | null; port: string | null;
+    )
+      .bind(cs, limit)
+      .all()
+  ).results as {
+    ts: number;
+    dst: string | null;
+    path: string | null;
+    payload: string | null;
+    heardVia: string | null;
+    port: string | null;
   }[];
   const packets = rows.map((r) => {
     const path = r.path ? `,${r.path}` : "";

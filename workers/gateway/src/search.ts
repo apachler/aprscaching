@@ -16,8 +16,22 @@ export function likeEscape(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-interface CacheHitRow { id: number; code: string; owner_call: string; title: string; type: string; lat: number | null; lon: number | null }
-interface StationHitRow { callsign: string; symbol: string | null; lat: number | null; lon: number | null; comment: string | null }
+interface CacheHitRow {
+  id: number;
+  code: string;
+  owner_call: string;
+  title: string;
+  type: string;
+  lat: number | null;
+  lon: number | null;
+}
+interface StationHitRow {
+  callsign: string;
+  symbol: string | null;
+  lat: number | null;
+  lon: number | null;
+  comment: string | null;
+}
 
 export async function handleSearch(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
@@ -26,12 +40,14 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
   if (q.length < 2) return json({ caches: [], stations: [] } satisfies SearchResults);
 
   const esc = likeEscape(q);
-  const contains = `%${esc}%`, prefix = `${esc}%`;
+  const contains = `%${esc}%`,
+    prefix = `${esc}%`;
 
   // Caches: contains-match across code/title/owner; rank prefix-of-code first, then code, then title.
   // Plain positional ? (bound repeatedly) for portability — D1 doesn't reliably support ?N reuse.
-  const cacheRows = (await env.DB.prepare(
-    `SELECT id, code, owner_call, title, type, lat, lon FROM caches
+  const cacheRows = (
+    await env.DB.prepare(
+      `SELECT id, code, owner_call, title, type, lat, lon FROM caches
        WHERE status != 'archived'
          AND (code LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR owner_call LIKE ? ESCAPE '\\')
        ORDER BY
@@ -41,22 +57,40 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
               ELSE 3 END,
          length(code)
        LIMIT ?`,
-  ).bind(contains, contains, contains, prefix, contains, contains, limit).all<CacheHitRow>()).results;
+    )
+      .bind(contains, contains, contains, prefix, contains, contains, limit)
+      .all<CacheHitRow>()
+  ).results;
 
   // Stations: callsign match, prefix-first then most-recently heard.
-  const stationRows = (await env.DB.prepare(
-    `SELECT callsign, symbol, lat, lon, comment FROM stations
+  const stationRows = (
+    await env.DB.prepare(
+      `SELECT callsign, symbol, lat, lon, comment FROM stations
        WHERE callsign LIKE ? ESCAPE '\\'
        ORDER BY CASE WHEN callsign LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, last_seen DESC
        LIMIT ?`,
-  ).bind(contains, prefix, limit).all<StationHitRow>()).results;
+    )
+      .bind(contains, prefix, limit)
+      .all<StationHitRow>()
+  ).results;
 
   const caches: SearchHitCache[] = cacheRows.map((r) => ({
-    kind: "cache", id: r.id, code: r.code, title: r.title, ownerCall: r.owner_call,
-    type: r.type as CacheType, lat: r.lat, lon: r.lon,
+    kind: "cache",
+    id: r.id,
+    code: r.code,
+    title: r.title,
+    ownerCall: r.owner_call,
+    type: r.type as CacheType,
+    lat: r.lat,
+    lon: r.lon,
   }));
   const stations: SearchHitStation[] = stationRows.map((r) => ({
-    kind: "station", callsign: r.callsign, symbol: r.symbol, lat: r.lat, lon: r.lon, comment: r.comment,
+    kind: "station",
+    callsign: r.callsign,
+    symbol: r.symbol,
+    lat: r.lat,
+    lon: r.lon,
+    comment: r.comment,
   }));
   return json({ caches, stations } satisfies SearchResults);
 }

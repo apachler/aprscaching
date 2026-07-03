@@ -8,23 +8,49 @@
  * ST/SR, K, H, B, A, X (expert), I — with a subject+body collection prompt for sends.
  */
 export type BbsType = "P" | "B" | "T";
-export interface BbsMsgMeta { id: number; type: BbsType; from: string; to: string; subject: string | null; postedAt: number }
-export interface BbsMsgFull extends BbsMsgMeta { body: string; replyTo?: number | null; readAt?: number | null }
+export interface BbsMsgMeta {
+  id: number;
+  type: BbsType;
+  from: string;
+  to: string;
+  subject: string | null;
+  postedAt: number;
+}
+export interface BbsMsgFull extends BbsMsgMeta {
+  body: string;
+  replyTo?: number | null;
+  readAt?: number | null;
+}
 
 export interface MessageStore {
-  listNew(call: string): BbsMsgMeta[];        // unread personal to `call` + recent bulletins
+  listNew(call: string): BbsMsgMeta[]; // unread personal to `call` + recent bulletins
   listAll(): BbsMsgMeta[];
   listBulletins(): BbsMsgMeta[];
   listMine(call: string): BbsMsgMeta[];
-  read(id: number): BbsMsgFull | null;        // implementations may mark personal mail read
-  post(m: { type: BbsType; from: string; to: string; subject: string | null; body: string; replyTo?: number | null }): number;
-  kill(id: number, call: string): boolean;    // only the author/recipient may kill; returns success
+  read(id: number): BbsMsgFull | null; // implementations may mark personal mail read
+  post(m: {
+    type: BbsType;
+    from: string;
+    to: string;
+    subject: string | null;
+    body: string;
+    replyTo?: number | null;
+  }): number;
+  kill(id: number, call: string): boolean; // only the author/recipient may kill; returns success
 }
 
-interface Pending { type: BbsType; to: string; subject: string | null; replyTo: number | null; body: string[]; stage: "subject" | "body" }
+interface Pending {
+  type: BbsType;
+  to: string;
+  subject: string | null;
+  replyTo: number | null;
+  body: string[];
+  stage: "subject" | "body";
+}
 
 const pad = (s: string, n: number) => (s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length));
-const fmtRow = (m: BbsMsgMeta) => `${pad(String(m.id), 5)} ${m.type}  ${pad(m.to, 9)} ${pad(m.from, 9)} ${m.subject ?? ""}`.trimEnd();
+const fmtRow = (m: BbsMsgMeta) =>
+  `${pad(String(m.id), 5)} ${m.type}  ${pad(m.to, 9)} ${pad(m.from, 9)} ${m.subject ?? ""}`.trimEnd();
 
 const HELP = [
   "Commands:",
@@ -43,7 +69,12 @@ export class BbsSession {
   private expert: boolean;
   readonly call: string;
 
-  constructor(callsign: string, private store: MessageStore, private bbsCall = "BBS", opts: { expert?: boolean } = {}) {
+  constructor(
+    callsign: string,
+    private store: MessageStore,
+    private bbsCall = "BBS",
+    opts: { expert?: boolean } = {},
+  ) {
     this.call = callsign.toUpperCase();
     this.expert = opts.expert ?? false;
   }
@@ -58,8 +89,12 @@ export class BbsSession {
     ];
   }
 
-  private prompt(): string { return this.expert ? ">" : `${this.call} de ${this.bbsCall}>`; }
-  private out(...lines: string[]): { lines: string[]; disconnect?: boolean } { return { lines: [...lines, this.prompt()] }; }
+  private prompt(): string {
+    return this.expert ? ">" : `${this.call} de ${this.bbsCall}>`;
+  }
+  private out(...lines: string[]): { lines: string[]; disconnect?: boolean } {
+    return { lines: [...lines, this.prompt()] };
+  }
 
   /** Process one input line; returns the reply lines and an optional disconnect. */
   handle(input: string): { lines: string[]; disconnect?: boolean } {
@@ -72,23 +107,44 @@ export class BbsSession {
     if (!word) return { lines: [this.prompt()] };
 
     switch (word) {
-      case "B": case "BYE": return { lines: [`73 de ${this.bbsCall}`], disconnect: true };
-      case "H": case "?": return this.out(...HELP);
-      case "X": this.expert = !this.expert; return this.out(`Expert mode ${this.expert ? "on" : "off"}.`);
-      case "I": return this.out(`${this.bbsCall} - APRScaching connected-mode BBS. You are ${this.call}.`);
-      case "L": return this.list(this.store.listNew(this.call), "New");
-      case "LA": return this.list(this.store.listAll(), "All");
-      case "LB": return this.list(this.store.listBulletins(), "Bulletins");
-      case "LM": return this.list(this.store.listMine(this.call), "Mine");
-      case "LL": return this.list(this.store.listAll().slice(0, Math.max(1, Number(arg) || 10)), `Last ${Number(arg) || 10}`);
-      case "R": return this.read(rest);
-      case "K": return this.kill(Number(arg));
-      case "A": return this.out("No message in progress.");
-      case "S": case "SP": return this.startSend("P", arg);
-      case "SB": return this.startSend("B", arg);
-      case "ST": return this.startSend("T", arg);
-      case "SR": return this.startReply(Number(arg) || this.lastRead);
-      default: return this.out(`Unknown command "${word}". Type H for help.`);
+      case "B":
+      case "BYE":
+        return { lines: [`73 de ${this.bbsCall}`], disconnect: true };
+      case "H":
+      case "?":
+        return this.out(...HELP);
+      case "X":
+        this.expert = !this.expert;
+        return this.out(`Expert mode ${this.expert ? "on" : "off"}.`);
+      case "I":
+        return this.out(`${this.bbsCall} - APRScaching connected-mode BBS. You are ${this.call}.`);
+      case "L":
+        return this.list(this.store.listNew(this.call), "New");
+      case "LA":
+        return this.list(this.store.listAll(), "All");
+      case "LB":
+        return this.list(this.store.listBulletins(), "Bulletins");
+      case "LM":
+        return this.list(this.store.listMine(this.call), "Mine");
+      case "LL":
+        return this.list(this.store.listAll().slice(0, Math.max(1, Number(arg) || 10)), `Last ${Number(arg) || 10}`);
+      case "R":
+        return this.read(rest);
+      case "K":
+        return this.kill(Number(arg));
+      case "A":
+        return this.out("No message in progress.");
+      case "S":
+      case "SP":
+        return this.startSend("P", arg);
+      case "SB":
+        return this.startSend("B", arg);
+      case "ST":
+        return this.startSend("T", arg);
+      case "SR":
+        return this.startReply(Number(arg) || this.lastRead);
+      default:
+        return this.out(`Unknown command "${word}". Type H for help.`);
     }
   }
 
@@ -103,15 +159,24 @@ export class BbsSession {
     const lines: string[] = [];
     for (const id of nums) {
       const m = this.store.read(id);
-      if (!m) { lines.push(`Message ${id} not found.`); continue; }
+      if (!m) {
+        lines.push(`Message ${id} not found.`);
+        continue;
+      }
       this.lastRead = id;
-      lines.push(`Msg #${m.id}  ${m.type}  ${m.from} > ${m.to}  ${m.subject ?? "(no subject)"}`, ...m.body.split("\n"), "---");
+      lines.push(
+        `Msg #${m.id}  ${m.type}  ${m.from} > ${m.to}  ${m.subject ?? "(no subject)"}`,
+        ...m.body.split("\n"),
+        "---",
+      );
     }
     return this.out(...lines);
   }
   private kill(id: number): { lines: string[]; disconnect?: boolean } {
     if (!id) return this.out("Usage: K <id>");
-    return this.out(this.store.kill(id, this.call) ? `Message ${id} killed.` : `Can't kill ${id} (not found or not yours).`);
+    return this.out(
+      this.store.kill(id, this.call) ? `Message ${id} killed.` : `Can't kill ${id} (not found or not yours).`,
+    );
   }
 
   // ---- sending (subject then body collection) ----
@@ -130,11 +195,19 @@ export class BbsSession {
   private collect(line: string): { lines: string[]; disconnect?: boolean } {
     const p = this.pending!;
     if (p.stage === "subject") {
-      p.subject = line.trim() || null; p.stage = "body";
-      return { lines: ["Enter message, end with /EX or a lone \".\" :"] };
+      p.subject = line.trim() || null;
+      p.stage = "body";
+      return { lines: ['Enter message, end with /EX or a lone "." :'] };
     }
     if (line.trim() === "/EX" || line.trim() === ".") {
-      const id = this.store.post({ type: p.type, from: this.call, to: p.to, subject: p.subject, body: p.body.join("\n"), replyTo: p.replyTo });
+      const id = this.store.post({
+        type: p.type,
+        from: this.call,
+        to: p.to,
+        subject: p.subject,
+        body: p.body.join("\n"),
+        replyTo: p.replyTo,
+      });
       this.pending = null;
       return this.out(`Message ${id} stored (${p.type} to ${p.to}).`);
     }

@@ -7,13 +7,12 @@
  * just the packet terminal, and lets a host ask only for the tools relevant to it.
  */
 export type Surface =
-  | "web"       // the general Tools app / app-wide console (the default home)
-  | "terminal"  // the packet terminal (monitor colour, /commands, panels)
-  | "bbs"       // the BBS surface
-  | "node"      // the NET/ROM node console
-  | "map";      // the map (declarative layers/overlays — reserved, see `map` capability)
+  | "web" // the general Tools app / app-wide console (the default home)
+  | "terminal" // the packet terminal (monitor colour, /commands, panels)
+  | "bbs" // the BBS surface
+  | "node" // the NET/ROM node console
+  | "map"; // the map (declarative layers/overlays — reserved, see `map` capability)
 
 export const ALL_SURFACES: Surface[] = ["web", "terminal", "bbs", "node", "map"];
 
-export const isSurface = (x: unknown): x is Surface =>
-  typeof x === "string" && (ALL_SURFACES as string[]).includes(x);
+export const isSurface = (x: unknown): x is Surface => typeof x === "string" && (ALL_SURFACES as string[]).includes(x);

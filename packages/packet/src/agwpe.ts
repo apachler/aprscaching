@@ -7,11 +7,11 @@
  * validated at deploy against a real engine.
  */
 export interface AgwpeFrame {
-  port: number;        // radio port (Multiport)
-  kind: string;        // DataKind, a single ASCII char ('K' raw AX.25, 'V' UI, 'D' conn data, …)
+  port: number; // radio port (Multiport)
+  kind: string; // DataKind, a single ASCII char ('K' raw AX.25, 'V' UI, 'D' conn data, …)
   pid: number;
-  from: string;        // CallFrom (≤9 chars)
-  to: string;          // CallTo
+  from: string; // CallFrom (≤9 chars)
+  to: string; // CallTo
   data: Uint8Array;
 }
 
@@ -20,7 +20,13 @@ const putAscii = (view: Uint8Array, off: number, s: string, len: number) => {
   for (let i = 0; i < len; i++) view[off + i] = i < s.length ? s.charCodeAt(i) & 0xff : 0;
 };
 const getAscii = (view: Uint8Array, off: number, len: number) => {
-  let s = ""; for (let i = 0; i < len; i++) { const c = view[off + i]!; if (c === 0) break; s += String.fromCharCode(c); } return s;
+  let s = "";
+  for (let i = 0; i < len; i++) {
+    const c = view[off + i]!;
+    if (c === 0) break;
+    s += String.fromCharCode(c);
+  }
+  return s;
 };
 
 /** Encode one AGWPE frame to bytes (header + data). */
@@ -33,7 +39,7 @@ export function encodeAgwpe(f: Partial<AgwpeFrame> & { kind: string }): Uint8Arr
   out[6] = f.pid ?? 0;
   putAscii(out, 8, (f.from ?? "").toUpperCase(), 10);
   putAscii(out, 18, (f.to ?? "").toUpperCase(), 10);
-  dv.setUint32(28, data.length, true);   // DataLen, little-endian
+  dv.setUint32(28, data.length, true); // DataLen, little-endian
   // bytes 32..35 (User) left 0
   out.set(data, HEADER);
   return out;
@@ -49,7 +55,7 @@ export function parseAgwpe(buf: Uint8Array): { frames: AgwpeFrame[]; rest: Uint8
   while (buf.length - off >= HEADER) {
     const dv = new DataView(buf.buffer, buf.byteOffset + off);
     const dataLen = dv.getUint32(28, true);
-    if (buf.length - off - HEADER < dataLen) break;        // wait for the full payload
+    if (buf.length - off - HEADER < dataLen) break; // wait for the full payload
     frames.push({
       port: buf[off]!,
       kind: String.fromCharCode(buf[off + 4]!),

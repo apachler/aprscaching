@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
 import {
-  validateManifest, signManifest, checkManifestSignature, signRegistry, verifyRegistry,
-  resolveTrust, bytesToB64, type RegistryEntry, type ToolManifest,
+  validateManifest,
+  signManifest,
+  checkManifestSignature,
+  signRegistry,
+  verifyRegistry,
+  resolveTrust,
+  bytesToB64,
+  type RegistryEntry,
+  type ToolManifest,
 } from "../src/index.js";
 
 async function genKeys() {
@@ -19,7 +26,14 @@ function manifest(input: Record<string, unknown>): ToolManifest {
 describe("manifest signing", () => {
   it("signs + verifies; tampering or the wrong key invalidates it; no sig = unsigned", async () => {
     const { priv, pubB64url } = await genKeys();
-    const base = manifest({ name: "sig-tool", title: "Signed", author: "OE8APR", version: "1.0", permissions: ["command"], pubkey: pubB64url });
+    const base = manifest({
+      name: "sig-tool",
+      title: "Signed",
+      author: "OE8APR",
+      version: "1.0",
+      permissions: ["command"],
+      pubkey: pubB64url,
+    });
     expect(await checkManifestSignature(base)).toBe("unsigned");
     const signed = await signManifest(base, priv);
     expect(await checkManifestSignature(signed)).toBe("valid");
@@ -28,7 +42,10 @@ describe("manifest signing", () => {
     expect(await checkManifestSignature(tampered)).toBe("invalid");
     // a signature made by a different key than the manifest's pubkey
     const other = await genKeys();
-    const mismatched = await signManifest(manifest({ name: "mm", title: "M", author: "X", version: "1", permissions: [], pubkey: other.pubB64url }), priv);
+    const mismatched = await signManifest(
+      manifest({ name: "mm", title: "M", author: "X", version: "1", permissions: [], pubkey: other.pubB64url }),
+      priv,
+    );
     expect(await checkManifestSignature(mismatched)).toBe("invalid");
   });
 });
@@ -36,11 +53,15 @@ describe("manifest signing", () => {
 describe("signed registry (marketplace index)", () => {
   it("verifies against the pinned authority; rejects a wrong authority or edited entries", async () => {
     const auth = await genKeys();
-    const entries: RegistryEntry[] = [{ name: "t", title: "T", author: "OE8APR", version: "1", pubkey: "AAAA", entry: "https://x/tool.json" }];
+    const entries: RegistryEntry[] = [
+      { name: "t", title: "T", author: "OE8APR", version: "1", pubkey: "AAAA", entry: "https://x/tool.json" },
+    ];
     const reg = await signRegistry(entries, auth.pubB64url, auth.priv);
     expect(await verifyRegistry(reg, auth.pubB64url)).toBe(true);
-    expect(await verifyRegistry(reg, "someOtherAuthorityKey")).toBe(false);          // pinned mismatch
-    expect(await verifyRegistry({ ...reg, entries: [...entries, { ...entries[0]!, name: "evil" }] }, auth.pubB64url)).toBe(false); // entries edited after signing
+    expect(await verifyRegistry(reg, "someOtherAuthorityKey")).toBe(false); // pinned mismatch
+    expect(
+      await verifyRegistry({ ...reg, entries: [...entries, { ...entries[0]!, name: "evil" }] }, auth.pubB64url),
+    ).toBe(false); // entries edited after signing
   });
 });
 

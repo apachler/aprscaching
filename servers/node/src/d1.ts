@@ -17,7 +17,11 @@ function norm(values: unknown[]): unknown[] {
 }
 
 class Stmt implements SqlStatement {
-  constructor(private db: DB, private sql: string, private params: unknown[] = []) {}
+  constructor(
+    private db: DB,
+    private sql: string,
+    private params: unknown[] = [],
+  ) {}
 
   bind(...values: unknown[]): SqlStatement {
     return new Stmt(this.db, this.sql, norm(values));
@@ -33,11 +37,15 @@ class Stmt implements SqlStatement {
     return { results: [], meta: { last_row_id: Number(info.lastInsertRowid), changes: info.changes } };
   }
 
-  async run<T = unknown>(): Promise<SqlResult<T>> { return this.execSync() as SqlResult<T>; }
-  async all<T = unknown>(): Promise<SqlResult<T>> { return this.execSync() as SqlResult<T>; }
+  async run<T = unknown>(): Promise<SqlResult<T>> {
+    return this.execSync() as SqlResult<T>;
+  }
+  async all<T = unknown>(): Promise<SqlResult<T>> {
+    return this.execSync() as SqlResult<T>;
+  }
   async first<T = unknown>(): Promise<T | null> {
     const s = this.db.prepare(this.sql);
-    return ((s.get(...this.params) as T | undefined) ?? null);
+    return (s.get(...this.params) as T | undefined) ?? null;
   }
 }
 

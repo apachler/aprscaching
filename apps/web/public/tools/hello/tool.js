@@ -6,7 +6,7 @@ register({
     hello: (args) => [`Hello ${args || "world"} from the imported hello-tool!`],
   },
   colourRules: [
-    { srcPrefix: "OE", colorVar: "--st-user" },   // tint OE-prefixed stations in the monitor
+    { srcPrefix: "OE", colorVar: "--st-user" }, // tint OE-prefixed stations in the monitor
   ],
   panel: {
     title: "Hello tool",
@@ -16,6 +16,14 @@ register({
     ],
   },
   decoders: [
-    { id: "rot13", label: "ROT13", kind: "text", decode: (s) => s.replace(/[a-z]/gi, (c) => String.fromCharCode((c <= "Z" ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26)) },
+    {
+      id: "rot13",
+      label: "ROT13",
+      kind: "text",
+      decode: (s) =>
+        s.replace(/[a-z]/gi, (c) =>
+          String.fromCharCode((c <= "Z" ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26),
+        ),
+    },
   ],
 });

@@ -13,14 +13,30 @@
 const stableStringify = (v) => {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
-  return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(",")}}`;
+  return `{${Object.keys(v)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`)
+    .join(",")}}`;
 };
-const readStdin = () => new Promise((res) => { let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => res(s)); });
+const readStdin = () =>
+  new Promise((res) => {
+    let s = "";
+    process.stdin.on("data", (d) => (s += d));
+    process.stdin.on("end", () => res(s));
+  });
 
 const raw = process.argv[2] ?? (await readStdin());
 let entries;
-try { entries = JSON.parse(raw); } catch { console.error("pass a JSON array of registry entries as argv[2] or on stdin"); process.exit(1); }
-if (!Array.isArray(entries)) { console.error("entries must be a JSON array"); process.exit(1); }
+try {
+  entries = JSON.parse(raw);
+} catch {
+  console.error("pass a JSON array of registry entries as argv[2] or on stdin");
+  process.exit(1);
+}
+if (!Array.isArray(entries)) {
+  console.error("entries must be a JSON array");
+  process.exit(1);
+}
 
 let pkcs8, pub;
 if (process.env.AUTHORITY) {
@@ -34,7 +50,7 @@ const priv = await crypto.subtle.importKey("pkcs8", Buffer.from(pkcs8, "base64")
 
 const at = Math.floor(Date.now() / 1000);
 const sig = Buffer.from(
-  await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(stableStringify({ at, entries })))
+  await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(stableStringify({ at, entries }))),
 ).toString("base64url");
 const doc = { entries, at, sig, signer: pub };
 
@@ -44,5 +60,7 @@ if (process.argv.includes("--raw")) {
   console.log("FED_REGISTRY=" + JSON.stringify(doc) + "\n");
   console.log("FED_REGISTRY_KEY=" + pub + "  (peers set this to verify the registry)\n");
   if (!process.env.AUTHORITY)
-    console.log("AUTHORITY (keep secret; reuse to re-sign)=" + Buffer.from(JSON.stringify({ pkcs8, pub })).toString("base64"));
+    console.log(
+      "AUTHORITY (keep secret; reuse to re-sign)=" + Buffer.from(JSON.stringify({ pkcs8, pub })).toString("base64"),
+    );
 }

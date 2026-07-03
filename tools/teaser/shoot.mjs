@@ -34,17 +34,21 @@ async function clickCache(page, match) {
 
 // 01 map overview + 02 detail
 {
-  const ctx = await newCtx(1440, 900); const page = await ctx.newPage();
+  const ctx = await newCtx(1440, 900);
+  const page = await ctx.newPage();
   await page.goto(`${BASE}/#11.6/47.083/15.423`, { waitUntil: "load" });
   await ready(page);
-  await page.screenshot({ path: OUT + "01-map.png" }); console.log("01-map");
+  await page.screenshot({ path: OUT + "01-map.png" });
+  console.log("01-map");
   await clickCache(page, "Schlossberg");
-  await page.screenshot({ path: OUT + "02-detail.png" }); console.log("02-detail");
+  await page.screenshot({ path: OUT + "02-detail.png" });
+  console.log("02-detail");
   await ctx.close();
 }
 // 03 hide a cache
 {
-  const ctx = await newCtx(1440, 900); const page = await ctx.newPage();
+  const ctx = await newCtx(1440, 900);
+  const page = await ctx.newPage();
   await page.goto(`${BASE}/#13/47.0735/15.4378`, { waitUntil: "load" });
   await ready(page);
   await page.click("button.primary:has-text('Hide a cache')");
@@ -53,16 +57,19 @@ async function clickCache(page, match) {
   await page.waitForTimeout(500);
   await page.fill('.panel.left label:has-text("Title") input', "Castle Casemates").catch(() => {});
   await page.waitForTimeout(400);
-  await page.screenshot({ path: OUT + "03-hide.png" }); console.log("03-hide");
+  await page.screenshot({ path: OUT + "03-hide.png" });
+  console.log("03-hide");
   await ctx.close();
 }
 // 04 mobile detail
 {
-  const ctx = await newCtx(390, 844, 3); const page = await ctx.newPage();
+  const ctx = await newCtx(390, 844, 3);
+  const page = await ctx.newPage();
   await page.goto(`${BASE}/#13/47.0735/15.4378`, { waitUntil: "load" });
   await ready(page);
   await clickCache(page, "Schlossberg");
-  await page.screenshot({ path: OUT + "04-mobile.png" }); console.log("04-mobile");
+  await page.screenshot({ path: OUT + "04-mobile.png" });
+  console.log("04-mobile");
   await ctx.close();
 }
 await browser.close();

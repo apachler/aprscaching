@@ -20,7 +20,13 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
     if (!navigator.geolocation) return Promise.resolve(undefined);
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracyM: p.coords.accuracy ?? 9999, ts: Math.floor(p.timestamp / 1000) }),
+        (p) =>
+          resolve({
+            lat: p.coords.latitude,
+            lon: p.coords.longitude,
+            accuracyM: p.coords.accuracy ?? 9999,
+            ts: Math.floor(p.timestamp / 1000),
+          }),
         () => resolve(undefined),
         { enableHighAccuracy: true, timeout: 8000 },
       );
@@ -28,8 +34,12 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
   }
 
   async function doLog(logType: LogType, comment?: string) {
-    if (props.callsign.length < 3) { setErr("Set your callsign in the top bar first."); return; }
-    setBusy(logType); setErr(null);
+    if (props.callsign.length < 3) {
+      setErr("Set your callsign in the top bar first.");
+      return;
+    }
+    setBusy(logType);
+    setErr(null);
     try {
       const appGeo = logType === "found" ? await getGeo() : undefined;
       let author;
@@ -40,11 +50,19 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
           author = await signAuthorship({ cache: props.cacheCode, instance, logger: props.callsign, logType, at });
           if (author) await registerKey({ callsign: props.callsign, publicKey: author.authorKey }).catch(() => {});
         }
-      } catch { /* unsupported browser -> log unsigned */ }
+      } catch {
+        /* unsupported browser -> log unsigned */
+      }
       const r = await logFind(props.cacheId, { loggerCall: props.callsign, logType, comment, appGeo, author });
-      setResult(r); setNote(""); setNoteOpen(false); props.onLogged();
-    } catch (e) { setErr((e as Error).message); }
-    finally { setBusy(null); }
+      setResult(r);
+      setNote("");
+      setNoteOpen(false);
+      props.onLogged();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
   }
 
   // the trust badge IS the feedback, shown after the tap (tap it for the "why")
@@ -59,19 +77,50 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
     const verb = result.logType === "found" ? "Logged" : result.logType === "dnf" ? "Marked DNF" : "Note posted";
     return (
       <div className="logresult">
-        <div className="big">{result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}</div>
-        {result.queued
-          ? <div className="muted mt-1"><Ico e="📴 " />offline — will sync when you're back online</div>
-          : <div className="tier">{tierBadge(result)}</div>}
-        {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
-        {result.signerKey && <div className="muted">signed with your device key <Ico e="✍" /></div>}
-        {result.logType === "found" && (noteOpen ? (
-          <div className="mt-3">
-            <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
-            <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post</button></div>
+        <div className="big">
+          {result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}
+        </div>
+        {result.queued ? (
+          <div className="muted mt-1">
+            <Ico e="📴 " />
+            offline — will sync when you're back online
           </div>
-        ) : <button className="link mt-3" onClick={() => setNoteOpen(true)}>add a note</button>)}
-        <div className="mt-3"><button className="link" onClick={() => { setResult(null); setNote(""); setNoteOpen(false); }}>log again</button></div>
+        ) : (
+          <div className="tier">{tierBadge(result)}</div>
+        )}
+        {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
+        {result.signerKey && (
+          <div className="muted">
+            signed with your device key <Ico e="✍" />
+          </div>
+        )}
+        {result.logType === "found" &&
+          (noteOpen ? (
+            <div className="mt-3">
+              <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
+              <div className="row end">
+                <button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
+                  Post
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="link mt-3" onClick={() => setNoteOpen(true)}>
+              add a note
+            </button>
+          ))}
+        <div className="mt-3">
+          <button
+            className="link"
+            onClick={() => {
+              setResult(null);
+              setNote("");
+              setNoteOpen(false);
+            }}
+          >
+            log again
+          </button>
+        </div>
       </div>
     );
   }
@@ -82,13 +131,21 @@ export function LogForm(props: { cacheId: number; cacheCode: string; callsign: s
         {busy === "found" ? "Logging…" : "✓ Log a find"}
       </button>
       <div className="row between mt-3">
-        <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>{busy === "dnf" ? "…" : "Couldn't find it"}</button>
-        <button className="link" onClick={() => setNoteOpen((v) => !v)}>Add a note</button>
+        <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>
+          {busy === "dnf" ? "…" : "Couldn't find it"}
+        </button>
+        <button className="link" onClick={() => setNoteOpen((v) => !v)}>
+          Add a note
+        </button>
       </div>
       {noteOpen && (
         <div className="mt-2">
           <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
-          <div className="row end"><button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>Post note</button></div>
+          <div className="row end">
+            <button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
+              Post note
+            </button>
+          </div>
         </div>
       )}
       {err && <p className="error">{err}</p>}

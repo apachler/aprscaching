@@ -11,36 +11,74 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import {
-  importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, activeFedKeys, type FedPublicKey,
-  loadRegistry, registryKeyAllowed, buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
-  verifyRotationRecord, type RotationRecord,
+  importVerifyKey,
+  verifyRecordSig,
+  FED_PROTOCOL_VERSION,
+  importActiveKeys,
+  activeFedKeys,
+  type FedPublicKey,
+  loadRegistry,
+  registryKeyAllowed,
+  buildFeed,
+  feedPublicKey,
+  CACHE_FEED,
+  FIND_FEED,
+  KEY_FEED,
+  type FeedServeDef,
+  verifyRotationRecord,
+  type RotationRecord,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
-const PEER_FETCH_TIMEOUT_MS = 5000;   // SR-FED-06: a blackholed peer must not hang the whole sync cron
+const PEER_FETCH_TIMEOUT_MS = 5000; // SR-FED-06: a blackholed peer must not hang the whole sync cron
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
 
 interface PeerRow {
-  url: string; instance: string | null; public_key: string | null;
-  caches_cursor: number; finds_cursor: number; keys_cursor: number; tombstones_cursor: number; moves_cursor: number; bulletins_cursor: number; enabled: number;
+  url: string;
+  instance: string | null;
+  public_key: string | null;
+  caches_cursor: number;
+  finds_cursor: number;
+  keys_cursor: number;
+  tombstones_cursor: number;
+  moves_cursor: number;
+  bulletins_cursor: number;
+  enabled: number;
   trust: TrustLevel;
 }
 
-interface FeedRecord { type: string; id: string; cursor: number; data: Record<string, unknown>; sig?: string; signer?: string }
-interface Feed { instance: string; nextCursor: number; complete: boolean; items: FeedRecord[] }
+interface FeedRecord {
+  type: string;
+  id: string;
+  cursor: number;
+  data: Record<string, unknown>;
+  sig?: string;
+  signer?: string;
+}
+interface Feed {
+  instance: string;
+  nextCursor: number;
+  complete: boolean;
+  items: FeedRecord[];
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const r = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS) });
+  const r = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS),
+  });
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} <- ${url}`);
   return r.json() as Promise<T>;
 }
 
-function ours(env: Env): string | null { return env.INSTANCE ?? null; }
+function ours(env: Env): string | null {
+  return env.INSTANCE ?? null;
+}
 
 /**
  * Seed fed_peers from the FED_PEERS env (idempotent). FED_PEERS are operator-curated, so they are
@@ -48,7 +86,10 @@ function ours(env: Env): string | null { return env.INSTANCE ?? null; }
  * blocked (quarantine wins over re-seeding); `approved_at` is stamped once and preserved.
  */
 async function seedPeers(env: Env): Promise<void> {
-  const urls = (env.FED_PEERS ?? "").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
+  const urls = (env.FED_PEERS ?? "")
+    .split(",")
+    .map((s) => s.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
   for (const url of urls) {
     await env.DB.prepare(
       `INSERT INTO fed_peers (url, trust, added_via, approved_at) VALUES (?, 'trusted', 'manual', ?)
@@ -56,7 +97,9 @@ async function seedPeers(env: Env): Promise<void> {
          added_via   = 'manual',
          trust       = CASE WHEN fed_peers.trust = 'blocked' THEN 'blocked' ELSE 'trusted' END,
          approved_at = COALESCE(fed_peers.approved_at, excluded.approved_at)`,
-    ).bind(url, now()).run();
+    )
+      .bind(url, now())
+      .run();
   }
   // registry discovery (T4.2): seed peers from the verified signed registry as `unvetted` (operator
   // promotes). Carries the registry-bound key + instance so the anti-spoof check has them. No-op
@@ -64,8 +107,11 @@ async function seedPeers(env: Env): Promise<void> {
   for (const e of (await loadRegistry(env)).values()) {
     const u = e.url?.trim().replace(/\/+$/, "");
     if (u && e.instance !== ours(env))
-      await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')")
-        .bind(u, e.instance, e.key ?? null).run();
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')",
+      )
+        .bind(u, e.instance, e.key ?? null)
+        .run();
   }
 }
 
@@ -76,7 +122,8 @@ async function seedPeers(env: Env): Promise<void> {
  */
 export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   await seedPeers(env);
-  return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1 AND trust != 'blocked'").all<PeerRow>()).results;
+  return (await env.DB.prepare("SELECT * FROM fed_peers WHERE enabled = 1 AND trust != 'blocked'").all<PeerRow>())
+    .results;
 }
 
 /**
@@ -87,48 +134,90 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
   await seedPeers(env);
   const p = await env.DB.prepare(
     "SELECT * FROM fed_peers WHERE instance = ? AND enabled = 1 AND trust != 'blocked' LIMIT 1",
-  ).bind(instance).first<PeerRow>();
+  )
+    .bind(instance)
+    .first<PeerRow>();
   if (!p) return false;
-  try { await syncPeer(env, p); return true; }
-  catch (e) {
-    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?").bind((e as Error).message, now(), p.url).run();
+  try {
+    await syncPeer(env, p);
+    return true;
+  } catch (e) {
+    await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
+      .bind((e as Error).message, now(), p.url)
+      .run();
     return false;
   }
 }
 
-export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number; errors: string[] }> {
+export async function syncAllPeers(env: Env): Promise<{
+  peers: number;
+  caches: number;
+  finds: number;
+  keys: number;
+  tombstones: number;
+  moves: number;
+  bulletins: number;
+  errors: string[];
+}> {
   const peers = await listEnabledPeers(env);
-  let caches = 0, finds = 0, keys = 0, tombstones = 0, moves = 0, bulletins = 0;
+  let caches = 0,
+    finds = 0,
+    keys = 0,
+    tombstones = 0,
+    moves = 0,
+    bulletins = 0;
   const errors: string[] = [];
   for (const p of peers) {
     try {
       const r = await syncPeer(env, p);
-      caches += r.caches; finds += r.finds; keys += r.keys; tombstones += r.tombstones; moves += r.moves; bulletins += r.bulletins;
+      caches += r.caches;
+      finds += r.finds;
+      keys += r.keys;
+      tombstones += r.tombstones;
+      moves += r.moves;
+      bulletins += r.bulletins;
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
-      await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?").bind(msg, now(), p.url).run();
+      await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
+        .bind(msg, now(), p.url)
+        .run();
     }
   }
   return { peers: peers.length, caches, finds, keys, tombstones, moves, bulletins, errors };
 }
 
-async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
+async function syncPeer(
+  env: Env,
+  p: PeerRow,
+): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
   const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; publicKeys?: FedPublicKey[]; rotations?: RotationRecord[]; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
+  const wk = await fetchJson<{
+    instance: string;
+    signed: boolean;
+    publicKey: string | null;
+    publicKeys?: FedPublicKey[];
+    rotations?: RotationRecord[];
+    peers?: string[];
+    capabilities?: string[];
+    protocolVersions?: string[];
+  }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
-  const pinned = p.public_key;   // the key we last trusted for this peer (null on first sight)
+  const pinned = p.public_key; // the key we last trusted for this peer (null on first sight)
   const newActive = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
 
   // SR-FED-04: never blindly re-pin. Once a peer is signed we refuse to drop to unsigned, and we only
   // accept a *changed* key if the peer proves continuity with a rotation-record chain from the pinned
   // key (each new key signed by its predecessor). A hijacked domain that simply swaps keys is rejected.
   if (pinned) {
-    if (!pub) throw new Error(`peer ${wk.instance} regressed to unsigned — refusing (was pinned ${pinned.slice(0, 12)}…)`);
+    if (!pub)
+      throw new Error(`peer ${wk.instance} regressed to unsigned — refusing (was pinned ${pinned.slice(0, 12)}…)`);
     if (!newActive.includes(pinned) && !(await rotationChainReaches(pinned, newActive, wk.rotations)))
       throw new Error(`peer ${wk.instance} key changed without a valid rotation proof — refusing (possible hijack)`);
   }
-  await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
+  await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?")
+    .bind(wk.instance ?? null, pub, p.url)
+    .run();
 
   // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
   // Discovered peers start `unvetted` — mirrored-but-flagged, excluded from corroboration until an
@@ -137,12 +226,17 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
     for (const url of (wk.peers ?? []).slice(0, 50)) {
       const u = String(url).trim().replace(/\/+$/, "");
       if (u && u !== base)
-        await env.DB.prepare("INSERT OR IGNORE INTO fed_peers (url, trust, added_via) VALUES (?, 'unvetted', 'discovered')").bind(u).run();
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO fed_peers (url, trust, added_via) VALUES (?, 'unvetted', 'discovered')",
+        )
+          .bind(u)
+          .run();
     }
   }
 
   // never mirror ourselves
-  if (wk.instance && wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
+  if (wk.instance && wk.instance === ours(env))
+    return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
 
   // T4.2 anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
   // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
@@ -160,15 +254,25 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
   // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass (T1.3).
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
   const counts: Record<string, number> = {};
-  for (const def of SYNC_DEFS) // iterate SYNC_DEFS to preserve the tombstones-first order
+  for (const def of SYNC_DEFS)
+    // iterate SYNC_DEFS to preserve the tombstones-first order
     counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKeys, def) : 0;
   // observability (T4.3): record a successful sync — time, count, cumulative total, per-feed breakdown
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   await env.DB.prepare(
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
        mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
-  ).bind(now(), now(), total, JSON.stringify(counts), p.url).run();
-  return { caches: counts.cache ?? 0, finds: counts.find ?? 0, keys: counts.key ?? 0, tombstones: counts.tombstone ?? 0, moves: counts["account-move"] ?? 0, bulletins: counts.bulletin ?? 0 };
+  )
+    .bind(now(), now(), total, JSON.stringify(counts), p.url)
+    .run();
+  return {
+    caches: counts.cache ?? 0,
+    finds: counts.find ?? 0,
+    keys: counts.key ?? 0,
+    tombstones: counts.tombstone ?? 0,
+    moves: counts["account-move"] ?? 0,
+    bulletins: counts.bulletin ?? 0,
+  };
 }
 
 /**
@@ -178,7 +282,9 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
  * by syncFeed). Order is preserved, so the tombstones-first invariant survives.
  */
 export function negotiateFeeds<T extends { capability: string }>(
-  wk: { capabilities?: string[]; protocolVersions?: string[] }, defs: T[], ourVersion: string,
+  wk: { capabilities?: string[]; protocolVersions?: string[] },
+  defs: T[],
+  ourVersion: string,
 ): T[] {
   const negotiated = Array.isArray(wk.protocolVersions) && wk.protocolVersions.includes(ourVersion);
   if (!negotiated) return defs;
@@ -188,17 +294,44 @@ export function negotiateFeeds<T extends { capability: string }>(
 
 /** Which feed each sync def consumes: its endpoint, advertised capability, peer cursor, and applier. */
 interface SyncDef {
-  type: string; path: string; capability: string;
-  cursorCol: "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor" | "bulletins_cursor";
+  type: string;
+  path: string;
+  capability: string;
+  cursorCol:
+    "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor" | "bulletins_cursor";
   apply(env: Env, rec: FeedRecord, origin: string): Promise<void>;
 }
 const SYNC_DEFS: SyncDef[] = [
-  { type: "tombstone", path: "/federation/tombstones", capability: "tombstones", cursorCol: "tombstones_cursor", apply: applyTombstone },
-  { type: "cache", path: "/federation/caches", capability: "caches", cursorCol: "caches_cursor", apply: upsertRemoteCache },
+  {
+    type: "tombstone",
+    path: "/federation/tombstones",
+    capability: "tombstones",
+    cursorCol: "tombstones_cursor",
+    apply: applyTombstone,
+  },
+  {
+    type: "cache",
+    path: "/federation/caches",
+    capability: "caches",
+    cursorCol: "caches_cursor",
+    apply: upsertRemoteCache,
+  },
   { type: "find", path: "/federation/finds", capability: "finds", cursorCol: "finds_cursor", apply: upsertRemoteFind },
   { type: "key", path: "/federation/keys", capability: "keys", cursorCol: "keys_cursor", apply: upsertRemoteKey },
-  { type: "account-move", path: "/federation/account-moves", capability: "moves", cursorCol: "moves_cursor", apply: upsertRemoteAccountMove },
-  { type: "bulletin", path: "/federation/bulletins", capability: "bulletins", cursorCol: "bulletins_cursor", apply: (env, rec, origin) => upsertRemoteBulletin(env, rec, origin) },
+  {
+    type: "account-move",
+    path: "/federation/account-moves",
+    capability: "moves",
+    cursorCol: "moves_cursor",
+    apply: upsertRemoteAccountMove,
+  },
+  {
+    type: "bulletin",
+    path: "/federation/bulletins",
+    capability: "bulletins",
+    cursorCol: "bulletins_cursor",
+    apply: (env, rec, origin) => upsertRemoteBulletin(env, rec, origin),
+  },
 ];
 
 /**
@@ -206,11 +339,22 @@ const SYNC_DEFS: SyncDef[] = [
  * peer cursor — one loop for every record type. A 404 means the peer doesn't serve this feed (an
  * older peer, or one with the capability disabled) → skip it gracefully, never failing the whole sync.
  */
-async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, verifyKeys: CryptoKey[], def: SyncDef): Promise<number> {
-  let cursor = (p[def.cursorCol] as number) ?? 0, applied = 0;
+async function syncFeed(
+  env: Env,
+  base: string,
+  p: PeerRow,
+  instance: string,
+  verifyKeys: CryptoKey[],
+  def: SyncDef,
+): Promise<number> {
+  let cursor = (p[def.cursorCol] as number) ?? 0,
+    applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS) });
-    if (res.status === 404) return applied;                                       // feed not supported → forward-compat skip
+    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 404) return applied; // feed not supported → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
     const feed = (await res.json()) as Feed;
     for (const rec of feed.items ?? []) {
@@ -242,15 +386,25 @@ export function idInNamespace(globalId: string | undefined | null, instance: str
  * signed by its predecessor)? Verifies every published record first, then walks prev→new edges. Bounds
  * the walk to the number of records so a cyclic/oversized rotation list can't loop.
  */
-export async function rotationChainReaches(from: string, targets: string[], rotations: RotationRecord[] | undefined): Promise<boolean> {
+export async function rotationChainReaches(
+  from: string,
+  targets: string[],
+  rotations: RotationRecord[] | undefined,
+): Promise<boolean> {
   const want = new Set(targets);
   if (want.has(from)) return true;
   const edges: Array<{ prev: string; key: string }> = [];
   for (const r of rotations ?? []) if (await verifyRotationRecord(r)) edges.push({ prev: r.prevKey, key: r.key });
   const reach = new Set([from]);
-  for (let i = 0; i < edges.length; i++) {          // at most |edges| relaxations reach every node
+  for (let i = 0; i < edges.length; i++) {
+    // at most |edges| relaxations reach every node
     let grew = false;
-    for (const e of edges) if (reach.has(e.prev) && !reach.has(e.key)) { reach.add(e.key); grew = true; if (want.has(e.key)) return true; }
+    for (const e of edges)
+      if (reach.has(e.prev) && !reach.has(e.key)) {
+        reach.add(e.key);
+        grew = true;
+        if (want.has(e.key)) return true;
+      }
     if (!grew) break;
   }
   return false;
@@ -258,7 +412,9 @@ export async function rotationChainReaches(from: string, targets: string[], rota
 
 /** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
 async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
-  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?").bind(globalId).first<{ x: number }>());
+  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?")
+    .bind(globalId)
+    .first<{ x: number }>());
 }
 
 /** Does the record verify under ANY of the peer's active keys (T4.1)? Empty set = unsigned peer (skip). */
@@ -269,14 +425,14 @@ async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boo
 }
 
 async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instance: string): Promise<boolean> {
-  if (!(await verifiesUnderAny(verifyKeys, rec))) return false;            // bad/unrecognised signature
+  if (!(await verifiesUnderAny(verifyKeys, rec))) return false; // bad/unrecognised signature
   // SR-FED-01: the signature covers {type,id,data} but NOT signer — so a peer could serve a record
   // in another instance's namespace, signed with its own key, and overwrite that instance's genuine
   // mirror (inheriting its trust). A peer may only serve records IN ITS OWN namespace, self-signed.
-  if (!idInNamespace(rec.id, instance)) return false;                       // id must be the serving peer's namespace
-  if (rec.signer && rec.signer !== instance) return false;                 // and self-attested as that peer
-  if (rec.signer && rec.signer === ours(env)) return false;                // never mirror our own
-  if (await isTombstoned(env, rec.id)) return false;                       // purged by a peer tombstone
+  if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
+  if (rec.signer && rec.signer !== instance) return false; // and self-attested as that peer
+  if (rec.signer && rec.signer === ours(env)) return false; // never mirror our own
+  if (await isTombstoned(env, rec.id)) return false; // purged by a peer tombstone
   return true;
 }
 
@@ -296,11 +452,11 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   await env.DB.batch([
     env.DB.prepare("DELETE FROM remote_caches WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
-    env.DB.prepare("INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)")
-      .bind(target, origin, d.kind ?? "unknown", d.ts ?? now(), now()),
+    env.DB.prepare(
+      "INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)",
+    ).bind(target, origin, d.kind ?? "unknown", d.ts ?? now(), now()),
   ]);
 }
-
 
 /** Apply a peer's account-move (T3.2): record the callsign's latest known home, last-writer by ts. */
 async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string): Promise<void> {
@@ -317,7 +473,9 @@ async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string
        from_instance = excluded.from_instance, to_instance = excluded.to_instance,
        ts = excluded.ts, origin = excluded.origin, mirrored_at = excluded.mirrored_at
      WHERE excluded.ts >= remote_account_moves.ts`,
-  ).bind(d.callsign.toUpperCase(), d.fromInstance ?? null, d.toInstance, ts, origin, now()).run();
+  )
+    .bind(d.callsign.toUpperCase(), d.fromInstance ?? null, d.toInstance, ts, origin, now())
+    .run();
 }
 
 async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {
@@ -325,7 +483,9 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
   await env.DB.prepare(
     `INSERT OR REPLACE INTO remote_keys (global_id, origin, callsign, public_key, verified, created_at, mirrored_at)
      VALUES (?,?,?,?,?,?,?)`,
-  ).bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, now()).run();
+  )
+    .bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, now())
+    .run();
 }
 
 async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
@@ -335,12 +495,30 @@ async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Pro
        (global_id, origin, code, owner_call, title, type, status, difficulty, terrain, lat, lon,
         station_call, source, external_id, hint, description, min_trust, created_at, updated_at, mirrored_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(
-    rec.id, origin, d.code ?? null, d.ownerCall ?? null, d.title ?? null, d.type ?? null, d.status ?? null,
-    d.difficulty ?? null, d.terrain ?? null, d.lat ?? null, d.lon ?? null, d.stationCall ?? null,
-    d.source ?? null, d.externalId ?? null, d.hint ?? null, d.description ?? null, d.minTrust ?? null,
-    d.createdAt ?? null, d.updatedAt ?? null, now(),
-  ).run();
+  )
+    .bind(
+      rec.id,
+      origin,
+      d.code ?? null,
+      d.ownerCall ?? null,
+      d.title ?? null,
+      d.type ?? null,
+      d.status ?? null,
+      d.difficulty ?? null,
+      d.terrain ?? null,
+      d.lat ?? null,
+      d.lon ?? null,
+      d.stationCall ?? null,
+      d.source ?? null,
+      d.externalId ?? null,
+      d.hint ?? null,
+      d.description ?? null,
+      d.minTrust ?? null,
+      d.createdAt ?? null,
+      d.updatedAt ?? null,
+      now(),
+    )
+    .run();
 }
 
 async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Promise<void> {
@@ -350,10 +528,23 @@ async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Prom
        (global_id, origin, cache_global_id, cache_code, logger_call, ts, log_type,
         verified, tier, verify_method, distance_m, comment, mirrored_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(
-    rec.id, origin, d.cacheId ?? null, d.cacheCode ?? null, d.loggerCall ?? null, d.ts ?? null, d.logType ?? null,
-    d.verified ? 1 : 0, d.tier ?? null, d.verifyMethod ?? null, d.distanceM ?? null, d.comment ?? null, now(),
-  ).run();
+  )
+    .bind(
+      rec.id,
+      origin,
+      d.cacheId ?? null,
+      d.cacheCode ?? null,
+      d.loggerCall ?? null,
+      d.ts ?? null,
+      d.logType ?? null,
+      d.verified ? 1 : 0,
+      d.tier ?? null,
+      d.verifyMethod ?? null,
+      d.distanceM ?? null,
+      d.comment ?? null,
+      now(),
+    )
+    .run();
 }
 
 // ---- endpoints ----
@@ -364,22 +555,23 @@ export async function handleFederationSync(req: Request, env: Env): Promise<Resp
 }
 
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;   // operator observability
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate; // operator observability
   await seedPeers(env);
-  const rows = (await env.DB.prepare(
-    `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
+  const rows = (
+    await env.DB.prepare(
+      `SELECT url, instance, public_key IS NOT NULL AS signed, trust, added_via, approved_at,
             rep_confirmed, rep_failed, caches_cursor, finds_cursor, keys_cursor, tombstones_cursor, moves_cursor,
             enabled, last_sync, last_ok, last_error, sync_ok, sync_err, mirrored_total, last_counts
        FROM fed_peers ORDER BY url`,
-  ).all<Record<string, unknown>>()).results;
+    ).all<Record<string, unknown>>()
+  ).results;
   // T4.3: derive a health signal + error rate so an operator scans state without doing the math.
   const peers = rows.map((p) => {
-    const okN = Number(p.sync_ok ?? 0), errN = Number(p.sync_err ?? 0);
+    const okN = Number(p.sync_ok ?? 0),
+      errN = Number(p.sync_err ?? 0);
     const lastErrored = !!p.last_error && (!p.last_ok || Number(p.last_sync ?? 0) > Number(p.last_ok ?? 0));
-    const health = p.trust === "blocked" ? "blocked"
-      : !p.last_sync ? "new"
-      : lastErrored ? "error"
-      : "ok";
+    const health = p.trust === "blocked" ? "blocked" : !p.last_sync ? "new" : lastErrored ? "error" : "ok";
     return {
       ...p,
       lastCounts: p.last_counts ? JSON.parse(String(p.last_counts)) : null,
@@ -396,7 +588,8 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
  * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
  */
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate;
   const b = (await req.json().catch(() => null)) as { url?: string; trust?: string } | null;
   const trust = b?.trust as TrustLevel | undefined;
   if (!b?.url || !trust || !TRUST_LEVELS.includes(trust))
@@ -406,15 +599,18 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
   await env.DB.prepare(
     "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
-  ).bind(trust, trust, now(), url).run();
+  )
+    .bind(trust, trust, now(), url)
+    .run();
   return json({ ok: true, url, trust });
 }
 
 // ---- push-to-hub (T2.3): NAT/firewall peers contribute without inbound reachability ----
 
 /** type → applier, reusing the exact mirror path as pull-sync (display-only, idempotent by global id). */
-const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> =
-  Object.fromEntries(SYNC_DEFS.map((d) => [d.type, d.apply]));
+const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> = Object.fromEntries(
+  SYNC_DEFS.map((d) => [d.type, d.apply]),
+);
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
@@ -431,15 +627,27 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   const secret = env.FED_SUBMIT_SECRET;
   if (!secret) return json({ ok: false, error: "submit disabled" }, { status: 403 });
   if (req.headers.get("x-fed-secret") !== secret) return json({ ok: false, error: "unauthorized" }, { status: 401 });
-  const b = (await req.json().catch(() => null)) as { instance?: string; publicKey?: string; records?: FeedRecord[] } | null;
+  const b = (await req.json().catch(() => null)) as {
+    instance?: string;
+    publicKey?: string;
+    records?: FeedRecord[];
+  } | null;
   if (!b?.instance || !b.publicKey || !Array.isArray(b.records))
     return json({ ok: false, error: "instance, publicKey, records required" }, { status: 400 });
   if (b.instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
-  const allow = (env.FED_SUBMIT_INSTANCES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (allow.length && !allow.includes(b.instance)) return json({ ok: false, error: "instance not allowed" }, { status: 403 });
+  const allow = (env.FED_SUBMIT_INSTANCES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (allow.length && !allow.includes(b.instance))
+    return json({ ok: false, error: "instance not allowed" }, { status: 403 });
 
   let key: CryptoKey;
-  try { key = await importVerifyKey(b.publicKey); } catch { return json({ ok: false, error: "bad public key" }, { status: 400 }); }
+  try {
+    key = await importVerifyKey(b.publicKey);
+  } catch {
+    return json({ ok: false, error: "bad public key" }, { status: 400 });
+  }
 
   // SR-FED-03: a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
   // binds this instance to a key, the submitted key MUST match it.
@@ -448,7 +656,9 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
   // TOFU: once we've pinned a key for this submit-instance, it can't silently change (SR-FED-04 for the
   // push path). A rotated spoke re-registers under a new instance id or the operator clears the row.
-  const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?").bind(`submit:${b.instance}`).first<{ public_key: string | null }>();
+  const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?")
+    .bind(`submit:${b.instance}`)
+    .first<{ public_key: string | null }>();
   if (pinnedRow?.public_key && pinnedRow.public_key !== b.publicKey)
     return json({ ok: false, error: "submitted key changed for a known instance — refusing" }, { status: 403 });
 
@@ -457,15 +667,30 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   // `submit:<instance>` url keeps it out of the pull set. INSERT OR IGNORE respects a later block.
   await env.DB.prepare(
     "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via, approved_at, enabled) VALUES (?, ?, ?, 'trusted', 'submitted', ?, 0)",
-  ).bind(`submit:${b.instance}`, b.instance, b.publicKey, now()).run();
+  )
+    .bind(`submit:${b.instance}`, b.instance, b.publicKey, now())
+    .run();
 
-  let applied = 0, rejected = 0;
+  let applied = 0,
+    rejected = 0;
   for (const rec of b.records) {
     const apply = APPLIERS[rec.type];
-    if (!apply || rec.signer !== b.instance) { rejected++; continue; }   // unknown type / wrong (or absent) signer
-    if (!idInNamespace(rec.id, b.instance)) { rejected++; continue; }       // SR-FED-01: only the submitter's own namespace
-    if (!(await verifyRecordSig(key, rec))) { rejected++; continue; }     // integrity
-    if (await isTombstoned(env, rec.id)) { rejected++; continue; }        // already purged by a tombstone
+    if (!apply || rec.signer !== b.instance) {
+      rejected++;
+      continue;
+    } // unknown type / wrong (or absent) signer
+    if (!idInNamespace(rec.id, b.instance)) {
+      rejected++;
+      continue;
+    } // SR-FED-01: only the submitter's own namespace
+    if (!(await verifyRecordSig(key, rec))) {
+      rejected++;
+      continue;
+    } // integrity
+    if (await isTombstoned(env, rec.id)) {
+      rejected++;
+      continue;
+    } // already purged by a tombstone
     await apply(env, rec, b.instance);
     applied++;
   }

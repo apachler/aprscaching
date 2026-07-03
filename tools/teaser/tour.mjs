@@ -20,7 +20,13 @@ let browser;
 async function launchBrowser() {
   return chromium.launch({
     executablePath: EXE,
-    args: ["--no-sandbox", "--disable-dev-shm-usage", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
+      "--ignore-gpu-blocklist",
+    ],
   });
 }
 
@@ -50,13 +56,23 @@ async function shot(page, vid, name, label) {
 const THEME = process.env.THEME || ""; // "cogmind" → capture the whole tour in the green-phosphor flip
 async function ctxFor(v, app = true) {
   const ctx = await browser.newContext({ viewport: { width: v.w, height: v.h }, deviceScaleFactor: v.dsf });
-  await ctx.addInitScript(([isApp, theme]) => {
-    try {
-      if (isApp) { localStorage.setItem("acs.call", "OE8APR"); sessionStorage.setItem("acs.explore", "1"); }
-      else { localStorage.removeItem("acs.call"); sessionStorage.removeItem("acs.explore"); }
-      if (theme) localStorage.setItem("acs.locale", JSON.stringify({ theme }));
-    } catch { /* ignore */ }
-  }, [app, THEME]);
+  await ctx.addInitScript(
+    ([isApp, theme]) => {
+      try {
+        if (isApp) {
+          localStorage.setItem("acs.call", "OE8APR");
+          sessionStorage.setItem("acs.explore", "1");
+        } else {
+          localStorage.removeItem("acs.call");
+          sessionStorage.removeItem("acs.explore");
+        }
+        if (theme) localStorage.setItem("acs.locale", JSON.stringify({ theme }));
+      } catch {
+        /* ignore */
+      }
+    },
+    [app, THEME],
+  );
   return ctx;
 }
 async function ready(page) {
@@ -80,7 +96,9 @@ async function signIn(page) {
   await page.goto(`${BASE}/`, { waitUntil: "load" }).catch(() => {});
   const r = await page.evaluate(async (api) => {
     const res = await fetch(api + "/auth/email/start", {
-      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: "oe8apr@teaser.local", callsign: "OE8APR" }),
     });
     return { status: res.status, body: await res.json().catch(() => ({})) };
@@ -93,14 +111,20 @@ async function signIn(page) {
 // and the mobile tab bar stay visible regardless of mode, so a reload isn't needed.
 async function closeAll(page) {
   await clickAny(page, ["header.topbar button:has-text('Cancel')"]);
-  for (let i = 0; i < 4; i++) { if (!(await clickAny(page, [".panel button[aria-label='Close']"]))) break; await page.waitForTimeout(120); }
+  for (let i = 0; i < 4; i++) {
+    if (!(await clickAny(page, [".panel button[aria-label='Close']"]))) break;
+    await page.waitForTimeout(120);
+  }
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(200);
 }
 async function clickAny(page, sels) {
   for (const s of sels) {
     const el = page.locator(s).first();
-    if (await el.isVisible().catch(() => false)) { await el.click().catch(() => {}); return true; }
+    if (await el.isVisible().catch(() => false)) {
+      await el.click().catch(() => {});
+      return true;
+    }
   }
   return false;
 }
@@ -120,8 +144,9 @@ async function openProfileAdvanced(page, btnText) {
   return clickAny(page, [`button:has-text('${btnText}')`]);
 }
 async function step(name, fn) {
-  try { await fn(); }
-  catch (e) {
+  try {
+    await fn();
+  } catch (e) {
     const reason = String(e.message).split("\n")[0];
     problems.push({ viewport: curView, step: name, reason });
     console.log("   ✗ SKIP", `[${curView}]`, name, "-", reason);
@@ -134,12 +159,17 @@ async function step(name, fn) {
 // "Packet terminal" group being attached, retrying once.
 let navSeq = 0; // bump per goto so the URL is never byte-identical (same-URL goto = no reload → stale surface)
 async function openWorkbench(page) {
-  const marker = () => page.locator(".wb-apps").first();  // the launcher grid (workbench is a pure launcher now)
+  const marker = () => page.locator(".wb-apps").first(); // the launcher grid (workbench is a pure launcher now)
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE}/?view=workbench&n=${++navSeq}#11.5/47.078/15.43`, { waitUntil: "load" });
     await ready(page);
-    try { await marker().waitFor({ state: "attached", timeout: 6000 }); await page.waitForTimeout(300); return; }
-    catch { /* retry the open once */ }
+    try {
+      await marker().waitFor({ state: "attached", timeout: 6000 });
+      await page.waitForTimeout(300);
+      return;
+    } catch {
+      /* retry the open once */
+    }
   }
   throw new Error("workbench did not open");
 }
@@ -173,18 +203,32 @@ async function gotoDemo(page, variant, waitSel) {
 // (terminal, rig, remote) + BBS are shown via the ?demo= sims instead.
 async function launchWbApp(page, label, waitSel) {
   await openWorkbench(page);
-  await page.locator(".wb-app-launch", { hasText: label }).first().click().catch(() => {});
+  await page
+    .locator(".wb-app-launch", { hasText: label })
+    .first()
+    .click()
+    .catch(() => {});
   await page.waitForSelector(waitSel, { timeout: 8000 });
   await page.waitForTimeout(400);
 }
 
 // Friendlier captions for the terse rail/tab titles; unknown titles fall back to themselves.
 const LABELS = {
-  Map: "Live cache map", Nearby: "Nearby caches", Activity: "Activity feed", Ranks: "Leaderboard",
-  Bench: "Workbench — APRS toolset", BBS: "BBS — store & forward mail", You: "Profile", Setup: "Settings",
+  Map: "Live cache map",
+  Nearby: "Nearby caches",
+  Activity: "Activity feed",
+  Ranks: "Leaderboard",
+  Bench: "Workbench — APRS toolset",
+  BBS: "BBS — store & forward mail",
+  You: "Profile",
+  Setup: "Settings",
   Admin: "Instance admin — operator only",
 };
-const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "view";
+const slug = (s) =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "view";
 
 // Enumerate the tools revealed under Profile → Advanced — the small-viewport home for Workbench/BBS/
 // Settings and any tool added later — so they're captured without being listed here. Returns
@@ -197,13 +241,21 @@ async function advancedTools(page) {
   await page.waitForTimeout(300);
   // tool buttons read like "📡 Workbench": a leading glyph THEN a word. Require letters so bare-glyph
   // controls (e.g. the panel's ✕ close button) are not mistaken for destinations.
-  const labels = await page.$$eval(".panel button", (els) =>
-    els.map((e) => (e.textContent || "").trim()).filter((t) => t && /^[^\w\s]/.test(t) && /[A-Za-z]{2,}/.test(t) && t.length <= 28)
-  ).catch(() => []);
+  const labels = await page
+    .$$eval(".panel button", (els) =>
+      els
+        .map((e) => (e.textContent || "").trim())
+        .filter((t) => t && /^[^\w\s]/.test(t) && /[A-Za-z]{2,}/.test(t) && t.length <= 28),
+    )
+    .catch(() => []);
   const seen = new Set();
-  return labels.filter((t) => !seen.has(t) && seen.add(t)).map((t) => ({
-    full: t, name: slug(t), label: t.replace(/^[^\w]+\s*/, "") || t,
-  }));
+  return labels
+    .filter((t) => !seen.has(t) && seen.add(t))
+    .map((t) => ({
+      full: t,
+      name: slug(t),
+      label: t.replace(/^[^\w]+\s*/, "") || t,
+    }));
 }
 
 // Expand EVERY collapsible group (.group-toggle) in the currently-open panel/drawer and screenshot
@@ -217,13 +269,24 @@ async function captureGroups(page, vid, prefix, panelLabel) {
   const nAll = await allToggles.count().catch(() => 0);
   for (let i = 0; i < nAll; i++) {
     const g = allToggles.nth(i);
-    if ((await g.getAttribute("aria-expanded").catch(() => null)) === "true") { await g.click().catch(() => {}); await page.waitForTimeout(120); }
+    if ((await g.getAttribute("aria-expanded").catch(() => null)) === "true") {
+      await g.click().catch(() => {});
+      await page.waitForTimeout(120);
+    }
   }
   await page.waitForTimeout(200);
-  const titles = await page.$$eval(".panel .group-toggle", (els) =>
-    els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean)).catch(() => []);
+  const titles = await page
+    .$$eval(".panel .group-toggle", (els) =>
+      els.map((e) => (e.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean),
+    )
+    .catch(() => []);
   for (const t of titles) {
-    const short = (t.split(/\s{2,}|·/)[0].replace(/^[▸▾▿►▼▶\s]+/, "").trim().slice(0, 40)) || t;
+    const short =
+      t
+        .split(/\s{2,}|·/)[0]
+        .replace(/^[▸▾▿►▼▶\s]+/, "")
+        .trim()
+        .slice(0, 40) || t;
     await step(`${prefix}-${slug(short)}`, async () => {
       const toggle = page.locator(".panel .group-toggle", { hasText: short }).first();
       await toggle.waitFor({ state: "visible", timeout: 5000 });
@@ -245,7 +308,8 @@ for (const v of VIEWS) {
 
   // signed-out: landing + sign-in dialog
   await step("landing", async () => {
-    const ctx = await ctxFor(v, false); const page = await ctx.newPage();
+    const ctx = await ctxFor(v, false);
+    const page = await ctx.newPage();
     await page.goto(`${BASE}/`, { waitUntil: "load" });
     await page.waitForSelector(".landing", { timeout: 15000 });
     await page.waitForTimeout(900);
@@ -259,15 +323,24 @@ for (const v of VIEWS) {
   });
 
   // signed-in demo journey (one context; reset to the map before each destination)
-  let ctx, page, signedIn = false;
+  let ctx,
+    page,
+    signedIn = false;
   try {
-    ctx = await ctxFor(v, true); page = await ctx.newPage();
-    try { await signIn(page); signedIn = true; }
-    catch (e) { console.log("   (real sign-in failed — explore mode, gated surfaces skip):", String(e.message).split("\n")[0]); }
+    ctx = await ctxFor(v, true);
+    page = await ctx.newPage();
+    try {
+      await signIn(page);
+      signedIn = true;
+    } catch (e) {
+      console.log("   (real sign-in failed — explore mode, gated surfaces skip):", String(e.message).split("\n")[0]);
+    }
     await gotoMap(page);
   } catch (e) {
     console.log("   !! app setup failed for", v.id, "-", String(e.message).split("\n")[0]);
-    try { await browser.close(); } catch {}
+    try {
+      await browser.close();
+    } catch {}
     continue;
   }
   await step("map", async () => shot(page, v.id, "map", "Live cache map"));
@@ -289,7 +362,9 @@ for (const v of VIEWS) {
     await closeAll(page);
     await clickCache(page, "Schlossberg");
     await clickAny(page, [".panel button:has-text('QR')"]);
-    await page.waitForSelector(".panel canvas, .panel svg, .panel img[src^='data:']", { timeout: 6000 }).catch(() => {});
+    await page
+      .waitForSelector(".panel canvas, .panel svg, .panel img[src^='data:']", { timeout: 6000 })
+      .catch(() => {});
     await page.waitForTimeout(500);
     await shot(page, v.id, "qr", "Per-cache QR — scan to find");
   });
@@ -306,7 +381,10 @@ for (const v of VIEWS) {
     await closeAll(page);
     await clickAny(page, ["button.primary:has-text('Hide a cache')", ".tabbar .fab"]);
     await page.waitForSelector(".panel", { timeout: 6000 });
-    await page.locator(".maplibregl-canvas").click({ position: { x: Math.round(v.w * 0.5), y: Math.round(v.h * 0.42) } }).catch(() => {});
+    await page
+      .locator(".maplibregl-canvas")
+      .click({ position: { x: Math.round(v.w * 0.5), y: Math.round(v.h * 0.42) } })
+      .catch(() => {});
     await page.waitForTimeout(400);
     await page.fill('.panel label:has-text("Title") input', "Castle Casemates").catch(() => {});
     await page.waitForTimeout(300);
@@ -319,7 +397,10 @@ for (const v of VIEWS) {
     await closeAll(page);
     await clickAny(page, ["button[title='Filter by type']"]);
     await page.waitForSelector(".panel", { timeout: 6000 });
-    await clickAny(page, [".panel label:has-text('Live stations') ~ * input", ".panel:has-text('Live stations') .switch input"]);
+    await clickAny(page, [
+      ".panel label:has-text('Live stations') ~ * input",
+      ".panel:has-text('Live stations') .switch input",
+    ]);
     // fall back: toggle the first switch under "Live layers"
     await page.evaluate(() => {
       const lbl = [...document.querySelectorAll(".panel label")].find((l) => /Live stations/.test(l.textContent || ""));
@@ -357,9 +438,15 @@ for (const v of VIEWS) {
   // NB: the rail exists in the DOM at every viewport (CSS display:none below 1024px), so gate on
   // VISIBILITY — $$eval would otherwise return the hidden rail titles on tablet/mobile and wrongly
   // take the desktop branch.
-  const railVisible = await page.locator(".rail").first().isVisible().catch(() => false);
+  const railVisible = await page
+    .locator(".rail")
+    .first()
+    .isVisible()
+    .catch(() => false);
   const rail = railVisible
-    ? await page.$$eval(".rail button[title]", (els) => els.map((e) => e.getAttribute("title")).filter(Boolean)).catch(() => [])
+    ? await page
+        .$$eval(".rail button[title]", (els) => els.map((e) => e.getAttribute("title")).filter(Boolean))
+        .catch(() => [])
     : [];
 
   if (rail.length) {
@@ -448,7 +535,7 @@ for (const v of VIEWS) {
   });
   await step("bbs", async () => {
     await gotoDemo(page, "app-bbs", ".bbs-body");
-    await clickAny(page, [".bbs-row"]);                               // open the first thread → reply tree
+    await clickAny(page, [".bbs-row"]); // open the first thread → reply tree
     await page.waitForSelector(".bbs-thread, .bbs-read", { timeout: 6000 }).catch(() => {});
     await page.waitForTimeout(400);
     await shot(page, v.id, "bbs", "BBS — mail, bulletins & threads");
@@ -475,7 +562,6 @@ for (const v of VIEWS) {
     await openView(page, "settings", ".panel");
     await captureGroups(page, v.id, "set", "Settings");
   });
-
 
   // Operator "Instance Admin" surface — EXCLUDED from public teasers, captured only with TEASER_ADMIN=1
   // (which sets ADMIN_CALLSIGNS so the sysop entry renders). On desktop the rail walk above already

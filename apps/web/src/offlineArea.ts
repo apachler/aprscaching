@@ -11,12 +11,34 @@ import type { MapCache } from "@aprsweb/shared";
 import type { BBox } from "./api.js";
 
 const KEY = "acs.offline.caches";
-export interface OfflineArea { at: number; bbox: BBox; caches: MapCache[] }
+export interface OfflineArea {
+  at: number;
+  bbox: BBox;
+  caches: MapCache[];
+}
 
 export function saveArea(caches: MapCache[], bbox: BBox): void {
-  try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), bbox, caches: caches.slice(0, 2000) } satisfies OfflineArea)); } catch { /* quota / private mode */ }
+  try {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ at: Date.now(), bbox, caches: caches.slice(0, 2000) } satisfies OfflineArea),
+    );
+  } catch {
+    /* quota / private mode */
+  }
 }
 export function loadArea(): OfflineArea | null {
-  try { const s = localStorage.getItem(KEY); return s ? (JSON.parse(s) as OfflineArea) : null; } catch { return null; }
+  try {
+    const s = localStorage.getItem(KEY);
+    return s ? (JSON.parse(s) as OfflineArea) : null;
+  } catch {
+    return null;
+  }
 }
-export function hasOfflineArea(): boolean { try { return !!localStorage.getItem(KEY); } catch { return false; } }
+export function hasOfflineArea(): boolean {
+  try {
+    return !!localStorage.getItem(KEY);
+  } catch {
+    return false;
+  }
+}

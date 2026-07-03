@@ -32,7 +32,11 @@ const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
 /** The transport-agnostic side of a line session: feed bytes/up/down, it drives the app. */
-export interface LineDriver { onData(info: Uint8Array): void; onUp(): void; onDown(): void }
+export interface LineDriver {
+  onData(info: Uint8Array): void;
+  onUp(): void;
+  onDown(): void;
+}
 
 /**
  * The transport-neutral core that binds a `LineApp` to a byte duplex: buffers received bytes into CR/LF
@@ -42,21 +46,35 @@ export interface LineDriver { onData(info: Uint8Array): void; onUp(): void; onDo
  */
 export function makeLineDriver(
   app: LineApp,
-  io: { send: (bytes: Uint8Array) => void; disconnect: () => void; onConnect?: (dest: string, relay: RelayController) => void },
+  io: {
+    send: (bytes: Uint8Array) => void;
+    disconnect: () => void;
+    onConnect?: (dest: string, relay: RelayController) => void;
+  },
 ): LineDriver {
   let buf = "";
   let greeted = false;
   let relaySink: ((bytes: Uint8Array) => void) | null = null;
-  const push = (lines: string[]) => { if (lines.length) io.send(enc(lines.join("\r") + "\r")); };
+  const push = (lines: string[]) => {
+    if (lines.length) io.send(enc(lines.join("\r") + "\r"));
+  };
   const relay: RelayController = {
     toUser: (bytes) => io.send(bytes),
-    attach: (sink) => { relaySink = sink; buf = ""; },
-    detach: () => { relaySink = null; },
+    attach: (sink) => {
+      relaySink = sink;
+      buf = "";
+    },
+    detach: () => {
+      relaySink = null;
+    },
     disconnectUser: () => io.disconnect(),
   };
   return {
     onData(info) {
-      if (relaySink) { relaySink(info); return; }          // transparent relay (connect-through) — no line-splitting
+      if (relaySink) {
+        relaySink(info);
+        return;
+      } // transparent relay (connect-through) — no line-splitting
       buf += dec(info);
       let i: number;
       while ((i = buf.search(/[\r\n]/)) >= 0) {
@@ -68,8 +86,17 @@ export function makeLineDriver(
         if (r.disconnect) io.disconnect();
       }
     },
-    onUp() { if (!greeted) { greeted = true; push(app.greeting()); } },
-    onDown() { greeted = false; buf = ""; relaySink = null; },
+    onUp() {
+      if (!greeted) {
+        greeted = true;
+        push(app.greeting());
+      }
+    },
+    onDown() {
+      greeted = false;
+      buf = "";
+      relaySink = null;
+    },
   };
 }
 
@@ -80,24 +107,39 @@ export function makeLineDriver(
  * When the app returns `{connect}`, `onConnect` fires with a `RelayController` for connect-through.
  */
 export function serveApp(
-  local: Ax25Address, remote: Ax25Address, app: LineApp,
+  local: Ax25Address,
+  remote: Ax25Address,
+  app: LineApp,
   opts: {
-    send: (f: Ax25Frame) => void; clock?: () => number; cfg?: Partial<LinkConfig>;
-    onState?: (s: LinkState) => void; onConnect?: (dest: string, relay: RelayController) => void;
+    send: (f: Ax25Frame) => void;
+    clock?: () => number;
+    cfg?: Partial<LinkConfig>;
+    onState?: (s: LinkState) => void;
+    onConnect?: (dest: string, relay: RelayController) => void;
   },
 ): ConnectedLink {
   // eslint-disable-next-line prefer-const -- the driver closes over `link` before it is assigned
   let link: ConnectedLink;
-  const driver = makeLineDriver(app, { send: (b) => link.send(b), disconnect: () => link.disconnect(), onConnect: opts.onConnect });
-  link = new ConnectedLink(local, remote, {
-    send: opts.send,
-    deliver: (info: Uint8Array) => driver.onData(info),
-    state: (s: LinkState) => {
-      if (s === "connected") driver.onUp();
-      else if (s === "disconnected") driver.onDown();
-      opts.onState?.(s);
+  const driver = makeLineDriver(app, {
+    send: (b) => link.send(b),
+    disconnect: () => link.disconnect(),
+    onConnect: opts.onConnect,
+  });
+  link = new ConnectedLink(
+    local,
+    remote,
+    {
+      send: opts.send,
+      deliver: (info: Uint8Array) => driver.onData(info),
+      state: (s: LinkState) => {
+        if (s === "connected") driver.onUp();
+        else if (s === "disconnected") driver.onDown();
+        opts.onState?.(s);
+      },
     },
-  }, opts.cfg, opts.clock);
+    opts.cfg,
+    opts.clock,
+  );
 
   return link;
 }

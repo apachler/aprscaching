@@ -10,8 +10,10 @@ import { RfBrowser } from "../rf/RfBrowser.js";
 export function ConnectionsSettings(props: { callsign: string; verified: boolean }) {
   return (
     <>
-      <p className="muted">Bridge a USB/Bluetooth TNC in this browser to feed RF into the platform from your
-        own station. This runs on your device (Chromium only) — nothing server-side.</p>
+      <p className="muted">
+        Bridge a USB/Bluetooth TNC in this browser to feed RF into the platform from your own station. This runs on your
+        device (Chromium only) — nothing server-side.
+      </p>
       <RfBrowser callsign={props.callsign} verified={props.verified} />
     </>
   );

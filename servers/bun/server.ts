@@ -34,14 +34,21 @@ const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
 if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
   console.error(
     "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
-    "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
-    "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
+      "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
+      "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
   );
   process.exit(1);
 }
 function gitHead(): string | undefined {
-  try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || undefined; }
-  catch { return undefined; }
+  try {
+    return (
+      execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+        .toString()
+        .trim() || undefined
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 // ---- storage ----
@@ -71,7 +78,7 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
-  ...stringEnvFrom(process.env),   // SR-RT-03: forward EVERY config key (Bun previously lacked ADMIN_CALLSIGNS etc.)
+  ...stringEnvFrom(process.env), // SR-RT-03: forward EVERY config key (Bun previously lacked ADMIN_CALLSIGNS etc.)
   // AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source) — the resolved value wins
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
 };
@@ -88,9 +95,15 @@ const server = Bun.serve<WsData, undefined>({
     return handle(req, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
   },
   websocket: {
-    open(ws) { rooms.join(ws); },
-    message(ws, msg) { rooms.onMessage(ws, msg); },
-    close(ws) { rooms.leave(ws); },
+    open(ws) {
+      rooms.join(ws);
+    },
+    message(ws, msg) {
+      rooms.onMessage(ws, msg);
+    },
+    close(ws) {
+      rooms.leave(ws);
+    },
   },
 });
 console.log(`aprscaching bun-gateway listening on :${server.port}  (db: ${DB_PATH})`);

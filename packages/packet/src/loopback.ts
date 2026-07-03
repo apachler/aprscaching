@@ -19,7 +19,10 @@ export class VirtualClock {
   time = (): number => this.t;
   /** Advance `ms`, calling `poll` every `step` ms so T1/T3 deadlines fire in order. */
   advance(ms: number, poll: () => void, step = 250): void {
-    for (let e = 0; e < ms; e += step) { this.t += Math.min(step, ms - e); poll(); }
+    for (let e = 0; e < ms; e += step) {
+      this.t += Math.min(step, ms - e);
+      poll();
+    }
   }
 }
 
@@ -35,16 +38,28 @@ export class LoopbackChannel {
   private q: Array<[Rx | null, Ax25Frame]> = [];
   /** Optional: drop the Nth transmitted frame(s) to model loss (indices are per-direction send order). */
   drop: (from: "A" | "B", n: number) => boolean = () => false;
-  private nA = 0; private nB = 0;
+  private nA = 0;
+  private nB = 0;
 
-  attach(a: Rx, b: Rx): void { this.a = a; this.b = b; }
-  sendFromA = (f: Ax25Frame): void => { if (!this.drop("A", this.nA++)) this.q.push([this.b, f]); };
-  sendFromB = (f: Ax25Frame): void => { if (!this.drop("B", this.nB++)) this.q.push([this.a, f]); };
+  attach(a: Rx, b: Rx): void {
+    this.a = a;
+    this.b = b;
+  }
+  sendFromA = (f: Ax25Frame): void => {
+    if (!this.drop("A", this.nA++)) this.q.push([this.b, f]);
+  };
+  sendFromB = (f: Ax25Frame): void => {
+    if (!this.drop("B", this.nB++)) this.q.push([this.a, f]);
+  };
 
   /** Deliver all queued frames (and any they trigger), FIFO, until the channel is idle. */
   pump(guard = 10000): number {
     let n = 0;
-    while (this.q.length && n < guard) { const [rx, fr] = this.q.shift()!; rx?.(fr); n++; }
+    while (this.q.length && n < guard) {
+      const [rx, fr] = this.q.shift()!;
+      rx?.(fr);
+      n++;
+    }
     return n;
   }
 }

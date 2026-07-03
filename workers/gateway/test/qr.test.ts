@@ -11,13 +11,14 @@ describe("QR encoder", () => {
   it("builds a square matrix with the three finder patterns + timing", () => {
     const m = qrMatrix("https://aprscaching.net/?cache=AC-0001");
     const n = m.length;
-    expect((n - 17) % 4).toBe(0);                    // valid QR dimension (17 + 4·version)
-    const finder = (r0: number, c0: number) => m[r0]!.slice(c0, c0 + 7).every(Boolean) && m[r0 + 6]!.slice(c0, c0 + 7).every(Boolean);
-    expect(finder(0, 0)).toBe(true);                 // top-left
-    expect(finder(0, n - 7)).toBe(true);             // top-right
-    expect(finder(n - 7, 0)).toBe(true);             // bottom-left
-    expect(m[6]![8]).toBe(true);                     // timing starts dark
-    expect(m[6]![9]).toBe(false);                    // alternating
+    expect((n - 17) % 4).toBe(0); // valid QR dimension (17 + 4·version)
+    const finder = (r0: number, c0: number) =>
+      m[r0]!.slice(c0, c0 + 7).every(Boolean) && m[r0 + 6]!.slice(c0, c0 + 7).every(Boolean);
+    expect(finder(0, 0)).toBe(true); // top-left
+    expect(finder(0, n - 7)).toBe(true); // top-right
+    expect(finder(n - 7, 0)).toBe(true); // bottom-left
+    expect(m[6]![8]).toBe(true); // timing starts dark
+    expect(m[6]![9]).toBe(false); // alternating
   });
 
   it("renders an SVG with a quiet zone and the requested pixel size", () => {

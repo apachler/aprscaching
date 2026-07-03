@@ -12,34 +12,73 @@
  *   'P'-'Y' -> digit 0-9, sign bits 1 (North / +100 / West)
  */
 export interface MicEFix {
-  lat: number; lon: number; table: string; code: string;
-  course?: number; speedKn?: number; altitudeM?: number;
-  messageType: string; ambiguity: number; comment?: string;
+  lat: number;
+  lon: number;
+  table: string;
+  code: string;
+  course?: number;
+  speedKn?: number;
+  altitudeM?: number;
+  messageType: string;
+  ambiguity: number;
+  comment?: string;
 }
 
 // standard message table, indexed by the 3 message bits (A,B,C) read as a 3-bit number
 const STD_MSG = ["Emergency", "Priority", "Special", "Committed", "Returning", "In Service", "En Route", "Off Duty"];
 const CUSTOM_MSG = ["Emergency", "Custom-6", "Custom-5", "Custom-4", "Custom-3", "Custom-2", "Custom-1", "Custom-0"];
 
-function decodeDest(dest: string): { digits: number[]; mbits: number[]; custom: boolean; north: boolean; lonOffset: boolean; west: boolean; ambiguity: number } | null {
+function decodeDest(dest: string): {
+  digits: number[];
+  mbits: number[];
+  custom: boolean;
+  north: boolean;
+  lonOffset: boolean;
+  west: boolean;
+  ambiguity: number;
+} | null {
   const call = dest.split("-")[0]!; // strip SSID
   if (call.length < 6) return null;
-  const digits: number[] = [], mbits: number[] = [];
-  let custom = false, ambiguity = 0;
+  const digits: number[] = [],
+    mbits: number[] = [];
+  let custom = false,
+    ambiguity = 0;
   // sign bits come from chars 3,4,5
-  let north = false, lonOffset = false, west = false;
+  let north = false,
+    lonOffset = false,
+    west = false;
   for (let i = 0; i < 6; i++) {
     const c = call[i]!;
-    let digit = 0, mbit = 0, high = false, space = false;
-    if (c >= "0" && c <= "9") { digit = c.charCodeAt(0) - 48; mbit = 0; }
-    else if (c >= "A" && c <= "J") { digit = c.charCodeAt(0) - 65; mbit = 1; custom = true; }
-    else if (c === "K") { space = true; mbit = 1; custom = true; }
-    else if (c === "L") { space = true; mbit = 0; }
-    else if (c >= "P" && c <= "Y") { digit = c.charCodeAt(0) - 80; mbit = 1; high = true; }
-    else if (c === "Z") { space = true; mbit = 1; high = true; }
-    else return null;
+    let digit = 0,
+      mbit = 0,
+      high = false,
+      space = false;
+    if (c >= "0" && c <= "9") {
+      digit = c.charCodeAt(0) - 48;
+      mbit = 0;
+    } else if (c >= "A" && c <= "J") {
+      digit = c.charCodeAt(0) - 65;
+      mbit = 1;
+      custom = true;
+    } else if (c === "K") {
+      space = true;
+      mbit = 1;
+      custom = true;
+    } else if (c === "L") {
+      space = true;
+      mbit = 0;
+    } else if (c >= "P" && c <= "Y") {
+      digit = c.charCodeAt(0) - 80;
+      mbit = 1;
+      high = true;
+    } else if (c === "Z") {
+      space = true;
+      mbit = 1;
+      high = true;
+    } else return null;
     if (space) ambiguity++;
-    digits.push(digit); mbits.push(mbit);
+    digits.push(digit);
+    mbits.push(mbit);
     if (i === 3) north = high;
     if (i === 4) lonOffset = high;
     if (i === 5) west = high;
@@ -71,7 +110,9 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   if (dd.west) lon = -lon;
 
   // speed (knots) + course (deg) from info bytes 4..6
-  const sp = info.charCodeAt(4) - 28, dc = info.charCodeAt(5) - 28, se = info.charCodeAt(6) - 28;
+  const sp = info.charCodeAt(4) - 28,
+    dc = info.charCodeAt(5) - 28,
+    se = info.charCodeAt(6) - 28;
   let speedKn = sp * 10 + Math.floor(dc / 10);
   let course = (dc % 10) * 100 + se;
   if (speedKn >= 800) speedKn -= 800;
@@ -84,8 +125,14 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   const messageType = (dd.custom ? CUSTOM_MSG : STD_MSG)[msgNum]!;
 
   const fix: MicEFix = {
-    lat: round(lat), lon: round(lon), table, code,
-    course, speedKn, messageType, ambiguity: dd.ambiguity,
+    lat: round(lat),
+    lon: round(lon),
+    table,
+    code,
+    course,
+    speedKn,
+    messageType,
+    ambiguity: dd.ambiguity,
   };
 
   // trailing comment may carry altitude as "xxx}" (base-91, metres above -10000m datum)

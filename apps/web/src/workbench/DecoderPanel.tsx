@@ -14,17 +14,29 @@ export function DecoderPanel() {
   const [decoded, setDecoded] = useState<DecodedPacket | null>(null);
 
   async function decode() {
-    try { setDecoded(await decodePacket(raw.trim())); }
-    catch (e) { setDecoded({ ok: false, error: (e as Error).message }); }
+    try {
+      setDecoded(await decodePacket(raw.trim()));
+    } catch (e) {
+      setDecoded({ ok: false, error: (e as Error).message });
+    }
   }
 
   return (
     <>
       <p className="muted">Decode a raw packet — paste a TNC2 monitor line or an APRS-IS line.</p>
-      <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={3} placeholder="paste a raw TNC2 / APRS-IS line…" />
+      <textarea
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        rows={3}
+        placeholder="paste a raw TNC2 / APRS-IS line…"
+      />
       <div className="row between mt-2">
-        <button className="link" onClick={() => setRaw(SAMPLE)}>use a sample</button>
-        <button className="primary" onClick={decode} disabled={!raw.trim()}>Decode</button>
+        <button className="link" onClick={() => setRaw(SAMPLE)}>
+          use a sample
+        </button>
+        <button className="primary" onClick={decode} disabled={!raw.trim()}>
+          Decode
+        </button>
       </div>
       {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
       {decoded?.ok && decoded.frame && (
@@ -33,10 +45,18 @@ export function DecoderPanel() {
             <strong className="mono">{decoded.frame.src}</strong>
             <Badge kind={decoded.frame.heardVia === "rf" ? "tierA" : undefined}>{decoded.frame.heardVia}</Badge>
           </div>
-          <div className="muted">→ {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}</div>
+          <div className="muted">
+            → {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}
+          </div>
           <div className="kind">{String(decoded.data?.kind)}</div>
           <dl className="fields">
-            {decoded.data && Object.entries(flatten(decoded.data)).map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
+            {decoded.data &&
+              Object.entries(flatten(decoded.data)).map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
           </dl>
         </div>
       )}
@@ -50,7 +70,10 @@ function flatten(data: Record<string, unknown>): Record<string, string> {
     if (k === "kind") continue;
     if (v == null) continue;
     if (typeof v === "object") {
-      if (k === "symbol" && (v as { label?: string }).label) { out.symbol = `${(v as { label: string }).label} (${(v as { table: string }).table}${(v as { code: string }).code})`; continue; }
+      if (k === "symbol" && (v as { label?: string }).label) {
+        out.symbol = `${(v as { label: string }).label} (${(v as { table: string }).table}${(v as { code: string }).code})`;
+        continue;
+      }
       out[k] = JSON.stringify(v);
     } else out[k] = String(v);
   }

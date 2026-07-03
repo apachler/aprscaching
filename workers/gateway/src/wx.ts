@@ -21,7 +21,11 @@ import { isCallsignVerified } from "./callsign.js";
 const WX_BEACON_MIN_SEC = 300; // throttle WX beacons to ≤ once / 5 min (cost + APRS etiquette)
 
 const now = () => Math.floor(Date.now() / 1000);
-const num = (v: string | undefined): number | undefined => { if (v == null || v === "") return undefined; const n = parseFloat(v); return Number.isFinite(n) ? n : undefined; };
+const num = (v: string | undefined): number | undefined => {
+  if (v == null || v === "") return undefined;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : undefined;
+};
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const fToC = (f: number) => r1(((f - 32) * 5) / 9);
 const inHgToHpa = (x: number) => r1(x * 33.8638867);
@@ -29,15 +33,32 @@ const mphToKn = (x: number) => r1(x * 0.868976);
 const inToMm = (x: number) => r1(x * 25.4);
 
 export interface WxReading {
-  temp_c?: number; humidity?: number; pressure_hpa?: number; wind_dir?: number; wind_kn?: number;
-  gust_kn?: number; rain_mm?: number; rain_24h_mm?: number; luminosity_wm2?: number;
+  temp_c?: number;
+  humidity?: number;
+  pressure_hpa?: number;
+  wind_dir?: number;
+  wind_kn?: number;
+  gust_kn?: number;
+  rain_mm?: number;
+  rain_24h_mm?: number;
+  luminosity_wm2?: number;
 }
 
 /** Parse an Ecowitt / WU parameter bag (imperial) into our metric reading. */
 export function parseWx(get: (k: string) => string | undefined): WxReading {
-  const g = (...keys: string[]): number | undefined => { for (const k of keys) { const v = num(get(k)); if (v != null) return v; } return undefined; };
-  const tempf = g("tempf", "temp"), barom = g("baromrelin", "baromin", "barom"), wind = g("windspeedmph", "windspeed");
-  const gust = g("windgustmph", "windgust"), rainHr = g("hourlyrainin", "rainin"), rainDay = g("dailyrainin");
+  const g = (...keys: string[]): number | undefined => {
+    for (const k of keys) {
+      const v = num(get(k));
+      if (v != null) return v;
+    }
+    return undefined;
+  };
+  const tempf = g("tempf", "temp"),
+    barom = g("baromrelin", "baromin", "barom"),
+    wind = g("windspeedmph", "windspeed");
+  const gust = g("windgustmph", "windgust"),
+    rainHr = g("hourlyrainin", "rainin"),
+    rainDay = g("dailyrainin");
   const dir = g("winddir");
   return {
     temp_c: tempf != null ? fToC(tempf) : undefined,
@@ -60,9 +81,16 @@ async function readParams(req: Request): Promise<(k: string) => string | undefin
   if (req.method === "POST") {
     const ct = req.headers.get("content-type") ?? "";
     try {
-      if (ct.includes("application/json")) { const b = await req.json() as Record<string, unknown>; for (const [k, v] of Object.entries(b)) map.set(k.toLowerCase(), String(v)); }
-      else { const t = await req.text(); for (const [k, v] of new URLSearchParams(t)) map.set(k.toLowerCase(), v); }
-    } catch { /* ignore */ }
+      if (ct.includes("application/json")) {
+        const b = (await req.json()) as Record<string, unknown>;
+        for (const [k, v] of Object.entries(b)) map.set(k.toLowerCase(), String(v));
+      } else {
+        const t = await req.text();
+        for (const [k, v] of new URLSearchParams(t)) map.set(k.toLowerCase(), v);
+      }
+    } catch {
+      /* ignore */
+    }
   }
   return (k) => map.get(k.toLowerCase());
 }
@@ -70,9 +98,11 @@ async function readParams(req: Request): Promise<(k: string) => string | undefin
 /** GET/POST /api/wx/submit (+ /updateweatherstation) — store a PWS reading under its station. */
 export async function handleWxSubmit(req: Request, env: Env): Promise<Response> {
   const get = await readParams(req);
-  const key = get("key") ?? get("password");  // our key, or WU's PASSWORD field
+  const key = get("key") ?? get("password"); // our key, or WU's PASSWORD field
   if (!key) return new Response("missing key", { status: 401 });
-  const row = await env.DB.prepare("SELECT callsign, station_id AS stationId FROM wx_keys WHERE key = ?").bind(key).first<{ callsign: string; stationId: number | null }>();
+  const row = await env.DB.prepare("SELECT callsign, station_id AS stationId FROM wx_keys WHERE key = ?")
+    .bind(key)
+    .first<{ callsign: string; stationId: number | null }>();
   if (!row) return new Response("unknown key", { status: 401 });
 
   const wx = parseWx(get);
@@ -86,26 +116,57 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
   let station = `${row.callsign.toUpperCase()}-13`;
   let place: { lat: number; lon: number } | null = null;
   if (row.stationId != null) {
-    const s = await env.DB.prepare("SELECT callsign, lat, lon FROM account_stations WHERE id = ?").bind(row.stationId).first<{ callsign: string; lat: number | null; lon: number | null }>();
-    if (s) { station = s.callsign.toUpperCase(); place = s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : null; }
+    const s = await env.DB.prepare("SELECT callsign, lat, lon FROM account_stations WHERE id = ?")
+      .bind(row.stationId)
+      .first<{ callsign: string; lat: number | null; lon: number | null }>();
+    if (s) {
+      station = s.callsign.toUpperCase();
+      place = s.lat != null && s.lon != null ? { lat: s.lat, lon: s.lon } : null;
+    }
   } else {
-    const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?").bind(row.callsign.toUpperCase()).first<{ homeGrid: string | null }>();
+    const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?")
+      .bind(row.callsign.toUpperCase())
+      .first<{ homeGrid: string | null }>();
     place = acct?.homeGrid ? gridToLatLon(acct.homeGrid) : null;
   }
 
-  const ts = (() => { const d = get("dateutc"); if (d && d !== "now") { const t = Date.parse(d.replace(" ", "T") + "Z"); if (Number.isFinite(t)) return Math.floor(t / 1000); } return now(); })();
+  const ts = (() => {
+    const d = get("dateutc");
+    if (d && d !== "now") {
+      const t = Date.parse(d.replace(" ", "T") + "Z");
+      if (Number.isFinite(t)) return Math.floor(t / 1000);
+    }
+    return now();
+  })();
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
   await env.DB.prepare(
     `INSERT OR REPLACE INTO sensor_readings (station, ts, temp_c, humidity, pressure_hpa, wind_dir, wind_kn, gust_kn, rain_mm, rain_24h_mm, luminosity_wm2, source)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(station, ts, wx.temp_c ?? null, wx.humidity ?? null, wx.pressure_hpa ?? null, wx.wind_dir ?? null, wx.wind_kn ?? null, wx.gust_kn ?? null, wx.rain_mm ?? null, wx.rain_24h_mm ?? null, wx.luminosity_wm2 ?? null, source).run();
+  )
+    .bind(
+      station,
+      ts,
+      wx.temp_c ?? null,
+      wx.humidity ?? null,
+      wx.pressure_hpa ?? null,
+      wx.wind_dir ?? null,
+      wx.wind_kn ?? null,
+      wx.gust_kn ?? null,
+      wx.rain_mm ?? null,
+      wx.rain_24h_mm ?? null,
+      wx.luminosity_wm2 ?? null,
+      source,
+    )
+    .run();
   await env.DB.prepare("UPDATE wx_keys SET last_seen = ? WHERE key = ?").bind(now(), key).run();
 
   if (place) {
     await env.DB.prepare(
       `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, source_call) VALUES (?,?,?,?, '_', ?)
        ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen, symbol='_'`,
-    ).bind(station, place.lat, place.lon, ts, station).run();
+    )
+      .bind(station, place.lat, place.lon, ts, station)
+      .run();
   }
 
   // W2/W3: if this PWS opted into TX (and its callsign is control-verified), enqueue an APRS WX
@@ -118,9 +179,15 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
 /** Map a stored metric reading to the encoder's wire-unit input. */
 function toWxFields(wx: WxReading): WxEncodeFields {
   return {
-    tempC: wx.temp_c, humidity: wx.humidity, pressureHpa: wx.pressure_hpa,
-    windDirDeg: wx.wind_dir, windKn: wx.wind_kn, gustKn: wx.gust_kn,
-    rainMm: wx.rain_mm, rain24hMm: wx.rain_24h_mm, luminosityWm2: wx.luminosity_wm2,
+    tempC: wx.temp_c,
+    humidity: wx.humidity,
+    pressureHpa: wx.pressure_hpa,
+    windDirDeg: wx.wind_dir,
+    windKn: wx.wind_kn,
+    gustKn: wx.gust_kn,
+    rainMm: wx.rain_mm,
+    rain24hMm: wx.rain_24h_mm,
+    luminosityWm2: wx.luminosity_wm2,
   };
 }
 
@@ -133,12 +200,15 @@ async function maybeBeaconWx(
   env: Env,
   o: { key: string; station: string; baseCall: string; place: { lat: number; lon: number } | null; wx: WxReading },
 ): Promise<void> {
-  const k = await env.DB.prepare("SELECT tx_is AS txIs, tx_cwop AS txCwop, last_beacon AS lastBeacon FROM wx_keys WHERE key = ?")
-    .bind(o.key).first<{ txIs: number; txCwop: number; lastBeacon: number | null }>();
+  const k = await env.DB.prepare(
+    "SELECT tx_is AS txIs, tx_cwop AS txCwop, last_beacon AS lastBeacon FROM wx_keys WHERE key = ?",
+  )
+    .bind(o.key)
+    .first<{ txIs: number; txCwop: number; lastBeacon: number | null }>();
   if (!k || (!k.txIs && !k.txCwop)) return;
-  if (!o.place) return;                                            // a WX report must carry a position
-  if (now() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return;     // throttle
-  if (!(await isCallsignVerified(env, o.baseCall))) return;        // control-verified gate (W2/W3)
+  if (!o.place) return; // a WX report must carry a position
+  if (now() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return; // throttle
+  if (!(await isCallsignVerified(env, o.baseCall))) return; // control-verified gate (W2/W3)
 
   const info = encodeAprsWeather(o.place.lat, o.place.lon, toWxFields(o.wx));
   const ts = now();
@@ -148,14 +218,17 @@ async function maybeBeaconWx(
   for (const target of targets) {
     await env.DB.prepare(
       "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload, target) VALUES (?,?,?, 'wx', ?, ?)",
-    ).bind(ts, o.station, "APZACG", info, target).run();
+    )
+      .bind(ts, o.station, "APZACG", info, target)
+      .run();
   }
   await env.DB.prepare("UPDATE wx_keys SET last_beacon = ? WHERE key = ?").bind(ts, o.key).run();
 }
 
 /** Generate a PWS push key. Shared by the legacy home-PWS endpoint and per-station keys. */
 export function makeWxKey(): string {
-  const b = new Uint8Array(12); crypto.getRandomValues(b);
+  const b = new Uint8Array(12);
+  crypto.getRandomValues(b);
   return "wx_" + [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
@@ -176,15 +249,26 @@ export async function handleWxKey(req: Request, env: Env): Promise<Response> {
   if (req.method === "POST") {
     await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
-      .bind(makeWxKey(), base, await sessionAccountId(req, env), now()).run();
+      .bind(makeWxKey(), base, await sessionAccountId(req, env), now())
+      .run();
   }
-  const row = await env.DB.prepare("SELECT key, last_seen AS lastSeen, tx_is AS txIs, tx_cwop AS txCwop FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string; lastSeen: number | null; txIs: number; txCwop: number }>();
+  const row = await env.DB.prepare(
+    "SELECT key, last_seen AS lastSeen, tx_is AS txIs, tx_cwop AS txCwop FROM wx_keys WHERE callsign = ? AND station_id IS NULL",
+  )
+    .bind(base)
+    .first<{ key: string; lastSeen: number | null; txIs: number; txCwop: number }>();
   const origin = new URL(req.url).origin;
   const urls = row ? wxUrls(origin, station, row.key) : null;
   return json({
-    callsign: base, station, key: row?.key ?? null, lastSeen: row?.lastSeen ?? null,
-    ecowittPath: urls?.ecowittPath ?? null, wuUrl: urls?.wuUrl ?? null,
-    txIs: !!row?.txIs, txCwop: !!row?.txCwop, verified: await isCallsignVerified(env, base),
+    callsign: base,
+    station,
+    key: row?.key ?? null,
+    lastSeen: row?.lastSeen ?? null,
+    ecowittPath: urls?.ecowittPath ?? null,
+    wuUrl: urls?.wuUrl ?? null,
+    txIs: !!row?.txIs,
+    txCwop: !!row?.txCwop,
+    verified: await isCallsignVerified(env, base),
   });
 }
 
@@ -198,7 +282,8 @@ export async function handleWxTx(req: Request, env: Env): Promise<Response> {
   if (!cs) return json({ error: "sign in to manage weather TX" }, { status: 401 });
   const base = cs.toUpperCase().split("-")[0]!;
   const body = (await req.json().catch(() => ({}))) as { stationId?: number; txIs?: boolean; txCwop?: boolean };
-  const txIs = !!body.txIs, txCwop = !!body.txCwop;
+  const txIs = !!body.txIs,
+    txCwop = !!body.txCwop;
 
   const verified = await isCallsignVerified(env, base);
   if ((txIs || txCwop) && !verified)
@@ -211,12 +296,18 @@ export async function handleWxTx(req: Request, env: Env): Promise<Response> {
     row = await env.DB.prepare(
       `SELECT wk.key AS key FROM wx_keys wk JOIN account_stations s ON s.id = wk.station_id
         WHERE wk.station_id = ? AND s.account_id = ?`,
-    ).bind(body.stationId, acct).first<{ key: string }>();
+    )
+      .bind(body.stationId, acct)
+      .first<{ key: string }>();
   } else {
-    row = await env.DB.prepare("SELECT key FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).first<{ key: string }>();
+    row = await env.DB.prepare("SELECT key FROM wx_keys WHERE callsign = ? AND station_id IS NULL")
+      .bind(base)
+      .first<{ key: string }>();
   }
   if (!row) return json({ error: "enable the weather station first" }, { status: 400 });
 
-  await env.DB.prepare("UPDATE wx_keys SET tx_is = ?, tx_cwop = ? WHERE key = ?").bind(txIs ? 1 : 0, txCwop ? 1 : 0, row.key).run();
+  await env.DB.prepare("UPDATE wx_keys SET tx_is = ?, tx_cwop = ? WHERE key = ?")
+    .bind(txIs ? 1 : 0, txCwop ? 1 : 0, row.key)
+    .run();
   return json({ txIs, txCwop, verified });
 }

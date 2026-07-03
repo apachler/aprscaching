@@ -20,11 +20,19 @@ const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as
 type Bucket = (typeof BUCKETS)[number];
 const ingestOk = (req: Request, env: Env): boolean => (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
 
-export interface LedgerRow { ts: number; direction: string; bucket: string; amount_cents: number; currency?: string | null }
+export interface LedgerRow {
+  ts: number;
+  direction: string;
+  bucket: string;
+  amount_cents: number;
+  currency?: string | null;
+}
 
 export interface LedgerSummary {
   currency: string;
-  totalInCents: number; totalOutCents: number; balanceCents: number;
+  totalInCents: number;
+  totalOutCents: number;
+  balanceCents: number;
   buckets: Record<Bucket, { inCents: number; outCents: number }>;
   months: { month: string; inCents: number; outCents: number }[];
 }
@@ -33,18 +41,31 @@ export interface LedgerSummary {
 export function summarizeLedger(rows: LedgerRow[]): LedgerSummary {
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, { inCents: 0, outCents: 0 }])) as LedgerSummary["buckets"];
   const months = new Map<string, { inCents: number; outCents: number }>();
-  let totalInCents = 0, totalOutCents = 0, currency = "EUR";
+  let totalInCents = 0,
+    totalOutCents = 0,
+    currency = "EUR";
   for (const r of rows) {
     if (r.currency) currency = r.currency;
     const m = new Date(r.ts * 1000).toISOString().slice(0, 7); // YYYY-MM (UTC)
     const mo = months.get(m) ?? { inCents: 0, outCents: 0 };
     const bk = (BUCKETS as readonly string[]).includes(r.bucket) ? buckets[r.bucket as Bucket] : null;
-    if (r.direction === "in") { totalInCents += r.amount_cents; mo.inCents += r.amount_cents; if (bk) bk.inCents += r.amount_cents; }
-    else { totalOutCents += r.amount_cents; mo.outCents += r.amount_cents; if (bk) bk.outCents += r.amount_cents; }
+    if (r.direction === "in") {
+      totalInCents += r.amount_cents;
+      mo.inCents += r.amount_cents;
+      if (bk) bk.inCents += r.amount_cents;
+    } else {
+      totalOutCents += r.amount_cents;
+      mo.outCents += r.amount_cents;
+      if (bk) bk.outCents += r.amount_cents;
+    }
     months.set(m, mo);
   }
   return {
-    currency, totalInCents, totalOutCents, balanceCents: totalInCents - totalOutCents, buckets,
+    currency,
+    totalInCents,
+    totalOutCents,
+    balanceCents: totalInCents - totalOutCents,
+    buckets,
     months: [...months.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, v]) => ({ month, ...v })),
   };
 }
@@ -61,17 +82,21 @@ function donationLinks(env: Env): { label: string; url: string }[] {
 }
 
 async function ledgerSummary(env: Env): Promise<LedgerSummary> {
-  const rows = (await env.DB.prepare(
-    "SELECT ts, direction, bucket, amount_cents, currency FROM ledger ORDER BY ts",
-  ).all<LedgerRow>()).results;
+  const rows = (
+    await env.DB.prepare(
+      "SELECT ts, direction, bucket, amount_cents, currency FROM ledger ORDER BY ts",
+    ).all<LedgerRow>()
+  ).results;
   return summarizeLedger(rows);
 }
 
 /** Opt-in public supporters: tier='supporter' AND a public profile. Recognition, not a directory. */
 async function publicSupporters(env: Env): Promise<string[]> {
-  return (await env.DB.prepare(
-    "SELECT callsign FROM accounts WHERE tier='supporter' AND COALESCE(profile_public,1)=1 ORDER BY callsign",
-  ).all<{ callsign: string }>()).results.map((r) => r.callsign);
+  return (
+    await env.DB.prepare(
+      "SELECT callsign FROM accounts WHERE tier='supporter' AND COALESCE(profile_public,1)=1 ORDER BY callsign",
+    ).all<{ callsign: string }>()
+  ).results.map((r) => r.callsign);
 }
 
 /** GET /api/support — public transparency JSON. */
@@ -80,7 +105,9 @@ export async function handleSupport(_req: Request, env: Env): Promise<Response> 
   return json({
     model: "free-in-full · recognition-only · ad-free (donations gate nothing functional)",
     donationLinks: donationLinks(env),
-    ledger, supporters, supporterCount: supporters.length,
+    ledger,
+    supporters,
+    supporterCount: supporters.length,
   });
 }
 
@@ -90,10 +117,13 @@ export async function handleSupportPrefs(req: Request, env: Env): Promise<Respon
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   if (req.method === "POST") {
     const b = (await req.json().catch(() => ({}))) as { hideNag?: boolean };
-    await env.DB.prepare("UPDATE accounts SET hide_nag = ? WHERE account_id = ?").bind(b.hideNag ? 1 : 0, acct).run();
+    await env.DB.prepare("UPDATE accounts SET hide_nag = ? WHERE account_id = ?")
+      .bind(b.hideNag ? 1 : 0, acct)
+      .run();
   }
   const row = await env.DB.prepare("SELECT tier, hide_nag AS hideNag FROM accounts WHERE account_id = ?")
-    .bind(acct).first<{ tier: string; hideNag: number }>();
+    .bind(acct)
+    .first<{ tier: string; hideNag: number }>();
   return json({ supporter: row?.tier === "supporter", hideNag: (row?.hideNag ?? 0) === 1 });
 }
 
@@ -105,17 +135,31 @@ export async function handleSupportPrefs(req: Request, env: Env): Promise<Respon
 export async function handleSupportConfirm(req: Request, env: Env): Promise<Response> {
   if (!ingestOk(req, env)) return json({ error: "unauthorized" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as {
-    callsign?: string; amountCents?: number; currency?: string; bucket?: string; note?: string; source?: string;
+    callsign?: string;
+    amountCents?: number;
+    currency?: string;
+    bucket?: string;
+    note?: string;
+    source?: string;
   };
   const ts = now();
   let supporter: string | null = null;
   if (b.callsign) {
     const base = b.callsign.toUpperCase().split("-")[0]!;
-    const acct = (await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?").bind(base).first<{ account_id: string }>())
-      ?? (await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign = ?").bind(base).first<{ account_id: string }>());
+    const acct =
+      (await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
+        .bind(base)
+        .first<{ account_id: string }>()) ??
+      (await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign = ?")
+        .bind(base)
+        .first<{ account_id: string }>());
     if (acct?.account_id) {
       await env.DB.prepare("UPDATE accounts SET tier='supporter' WHERE account_id = ?").bind(acct.account_id).run();
-      await env.DB.prepare("INSERT OR IGNORE INTO entitlements (account_id, key, granted_at) VALUES (?, 'supporter_badge', ?)").bind(acct.account_id, ts).run();
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO entitlements (account_id, key, granted_at) VALUES (?, 'supporter_badge', ?)",
+      )
+        .bind(acct.account_id, ts)
+        .run();
       supporter = base;
     }
   }
@@ -123,7 +167,9 @@ export async function handleSupportConfirm(req: Request, env: Env): Promise<Resp
     const bucket = (BUCKETS as readonly string[]).includes(b.bucket ?? "") ? b.bucket! : "development";
     await env.DB.prepare(
       "INSERT INTO ledger (ts, direction, bucket, amount_cents, currency, note, source) VALUES (?, 'in', ?, ?, ?, ?, ?)",
-    ).bind(ts, bucket, Math.round(b.amountCents), b.currency ?? "EUR", b.note ?? null, b.source ?? "manual").run();
+    )
+      .bind(ts, bucket, Math.round(b.amountCents), b.currency ?? "EUR", b.note ?? null, b.source ?? "manual")
+      .run();
   }
   return json({ ok: true, supporter });
 }
@@ -134,10 +180,13 @@ export async function handleSupportPage(_req: Request, env: Env): Promise<Respon
   const ledger = await ledgerSummary(env);
   const links = donationLinks(env);
   const supporters = await publicSupporters(env);
-  const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]!));
-  const bucketRows = BUCKETS.map((b) =>
-    `<tr><td>${b.replace("_", " ")}</td><td>${eur(ledger.buckets[b].inCents)}</td><td>${eur(ledger.buckets[b].outCents)}</td></tr>`).join("");
-  const linkHtml = links.length ? links.map((l) => `<a href="${esc(l.url)}" rel="noopener">${esc(l.label)}</a>`).join(" · ")
+  const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+  const bucketRows = BUCKETS.map(
+    (b) =>
+      `<tr><td>${b.replace("_", " ")}</td><td>${eur(ledger.buckets[b].inCents)}</td><td>${eur(ledger.buckets[b].outCents)}</td></tr>`,
+  ).join("");
+  const linkHtml = links.length
+    ? links.map((l) => `<a href="${esc(l.url)}" rel="noopener">${esc(l.label)}</a>`).join(" · ")
     : "<span class=m>Donation links are configured per instance.</span>";
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Support · aprscaching</title><style>

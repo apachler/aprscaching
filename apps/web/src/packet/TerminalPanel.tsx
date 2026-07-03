@@ -10,7 +10,16 @@ import { PacketTerminal } from "./PacketTerminal.js";
 
 export function TerminalPanel(props: { callsign: string; onClose: () => void }) {
   return (
-    <Panel title={<><Ico e="📻 " />Packet terminal</>} onClose={props.onClose} wide>
+    <Panel
+      title={
+        <>
+          <Ico e="📻 " />
+          Packet terminal
+        </>
+      }
+      onClose={props.onClose}
+      wide
+    >
       <PacketTerminal callsign={props.callsign} />
     </Panel>
   );

@@ -10,7 +10,7 @@ describe("public read API /api/v1 (ADR-4a)", () => {
   it("index advertises version, limits and the endpoint catalogue", async () => {
     const res = await handleApiV1(req("GET", ""), {} as Env, "");
     expect(res.status).toBe(200);
-    const d = await res.json() as any;
+    const d = (await res.json()) as any;
     expect(d.version).toBe("v1");
     expect(d.access).toMatch(/read-only/);
     expect(d.rateLimits.anonymous).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ describe("public read API /api/v1 (ADR-4a)", () => {
   it("caps bbox size and rejects malformed bbox (before touching the DB)", async () => {
     const big = await handleApiV1(req("GET", "/caches?bbox=-50,-50,50,50"), {} as Env, "/caches");
     expect(big.status).toBe(400);
-    expect((await big.json() as any).error).toMatch(/too large/);
+    expect(((await big.json()) as any).error).toMatch(/too large/);
     const bad = await handleApiV1(req("GET", "/caches?bbox=1,2,3"), {} as Env, "/caches");
     expect(bad.status).toBe(400);
   });
@@ -40,13 +40,13 @@ describe("public read API /api/v1 (ADR-4a)", () => {
     const c = await handleApiV1(req("GET", "/spots", ip), env, "/spots");
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(c.status).toBe(429);
-    expect((await c.json() as any).limit).toBe(2);
+    expect(((await c.json()) as any).limit).toBe(2);
     expect(c.headers.get("retry-after")).toBe("60");
   });
 
   it("unknown v1 path → 404 with a pointer to the index", async () => {
     const res = await handleApiV1(req("GET", "/nope"), {} as Env, "/nope");
     expect(res.status).toBe(404);
-    expect((await res.json() as any).see).toBe("/api/v1");
+    expect(((await res.json()) as any).see).toBe("/api/v1");
   });
 });

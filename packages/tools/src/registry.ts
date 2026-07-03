@@ -16,7 +16,10 @@ function stableStringify(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
   const o = v as Record<string, unknown>;
-  return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(",")}}`;
+  return `{${Object.keys(o)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
+    .join(",")}}`;
 }
 
 // ---- base64 / base64url <-> bytes (browser + Worker + Node/Bun globals) ----
@@ -56,7 +59,9 @@ export async function checkManifestSignature(m: ToolManifest): Promise<ManifestS
     const key = await importVerifyKey(m.pubkey);
     const ok = await crypto.subtle.verify("Ed25519", key, buf(b64ToBytes(m.signature)), buf(manifestSigningBytes(m)));
     return ok ? "valid" : "invalid";
-  } catch { return "invalid"; }
+  } catch {
+    return "invalid";
+  }
 }
 
 /** Sign a manifest with an Ed25519 private key (authoring/tests) — returns the manifest with `signature` set. */
@@ -67,13 +72,20 @@ export async function signManifest(m: ToolManifest, priv: CryptoKey): Promise<To
 
 // ---- the signed tool registry (marketplace index) ----
 export interface RegistryEntry {
-  name: string; title: string; author: string; version: string;
-  pubkey: string;         // the author key this tool's manifest MUST match to be "verified"
-  entry: string;          // absolute URL to the tool.json
+  name: string;
+  title: string;
+  author: string;
+  version: string;
+  pubkey: string; // the author key this tool's manifest MUST match to be "verified"
+  entry: string; // absolute URL to the tool.json
   description?: string;
 }
 /** An authority-signed registry: `sig` (base64) covers the canonical `entries`; `authority` is its pubkey. */
-export interface SignedRegistry { entries: RegistryEntry[]; authority: string; sig: string }
+export interface SignedRegistry {
+  entries: RegistryEntry[];
+  authority: string;
+  sig: string;
+}
 
 export function registrySigningBytes(entries: RegistryEntry[]): Uint8Array {
   return new TextEncoder().encode(stableStringify(entries));
@@ -85,18 +97,27 @@ export async function verifyRegistry(reg: SignedRegistry, pinnedAuthorityB64url:
   try {
     const key = await importVerifyKey(reg.authority);
     return await crypto.subtle.verify("Ed25519", key, buf(b64ToBytes(reg.sig)), buf(registrySigningBytes(reg.entries)));
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /** Sign a registry (authoring/tests). */
-export async function signRegistry(entries: RegistryEntry[], authorityPub: string, priv: CryptoKey): Promise<SignedRegistry> {
+export async function signRegistry(
+  entries: RegistryEntry[],
+  authorityPub: string,
+  priv: CryptoKey,
+): Promise<SignedRegistry> {
   const sig = await crypto.subtle.sign("Ed25519", priv, buf(registrySigningBytes(entries)));
   return { entries, authority: authorityPub, sig: bytesToB64(new Uint8Array(sig)) };
 }
 
 /** Overall trust of a fetched manifest given signature status + registry match + a TOFU pin. */
 export type ToolTrust = "verified" | "known" | "self-signed" | "unsigned" | "invalid" | "key-changed";
-export function resolveTrust(sig: ManifestSig, opts: { registryPubkey?: string; pinnedPubkey?: string; pubkey?: string }): ToolTrust {
+export function resolveTrust(
+  sig: ManifestSig,
+  opts: { registryPubkey?: string; pinnedPubkey?: string; pubkey?: string },
+): ToolTrust {
   if (sig === "invalid") return "invalid";
   if (sig === "unsigned") return "unsigned";
   // sig === valid from here

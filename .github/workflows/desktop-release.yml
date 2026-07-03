@@ -9,9 +9,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest        # Bun cross-compiles every target from one runner
+    runs-on: ubuntu-latest # Bun cross-compiles every target from one runner
     permissions:
-      contents: write             # create the GitHub release + upload the desktop binaries
+      contents: write # create the GitHub release + upload the desktop binaries
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4

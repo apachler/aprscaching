@@ -45,11 +45,11 @@ export function makeStreamDecoder(mode: DecodeMode, sampleRate: number, opts: St
   const minNew = Math.max(1, Math.floor(((opts.minRedecodeMs ?? 400) * sampleRate) / 1000));
 
   let buf = new Float64Array(0);
-  let sinceDecode = 0;   // new samples appended since the last re-decode
+  let sinceDecode = 0; // new samples appended since the last re-decode
   let out = "";
 
   const decodeAll = (): string => {
-    if (buf.length < sampleRate / 20) return out;   // < ~50 ms — nothing to decode yet
+    if (buf.length < sampleRate / 20) return out; // < ~50 ms — nothing to decode yet
     return mode === "psk31"
       ? decodeVaricode(psk31DemodRobust(buf, sampleRate, { carrierHz: opts.carrierHz, baud: opts.baud }))
       : decodeMorse(morseFromTiming(cwKeyEvents(buf, sampleRate, { pitchHz: opts.pitchHz })));
@@ -78,11 +78,24 @@ export function makeStreamDecoder(mode: DecodeMode, sampleRate: number, opts: St
     push(chunk) {
       append(chunk);
       sinceDecode += chunk.length;
-      if (sinceDecode >= minNew) { out = decodeAll(); sinceDecode = 0; }
+      if (sinceDecode >= minNew) {
+        out = decodeAll();
+        sinceDecode = 0;
+      }
       return out;
     },
-    flush() { out = decodeAll(); sinceDecode = 0; return out; },
-    text() { return out; },
-    reset() { buf = new Float64Array(0); sinceDecode = 0; out = ""; },
+    flush() {
+      out = decodeAll();
+      sinceDecode = 0;
+      return out;
+    },
+    text() {
+      return out;
+    },
+    reset() {
+      buf = new Float64Array(0);
+      sinceDecode = 0;
+      out = "";
+    },
   };
 }

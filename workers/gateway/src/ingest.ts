@@ -13,12 +13,31 @@ import { verifySignedIngest } from "./keys.js";
 import { rateLimited } from "./corroborate_privacy.js";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
-function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }):
-  { lat: number; lon: number; symbol?: string; course?: number; speedKn?: number; altitudeM?: number; comment?: string } | null {
+function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
+  lat: number;
+  lon: number;
+  symbol?: string;
+  course?: number;
+  speedKn?: number;
+  altitudeM?: number;
+  comment?: string;
+} | null {
   const d = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
-  if ((d.kind === "position" || d.kind === "object" || d.kind === "item" || d.kind === "weather") && typeof d.lat === "number" && d.lat !== 0) {
+  if (
+    (d.kind === "position" || d.kind === "object" || d.kind === "item" || d.kind === "weather") &&
+    typeof d.lat === "number" &&
+    d.lat !== 0
+  ) {
     const sym = d.symbol ? `${d.symbol.table}${d.symbol.code}` : undefined;
-    return { lat: d.lat, lon: d.lon, symbol: sym, course: d.course, speedKn: d.speedKn, altitudeM: d.altitudeM, comment: d.comment };
+    return {
+      lat: d.lat,
+      lon: d.lon,
+      symbol: sym,
+      course: d.course,
+      speedKn: d.speedKn,
+      altitudeM: d.altitudeM,
+      comment: d.comment,
+    };
   }
   // fall back to a pre-parsed {lat,lon,symbol} supplied by the ingest box
   const pp = p.parsed as any;
@@ -59,8 +78,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         env.DB.prepare(
           `INSERT OR REPLACE INTO sensor_readings (station, ts, temp_c, humidity, pressure_hpa, wind_dir, wind_kn, rain_mm)
            VALUES (?,?,?,?,?,?,?,?)`,
-        ).bind(p.src, p.ts, data.tempC ?? null, data.humidity ?? null, data.pressureHpa ?? null,
-          data.windDirDeg ?? null, data.windKn ?? null, data.rain1hMm ?? null),
+        ).bind(
+          p.src,
+          p.ts,
+          data.tempC ?? null,
+          data.humidity ?? null,
+          data.pressureHpa ?? null,
+          data.windDirDeg ?? null,
+          data.windKn ?? null,
+          data.rain1hMm ?? null,
+        ),
       );
     }
     // text message -> messages log; ack -> BBS delivery confirmation
@@ -93,8 +120,19 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       env.DB.prepare(
         `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course)
          VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(p.src, p.ts, fix.lat, fix.lon, p.heardVia, igate, p.path.join(","), src,
-        fix.speedKn ?? null, fix.altitudeM ?? null, fix.course ?? null),
+      ).bind(
+        p.src,
+        p.ts,
+        fix.lat,
+        fix.lon,
+        p.heardVia,
+        igate,
+        p.path.join(","),
+        src,
+        fix.speedKn ?? null,
+        fix.altitudeM ?? null,
+        fix.course ?? null,
+      ),
     );
     stmts.push(
       env.DB.prepare(
@@ -103,14 +141,28 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
          ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen,
            symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
            altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)`,
-      ).bind(p.src, fix.lat, fix.lon, p.ts, fix.symbol ?? null, fix.course ?? null,
-        fix.speedKn ?? null, fix.altitudeM ?? null, fix.comment ?? null, igate),
+      ).bind(
+        p.src,
+        fix.lat,
+        fix.lon,
+        p.ts,
+        fix.symbol ?? null,
+        fix.course ?? null,
+        fix.speedKn ?? null,
+        fix.altitudeM ?? null,
+        fix.comment ?? null,
+        igate,
+      ),
     );
     // Keep a registered operated-station's location live: if this callsign is in someone's registry,
     // an APRS position fix updates its stored coordinates.
     stmts.push(
-      env.DB.prepare("UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ?")
-        .bind(fix.lat, fix.lon, p.ts, p.src),
+      env.DB.prepare("UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ?").bind(
+        fix.lat,
+        fix.lon,
+        p.ts,
+        p.src,
+      ),
     );
   }
   // M6: per-transport RX counters, bucketed by hour (port_stats)
@@ -131,16 +183,34 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   for (const cs of heardCalls) await deliverHeld(env, cs);
 
   // W1: raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)
-  try { await recordWatchHeard(env, positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon }))); }
-  catch (e) { console.error("watch alerts:", (e as Error).message); }
+  try {
+    await recordWatchHeard(
+      env,
+      positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon })),
+    );
+  } catch (e) {
+    console.error("watch alerts:", (e as Error).message);
+  }
 
   // F-4: record living-cache rendezvous for any opted-in living cache just heard (best-effort)
-  try { await recordRendezvous(env, positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon }))); }
-  catch (e) { console.error("rendezvous:", (e as Error).message); }
+  try {
+    await recordRendezvous(
+      env,
+      positions.map((p) => ({ src: p.src, lat: p.lat, lon: p.lon })),
+    );
+  } catch (e) {
+    console.error("rendezvous:", (e as Error).message);
+  }
 
   // P4: per-port MHeard for the NET/ROM node (best-effort)
-  try { await recordMheard(env, body.data.packets.map((p) => ({ src: p.src, port: p.port }))); }
-  catch (e) { console.error("mheard:", (e as Error).message); }
+  try {
+    await recordMheard(
+      env,
+      body.data.packets.map((p) => ({ src: p.src, port: p.port })),
+    );
+  } catch (e) {
+    console.error("mheard:", (e as Error).message);
+  }
 
   // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];

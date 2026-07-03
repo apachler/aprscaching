@@ -39,26 +39,45 @@ export function deliveriesFor(sub: Subscribe | undefined, env: LiveEnvelope): Se
 
 /** Build the live envelope for one ingested position: a station delta + nearby geofence prompts. */
 export async function envelopeForPosition(
-  env: Env, callsign: string, lat: number, lon: number, symbol?: string, course?: number,
+  env: Env,
+  callsign: string,
+  lat: number,
+  lon: number,
+  symbol?: string,
+  course?: number,
 ): Promise<LiveEnvelope> {
   const cs = callsign.toUpperCase();
-  const station: StationDelta = { type: "station", callsign: cs, lat, lon, symbol, course, lastSeen: Math.floor(Date.now() / 1000) };
+  const station: StationDelta = {
+    type: "station",
+    callsign: cs,
+    lat,
+    lon,
+    symbol,
+    course,
+    lastSeen: Math.floor(Date.now() / 1000),
+  };
 
   const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
   const dLat = GEOFENCE_RADIUS_M / 111320;
   const dLon = GEOFENCE_RADIUS_M / (111320 * cosLat);
-  const rows = (await env.DB.prepare(
-    `SELECT id, code, title, lat, lon FROM caches
+  const rows = (
+    await env.DB.prepare(
+      `SELECT id, code, title, lat, lon FROM caches
       WHERE status = 'active' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? LIMIT 50`,
-  ).bind(lat - dLat, lat + dLat, lon - dLon, lon + dLon)
-    .all<{ id: number; code: string; title: string; lat: number; lon: number }>()).results;
+    )
+      .bind(lat - dLat, lat + dLat, lon - dLon, lon + dLon)
+      .all<{ id: number; code: string; title: string; lat: number; lon: number }>()
+  ).results;
 
   const prompts: { forCallsign: string; prompt: GeofencePrompt }[] = [];
   for (const c of rows) {
     if (c.lat == null || c.lon == null) continue;
     const distanceM = haversineMeters(lat, lon, c.lat, c.lon);
     if (distanceM <= GEOFENCE_RADIUS_M) {
-      prompts.push({ forCallsign: cs, prompt: { type: "near_cache", cacheId: c.id, code: c.code, title: c.title, distanceM } });
+      prompts.push({
+        forCallsign: cs,
+        prompt: { type: "near_cache", cacheId: c.id, code: c.code, title: c.title, distanceM },
+      });
     }
   }
   return { station, prompts: prompts.length ? prompts : undefined };
@@ -68,8 +87,15 @@ export async function envelopeForPosition(
 export async function dispatchLive(env: Env, envelopes: LiveEnvelope[], region = LIVE_REGION): Promise<void> {
   if (!envelopes.length) return;
   const room = env.ROOMS.get(env.ROOMS.idFromName(region));
-  await room.fetch(new Request("https://room/dispatch", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ envelopes }),
-  })).catch(() => { /* room unavailable; live is best-effort */ });
+  await room
+    .fetch(
+      new Request("https://room/dispatch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ envelopes }),
+      }),
+    )
+    .catch(() => {
+      /* room unavailable; live is best-effort */
+    });
 }

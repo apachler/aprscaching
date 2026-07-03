@@ -9,7 +9,10 @@ import { deliveriesFor, type LiveEnvelope } from "./live.js";
  * station deltas + geofence prompts. SQLite-backed => available on Workers Free.
  */
 export class RegionRoom {
-  constructor(private ctx: DurableObjectState, private env: Env) {}
+  constructor(
+    private ctx: DurableObjectState,
+    private env: Env,
+  ) {}
 
   async fetch(req: Request): Promise<Response> {
     if (req.headers.get("Upgrade") === "websocket") {
@@ -27,7 +30,11 @@ export class RegionRoom {
         const sub = ws.deserializeAttachment() as Subscribe | undefined;
         for (const env of envelopes) {
           for (const msg of deliveriesFor(sub, env)) {
-            try { ws.send(JSON.stringify(msg)); } catch { /* dropped */ }
+            try {
+              ws.send(JSON.stringify(msg));
+            } catch {
+              /* dropped */
+            }
           }
         }
       }
@@ -41,13 +48,25 @@ export class RegionRoom {
     try {
       const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg);
       const parsed = Subscribe.safeParse(JSON.parse(text));
-      if (parsed.success) ws.serializeAttachment(parsed.data);   // survives hibernation
-    } catch { /* ignore junk frames */ }
+      if (parsed.success) ws.serializeAttachment(parsed.data); // survives hibernation
+    } catch {
+      /* ignore junk frames */
+    }
   }
 
   async webSocketClose(ws: WebSocket, code?: number, reason?: string): Promise<void> {
     // SR-RT-13: echo a valid close code (1000 when the client sent a reserved/absent one).
-    try { ws.close(code && code >= 1000 && code < 5000 ? code : 1000, reason); } catch { /* already closing */ }
+    try {
+      ws.close(code && code >= 1000 && code < 5000 ? code : 1000, reason);
+    } catch {
+      /* already closing */
+    }
   }
-  async webSocketError(ws: WebSocket): Promise<void> { try { ws.close(1011, "error"); } catch { /* noop */ } }
+  async webSocketError(ws: WebSocket): Promise<void> {
+    try {
+      ws.close(1011, "error");
+    } catch {
+      /* noop */
+    }
+  }
 }

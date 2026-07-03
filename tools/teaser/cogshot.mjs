@@ -15,10 +15,13 @@ const browser = await chromium.launch({
 
 async function shoot(demo, theme, file, crt = false, vw = 1280) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: 860 }, deviceScaleFactor: 2 });
-  await ctx.addInitScript(([th, c]) => {
-    localStorage.setItem("acs.call", "OE8APR");
-    localStorage.setItem("acs.locale", JSON.stringify({ theme: th, crt: c }));
-  }, [theme, crt]);
+  await ctx.addInitScript(
+    ([th, c]) => {
+      localStorage.setItem("acs.call", "OE8APR");
+      localStorage.setItem("acs.locale", JSON.stringify({ theme: th, crt: c }));
+    },
+    [theme, crt],
+  );
   const page = await ctx.newPage();
   await page.goto(`${BASE}/?demo=${demo}`, { waitUntil: "load" });
   await page.waitForTimeout(1500);

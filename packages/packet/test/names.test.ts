@@ -16,11 +16,11 @@ describe("NAMES.GP station-type registry", () => {
   });
 
   it("an explicit override always wins over the classifier", () => {
-    const r = new StationRegistry({ "OE8BBS": "bbs" });
+    const r = new StationRegistry({ OE8BBS: "bbs" });
     expect(r.classify("OE8BBS", { symbol: "/_" })).toBe("bbs"); // would auto-classify weather, override wins
     r.set("OE8BBS", null);
     expect(r.classify("OE8BBS-0", { payload: "!4704.41N/01526.27E>" })).toBe("beacon");
-    r.set("oe8bbs", "node");                 // case-insensitive
+    r.set("oe8bbs", "node"); // case-insensitive
     expect(r.classify("OE8BBS")).toBe("node");
     expect(r.toJSON()).toEqual({ OE8BBS: "node" });
   });

@@ -8,32 +8,44 @@
  * The modulo is a per-link property established at connect (SABM ⇒ mod-8, SABME ⇒ mod-128), so the
  * codec cannot infer it from the bytes; the caller passes `extended` to match the link.
  */
-export interface Ax25Address { call: string; ssid: number }
+export interface Ax25Address {
+  call: string;
+  ssid: number;
+}
 
 export type FrameType =
-  | "I" | "RR" | "RNR" | "REJ" | "SREJ"
-  | "SABM" | "SABME" | "DISC" | "DM" | "UA" | "FRMR" | "UI" | "XID" | "TEST";
+  "I" | "RR" | "RNR" | "REJ" | "SREJ" | "SABM" | "SABME" | "DISC" | "DM" | "UA" | "FRMR" | "UI" | "XID" | "TEST";
 
 export interface Ax25Frame {
   dst: Ax25Address;
   src: Ax25Address;
-  digis?: Ax25Address[];     // via path (each with its has-been-repeated bit on decode)
+  digis?: Ax25Address[]; // via path (each with its has-been-repeated bit on decode)
   digisRepeated?: boolean[]; // parallel to digis: the H (has-been-repeated) bit per via-hop
-  command: boolean;          // from the C bits: true = command, false = response (AX.25 v2)
+  command: boolean; // from the C bits: true = command, false = response (AX.25 v2)
   type: FrameType;
-  pf: boolean;               // poll (command) / final (response)
-  extended?: boolean;        // set on decode (and by the link on emit) when this is a modulo-128 I/S frame
-  nr?: number;               // I + S frames
-  ns?: number;               // I frames
-  pid?: number;              // I + UI frames (0xF0 = no layer 3)
-  info?: Uint8Array;         // I / UI / FRMR / TEST payload
+  pf: boolean; // poll (command) / final (response)
+  extended?: boolean; // set on decode (and by the link on emit) when this is a modulo-128 I/S frame
+  nr?: number; // I + S frames
+  ns?: number; // I frames
+  pid?: number; // I + UI frames (0xF0 = no layer 3)
+  info?: Uint8Array; // I / UI / FRMR / TEST payload
 }
 
 export const PID_NO_L3 = 0xf0;
 export const PID_NETROM = 0xcf;
 
 // U-frame control values (P/F bit 0x10 masked off)
-const U: Record<string, number> = { SABME: 0x6f, SABM: 0x2f, DISC: 0x43, DM: 0x0f, UA: 0x63, FRMR: 0x87, UI: 0x03, XID: 0xaf, TEST: 0xe3 };
+const U: Record<string, number> = {
+  SABME: 0x6f,
+  SABM: 0x2f,
+  DISC: 0x43,
+  DM: 0x0f,
+  UA: 0x63,
+  FRMR: 0x87,
+  UI: 0x03,
+  XID: 0xaf,
+  TEST: 0xe3,
+};
 const U_REV: Record<number, FrameType> = Object.fromEntries(Object.entries(U).map(([k, v]) => [v, k as FrameType]));
 const S_BITS: Record<string, number> = { RR: 0, RNR: 1, REJ: 2, SREJ: 3 };
 const S_REV: FrameType[] = ["RR", "RNR", "REJ", "SREJ"];
@@ -55,7 +67,11 @@ export function decodeAddress(b: Uint8Array, off: number): { addr: Ax25Address; 
   let call = "";
   for (let i = 0; i < 6; i++) call += String.fromCharCode(b[off + i]! >> 1);
   const ssidByte = b[off + 6]!;
-  return { addr: { call: call.trimEnd(), ssid: (ssidByte >> 1) & 0x0f }, cbit: !!(ssidByte & 0x80), last: !!(ssidByte & 1) };
+  return {
+    addr: { call: call.trimEnd(), ssid: (ssidByte >> 1) & 0x0f },
+    cbit: !!(ssidByte & 0x80),
+    last: !!(ssidByte & 1),
+  };
 }
 
 // ------------------------------------------------------------------ frame
@@ -73,10 +89,11 @@ export function encodeFrame(f: Ax25Frame, extended = f.extended ?? false): Uint8
   parts.push(...dst, ...src);
   digis.forEach((d, i) => parts.push(...encodeAddress(d, f.digisRepeated?.[i] ?? false, i === digis.length - 1)));
 
-  const isI = f.type === "I", isS = S_BITS[f.type] !== undefined;
+  const isI = f.type === "I",
+    isS = S_BITS[f.type] !== undefined;
   if (extended && (isI || isS)) {
     // 16-bit control, low octet first: octet1 carries the type/N(S), octet2 carries P/F + N(R).
-    const o1 = isI ? ((f.ns! & 0x7f) << 1) : (0b01 | (S_BITS[f.type]! << 2));
+    const o1 = isI ? (f.ns! & 0x7f) << 1 : 0b01 | (S_BITS[f.type]! << 2);
     const o2 = ((f.nr! & 0x7f) << 1) | (f.pf ? 1 : 0);
     parts.push(o1, o2);
   } else {
@@ -97,42 +114,77 @@ export function encodeFrame(f: Ax25Frame, extended = f.extended ?? false): Uint8
  * I/S control field — the caller knows the link's modulo from the connect (SABM vs SABME); the bytes don't.
  */
 export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | null {
-  if (bytes.length < 15) return null;                       // 2 addresses + control minimum
+  if (bytes.length < 15) return null; // 2 addresses + control minimum
   const addrs: { addr: Ax25Address; cbit: boolean; last: boolean }[] = [];
   let off = 0;
-  for (let n = 0; n < 10; n++) {                            // dst, src, up to 8 digis
+  for (let n = 0; n < 10; n++) {
+    // dst, src, up to 8 digis
     if (off + 7 > bytes.length) return null;
-    const a = decodeAddress(bytes, off); addrs.push(a); off += 7;
+    const a = decodeAddress(bytes, off);
+    addrs.push(a);
+    off += 7;
     if (a.last) break;
   }
   if (addrs.length < 2) return null;
   const [dst, src, ...digis] = addrs;
-  const command = dst!.cbit;                                // v2: dst C bit set ⇒ command
+  const command = dst!.cbit; // v2: dst C bit set ⇒ command
 
   const ctrl = bytes[off++]!;
-  let pf = !!(ctrl & PF), isExt = false;
-  let type: FrameType, nr: number | undefined, ns: number | undefined, pid: number | undefined, info: Uint8Array | undefined;
+  let pf = !!(ctrl & PF),
+    isExt = false;
+  let type: FrameType,
+    nr: number | undefined,
+    ns: number | undefined,
+    pid: number | undefined,
+    info: Uint8Array | undefined;
 
-  if ((ctrl & 1) === 0) {                                   // I frame
+  if ((ctrl & 1) === 0) {
+    // I frame
     type = "I";
-    if (extended) { const c2 = bytes[off++]!; isExt = true; ns = (ctrl >> 1) & 0x7f; nr = (c2 >> 1) & 0x7f; pf = !!(c2 & 1); }
-    else { nr = (ctrl >> 5) & 7; ns = (ctrl >> 1) & 7; }
-    pid = bytes[off++]; info = bytes.subarray(off);
-  } else if ((ctrl & 0b11) === 0b01) {                      // S frame
+    if (extended) {
+      const c2 = bytes[off++]!;
+      isExt = true;
+      ns = (ctrl >> 1) & 0x7f;
+      nr = (c2 >> 1) & 0x7f;
+      pf = !!(c2 & 1);
+    } else {
+      nr = (ctrl >> 5) & 7;
+      ns = (ctrl >> 1) & 7;
+    }
+    pid = bytes[off++];
+    info = bytes.subarray(off);
+  } else if ((ctrl & 0b11) === 0b01) {
+    // S frame
     type = S_REV[(ctrl >> 2) & 3]!;
-    if (extended) { const c2 = bytes[off++]!; isExt = true; nr = (c2 >> 1) & 0x7f; pf = !!(c2 & 1); }
-    else { nr = (ctrl >> 5) & 7; }
-  } else {                                                  // U frame (always 1 octet, even in extended mode)
+    if (extended) {
+      const c2 = bytes[off++]!;
+      isExt = true;
+      nr = (c2 >> 1) & 0x7f;
+      pf = !!(c2 & 1);
+    } else {
+      nr = (ctrl >> 5) & 7;
+    }
+  } else {
+    // U frame (always 1 octet, even in extended mode)
     const base = ctrl & ~PF;
     type = U_REV[base] ?? "DM";
-    if (type === "UI") { pid = bytes[off++]; info = bytes.subarray(off); }
-    else if (type === "FRMR" || type === "TEST") info = bytes.subarray(off);
+    if (type === "UI") {
+      pid = bytes[off++];
+      info = bytes.subarray(off);
+    } else if (type === "FRMR" || type === "TEST") info = bytes.subarray(off);
   }
   return {
-    dst: dst!.addr, src: src!.addr,
+    dst: dst!.addr,
+    src: src!.addr,
     digis: digis.length ? digis.map((d) => d.addr) : undefined,
     digisRepeated: digis.length ? digis.map((d) => d.cbit) : undefined,
-    command, type, pf, nr, ns, pid, info: info && info.length ? info : undefined,
+    command,
+    type,
+    pf,
+    nr,
+    ns,
+    pid,
+    info: info && info.length ? info : undefined,
     ...(isExt ? { extended: true } : {}),
   };
 }

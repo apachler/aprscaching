@@ -15,13 +15,17 @@ import { json } from "./app.js";
 const UPSTREAM_REPO = "https://github.com/apachler/aprscaching";
 
 export function sourceInfo(env: Env): {
-  repo: string; commit: string | null; tag: string | null; builtAt: number | null; license: string;
+  repo: string;
+  commit: string | null;
+  tag: string | null;
+  builtAt: number | null;
+  license: string;
 } {
   return {
     repo: (env.SOURCE_REPO ?? UPSTREAM_REPO).replace(/\/+$/, ""),
     commit: env.SOURCE_COMMIT ?? null,
     tag: env.SOURCE_TAG ?? null,
-    builtAt: env.SOURCE_BUILT_AT ? (Number(env.SOURCE_BUILT_AT) || null) : null,
+    builtAt: env.SOURCE_BUILT_AT ? Number(env.SOURCE_BUILT_AT) || null : null,
     license: "AGPL-3.0-or-later",
   };
 }

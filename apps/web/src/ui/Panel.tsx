@@ -8,7 +8,11 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 export function Panel(props: {
-  title: ReactNode; onClose?: () => void; side?: "left" | "right"; actions?: ReactNode; children: ReactNode;
+  title: ReactNode;
+  onClose?: () => void;
+  side?: "left" | "right";
+  actions?: ReactNode;
+  children: ReactNode;
   /** Dense workspace surfaces (packet terminal, BBS) fill the content area at ≥1024px instead of
    *  docking as a slim ~348px drawer — the map hides while the surface is active (see css.md). */
   wide?: boolean;
@@ -24,23 +28,41 @@ export function Panel(props: {
     return () => prev?.focus?.();
   }, []);
   const onKeyDown = onClose
-    ? (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }
+    ? (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }
     : undefined;
   return (
     // Wide surfaces are the workbench apps (terminal, BBS, node, tools…). Mark them with the terminal
     // shell so the Cogmind theme can transform them into bordered CRT windows; the CSS
     // gates on [data-theme="cogmind"], so the attribute is inert in Modern.
-    <aside ref={ref} tabIndex={-1} onKeyDown={onKeyDown} data-shell={props.wide ? "terminal" : undefined}
-           className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}>
+    <aside
+      ref={ref}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      data-shell={props.wide ? "terminal" : undefined}
+      className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}
+    >
       <div className="row between">
         <h2>{props.title}</h2>
         <span className="spacer" />
         {props.actions}
-        {onClose && <button className="icon" aria-label="Close" onClick={onClose}>✕</button>}
+        {onClose && (
+          <button className="icon" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        )}
       </div>
       {/* Workbench apps are desktop-density; on a narrow viewport show a one-line hint (CSS-gated, so
           it's free on desktop). Not blocking — the app still works. */}
-      {props.wide && <p className="wide-hint" role="note">Best on a wider screen — this workbench app is built for desktop.</p>}
+      {props.wide && (
+        <p className="wide-hint" role="note">
+          Best on a wider screen — this workbench app is built for desktop.
+        </p>
+      )}
       {props.children}
     </aside>
   );

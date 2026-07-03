@@ -4,7 +4,9 @@ import { composeDigest, b64urlToBytes, bytesToB64url } from "../src/notify.js";
 
 describe("notify — email digest + helpers (ADR-4b)", () => {
   it("composeDigest summarises alerts, pluralising correctly", () => {
-    const one = composeDigest([{ callsign: "OE8APR", kind: "near_cache", detail: "OE8APR heard near AC-0001 — Schlossberg", ts: 1 }]);
+    const one = composeDigest([
+      { callsign: "OE8APR", kind: "near_cache", detail: "OE8APR heard near AC-0001 — Schlossberg", ts: 1 },
+    ]);
     expect(one.subject).toBe("aprscaching — 1 new watchlist alert");
     expect(one.text).toContain("• OE8APR heard near AC-0001 — Schlossberg");
 
@@ -13,7 +15,7 @@ describe("notify — email digest + helpers (ADR-4b)", () => {
       { callsign: "B", kind: "near_cache", detail: "B near X", ts: 2 },
     ]);
     expect(many.subject).toBe("aprscaching — 2 new watchlist alerts");
-    expect(many.text).toContain("• A heard");      // falls back to callsign+kind when no detail
+    expect(many.text).toContain("• A heard"); // falls back to callsign+kind when no detail
     expect(many.text).toContain("• B near X");
   });
 

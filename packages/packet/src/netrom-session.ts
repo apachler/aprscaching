@@ -16,7 +16,8 @@ import { makeLineDriver, type LineApp, type RelayController } from "./link-app.j
  * circuit — the caller registers it for demux and routes its outbound packets to the reverse-path neighbour.
  */
 export function serveNetromApp(
-  id: { index: number; id: number }, app: LineApp,
+  id: { index: number; id: number },
+  app: LineApp,
   opts: {
     send: (p: NrTpPacket) => void;
     onState?: (s: CircuitState) => void;
@@ -25,15 +26,22 @@ export function serveNetromApp(
 ): NetromCircuit {
   // eslint-disable-next-line prefer-const -- the driver closes over `circuit` before it is assigned
   let circuit: NetromCircuit;
-  const driver = makeLineDriver(app, { send: (b) => circuit.send(b), disconnect: () => circuit.disconnect(), onConnect: opts.onConnect });
-  circuit = new NetromCircuit({
-    send: (p) => opts.send(p),
-    deliver: (info) => driver.onData(info),
-    state: (s) => {
-      if (s === "connected") driver.onUp();
-      else if (s === "disconnected") driver.onDown();
-      opts.onState?.(s);
+  const driver = makeLineDriver(app, {
+    send: (b) => circuit.send(b),
+    disconnect: () => circuit.disconnect(),
+    onConnect: opts.onConnect,
+  });
+  circuit = new NetromCircuit(
+    {
+      send: (p) => opts.send(p),
+      deliver: (info) => driver.onData(info),
+      state: (s) => {
+        if (s === "connected") driver.onUp();
+        else if (s === "disconnected") driver.onDown();
+        opts.onState?.(s);
+      },
     },
-  }, id);
+    id,
+  );
   return circuit;
 }

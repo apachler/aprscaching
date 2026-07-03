@@ -25,21 +25,67 @@ const noop = () => {};
 
 // The real desktop 3-pane shell (top bar + nav rail + map + docked panel), so the surfaces are shown
 // at their true docked width in context — the panel is a fixed ~392px column beside the map, by design.
-function AppShell({ active, title, children, childIsPanel, wide }: { active: string; title: ReactNode; children: ReactNode; childIsPanel?: boolean; wide?: boolean }) {
+function AppShell({
+  active,
+  title,
+  children,
+  childIsPanel,
+  wide,
+}: {
+  active: string;
+  title: ReactNode;
+  children: ReactNode;
+  childIsPanel?: boolean;
+  wide?: boolean;
+}) {
   return (
     <div className="app" style={{ height: "100dvh" }}>
       {/* the REAL top bar with the demo operator's chip, matching the signed-in teaser frames so every
           teaser frame shares identical chrome (ui-ux §6). Handlers are no-ops in the harness. */}
-      <TopBar callsign={ME} verified={true} onAccount={noop} onHide={noop} count={7} queued={0}
-              onFilters={noop} filtered={false} q="" onSearch={noop} onSearchSubmit={noop}
-              onPickCache={noop} onPickStation={noop} onNearby={noop} onActivity={noop} onProfile={noop} />
+      <TopBar
+        callsign={ME}
+        verified={true}
+        onAccount={noop}
+        onHide={noop}
+        count={7}
+        queued={0}
+        onFilters={noop}
+        filtered={false}
+        q=""
+        onSearch={noop}
+        onSearchSubmit={noop}
+        onPickCache={noop}
+        onPickStation={noop}
+        onNearby={noop}
+        onActivity={noop}
+        onProfile={noop}
+      />
       <div className="shell">
-        <NavRail active={active} onMap={noop} onNearby={noop} onActivity={noop} onMessages={noop} onRanks={noop}
-                 onWorkbench={noop} onProfile={noop} onSettings={noop} />
-        <div className="mapwrap"><div className="map" style={{ background: "var(--surface-2)" }} /></div>
-        {childIsPanel ? children : (
+        <NavRail
+          active={active}
+          onMap={noop}
+          onNearby={noop}
+          onActivity={noop}
+          onMessages={noop}
+          onRanks={noop}
+          onWorkbench={noop}
+          onProfile={noop}
+          onSettings={noop}
+        />
+        <div className="mapwrap">
+          <div className="map" style={{ background: "var(--surface-2)" }} />
+        </div>
+        {childIsPanel ? (
+          children
+        ) : (
           <aside className={`panel right${wide ? " panel-wide" : ""}`} data-shell={wide ? "terminal" : undefined}>
-            <div className="row between"><h2>{title}</h2><span className="spacer" /><button className="icon" aria-label="Close">✕</button></div>
+            <div className="row between">
+              <h2>{title}</h2>
+              <span className="spacer" />
+              <button className="icon" aria-label="Close">
+                ✕
+              </button>
+            </div>
             {children}
           </aside>
         )}
@@ -64,30 +110,81 @@ export function DemoHarness({ which }: { which: string }) {
   // log see them on the very first render — a useEffect would flash the un-simulated fallback first.
   useState(() => {
     if (which === "app-rig") installSerialSim();
-    if (which === "app-remote") { installBoxSim(); try { localStorage.setItem("acs.boxId", "pi-home"); } catch { /* ignore */ } }
-    if (which === "app-packet-tools") { setToolEnabled("mheard", true); setToolEnabled("watch-alert", true); setToolEnabled("block-art", true); }
+    if (which === "app-remote") {
+      installBoxSim();
+      try {
+        localStorage.setItem("acs.boxId", "pi-home");
+      } catch {
+        /* ignore */
+      }
+    }
+    if (which === "app-packet-tools") {
+      setToolEnabled("mheard", true);
+      setToolEnabled("watch-alert", true);
+      setToolEnabled("block-art", true);
+    }
     return null;
   });
-  useEffect(() => { installBbsSim(); setBbsReady(true); }, []);
+  useEffect(() => {
+    installBbsSim();
+    setBbsReady(true);
+  }, []);
 
   // Full-app-shell variants: the surface docked in the real 3-pane desktop layout (header + rail + map).
   if (which === "app-packet" || which === "app-packet-tools") {
     return (
-      <AppShell active="workbench" title={<><Ico e="📻 " />Packet terminal</>} wide>
+      <AppShell
+        active="workbench"
+        title={
+          <>
+            <Ico e="📻 " />
+            Packet terminal
+          </>
+        }
+        wide
+      >
         <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
       </AppShell>
     );
   }
   if (which === "app-bbs") {
-    return <AppShell active="bbs" title="✉ BBS" childIsPanel>{bbsReady && <BbsPanel callsign={ME} onClose={noop} />}</AppShell>;
+    return (
+      <AppShell active="bbs" title="✉ BBS" childIsPanel>
+        {bbsReady && <BbsPanel callsign={ME} onClose={noop} />}
+      </AppShell>
+    );
   }
   if (which === "app-rig") {
     // A demo operator with a control-verified callsign, so the connected tune UI is shown (RX-side,
     // no H5 gate on tuning). The fake serial port is already installed above.
-    return <AppShell active="workbench" title={<><Ico e="🎚 " />Rig control (CAT)</>}><RigControl /></AppShell>;
+    return (
+      <AppShell
+        active="workbench"
+        title={
+          <>
+            <Ico e="🎚 " />
+            Rig control (CAT)
+          </>
+        }
+      >
+        <RigControl />
+      </AppShell>
+    );
   }
   if (which === "app-remote") {
-    return <AppShell active="workbench" title={<><Ico e="🛰 " />Remote control — your box</>}><RemoteControl callsign={ME} verified map={null} /></AppShell>;
+    return (
+      <AppShell
+        active="workbench"
+        title={
+          <>
+            <Ico e="🛰 " />
+            Remote control — your box
+          </>
+        }
+      >
+        <RemoteControl callsign={ME} verified map={null} />
+      </AppShell>
+    );
   }
 
   return (
@@ -96,14 +193,20 @@ export function DemoHarness({ which }: { which: string }) {
       <header style={{ marginBottom: 14 }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>Design harness — simulator</h1>
         <p className="muted" style={{ margin: "4px 0 0" }}>
-          Real components, no hardware. The packet terminal is wired to a loopback BBS peer; BBS shows canned mail.
-          Try <code>?demo=packet</code>, <code>?demo=bbs</code>, or <code>?demo=1</code> for both.
+          Real components, no hardware. The packet terminal is wired to a loopback BBS peer; BBS shows canned mail. Try{" "}
+          <code>?demo=packet</code>, <code>?demo=bbs</code>, or <code>?demo=1</code> for both.
         </p>
       </header>
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
         {showPacket && (
           <aside className="panel right demo-surface" data-shell="terminal">
-            <div className="row between"><h2><Ico e="📻 " />Packet terminal</h2><span className="spacer" /></div>
+            <div className="row between">
+              <h2>
+                <Ico e="📻 " />
+                Packet terminal
+              </h2>
+              <span className="spacer" />
+            </div>
             <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
           </aside>
         )}

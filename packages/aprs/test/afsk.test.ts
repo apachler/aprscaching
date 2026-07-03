@@ -12,7 +12,7 @@ function loopback(frame: Uint8Array, sampleRate: number): Uint8Array[] {
 }
 
 describe("afsk — Bell-202 1200-baud modem", () => {
-  it("CRC-16/X.25 matches the known check value for \"123456789\"", () => {
+  it('CRC-16/X.25 matches the known check value for "123456789"', () => {
     expect(crc16X25(new TextEncoder().encode("123456789"))).toBe(0x906e);
   });
 
@@ -34,7 +34,8 @@ describe("afsk — Bell-202 1200-baud modem", () => {
 
   it("rejects noise (no spurious frames from random audio)", () => {
     const noise = new Float32Array(48000);
-    for (let i = 0; i < noise.length; i++) noise[i] = Math.sin(i * 0.7) * 0.3 + (((i * 1103515245 + 12345) & 0x7fff) / 0x7fff - 0.5);
+    for (let i = 0; i < noise.length; i++)
+      noise[i] = Math.sin(i * 0.7) * 0.3 + (((i * 1103515245 + 12345) & 0x7fff) / 0x7fff - 0.5);
     const got: Uint8Array[] = [];
     new Afsk1200Rx(48000, (f) => got.push(f)).push(noise);
     expect(got).toHaveLength(0);

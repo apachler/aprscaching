@@ -8,7 +8,7 @@ describe("account UI-prefs sanitizer", () => {
       locale: { locale: "de-AT", timeZone: "Europe/Vienna", units: "metric", theme: "dark", junk: 1 },
       pins: ["terminal", "bbs"],
       basemap: "topo",
-      evil: "<script>",              // unknown key → dropped
+      evil: "<script>", // unknown key → dropped
     });
     expect(out).toEqual({
       locale: { locale: "de-AT", timeZone: "Europe/Vienna", units: "metric", theme: "dark" },

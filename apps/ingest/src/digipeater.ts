@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { digipeat, dedupeKey } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
-import { digipeatAx25, decodeFrame, addrStr, parseAddr, frameContentKey, ViscousDigi, type Ax25Address } from "@aprsweb/ax25";
+import {
+  digipeatAx25,
+  decodeFrame,
+  addrStr,
+  parseAddr,
+  frameContentKey,
+  ViscousDigi,
+  type Ax25Address,
+} from "@aprsweb/ax25";
 import type { KissTnc } from "./kiss.js";
 
 /**
@@ -10,7 +18,10 @@ import type { KissTnc } from "./kiss.js";
  */
 export class Digipeater {
   private recent = new Map<string, number>(); // dedupe key -> ts(ms)
-  constructor(private kiss: KissTnc, private opts: { mycall: string; aliases?: Set<string>; dedupeMs?: number }) {}
+  constructor(
+    private kiss: KissTnc,
+    private opts: { mycall: string; aliases?: Set<string>; dedupeMs?: number },
+  ) {}
 
   onFrame(f: ParsedFrame): void {
     const out = digipeat(f, this.opts);
@@ -33,9 +44,12 @@ export class Digipeater {
  */
 export class ConnectedDigipeater {
   private ours: Ax25Address[];
-  private recent = new Map<string, number>();          // dedupe key -> ts(ms)
+  private recent = new Map<string, number>(); // dedupe key -> ts(ms)
   private viscous = new ViscousDigi<ReturnType<typeof setTimeout>>();
-  constructor(private kiss: KissTnc, private opts: { mycall: string; aliases?: string[]; dedupeMs?: number; viscousMs?: number }) {
+  constructor(
+    private kiss: KissTnc,
+    private opts: { mycall: string; aliases?: string[]; dedupeMs?: number; viscousMs?: number },
+  ) {
     this.ours = [opts.mycall, ...(opts.aliases ?? [])].map((c) => parseAddr(c));
   }
 
@@ -44,16 +58,29 @@ export class ConnectedDigipeater {
     if (!f) return;
     const key = frameContentKey(f);
     // viscous: if we already hold a repeat for this frame and hear it again, a better digi carried it → back off
-    if (this.opts.viscousMs) { const tok = this.viscous.onDuplicate(key); if (tok != null) { clearTimeout(tok); return; } }
+    if (this.opts.viscousMs) {
+      const tok = this.viscous.onDuplicate(key);
+      if (tok != null) {
+        clearTimeout(tok);
+        return;
+      }
+    }
     const out = digipeatAx25(f, this.ours);
     if (!out) return;
     const window = this.opts.dedupeMs ?? 30_000;
     const nowMs = Date.now();
     for (const [k, t] of this.recent) if (nowMs - t > window) this.recent.delete(k);
-    if (this.recent.has(key)) return;                  // already handled this frame this window
+    if (this.recent.has(key)) return; // already handled this frame this window
     this.recent.set(key, nowMs);
-    const tx = () => { if (this.kiss.sendFrame(out)) console.log(`[digi-c] repeated ${addrStr(f.src)}→${addrStr(f.dst)} ${f.type}`); };
-    if (this.opts.viscousMs) { const tok = setTimeout(() => { this.viscous.fired(key); tx(); }, this.opts.viscousMs); this.viscous.schedule(key, tok); }
-    else tx();
+    const tx = () => {
+      if (this.kiss.sendFrame(out)) console.log(`[digi-c] repeated ${addrStr(f.src)}→${addrStr(f.dst)} ${f.type}`);
+    };
+    if (this.opts.viscousMs) {
+      const tok = setTimeout(() => {
+        this.viscous.fired(key);
+        tx();
+      }, this.opts.viscousMs);
+      this.viscous.schedule(key, tok);
+    } else tx();
   }
 }

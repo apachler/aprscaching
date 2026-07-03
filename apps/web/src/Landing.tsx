@@ -17,16 +17,22 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
         {/* HERO slogan set; feature/how-it-works/screenshot sections are deferred — see */}
         <p className="landing-slogan">Geocaching, on the air.</p>
         <div className="landing-cta">
-          <button className="primary" onClick={props.onRegister}>Register</button>
+          <button className="primary" onClick={props.onRegister}>
+            Register
+          </button>
           <button onClick={props.onLogin}>Log in</button>
-          <button className="landing-explore" onClick={props.onExplore}>Explore the map →</button>
+          <button className="landing-explore" onClick={props.onExplore}>
+            Explore the map →
+          </button>
         </div>
         <p className="landing-note">A full project overview is coming soon.</p>
       </div>
       <footer className="landing-footer">
         <a href={`${API_BASE}/sitemap`}>Site map</a>
         <a href={`${API_BASE}/support`}>Support</a>
-        <a href={`${API_BASE}/source`} rel="noopener">Source (AGPL-3.0)</a>
+        <a href={`${API_BASE}/source`} rel="noopener">
+          Source (AGPL-3.0)
+        </a>
         <a href={`${API_BASE}/api/v1`}>Read API</a>
         <a href={`${API_BASE}/sitemap.xml`}>sitemap.xml</a>
       </footer>

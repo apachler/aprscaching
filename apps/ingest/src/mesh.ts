@@ -3,7 +3,10 @@ import net from "node:net";
 import { parseMeshtasticJson, formatPosition } from "@aprsweb/aprs";
 import type { Packet } from "@aprsweb/shared";
 
-export interface MeshOpts { host: string; port: number }
+export interface MeshOpts {
+  host: string;
+  port: number;
+}
 
 /**
  * Meshtastic ingest via newline-delimited JSON over TCP — point this at an MQTT→TCP bridge or a
@@ -13,9 +16,14 @@ export interface MeshOpts { host: string; port: number }
 export class MeshtasticReader {
   private sock?: net.Socket;
   private buf = "";
-  constructor(private o: MeshOpts, private onPacket: (p: Packet) => void) {}
+  constructor(
+    private o: MeshOpts,
+    private onPacket: (p: Packet) => void,
+  ) {}
 
-  start() { this.connect(); }
+  start() {
+    this.connect();
+  }
 
   private connect() {
     const s = net.connect(this.o.port, this.o.host);
@@ -26,17 +34,27 @@ export class MeshtasticReader {
       this.buf += chunk;
       let i;
       while ((i = this.buf.indexOf("\n")) >= 0) {
-        const line = this.buf.slice(0, i); this.buf = this.buf.slice(i + 1);
+        const line = this.buf.slice(0, i);
+        this.buf = this.buf.slice(i + 1);
         const fix = parseMeshtasticJson(line);
         if (!fix) continue;
         const src = ("MSH" + fix.node.replace(/[^a-zA-Z0-9]/g, "")).slice(0, 9).toUpperCase();
         const payload = formatPosition(fix.lat, fix.lon, {
-          table: "/", code: "p", altitudeM: fix.altitudeM, comment: fix.longName ? ` ${fix.longName}` : undefined,
+          table: "/",
+          code: "p",
+          altitudeM: fix.altitudeM,
+          comment: fix.longName ? ` ${fix.longName}` : undefined,
         });
         this.onPacket({
-          src, dst: "APRS", path: [], payload, kind: "position",
+          src,
+          dst: "APRS",
+          path: [],
+          payload,
+          kind: "position",
           parsed: { lat: fix.lat, lon: fix.lon } as Record<string, unknown>,
-          heardVia: "aprs_is", port: "meshtastic", ts: Math.floor(Date.now() / 1000),
+          heardVia: "aprs_is",
+          port: "meshtastic",
+          ts: Math.floor(Date.now() / 1000),
         });
       }
     });

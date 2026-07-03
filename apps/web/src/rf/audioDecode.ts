@@ -14,9 +14,13 @@
 import { makeStreamDecoder, type DecodeMode } from "@aprsweb/tools";
 
 export type AudioMode = DecodeMode;
-export interface AudioCapture { stop(): Promise<string> }
+export interface AudioCapture {
+  stop(): Promise<string>;
+}
 export interface ListenOpts {
-  pitchHz?: number; carrierHz?: number; baud?: number;
+  pitchHz?: number;
+  carrierHz?: number;
+  baud?: number;
   /** Force the AudioContext sample rate (else the browser default). */ sampleRate?: number;
   /** Live callback with the full decoded text so far, fired as audio arrives. */ onText?: (text: string) => void;
 }
@@ -44,8 +48,15 @@ export async function listenDecode(mode: AudioMode, opts: ListenOpts = {}): Prom
   });
   const ac = opts.sampleRate ? new AudioContext({ sampleRate: opts.sampleRate }) : new AudioContext();
   const src = ac.createMediaStreamSource(stream);
-  const decoder = makeStreamDecoder(mode, ac.sampleRate, { carrierHz: opts.carrierHz, pitchHz: opts.pitchHz, baud: opts.baud });
-  const onChunk = (samples: Float32Array) => { const text = decoder.push(samples); opts.onText?.(text); };
+  const decoder = makeStreamDecoder(mode, ac.sampleRate, {
+    carrierHz: opts.carrierHz,
+    pitchHz: opts.pitchHz,
+    baud: opts.baud,
+  });
+  const onChunk = (samples: Float32Array) => {
+    const text = decoder.push(samples);
+    opts.onText?.(text);
+  };
 
   let teardown: () => void;
   // Preferred path: AudioWorklet (off-main-thread tap).
@@ -55,19 +66,35 @@ export async function listenDecode(mode: AudioMode, opts: ListenOpts = {}): Prom
       const url = URL.createObjectURL(new Blob([TAP_WORKLET], { type: "application/javascript" }));
       await ac.audioWorklet.addModule(url);
       URL.revokeObjectURL(url);
-      const node = new AudioWorkletNode(ac, "pcm-tap", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+      const node = new AudioWorkletNode(ac, "pcm-tap", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
       node.port.onmessage = (e) => onChunk(e.data as Float32Array);
-      src.connect(node); node.connect(ac.destination);   // connect to pull the graph; the node emits silence
-      teardown = () => { node.port.onmessage = null; node.disconnect(); src.disconnect(); };
+      src.connect(node);
+      node.connect(ac.destination); // connect to pull the graph; the node emits silence
+      teardown = () => {
+        node.port.onmessage = null;
+        node.disconnect();
+        src.disconnect();
+      };
       usedWorklet = true;
-    } catch { /* fall through to ScriptProcessor */ }
+    } catch {
+      /* fall through to ScriptProcessor */
+    }
   }
   if (!usedWorklet) {
     // Fallback: the deprecated ScriptProcessorNode (still the universal raw-sample tap).
     const proc = ac.createScriptProcessor(4096, 1, 1);
     proc.onaudioprocess = (e) => onChunk(new Float32Array(e.inputBuffer.getChannelData(0)));
-    src.connect(proc); proc.connect(ac.destination);
-    teardown = () => { proc.onaudioprocess = null; proc.disconnect(); src.disconnect(); };
+    src.connect(proc);
+    proc.connect(ac.destination);
+    teardown = () => {
+      proc.onaudioprocess = null;
+      proc.disconnect();
+      src.disconnect();
+    };
   }
 
   return {

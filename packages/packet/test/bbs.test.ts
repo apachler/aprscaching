@@ -13,15 +13,29 @@ function makeStore(): MessageStore & { msgs: BbsMsgFull[] } {
     listBulletins: () => msgs.filter((m) => m.type === "B"),
     listMine: (call) => msgs.filter((m) => m.to === call || m.from === call),
     read: (i) => msgs.find((m) => m.id === i) ?? null,
-    post: (m) => { const nid = ++id; msgs.push({ id: nid, postedAt: 0, ...m }); return nid; },
-    kill: (i, call) => { const idx = msgs.findIndex((m) => m.id === i && (m.from === call || m.to === call)); if (idx < 0) return false; msgs.splice(idx, 1); return true; },
+    post: (m) => {
+      const nid = ++id;
+      msgs.push({ id: nid, postedAt: 0, ...m });
+      return nid;
+    },
+    kill: (i, call) => {
+      const idx = msgs.findIndex((m) => m.id === i && (m.from === call || m.to === call));
+      if (idx < 0) return false;
+      msgs.splice(idx, 1);
+      return true;
+    },
   };
 }
 
 /** Feed a sequence of lines, return all output lines flattened. */
 function run(s: BbsSession, lines: string[]): { out: string[]; disconnected: boolean } {
-  const out: string[] = []; let disconnected = false;
-  for (const l of lines) { const r = s.handle(l); out.push(...r.lines); if (r.disconnect) disconnected = true; }
+  const out: string[] = [];
+  let disconnected = false;
+  for (const l of lines) {
+    const r = s.handle(l);
+    out.push(...r.lines);
+    if (r.disconnect) disconnected = true;
+  }
   return { out, disconnected };
 }
 
@@ -38,7 +52,13 @@ describe("FBB BBS command interpreter", () => {
     const s = new BbsSession("OE8APR", store, "OE8BBS");
     run(s, ["SP OE8XBM", "Hello there", "first line", "second line", "/EX"]);
     expect(store.msgs).toHaveLength(1);
-    expect(store.msgs[0]).toMatchObject({ type: "P", from: "OE8APR", to: "OE8XBM", subject: "Hello there", body: "first line\nsecond line" });
+    expect(store.msgs[0]).toMatchObject({
+      type: "P",
+      from: "OE8APR",
+      to: "OE8XBM",
+      subject: "Hello there",
+      body: "first line\nsecond line",
+    });
 
     const xbm = new BbsSession("OE8XBM", store, "OE8BBS");
     const list = run(xbm, ["L"]).out;
@@ -74,7 +94,7 @@ describe("FBB BBS command interpreter", () => {
     expect(run(s, ["K 1"]).out.some((l) => /killed/.test(l))).toBe(true);
     expect(run(s, ["K 99"]).out.some((l) => /Can't kill/.test(l))).toBe(true);
     const x = s.handle("X");
-    expect(x.lines.at(-1)).toBe(">");          // expert prompt
+    expect(x.lines.at(-1)).toBe(">"); // expert prompt
     expect(run(s, ["B"]).disconnected).toBe(true);
   });
 

@@ -7,7 +7,10 @@
  */
 import type { ParsedFrame } from "./types.js";
 
-interface Hop { call: string; used: boolean }
+interface Hop {
+  call: string;
+  used: boolean;
+}
 
 const baseCall = (c: string) => c.split("-")[0]!.toUpperCase();
 function parseNN(call: string): { base: string; ssid: number } {
@@ -16,12 +19,18 @@ function parseNN(call: string): { base: string; ssid: number } {
 }
 function rebuild(f: ParsedFrame, hops: Hop[]): ParsedFrame {
   const path = hops.map((h) => h.call + (h.used ? "*" : ""));
-  return { src: f.src, dst: f.dst, path, payload: f.payload, raw: `${f.src}>${f.dst}${path.length ? "," + path.join(",") : ""}:${f.payload}` };
+  return {
+    src: f.src,
+    dst: f.dst,
+    path,
+    payload: f.payload,
+    raw: `${f.src}>${f.dst}${path.length ? "," + path.join(",") : ""}:${f.payload}`,
+  };
 }
 
 export interface DigiOpts {
-  mycall: string;            // our station callsign
-  aliases?: Set<string>;     // served n-N alias bases, default {WIDE1, WIDE2}
+  mycall: string; // our station callsign
+  aliases?: Set<string>; // served n-N alias bases, default {WIDE1, WIDE2}
 }
 
 /**
@@ -38,7 +47,7 @@ export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   if (hops.some((h) => h.used && baseCall(h.call) === baseCall(mycall))) return null;
 
   const i = hops.findIndex((h) => !h.used);
-  if (i < 0) return null;                 // nothing left to repeat
+  if (i < 0) return null; // nothing left to repeat
   const hop = hops[i]!;
   const { base, ssid } = parseNN(hop.call);
 
@@ -50,10 +59,10 @@ export function digipeat(f: ParsedFrame, opts: DigiOpts): ParsedFrame | null {
   // served WIDEn-N alias with hops remaining
   if (aliases.has(base) && ssid >= 1) {
     if (ssid === 1) {
-      hops[i] = { call: mycall, used: true };           // last hop: replace alias with us
+      hops[i] = { call: mycall, used: true }; // last hop: replace alias with us
     } else {
       hops[i] = { call: `${base}-${ssid - 1}`, used: false }; // decrement…
-      hops.splice(i, 0, { call: mycall, used: true });        // …and insert us (repeated) ahead
+      hops.splice(i, 0, { call: mycall, used: true }); // …and insert us (repeated) ahead
     }
     return rebuild(f, hops);
   }

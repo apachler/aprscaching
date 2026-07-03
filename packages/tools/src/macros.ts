@@ -5,13 +5,13 @@
  * `{token}` set. Pure substitution: only provided vars are replaced; unknown `{tokens}` are left intact.
  */
 export interface MacroVars {
-  call?: string;    // the operator's callsign (station in use)
-  mycall?: string;  // alias for call (GP {mycall})
-  peer?: string;    // the far station on the active channel
-  chan?: string;    // active channel's remote call (GP {chan})
-  grid?: string;    // Maidenhead locator, when known
-  date?: string;    // caller-supplied date string
-  time?: string;    // caller-supplied time string
+  call?: string; // the operator's callsign (station in use)
+  mycall?: string; // alias for call (GP {mycall})
+  peer?: string; // the far station on the active channel
+  chan?: string; // active channel's remote call (GP {chan})
+  grid?: string; // Maidenhead locator, when known
+  date?: string; // caller-supplied date string
+  time?: string; // caller-supplied time string
   [k: string]: string | undefined;
 }
 

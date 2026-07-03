@@ -19,8 +19,12 @@ export function NodePanel() {
 
   useEffect(() => {
     if (!open || nodes) return;
-    getNodes().then((r) => setNodes(r.nodes)).catch(() => setNodes([]));
-    getMheard(30).then((r) => setMheard(r.mheard)).catch(() => setMheard([]));
+    getNodes()
+      .then((r) => setNodes(r.nodes))
+      .catch(() => setNodes([]));
+    getMheard(30)
+      .then((r) => setMheard(r.mheard))
+      .catch(() => setMheard([]));
   }, [open, nodes]);
 
   return (
@@ -31,17 +35,42 @@ export function NodePanel() {
       {open && (
         <div className="mt-1">
           <div className="ulabel">Nodes</div>
-          {nodes == null ? <p className="muted">Loading…</p>
-            : nodes.length === 0 ? <p className="muted">No NET/ROM nodes learned yet.</p>
-            : <ul className="logs">{nodes.map((n) => (
-                <li key={n.dest}><span className="mono"><strong>{n.alias}</strong>:{n.dest}</span> <span className="muted">· via {n.neighbor} · q{n.quality}{n.port ? ` · ${n.port}` : ""}</span></li>
-              ))}</ul>}
+          {nodes == null ? (
+            <p className="muted">Loading…</p>
+          ) : nodes.length === 0 ? (
+            <p className="muted">No NET/ROM nodes learned yet.</p>
+          ) : (
+            <ul className="logs">
+              {nodes.map((n) => (
+                <li key={n.dest}>
+                  <span className="mono">
+                    <strong>{n.alias}</strong>:{n.dest}
+                  </span>{" "}
+                  <span className="muted">
+                    · via {n.neighbor} · q{n.quality}
+                    {n.port ? ` · ${n.port}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="ulabel mt-2">MHeard</div>
-          {mheard == null ? <p className="muted">Loading…</p>
-            : mheard.length === 0 ? <p className="muted">Nothing heard yet.</p>
-            : <ul className="logs">{mheard.map((m) => (
-                <li key={`${m.callsign}-${m.port}`}><span className="mono">{m.callsign}</span> <span className="muted">· {m.port} · {fmt.ago(m.lastHeard)} · ×{m.count}</span></li>
-              ))}</ul>}
+          {mheard == null ? (
+            <p className="muted">Loading…</p>
+          ) : mheard.length === 0 ? (
+            <p className="muted">Nothing heard yet.</p>
+          ) : (
+            <ul className="logs">
+              {mheard.map((m) => (
+                <li key={`${m.callsign}-${m.port}`}>
+                  <span className="mono">{m.callsign}</span>{" "}
+                  <span className="muted">
+                    · {m.port} · {fmt.ago(m.lastHeard)} · ×{m.count}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       <ToolPanels host={host} surface="node" />

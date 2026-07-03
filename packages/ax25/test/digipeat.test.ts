@@ -5,16 +5,23 @@ import { frameContentKey, ViscousDigi } from "../src/digipeat.js";
 import { encodeFrame, decodeFrame, type Ax25Frame } from "../src/frame.js";
 
 const A = (call: string, ssid = 0) => ({ call, ssid });
-const base = (digis: ReturnType<typeof A>[], digisRepeated?: boolean[]): Ax25Frame =>
-  ({ dst: A("OE8NOD", 1), src: A("OE1SND"), digis, digisRepeated, command: true, type: "SABM", pf: true });
+const base = (digis: ReturnType<typeof A>[], digisRepeated?: boolean[]): Ax25Frame => ({
+  dst: A("OE8NOD", 1),
+  src: A("OE1SND"),
+  digis,
+  digisRepeated,
+  command: true,
+  type: "SABM",
+  pf: true,
+});
 
 describe("connected-mode AX.25 digipeat", () => {
   it("repeats a frame whose next via-hop is us and sets the H-bit", () => {
     const f = base([A("OE8DGI"), A("OE9OTH")]);
     const out = digipeatAx25(f, [A("OE8DGI")]);
     expect(out).not.toBeNull();
-    expect(out!.digisRepeated).toEqual([true, false]);   // our hop consumed, the next still pending
-    expect(out!.type).toBe("SABM");                       // any frame type, not just UI
+    expect(out!.digisRepeated).toEqual([true, false]); // our hop consumed, the next still pending
+    expect(out!.type).toBe("SABM"); // any frame type, not just UI
   });
 
   it("matches an alias as well as the station call", () => {
@@ -47,11 +54,11 @@ describe("connected-mode AX.25 digipeat", () => {
 
 describe("viscous-digi bookkeeping", () => {
   it("content key ignores the via path so a re-digied copy matches the original", () => {
-    const a = frameContentKey(base([A("OE8DGI"), A("OE9OTH")]));                     // fresh
-    const b = frameContentKey(base([A("OE8DGI"), A("OE9OTH")], [true, false]));      // our hop now repeated
-    const c = frameContentKey(base([A("RELAY")]));                                   // different via path
-    expect(a).toBe(b);                                                                // same frame, later stage → same key
-    expect(a).toBe(c);                                                                // via path excluded entirely
+    const a = frameContentKey(base([A("OE8DGI"), A("OE9OTH")])); // fresh
+    const b = frameContentKey(base([A("OE8DGI"), A("OE9OTH")], [true, false])); // our hop now repeated
+    const c = frameContentKey(base([A("RELAY")])); // different via path
+    expect(a).toBe(b); // same frame, later stage → same key
+    expect(a).toBe(c); // via path excluded entirely
     // a different frame (poll bit set) does not collide
     expect(a).not.toBe(frameContentKey({ ...base([]), pf: false }));
   });
@@ -60,8 +67,8 @@ describe("viscous-digi bookkeeping", () => {
     const v = new ViscousDigi<number>();
     v.schedule("k", 42);
     expect(v.pendingCount()).toBe(1);
-    expect(v.onDuplicate("k")).toBe(42);        // heard again → cancel token returned
-    expect(v.onDuplicate("k")).toBeNull();      // already cancelled
+    expect(v.onDuplicate("k")).toBe(42); // heard again → cancel token returned
+    expect(v.onDuplicate("k")).toBeNull(); // already cancelled
     expect(v.pendingCount()).toBe(0);
   });
 

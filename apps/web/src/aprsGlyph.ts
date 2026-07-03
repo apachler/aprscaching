@@ -7,14 +7,28 @@ import { lookupSymbol } from "@aprsweb/aprs";
  * Marker glyph precedence is: cache type → station role → APRS symbol → plain dot.
  */
 const CATEGORY_GLYPH: Record<string, string> = {
-  station: "📻", vehicle: "🚗", infra: "🏢", weather: "🌡", digi: "📡",
-  marine: "⛵", air: "✈", event: "📍", other: "•",
+  station: "📻",
+  vehicle: "🚗",
+  infra: "🏢",
+  weather: "🌡",
+  digi: "📡",
+  marine: "⛵",
+  air: "✈",
+  event: "📍",
+  other: "•",
 };
 
 /** CP437/ASCII variants drawn in Cogmind mode (no colour emoji on the map). */
 const CATEGORY_COG: Record<string, string> = {
-  station: "≡", vehicle: "►", infra: "■", weather: "☼", digi: "#",
-  marine: "≈", air: "^", event: "!", other: "•",
+  station: "≡",
+  vehicle: "►",
+  infra: "■",
+  weather: "☼",
+  digi: "#",
+  marine: "≈",
+  air: "^",
+  event: "!",
+  other: "•",
 };
 
 /** Resolve a stored `symbol` ("/>" or a single char) into a display glyph (+ Cogmind variant) + label. */

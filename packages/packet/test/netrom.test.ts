@@ -14,8 +14,10 @@ describe("NET/ROM node logic", () => {
 
   it("decays route quality and drops dead routes", () => {
     const t = new NodesTable([{ dest: "A", alias: "AA", neighbor: "N", quality: 10 }]);
-    t.decay(0.5); expect(t.best("A")?.quality).toBe(5);
-    t.decay(0.1); expect(t.best("A")).toBeNull(); // floors to 0 → removed
+    t.decay(0.5);
+    expect(t.best("A")?.quality).toBe(5);
+    t.decay(0.1);
+    expect(t.best("A")).toBeNull(); // floors to 0 → removed
   });
 
   it("reverses a heard digi path for the return route (autorouting)", () => {

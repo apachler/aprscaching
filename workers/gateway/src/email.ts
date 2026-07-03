@@ -23,14 +23,18 @@ function appOrigin(req: Request, env: Env): string {
 /** POST /auth/email/start {email, callsign?} — begin email register (needs callsign) or login. */
 export async function handleEmailStart(req: Request, env: Env): Promise<Response> {
   const { email, callsign } = (await req.json().catch(() => ({}))) as { email?: string; callsign?: string };
-  const e = String(email ?? "").trim().toLowerCase();
+  const e = String(email ?? "")
+    .trim()
+    .toLowerCase();
   if (!EMAIL_RE.test(e)) return json({ error: "invalid email" }, { status: 400 });
 
   const acct = await env.DB.prepare("SELECT account_id FROM accounts WHERE email = ?").bind(e).first();
   const purpose = acct ? "login" : "register";
   let cs: string | null = null;
   if (purpose === "register") {
-    cs = String(callsign ?? "").toUpperCase().trim();
+    cs = String(callsign ?? "")
+      .toUpperCase()
+      .trim();
     if (cs.length < 3) return json({ error: "callsign required to register" }, { status: 400 });
     const taken = await env.DB.prepare("SELECT 1 FROM accounts WHERE callsign = ?").bind(cs).first();
     if (taken) return json({ error: "callsign already claimed — sign in with its email" }, { status: 409 });
@@ -39,11 +43,17 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   const token = newToken();
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, ?, ?, ?, 0)",
-  ).bind(token, e, cs, purpose, Math.floor(Date.now() / 1000)).run();
+  )
+    .bind(token, e, cs, purpose, Math.floor(Date.now() / 1000))
+    .run();
 
   const link = `${appOrigin(req, env)}/auth/email/verify?token=${token}`;
-  const sent = await sendEmail(env, e, "Your aprscaching sign-in link",
-    `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`);
+  const sent = await sendEmail(
+    env,
+    e,
+    "Your aprscaching sign-in link",
+    `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`,
+  );
   if (sent) return json({ sent: true, purpose });
   // SR-SEC-06: the sign-in token must NOT be handed back to the caller on a real instance. Returning
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
@@ -57,12 +67,15 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
 export async function handleEmailVerify(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   let token = url.searchParams.get("token");
-  if (!token && req.method === "POST") token = ((await req.json().catch(() => ({}))) as { token?: string }).token ?? null;
+  if (!token && req.method === "POST")
+    token = ((await req.json().catch(() => ({}))) as { token?: string }).token ?? null;
   if (!token) return json({ error: "missing token" }, { status: 400 });
 
   const row = await env.DB.prepare(
     "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE token = ?",
-  ).bind(token).first<{ email: string; callsign: string | null; purpose: string; created_at: number; used: number }>();
+  )
+    .bind(token)
+    .first<{ email: string; callsign: string | null; purpose: string; created_at: number; used: number }>();
   const now = Math.floor(Date.now() / 1000);
   if (!row || row.used || now - row.created_at > TTL_SEC) {
     return json({ error: "invalid or expired link" }, { status: 400 });
@@ -70,7 +83,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ?").bind(token).run();
 
   let acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
-    .bind(row.email).first<{ account_id: string; callsign: string }>();
+    .bind(row.email)
+    .first<{ account_id: string; callsign: string }>();
   if (!acct) {
     // register: create the durable account + record the initial callsign (unverified control)
     const id = crypto.randomUUID();
@@ -81,14 +95,18 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     if (taken) return json({ error: "callsign already claimed" }, { status: 409 });
     await env.DB.prepare(
       "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-    ).bind(cs, id, row.email, now).run();
-    await env.DB.prepare(
-      "INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)",
-    ).bind(id, cs, now).run();
+    )
+      .bind(cs, id, row.email, now)
+      .run();
+    await env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)")
+      .bind(id, cs, now)
+      .run();
     // seed the held-callsign set with this call as the account's primary base call
     await env.DB.prepare(
       "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-    ).bind(id, cs.split("-")[0], now).run();
+    )
+      .bind(id, cs.split("-")[0], now)
+      .run();
     acct = { account_id: id, callsign: cs };
   }
 
@@ -110,5 +128,7 @@ export async function sendEmail(env: Env, to: string, subject: string, text: str
       body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),
     });
     return res.ok;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }

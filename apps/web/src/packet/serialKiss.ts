@@ -18,7 +18,8 @@ interface SerialPortLike {
 }
 
 export const webSerialSupported = (): boolean =>
-  typeof navigator !== "undefined" && typeof (navigator as { serial?: { requestPort?: unknown } }).serial?.requestPort === "function";
+  typeof navigator !== "undefined" &&
+  typeof (navigator as { serial?: { requestPort?: unknown } }).serial?.requestPort === "function";
 
 export class SerialKissTransport implements Transport {
   private port: SerialPortLike | null = null;
@@ -27,7 +28,10 @@ export class SerialKissTransport implements Transport {
   private closed = false;
   private buf: number[] = [];
 
-  constructor(private onFrame: (f: Ax25Frame) => void, private onClose?: (err?: Error) => void) {}
+  constructor(
+    private onFrame: (f: Ax25Frame) => void,
+    private onClose?: (err?: Error) => void,
+  ) {}
 
   /** Prompt for a serial port (needs a user gesture), open it, and start reading KISS frames. */
   async connect(baudRate = 9600): Promise<void> {
@@ -40,17 +44,23 @@ export class SerialKissTransport implements Transport {
   }
 
   /** Transport.send — encode + KISS-wrap + queue the write (the session calls this synchronously). */
-  send(frame: Ax25Frame): void { void this.write(kissWrap(encodeFrame(frame))); }
+  send(frame: Ax25Frame): void {
+    void this.write(kissWrap(encodeFrame(frame)));
+  }
 
   private async write(bytes: Uint8Array): Promise<void> {
     if (!this.writer) return;
-    try { await this.writer.write(bytes); } catch (e) { if (!this.closed) this.onClose?.(e as Error); }
+    try {
+      await this.writer.write(bytes);
+    } catch (e) {
+      if (!this.closed) this.onClose?.(e as Error);
+    }
   }
 
   private feed(chunk: Uint8Array): void {
     for (const b of chunk) this.buf.push(b);
     const lastFend = this.buf.lastIndexOf(0xc0);
-    if (lastFend <= 0) return;                          // wait for a complete FEND-delimited frame
+    if (lastFend <= 0) return; // wait for a complete FEND-delimited frame
     const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
     this.buf = this.buf.slice(lastFend + 1);
     for (const raw of kissFrames(ready)) {
@@ -70,18 +80,36 @@ export class SerialKissTransport implements Transport {
             if (done) break;
             if (value) this.feed(value);
           }
-        } finally { this.reader.releaseLock(); this.reader = null; }
+        } finally {
+          this.reader.releaseLock();
+          this.reader = null;
+        }
       }
-    } catch (e) { err = e as Error; }
-    finally { if (!this.closed) this.onClose?.(err); }
+    } catch (e) {
+      err = e as Error;
+    } finally {
+      if (!this.closed) this.onClose?.(err);
+    }
   }
 
   async disconnect(): Promise<void> {
     this.closed = true;
-    try { await this.reader?.cancel(); } catch { /* already closed */ }
-    try { this.writer?.releaseLock(); } catch { /* already released */ }
+    try {
+      await this.reader?.cancel();
+    } catch {
+      /* already closed */
+    }
+    try {
+      this.writer?.releaseLock();
+    } catch {
+      /* already released */
+    }
     this.writer = null;
-    try { await this.port?.close(); } catch { /* already closed */ }
+    try {
+      await this.port?.close();
+    } catch {
+      /* already closed */
+    }
     this.port = null;
   }
 }

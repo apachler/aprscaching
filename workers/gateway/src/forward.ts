@@ -15,13 +15,17 @@ const now = () => Math.floor(Date.now() / 1000);
 
 /** Build a router from the enabled forward rules. */
 export async function loadRouter(env: Env): Promise<ForwardRouter> {
-  const rows = (await env.DB.prepare("SELECT partner, route, transport FROM bbs_forward_rules WHERE enabled=1").all<ForwardRule>()).results;
+  const rows = (
+    await env.DB.prepare("SELECT partner, route, transport FROM bbs_forward_rules WHERE enabled=1").all<ForwardRule>()
+  ).results;
   return new ForwardRouter(rows);
 }
 
 /** Look up a callsign's home BBS from the White Pages (null if unknown). */
 async function homeBbs(env: Env, call: string): Promise<string | null> {
-  const r = await env.DB.prepare("SELECT home_bbs FROM white_pages WHERE callsign=?").bind(call.toUpperCase()).first<{ home_bbs: string }>();
+  const r = await env.DB.prepare("SELECT home_bbs FROM white_pages WHERE callsign=?")
+    .bind(call.toUpperCase())
+    .first<{ home_bbs: string }>();
   return r?.home_bbs ?? null;
 }
 
@@ -41,7 +45,9 @@ export async function learnWhitePages(env: Env, call: string, bbs: string): Prom
   if (!call || !bbs) return;
   await env.DB.prepare(
     "INSERT INTO white_pages (callsign, home_bbs, updated_at) VALUES (?,?,?) ON CONFLICT(callsign) DO UPDATE SET home_bbs=excluded.home_bbs, updated_at=excluded.updated_at",
-  ).bind(call.toUpperCase(), bbs.toUpperCase(), now()).run();
+  )
+    .bind(call.toUpperCase(), bbs.toUpperCase(), now())
+    .run();
 }
 
 // ---- HTTP surface ----
@@ -69,21 +75,27 @@ export async function handleWhitePages(req: Request, env: Env): Promise<Response
 
 /** Operator forward-rule CRUD: GET list · POST add · DELETE /:id. Sysop session or the operator secret. */
 export async function handleForwardRules(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate;
   if (req.method === "GET") {
-    const rows = (await env.DB.prepare("SELECT id, partner, route, transport, enabled FROM bbs_forward_rules ORDER BY id").all()).results;
+    const rows = (
+      await env.DB.prepare("SELECT id, partner, route, transport, enabled FROM bbs_forward_rules ORDER BY id").all()
+    ).results;
     return json({ rules: rows.map((r: any) => ({ ...r, enabled: !!r.enabled })) });
   }
   const b = (await req.json().catch(() => ({}))) as { partner?: string; route?: string; transport?: string };
   if (!b.partner || !b.route) return json({ error: "partner + route required" }, { status: 400 });
   const res = await env.DB.prepare(
     "INSERT INTO bbs_forward_rules (partner, route, transport, enabled, created_at) VALUES (?,?,?,1,?)",
-  ).bind(b.partner.toLowerCase(), b.route.toUpperCase(), (b.transport ?? "rf-fbb").toLowerCase(), now()).run();
+  )
+    .bind(b.partner.toLowerCase(), b.route.toUpperCase(), (b.transport ?? "rf-fbb").toLowerCase(), now())
+    .run();
   return json({ ok: true, id: Number(res.meta.last_row_id) }, { status: 201 });
 }
 
 export async function handleForwardRuleDelete(req: Request, env: Env, id: number): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_forward_rules WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
@@ -91,8 +103,16 @@ export async function handleForwardRuleDelete(req: Request, env: Env, id: number
 // ---- FBB forwarding partners ----
 const PARTNER_PROTOS = ["rf-fbb", "axudp", "ip-fed"] as const;
 export interface ForwardPartner {
-  call: string; ha: string | null; connectScript: string; proto: (typeof PARTNER_PROTOS)[number];
-  intervalMin: number; timebands: string; requestReverse: boolean; msgtypes: string; maxBlock: number; enabled: boolean;
+  call: string;
+  ha: string | null;
+  connectScript: string;
+  proto: (typeof PARTNER_PROTOS)[number];
+  intervalMin: number;
+  timebands: string;
+  requestReverse: boolean;
+  msgtypes: string;
+  maxBlock: number;
+  enabled: boolean;
 }
 const clampInt = (v: unknown, lo: number, hi: number, dflt: number): number => {
   const n = Math.floor(Number(v));
@@ -106,11 +126,23 @@ const clampInt = (v: unknown, lo: number, hi: number, dflt: number): number => {
  */
 export function normalizePartner(input: unknown): ForwardPartner | null {
   const b = (input ?? {}) as Record<string, unknown>;
-  const call = String(b.call ?? "").trim().toUpperCase();
+  const call = String(b.call ?? "")
+    .trim()
+    .toUpperCase();
   if (!/^[A-Z0-9]{3,6}(-\d{1,2})?$/.test(call)) return null;
   const proto = PARTNER_PROTOS.includes(b.proto as never) ? (b.proto as ForwardPartner["proto"]) : "rf-fbb";
-  const msgtypes = [...new Set(String(b.msgtypes ?? "PBT").toUpperCase().split("").filter((c) => "PBT".includes(c)))].join("") || "PBT";
-  const timebands = String(b.timebands ?? "").replace(/[^0-9,\-]/g, "").slice(0, 64);
+  const msgtypes =
+    [
+      ...new Set(
+        String(b.msgtypes ?? "PBT")
+          .toUpperCase()
+          .split("")
+          .filter((c) => "PBT".includes(c)),
+      ),
+    ].join("") || "PBT";
+  const timebands = String(b.timebands ?? "")
+    .replace(/[^0-9,\-]/g, "")
+    .slice(0, 64);
   return {
     call,
     ha: b.ha != null && String(b.ha).trim() ? String(b.ha).trim().toUpperCase().slice(0, 64) : null,
@@ -126,19 +158,30 @@ export function normalizePartner(input: unknown): ForwardPartner | null {
 }
 
 const partnerRow = (r: any): ForwardPartner & { id: number } => ({
-  id: r.id, call: r.call, ha: r.ha, connectScript: r.connect_script, proto: r.proto,
-  intervalMin: r.interval_min, timebands: r.timebands, requestReverse: !!r.request_reverse,
-  msgtypes: r.msgtypes, maxBlock: r.max_block, enabled: !!r.enabled,
+  id: r.id,
+  call: r.call,
+  ha: r.ha,
+  connectScript: r.connect_script,
+  proto: r.proto,
+  intervalMin: r.interval_min,
+  timebands: r.timebands,
+  requestReverse: !!r.request_reverse,
+  msgtypes: r.msgtypes,
+  maxBlock: r.max_block,
+  enabled: !!r.enabled,
 });
 
 /** Operator partner CRUD: GET list · POST create (upsert by call). Sysop session or the operator secret
  *  (the forwarder ingest loads the list with its INGEST_SECRET). Never a plain user. */
 export async function handleForwardPartners(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate;
   if (req.method === "GET") {
-    const rows = (await env.DB.prepare(
-      "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners ORDER BY call",
-    ).all()).results;
+    const rows = (
+      await env.DB.prepare(
+        "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners ORDER BY call",
+      ).all()
+    ).results;
     return json({ partners: rows.map(partnerRow) });
   }
   const p = normalizePartner(await req.json().catch(() => ({})));
@@ -150,42 +193,96 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
      ON CONFLICT(call) DO UPDATE SET ha=excluded.ha, connect_script=excluded.connect_script, proto=excluded.proto,
        interval_min=excluded.interval_min, timebands=excluded.timebands, request_reverse=excluded.request_reverse,
        msgtypes=excluded.msgtypes, max_block=excluded.max_block, enabled=excluded.enabled, updated_at=excluded.updated_at`,
-  ).bind(p.call, p.ha, p.connectScript, p.proto, p.intervalMin, p.timebands, p.requestReverse ? 1 : 0, p.msgtypes, p.maxBlock, p.enabled ? 1 : 0, ts, ts).run();
+  )
+    .bind(
+      p.call,
+      p.ha,
+      p.connectScript,
+      p.proto,
+      p.intervalMin,
+      p.timebands,
+      p.requestReverse ? 1 : 0,
+      p.msgtypes,
+      p.maxBlock,
+      p.enabled ? 1 : 0,
+      ts,
+      ts,
+    )
+    .run();
   const row = await env.DB.prepare(
     "SELECT id, call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled FROM bbs_partners WHERE call=?",
-  ).bind(p.call).first();
+  )
+    .bind(p.call)
+    .first();
   return json({ ok: true, partner: partnerRow(row) }, { status: 201 });
 }
 
 export async function handleForwardPartnerDelete(req: Request, env: Env, id: number): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); if (gate) return gate;
+  const gate = await requireSysop(req, env, { allowIngest: true });
+  if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_partners WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
 
 // ---- FBB forwarding pool — the ingest scheduler pulls outbound / pushes inbound here ----
 /** An FBB message on the wire (matches @aprsweb/packet FbbMessage; the ingest feeds these to FbbSession). */
-export interface FbbWireMsg { type: "P" | "B"; from: string; at: string; to: string; bid: string; title: string; body: string }
-interface PoolRow { id: number; bid: string | null; type: string; from_call: string; to_call: string; subject: string | null; body: string }
+export interface FbbWireMsg {
+  type: "P" | "B";
+  from: string;
+  at: string;
+  to: string;
+  bid: string;
+  title: string;
+  body: string;
+}
+interface PoolRow {
+  id: number;
+  bid: string | null;
+  type: string;
+  from_call: string;
+  to_call: string;
+  subject: string | null;
+  body: string;
+}
 
 /** Map a local bbs_messages row → the FBB wire shape. `at` is the routing hint (partner HA). Pure. */
 export function fbbFromRow(r: PoolRow, instance: string, at: string): FbbWireMsg {
   return {
-    type: r.type === "B" ? "B" : "P",                 // FBB proposes P or B; T (traffic) rides as P
-    from: r.from_call, at, to: r.to_call,
+    type: r.type === "B" ? "B" : "P", // FBB proposes P or B; T (traffic) rides as P
+    from: r.from_call,
+    at,
+    to: r.to_call,
     bid: r.bid ?? `${r.id}_${instance}`,
-    title: r.subject ?? "", body: r.body,
+    title: r.subject ?? "",
+    body: r.body,
   };
 }
 
 /** Values for INSERT OR IGNORE of an inbound forwarded message (BID-deduped). Pure; null if invalid. */
-export function inboundRow(m: Partial<FbbWireMsg>, origin: string, ts: number):
-  { bid: string; type: string; from: string; to: string; title: string; body: string; posted: number; origin: string } | null {
+export function inboundRow(
+  m: Partial<FbbWireMsg>,
+  origin: string,
+  ts: number,
+): {
+  bid: string;
+  type: string;
+  from: string;
+  to: string;
+  title: string;
+  body: string;
+  posted: number;
+  origin: string;
+} | null {
   if (!m.bid || !m.from || !m.to || m.body == null) return null;
   return {
-    bid: m.bid, type: m.type === "B" ? "B" : "P",
-    from: String(m.from).toUpperCase(), to: String(m.to).toUpperCase(),
-    title: m.title ?? "", body: String(m.body), posted: ts, origin,
+    bid: m.bid,
+    type: m.type === "B" ? "B" : "P",
+    from: String(m.from).toUpperCase(),
+    to: String(m.to).toUpperCase(),
+    title: m.title ?? "",
+    body: String(m.body),
+    posted: ts,
+    origin,
   };
 }
 
@@ -199,15 +296,21 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
   if (!partner) return json({ error: "partner required" }, { status: 400 });
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit")) || 20, 1), 50);
   const instance = env.INSTANCE ?? u.host;
-  const at = (await env.DB.prepare("SELECT ha FROM bbs_partners WHERE call=?").bind(partner).first<{ ha: string | null }>())?.ha ?? partner;
+  const at =
+    (await env.DB.prepare("SELECT ha FROM bbs_partners WHERE call=?").bind(partner).first<{ ha: string | null }>())
+      ?.ha ?? partner;
 
-  const rows = (await env.DB.prepare(
-    `SELECT m.id, m.bid, m.type, m.from_call, m.to_call, m.subject, m.body, m.posted_at
+  const rows = (
+    await env.DB.prepare(
+      `SELECT m.id, m.bid, m.type, m.from_call, m.to_call, m.subject, m.body, m.posted_at
        FROM bbs_messages m
        WHERE m.origin='local' AND m.bid IS NOT NULL AND (m.expires_at IS NULL OR m.expires_at > ?)
          AND NOT EXISTS (SELECT 1 FROM bbs_forward_log l WHERE l.partner=? AND l.bid=m.bid)
        ORDER BY m.posted_at LIMIT 200`,
-  ).bind(now(), partner).all<PoolRow>()).results;
+    )
+      .bind(now(), partner)
+      .all<PoolRow>()
+  ).results;
 
   const out: FbbWireMsg[] = [];
   for (const r of rows) {
@@ -229,8 +332,10 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
      VALUES (?,?,?,?,?,?,?,?)`,
-  ).bind(row.bid, row.type, row.from, row.to, row.title || null, row.body, row.posted, row.origin).run();
-  if (row.type === "P") await learnWhitePages(env, row.from, row.origin);   // FBB White Pages: learn HomeBBS from P-mail
+  )
+    .bind(row.bid, row.type, row.from, row.to, row.title || null, row.body, row.posted, row.origin)
+    .run();
+  if (row.type === "P") await learnWhitePages(env, row.from, row.origin); // FBB White Pages: learn HomeBBS from P-mail
   return json({ ok: true, stored: res.meta.changes ? 1 : 0, deduped: !res.meta.changes });
 }
 
@@ -239,9 +344,19 @@ export async function handleForwardSent(req: Request, env: Env): Promise<Respons
   if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { partner?: string; bids?: string[] };
   const partner = (b.partner ?? "").toUpperCase();
-  if (!partner || !Array.isArray(b.bids) || !b.bids.length) return json({ error: "partner + bids required" }, { status: 400 });
+  if (!partner || !Array.isArray(b.bids) || !b.bids.length)
+    return json({ error: "partner + bids required" }, { status: 400 });
   const ts = now();
-  await env.DB.batch(b.bids.slice(0, 200).map((bid) =>
-    env.DB.prepare("INSERT OR IGNORE INTO bbs_forward_log (partner, bid, forwarded_at) VALUES (?,?,?)").bind(partner, String(bid), ts)));
+  await env.DB.batch(
+    b.bids
+      .slice(0, 200)
+      .map((bid) =>
+        env.DB.prepare("INSERT OR IGNORE INTO bbs_forward_log (partner, bid, forwarded_at) VALUES (?,?,?)").bind(
+          partner,
+          String(bid),
+          ts,
+        ),
+      ),
+  );
   return json({ ok: true, marked: Math.min(b.bids.length, 200) });
 }

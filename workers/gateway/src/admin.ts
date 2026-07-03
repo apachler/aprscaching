@@ -12,7 +12,12 @@ import { sessionCallsign } from "./auth.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
 export function adminCalls(env: Env): Set<string> {
-  return new Set((env.ADMIN_CALLSIGNS ?? "").split(",").map((c) => c.trim().toUpperCase()).filter(Boolean));
+  return new Set(
+    (env.ADMIN_CALLSIGNS ?? "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean),
+  );
 }
 
 /** Is the requester a signed-in instance operator? */
@@ -31,13 +36,19 @@ const ingestOk = (req: Request, env: Env): boolean => req.headers.get("x-ingest-
  * `{ allowIngest: true }` for endpoints the operator-local ingest also legitimately reads/writes with its
  * secret (e.g. the forwarding partner list the forwarder loads, or the node-table mirror it posts).
  */
-export async function requireSysop(req: Request, env: Env, opts: { allowIngest?: boolean } = {}): Promise<Response | null> {
+export async function requireSysop(
+  req: Request,
+  env: Env,
+  opts: { allowIngest?: boolean } = {},
+): Promise<Response | null> {
   if (opts.allowIngest && ingestOk(req, env)) return null;
   if (await isSysop(req, env)) return null;
   // A machine that PRESENTED an ingest secret but it was wrong → 401 (bad credential), matching the
   // established ingest-auth contract. A browser with no session / a non-operator session → 403.
-  if (opts.allowIngest && req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
-  if (adminCalls(env).size === 0) return json({ error: "no instance operator configured (set ADMIN_CALLSIGNS)" }, { status: 403 });
+  if (opts.allowIngest && req.headers.get("x-ingest-secret") !== null)
+    return new Response("unauthorized", { status: 401 });
+  if (adminCalls(env).size === 0)
+    return json({ error: "no instance operator configured (set ADMIN_CALLSIGNS)" }, { status: 403 });
   return json({ error: "instance-operator (sysop) access required" }, { status: 403 });
 }
 

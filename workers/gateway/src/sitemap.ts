@@ -23,7 +23,7 @@ export function appBase(env: Env): string {
 }
 
 export function xmlEscape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]!));
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 }
 
 /** A deep-link URL for a surface: the map is the root, panels carry `?view=<key>`. */
@@ -34,10 +34,11 @@ export function surfaceUrl(env: Env, view: string | null): string {
 
 /** GET /sitemap.xml — public, indexable surfaces as a standard urlset. */
 export function handleSitemapXml(_req: Request, env: Env): Response {
-  const urls = SURFACES.filter((s) => s.indexable).map((s) =>
-    `  <url>\n    <loc>${xmlEscape(surfaceUrl(env, s.view))}</loc>\n` +
-    `    <changefreq>${s.view === null ? "hourly" : "daily"}</changefreq>\n` +
-    `    <priority>${s.view === null ? "1.0" : "0.6"}</priority>\n  </url>`,
+  const urls = SURFACES.filter((s) => s.indexable).map(
+    (s) =>
+      `  <url>\n    <loc>${xmlEscape(surfaceUrl(env, s.view))}</loc>\n` +
+      `    <changefreq>${s.view === null ? "hourly" : "daily"}</changefreq>\n` +
+      `    <priority>${s.view === null ? "1.0" : "0.6"}</priority>\n  </url>`,
   );
   const body =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -65,14 +66,17 @@ export function handleSitemapPage(_req: Request, env: Env): Response {
   const groupHtml = SURFACE_GROUPS.map((group: SurfaceGroup) => {
     const items = SURFACES.filter((s) => s.group === group);
     if (!items.length) return "";
-    const rows = items.map((s) => {
-      const badge = s.access === "account" ? ` <span class=tag>account</span>` : "";
-      return `<li><a href="${e(surfaceUrl(env, s.view))}">${e(s.title)}</a>${badge}<div class=m>${e(s.summary)}</div></li>`;
-    }).join("");
+    const rows = items
+      .map((s) => {
+        const badge = s.access === "account" ? ` <span class=tag>account</span>` : "";
+        return `<li><a href="${e(surfaceUrl(env, s.view))}">${e(s.title)}</a>${badge}<div class=m>${e(s.summary)}</div></li>`;
+      })
+      .join("");
     return `<section><h2>${e(group)}</h2><ul>${rows}</ul></section>`;
   }).join("");
-  const feedHtml = FEEDS.map((f) =>
-    `<li><a href="${e(base + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`).join("");
+  const feedHtml = FEEDS.map(
+    (f) => `<li><a href="${e(base + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
+  ).join("");
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Site map · aprscaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.55 system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem}

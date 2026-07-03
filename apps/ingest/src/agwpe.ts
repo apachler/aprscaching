@@ -5,8 +5,15 @@ import { parseAgwpe, encodeAgwpe } from "@aprsweb/packet";
 import type { Packet } from "@aprsweb/shared";
 import type { ParsedFrame } from "@aprsweb/aprs";
 
-export interface AgwpeOpts { host: string; port: number; radioPort?: number }
-export interface AgwpeHandlers { onPacket: (p: Packet) => void; onFrame?: (f: ParsedFrame) => void }
+export interface AgwpeOpts {
+  host: string;
+  port: number;
+  radioPort?: number;
+}
+export interface AgwpeHandlers {
+  onPacket: (p: Packet) => void;
+  onFrame?: (f: ParsedFrame) => void;
+}
 
 /**
  * AGWPE TCP client — connects to an AGW Packet Engine (Direwolf/SoundModem/UZ7HO on
@@ -18,9 +25,14 @@ export class AgwpeTnc {
   private sock?: net.Socket;
   private connected = false;
   private buf = new Uint8Array(0);
-  constructor(private o: AgwpeOpts, private h: AgwpeHandlers) {}
+  constructor(
+    private o: AgwpeOpts,
+    private h: AgwpeHandlers,
+  ) {}
 
-  start() { this.connect(); }
+  start() {
+    this.connect();
+  }
 
   /** Transmit a raw AX.25 frame via AGWPE 'K' (RawAX25). Best-effort. */
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean {
@@ -30,8 +42,14 @@ export class AgwpeTnc {
     const data = new Uint8Array(1 + ax.length);
     data[0] = this.o.radioPort ?? 0;
     data.set(ax, 1);
-    try { this.sock.write(Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "K", from: f.src, to: f.dst, data }))); return true; }
-    catch { return false; }
+    try {
+      this.sock.write(
+        Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "K", from: f.src, to: f.dst, data })),
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private connect() {
@@ -46,24 +64,39 @@ export class AgwpeTnc {
     });
     s.on("data", (chunk: Buffer) => {
       const merged = new Uint8Array(this.buf.length + chunk.length);
-      merged.set(this.buf); merged.set(chunk, this.buf.length);
+      merged.set(this.buf);
+      merged.set(chunk, this.buf.length);
       const { frames, rest } = parseAgwpe(merged);
-      this.buf = new Uint8Array(rest);   // copy into a fresh ArrayBuffer-backed view
+      this.buf = new Uint8Array(rest); // copy into a fresh ArrayBuffer-backed view
       for (const fr of frames) {
-        if (fr.kind !== "K") continue;                 // raw AX.25 monitor frames only
+        if (fr.kind !== "K") continue; // raw AX.25 monitor frames only
         const ax = fr.data.length > 1 ? fr.data.slice(1) : fr.data; // strip the leading radio-port byte
         const f = decodeAx25(ax);
         if (!f) continue;
         this.h.onFrame?.(f);
         this.h.onPacket({
-          src: f.src, dst: f.dst, path: f.path, payload: f.payload,
-          kind: "other", heardVia: "rf", port: "agwpe",
-          ts: Math.floor(Date.now() / 1000), raw: f.raw,
+          src: f.src,
+          dst: f.dst,
+          path: f.path,
+          payload: f.payload,
+          kind: "other",
+          heardVia: "rf",
+          port: "agwpe",
+          ts: Math.floor(Date.now() / 1000),
+          raw: f.raw,
         });
       }
     });
-    const down = () => { this.connected = false; };
-    s.on("error", () => { down(); console.log("[agwpe] disconnected, retrying…"); });
-    s.on("close", () => { down(); setTimeout(() => this.connect(), 3000); });
+    const down = () => {
+      this.connected = false;
+    };
+    s.on("error", () => {
+      down();
+      console.log("[agwpe] disconnected, retrying…");
+    });
+    s.on("close", () => {
+      down();
+      setTimeout(() => this.connect(), 3000);
+    });
   }
 }

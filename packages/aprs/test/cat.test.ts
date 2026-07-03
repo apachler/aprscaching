@@ -27,7 +27,7 @@ describe("cat — set mode", () => {
     expect(ascii(catSetMode("kenwood", "FM")!)).toBe("MD4;");
     expect(ascii(catSetMode("kenwood", "usb")!)).toBe("MD2;");
     expect(hex(catSetMode("icom", "FM")!)).toBe("fe fe 94 e0 06 05 fd");
-    expect(catSetMode("yaesu-bin", "FM")).toBeNull();   // opcode varies per classic model
+    expect(catSetMode("yaesu-bin", "FM")).toBeNull(); // opcode varies per classic model
     expect(catSetMode("kenwood", "bogus")).toBeNull();
   });
 });

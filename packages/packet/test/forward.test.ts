@@ -4,14 +4,18 @@ import { parseHierAddr, ForwardRouter, buildProposal, parseFS } from "../src/ind
 
 describe("FBB hierarchical addressing + forward routing", () => {
   it("parses a full H-address into bbs + hierarchy", () => {
-    expect(parseHierAddr("OE8APR @ OE8XBM.#OE3.OE.EU")).toEqual({ to: "OE8APR", bbs: "OE8XBM", hier: ["#OE3", "OE", "EU"] });
+    expect(parseHierAddr("OE8APR @ OE8XBM.#OE3.OE.EU")).toEqual({
+      to: "OE8APR",
+      bbs: "OE8XBM",
+      hier: ["#OE3", "OE", "EU"],
+    });
     expect(parseHierAddr("ALL")).toEqual({ to: "ALL", bbs: null, hier: [] });
     expect(parseHierAddr("BLN @ WW")).toEqual({ to: "BLN", bbs: "WW", hier: [] });
   });
 
   it("routes to the MOST specific matching partner", () => {
     const r = new ForwardRouter([
-      { partner: "ip-fed", route: "*" },     // catch-all (the federated/IP partner)
+      { partner: "ip-fed", route: "*" }, // catch-all (the federated/IP partner)
       { partner: "rf-eu", route: "EU" },
       { partner: "rf-oe", route: "OE" },
     ]);

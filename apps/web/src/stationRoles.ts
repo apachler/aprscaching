@@ -3,15 +3,20 @@ import type { StationRole } from "@aprsweb/shared";
 import { BRAND } from "./brand.js";
 
 /** `cog` = the CP437/ASCII marker glyph used when the Cogmind theme is active (no colour emoji). */
-export interface RoleMeta { label: string; color: string; glyph: string; cog: string }
+export interface RoleMeta {
+  label: string;
+  color: string;
+  glyph: string;
+  cog: string;
+}
 
 /** Marker colour (brand palette) + glyph per operated-station role — our own glyph set (ui-ux.md). */
 export const ROLE_META: Record<StationRole, RoleMeta> = {
-  weather:    { label: "Weather",    color: BRAND.beige2, glyph: "☼", cog: "☼" },
-  digipeater: { label: "Digipeater", color: BRAND.blue,   glyph: "#", cog: "#" },
-  igate:      { label: "IGate",      color: BRAND.green,  glyph: "⇅", cog: "↕" },
-  node:       { label: "Node",       color: BRAND.grey,   glyph: "⬡", cog: "○" },
-  relay:      { label: "Relay",      color: BRAND.beige,  glyph: "↻", cog: "→" },
+  weather: { label: "Weather", color: BRAND.beige2, glyph: "☼", cog: "☼" },
+  digipeater: { label: "Digipeater", color: BRAND.blue, glyph: "#", cog: "#" },
+  igate: { label: "IGate", color: BRAND.green, glyph: "⇅", cog: "↕" },
+  node: { label: "Node", color: BRAND.grey, glyph: "⬡", cog: "○" },
+  relay: { label: "Relay", color: BRAND.beige, glyph: "↻", cog: "→" },
 };
 
 /** Priority when a station has several roles — the most infrastructure-defining one wins the glyph. */

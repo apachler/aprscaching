@@ -6,31 +6,92 @@
  * Both pure + unit-tested; the audio tone detection itself is browser-side (validate-at-deploy).
  */
 const MORSE: Record<string, string> = {
-  A: ".-", B: "-...", C: "-.-.", D: "-..", E: ".", F: "..-.", G: "--.", H: "....", I: "..",
-  J: ".---", K: "-.-", L: ".-..", M: "--", N: "-.", O: "---", P: ".--.", Q: "--.-", R: ".-.",
-  S: "...", T: "-", U: "..-", V: "...-", W: ".--", X: "-..-", Y: "-.--", Z: "--..",
-  "0": "-----", "1": ".----", "2": "..---", "3": "...--", "4": "....-", "5": ".....",
-  "6": "-....", "7": "--...", "8": "---..", "9": "----.",
-  ".": ".-.-.-", ",": "--..--", "?": "..--..", "/": "-..-.", "=": "-...-", "-": "-....-",
-  ":": "---...", "'": ".----.", "@": ".--.-.", "(": "-.--.", ")": "-.--.-",
+  A: ".-",
+  B: "-...",
+  C: "-.-.",
+  D: "-..",
+  E: ".",
+  F: "..-.",
+  G: "--.",
+  H: "....",
+  I: "..",
+  J: ".---",
+  K: "-.-",
+  L: ".-..",
+  M: "--",
+  N: "-.",
+  O: "---",
+  P: ".--.",
+  Q: "--.-",
+  R: ".-.",
+  S: "...",
+  T: "-",
+  U: "..-",
+  V: "...-",
+  W: ".--",
+  X: "-..-",
+  Y: "-.--",
+  Z: "--..",
+  "0": "-----",
+  "1": ".----",
+  "2": "..---",
+  "3": "...--",
+  "4": "....-",
+  "5": ".....",
+  "6": "-....",
+  "7": "--...",
+  "8": "---..",
+  "9": "----.",
+  ".": ".-.-.-",
+  ",": "--..--",
+  "?": "..--..",
+  "/": "-..-.",
+  "=": "-...-",
+  "-": "-....-",
+  ":": "---...",
+  "'": ".----.",
+  "@": ".--.-.",
+  "(": "-.--.",
+  ")": "-.--.-",
 };
 const REV: Record<string, string> = Object.fromEntries(Object.entries(MORSE).map(([c, m]) => [m, c]));
 
 /** Decode "…. . .-.. .-.. ---" (letters space-separated, words by " / " or a double space) → text. */
 export function decodeMorse(input: string): string {
-  return input.trim().split(/\s*\/\s*|\s{2,}/).map((word) =>
-    word.trim().split(/\s+/).filter(Boolean).map((t) => REV[t] ?? "").join("")
-  ).join(" ").trim();
+  return input
+    .trim()
+    .split(/\s*\/\s*|\s{2,}/)
+    .map((word) =>
+      word
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((t) => REV[t] ?? "")
+        .join(""),
+    )
+    .join(" ")
+    .trim();
 }
 
 /** Encode text → Morse tokens (letters space-separated, words by " / "). For tests + a sender tool. */
 export function encodeMorse(text: string): string {
-  return text.toUpperCase().split(/\s+/).filter(Boolean).map((word) =>
-    [...word].map((c) => MORSE[c] ?? "").filter(Boolean).join(" ")
-  ).join(" / ");
+  return text
+    .toUpperCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) =>
+      [...word]
+        .map((c) => MORSE[c] ?? "")
+        .filter(Boolean)
+        .join(" "),
+    )
+    .join(" / ");
 }
 
-export interface KeyEvent { on: boolean; ms: number }
+export interface KeyEvent {
+  on: boolean;
+  ms: number;
+}
 
 /**
  * Classify a keyed on/off envelope into Morse. `unit` (ms per dot) is estimated from the shortest ON

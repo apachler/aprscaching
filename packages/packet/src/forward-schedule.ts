@@ -9,13 +9,16 @@
 
 export interface SchedulablePartner {
   enabled: boolean;
-  intervalMin: number;   // 0 ⇒ manual only (never auto-due)
-  timebands: string;     // "" ⇒ any time
+  intervalMin: number; // 0 ⇒ manual only (never auto-due)
+  timebands: string; // "" ⇒ any time
 }
 
 /** Is the given UTC hour (0–23) inside any of the comma-separated `a-b` windows? Empty list ⇒ true. */
 export function hourInBands(hour: number, timebands: string): boolean {
-  const bands = timebands.split(",").map((s) => s.trim()).filter(Boolean);
+  const bands = timebands
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (bands.length === 0) return true;
   for (const band of bands) {
     const m = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(band);

@@ -8,17 +8,21 @@ import { isCallsignVerified } from "./callsign.js";
  * excluded from verification by construction. The ingest box publishes via third-party format.
  */
 export async function maybeAnnounceFind(
-  env: Env, callsign: string, cacheCode: string, cacheTitle?: string,
+  env: Env,
+  callsign: string,
+  cacheCode: string,
+  cacheTitle?: string,
 ): Promise<boolean> {
   const acct = await env.DB.prepare("SELECT announce_is, announce_tocall FROM accounts WHERE callsign = ?")
-    .bind(callsign).first<{ announce_is: number; announce_tocall: string }>();
+    .bind(callsign)
+    .first<{ announce_is: number; announce_tocall: string }>();
   if (!acct?.announce_is) return false;
   if (!(await isCallsignVerified(env, callsign))) return false;
 
   const title = cacheTitle ? ` (${cacheTitle})` : "";
   const payload = `>Found ${cacheCode}${title} via aprscaching.com`.slice(0, 120);
-  await env.DB.prepare(
-    "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)",
-  ).bind(Math.floor(Date.now() / 1000), callsign, acct.announce_tocall ?? "APZACG", payload).run();
+  await env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)")
+    .bind(Math.floor(Date.now() / 1000), callsign, acct.announce_tocall ?? "APZACG", payload)
+    .run();
   return true;
 }

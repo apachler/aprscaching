@@ -16,7 +16,10 @@ export class BunRooms {
   join(ws: ServerWebSocket<WsData>): void {
     const r = ws.data.region;
     let set = this.rooms.get(r);
-    if (!set) { set = new Set(); this.rooms.set(r, set); }
+    if (!set) {
+      set = new Set();
+      this.rooms.set(r, set);
+    }
     set.add(ws);
   }
   leave(ws: ServerWebSocket<WsData>): void {
@@ -26,7 +29,9 @@ export class BunRooms {
     try {
       const parsed = Subscribe.safeParse(JSON.parse(String(raw)));
       if (parsed.success) ws.data.sub = parsed.data;
-    } catch { /* ignore malformed */ }
+    } catch {
+      /* ignore malformed */
+    }
   }
 
   /** Deliver live envelopes to each subscriber per its subscription (same semantics as the DO). */
@@ -35,7 +40,13 @@ export class BunRooms {
     if (!set) return;
     for (const ws of set) {
       for (const env of envelopes) {
-        for (const msg of deliveriesFor(ws.data.sub, env)) { try { ws.send(JSON.stringify(msg)); } catch { /* dropped */ } }
+        for (const msg of deliveriesFor(ws.data.sub, env)) {
+          try {
+            ws.send(JSON.stringify(msg));
+          } catch {
+            /* dropped */
+          }
+        }
       }
     }
   }

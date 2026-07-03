@@ -24,11 +24,17 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
     { label: "Maps app", href: `geo:${dest}?q=${dest}(${encodeURIComponent(title)})` },
     { label: "Google", href: `https://www.google.com/maps/dir/?api=1&destination=${dest}` },
     { label: "Apple", href: `https://maps.apple.com/?daddr=${dest}` },
-    { label: "OpenStreetMap", href: `https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lon.toFixed(6)}#map=16/${lat.toFixed(4)}/${lon.toFixed(4)}` },
+    {
+      label: "OpenStreetMap",
+      href: `https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lon.toFixed(6)}#map=16/${lat.toFixed(4)}/${lon.toFixed(4)}`,
+    },
   ];
 
   function locate() {
-    if (!navigator.geolocation) { toast("Geolocation unavailable on this device"); return; }
+    if (!navigator.geolocation) {
+      toast("Geolocation unavailable on this device");
+      return;
+    }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -40,7 +46,10 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
         });
         setLocating(false);
       },
-      (e) => { setLocating(false); toast(e.code === e.PERMISSION_DENIED ? "Location permission denied" : "Couldn't get a fix"); },
+      (e) => {
+        setLocating(false);
+        toast(e.code === e.PERMISSION_DENIED ? "Location permission denied" : "Couldn't get a fix");
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
   }
@@ -54,14 +63,22 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
         <div className="navcache-body">
           <div className="navcache-links">
             {links.map((l) => (
-              <a key={l.label} href={l.href} target="_blank" rel="noreferrer noopener">{l.label} ↗</a>
+              <a key={l.label} href={l.href} target="_blank" rel="noreferrer noopener">
+                {l.label} ↗
+              </a>
             ))}
           </div>
           <div className="navcache-bearing">
             {fix ? (
               <p className="mono" role="status">
-                <span className="navcache-arrow" style={{ transform: `rotate(${Math.round(fix.bearing)}deg)` }} aria-hidden="true">↑</span>
-                {" "}{Math.round(fix.bearing)}° {fix.octant} · {fmt.distance(fix.distM)} away
+                <span
+                  className="navcache-arrow"
+                  style={{ transform: `rotate(${Math.round(fix.bearing)}deg)` }}
+                  aria-hidden="true"
+                >
+                  ↑
+                </span>{" "}
+                {Math.round(fix.bearing)}° {fix.octant} · {fmt.distance(fix.distM)} away
               </p>
             ) : (
               <button className="link" onClick={locate} disabled={locating}>

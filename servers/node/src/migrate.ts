@@ -6,10 +6,11 @@ import type BetterSqlite3 from "better-sqlite3";
 
 export function migrate(db: BetterSqlite3.Database, dir: string): string[] {
   db.exec("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
-  const applied = new Set(
-    (db.prepare("SELECT name FROM _migrations").all() as { name: string }[]).map((r) => r.name),
-  );
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  const applied = new Set((db.prepare("SELECT name FROM _migrations").all() as { name: string }[]).map((r) => r.name));
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
   const insert = db.prepare("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)");
   const ran: string[] = [];
 

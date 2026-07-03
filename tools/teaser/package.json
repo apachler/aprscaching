@@ -10,5 +10,7 @@
     "teaser": "node teaser.mjs",
     "all": "./run.sh"
   },
-  "devDependencies": { "playwright": "^1.55.0" }
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
 }

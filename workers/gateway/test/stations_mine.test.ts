@@ -5,7 +5,7 @@ import { parseRoles, validStationCallsign } from "../src/stations_mine.js";
 describe("operated stations — validation", () => {
   it("accepts a base call and a base call with an SSID", () => {
     expect(validStationCallsign("OE8APR")).toBe(true);
-    expect(validStationCallsign("oe8apr-1")).toBe(true);   // case-insensitive
+    expect(validStationCallsign("oe8apr-1")).toBe(true); // case-insensitive
     expect(validStationCallsign("OE8APR-13")).toBe(true);
   });
 

@@ -17,13 +17,22 @@ export function goertzel(samples: ArrayLike<number>, sampleRate: number, freq: n
   const k = Math.round((n * freq) / sampleRate);
   const w = (2 * Math.PI * k) / n;
   const coeff = 2 * Math.cos(w);
-  let s1 = 0, s2 = 0;
-  for (let i = 0; i < n; i++) { const s0 = samples[i]! + coeff * s1 - s2; s2 = s1; s1 = s0; }
+  let s1 = 0,
+    s2 = 0;
+  for (let i = 0; i < n; i++) {
+    const s0 = samples[i]! + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
   const power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
   return (Math.sqrt(Math.max(0, power)) / n) * 2;
 }
 
-export interface CwEnvelopeOpts { windowMs?: number; threshold?: number; pitchHz?: number }
+export interface CwEnvelopeOpts {
+  windowMs?: number;
+  threshold?: number;
+  pitchHz?: number;
+}
 
 /**
  * Turn PCM audio into a Morse key envelope: slide a short window, measure tone energy at `pitchHz`, and
@@ -41,14 +50,19 @@ export function cwKeyEvents(samples: ArrayLike<number>, sampleRate: number, opts
   }
   if (!mags.length) return [];
   const peak = Math.max(...mags);
-  if (peak <= 1e-6) return [];                       // silence
+  if (peak <= 1e-6) return []; // silence
   const thr = (opts.threshold ?? 0.4) * peak;
   const events: KeyEvent[] = [];
-  let cur = mags[0]! > thr, run = 0;
+  let cur = mags[0]! > thr,
+    run = 0;
   for (const m of mags) {
     const on = m > thr;
     if (on === cur) run++;
-    else { events.push({ on: cur, ms: run * winMs }); cur = on; run = 1; }
+    else {
+      events.push({ on: cur, ms: run * winMs });
+      cur = on;
+      run = 1;
+    }
   }
   events.push({ on: cur, ms: run * winMs });
   return events;

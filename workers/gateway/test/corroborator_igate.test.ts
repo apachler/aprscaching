@@ -8,7 +8,9 @@ describe("corroboratorIgate — who to credit for a Tier-A find", () => {
   });
 
   it("credits a peer's revealed IGate for a cross-instance corroboration", () => {
-    expect(corroboratorIgate({ method: "aprs_rf_peer", peerIgate: "DL9PEER-10", loggerCall: "OE3RF" })).toBe("DL9PEER-10");
+    expect(corroboratorIgate({ method: "aprs_rf_peer", peerIgate: "DL9PEER-10", loggerCall: "OE3RF" })).toBe(
+      "DL9PEER-10",
+    );
   });
 
   it("credits nobody when a peer did not reveal its IGate (privacy default)", () => {

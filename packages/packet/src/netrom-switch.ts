@@ -12,8 +12,8 @@ import { addrStr, sameAddr, type Ax25Address } from "@aprsweb/ax25";
 import type { NrPacket } from "./netrom-wire.js";
 
 export type SwitchDecision =
-  | { action: "local" }                                             // dest is us → hand to the circuit layer
-  | { action: "forward"; neighbor: Ax25Address; packet: NrPacket }  // transit → re-send to this neighbour (TTL-1)
+  | { action: "local" } // dest is us → hand to the circuit layer
+  | { action: "forward"; neighbor: Ax25Address; packet: NrPacket } // transit → re-send to this neighbour (TTL-1)
   | { action: "drop"; reason: "ttl" | "no-route" | "loop" };
 
 /**
@@ -26,6 +26,7 @@ export function routeNetrom(pkt: NrPacket, node: NetromNode, me: Ax25Address): S
   if (ttl <= 0) return { action: "drop", reason: "ttl" };
   const route = node.best(addrStr(pkt.net.dest));
   if (!route) return { action: "drop", reason: "no-route" };
-  if (sameAddr(route.neighbor, me) || sameAddr(route.neighbor, pkt.net.origin)) return { action: "drop", reason: "loop" };
+  if (sameAddr(route.neighbor, me) || sameAddr(route.neighbor, pkt.net.origin))
+    return { action: "drop", reason: "loop" };
   return { action: "forward", neighbor: route.neighbor, packet: { ...pkt, net: { ...pkt.net, ttl } } };
 }

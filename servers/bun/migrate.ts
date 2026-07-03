@@ -7,7 +7,9 @@ import { join } from "node:path";
 export function migrate(db: Database, dir: string): string[] {
   db.exec("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
   const applied = new Set((db.query("SELECT name FROM _migrations").all() as { name: string }[]).map((r) => r.name));
-  const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
   const ran: string[] = [];
   for (const f of files) {
     if (applied.has(f)) continue;

@@ -30,31 +30,120 @@ export interface Surface {
 }
 
 export const SURFACES: Surface[] = [
-  { key: "map", view: null, label: "Map", title: "Live cache map", group: "Caching", access: "public", indexable: true,
-    summary: "Browse caches and live APRS stations on the map." },
-  { key: "nearby", view: "nearby", label: "Nearby", title: "Nearby caches", group: "Caching", access: "public", indexable: true,
-    summary: "Caches and stations closest to you, sorted by distance." },
-  { key: "filter", view: "filter", label: "Search & filter", title: "Search & filter", group: "Caching", access: "public", indexable: true,
-    summary: "Search by callsign, cache id or grid; filter by type and trust tier." },
-  { key: "hide", view: "hide", label: "Hide a cache", title: "Hide a cache", group: "Caching", access: "account", indexable: false,
-    summary: "Place a new cache for others to find." },
+  {
+    key: "map",
+    view: null,
+    label: "Map",
+    title: "Live cache map",
+    group: "Caching",
+    access: "public",
+    indexable: true,
+    summary: "Browse caches and live APRS stations on the map.",
+  },
+  {
+    key: "nearby",
+    view: "nearby",
+    label: "Nearby",
+    title: "Nearby caches",
+    group: "Caching",
+    access: "public",
+    indexable: true,
+    summary: "Caches and stations closest to you, sorted by distance.",
+  },
+  {
+    key: "filter",
+    view: "filter",
+    label: "Search & filter",
+    title: "Search & filter",
+    group: "Caching",
+    access: "public",
+    indexable: true,
+    summary: "Search by callsign, cache id or grid; filter by type and trust tier.",
+  },
+  {
+    key: "hide",
+    view: "hide",
+    label: "Hide a cache",
+    title: "Hide a cache",
+    group: "Caching",
+    access: "account",
+    indexable: false,
+    summary: "Place a new cache for others to find.",
+  },
 
-  { key: "activity", view: "activity", label: "Activity", title: "Activity feed", group: "Community", access: "public", indexable: true,
-    summary: "Recent finds, hides and DNFs across the network." },
-  { key: "ranks", view: "ranks", label: "Leaderboard", title: "Leaderboard", group: "Community", access: "public", indexable: true,
-    summary: "Top finders and hiders, ranked by callsign and profile." },
-  { key: "messages", view: "messages", label: "Messages", title: "APRS messages", group: "Community", access: "public", indexable: false,
-    summary: "Live APRS text messages — a first-class inbox, separate from BBS mail." },
+  {
+    key: "activity",
+    view: "activity",
+    label: "Activity",
+    title: "Activity feed",
+    group: "Community",
+    access: "public",
+    indexable: true,
+    summary: "Recent finds, hides and DNFs across the network.",
+  },
+  {
+    key: "ranks",
+    view: "ranks",
+    label: "Leaderboard",
+    title: "Leaderboard",
+    group: "Community",
+    access: "public",
+    indexable: true,
+    summary: "Top finders and hiders, ranked by callsign and profile.",
+  },
+  {
+    key: "messages",
+    view: "messages",
+    label: "Messages",
+    title: "APRS messages",
+    group: "Community",
+    access: "public",
+    indexable: false,
+    summary: "Live APRS text messages — a first-class inbox, separate from BBS mail.",
+  },
 
-  { key: "workbench", view: "workbench", label: "Workbench", title: "Workbench — APRS apps", group: "Workbench", access: "public", indexable: true,
-    summary: "App launcher for the operator tools — packet terminal, BBS, decoder, NET/ROM node, plugins, rig & remote control." },
-  { key: "bbs", view: "bbs", label: "BBS", title: "BBS — store & forward mail", group: "Workbench", access: "account", indexable: false,
-    summary: "APRS store-and-forward mail and bulletins." },
+  {
+    key: "workbench",
+    view: "workbench",
+    label: "Workbench",
+    title: "Workbench — APRS apps",
+    group: "Workbench",
+    access: "public",
+    indexable: true,
+    summary:
+      "App launcher for the operator tools — packet terminal, BBS, decoder, NET/ROM node, plugins, rig & remote control.",
+  },
+  {
+    key: "bbs",
+    view: "bbs",
+    label: "BBS",
+    title: "BBS — store & forward mail",
+    group: "Workbench",
+    access: "account",
+    indexable: false,
+    summary: "APRS store-and-forward mail and bulletins.",
+  },
 
-  { key: "profile", view: "profile", label: "You", title: "Your profile", group: "Account", access: "account", indexable: false,
-    summary: "Your finds, points, badges and identity." },
-  { key: "settings", view: "settings", label: "Settings", title: "Settings", group: "Account", access: "account", indexable: false,
-    summary: "Units, basemap, notifications and account." },
+  {
+    key: "profile",
+    view: "profile",
+    label: "You",
+    title: "Your profile",
+    group: "Account",
+    access: "account",
+    indexable: false,
+    summary: "Your finds, points, badges and identity.",
+  },
+  {
+    key: "settings",
+    view: "settings",
+    label: "Settings",
+    title: "Settings",
+    group: "Account",
+    access: "account",
+    indexable: false,
+    summary: "Units, basemap, notifications and account.",
+  },
   // NB: the site map is intentionally NOT a surface here — it is a standalone page (gateway /sitemap,
   // linked from the landing footer), not an in-app panel. It lists these surfaces; it isn't one.
 ];
@@ -65,13 +154,28 @@ export const surfaceByKey = (key: string): Surface | null => SURFACES.find((s) =
 export const surfaceByView = (view: string): Surface | null => SURFACES.find((s) => s.view === view) ?? null;
 
 /** Platform RSS feeds — advertised in /api/sitemap and the /sitemap page. */
-export interface FeedDef { key: string; path: string; title: string; summary: string }
+export interface FeedDef {
+  key: string;
+  path: string;
+  title: string;
+  summary: string;
+}
 
 export const FEEDS: FeedDef[] = [
-  { key: "activity", path: "/feeds/activity.xml", title: "Activity", summary: "Recent finds, hides and DNFs across the network." },
+  {
+    key: "activity",
+    path: "/feeds/activity.xml",
+    title: "Activity",
+    summary: "Recent finds, hides and DNFs across the network.",
+  },
   { key: "caches", path: "/feeds/caches.xml", title: "New caches", summary: "Recently published public caches." },
   { key: "bulletins", path: "/feeds/bulletins.xml", title: "Bulletins", summary: "Public APRS bulletins." },
-  { key: "leaderboard", path: "/feeds/leaderboard.xml", title: "Leaderboard", summary: "Top finders, ranked by verified finds." },
+  {
+    key: "leaderboard",
+    path: "/feeds/leaderboard.xml",
+    title: "Leaderboard",
+    summary: "Top finders, ranked by verified finds.",
+  },
 ];
 
 /** Per-user RSS feed path (callsign uppercased): finds, badge awards and scoring. */

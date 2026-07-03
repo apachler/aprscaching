@@ -34,7 +34,9 @@ function civFreqBcd(hz: number): Uint8Array {
 
 /** Classic Yaesu binary CAT: 4 BCD bytes of frequency in 10 Hz units, then the set-frequency opcode. */
 function yaesuBinFreq(hz: number): Uint8Array {
-  const u = Math.round(hz / 10).toString().padStart(8, "0");
+  const u = Math.round(hz / 10)
+    .toString()
+    .padStart(8, "0");
   const b = new Uint8Array(5);
   for (let i = 0; i < 4; i++) b[i] = ((u.charCodeAt(i * 2) - 48) << 4) | (u.charCodeAt(i * 2 + 1) - 48);
   b[4] = 0x01;
@@ -50,13 +52,46 @@ export function catSetFrequency(rig: CatRig, hz: number, opts: { icomAddr?: numb
 }
 
 // --- modes (best-effort; frequency is the reliable core) ---
-const KENWOOD_MODE: Record<string, number> = { LSB: 1, USB: 2, CW: 3, FM: 4, AM: 5, RTTY: 6, FSK: 6, DATA: 6, FT8: 6, FT4: 6, PSK: 6, SSB: 2 };
-const ICOM_MODE: Record<string, number> = { LSB: 0, USB: 1, AM: 2, CW: 3, RTTY: 4, FM: 5, DATA: 1, FT8: 1, FT4: 1, PSK: 1, SSB: 1 };
+const KENWOOD_MODE: Record<string, number> = {
+  LSB: 1,
+  USB: 2,
+  CW: 3,
+  FM: 4,
+  AM: 5,
+  RTTY: 6,
+  FSK: 6,
+  DATA: 6,
+  FT8: 6,
+  FT4: 6,
+  PSK: 6,
+  SSB: 2,
+};
+const ICOM_MODE: Record<string, number> = {
+  LSB: 0,
+  USB: 1,
+  AM: 2,
+  CW: 3,
+  RTTY: 4,
+  FM: 5,
+  DATA: 1,
+  FT8: 1,
+  FT4: 1,
+  PSK: 1,
+  SSB: 1,
+};
 
 /** Encode a set-mode command, or null if the mode/rig pair isn't mapped. `mode` is upper-cased. */
 export function catSetMode(rig: CatRig, mode: string, opts: { icomAddr?: number } = {}): Uint8Array | null {
   const m = mode.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (rig === "kenwood") { const c = KENWOOD_MODE[m]; return c == null ? null : enc(`MD${c};`); }
-  if (rig === "icom") { const c = ICOM_MODE[m]; if (c == null) return null; const addr = opts.icomAddr ?? 0x94; return Uint8Array.from([0xfe, 0xfe, addr & 0xff, 0xe0, 0x06, c, 0xfd]); }
+  if (rig === "kenwood") {
+    const c = KENWOOD_MODE[m];
+    return c == null ? null : enc(`MD${c};`);
+  }
+  if (rig === "icom") {
+    const c = ICOM_MODE[m];
+    if (c == null) return null;
+    const addr = opts.icomAddr ?? 0x94;
+    return Uint8Array.from([0xfe, 0xfe, addr & 0xff, 0xe0, 0x06, c, 0xfd]);
+  }
   return null; // classic Yaesu mode opcode varies per model — skip
 }

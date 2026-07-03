@@ -8,26 +8,53 @@
 import type { Env } from "./env.js";
 
 interface CotStation {
-  callsign: string; lat: number; lon: number; symbol: string | null;
-  course: number | null; speedKn: number | null; altitudeM: number | null;
-  comment: string | null; lastSeen: number;
+  callsign: string;
+  lat: number;
+  lon: number;
+  symbol: string | null;
+  course: number | null;
+  speedKn: number | null;
+  altitudeM: number | null;
+  comment: string | null;
+  lastSeen: number;
 }
 
-const UNK = 9999999.0;            // CoT "unknown" sentinel for hae/ce/le
+const UNK = 9999999.0; // CoT "unknown" sentinel for hae/ce/le
 const KN_TO_MS = 0.514444;
 const iso = (sec: number) => new Date(sec * 1000).toISOString();
-const xml = (s: string) => s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]!));
+const xml = (s: string) =>
+  s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]!);
 
 /** Map an APRS symbol (table+code) to a coarse CoT 2525-ish type. Friendly by default. */
 export function cotType(symbol: string | null): string {
   const code = symbol && symbol.length >= 2 ? symbol[1] : symbol?.[0];
   switch (code) {
-    case ">": case "<": case "j": case "k": case "u": case "v": case "=": return "a-f-G-E-V-C"; // ground vehicle
-    case "^": case "'": case "X": case "g": case "O": return "a-f-A"; // aircraft
-    case "Y": case "s": case "C": return "a-f-S"; // surface/marine
-    case "_": case "W": return "a-f-G-I-U-T"; // weather/sensor
-    case "#": case "r": return "a-f-G-I-U-R"; // infrastructure (digi/repeater)
-    default: return "a-f-G-U-C"; // generic friendly ground combat unit
+    case ">":
+    case "<":
+    case "j":
+    case "k":
+    case "u":
+    case "v":
+    case "=":
+      return "a-f-G-E-V-C"; // ground vehicle
+    case "^":
+    case "'":
+    case "X":
+    case "g":
+    case "O":
+      return "a-f-A"; // aircraft
+    case "Y":
+    case "s":
+    case "C":
+      return "a-f-S"; // surface/marine
+    case "_":
+    case "W":
+      return "a-f-G-I-U-T"; // weather/sensor
+    case "#":
+    case "r":
+      return "a-f-G-I-U-R"; // infrastructure (digi/repeater)
+    default:
+      return "a-f-G-U-C"; // generic friendly ground combat unit
   }
 }
 
@@ -60,10 +87,14 @@ export async function handleCot(req: Request, env: Env, now: number): Promise<Re
       binds.push(minLat, maxLat, minLon, maxLon);
     }
   }
-  const rows = (await env.DB.prepare(
-    `SELECT callsign, lat, lon, symbol, course, speed_kn AS speedKn, altitude_m AS altitudeM,
+  const rows = (
+    await env.DB.prepare(
+      `SELECT callsign, lat, lon, symbol, course, speed_kn AS speedKn, altitude_m AS altitudeM,
             comment, last_seen AS lastSeen FROM stations WHERE ${where} ORDER BY last_seen DESC LIMIT 2000`,
-  ).bind(...binds).all<CotStation>()).results;
+    )
+      .bind(...binds)
+      .all<CotStation>()
+  ).results;
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>\n<events>${rows.map((r) => stationToCotEvent(r, now)).join("")}</events>`;
   return new Response(body, { headers: { "content-type": "application/xml; charset=utf-8" } });

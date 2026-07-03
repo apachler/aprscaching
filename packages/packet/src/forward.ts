@@ -8,14 +8,22 @@
  * brain the gateway/ingest drive.
  */
 
-export interface HierAddr { to: string; bbs: string | null; hier: string[] }
+export interface HierAddr {
+  to: string;
+  bbs: string | null;
+  hier: string[];
+}
 
 /** Parse "TO @ BBS.#OE3.OE.EU" (or just "TO") into its routing components. */
 export function parseHierAddr(addr: string): HierAddr {
   const [left, right] = addr.split("@").map((s) => s.trim());
   const to = (left ?? "").toUpperCase();
   if (!right) return { to, bbs: null, hier: [] };
-  const parts = right.toUpperCase().split(".").map((p) => p.trim()).filter(Boolean);
+  const parts = right
+    .toUpperCase()
+    .split(".")
+    .map((p) => p.trim())
+    .filter(Boolean);
   return { to, bbs: parts[0] ?? null, hier: parts.slice(1) };
 }
 
@@ -24,7 +32,11 @@ function specificity(addr: HierAddr): string[] {
   return [addr.bbs, ...addr.hier].filter((x): x is string => !!x);
 }
 
-export interface ForwardRule { partner: string; route: string; transport?: string }
+export interface ForwardRule {
+  partner: string;
+  route: string;
+  transport?: string;
+}
 
 /**
  * Route a hierarchical address to a partner. A rule matches if its `route` token appears among the
@@ -33,23 +45,42 @@ export interface ForwardRule { partner: string; route: string; transport?: strin
  */
 export class ForwardRouter {
   private rules: ForwardRule[];
-  constructor(rules: ForwardRule[] = []) { this.rules = rules.map((r) => ({ ...r, route: r.route.toUpperCase() })); }
+  constructor(rules: ForwardRule[] = []) {
+    this.rules = rules.map((r) => ({ ...r, route: r.route.toUpperCase() }));
+  }
 
   route(addr: HierAddr): ForwardRule | null {
     const spec = specificity(addr);
-    let best: ForwardRule | null = null, bestIdx = Infinity, bestLen = 0, fallback: ForwardRule | null = null;
+    let best: ForwardRule | null = null,
+      bestIdx = Infinity,
+      bestLen = 0,
+      fallback: ForwardRule | null = null;
     for (const r of this.rules) {
-      if (r.route === "*") { fallback = fallback ?? r; continue; }  // catch-all, lowest priority
+      if (r.route === "*") {
+        fallback = fallback ?? r;
+        continue;
+      } // catch-all, lowest priority
       const idx = spec.indexOf(r.route);
       if (idx < 0) continue;
-      if (idx < bestIdx || (idx === bestIdx && r.route.length > bestLen)) { best = r; bestIdx = idx; bestLen = r.route.length; }
+      if (idx < bestIdx || (idx === bestIdx && r.route.length > bestLen)) {
+        best = r;
+        bestIdx = idx;
+        bestLen = r.route.length;
+      }
     }
     return best ?? fallback;
   }
 }
 
 // ---- FBB forward proposal/accept protocol (the F> / FS handshake) ----
-export interface Proposal { type: "P" | "B" | "T"; from: string; to: string; atBbs: string; bid: string; size: number }
+export interface Proposal {
+  type: "P" | "B" | "T";
+  from: string;
+  to: string;
+  atBbs: string;
+  bid: string;
+  size: number;
+}
 
 /**
  * Build the proposal block a sender offers: one line per message then "F>". The FBB field order is
@@ -80,5 +111,6 @@ export function parseFS(line: string): ("accept" | "reject" | "defer")[] {
   const m = /^FS\s*(.*)$/i.exec(line.trim());
   if (!m) return [];
   return [...(m[1] ?? "").replace(/\s+/g, "")].map((c) =>
-    c === "+" || c === "Y" ? "accept" : c === "=" ? "defer" : "reject");
+    c === "+" || c === "Y" ? "accept" : c === "=" ? "defer" : "reject",
+  );
 }

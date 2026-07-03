@@ -12,7 +12,10 @@ import type { RelayController } from "./link-app.js";
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 /** One hop of a BPQ-style connect script: `C [port] <call>` (an optional radio port then a callsign). */
-export interface ConnectStep { port?: number; call: string }
+export interface ConnectStep {
+  port?: number;
+  call: string;
+}
 
 /**
  * Parse a BPQ connect script into hops. Each non-empty line is `C [port] <call>` (case-insensitive `C`);
@@ -41,29 +44,35 @@ export function parseConnectScript(script: string): ConnectStep[] {
  * feeds it the node's bytes and sends its command lines over the link; a scripted loopback drives it in tests.
  */
 export interface SequencerHooks {
-  send: (line: string) => void;         // transmit a command line to the current node (transport adds CR)
-  onReady: () => void;                  // the final hop is connected — the forwarding session can start
+  send: (line: string) => void; // transmit a command line to the current node (transport adds CR)
+  onReady: () => void; // the final hop is connected — the forwarding session can start
   onFail: (reason: string) => void;
-  connectedRe?: RegExp;                 // confirmation pattern (default /connected to/i)
-  failRe?: RegExp;                      // failure pattern (default below)
+  connectedRe?: RegExp; // confirmation pattern (default /connected to/i)
+  failRe?: RegExp; // failure pattern (default below)
 }
 
 const dec = (b: Uint8Array): string => new TextDecoder().decode(b);
 
 export class ConnectSequencer {
   private buf = "";
-  private idx = 0;                      // steps[0] is already connected by the link; we drive steps[1..]
+  private idx = 0; // steps[0] is already connected by the link; we drive steps[1..]
   private done = false;
   private readonly ok: RegExp;
   private readonly bad: RegExp;
-  constructor(private steps: ConnectStep[], private h: SequencerHooks) {
+  constructor(
+    private steps: ConnectStep[],
+    private h: SequencerHooks,
+  ) {
     this.ok = h.connectedRe ?? /connected to/i;
     this.bad = h.failRe ?? /busy|failure|failed|no route|not? avail|invalid|reject|disconnect/i;
   }
 
   /** Begin sequencing (call once the link to the first hop is up). Direct (≤1 hop) → ready immediately. */
   start(): void {
-    if (this.steps.length <= 1) { this.finish(); return; }
+    if (this.steps.length <= 1) {
+      this.finish();
+      return;
+    }
     this.idx = 1;
     this.h.send(`C ${this.steps[1]!.call}`);
   }
@@ -77,7 +86,11 @@ export class ConnectSequencer {
       const line = this.buf.slice(0, i).trim();
       this.buf = this.buf.slice(i + 1);
       if (!line) continue;
-      if (this.bad.test(line)) { this.done = true; this.h.onFail(line); return; }
+      if (this.bad.test(line)) {
+        this.done = true;
+        this.h.onFail(line);
+        return;
+      }
       if (this.ok.test(line)) {
         this.idx++;
         if (this.idx >= this.steps.length) this.finish();
@@ -86,29 +99,51 @@ export class ConnectSequencer {
     }
   }
 
-  private finish(): void { if (!this.done) { this.done = true; this.h.onReady(); } }
+  private finish(): void {
+    if (!this.done) {
+      this.done = true;
+      this.h.onReady();
+    }
+  }
 }
 
 /** The onward leg of a connect-through: send bytes to the destination, and tear it down. */
-export interface OutboundCircuit { send(bytes: Uint8Array): void; disconnect(): void }
+export interface OutboundCircuit {
+  send(bytes: Uint8Array): void;
+  disconnect(): void;
+}
 /** Open an onward circuit to `route`, delivering its data via `onData` and its teardown via `onClose`. */
-export type CircuitDialer = (route: LearnedRoute, hooks: { onData: (b: Uint8Array) => void; onClose: () => void }) => OutboundCircuit;
+export type CircuitDialer = (
+  route: LearnedRoute,
+  hooks: { onData: (b: Uint8Array) => void; onClose: () => void },
+) => OutboundCircuit;
 
 /**
  * Build the node's `onConnect` handler. On `C <dest>`: no route → tell the user; otherwise dial the onward
  * circuit and splice it to the relay (user bytes → circuit, circuit data → user; circuit close → back to
  * the node prompt). Returns a handler for `SessionServer` `Service.onConnect` / `serveApp` `onConnect`.
  */
-export function nodeConnectThrough(node: NetromNode, dial: CircuitDialer): (dest: string, relay: RelayController) => void {
+export function nodeConnectThrough(
+  node: NetromNode,
+  dial: CircuitDialer,
+): (dest: string, relay: RelayController) => void {
   return (dest, relay) => {
     const route = node.best(dest);
-    if (!route) { relay.toUser(enc(`Sorry, no route to ${dest}.\r`)); return; }
+    if (!route) {
+      relay.toUser(enc(`Sorry, no route to ${dest}.\r`));
+      return;
+    }
     relay.toUser(enc(`Connected to ${dest}.\r`));
     let closed = false;
     const out = dial(route, {
       onData: (b) => relay.toUser(b),
-      onClose: () => { if (closed) return; closed = true; relay.detach(); relay.toUser(enc(`Disconnected from ${dest}. Back at node.\r`)); },
+      onClose: () => {
+        if (closed) return;
+        closed = true;
+        relay.detach();
+        relay.toUser(enc(`Disconnected from ${dest}. Back at node.\r`));
+      },
     });
-    relay.attach((userBytes) => out.send(userBytes));     // transparent: subsequent user data → the onward circuit
+    relay.attach((userBytes) => out.send(userBytes)); // transparent: subsequent user data → the onward circuit
   };
 }

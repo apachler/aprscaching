@@ -13,10 +13,10 @@ describe("TNC2", () => {
 describe("q-construct", () => {
   it("flags RF-gated", () => {
     const r = classifyQ(["WIDE1-1", "qAR", "OE8XXX"]);
-    expect(r.heardVia).toBe("rf"); expect(r.igateCall).toBe("OE8XXX");
+    expect(r.heardVia).toBe("rf");
+    expect(r.igateCall).toBe("OE8XXX");
   });
-  it("flags internet injection", () =>
-    expect(classifyQ(["TCPIP*", "qAC", "T2SERVER"]).heardVia).toBe("aprs_is"));
+  it("flags internet injection", () => expect(classifyQ(["TCPIP*", "qAC", "T2SERVER"]).heardVia).toBe("aprs_is"));
 });
 describe("position + geo", () => {
   it("parses lat/lon", () => {

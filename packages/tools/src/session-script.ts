@@ -20,20 +20,20 @@ export type SessionStep =
 
 /** The abstract connection the engine drives — the surface (terminal/node) implements it over its session. */
 export interface ScriptSession {
-  connect(call: string): number;                 // open a channel, return its id
-  send(id: number, text: string): void;          // send a line on the channel
-  close(id: number): void;                        // close the channel
-  channelState(id: number): string | undefined;   // "connected" | "disconnected" | …
-  channelLines(id: number): string[];             // the channel's received (RX) lines, oldest→newest
+  connect(call: string): number; // open a channel, return its id
+  send(id: number, text: string): void; // send a line on the channel
+  close(id: number): void; // close the channel
+  channelState(id: number): string | undefined; // "connected" | "disconnected" | …
+  channelLines(id: number): string[]; // the channel's received (RX) lines, oldest→newest
 }
 
 export type ScriptStatus = "idle" | "running" | "done" | "error";
 export interface ScriptState {
   status: ScriptStatus;
-  step: number;          // 1-based index of the current/last step (0 while idle)
+  step: number; // 1-based index of the current/last step (0 while idle)
   total: number;
-  captured: string[];    // RX lines gathered from the connected station
-  note?: string;         // last human-readable note (waiting for…, timed out, …)
+  captured: string[]; // RX lines gathered from the connected station
+  note?: string; // last human-readable note (waiting for…, timed out, …)
 }
 
 const DEFAULT_CONNECT_TIMEOUT = 30;
@@ -47,7 +47,10 @@ const DEFAULT_WAITFOR_TIMEOUT = 60;
 export function parseScript(text: string): SessionStep[] {
   const steps: SessionStep[] = [];
   for (const raw of String(text).split(/[\n;]/)) {
-    const line = raw.trim().replace(/^\*\*\*/, "").trim();
+    const line = raw
+      .trim()
+      .replace(/^\*\*\*/, "")
+      .trim();
     if (!line || line.startsWith("#") || /^rem\b/i.test(line)) continue;
     const sp = line.indexOf(" ");
     const op = (sp < 0 ? line : line.slice(0, sp)).toLowerCase();
@@ -76,7 +79,7 @@ export class ScriptRunner {
   private note: string | undefined;
   private captured: string[] = [];
   private stepStart = 0;
-  private consumed = 0;     // channelLines already folded into `captured`
+  private consumed = 0; // channelLines already folded into `captured`
   private lastEmit = "";
 
   constructor(private session: ScriptSession) {}
@@ -84,13 +87,23 @@ export class ScriptRunner {
   /** Load + start a script (replaces any running one). */
   load(steps: SessionStep[], now: number): void {
     this.steps = steps.slice(0, 64);
-    this.i = 0; this.chan = null; this.captured = []; this.consumed = 0; this.note = undefined;
+    this.i = 0;
+    this.chan = null;
+    this.captured = [];
+    this.consumed = 0;
+    this.note = undefined;
     this.status = this.steps.length ? "running" : "idle";
     this.stepStart = now;
   }
 
   state(): ScriptState {
-    return { status: this.status, step: Math.min(this.i + 1, this.steps.length), total: this.steps.length, captured: this.captured.slice(-40), note: this.note };
+    return {
+      status: this.status,
+      step: Math.min(this.i + 1, this.steps.length),
+      total: this.steps.length,
+      captured: this.captured.slice(-40),
+      note: this.note,
+    };
   }
 
   /** Fold any new RX lines from the active channel into `captured`; returns the newly-added lines. */
@@ -99,12 +112,25 @@ export class ScriptRunner {
     const all = this.session.channelLines(this.chan);
     const fresh = all.slice(this.consumed);
     this.consumed = all.length;
-    if (fresh.length) { this.captured.push(...fresh); if (this.captured.length > 200) this.captured.splice(0, this.captured.length - 200); }
+    if (fresh.length) {
+      this.captured.push(...fresh);
+      if (this.captured.length > 200) this.captured.splice(0, this.captured.length - 200);
+    }
     return fresh;
   }
 
-  private advance(now: number): void { this.i++; this.stepStart = now; if (this.i >= this.steps.length) { this.status = "done"; this.note = "complete"; } }
-  private fail(msg: string): void { this.status = "error"; this.note = msg; }
+  private advance(now: number): void {
+    this.i++;
+    this.stepStart = now;
+    if (this.i >= this.steps.length) {
+      this.status = "done";
+      this.note = "complete";
+    }
+  }
+  private fail(msg: string): void {
+    this.status = "error";
+    this.note = msg;
+  }
 
   /** Advance the machine; returns the new state if it changed since the last tick, else null. */
   tick(now: number): ScriptState | null {
@@ -116,30 +142,67 @@ export class ScriptRunner {
   }
 
   private step(now: number): void {
-    const s = this.steps[this.i]; if (!s) { this.status = "done"; return; }
+    const s = this.steps[this.i];
+    if (!s) {
+      this.status = "done";
+      return;
+    }
     const elapsed = (now - this.stepStart) / 1000;
     switch (s.op) {
       case "connect": {
-        if (this.chan == null) { this.chan = this.session.connect(s.call); this.consumed = 0; this.note = `connecting ${s.call}…`; return; }
+        if (this.chan == null) {
+          this.chan = this.session.connect(s.call);
+          this.consumed = 0;
+          this.note = `connecting ${s.call}…`;
+          return;
+        }
         const st = this.session.channelState(this.chan);
-        if (st === "connected") { this.note = `connected ${s.call}`; this.advance(now); }
-        else if (st === "disconnected" && elapsed > 2) { this.fail(`connect to ${s.call} failed`); }
-        else if (elapsed > DEFAULT_CONNECT_TIMEOUT) this.fail(`connect to ${s.call} timed out`);
+        if (st === "connected") {
+          this.note = `connected ${s.call}`;
+          this.advance(now);
+        } else if (st === "disconnected" && elapsed > 2) {
+          this.fail(`connect to ${s.call} failed`);
+        } else if (elapsed > DEFAULT_CONNECT_TIMEOUT) this.fail(`connect to ${s.call} timed out`);
         return;
       }
       case "send": {
-        if (this.chan == null) { this.fail("send before connect"); return; }
-        this.session.send(this.chan, s.text); this.note = `sent: ${s.text}`; this.advance(now); return;
+        if (this.chan == null) {
+          this.fail("send before connect");
+          return;
+        }
+        this.session.send(this.chan, s.text);
+        this.note = `sent: ${s.text}`;
+        this.advance(now);
+        return;
       }
       case "waitfor": {
         const fresh = this.drain();
         this.note = `waiting for "${s.text}"`;
-        if (fresh.some((l) => l.includes(s.text)) || this.captured.some((l) => l.includes(s.text))) { this.note = `matched "${s.text}"`; this.advance(now); }
-        else if (elapsed > (s.timeoutSec ?? DEFAULT_WAITFOR_TIMEOUT)) { this.note = `timeout waiting for "${s.text}"`; this.advance(now); }
+        if (fresh.some((l) => l.includes(s.text)) || this.captured.some((l) => l.includes(s.text))) {
+          this.note = `matched "${s.text}"`;
+          this.advance(now);
+        } else if (elapsed > (s.timeoutSec ?? DEFAULT_WAITFOR_TIMEOUT)) {
+          this.note = `timeout waiting for "${s.text}"`;
+          this.advance(now);
+        }
         return;
       }
-      case "wait": { this.drain(); if (elapsed >= s.sec) this.advance(now); else this.note = `waiting ${Math.ceil(s.sec - elapsed)}s`; return; }
-      case "disconnect": { if (this.chan != null) { this.drain(); this.session.close(this.chan); this.chan = null; } this.note = "disconnected"; this.advance(now); return; }
+      case "wait": {
+        this.drain();
+        if (elapsed >= s.sec) this.advance(now);
+        else this.note = `waiting ${Math.ceil(s.sec - elapsed)}s`;
+        return;
+      }
+      case "disconnect": {
+        if (this.chan != null) {
+          this.drain();
+          this.session.close(this.chan);
+          this.chan = null;
+        }
+        this.note = "disconnected";
+        this.advance(now);
+        return;
+      }
     }
   }
 }

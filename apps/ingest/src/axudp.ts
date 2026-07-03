@@ -4,15 +4,23 @@ import { decodeAx25 } from "@aprsweb/aprs";
 import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 
-export interface AxudpOpts { port: number; bind?: string }
+export interface AxudpOpts {
+  port: number;
+  bind?: string;
+}
 /** A UDP endpoint to send AX.25 frames to (the other end of an AXUDP link). */
-export interface AxudpPeer { host: string; port: number }
+export interface AxudpPeer {
+  host: string;
+  port: number;
+}
 
 /**
  * PURE: encode an AX.25 frame into the AXUDP wire payload for TX — a bare AX.25 frame (the UDP datagram
  * body; BPQ AXUDP adds no header). Symmetric with `axudpToPacket`'s decode; used by `AxudpPort.sendFrame`.
  */
-export function frameToAxudp(f: Ax25Frame): Uint8Array { return encodeFrame(f); }
+export function frameToAxudp(f: Ax25Frame): Uint8Array {
+  return encodeFrame(f);
+}
 
 /**
  * PURE: normalize one AXUDP datagram (a bare AX.25 frame over UDP) into a Tier-C ingest Packet, or null if
@@ -25,9 +33,15 @@ export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now()
   const f = decodeAx25(datagram);
   if (!f) return null;
   return {
-    src: f.src, dst: f.dst, path: f.path, payload: f.payload,
-    kind: "other", heardVia: "aprs_is", port: "axudp",   // tunnelled → never first-party attested
-    ts: nowS, raw: f.raw,
+    src: f.src,
+    dst: f.dst,
+    path: f.path,
+    payload: f.payload,
+    kind: "other",
+    heardVia: "aprs_is",
+    port: "axudp", // tunnelled → never first-party attested
+    ts: nowS,
+    raw: f.raw,
   };
 }
 
@@ -42,7 +56,10 @@ export function axudpToPacket(datagram: Uint8Array, nowS = Math.floor(Date.now()
  */
 export class AxudpListener {
   private sock?: dgram.Socket;
-  constructor(private o: AxudpOpts, private onPacket: (p: Packet) => void) {}
+  constructor(
+    private o: AxudpOpts,
+    private onPacket: (p: Packet) => void,
+  ) {}
 
   start() {
     const s = dgram.createSocket("udp4");
@@ -68,7 +85,10 @@ export class AxudpPort {
   private sock?: dgram.Socket;
   private rawCbs: ((b: Uint8Array) => void)[] = [];
   private frameCbs: ((f: Ax25Frame) => void)[] = [];
-  constructor(private o: AxudpOpts & { peers: AxudpPeer[] }, private onPacket?: (p: Packet) => void) {}
+  constructor(
+    private o: AxudpOpts & { peers: AxudpPeer[] },
+    private onPacket?: (p: Packet) => void,
+  ) {}
 
   start() {
     const s = dgram.createSocket("udp4");
@@ -78,12 +98,14 @@ export class AxudpPort {
       for (const cb of this.rawCbs) cb(bytes);
       const f = decodeFrame(bytes);
       if (f) for (const cb of this.frameCbs) cb(f);
-      const p = axudpToPacket(bytes);                     // also feed the Tier-C ingest (positions/etc.)
+      const p = axudpToPacket(bytes); // also feed the Tier-C ingest (positions/etc.)
       if (p && this.onPacket) this.onPacket(p);
     });
     s.on("error", (e) => console.error("[axudp] socket error:", e.message));
     s.bind(this.o.port, this.o.bind);
-    console.log(`[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`);
+    console.log(
+      `[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`,
+    );
   }
 
   /** Send a full AX.25 frame to every configured peer (best-effort). */
@@ -91,18 +113,33 @@ export class AxudpPort {
     if (!this.sock) return false;
     const bytes = frameToAxudp(f);
     let ok = false;
-    for (const p of this.o.peers) { try { this.sock.send(bytes, p.port, p.host); ok = true; } catch { /* drop */ } }
+    for (const p of this.o.peers) {
+      try {
+        this.sock.send(bytes, p.port, p.host);
+        ok = true;
+      } catch {
+        /* drop */
+      }
+    }
     return ok;
   }
 
-  onRaw(cb: (b: Uint8Array) => void): void { this.rawCbs.push(cb); }
-  onFrame(cb: (f: Ax25Frame) => void): void { this.frameCbs.push(cb); }
+  onRaw(cb: (b: Uint8Array) => void): void {
+    this.rawCbs.push(cb);
+  }
+  onFrame(cb: (f: Ax25Frame) => void): void {
+    this.frameCbs.push(cb);
+  }
 }
 
 /** Parse "host:port,host:port" into peer endpoints (AXUDP default port 10093). */
 export function parseAxudpPeers(spec: string): AxudpPeer[] {
-  return spec.split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
-    const [host, port] = s.split(":");
-    return { host: host!, port: Number(port) || 10093 };
-  });
+  return spec
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const [host, port] = s.split(":");
+      return { host: host!, port: Number(port) || 10093 };
+    });
 }

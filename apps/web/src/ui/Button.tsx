@@ -7,8 +7,11 @@ import type { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "danger" | "link" | "icon";
 
-export function Button({ variant = "secondary", className, ...rest }:
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+export function Button({
+  variant = "secondary",
+  className,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   const v = variant === "secondary" ? "" : variant;
   const cls = [v, className].filter(Boolean).join(" ");
   return <button className={cls || undefined} {...rest} />;

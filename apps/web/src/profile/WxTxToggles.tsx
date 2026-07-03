@@ -18,12 +18,20 @@ export function WxTxToggles(props: { stationId?: number; txIs?: boolean; txCwop?
 
   async function apply(next: { txIs: boolean; txCwop: boolean }) {
     const prev = { txIs, txCwop };
-    setTxIs(next.txIs); setTxCwop(next.txCwop); setBusy(true);   // optimistic
+    setTxIs(next.txIs);
+    setTxCwop(next.txCwop);
+    setBusy(true); // optimistic
     try {
       const r = await setWxTx({ stationId: props.stationId, ...next });
-      setTxIs(r.txIs); setTxCwop(r.txCwop);
-    } catch (e) { setTxIs(prev.txIs); setTxCwop(prev.txCwop); toast((e as Error).message); }
-    finally { setBusy(false); }
+      setTxIs(r.txIs);
+      setTxCwop(r.txCwop);
+    } catch (e) {
+      setTxIs(prev.txIs);
+      setTxCwop(prev.txCwop);
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!props.verified)
@@ -32,11 +40,16 @@ export function WxTxToggles(props: { stationId?: number; txIs?: boolean; txCwop?
   return (
     <div className="wx-tx">
       <div className="row between">
-        <label>Beacon to APRS-IS <span className="muted block">Transmit your weather as a standard APRS report.</span></label>
+        <label>
+          Beacon to APRS-IS <span className="muted block">Transmit your weather as a standard APRS report.</span>
+        </label>
         <Switch label="Beacon to APRS-IS" checked={txIs} disabled={busy} onChange={(v) => apply({ txIs: v, txCwop })} />
       </div>
       <div className="row between">
-        <label>Relay to CWOP (NOAA) <span className="muted block">Feed your readings to NOAA's Citizen Weather network.</span></label>
+        <label>
+          Relay to CWOP (NOAA){" "}
+          <span className="muted block">Feed your readings to NOAA's Citizen Weather network.</span>
+        </label>
         <Switch label="Relay to CWOP" checked={txCwop} disabled={busy} onChange={(v) => apply({ txIs, txCwop: v })} />
       </div>
     </div>

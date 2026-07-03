@@ -3,7 +3,22 @@
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "scripts": { "dev": "tsx watch src/index.ts", "start": "node --import tsx src/index.ts", "build": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@aprsweb/aprs": "workspace:*", "@aprsweb/ax25": "workspace:*", "@aprsweb/shared": "workspace:*", "@aprsweb/packet": "workspace:*" },
-  "devDependencies": { "tsx": "^4.16.0", "typescript": "^5.5.0", "@types/node": "^20.14.0", "vitest": "^1.6.0" }
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprsweb/aprs": "workspace:*",
+    "@aprsweb/ax25": "workspace:*",
+    "@aprsweb/shared": "workspace:*",
+    "@aprsweb/packet": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0",
+    "vitest": "^1.6.0"
+  }
 }

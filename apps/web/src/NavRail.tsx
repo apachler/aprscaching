@@ -9,15 +9,28 @@ import type { WorkbenchApp } from "./workbench/apps.js";
 
 export function NavRail(props: {
   active: string;
-  onMap: () => void; onNearby: () => void; onActivity: () => void; onMessages: () => void; onRanks: () => void;
-  onWorkbench: () => void; onProfile: () => void; onSettings: () => void;
-  pinnedApps?: WorkbenchApp[]; onLaunchApp?: (id: WorkbenchApp["id"]) => void;
-  sysop?: boolean; onAdmin?: () => void; // instance-operator only — the Instance-admin surface
+  onMap: () => void;
+  onNearby: () => void;
+  onActivity: () => void;
+  onMessages: () => void;
+  onRanks: () => void;
+  onWorkbench: () => void;
+  onProfile: () => void;
+  onSettings: () => void;
+  pinnedApps?: WorkbenchApp[];
+  onLaunchApp?: (id: WorkbenchApp["id"]) => void;
+  sysop?: boolean;
+  onAdmin?: () => void; // instance-operator only — the Instance-admin surface
 }) {
   const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
-    <button className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`} onClick={onClick}
-            title={label} aria-current={props.active === key ? "page" : undefined}>
-      <Icon name={icon} size={21} /><span>{label}</span>
+    <button
+      className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`}
+      onClick={onClick}
+      title={label}
+      aria-current={props.active === key ? "page" : undefined}
+    >
+      <Icon name={icon} size={21} />
+      <span>{label}</span>
     </button>
   );
   return (
@@ -29,7 +42,9 @@ export function NavRail(props: {
       {item("ranks", "ranks", "Ranks", props.onRanks)}
       {item("workbench", "tools", "Bench", props.onWorkbench)}
       {(props.pinnedApps ?? []).length > 0 && <span className="rail-div" aria-hidden="true" />}
-      {(props.pinnedApps ?? []).map((app) => item(app.id, app.icon, app.label, () => props.onLaunchApp?.(app.id), "rail-pinned"))}
+      {(props.pinnedApps ?? []).map((app) =>
+        item(app.id, app.icon, app.label, () => props.onLaunchApp?.(app.id), "rail-pinned"),
+      )}
       {item("profile", "profile", "You", props.onProfile, "rail-sp")}
       {item("settings", "settings", "Setup", props.onSettings)}
       {/* operator-only: the instance-admin surface — hidden for normal users (server-gated too) */}

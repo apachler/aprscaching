@@ -12,7 +12,11 @@ import { Switch } from "./Switch.js";
  * master switch is off, the body collapses to the `reason` (or nothing) instead of dead controls.
  */
 export function Group(props: {
-  title: string; status?: string; defaultOpen?: boolean; reason?: ReactNode; children?: ReactNode;
+  title: string;
+  status?: string;
+  defaultOpen?: boolean;
+  reason?: ReactNode;
+  children?: ReactNode;
   master?: { on: boolean; set: (v: boolean) => void; disabled?: boolean };
 }) {
   const [open, setOpen] = useState(props.defaultOpen ?? true);
@@ -22,14 +26,33 @@ export function Group(props: {
     <section className="group">
       <header className="group-h">
         <button className="group-toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)}>
-          <span className={`chev${open ? " open" : ""}`} aria-hidden="true">▸</span> {props.title}
+          <span className={`chev${open ? " open" : ""}`} aria-hidden="true">
+            ▸
+          </span>{" "}
+          {props.title}
         </button>
         {props.status && <span className="group-status">{props.status}</span>}
-        {props.master && <Switch label={props.title} checked={props.master.on} disabled={props.master.disabled} onChange={props.master.set} />}
+        {props.master && (
+          <Switch
+            label={props.title}
+            checked={props.master.on}
+            disabled={props.master.disabled}
+            onChange={props.master.set}
+          />
+        )}
       </header>
-      {open && (masterOff
-        ? (props.reason && <p id={bodyId} className="group-reason">{props.reason}</p>)
-        : <div id={bodyId} className="group-body">{props.children}</div>)}
+      {open &&
+        (masterOff ? (
+          props.reason && (
+            <p id={bodyId} className="group-reason">
+              {props.reason}
+            </p>
+          )
+        ) : (
+          <div id={bodyId} className="group-body">
+            {props.children}
+          </div>
+        ))}
     </section>
   );
 }
@@ -38,7 +61,10 @@ export function Group(props: {
 export function Row(props: { label: ReactNode; help?: ReactNode; children: ReactNode }) {
   return (
     <div className="setrow">
-      <div className="setrow-l"><div>{props.label}</div>{props.help && <div className="muted setrow-help">{props.help}</div>}</div>
+      <div className="setrow-l">
+        <div>{props.label}</div>
+        {props.help && <div className="muted setrow-help">{props.help}</div>}
+      </div>
       <div className="setrow-c">{props.children}</div>
     </div>
   );
@@ -50,7 +76,10 @@ export function Advanced(props: { children: ReactNode; label?: string }) {
   return (
     <div className="adv">
       <button className="adv-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className={`chev${open ? " open" : ""}`} aria-hidden="true">▸</span> {props.label ?? "Advanced"}
+        <span className={`chev${open ? " open" : ""}`} aria-hidden="true">
+          ▸
+        </span>{" "}
+        {props.label ?? "Advanced"}
       </button>
       {open && <div className="adv-body">{props.children}</div>}
     </div>

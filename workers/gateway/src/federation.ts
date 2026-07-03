@@ -24,40 +24,89 @@ const PROTOCOL_VERSIONS = ["0.1", "0.2"];
 
 // ---- D1 row shapes (subset) ----
 interface CacheRow {
-  id: number; code: string; owner_call: string; title: string; type: string; status: string;
-  difficulty: number; terrain: number; lat: number | null; lon: number | null;
-  station_call: string | null; source: string; external_id: string | null;
-  hint: string | null; description: string | null; min_trust: string | null; fed_scope: string;
-  created_at: number; updated_at: number;
+  id: number;
+  code: string;
+  owner_call: string;
+  title: string;
+  type: string;
+  status: string;
+  difficulty: number;
+  terrain: number;
+  lat: number | null;
+  lon: number | null;
+  station_call: string | null;
+  source: string;
+  external_id: string | null;
+  hint: string | null;
+  description: string | null;
+  min_trust: string | null;
+  fed_scope: string;
+  created_at: number;
+  updated_at: number;
 }
 interface FindRow {
-  id: number; cache_id: number; cache_code: string | null; logger_call: string; ts: number;
-  log_type: string; verified: number; tier: string | null; verify_method: string | null;
-  distance_m: number | null; comment: string | null;
-  signer_key: string | null; author_sig: string | null; signed_at: number | null;
+  id: number;
+  cache_id: number;
+  cache_code: string | null;
+  logger_call: string;
+  ts: number;
+  log_type: string;
+  verified: number;
+  tier: string | null;
+  verify_method: string | null;
+  distance_m: number | null;
+  comment: string | null;
+  signer_key: string | null;
+  author_sig: string | null;
+  signed_at: number | null;
 }
-interface KeyRow { id: number; callsign: string; public_key: string; verified: number; created_at: number }
+interface KeyRow {
+  id: number;
+  callsign: string;
+  public_key: string;
+  verified: number;
+  created_at: number;
+}
 
 function cacheData(r: CacheRow) {
   // T3.3 redaction: the hint is a spoiler and NEVER federates; an `unlisted` cache withholds its
   // description too (location/title only). `local-only` caches are filtered out before this (CACHE_FEED).
   return {
-    code: r.code, ownerCall: r.owner_call, title: r.title, type: r.type, status: r.status,
-    difficulty: r.difficulty, terrain: r.terrain, lat: r.lat, lon: r.lon,
-    stationCall: r.station_call, source: r.source, externalId: r.external_id,
-    description: r.fed_scope === "unlisted" ? null : r.description, minTrust: r.min_trust,
+    code: r.code,
+    ownerCall: r.owner_call,
+    title: r.title,
+    type: r.type,
+    status: r.status,
+    difficulty: r.difficulty,
+    terrain: r.terrain,
+    lat: r.lat,
+    lon: r.lon,
+    stationCall: r.station_call,
+    source: r.source,
+    externalId: r.external_id,
+    description: r.fed_scope === "unlisted" ? null : r.description,
+    minTrust: r.min_trust,
     fedScope: r.fed_scope,
-    createdAt: r.created_at, updatedAt: r.updated_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 function findData(r: FindRow, instance: string) {
   return {
-    cacheId: `${instance}:cache:${r.cache_id}`, cacheCode: r.cache_code,
-    loggerCall: r.logger_call, ts: r.ts, logType: r.log_type,
-    verified: r.verified === 1, tier: r.tier, verifyMethod: r.verify_method,
-    distanceM: r.distance_m, comment: r.comment,
+    cacheId: `${instance}:cache:${r.cache_id}`,
+    cacheCode: r.cache_code,
+    loggerCall: r.logger_call,
+    ts: r.ts,
+    logType: r.log_type,
+    verified: r.verified === 1,
+    tier: r.tier,
+    verifyMethod: r.verify_method,
+    distanceM: r.distance_m,
+    comment: r.comment,
     // per-callsign authorship signature (F0): self-contained, verifiable by anyone
-    authorKey: r.signer_key, authorSig: r.author_sig, signedAt: r.signed_at,
+    authorKey: r.signer_key,
+    authorSig: r.author_sig,
+    signedAt: r.signed_at,
   };
 }
 function keyData(r: KeyRow) {
@@ -69,10 +118,14 @@ export function stableStringify(v: unknown): string {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
   const o = v as Record<string, unknown>;
-  return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`).join(",")}}`;
+  return `{${Object.keys(o)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
+    .join(",")}}`;
 }
 function b64url(buf: ArrayBuffer): string {
-  let s = ""; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
+  let s = "";
+  for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 export function fromB64(b64: string): ArrayBuffer {
@@ -82,7 +135,11 @@ export function fromB64(b64: string): ArrayBuffer {
   return out.buffer;
 }
 
-interface FedKey { key: CryptoKey; publicX: string; jwk: { kty: string; crv: string; x: string } }
+interface FedKey {
+  key: CryptoKey;
+  publicX: string;
+  jwk: { kty: string; crv: string; x: string };
+}
 let keyCache: Promise<FedKey | null> | undefined;
 /**
  * FED_PRIVATE_KEY is base64(JSON({ pkcs8, pub })) — see tools/fedkey/genkey.mjs. We import the
@@ -105,11 +162,26 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
 }
 
 // ---- key rotation + multi-key + revocation (T4.1) ----
-export interface FedPublicKey { x: string; since?: number; until?: number; revoked?: boolean }
-export interface RotationRecord { key: string; prevKey: string; at: number; sig: string }
+export interface FedPublicKey {
+  x: string;
+  since?: number;
+  until?: number;
+  revoked?: boolean;
+}
+export interface RotationRecord {
+  key: string;
+  prevKey: string;
+  at: number;
+  sig: string;
+}
 
 function parseJsonArray<T>(s: string | undefined): T[] {
-  try { const a = JSON.parse(s ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+  try {
+    const a = JSON.parse(s ?? "[]");
+    return Array.isArray(a) ? a : [];
+  } catch {
+    return [];
+  }
 }
 
 /** This instance's published key set: the current signing key + any history/revocations from config. */
@@ -122,21 +194,39 @@ async function instanceKeys(env: Env): Promise<FedPublicKey[]> {
 /** Pure (T4.1): the non-revoked, in-window key strings from a published key list — the accept set. */
 export function activeFedKeys(keys: FedPublicKey[], nowS: number): string[] {
   return keys
-    .filter((k) => k && k.x && !k.revoked && (k.since == null || k.since <= nowS) && (k.until == null || k.until > nowS))
+    .filter(
+      (k) => k && k.x && !k.revoked && (k.since == null || k.since <= nowS) && (k.until == null || k.until > nowS),
+    )
     .map((k) => k.x);
 }
 
 /** Import a peer's ACTIVE published keys (falling back to a legacy single `publicKey`) for verifying its feed. */
-export async function importActiveKeys(publicKeys: FedPublicKey[] | undefined, fallback: string | null, nowS: number): Promise<CryptoKey[]> {
-  const xs = Array.isArray(publicKeys) && publicKeys.length ? activeFedKeys(publicKeys, nowS) : (fallback ? [fallback] : []);
+export async function importActiveKeys(
+  publicKeys: FedPublicKey[] | undefined,
+  fallback: string | null,
+  nowS: number,
+): Promise<CryptoKey[]> {
+  const xs =
+    Array.isArray(publicKeys) && publicKeys.length ? activeFedKeys(publicKeys, nowS) : fallback ? [fallback] : [];
   const out: CryptoKey[] = [];
-  for (const x of xs) { try { out.push(await importVerifyKey(x)); } catch { /* skip an unparseable key */ } }
+  for (const x of xs) {
+    try {
+      out.push(await importVerifyKey(x));
+    } catch {
+      /* skip an unparseable key */
+    }
+  }
   return out;
 }
 
 // ---- signed instance registry / namespace authority (T4.2) ----
 export interface RegistryEntry {
-  instance: string; url?: string; key?: string; operator?: string; aprsCall?: string; since?: number;
+  instance: string;
+  url?: string;
+  key?: string;
+  operator?: string;
+  aprsCall?: string;
+  since?: number;
   /**
    * Reserved seam: an optional 44net / HAMNET address or ampr.org hostname for this node,
    * so a peer can be reached over amateur space without coupling the serverless front-end to any IP
@@ -144,7 +234,12 @@ export interface RegistryEntry {
    */
   amateurEndpoint?: string;
 }
-export interface SignedRegistry { entries: RegistryEntry[]; at?: number; sig?: string; signer?: string }
+export interface SignedRegistry {
+  entries: RegistryEntry[];
+  at?: number;
+  sig?: string;
+  signer?: string;
+}
 
 /** Verify a registry document's authority signature (sig over the canonical {entries,at}). Pure/testable. */
 export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: string): Promise<boolean> {
@@ -153,13 +248,15 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
     const k = await importVerifyKey(authorityKeyB64url);
     const msg = new TextEncoder().encode(stableStringify({ at: doc.at ?? 0, entries: doc.entries }));
     return crypto.subtle.verify("Ed25519", k, fromB64(doc.sig), msg);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /** Verify a signed registry doc against a pinned key → instance→entry map (empty if invalid). */
 async function registryToMap(doc: SignedRegistry, key: string): Promise<Map<string, RegistryEntry>> {
   const m = new Map<string, RegistryEntry>();
-  if (!(await verifyRegistry(doc, key))) return m;    // reject an unsigned / forged registry
+  if (!(await verifyRegistry(doc, key))) return m; // reject an unsigned / forged registry
   for (const e of doc.entries) if (e?.instance) m.set(e.instance, e);
   return m;
 }
@@ -174,7 +271,8 @@ export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
   for (const tok of String(txt).replace(/^"|"$/g, "").split(";")) {
     const i = tok.indexOf("=");
     if (i < 0) continue;
-    const k = tok.slice(0, i).trim().toLowerCase(), v = tok.slice(i + 1).trim();
+    const k = tok.slice(0, i).trim().toLowerCase(),
+      v = tok.slice(i + 1).trim();
     if (k === "url" && /^https:\/\//.test(v)) out.url = v;
     else if (k === "key" && v) out.key = v;
   }
@@ -187,7 +285,8 @@ async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
   if (!name) return new Map();
   try {
     const doh = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`, {
-      headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(3000),
+      headers: { accept: "application/dns-json" },
+      signal: AbortSignal.timeout(3000),
     });
     if (!doh.ok) return new Map();
     const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
@@ -199,7 +298,9 @@ async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
       const map = await registryToMap((await r.json()) as SignedRegistry, key);
       if (map.size) return map;
     }
-  } catch { /* DoH / fetch / parse failure → no registry */ }
+  } catch {
+    /* DoH / fetch / parse failure → no registry */
+  }
   return new Map();
 }
 
@@ -207,8 +308,11 @@ async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
  *  anchor (FED_REGISTRY_DNS, T4.2). Empty when absent/invalid/forged. */
 export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
   if (env.FED_REGISTRY && env.FED_REGISTRY_KEY) {
-    try { return await registryToMap(JSON.parse(env.FED_REGISTRY) as SignedRegistry, env.FED_REGISTRY_KEY); }
-    catch { return new Map(); }
+    try {
+      return await registryToMap(JSON.parse(env.FED_REGISTRY) as SignedRegistry, env.FED_REGISTRY_KEY);
+    } catch {
+      return new Map();
+    }
   }
   return registryFromDns(env);
 }
@@ -223,15 +327,24 @@ export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeySt
 /** This instance's own registry self-attestation (what it publishes about itself). */
 export async function selfRegistryEntry(env: Env, instance: string): Promise<RegistryEntry> {
   const fk = await loadKey(env);
-  return { instance, key: fk?.publicX, operator: env.FED_OPERATOR, aprsCall: env.FED_APRS_CALL,
-    ...(env.FED_AMATEUR_ENDPOINT ? { amateurEndpoint: env.FED_AMATEUR_ENDPOINT } : {}) };
+  return {
+    instance,
+    key: fk?.publicX,
+    operator: env.FED_OPERATOR,
+    aprsCall: env.FED_APRS_CALL,
+    ...(env.FED_AMATEUR_ENDPOINT ? { amateurEndpoint: env.FED_AMATEUR_ENDPOINT } : {}),
+  };
 }
 
 /** Endpoint: this instance's verified view of the network registry + its own self-entry (transparency). */
 export async function handleFederationRegistry(req: Request, env: Env): Promise<Response> {
   const instance = instanceOf(req, env);
   const reg = await loadRegistry(env);
-  return json({ self: await selfRegistryEntry(env, instance), entries: [...reg.values()], verified: reg.size > 0 || !env.FED_REGISTRY });
+  return json({
+    self: await selfRegistryEntry(env, instance),
+    entries: [...reg.values()],
+    verified: reg.size > 0 || !env.FED_REGISTRY,
+  });
 }
 
 /** Verify a rotation record's continuity: the new `key` is vouched for by `prevKey` (sig over {key,prevKey,at}). */
@@ -241,7 +354,9 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
     const pk = await importVerifyKey(r.prevKey);
     const msg = new TextEncoder().encode(stableStringify({ key: r.key, prevKey: r.prevKey, at: r.at }));
     return crypto.subtle.verify("Ed25519", pk, fromB64(r.sig), msg);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -249,7 +364,9 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
  * `{type,id,data}` record exactly like the caches/finds/keys feeds, or null if the instance has no
  * FED_PRIVATE_KEY (feeds are then served unsigned). Callers set `rec.signer = instance` when signed.
  */
-export async function feedSigner(env: Env): Promise<((type: string, id: string, data: unknown) => Promise<string>) | null> {
+export async function feedSigner(
+  env: Env,
+): Promise<((type: string, id: string, data: unknown) => Promise<string>) | null> {
   const fk = await loadKey(env);
   if (!fk) return null;
   return (type, id, data) => sign(fk, type, id, data);
@@ -277,21 +394,40 @@ function instanceOf(req: Request, env: Env): string {
 // ---- endpoints ----
 export async function handleWellKnown(req: Request, env: Env): Promise<Response> {
   const fk = await loadKey(env);
-  const peers = (env.FED_PEERS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const peers = (env.FED_PEERS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return json({
     protocol: PROTOCOL,
     protocolVersions: PROTOCOL_VERSIONS,
     instance: instanceOf(req, env),
     software: "aprscaching",
-    capabilities: ["caches", "finds", "keys", "tombstones", "moves", "bulletins", "notify", env.FED_SUBMIT_SECRET ? "submit" : null].filter(Boolean),
-    endpoints: { caches: "/federation/caches", finds: "/federation/finds", keys: "/federation/keys", tombstones: "/federation/tombstones", "account-moves": "/federation/account-moves", notify: "/federation/notify" },
+    capabilities: [
+      "caches",
+      "finds",
+      "keys",
+      "tombstones",
+      "moves",
+      "bulletins",
+      "notify",
+      env.FED_SUBMIT_SECRET ? "submit" : null,
+    ].filter(Boolean),
+    endpoints: {
+      caches: "/federation/caches",
+      finds: "/federation/finds",
+      keys: "/federation/keys",
+      tombstones: "/federation/tombstones",
+      "account-moves": "/federation/account-moves",
+      notify: "/federation/notify",
+    },
     sigAlg: "Ed25519",
     signed: !!fk,
-    publicKey: fk?.publicX ?? null,        // current raw Ed25519 public key (base64url) — legacy single-key field
+    publicKey: fk?.publicX ?? null, // current raw Ed25519 public key (base64url) — legacy single-key field
     publicKeyJwk: fk?.jwk ?? null,
-    publicKeys: await instanceKeys(env),   // T4.1: current + previous keys + revocations, each {x,since?,until?,revoked?}
+    publicKeys: await instanceKeys(env), // T4.1: current + previous keys + revocations, each {x,since?,until?,revoked?}
     rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // T4.1: continuity proofs (new key signed by old)
-    operator: env.FED_OPERATOR ?? null,    // T4.2: self-published operator + APRS service address
+    operator: env.FED_OPERATOR ?? null, // T4.2: self-published operator + APRS service address
     aprsCall: env.FED_APRS_CALL ?? null,
     peers,
   });
@@ -320,7 +456,11 @@ function feedParams(req: Request): { since: number; limit: number } {
 
 /** Build the signed record items for a feed page (shared by serveFeed and the push-to-hub client, T2.3). */
 export async function buildFeed(
-  env: Env, instance: string, def: FeedServeDef, since: number, limit: number,
+  env: Env,
+  instance: string,
+  def: FeedServeDef,
+  since: number,
+  limit: number,
 ): Promise<{ items: Record<string, unknown>[]; nextCursor: number; complete: boolean }> {
   const sign = await feedSigner(env);
   const rows = await def.selectRows(env, since, limit);
@@ -329,7 +469,10 @@ export async function buildFeed(
   for (const r of rows) {
     const { id, cursor, data } = def.recordOf(r, instance);
     const rec: Record<string, unknown> = { type: def.type, id, cursor, data };
-    if (sign) { rec.sig = await sign(def.type, id, data); rec.signer = instance; }
+    if (sign) {
+      rec.sig = await sign(def.type, id, data);
+      rec.signer = instance;
+    }
     items.push(rec);
     if (cursor > nextCursor) nextCursor = cursor;
   }
@@ -351,25 +494,38 @@ export async function feedPublicKey(env: Env): Promise<string | null> {
 // only NATIVE caches are federated; imported third-party data stays local (M3 decision)
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
-  selectRows: async (env, since, limit) => (await env.DB.prepare(
-    "SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
-  ).bind(since, limit).all<CacheRow>()).results,
+  selectRows: async (env, since, limit) =>
+    (
+      await env.DB.prepare(
+        "SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
+      )
+        .bind(since, limit)
+        .all<CacheRow>()
+    ).results,
   recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
 };
 export const FIND_FEED: FeedServeDef<FindRow> = {
   type: "find",
-  selectRows: async (env, since, limit) => (await env.DB.prepare(
-    `SELECT l.*, c.code AS cache_code FROM cache_logs l
+  selectRows: async (env, since, limit) =>
+    (
+      await env.DB.prepare(
+        `SELECT l.*, c.code AS cache_code FROM cache_logs l
        LEFT JOIN caches c ON c.id = l.cache_id
       WHERE l.id > ? ORDER BY l.id LIMIT ?`,
-  ).bind(since, limit).all<FindRow>()).results,
+      )
+        .bind(since, limit)
+        .all<FindRow>()
+    ).results,
   recordOf: (r, instance) => ({ id: `${instance}:find:${r.id}`, cursor: r.id, data: findData(r, instance) }),
 };
 export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",
-  selectRows: async (env, since, limit) => (await env.DB.prepare(
-    "SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
-  ).bind(since, limit).all<KeyRow>()).results,
+  selectRows: async (env, since, limit) =>
+    (
+      await env.DB.prepare("SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?")
+        .bind(since, limit)
+        .all<KeyRow>()
+    ).results,
   recordOf: (r, instance) => ({ id: `${instance}:key:${r.id}`, cursor: r.id, data: keyData(r) }),
 };
 

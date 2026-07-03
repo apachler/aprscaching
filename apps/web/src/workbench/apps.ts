@@ -35,13 +35,69 @@ export interface WorkbenchApp {
 // functionality, so a solo op with just a laptop + radio can operate off-grid with no server box. The
 // `sysop` apps (NET/ROM node, remote box) administer the instance's always-on server ingest — operator-only.
 export const WORKBENCH_APPS: WorkbenchApp[] = [
-  { id: "terminal", icon: "radio", label: "Packet terminal", blurb: "Graphic-Packet multi-channel connected-mode terminal (Web Serial / BLE)", emoji: "📻", title: "Packet terminal", wide: true },
-  { id: "bbs", icon: "bbs", label: "BBS", blurb: "Store-and-forward mail, bulletins & threads", emoji: "✉", title: "BBS", wide: true },
-  { id: "decoder", icon: "decode", label: "Packet decoder", blurb: "Decode a raw AX.25 / APRS frame", emoji: "🔎", title: "Packet decoder", wide: true },
-  { id: "tools", icon: "tools", label: "Tools", blurb: "Sandboxed plugins & signal decoders", emoji: "🧩", title: "Tools", wide: true },
-  { id: "rig", icon: "dial", label: "Rig control", blurb: "CAT — one-click tune (Web Serial)", emoji: "🎚", title: "Rig control (CAT)" },
-  { id: "node", icon: "node", label: "NET/ROM node", blurb: "Run a node · digipeater · sysop console", emoji: "🗄", title: "NET/ROM node", wide: true, sysop: true },
-  { id: "remote", icon: "server", label: "Remote box", blurb: "Control your ingest box over the relay", emoji: "🛰", title: "Remote control — your box", sysop: true },
+  {
+    id: "terminal",
+    icon: "radio",
+    label: "Packet terminal",
+    blurb: "Graphic-Packet multi-channel connected-mode terminal (Web Serial / BLE)",
+    emoji: "📻",
+    title: "Packet terminal",
+    wide: true,
+  },
+  {
+    id: "bbs",
+    icon: "bbs",
+    label: "BBS",
+    blurb: "Store-and-forward mail, bulletins & threads",
+    emoji: "✉",
+    title: "BBS",
+    wide: true,
+  },
+  {
+    id: "decoder",
+    icon: "decode",
+    label: "Packet decoder",
+    blurb: "Decode a raw AX.25 / APRS frame",
+    emoji: "🔎",
+    title: "Packet decoder",
+    wide: true,
+  },
+  {
+    id: "tools",
+    icon: "tools",
+    label: "Tools",
+    blurb: "Sandboxed plugins & signal decoders",
+    emoji: "🧩",
+    title: "Tools",
+    wide: true,
+  },
+  {
+    id: "rig",
+    icon: "dial",
+    label: "Rig control",
+    blurb: "CAT — one-click tune (Web Serial)",
+    emoji: "🎚",
+    title: "Rig control (CAT)",
+  },
+  {
+    id: "node",
+    icon: "node",
+    label: "NET/ROM node",
+    blurb: "Run a node · digipeater · sysop console",
+    emoji: "🗄",
+    title: "NET/ROM node",
+    wide: true,
+    sysop: true,
+  },
+  {
+    id: "remote",
+    icon: "server",
+    label: "Remote box",
+    blurb: "Control your ingest box over the relay",
+    emoji: "🛰",
+    title: "Remote control — your box",
+    sysop: true,
+  },
 ];
 
 export const appById = (id: WorkbenchAppId): WorkbenchApp | undefined => WORKBENCH_APPS.find((a) => a.id === id);
@@ -51,14 +107,20 @@ const DEFAULT_PINS: WorkbenchAppId[] = []; // nothing pinned by default — the 
 const readPins = (): WorkbenchAppId[] => {
   try {
     const stored = localStorage.getItem(PIN_KEY);
-    if (stored == null) return DEFAULT_PINS;                      // never set → sensible default
+    if (stored == null) return DEFAULT_PINS; // never set → sensible default
     const raw = JSON.parse(stored);
     return Array.isArray(raw) ? raw.filter((x): x is WorkbenchAppId => WORKBENCH_APPS.some((a) => a.id === x)) : [];
-  } catch { return DEFAULT_PINS; }
+  } catch {
+    return DEFAULT_PINS;
+  }
 };
 
 /** Pinned-app ids (persisted in localStorage) + a toggle. Pinned apps show in the nav rail. */
-export function usePinnedApps(): { pins: WorkbenchAppId[]; toggle: (id: WorkbenchAppId) => void; isPinned: (id: WorkbenchAppId) => boolean } {
+export function usePinnedApps(): {
+  pins: WorkbenchAppId[];
+  toggle: (id: WorkbenchAppId) => void;
+  isPinned: (id: WorkbenchAppId) => boolean;
+} {
   const [pins, setPins] = useState<WorkbenchAppId[]>(readPins);
   // Re-read when an account sign-in pulls prefs and rewrites acs.pins (multi-device sync).
   useEffect(() => {
@@ -66,11 +128,16 @@ export function usePinnedApps(): { pins: WorkbenchAppId[]; toggle: (id: Workbenc
     window.addEventListener(PREFS_EVENT, onSync);
     return () => window.removeEventListener(PREFS_EVENT, onSync);
   }, []);
-  const toggle = (id: WorkbenchAppId) => setPins((prev) => {
-    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-    try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-    notePrefChange();                                               // mirror to the account (if signed in)
-    return next;
-  });
+  const toggle = (id: WorkbenchAppId) =>
+    setPins((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try {
+        localStorage.setItem(PIN_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      notePrefChange(); // mirror to the account (if signed in)
+      return next;
+    });
   return { pins, toggle, isPinned: (id) => pins.includes(id) };
 }

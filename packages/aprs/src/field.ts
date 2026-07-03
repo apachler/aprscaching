@@ -13,39 +13,69 @@ const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase(
 const cleanCall = (c: string) => c.replace(/\*$/, "").toUpperCase();
 
 export interface LocalStation {
-  callsign: string; lat: number; lon: number;
-  symbol?: string;              // 2-char table+code, e.g. "/>"; undefined if unknown
-  course?: number; speedKn?: number; altitudeM?: number; comment?: string;
+  callsign: string;
+  lat: number;
+  lon: number;
+  symbol?: string; // 2-char table+code, e.g. "/>"; undefined if unknown
+  course?: number;
+  speedKn?: number;
+  altitudeM?: number;
+  comment?: string;
   kind: "station" | "object" | "item" | "weather";
-  heardAt: number;              // epoch ms
+  heardAt: number; // epoch ms
 }
 export interface LocalMessage {
-  from: string; to: string; text: string; msgNo?: string;
-  ack: boolean; rej: boolean; at: number;   // epoch ms
+  from: string;
+  to: string;
+  text: string;
+  msgNo?: string;
+  ack: boolean;
+  rej: boolean;
+  at: number; // epoch ms
 }
 export type LocalEvent =
-  | { kind: "station"; station: LocalStation }
-  | { kind: "message"; message: LocalMessage }
-  | { kind: "none" };
+  { kind: "station"; station: LocalStation } | { kind: "message"; message: LocalMessage } | { kind: "none" };
 
 /** (A) Map a decoded RF frame to a local field-station event — a station fix or an inbox message. Pure. */
 export function localEvent(frame: ParsedFrame, data: AprsData, at: number): LocalEvent {
   if (data.kind === "position" || data.kind === "object" || data.kind === "item" || data.kind === "weather") {
-    const lat = data.lat, lon = data.lon;
+    const lat = data.lat,
+      lon = data.lon;
     if (typeof lat !== "number" || typeof lon !== "number") return { kind: "none" };
-    const named = (data.kind === "object" || data.kind === "item") ? cleanCall((data as { name: string }).name) : cleanCall(frame.src);
+    const named =
+      data.kind === "object" || data.kind === "item"
+        ? cleanCall((data as { name: string }).name)
+        : cleanCall(frame.src);
     const sym = data.symbol ? `${data.symbol.table}${data.symbol.code}` : undefined;
-    return { kind: "station", station: {
-      callsign: named, lat, lon, symbol: sym,
-      course: data.course, speedKn: data.speedKn, altitudeM: data.altitudeM, comment: data.comment,
-      kind: data.kind === "position" ? "station" : data.kind, heardAt: at,
-    } };
+    return {
+      kind: "station",
+      station: {
+        callsign: named,
+        lat,
+        lon,
+        symbol: sym,
+        course: data.course,
+        speedKn: data.speedKn,
+        altitudeM: data.altitudeM,
+        comment: data.comment,
+        kind: data.kind === "position" ? "station" : data.kind,
+        heardAt: at,
+      },
+    };
   }
   if (data.kind === "message" && !data.bulletin) {
-    return { kind: "message", message: {
-      from: cleanCall(frame.src), to: cleanCall(data.addressee), text: data.text, msgNo: data.msgNo,
-      ack: !!data.ack, rej: !!data.rej, at,
-    } };
+    return {
+      kind: "message",
+      message: {
+        from: cleanCall(frame.src),
+        to: cleanCall(data.addressee),
+        text: data.text,
+        msgNo: data.msgNo,
+        ack: !!data.ack,
+        rej: !!data.rej,
+        at,
+      },
+    };
   }
   return { kind: "none" };
 }
@@ -65,7 +95,10 @@ export function ackReply(msg: LocalMessage, myCall: string): string | null {
 }
 
 /** A locally-heard RF reception, ready to replay to a gateway when connectivity returns (D). */
-export interface HeardReception { raw: string; at: number }
+export interface HeardReception {
+  raw: string;
+  at: number;
+}
 /**
  * (D) Shape locally-heard receptions into ingest packets for sync-back. Dedupes identical raw frames,
  * caps the batch, and drops our own transmissions (we already forwarded those). RX ≠ trust — the gateway
@@ -78,7 +111,7 @@ export function syncBackBatch(heard: HeardReception[], myCall: string, cap = 200
   for (const h of heard) {
     if (!h.raw || seen.has(h.raw)) continue;
     const src = h.raw.split(">")[0] ?? "";
-    if (baseCall(src) === mine) continue;   // don't replay our own beacons
+    if (baseCall(src) === mine) continue; // don't replay our own beacons
     seen.add(h.raw);
     out.push({ raw: h.raw, at: h.at });
     if (out.length >= cap) break;

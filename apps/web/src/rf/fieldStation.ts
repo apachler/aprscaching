@@ -10,7 +10,7 @@ import { localEvent, type LocalStation, type LocalMessage } from "@aprsweb/aprs"
 import type { Packet } from "@aprsweb/shared";
 import type { RfFrame } from "./kiss.js";
 
-const STA_TTL_MS = 60 * 60 * 1000;   // drop a station not heard for an hour
+const STA_TTL_MS = 60 * 60 * 1000; // drop a station not heard for an hour
 const MSG_CAP = 200;
 const HEARD_CAP = 500;
 
@@ -19,7 +19,7 @@ type Snapshot = { stations: LocalStation[]; messages: LocalMessage[]; heard: num
 class FieldStation {
   private stations = new Map<string, LocalStation>();
   private messages: LocalMessage[] = [];
-  private heard: { raw: string; at: number; packet: Packet }[] = [];   // for sync-back (D)
+  private heard: { raw: string; at: number; packet: Packet }[] = []; // for sync-back (D)
   private subs = new Set<() => void>();
 
   /** Feed a decoded RF frame: update the live station or append to the inbox; queue it for sync-back. */
@@ -27,7 +27,10 @@ class FieldStation {
     const ev = localEvent(f.frame, f.data, f.at);
     if (ev.kind === "station") this.stations.set(ev.station.callsign, ev.station);
     else if (ev.kind === "message") this.messages = [ev.message, ...this.messages].slice(0, MSG_CAP);
-    if (f.frame.raw) { this.heard.push({ raw: f.frame.raw, at: f.at, packet: f.packet }); if (this.heard.length > HEARD_CAP) this.heard.shift(); }
+    if (f.frame.raw) {
+      this.heard.push({ raw: f.frame.raw, at: f.at, packet: f.packet });
+      if (this.heard.length > HEARD_CAP) this.heard.shift();
+    }
     if (ev.kind !== "none") this.emit();
   }
 
@@ -40,13 +43,31 @@ class FieldStation {
     }
     return out.sort((a, b) => b.heardAt - a.heardAt);
   }
-  inbox(): LocalMessage[] { return this.messages; }
-  heardForSync(): { raw: string; at: number; packet: Packet }[] { return this.heard; }
-  clearHeard(): void { this.heard = []; }
+  inbox(): LocalMessage[] {
+    return this.messages;
+  }
+  heardForSync(): { raw: string; at: number; packet: Packet }[] {
+    return this.heard;
+  }
+  clearHeard(): void {
+    this.heard = [];
+  }
 
-  snapshot(): Snapshot { return { stations: this.liveStations(), messages: this.messages, heard: this.heard.length }; }
-  subscribe(fn: () => void): () => void { this.subs.add(fn); return () => this.subs.delete(fn); }
-  private emit(): void { for (const fn of this.subs) try { fn(); } catch { /* ignore */ } }
+  snapshot(): Snapshot {
+    return { stations: this.liveStations(), messages: this.messages, heard: this.heard.length };
+  }
+  subscribe(fn: () => void): () => void {
+    this.subs.add(fn);
+    return () => this.subs.delete(fn);
+  }
+  private emit(): void {
+    for (const fn of this.subs)
+      try {
+        fn();
+      } catch {
+        /* ignore */
+      }
+  }
 }
 
 /** The one shared field-station store (a module singleton, like the tool host). */

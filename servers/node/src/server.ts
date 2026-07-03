@@ -34,8 +34,8 @@ const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
 if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
   console.error(
     "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
-    "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
-    "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
+      "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
+      "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
   );
   process.exit(1);
 }
@@ -50,8 +50,15 @@ console.log(ran.length ? `migrations applied: ${ran.join(", ")}` : "migrations u
 
 // ---- AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source) ----
 function gitHead(): string | undefined {
-  try { return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || undefined; }
-  catch { return undefined; }
+  try {
+    return (
+      execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+        .toString()
+        .trim() || undefined
+    );
+  } catch {
+    return undefined;
+  }
 }
 const SOURCE = {
   SOURCE_REPO: process.env.SOURCE_REPO,
@@ -81,8 +88,8 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
-  ...stringEnvFrom(process.env),   // SR-RT-03: forward EVERY config key, not a hand-picked subset
-  ...SOURCE,                        // host-resolved SOURCE_* (git HEAD fallback) wins over the raw env
+  ...stringEnvFrom(process.env), // SR-RT-03: forward EVERY config key, not a hand-picked subset
+  ...SOURCE, // host-resolved SOURCE_* (git HEAD fallback) wins over the raw env
 };
 
 // ---- node:http <-> Web Request/Response ----
@@ -114,7 +121,10 @@ const server = http.createServer(async (nreq, nres) => {
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
   const u = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  if (u.pathname !== "/ws") { socket.destroy(); return; }
+  if (u.pathname !== "/ws") {
+    socket.destroy();
+    return;
+  }
   const region = u.searchParams.get("region") ?? "global";
   wss.handleUpgrade(req, socket, head, (ws) => rooms.join(region, ws));
 });

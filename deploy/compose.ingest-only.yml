@@ -5,13 +5,13 @@ services:
   ingest:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
-    command: ["pnpm","--filter","@aprsweb/ingest","start"]
+    command: ["pnpm", "--filter", "@aprsweb/ingest", "start"]
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}
       APRSIS_CALLSIGN: ${APRSIS_CALLSIGN}
       APRSIS_PASSCODE: ${APRSIS_PASSCODE}
       APRSIS_FILTER: ${APRSIS_FILTER}
-      INGEST_URL: ${INGEST_URL}            # e.g. https://gateway.<you>.workers.dev/ingest
-      INGEST_SECRET: ${INGEST_SECRET}      # or per-operator peer key when feeding a shared gateway
+      INGEST_URL: ${INGEST_URL} # e.g. https://gateway.<you>.workers.dev/ingest
+      INGEST_SECRET: ${INGEST_SECRET} # or per-operator peer key when feeding a shared gateway
     restart: unless-stopped

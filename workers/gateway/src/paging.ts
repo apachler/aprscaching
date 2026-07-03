@@ -16,21 +16,32 @@
  *   return json({ activity: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
  */
 
-export interface Cursor { primary: number; id: number }
-export interface PageParams { limit: number; cursor: Cursor | null }
+export interface Cursor {
+  primary: number;
+  id: number;
+}
+export interface PageParams {
+  limit: number;
+  cursor: Cursor | null;
+}
 
 const b64url = (s: string): string => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const unb64url = (s: string): string => atob(s.replace(/-/g, "+").replace(/_/g, "/"));
 
-export function encodeCursor(c: Cursor): string { return b64url(`${c.primary}:${c.id}`); }
+export function encodeCursor(c: Cursor): string {
+  return b64url(`${c.primary}:${c.id}`);
+}
 
 export function decodeCursor(s: string | null): Cursor | null {
   if (!s) return null;
   try {
     const [p, i] = unb64url(s).split(":");
-    const primary = Number(p), id = Number(i);
+    const primary = Number(p),
+      id = Number(i);
     return Number.isFinite(primary) && Number.isFinite(id) ? { primary, id } : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /** Parse ?limit= (clamped to [1,max]) and ?cursor= from the request URL. */
@@ -46,11 +57,18 @@ export function parsePage(u: URL, def = 25, max = 100): PageParams {
  */
 export function keyset(cursor: Cursor | null, primaryCol: string, idCol: string): { sql: string; binds: number[] } {
   if (!cursor) return { sql: "", binds: [] };
-  return { sql: ` AND (${primaryCol} < ? OR (${primaryCol} = ? AND ${idCol} < ?))`, binds: [cursor.primary, cursor.primary, cursor.id] };
+  return {
+    sql: ` AND (${primaryCol} < ? OR (${primaryCol} = ? AND ${idCol} < ?))`,
+    binds: [cursor.primary, cursor.primary, cursor.id],
+  };
 }
 
 /** Slice a (limit+1)-row fetch into a page + its nextCursor. `keyOf` maps the last kept row to a cursor. */
-export function paginate<T>(rows: T[], limit: number, keyOf: (r: T) => Cursor): { items: T[]; nextCursor: string | null; hasMore: boolean } {
+export function paginate<T>(
+  rows: T[],
+  limit: number,
+  keyOf: (r: T) => Cursor,
+): { items: T[]; nextCursor: string | null; hasMore: boolean } {
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   const last = items[items.length - 1];

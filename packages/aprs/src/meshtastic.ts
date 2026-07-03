@@ -7,11 +7,21 @@
  * Envelope shape (position): { from, sender:"!hex", type:"position",
  *   payload:{ latitude_i, longitude_i, altitude } }
  */
-export interface MeshFix { node: string; lat: number; lon: number; altitudeM?: number; longName?: string }
+export interface MeshFix {
+  node: string;
+  lat: number;
+  lon: number;
+  altitudeM?: number;
+  longName?: string;
+}
 
 export function parseMeshtasticJson(input: string | Record<string, unknown>): MeshFix | null {
   let o: any;
-  try { o = typeof input === "string" ? JSON.parse(input) : input; } catch { return null; }
+  try {
+    o = typeof input === "string" ? JSON.parse(input) : input;
+  } catch {
+    return null;
+  }
   if (!o || typeof o !== "object") return null;
   if (o.type && o.type !== "position") return null;
   const p = o.payload ?? o;
@@ -31,17 +41,25 @@ export function parseMeshtasticJson(input: string | Record<string, unknown>): Me
 // `0x94 0xC3 <len16-be> <FromRadio…>`. We deframe the stream and pull POSITION_APP fixes out with a
 // minimal protobuf reader (canonical field numbers from meshtastic/protobufs). RX-only; no TX here.
 
-const START1 = 0x94, START2 = 0xc3, MAX_FRAME = 512;
+const START1 = 0x94,
+  START2 = 0xc3,
+  MAX_FRAME = 512;
 
 /** Split a Meshtastic serial buffer into complete protobuf frames; `rest` is the unconsumed tail. */
 export function deframeMeshtastic(buf: Uint8Array): { frames: Uint8Array[]; rest: Uint8Array } {
   const frames: Uint8Array[] = [];
   let i = 0;
   while (i + 4 <= buf.length) {
-    if (buf[i] !== START1 || buf[i + 1] !== START2) { i++; continue; } // resync on junk
+    if (buf[i] !== START1 || buf[i + 1] !== START2) {
+      i++;
+      continue;
+    } // resync on junk
     const len = (buf[i + 2]! << 8) | buf[i + 3]!;
-    if (len > MAX_FRAME) { i++; continue; }                            // bogus length → skip a byte
-    if (i + 4 + len > buf.length) break;                               // incomplete → wait for more
+    if (len > MAX_FRAME) {
+      i++;
+      continue;
+    } // bogus length → skip a byte
+    if (i + 4 + len > buf.length) break; // incomplete → wait for more
     frames.push(buf.subarray(i + 4, i + 4 + len));
     i += 4 + len;
   }
@@ -50,7 +68,8 @@ export function deframeMeshtastic(buf: Uint8Array): { frames: Uint8Array[]; rest
 
 /** Read a base-128 varint at `p`; returns the value and the next offset. */
 function varint(b: Uint8Array, p: number): [number, number] {
-  let v = 0, shift = 0;
+  let v = 0,
+    shift = 0;
   while (p < b.length) {
     const c = b[p++]!;
     v += (c & 0x7f) * 2 ** shift;
@@ -65,13 +84,29 @@ const i32le = (b: Uint8Array, p: number): number => new DataView(b.buffer, b.byt
 function* walk(b: Uint8Array): Generator<[number, number, number | Uint8Array]> {
   let p = 0;
   while (p < b.length) {
-    let tag: number; [tag, p] = varint(b, p);
-    const field = tag >>> 3, wire = tag & 7;
-    if (wire === 0) { let v: number; [v, p] = varint(b, p); yield [field, wire, v]; }
-    else if (wire === 5) { if (p + 4 > b.length) break; yield [field, wire, i32le(b, p)]; p += 4; }   // truncated fixed32 → stop, never read past the frame
-    else if (wire === 1) { p += 8; }                                   // 64-bit (unused) — skip
-    else if (wire === 2) { let len: number; [len, p] = varint(b, p); if (p + len > b.length) break; yield [field, wire, b.subarray(p, p + len)]; p += len; }
-    else break;                                                        // groups/unknown — stop
+    let tag: number;
+    [tag, p] = varint(b, p);
+    const field = tag >>> 3,
+      wire = tag & 7;
+    if (wire === 0) {
+      let v: number;
+      [v, p] = varint(b, p);
+      yield [field, wire, v];
+    } else if (wire === 5) {
+      if (p + 4 > b.length) break;
+      yield [field, wire, i32le(b, p)];
+      p += 4;
+    } // truncated fixed32 → stop, never read past the frame
+    else if (wire === 1) {
+      p += 8;
+    } // 64-bit (unused) — skip
+    else if (wire === 2) {
+      let len: number;
+      [len, p] = varint(b, p);
+      if (p + len > b.length) break;
+      yield [field, wire, b.subarray(p, p + len)];
+      p += len;
+    } else break; // groups/unknown — stop
   }
 }
 const sub = (b: Uint8Array, want: number): Uint8Array | null => {
@@ -89,14 +124,17 @@ export type MeshEvent =
 
 /** Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3) } → a fix (×1e-7 deg), or null. */
 function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
-  let latI: number | null = null, lonI: number | null = null, alt = 0;
+  let latI: number | null = null,
+    lonI: number | null = null,
+    alt = 0;
   for (const [f, w, v] of walk(payload)) {
     if (f === 1 && w === 5) latI = v as number;
     else if (f === 2 && w === 5) lonI = v as number;
     else if (f === 3 && w === 0) alt = v as number;
   }
   if (latI == null || lonI == null) return null;
-  const lat = latI / 1e7, lon = lonI / 1e7;
+  const lat = latI / 1e7,
+    lon = lonI / 1e7;
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   const fix: MeshFix = { node, lat, lon };
@@ -113,17 +151,26 @@ function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
 export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
   let from = 0;
   for (const [f, w, v] of walk(packet)) if (f === 1 && w === 5) from = (v as number) >>> 0;
-  const data = sub(packet, 4); if (!data) return null;                 // decoded Data; encrypted → skip
-  let portnum = 0; let payload: Uint8Array | null = null;
+  const data = sub(packet, 4);
+  if (!data) return null; // decoded Data; encrypted → skip
+  let portnum = 0;
+  let payload: Uint8Array | null = null;
   for (const [f, w, v] of walk(data)) {
     if (f === 1 && w === 0) portnum = v as number;
     else if (f === 2 && w === 2 && v instanceof Uint8Array) payload = v;
   }
   if (!payload) return null;
   const node = nodeId(from);
-  if (portnum === 3) { const fix = positionFrom(payload, node); return fix ? { kind: "position", fix } : null; }
-  if (portnum === 1) { const text = new TextDecoder().decode(payload).replace(/\0+$/, ""); return text ? { kind: "text", node, text } : null; }
-  if (portnum === 4) {                                                  // NODEINFO_APP → User{ long_name(2), short_name(3) }
+  if (portnum === 3) {
+    const fix = positionFrom(payload, node);
+    return fix ? { kind: "position", fix } : null;
+  }
+  if (portnum === 1) {
+    const text = new TextDecoder().decode(payload).replace(/\0+$/, "");
+    return text ? { kind: "text", node, text } : null;
+  }
+  if (portnum === 4) {
+    // NODEINFO_APP → User{ long_name(2), short_name(3) }
     let longName: string | undefined, shortName: string | undefined;
     for (const [f, w, v] of walk(payload)) {
       if (f === 2 && w === 2 && v instanceof Uint8Array) longName = new TextDecoder().decode(v);
@@ -140,7 +187,8 @@ export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
  * what the map consumes); use `parseMeshPacket` directly for text/nodeinfo.
  */
 export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
-  const packet = sub(frame, 2); if (!packet) return null;
+  const packet = sub(frame, 2);
+  if (!packet) return null;
   const ev = parseMeshPacket(packet);
   return ev?.kind === "position" ? ev.fix : null;
 }
@@ -151,6 +199,7 @@ export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
  * native protobuf MQTT path (many brokers publish protobuf, not the JSON `parseMeshtasticJson` handles).
  */
 export function parseMeshServiceEnvelope(bytes: Uint8Array): MeshEvent | null {
-  const packet = sub(bytes, 1); if (!packet) return null;
+  const packet = sub(bytes, 1);
+  if (!packet) return null;
   return parseMeshPacket(packet);
 }

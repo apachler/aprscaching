@@ -8,11 +8,18 @@ function makeStore(out: FbbMessage[]): FbbStore & { inbox: FbbMessage[]; queue: 
   const inbox: FbbMessage[] = [];
   const held = new Set(out.map((m) => m.bid));
   return {
-    queue, inbox,
+    queue,
+    inbox,
     outbound: () => queue,
     hasBid: (bid) => held.has(bid),
-    accept: (m) => { inbox.push(m); held.add(m.bid); },
-    sent: (bid) => { const i = queue.findIndex((m) => m.bid === bid); if (i >= 0) queue.splice(i, 1); },
+    accept: (m) => {
+      inbox.push(m);
+      held.add(m.bid);
+    },
+    sent: (bid) => {
+      const i = queue.findIndex((m) => m.bid === bid);
+      if (i >= 0) queue.splice(i, 1);
+    },
   };
 }
 
@@ -28,13 +35,27 @@ function drive(a: FbbSession, b: FbbSession): void {
   if (guard <= 0) throw new Error("FBB exchange did not terminate");
 }
 
-const msg = (o: Partial<FbbMessage> & Pick<FbbMessage, "from" | "to" | "bid" | "title" | "body">): FbbMessage =>
-  ({ type: "P", at: "WW", ...o });
+const msg = (o: Partial<FbbMessage> & Pick<FbbMessage, "from" | "to" | "bid" | "title" | "body">): FbbMessage => ({
+  type: "P",
+  at: "WW",
+  ...o,
+});
 
 describe("FBB forwarding session over the loopback", () => {
   it("forwards a message each way with reverse forwarding", () => {
-    const A = makeStore([msg({ from: "OE8BBS", to: "DL1ABC", at: "DB0XYZ", bid: "1_OE8", title: "Hi from OE", body: "hello DL\nline two" })]);
-    const B = makeStore([msg({ type: "B", from: "DB0XYZ", to: "ALL", at: "WW", bid: "9_DB0", title: "Net Sat", body: "net on 144.800" })]);
+    const A = makeStore([
+      msg({
+        from: "OE8BBS",
+        to: "DL1ABC",
+        at: "DB0XYZ",
+        bid: "1_OE8",
+        title: "Hi from OE",
+        body: "hello DL\nline two",
+      }),
+    ]);
+    const B = makeStore([
+      msg({ type: "B", from: "DB0XYZ", to: "ALL", at: "WW", bid: "9_DB0", title: "Net Sat", body: "net on 144.800" }),
+    ]);
 
     drive(new FbbSession(A, { initiator: true }), new FbbSession(B, { initiator: false }));
 
@@ -54,16 +75,16 @@ describe("FBB forwarding session over the loopback", () => {
       msg({ from: "OE8BBS", to: "DL2BBB", bid: "2_A", title: "two", body: "bravo" }),
     ]);
     const s = new FbbSession(A, { initiator: true });
-    s.start();                                   // SID + FB×2 + F>  → phase await-fs
-    const r = s.feed("FS +");                    // only ONE verdict for TWO proposals
-    expect(r.out.join("\n")).toContain("one");   // the accepted message's body went out
-    expect(A.queue.map((m) => m.bid)).toEqual(["2_A"]);  // the un-verdicted one is STILL queued, not lost
+    s.start(); // SID + FB×2 + F>  → phase await-fs
+    const r = s.feed("FS +"); // only ONE verdict for TWO proposals
+    expect(r.out.join("\n")).toContain("one"); // the accepted message's body went out
+    expect(A.queue.map((m) => m.bid)).toEqual(["2_A"]); // the un-verdicted one is STILL queued, not lost
   });
 
   it("rejects a message the partner already holds (BID dedup) and doesn't resend", () => {
     const dup = msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Dup", body: "already have this" });
     const A = makeStore([dup]);
-    const B = makeStore([]);         // B already holds BID 1_OE8
+    const B = makeStore([]); // B already holds BID 1_OE8
     (B as unknown as { accept: (m: FbbMessage) => void }).accept({ ...dup, body: "prior copy" });
     const bInboxBefore = B.inbox.length;
 
@@ -88,10 +109,10 @@ describe("FBB forwarding session over the loopback", () => {
     const A = makeStore([]);
     const s = new FbbSession(A, { initiator: true });
     s.start();
-    s.feed("[PEER-1.0-F$]");                       // their SID
-    s.feed("FF");                                  // both empty → we answer FQ, phase=done
-    expect(s.feed("FQ").out).toEqual([]);          // trailing FQ after done
-    expect(() => s.feed("\x1a")).not.toThrow();    // the crashing line
+    s.feed("[PEER-1.0-F$]"); // their SID
+    s.feed("FF"); // both empty → we answer FQ, phase=done
+    expect(s.feed("FQ").out).toEqual([]); // trailing FQ after done
+    expect(() => s.feed("\x1a")).not.toThrow(); // the crashing line
     expect(s.feed("\x1a").out).toEqual([]);
     expect(s.feed("junk title").out).toEqual([]);
     expect(A.inbox).toHaveLength(0);
@@ -100,11 +121,15 @@ describe("FBB forwarding session over the loopback", () => {
   it("survives a bare ^Z in recv-block with no pending message", () => {
     const B = makeStore([]);
     const s = new FbbSession(B, { initiator: false });
-    s.feed("[PEER-1.0-F$]");                       // SID → await-proposals
-    s.feed("FB P OE8APR WW OE1AAA 1_OE8 5");       // one proposal
-    s.feed("F>");                                  // we accept → recv-block
-    s.feed("title");                               // title line
-    expect(() => { s.feed("\x1a"); s.feed("\x1a"); s.feed("\x1a"); }).not.toThrow();  // extra ^Z beyond the block
-    expect(B.inbox).toHaveLength(1);               // only the real message landed
+    s.feed("[PEER-1.0-F$]"); // SID → await-proposals
+    s.feed("FB P OE8APR WW OE1AAA 1_OE8 5"); // one proposal
+    s.feed("F>"); // we accept → recv-block
+    s.feed("title"); // title line
+    expect(() => {
+      s.feed("\x1a");
+      s.feed("\x1a");
+      s.feed("\x1a");
+    }).not.toThrow(); // extra ^Z beyond the block
+    expect(B.inbox).toHaveLength(1); // only the real message landed
   });
 });

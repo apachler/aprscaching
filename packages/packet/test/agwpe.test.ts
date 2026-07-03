@@ -10,8 +10,11 @@ describe("AGWPE frame codec", () => {
     expect(rest.length).toBe(0);
     expect(frames).toHaveLength(1);
     const f = frames[0]!;
-    expect(f.port).toBe(1); expect(f.kind).toBe("K"); expect(f.pid).toBe(0xf0);
-    expect(f.from).toBe("OE8APR-7"); expect(f.to).toBe("OE8XBM-1");
+    expect(f.port).toBe(1);
+    expect(f.kind).toBe("K");
+    expect(f.pid).toBe(0xf0);
+    expect(f.from).toBe("OE8APR-7");
+    expect(f.to).toBe("OE8XBM-1");
     expect(new TextDecoder().decode(f.data)).toBe("hello agw");
   });
 
@@ -19,7 +22,8 @@ describe("AGWPE frame codec", () => {
     const a = encodeAgwpe({ kind: "V", from: "A", to: "B", data: new Uint8Array([1, 2]) });
     const b = encodeAgwpe({ kind: "D", from: "C", to: "D", data: new Uint8Array([3]) });
     const joined = new Uint8Array(a.length + b.length);
-    joined.set(a); joined.set(b, a.length);
+    joined.set(a);
+    joined.set(b, a.length);
     // feed everything but the last 2 bytes → second frame is incomplete, held back as rest
     const cut = joined.slice(0, joined.length - 2);
     const r1 = parseAgwpe(cut);

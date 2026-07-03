@@ -11,14 +11,24 @@ describe("toAnsi", () => {
   });
 
   it("emits SGR for per-segment fg/bg/bold and coalesces nothing it isn't given", () => {
-    const out = toAnsi([[{ text: "A", fg: 1, bold: true }, { text: "B", bg: 4 }]]);
-    expect(out).toContain(`${ESC}[1;31mA`);   // bold + red fg
-    expect(out).toContain(`${ESC}[44mB`);     // blue bg
+    const out = toAnsi([
+      [
+        { text: "A", fg: 1, bold: true },
+        { text: "B", bg: 4 },
+      ],
+    ]);
+    expect(out).toContain(`${ESC}[1;31mA`); // bold + red fg
+    expect(out).toContain(`${ESC}[44mB`); // blue bg
     expect(out.endsWith("\r\n")).toBe(true);
   });
 
   it("round-trips through the parser: exported colour spans parse back to the same attributes", () => {
-    const ansi = toAnsi([[{ text: "OE8APR", fg: 10, bold: true }, { text: " de ", fg: 7 }]]);
+    const ansi = toAnsi([
+      [
+        { text: "OE8APR", fg: 10, bold: true },
+        { text: " de ", fg: 7 },
+      ],
+    ]);
     const spans = parseAnsi(ansi).filter((s) => s.text.trim() !== "");
     expect(spans[0]).toMatchObject({ text: "OE8APR", fg: 10, bold: true });
     expect(stripAnsi(ansi).trim()).toBe("OE8APR de");

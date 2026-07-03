@@ -39,19 +39,31 @@ export function sanitizePrefs(raw: unknown): Record<string, unknown> {
   }
   // pinned workbench apps (ids only, capped)
   if (Array.isArray(b.pins))
-    out.pins = b.pins.filter((x): x is string => typeof x === "string").slice(0, 20).map((s) => s.slice(0, 24));
+    out.pins = b.pins
+      .filter((x): x is string => typeof x === "string")
+      .slice(0, 20)
+      .map((s) => s.slice(0, 24));
   // basemap choice
   if (typeof b.basemap === "string") out.basemap = b.basemap.slice(0, 24);
 
   return out;
 }
 
-const parse = (s: string): Record<string, unknown> => { try { const v = JSON.parse(s); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
+const parse = (s: string): Record<string, unknown> => {
+  try {
+    const v = JSON.parse(s);
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+};
 
 export async function handlePrefsGet(req: Request, env: Env): Promise<Response> {
   const me = await sessionAccountId(req, env);
   if (!me) return json({ error: "sign in" }, { status: 401 });
-  const row = await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=?").bind(me.accountId).first<{ prefs: string }>();
+  const row = await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=?")
+    .bind(me.accountId)
+    .first<{ prefs: string }>();
   return json({ prefs: row ? parse(row.prefs) : {} });
 }
 
@@ -64,7 +76,9 @@ export async function handlePrefsPut(req: Request, env: Env): Promise<Response> 
   if (str.length > MAX_BYTES) return json({ error: "prefs too large" }, { status: 400 });
   await env.DB.prepare(
     "INSERT INTO account_prefs (account_id, prefs, updated_at) VALUES (?,?,?) " +
-    "ON CONFLICT(account_id) DO UPDATE SET prefs=excluded.prefs, updated_at=excluded.updated_at",
-  ).bind(me.accountId, str, now()).run();
+      "ON CONFLICT(account_id) DO UPDATE SET prefs=excluded.prefs, updated_at=excluded.updated_at",
+  )
+    .bind(me.accountId, str, now())
+    .run();
   return json({ ok: true, prefs });
 }

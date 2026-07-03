@@ -4,16 +4,16 @@ services:
   gateway:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
-    command: ["pnpm","--filter","@aprsweb/node-gateway","start"]
+    command: ["pnpm", "--filter", "@aprsweb/node-gateway", "start"]
     environment:
       DB_PATH: /data/aprscaching.db
       PORT: "8080"
-    volumes: [ "data:/data" ]
+    volumes: ["data:/data"]
     restart: unless-stopped
 
-  ingest:                     # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
+  ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
     image: aprscaching:local
-    command: ["pnpm","--filter","@aprsweb/ingest","start"]
+    command: ["pnpm", "--filter", "@aprsweb/ingest", "start"]
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}
@@ -26,9 +26,9 @@ services:
     depends_on: [gateway]
     restart: unless-stopped
 
-  caddy:                      # TLS + static SPA + reverse proxy
+  caddy: # TLS + static SPA + reverse proxy
     image: caddy:2
-    ports: ["80:80","443:443"]
+    ports: ["80:80", "443:443"]
     environment:
       DOMAIN: ${DOMAIN:-:80}
     volumes:

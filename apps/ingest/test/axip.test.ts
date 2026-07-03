@@ -6,17 +6,23 @@ import { stripIpv4Header, axipToPacket, frameToAxip, parseAxipPeers } from "../s
 /** A bare AX.25 UI/APRS frame (the AXIP IP-payload). */
 function ax25Frame(src: string, dst: string, aprs: string): Uint8Array {
   return encodeFrame({
-    dst: parseAddr(dst), src: parseAddr(src), command: true, type: "UI", pf: false,
-    pid: 0xf0, info: new TextEncoder().encode(aprs),
+    dst: parseAddr(dst),
+    src: parseAddr(src),
+    command: true,
+    type: "UI",
+    pf: false,
+    pid: 0xf0,
+    info: new TextEncoder().encode(aprs),
   });
 }
 /** Prepend a minimal 20-byte IPv4 header (version 4, IHL 5, protocol 93) — what a raw proto-93 socket sees. */
 function ipv4Proto93(payload: Uint8Array, ihlWords = 5): Uint8Array {
   const hdr = new Uint8Array(ihlWords * 4);
-  hdr[0] = 0x40 | (ihlWords & 0x0f);   // version 4 + IHL
-  hdr[9] = 93;                          // protocol = AX.25
+  hdr[0] = 0x40 | (ihlWords & 0x0f); // version 4 + IHL
+  hdr[9] = 93; // protocol = AX.25
   const out = new Uint8Array(hdr.length + payload.length);
-  out.set(hdr, 0); out.set(payload, hdr.length);
+  out.set(hdr, 0);
+  out.set(payload, hdr.length);
   return out;
 }
 
@@ -29,20 +35,20 @@ describe("AXIP ingest — IP proto-93 encapsulation", () => {
 
   it("honours a variable IHL (header with options)", () => {
     const frame = ax25Frame("DL1ABC", "APRS", ">opts");
-    const stripped = stripIpv4Header(ipv4Proto93(frame, 6))!;   // IHL 6 = 24-byte header
+    const stripped = stripIpv4Header(ipv4Proto93(frame, 6))!; // IHL 6 = 24-byte header
     expect(Array.from(stripped)).toEqual(Array.from(frame));
   });
 
   it("rejects non-IPv4 / runt datagrams", () => {
-    expect(stripIpv4Header(new Uint8Array(10))).toBeNull();               // too short
-    expect(stripIpv4Header(new Uint8Array(20).fill(0x60))).toBeNull();    // version 6
+    expect(stripIpv4Header(new Uint8Array(10))).toBeNull(); // too short
+    expect(stripIpv4Header(new Uint8Array(20).fill(0x60))).toBeNull(); // version 6
   });
 
   it("decodes an AXIP datagram (with IP header) into a Tier-C Packet — never first-party attested", () => {
     const p = axipToPacket(ipv4Proto93(ax25Frame("OE8APR-9", "APRS", "!4703.00N/01526.00E>x")), 1000)!;
     expect(p.src).toBe("OE8APR-9");
     expect(p.payload).toBe("!4703.00N/01526.00E>x");
-    expect(p.heardVia).toBe("aprs_is");   // → provenance firstPartyAttested = false
+    expect(p.heardVia).toBe("aprs_is"); // → provenance firstPartyAttested = false
     expect(p.port).toBe("axip");
     expect(p.ts).toBe(1000);
   });
@@ -59,13 +65,22 @@ describe("AXIP ingest — IP proto-93 encapsulation", () => {
   });
 
   it("TX: frameToAxip emits the bare frame (kernel adds the IP header) and round-trips", () => {
-    const f = { dst: parseAddr("OE8XBM-7"), src: parseAddr("OE8APR-9"), command: true, type: "UI" as const, pf: false, pid: 0xf0, info: new TextEncoder().encode("axip-tx") };
+    const f = {
+      dst: parseAddr("OE8XBM-7"),
+      src: parseAddr("OE8APR-9"),
+      command: true,
+      type: "UI" as const,
+      pf: false,
+      pid: 0xf0,
+      info: new TextEncoder().encode("axip-tx"),
+    };
     const payload = frameToAxip(f);
     // egress carries no IP header (raw proto-93 socket lets the kernel build it) → a peer decodes it directly…
     expect(decodeFrame(payload)!.src).toEqual(f.src);
     // …and our own RX (bare-frame fallback) lands it Tier C on the axip port.
     const p = axipToPacket(payload, 1000)!;
-    expect(p.payload).toBe("axip-tx"); expect(p.port).toBe("axip");
+    expect(p.payload).toBe("axip-tx");
+    expect(p.port).toBe("axip");
   });
 
   it("parses AXIP peers (host only — no port, unlike AXUDP)", () => {

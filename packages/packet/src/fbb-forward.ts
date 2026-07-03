@@ -34,10 +34,13 @@ export class FbbForwarder {
     while ((i = this.buf.search(/[\r\n]/)) >= 0) {
       const line = this.buf.slice(0, i);
       this.buf = this.buf.slice(i + 1);
-      if (line === "" ) continue;                       // skip blank separators between CR/LF pairs
+      if (line === "") continue; // skip blank separators between CR/LF pairs
       const r = this.session.feed(line);
       out.push(...r.out);
-      if (r.done) { this.done = true; break; }          // FQ ends the session — never feed trailing lines
+      if (r.done) {
+        this.done = true;
+        break;
+      } // FQ ends the session — never feed trailing lines
     }
     return this.frame(out);
   }

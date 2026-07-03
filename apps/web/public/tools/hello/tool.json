@@ -3,16 +3,8 @@
   "title": "Hello tool",
   "author": "OE8APR",
   "version": "1.0.0",
-  "permissions": [
-    "command",
-    "monitor",
-    "panel",
-    "decoder"
-  ],
-  "surfaces": [
-    "web",
-    "terminal"
-  ],
+  "permissions": ["command", "monitor", "panel", "decoder"],
+  "surfaces": ["web", "terminal"],
   "description": "Example signed tool: a command, colour rule, panel and a ROT13 decoder.",
   "entry": "tool.js",
   "pubkey": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",

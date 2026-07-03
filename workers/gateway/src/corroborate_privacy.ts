@@ -22,9 +22,9 @@ import type { Env } from "./env.js";
 const M_PER_DEG = 111_320; // metres per degree of latitude (good enough for slack sizing)
 
 export interface CoarsenConfig {
-  gridDeg: number;       // grid-square size in degrees for the request center snap
+  gridDeg: number; // grid-square size in degrees for the request center snap
   timeBucketSec: number; // time-window + response-ts bucket
-  distBucketM: number;   // response distance bucket
+  distBucketM: number; // response distance bucket
 }
 /** Site defaults: ~550 m grid, 10-min buckets, 100 m distance steps. Tunable per deployment. */
 export const DEFAULT_COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
@@ -63,15 +63,21 @@ export function bucketTs(ts: number, bucketSec: number): number {
 }
 
 // ---- abuse limits (in-memory, per-isolate, best-effort) ----
-interface RlWindow { count: number; resetAt: number }
+interface RlWindow {
+  count: number;
+  resetAt: number;
+}
 const rlBuckets = new Map<string, RlWindow>();
-export const RL_MAX = 60;          // probes per key per window
+export const RL_MAX = 60; // probes per key per window
 export const RL_WINDOW_MS = 60_000;
 
 /** Fixed-window rate limit. Returns true when `key` is OVER budget. `nowMs` is injected for testing. */
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
   const w = rlBuckets.get(key);
-  if (!w || nowMs >= w.resetAt) { rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs }); return false; }
+  if (!w || nowMs >= w.resetAt) {
+    rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs });
+    return false;
+  }
   w.count++;
   return w.count > max;
 }
@@ -83,7 +89,10 @@ const NEG_MAX_ENTRIES = 5000;
 export function negCached(key: string, nowMs: number): boolean {
   const exp = negMemo.get(key);
   if (exp == null) return false;
-  if (nowMs >= exp) { negMemo.delete(key); return false; }
+  if (nowMs >= exp) {
+    negMemo.delete(key);
+    return false;
+  }
   return true;
 }
 export function negStore(key: string, nowMs: number, ttlMs = NEG_TTL_MS): void {
@@ -100,9 +109,9 @@ export function corroborationAuthorized(env: Env, req: Request): boolean {
 
 /** Best-effort client ip for rate-limit keying (CF edge header, then XFF, then unknown). */
 export function clientIp(req: Request): string {
-  return req.headers.get("cf-connecting-ip")
-    || (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim()
-    || "unknown";
+  return (
+    req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "unknown"
+  );
 }
 
 export function coarsenConfig(env: Env): CoarsenConfig {

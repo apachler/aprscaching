@@ -12,14 +12,19 @@ import type { Env } from "./env.js";
 import { appBase } from "./sitemap.js";
 import { qrSvg } from "./qr.js";
 
-const escAttr = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+const escAttr = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** SR-SEC-03: serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
  *  escape `<`, `>`, `&`, or the line separators, so a raw value like `</script><script>…` breaks out
  *  of the script element. Escaping these to \uXXXX keeps the value a string, never markup. */
 const jsonForScript = (o: unknown) =>
-  JSON.stringify(o).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+  JSON.stringify(o)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 
 /** A bbox query param is trusted only if it is exactly four finite numbers; anything else → null. */
 function safeBbox(raw: string | null): string | null {
@@ -35,7 +40,7 @@ export function handleEmbed(req: Request, env: Env): Response {
   const u = new URL(req.url);
   const cache = u.searchParams.get("cache");
   const bbox = safeBbox(u.searchParams.get("bbox"));
-  const api = u.origin;            // the gateway serves this page → its own origin hosts /api/v1
+  const api = u.origin; // the gateway serves this page → its own origin hosts /api/v1
   const app = appBase(env);
   // cache code: letters/digits/hyphen only — never markup, even before JSON escaping
   const safeCache = cache ? cache.toUpperCase().replace(/[^A-Z0-9-]/g, "") || null : null;
@@ -77,21 +82,23 @@ map.on('load', async () => {
   } catch (e) { /* offline / blocked tiles — the map chrome still renders */ }
 });
 </script></body></html>`;
-  return new Response(html, { headers: {
-    "content-type": "text/html; charset=utf-8",
-    // Embeddable by design (frame-ancestors *), but lock down what may execute/connect as
-    // defence-in-depth behind the JSON escaping above (SR-SEC-03). No plugins, no <base> hijack.
-    "content-security-policy": [
-      "default-src 'none'",
-      "script-src 'unsafe-inline' https://unpkg.com",
-      "style-src 'unsafe-inline' https://unpkg.com",
-      "img-src 'self' data: https://tile.openstreetmap.org",
-      `connect-src 'self' ${api}`,
-      "frame-ancestors *",
-      "base-uri 'none'",
-      "object-src 'none'",
-    ].join("; "),
-  } });
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      // Embeddable by design (frame-ancestors *), but lock down what may execute/connect as
+      // defence-in-depth behind the JSON escaping above (SR-SEC-03). No plugins, no <base> hijack.
+      "content-security-policy": [
+        "default-src 'none'",
+        "script-src 'unsafe-inline' https://unpkg.com",
+        "style-src 'unsafe-inline' https://unpkg.com",
+        "img-src 'self' data: https://tile.openstreetmap.org",
+        `connect-src 'self' ${api}`,
+        "frame-ancestors *",
+        "base-uri 'none'",
+        "object-src 'none'",
+      ].join("; "),
+    },
+  });
 }
 
 /** GET /embed/qr.svg — QR for a cache share link (?cache=) or an arbitrary URL (?url=). */
@@ -99,12 +106,14 @@ export function handleQr(req: Request, env: Env): Response {
   const u = new URL(req.url);
   const cache = u.searchParams.get("cache");
   const url = u.searchParams.get("url");
-  const data = cache ? `${appBase(env)}/?cache=${encodeURIComponent(cache.toUpperCase())}` : (url || appBase(env));
+  const data = cache ? `${appBase(env)}/?cache=${encodeURIComponent(cache.toUpperCase())}` : url || appBase(env);
   if (new TextEncoder().encode(data).length > 106) return new Response("data too long", { status: 400 });
   const sizeParam = Number(u.searchParams.get("size"));
   try {
     const svg = qrSvg(data, { size: Number.isFinite(sizeParam) && sizeParam > 0 ? Math.min(sizeParam, 1024) : 256 });
-    return new Response(svg, { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=3600" } });
+    return new Response(svg, {
+      headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+    });
   } catch (e) {
     return new Response((e as Error).message, { status: 400 });
   }

@@ -11,7 +11,7 @@ describe("embed widget + QR", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
     const body = await res.text();
     expect(body).toContain("maplibre-gl");
-    expect(body).toContain('"cache":"AC-0001"');         // uppercased into the client config
+    expect(body).toContain('"cache":"AC-0001"'); // uppercased into the client config
     expect(body).toContain('"api":"https://api.example"'); // fetches from its own origin
     expect(body).toContain("/api/v1/caches/");
   });
@@ -28,7 +28,7 @@ describe("embed widget + QR", () => {
     const res = handleEmbed(new Request("https://api.example/embed?bbox=" + encodeURIComponent(attack)), env);
     const body = await res.text();
     // the only legitimate </script> is the widget's own closing tag → exactly one
-    expect(body.match(/<\/script>/gi)?.length).toBe(2);   // two legit tags (external + inline), none injected
+    expect(body.match(/<\/script>/gi)?.length).toBe(2); // two legit tags (external + inline), none injected
     expect(body).not.toContain("<script>alert(1)");
     // an invalid bbox is dropped to null, never reflected verbatim
     expect(body).toContain('"bbox":null');
@@ -38,7 +38,7 @@ describe("embed widget + QR", () => {
   it("strips markup from the cache param before it reaches the page", async () => {
     const res = handleEmbed(new Request("https://api.example/embed?cache=" + encodeURIComponent("</script><b>x")), env);
     const body = await res.text();
-    expect(body.match(/<\/script>/gi)?.length).toBe(2);   // two legit tags (external + inline), none injected
+    expect(body.match(/<\/script>/gi)?.length).toBe(2); // two legit tags (external + inline), none injected
     expect(body).not.toContain("<b>x");
   });
 

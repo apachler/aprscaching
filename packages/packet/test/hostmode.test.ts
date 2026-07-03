@@ -17,9 +17,17 @@ describe("WA8DED host-mode codec", () => {
 
   it("decodes the typed TNC responses (success / message / monitor-info / connected-info)", () => {
     const frame = new Uint8Array([
-      1, 0,                                  // chan1 success, nothing
-      0, 1, ...str("OE8XBM"), 0,             // chan0 success-message "OE8XBM"
-      1, 7, 3, 0, ...str("abc"),             // chan1 connected info, len=3 "abc"
+      1,
+      0, // chan1 success, nothing
+      0,
+      1,
+      ...str("OE8XBM"),
+      0, // chan0 success-message "OE8XBM"
+      1,
+      7,
+      3,
+      0,
+      ...str("abc"), // chan1 connected info, len=3 "abc"
     ]);
     const { events, rest } = parseHostmode(frame);
     expect(rest.length).toBe(0);
@@ -37,8 +45,8 @@ describe("WA8DED host-mode codec", () => {
   });
 
   it("holds back a partial frame until the rest arrives", () => {
-    const full = new Uint8Array([1, 7, 3, 0, ...str("abc")]);   // connected info len=3
-    const r1 = parseHostmode(full.slice(0, 5));                 // missing the last byte
+    const full = new Uint8Array([1, 7, 3, 0, ...str("abc")]); // connected info len=3
+    const r1 = parseHostmode(full.slice(0, 5)); // missing the last byte
     expect(r1.events).toHaveLength(0);
     expect(r1.rest.length).toBe(5);
     const r2 = parseHostmode(full);

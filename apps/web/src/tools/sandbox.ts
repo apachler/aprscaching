@@ -11,14 +11,18 @@
  */
 import { validateManifest, type ToolManifest, type Capability } from "@aprsweb/tools";
 
-export async function fetchToolManifest(url: string): Promise<{ ok: true; manifest: ToolManifest; base: string } | { ok: false; error: string }> {
+export async function fetchToolManifest(
+  url: string,
+): Promise<{ ok: true; manifest: ToolManifest; base: string } | { ok: false; error: string }> {
   try {
     const res = await fetch(url, { credentials: "omit" });
     if (!res.ok) return { ok: false, error: `manifest ${res.status}` };
     const v = validateManifest(await res.json());
     if (!v.ok) return v;
     return { ok: true, manifest: v.manifest, base: new URL(url, location.href).href };
-  } catch (e) { return { ok: false, error: (e as Error).message }; }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 /** The bus bridge the host provides to an imported tool (only wired when it was granted 'ipc'). */
@@ -29,9 +33,19 @@ export interface IpcBridge {
 }
 
 /** A declarative monitor colour rule — evaluated host-side (sync), so no per-line Worker round-trip. */
-export interface ColourRule { srcPrefix?: string; dstPrefix?: string; textIncludes?: string; colorVar?: string; hidden?: boolean }
+export interface ColourRule {
+  srcPrefix?: string;
+  dstPrefix?: string;
+  textIncludes?: string;
+  colorVar?: string;
+  hidden?: boolean;
+}
 /** Decoder metadata an imported tool contributes; the decode itself runs in the worker (async). */
-export interface DecoderMeta { id: string; label: string; kind: string }
+export interface DecoderMeta {
+  id: string;
+  label: string;
+  kind: string;
+}
 
 /** The worker bootstrap (stringified) — locks down globals, evals the tool, bridges commands/decode/IPC. */
 function workerSource(): string {
@@ -75,11 +89,11 @@ function workerSource(): string {
 export interface Sandbox {
   commands: string[];
   colourRules: ColourRule[];
-  panel: unknown | null;                 // initial declarative PanelSpec (sanitised by the host adapter)
+  panel: unknown | null; // initial declarative PanelSpec (sanitised by the host adapter)
   decoders: DecoderMeta[];
   runCommand(word: string, args: string): Promise<string[]>;
   decode(id: string, input: string): Promise<string>;
-  onPanel(cb: (spec: unknown) => void): void;   // dynamic panel updates (ipc.setPanel from the worker)
+  onPanel(cb: (spec: unknown) => void): void; // dynamic panel updates (ipc.setPanel from the worker)
   destroy(): void;
 }
 
@@ -99,15 +113,33 @@ export async function loadSandbox(scriptUrl: string, granted: Capability[], brid
   // Bridge worker → host (IPC + dynamic panel updates + decode results). The host routes; payloads opaque.
   const onAux = (ev: MessageEvent) => {
     const m = ev.data;
-    if (m.type === "panel") { panelCb?.(m.spec); return; }
-    if (m.type === "decodeResult") { decodePending.get(m.id)?.(m.out); decodePending.delete(m.id); return; }
+    if (m.type === "panel") {
+      panelCb?.(m.spec);
+      return;
+    }
+    if (m.type === "decodeResult") {
+      decodePending.get(m.id)?.(m.out);
+      decodePending.delete(m.id);
+      return;
+    }
     if (!ipcOn || !bridge) return;
     if (m.type === "emit") bridge.emit(String(m.topic), m.data);
-    else if (m.type === "subscribe") disposers.push(bridge.subscribe(String(m.topic), (data, from) => worker.postMessage({ type: "ipcEvent", topic: m.topic, data, from })));
-    else if (m.type === "call") worker.postMessage({ type: "callResult", id: m.id, result: bridge.call(String(m.name), m.args) });
+    else if (m.type === "subscribe")
+      disposers.push(
+        bridge.subscribe(String(m.topic), (data, from) =>
+          worker.postMessage({ type: "ipcEvent", topic: m.topic, data, from }),
+        ),
+      );
+    else if (m.type === "call")
+      worker.postMessage({ type: "callResult", id: m.id, result: bridge.call(String(m.name), m.args) });
   };
 
-  const loaded = await new Promise<{ commands: string[]; colourRules: ColourRule[]; panel: unknown | null; decoders: DecoderMeta[] }>((resolve, reject) => {
+  const loaded = await new Promise<{
+    commands: string[];
+    colourRules: ColourRule[];
+    panel: unknown | null;
+    decoders: DecoderMeta[];
+  }>((resolve, reject) => {
     worker.onmessage = (ev) => {
       if (ev.data.type === "loaded") resolve(ev.data);
       else if (ev.data.type === "error") reject(new Error(ev.data.error));
@@ -126,9 +158,24 @@ export async function loadSandbox(scriptUrl: string, granted: Capability[], brid
     colourRules: Array.isArray(loaded.colourRules) ? loaded.colourRules : [],
     panel: loaded.panel ?? null,
     decoders: Array.isArray(loaded.decoders) ? loaded.decoders : [],
-    runCommand: (word, args) => new Promise((resolve) => { const id = ++seq; pending.set(id, resolve); worker.postMessage({ type: "cmd", id, word, args }); }),
-    decode: (decId, input) => new Promise((resolve) => { const id = ++dseq; decodePending.set(id, resolve); worker.postMessage({ type: "decode", id, decId, input }); }),
-    onPanel: (cb) => { panelCb = cb; },
-    destroy: () => { for (const d of disposers) d(); worker.terminate(); },
+    runCommand: (word, args) =>
+      new Promise((resolve) => {
+        const id = ++seq;
+        pending.set(id, resolve);
+        worker.postMessage({ type: "cmd", id, word, args });
+      }),
+    decode: (decId, input) =>
+      new Promise((resolve) => {
+        const id = ++dseq;
+        decodePending.set(id, resolve);
+        worker.postMessage({ type: "decode", id, decId, input });
+      }),
+    onPanel: (cb) => {
+      panelCb = cb;
+    },
+    destroy: () => {
+      for (const d of disposers) d();
+      worker.terminate();
+    },
   };
 }

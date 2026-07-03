@@ -4,22 +4,40 @@
 // ---------- CSV (RFC-4180-ish: quoted fields, embedded commas/newlines, "" escapes) ----------
 function splitCsvRows(text: string): string[][] {
   const rows: string[][] = [];
-  let row: string[] = [], cell = "", q = false;
+  let row: string[] = [],
+    cell = "",
+    q = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;
     if (q) {
-      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-      else cell += c;
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else q = false;
+      } else cell += c;
     } else if (c === '"') q = true;
-    else if (c === ",") { row.push(cell); cell = ""; }
-    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
-    else if (c !== "\r") cell += c;
+    else if (c === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (c === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (c !== "\r") cell += c;
   }
-  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  if (cell !== "" || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
   return rows;
 }
 
-export function parseCsv(text: string, opts: { skipLines?: number } = {}): { header: string[]; rows: Record<string, string>[] } {
+export function parseCsv(
+  text: string,
+  opts: { skipLines?: number } = {},
+): { header: string[]; rows: Record<string, string>[] } {
   const all = splitCsvRows(text);
   const start = opts.skipLines ?? 0;
   const header = (all[start] ?? []).map((h) => h.trim());
@@ -28,14 +46,20 @@ export function parseCsv(text: string, opts: { skipLines?: number } = {}): { hea
     const cells = all[i]!;
     if (cells.length === 1 && cells[0] === "") continue; // blank line
     const row: Record<string, string> = {};
-    header.forEach((h, j) => { row[h] = (cells[j] ?? "").trim(); });
+    header.forEach((h, j) => {
+      row[h] = (cells[j] ?? "").trim();
+    });
     rows.push(row);
   }
   return { header, rows };
 }
 
 // ---------- GeoJSON (Point features) ----------
-export interface GeoFeature { lat: number; lon: number; props: Record<string, unknown> }
+export interface GeoFeature {
+  lat: number;
+  lon: number;
+  props: Record<string, unknown>;
+}
 export function parseGeoJsonFeatures(text: string): GeoFeature[] {
   const fc = JSON.parse(text) as { features?: unknown[] };
   const out: GeoFeature[] = [];
@@ -51,11 +75,25 @@ export function parseGeoJsonFeatures(text: string): GeoFeature[] {
 }
 
 // ---------- GPX (<wpt>) ----------
-export interface GpxWpt { lat: number; lon: number; name?: string; desc?: string; type?: string; urlname?: string; url?: string }
+export interface GpxWpt {
+  lat: number;
+  lon: number;
+  name?: string;
+  desc?: string;
+  type?: string;
+  urlname?: string;
+  url?: string;
+}
 function xmlText(body: string, tag: string): string | undefined {
   const m = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`).exec(body);
-  return m?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim()
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+  return m?.[1]
+    ?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .trim()
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 export function parseGpxWaypoints(xml: string): GpxWpt[] {
   const out: GpxWpt[] = [];
@@ -66,7 +104,15 @@ export function parseGpxWaypoints(xml: string): GpxWpt[] {
     const lon = Number(/\blon\s*=\s*"([^"]+)"/.exec(m[1]!)?.[1]);
     if (!isFinite(lat) || !isFinite(lon)) continue;
     const body = m[2]!;
-    out.push({ lat, lon, name: xmlText(body, "name"), desc: xmlText(body, "desc"), type: xmlText(body, "type"), urlname: xmlText(body, "urlname"), url: xmlText(body, "url") });
+    out.push({
+      lat,
+      lon,
+      name: xmlText(body, "name"),
+      desc: xmlText(body, "desc"),
+      type: xmlText(body, "type"),
+      urlname: xmlText(body, "urlname"),
+      url: xmlText(body, "url"),
+    });
   }
   return out;
 }

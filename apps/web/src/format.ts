@@ -14,8 +14,8 @@ import { createContext, useContext } from "react";
  */
 export type Theme = "modern" | "cogmind";
 export interface LocaleSettings {
-  locale: string;    // BCP-47 (e.g. "de-AT"); "" => browser default
-  timeZone: string;  // IANA (e.g. "Europe/Vienna"); "" => browser default
+  locale: string; // BCP-47 (e.g. "de-AT"); "" => browser default
+  timeZone: string; // IANA (e.g. "Europe/Vienna"); "" => browser default
   units: "metric" | "imperial";
   theme: Theme;
   /** Opt-in CRT flourish (scanline + phosphor glow), only meaningful in Cogmind; off by default
@@ -46,13 +46,19 @@ export function browserLocale(): string {
   return (typeof navigator !== "undefined" && navigator.language) || "en-US";
 }
 export function browserTimeZone(): string {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 function unitsForLocale(locale: string): "metric" | "imperial" {
   try {
     const region = new Intl.Locale(locale).maximize().region ?? "";
     return IMPERIAL_REGIONS.has(region) ? "imperial" : "metric";
-  } catch { return "metric"; }
+  } catch {
+    return "metric";
+  }
 }
 
 export function defaultSettings(): LocaleSettings {
@@ -67,11 +73,17 @@ export function loadSettings(): LocaleSettings {
       s.theme = normalizeTheme(s.theme); // migrate old dark/light/auto → modern
       return s;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return defaultSettings();
 }
 export function saveSettings(s: LocaleSettings): void {
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---------------------------------------------------------------- formatters
@@ -91,7 +103,10 @@ export interface Formatters {
   coord: (lat: number, lon: number) => string;
 }
 
-const KN_TO_KMH = 1.852, KN_TO_MPH = 1.150779, M_TO_FT = 3.28084, M_TO_MI = 0.000621371;
+const KN_TO_KMH = 1.852,
+  KN_TO_MPH = 1.150779,
+  M_TO_FT = 3.28084,
+  M_TO_MI = 0.000621371;
 
 export function makeFormatters(settings: LocaleSettings): Formatters {
   const locale = settings.locale || browserLocale();
@@ -120,18 +135,26 @@ export function makeFormatters(settings: LocaleSettings): Formatters {
     }
     return m < 1000 ? `${num(Math.round(m), 0)} m` : `${num(m / 1000, m < 10000 ? 2 : 1)} km`;
   };
-  const speed = (kn: number) => imperial ? `${num(kn * KN_TO_MPH)} mph` : `${num(kn * KN_TO_KMH)} km/h`;
-  const altitude = (m: number) => imperial ? `${num(Math.round(m * M_TO_FT), 0)} ft` : `${num(Math.round(m), 0)} m`;
-  const temp = (c: number) => imperial ? `${num(c * 9 / 5 + 32, 0)} °F` : `${num(c, 0)} °C`;
-  const coord = (lat: number, lon: number) => `${num(Math.abs(lat), 5)}°${lat >= 0 ? "N" : "S"}, ${num(Math.abs(lon), 5)}°${lon >= 0 ? "E" : "W"}`;
+  const speed = (kn: number) => (imperial ? `${num(kn * KN_TO_MPH)} mph` : `${num(kn * KN_TO_KMH)} km/h`);
+  const altitude = (m: number) => (imperial ? `${num(Math.round(m * M_TO_FT), 0)} ft` : `${num(Math.round(m), 0)} m`);
+  const temp = (c: number) => (imperial ? `${num((c * 9) / 5 + 32, 0)} °F` : `${num(c, 0)} °C`);
+  const coord = (lat: number, lon: number) =>
+    `${num(Math.abs(lat), 5)}°${lat >= 0 ? "N" : "S"}, ${num(Math.abs(lon), 5)}°${lon >= 0 ? "E" : "W"}`;
 
   return {
-    settings, resolvedLocale: locale, resolvedTimeZone: timeZone,
+    settings,
+    resolvedLocale: locale,
+    resolvedTimeZone: timeZone,
     num,
     date: (ts) => dateFmt.format(ts * 1000),
     time: (ts) => timeFmt.format(ts * 1000),
     dateTime: (ts) => dtFmt.format(ts * 1000),
-    ago, distance, speed, altitude, temp, coord,
+    ago,
+    distance,
+    speed,
+    altitude,
+    temp,
+    coord,
   };
 }
 

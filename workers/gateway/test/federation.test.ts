@@ -25,9 +25,7 @@ describe("Ed25519 record signing (WebCrypto)", () => {
     expect(good).toBe(true);
 
     // a tampered payload must NOT verify
-    const tampered = new TextEncoder().encode(
-      stableStringify({ type: "cache", id, data: { ...data, lat: 0 } }),
-    );
+    const tampered = new TextEncoder().encode(stableStringify({ type: "cache", id, data: { ...data, lat: 0 } }));
     const bad = await crypto.subtle.verify("Ed25519", kp.publicKey, sig, tampered);
     expect(bad).toBe(false);
   });

@@ -8,15 +8,33 @@ import type { ReactNode } from "react";
 
 export function Badge(props: { kind?: string; title?: string; className?: string; children: ReactNode }) {
   const cls = ["badge", props.kind, props.className].filter(Boolean).join(" ");
-  return <span className={cls} title={props.title}>{props.children}</span>;
+  return (
+    <span className={cls} title={props.title}>
+      {props.children}
+    </span>
+  );
 }
 
 /** Trust-tier chip with the standard short label (RF / App / tier letter). */
-export function TierBadge(props: { tier?: "A" | "B" | "C" | null; verified?: boolean; prefix?: string; title?: string }) {
+export function TierBadge(props: {
+  tier?: "A" | "B" | "C" | null;
+  verified?: boolean;
+  prefix?: string;
+  title?: string;
+}) {
   if (props.verified === false) {
-    return <Badge kind="tierC" title={props.title}>{props.prefix ? `${props.prefix} · ` : ""}unverified</Badge>;
+    return (
+      <Badge kind="tierC" title={props.title}>
+        {props.prefix ? `${props.prefix} · ` : ""}unverified
+      </Badge>
+    );
   }
   const t = props.tier ?? "C";
   const label = t === "A" ? "RF" : t === "B" ? "App" : String(t);
-  return <Badge kind={`tier${t}`} title={props.title}>{props.prefix ? `${props.prefix} · ` : ""}{label}</Badge>;
+  return (
+    <Badge kind={`tier${t}`} title={props.title}>
+      {props.prefix ? `${props.prefix} · ` : ""}
+      {label}
+    </Badge>
+  );
 }

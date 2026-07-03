@@ -22,12 +22,27 @@ export type NrOpcode = (typeof NrOp)[keyof typeof NrOp];
 
 /** Flag bits in the opcode&flags byte. */
 export const NR_CHOKE = 0x80; // this node cannot accept more info right now
-export const NR_NAK = 0x40;   // selective retransmit requested (of rx-seq)
-export const NR_MORE = 0x20;  // this info is a fragment; more follows
+export const NR_NAK = 0x40; // selective retransmit requested (of rx-seq)
+export const NR_MORE = 0x20; // this info is a fragment; more follows
 
-export interface NrNetHeader { origin: Ax25Address; dest: Ax25Address; ttl: number }
-export interface NrTransport { opcode: number; flags: number; circuitIndex: number; circuitId: number; txSeq: number; rxSeq: number }
-export interface NrPacket { net: NrNetHeader; tp: NrTransport; info: Uint8Array }
+export interface NrNetHeader {
+  origin: Ax25Address;
+  dest: Ax25Address;
+  ttl: number;
+}
+export interface NrTransport {
+  opcode: number;
+  flags: number;
+  circuitIndex: number;
+  circuitId: number;
+  txSeq: number;
+  rxSeq: number;
+}
+export interface NrPacket {
+  net: NrNetHeader;
+  tp: NrTransport;
+  info: Uint8Array;
+}
 
 // The network-header callsigns are "AX.25 shifted format". encodeAddress(a, cbit, last) writes the
 // 7-byte shifted form; the c-bit/reserved bits carry no L3 meaning here, so we fix cbit=false and set
@@ -57,22 +72,34 @@ export function decodeNetrom(b: Uint8Array): NrPacket | null {
   return {
     net: { origin: getCall(b, 0), dest: getCall(b, 7), ttl: b[14]! },
     tp: {
-      circuitIndex: b[15]!, circuitId: b[16]!, txSeq: b[17]!, rxSeq: b[18]!,
-      opcode: opByte & 0x0f, flags: opByte & 0xe0,
+      circuitIndex: b[15]!,
+      circuitId: b[16]!,
+      txSeq: b[17]!,
+      rxSeq: b[18]!,
+      opcode: opByte & 0x0f,
+      flags: opByte & 0xe0,
     },
     info: b.slice(20),
   };
 }
 
 // ---- NODES broadcast ----
-export interface NodesDest { dest: Ax25Address; alias: string; neighbor: Ax25Address; quality: number }
+export interface NodesDest {
+  dest: Ax25Address;
+  alias: string;
+  neighbor: Ax25Address;
+  quality: number;
+}
 
 const NODES_SIG = 0xff;
 const MAX_DESTS_PER_FRAME = 11;
 /** 6-byte space-padded ASCII mnemonic (uppercased, control-stripped). */
 const putAlias = (s: string): Uint8Array => {
   const out = new Uint8Array(6).fill(0x20);
-  const t = s.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const t = s
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 6);
   for (let i = 0; i < t.length; i++) out[i] = t.charCodeAt(i);
   return out;
 };

@@ -6,25 +6,25 @@ const ev = (instance: string, distanceM: number): Evidence => ({ instance, igate
 
 describe("peer auto-promotion (T1.1 reputation)", () => {
   it("promotes an unvetted peer only past the threshold with no contradictions", () => {
-    expect(shouldAutoPromote("unvetted", 5, 0, 5)).toBe(true);   // exactly at threshold
-    expect(shouldAutoPromote("unvetted", 4, 0, 5)).toBe(false);  // below threshold
-    expect(shouldAutoPromote("unvetted", 9, 1, 5)).toBe(false);  // any contradiction blocks it
+    expect(shouldAutoPromote("unvetted", 5, 0, 5)).toBe(true); // exactly at threshold
+    expect(shouldAutoPromote("unvetted", 4, 0, 5)).toBe(false); // below threshold
+    expect(shouldAutoPromote("unvetted", 9, 1, 5)).toBe(false); // any contradiction blocks it
   });
   it("never promotes trusted/blocked, and is off when the threshold is 0", () => {
-    expect(shouldAutoPromote("trusted", 99, 0, 5)).toBe(false);  // already trusted
-    expect(shouldAutoPromote("blocked", 99, 0, 5)).toBe(false);  // quarantined stays quarantined
+    expect(shouldAutoPromote("trusted", 99, 0, 5)).toBe(false); // already trusted
+    expect(shouldAutoPromote("blocked", 99, 0, 5)).toBe(false); // quarantined stays quarantined
     expect(shouldAutoPromote("unvetted", 99, 0, 0)).toBe(false); // disabled
   });
 
   it("(T1.1 contradiction signal) debits only peers that DENIED a confirmed corroboration", () => {
     const probes = [
       { url: "https://a", denied: false }, // hit
-      { url: "https://b", denied: true },  // explicit "no"
+      { url: "https://b", denied: true }, // explicit "no"
       { url: "https://c", denied: false }, // unavailable (timeout) — not a contradiction
-      { url: "https://b", denied: true },  // dup → collapsed
+      { url: "https://b", denied: true }, // dup → collapsed
     ];
     expect(contradictors(probes, true)).toEqual(["https://b"]); // only the denier, deduped
-    expect(contradictors(probes, false)).toEqual([]);           // no winner → a "no" isn't a contradiction
+    expect(contradictors(probes, false)).toEqual([]); // no winner → a "no" isn't a contradiction
   });
 });
 

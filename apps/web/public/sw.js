@@ -8,22 +8,34 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 self.addEventListener("push", (event) => {
   let title = "APRScaching";
   let body = "New watchlist activity — open the app to see what's active.";
-  try { if (event.data) { const d = event.data.json(); title = d.title || title; body = d.body || body; } } catch (e) { /* payload-less push */ }
-  event.waitUntil(self.registration.showNotification(title, {
-    body,
-    icon: "/icons/manifest-icon-192.png",
-    badge: "/icons/favicon-96x96.png",
-    tag: "acs-watch",
-    renotify: true,
-  }));
+  try {
+    if (event.data) {
+      const d = event.data.json();
+      title = d.title || title;
+      body = d.body || body;
+    }
+  } catch (e) {
+    /* payload-less push */
+  }
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icons/manifest-icon-192.png",
+      badge: "/icons/favicon-96x96.png",
+      tag: "acs-watch",
+      renotify: true,
+    }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  event.waitUntil((async () => {
-    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const open = wins.find((w) => "focus" in w);
-    if (open) return open.focus();
-    return self.clients.openWindow("/");
-  })());
+  event.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = wins.find((w) => "focus" in w);
+      if (open) return open.focus();
+      return self.clients.openWindow("/");
+    })(),
+  );
 });

@@ -26,8 +26,8 @@ const aprs = new AprsIs({
 
 let batch: Packet[] = [];
 const enqueue = (p: Packet) => batch.push(p);
-let spool: Packet[] = [];                          // SR-ING-03: undelivered packets, retried next tick
-const MAX_SPOOL = Number(env.INGEST_SPOOL_MAX ?? 5000);   // bounded (drop-oldest) so a long outage can't OOM the Pi
+let spool: Packet[] = []; // SR-ING-03: undelivered packets, retried next tick
+const MAX_SPOOL = Number(env.INGEST_SPOOL_MAX ?? 5000); // bounded (drop-oldest) so a long outage can't OOM the Pi
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
@@ -35,14 +35,27 @@ if (env.KISS_TNC_HOST) {
   const rawSubs: ((b: Uint8Array) => void)[] = [];
   const kiss = new KissTnc(
     { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
-    { onPacket: enqueue, onFrame: (f) => { for (const s of frameSubs) s(f); }, onRaw: (b) => { for (const s of rawSubs) s(b); } },
+    {
+      onPacket: enqueue,
+      onFrame: (f) => {
+        for (const s of frameSubs) s(f);
+      },
+      onRaw: (b) => {
+        for (const s of rawSubs) s(b);
+      },
+    },
   );
   kiss.start();
   console.log("[kiss] enabled");
 
   // RF digipeater (KISS TX) — repeat n-N traffic
   if (env.DIGI_CALL) {
-    const aliases = new Set((env.DIGI_ALIASES ?? "WIDE1,WIDE2").split(",").map((a) => a.trim().toUpperCase()).filter(Boolean));
+    const aliases = new Set(
+      (env.DIGI_ALIASES ?? "WIDE1,WIDE2")
+        .split(",")
+        .map((a) => a.trim().toUpperCase())
+        .filter(Boolean),
+    );
     const digi = new Digipeater(kiss, { mycall: env.DIGI_CALL, aliases });
     frameSubs.push((f) => digi.onFrame(f));
     console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
@@ -50,7 +63,8 @@ if (env.KISS_TNC_HOST) {
     // connected-mode digipeater — repeat SABM/I/… for NET/ROM + FBB relay through us
     if (env.DIGI_CONNECTED === "1") {
       const cdigi = new ConnectedDigipeater(kiss, {
-        mycall: env.DIGI_CALL, aliases: [...aliases],
+        mycall: env.DIGI_CALL,
+        aliases: [...aliases],
         viscousMs: env.DIGI_VISCOUS_MS ? Number(env.DIGI_VISCOUS_MS) : undefined,
       });
       rawSubs.push((b) => cdigi.onRaw(b));
@@ -68,17 +82,24 @@ if (env.KISS_TNC_HOST) {
   if (env.NETROM_CALL && env.NETROM_ALIAS) {
     const { NetromNodeRunner } = await import("./netromnode.js");
     const node = new NetromNodeRunner(kiss, {
-      mycall: env.NETROM_CALL, alias: env.NETROM_ALIAS,
+      mycall: env.NETROM_CALL,
+      alias: env.NETROM_ALIAS,
       broadcastMs: env.NETROM_BROADCAST_MS ? Number(env.NETROM_BROADCAST_MS) : undefined,
       pathQuality: env.NETROM_PATH_QUALITY ? Number(env.NETROM_PATH_QUALITY) : undefined,
-      gatewayBase: gwBase, secret: SECRET,
+      gatewayBase: gwBase,
+      secret: SECRET,
     });
     rawSubs.push((b) => node.onRaw(b));
     node.start();
     const nodeApp = (r: import("@aprsweb/ax25").Ax25Address) =>
-      new NodeSession(r.call, node.nodeStore(() => [...users]), env.NETROM_ALIAS!, env.NETROM_CALL!);
+      new NodeSession(
+        r.call,
+        node.nodeStore(() => [...users]),
+        env.NETROM_ALIAS!,
+        env.NETROM_CALL!,
+      );
     services.push({ addr: parseAddr(env.NETROM_CALL), name: "NODE", app: nodeApp, onConnect: node.connectThrough() });
-    node.serveInbound(nodeApp);                    // also answer stations that connect a NET/ROM circuit TO us (L4 inbound)
+    node.serveInbound(nodeApp); // also answer stations that connect a NET/ROM circuit TO us (L4 inbound)
     console.log(`[netrom] node CLI answering inbound connects on ${env.NETROM_CALL}`);
   }
 
@@ -87,16 +108,27 @@ if (env.KISS_TNC_HOST) {
     const { CachedBbsStore, BbsSession } = await import("@aprsweb/packet");
     const backend = gatewayBbsBackend(gwBase, SECRET);
     services.push({
-      addr: parseAddr(env.BBS_NODE_CALL), name: "BBS",
-      app: async (r) => { const store = new CachedBbsStore(r.call, backend); await store.refresh(); return new BbsSession(r.call, store, env.BBS_NODE_CALL!); },
+      addr: parseAddr(env.BBS_NODE_CALL),
+      name: "BBS",
+      app: async (r) => {
+        const store = new CachedBbsStore(r.call, backend);
+        await store.refresh();
+        return new BbsSession(r.call, store, env.BBS_NODE_CALL!);
+      },
     });
     console.log(`[bbs] BBS answering inbound connects on ${env.BBS_NODE_CALL}`);
   }
 
   if (services.length) {
     const server = new SessionServer({
-      send: (f) => { kiss.sendFrame(f); }, services,
-      onEvent: (e) => { if (e.kind === "connect") users.add(e.remote); else if (e.kind === "disconnect") users.delete(e.remote); },
+      send: (f) => {
+        kiss.sendFrame(f);
+      },
+      services,
+      onEvent: (e) => {
+        if (e.kind === "connect") users.add(e.remote);
+        else if (e.kind === "disconnect") users.delete(e.remote);
+      },
     });
     rawSubs.push((b) => server.onRaw(b));
     setInterval(() => server.poll(), 1000);
@@ -104,8 +136,11 @@ if (env.KISS_TNC_HOST) {
   // bidirectional APRS IGate (RF<->APRS-IS). Needs a real callsign + passcode.
   if (env.IGATE_CALL && env.IGATE_PASS) {
     const igate = new Igate(kiss, {
-      host: env.APRSIS_HOST ?? "rotate.aprs2.net", port: Number(env.APRSIS_PORT ?? 14580),
-      call: env.IGATE_CALL, pass: env.IGATE_PASS, filter: env.IGATE_FILTER,
+      host: env.APRSIS_HOST ?? "rotate.aprs2.net",
+      port: Number(env.APRSIS_PORT ?? 14580),
+      call: env.IGATE_CALL,
+      pass: env.IGATE_PASS,
+      filter: env.IGATE_FILTER,
       localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
     });
     frameSubs.push((f) => igate.onRf(f));
@@ -134,7 +169,12 @@ if (env.AGWPE_HOST) {
 if (env.HOSTMODE_HOST) {
   const { HostmodeTnc } = await import("./hostmode.js");
   new HostmodeTnc(
-    { host: env.HOSTMODE_HOST, port: Number(env.HOSTMODE_PORT ?? 3694), mycall: env.HOSTMODE_MYCALL, radioPort: Number(env.HOSTMODE_RADIO_PORT ?? 0) },
+    {
+      host: env.HOSTMODE_HOST,
+      port: Number(env.HOSTMODE_PORT ?? 3694),
+      mycall: env.HOSTMODE_MYCALL,
+      radioPort: Number(env.HOSTMODE_RADIO_PORT ?? 0),
+    },
     { onPacket: enqueue },
   ).start();
   console.log("[hostmode] enabled");
@@ -177,19 +217,26 @@ aprs.on("line", (line: string) => {
   const q = classifyQ(f.path);
   const pos = parsePosition(f.payload);
   const pkt: Packet = {
-    src: f.src, dst: f.dst, path: f.path, payload: f.payload,
+    src: f.src,
+    dst: f.dst,
+    path: f.path,
+    payload: f.payload,
     kind: pos ? "position" : "other",
     parsed: pos ? (pos as unknown as Record<string, unknown>) : undefined,
-    heardVia: q.heardVia, igateCall: q.igateCall,
-    port: "aprs-is", ts: Math.floor(Date.now() / 1000), raw: f.raw,
+    heardVia: q.heardVia,
+    igateCall: q.igateCall,
+    port: "aprs-is",
+    ts: Math.floor(Date.now() / 1000),
+    raw: f.raw,
   };
   batch.push(pkt);
 });
 
 let spoolLoggedAt = 0;
 setInterval(async () => {
-  const packets = spool.concat(batch);   // retry anything spooled from a prior failure, then the new batch
-  batch = []; spool = [];
+  const packets = spool.concat(batch); // retry anything spooled from a prior failure, then the new batch
+  batch = [];
+  spool = [];
   if (!packets.length) return;
   try {
     const res = await fetch(INGEST_URL, {
@@ -197,7 +244,7 @@ setInterval(async () => {
       headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
       body: JSON.stringify({ packets }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);   // SR-ING-04: a 401/413/500 is NOT success
+    if (!res.ok) throw new Error(`HTTP ${res.status}`); // SR-ING-04: a 401/413/500 is NOT success
   } catch (e) {
     // SR-ING-03: keep the packets and retry next tick, bounded (drop-oldest) so an hours-long gateway
     // outage can't grow memory without limit. Rate-limit the log so a dead gateway can't flood the SD card.
@@ -219,7 +266,9 @@ console.log(`[ingest] started -> ${INGEST_URL}`);
 if (env.BBS_FORWARD === "1" && env.KISS_TNC_HOST && env.BBS_FORWARD_CALL) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
-    base: INGEST_URL.replace(/\/ingest$/, ""), secret: SECRET, mycall: env.BBS_FORWARD_CALL,
+    base: INGEST_URL.replace(/\/ingest$/, ""),
+    secret: SECRET,
+    mycall: env.BBS_FORWARD_CALL,
     kiss: { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
     pollMs: Number(env.BBS_FORWARD_POLL_MS ?? 60000),
     sid: env.BBS_FORWARD_SID,
@@ -241,24 +290,33 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
   // W3: an optional separate uplink to CWOP (feeds NOAA). Items with target='cwop' go here; when no
   // CWOP server is configured we fall back to standard APRS-IS, which also reaches CWOP-registered IDs.
   const cwop = env.CWOP_HOST
-    ? new AprsUplink({ host: env.CWOP_HOST, port: Number(env.CWOP_PORT ?? 14580), serviceCall: SERVICE_CALL, servicePass: env.APRSIS_SERVICE_PASS })
+    ? new AprsUplink({
+        host: env.CWOP_HOST,
+        port: Number(env.CWOP_PORT ?? 14580),
+        serviceCall: SERVICE_CALL,
+        servicePass: env.APRSIS_SERVICE_PASS,
+      })
     : null;
   cwop?.start();
   const base = INGEST_URL.replace(/\/ingest$/, "");
   setInterval(async () => {
     try {
       const r = await fetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
-      const { items } = await r.json() as { items: any[] };
+      const { items } = (await r.json()) as { items: any[] };
       const sent: number[] = [];
       for (const it of items ?? []) {
-        const link = it.target === "cwop" && cwop ? cwop : uplink;   // W3 → CWOP, else standard APRS-IS
+        const link = it.target === "cwop" && cwop ? cwop : uplink; // W3 → CWOP, else standard APRS-IS
         if (link.publish(it)) sent.push(it.id);
       }
-      if (sent.length) await fetch(`${base}/outbox/ack`, {
-        method: "POST", headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
-        body: JSON.stringify({ ids: sent }),
-      });
-    } catch { /* retry next tick */ }
+      if (sent.length)
+        await fetch(`${base}/outbox/ack`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
+          body: JSON.stringify({ ids: sent }),
+        });
+    } catch {
+      /* retry next tick */
+    }
   }, 4000);
   console.log("[uplink] announce + weather publisher active");
 }

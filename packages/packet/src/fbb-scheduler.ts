@@ -12,9 +12,17 @@ import type { FbbMessage, FbbStore } from "./fbb-session.js";
 
 /** A forwarding partner as returned by the gateway `/api/bbs/partners`. */
 export interface GwPartner {
-  id: number; call: string; ha: string | null; connectScript: string;
-  proto: "rf-fbb" | "axudp" | "ip-fed"; intervalMin: number; timebands: string;
-  requestReverse: boolean; msgtypes: string; maxBlock: number; enabled: boolean;
+  id: number;
+  call: string;
+  ha: string | null;
+  connectScript: string;
+  proto: "rf-fbb" | "axudp" | "ip-fed";
+  intervalMin: number;
+  timebands: string;
+  requestReverse: boolean;
+  msgtypes: string;
+  maxBlock: number;
+  enabled: boolean;
 }
 
 /** The gateway forwarding-pool API the scheduler drives (implemented over REST by the ingest). */
@@ -36,7 +44,7 @@ export interface ForwardLink {
 export type LinkFactory = (partner: GwPartner) => ForwardLink;
 
 const SESSION_TIMEOUT_MS = 120_000;
-const CONNECT_TIMEOUT_MS = 30_000;   // SR-PKT-07: a partner that never answers must not block the slot forever
+const CONNECT_TIMEOUT_MS = 30_000; // SR-PKT-07: a partner that never answers must not block the slot forever
 
 /** Per-session FbbStore over a pool snapshot: the outbound queue drains as messages are sent; inbound is
  *  buffered and flushed to the gateway after the session (which dedups by BID). */
@@ -44,9 +52,15 @@ export class SessionStore implements FbbStore {
   readonly inbox: FbbMessage[] = [];
   readonly sentBids: string[] = [];
   constructor(private queue: FbbMessage[]) {}
-  outbound(): FbbMessage[] { return this.queue; }
-  hasBid(): boolean { return false; }                 // accept inbound; the gateway INSERT-OR-IGNORE dedups by BID
-  accept(m: FbbMessage): void { this.inbox.push(m); }
+  outbound(): FbbMessage[] {
+    return this.queue;
+  }
+  hasBid(): boolean {
+    return false;
+  } // accept inbound; the gateway INSERT-OR-IGNORE dedups by BID
+  accept(m: FbbMessage): void {
+    this.inbox.push(m);
+  }
   sent(bid: string): void {
     this.sentBids.push(bid);
     const i = this.queue.findIndex((q) => q.bid === bid);
@@ -55,8 +69,13 @@ export class SessionStore implements FbbStore {
 }
 
 export interface ForwarderOpts {
-  api: ForwardApi; linkFactory: LinkFactory;
-  pollMs?: number; sid?: string; now?: () => number; sessionTimeoutMs?: number; connectTimeoutMs?: number;
+  api: ForwardApi;
+  linkFactory: LinkFactory;
+  pollMs?: number;
+  sid?: string;
+  now?: () => number;
+  sessionTimeoutMs?: number;
+  connectTimeoutMs?: number;
 }
 
 export class BbsForwarder {
@@ -70,24 +89,37 @@ export class BbsForwarder {
   }
 
   start(): void {
-    this.timer = setInterval(() => { void this.tick(); }, this.o.pollMs ?? 60_000);
+    this.timer = setInterval(() => {
+      void this.tick();
+    }, this.o.pollMs ?? 60_000);
     void this.tick();
   }
-  stop(): void { if (this.timer) clearInterval(this.timer); }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
 
   /** One scheduler pass: forward every partner that is due now. */
   async tick(): Promise<void> {
     let partners: GwPartner[];
-    try { partners = await this.o.api.partners(); } catch (e) { console.error("[forward] partner poll failed:", (e as Error).message); return; }
+    try {
+      partners = await this.o.api.partners();
+    } catch (e) {
+      console.error("[forward] partner poll failed:", (e as Error).message);
+      return;
+    }
     const nowSec = this.now();
     for (const p of partners.filter((x) => x.proto === "rf-fbb" || x.proto === "axudp")) {
       if (this.busy.has(p.call)) continue;
       if (!partnerDue(p, this.lastRun.get(p.call) ?? null, nowSec)) continue;
       this.lastRun.set(p.call, nowSec);
       this.busy.add(p.call);
-      try { await this.runSession(p); }
-      catch (e) { console.error(`[forward] ${p.call} session failed:`, (e as Error).message); }
-      finally { this.busy.delete(p.call); }
+      try {
+        await this.runSession(p);
+      } catch (e) {
+        console.error(`[forward] ${p.call} session failed:`, (e as Error).message);
+      } finally {
+        this.busy.delete(p.call);
+      }
     }
   }
 
@@ -102,21 +134,44 @@ export class BbsForwarder {
     let connectTimer: ReturnType<typeof setTimeout> | null = null;
     await Promise.race([
       link.connect(),
-      new Promise<void>((_res, rej) => { connectTimer = setTimeout(() => { link.disconnect(); rej(new Error("connect timeout")); }, this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS); }),
-    ]).finally(() => { if (connectTimer !== null) clearTimeout(connectTimer); });
+      new Promise<void>((_res, rej) => {
+        connectTimer = setTimeout(() => {
+          link.disconnect();
+          rej(new Error("connect timeout"));
+        }, this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
+      }),
+    ]).finally(() => {
+      if (connectTimer !== null) clearTimeout(connectTimer);
+    });
 
     // SR-PKT-03: only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
     // close mid-body the messages were NOT delivered — leave them queued (BID dedup makes re-send safe).
     let cleanDone = false;
     await new Promise<void>((resolve) => {
       let settled = false;
-      const finish = () => { if (!settled) { settled = true; resolve(); } };
-      const timer = setTimeout(() => { link.disconnect(); finish(); }, this.o.sessionTimeoutMs ?? SESSION_TIMEOUT_MS);
-      link.onClose(() => { clearTimeout(timer); finish(); });
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      const timer = setTimeout(() => {
+        link.disconnect();
+        finish();
+      }, this.o.sessionTimeoutMs ?? SESSION_TIMEOUT_MS);
+      link.onClose(() => {
+        clearTimeout(timer);
+        finish();
+      });
       link.onData((bytes) => {
         const out = fwd.onData(bytes);
         if (out) link.send(out);
-        if (fwd.done) { cleanDone = true; clearTimeout(timer); link.disconnect(); finish(); }
+        if (fwd.done) {
+          cleanDone = true;
+          clearTimeout(timer);
+          link.disconnect();
+          finish();
+        }
       });
       const open = fwd.start();
       if (open) link.send(open);

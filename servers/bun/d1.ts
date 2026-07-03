@@ -16,7 +16,11 @@ function norm(values: unknown[]): unknown[] {
 }
 
 class Stmt implements SqlStatement {
-  constructor(private db: Database, private sql: string, private params: unknown[] = []) {}
+  constructor(
+    private db: Database,
+    private sql: string,
+    private params: unknown[] = [],
+  ) {}
 
   bind(...values: unknown[]): SqlStatement {
     return new Stmt(this.db, this.sql, norm(values));
@@ -33,10 +37,14 @@ class Stmt implements SqlStatement {
     return { results: [], meta: { last_row_id: Number(info.lastInsertRowid), changes: info.changes } };
   }
 
-  async run<T = unknown>(): Promise<SqlResult<T>> { return this.execSync() as SqlResult<T>; }
-  async all<T = unknown>(): Promise<SqlResult<T>> { return this.execSync() as SqlResult<T>; }
+  async run<T = unknown>(): Promise<SqlResult<T>> {
+    return this.execSync() as SqlResult<T>;
+  }
+  async all<T = unknown>(): Promise<SqlResult<T>> {
+    return this.execSync() as SqlResult<T>;
+  }
   async first<T = unknown>(): Promise<T | null> {
-    return ((this.db.query(this.sql).get(...(this.params as never[])) as T | undefined) ?? null);
+    return (this.db.query(this.sql).get(...(this.params as never[])) as T | undefined) ?? null;
   }
 }
 
@@ -48,7 +56,9 @@ export class BunDb implements SqlDatabase {
     this.raw.exec("PRAGMA journal_mode = WAL;");
     this.raw.exec("PRAGMA foreign_keys = ON;");
   }
-  prepare(query: string): SqlStatement { return new Stmt(this.raw, query); }
+  prepare(query: string): SqlStatement {
+    return new Stmt(this.raw, query);
+  }
   async batch<T = unknown>(statements: SqlStatement[]): Promise<SqlResult<T>[]> {
     const txn = this.raw.transaction((stmts: Stmt[]) => stmts.map((s) => s.execSync()));
     return txn(statements as Stmt[]) as SqlResult<T>[];

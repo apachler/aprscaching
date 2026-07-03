@@ -14,7 +14,7 @@ describe("SR-FED-01/02 — id namespace ownership", () => {
   });
 
   it("rejects an id in ANOTHER instance's namespace (origin spoof / overwrite)", () => {
-    expect(idInNamespace("victim.net:cache:1", "oe.peer.net")).toBe(false);   // serving peer.net, claiming victim.net
+    expect(idInNamespace("victim.net:cache:1", "oe.peer.net")).toBe(false); // serving peer.net, claiming victim.net
     expect(idInNamespace("victim.net:find:1", "oe.peer.net")).toBe(false);
   });
 

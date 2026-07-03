@@ -9,13 +9,18 @@ const MH_BASES = [18, 10, 24, 10, 24];
  */
 export function maidenhead(lat: number, lon: number, chars = 6): string {
   const n = Math.max(2, Math.min(10, chars - (chars % 2)));
-  let lonRem = ((((lon + 180) % 360) + 360) % 360);
-  let latRem = Math.min(((((lat + 90) % 180) + 180) % 180), 179.999999);
-  let lonCell = 360, latCell = 180, out = "";
+  let lonRem = (((lon + 180) % 360) + 360) % 360;
+  let latRem = Math.min((((lat + 90) % 180) + 180) % 180, 179.999999);
+  let lonCell = 360,
+    latCell = 180,
+    out = "";
   for (let p = 0; p < n / 2; p++) {
-    lonCell /= MH_BASES[p]!; latCell /= MH_BASES[p]!;
-    const li = Math.floor(lonRem / lonCell), ai = Math.floor(latRem / latCell);
-    lonRem -= li * lonCell; latRem -= ai * latCell;
+    lonCell /= MH_BASES[p]!;
+    latCell /= MH_BASES[p]!;
+    const li = Math.floor(lonRem / lonCell),
+      ai = Math.floor(latRem / latCell);
+    lonRem -= li * lonCell;
+    latRem -= ai * latCell;
     const base = p === 0 ? 65 : p % 2 === 1 ? 48 : 97; // field A-R · digit 0-9 · subsquare a-x
     out += String.fromCharCode(base + li) + String.fromCharCode(base + ai);
   }
@@ -27,7 +32,8 @@ const OCTANT = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 export function bearingDeg(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const d = Math.PI / 180;
   const y = Math.sin((bLon - aLon) * d) * Math.cos(bLat * d);
-  const x = Math.cos(aLat * d) * Math.sin(bLat * d) - Math.sin(aLat * d) * Math.cos(bLat * d) * Math.cos((bLon - aLon) * d);
+  const x =
+    Math.cos(aLat * d) * Math.sin(bLat * d) - Math.sin(aLat * d) * Math.cos(bLat * d) * Math.cos((bLon - aLon) * d);
   return (Math.atan2(y, x) / d + 360) % 360;
 }
 /** Compass octant (N/NE/…/NW) of point B as seen from point A. */
@@ -40,9 +46,13 @@ export function gridCenter(grid: string): [number, number] | null {
   const g = grid.trim().toUpperCase();
   if (!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2}([A-X]{2})?)?)?$/.test(g)) return null;
   const pairs = g.match(/../g)!;
-  let lon = -180, lat = -90, lonCell = 360, latCell = 180;
+  let lon = -180,
+    lat = -90,
+    lonCell = 360,
+    latCell = 180;
   for (let p = 0; p < pairs.length; p++) {
-    lonCell /= MH_BASES[p]!; latCell /= MH_BASES[p]!;
+    lonCell /= MH_BASES[p]!;
+    latCell /= MH_BASES[p]!;
     const base = p === 0 || p % 2 === 0 ? 65 : 48; // letters A-X (field/subsquare) or digits 0-9
     lon += (pairs[p]!.charCodeAt(0) - base) * lonCell;
     lat += (pairs[p]!.charCodeAt(1) - base) * latCell;
@@ -52,8 +62,10 @@ export function gridCenter(grid: string): [number, number] | null {
 
 /** Great-circle distance in metres (local copy; the web doesn't depend on @aprsweb/aprs). */
 export function haversine(aLat: number, aLon: number, bLat: number, bLon: number): number {
-  const R = 6371000, d = Math.PI / 180;
-  const dLat = (bLat - aLat) * d, dLon = (bLon - aLon) * d;
+  const R = 6371000,
+    d = Math.PI / 180;
+  const dLat = (bLat - aLat) * d,
+    dLon = (bLon - aLon) * d;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * d) * Math.cos(bLat * d) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }

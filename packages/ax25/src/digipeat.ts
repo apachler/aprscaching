@@ -14,10 +14,10 @@ import { sameAddr, addrStr, type Ax25Address, type Ax25Frame } from "./frame.js"
  */
 export function digipeatAx25(f: Ax25Frame, ours: Ax25Address[]): Ax25Frame | null {
   const digis = f.digis ?? [];
-  if (digis.length === 0) return null;                          // no via path → nothing to repeat
+  if (digis.length === 0) return null; // no via path → nothing to repeat
   const repeated = f.digisRepeated ?? digis.map(() => false);
-  const next = repeated.indexOf(false);                         // first un-repeated hop
-  if (next < 0) return null;                                    // every hop already repeated
+  const next = repeated.indexOf(false); // first un-repeated hop
+  if (next < 0) return null; // every hop already repeated
   if (!ours.some((o) => sameAddr(o, digis[next]!))) return null; // the next hop is not us
   const digisRepeated = repeated.slice();
   digisRepeated[next] = true;
@@ -42,10 +42,21 @@ export function frameContentKey(f: Ax25Frame): string {
 export class ViscousDigi<T> {
   private pending = new Map<string, T>();
   /** Register a pending repeat for `key` with its timer token. */
-  schedule(key: string, token: T): void { this.pending.set(key, token); }
+  schedule(key: string, token: T): void {
+    this.pending.set(key, token);
+  }
   /** A copy of `key` was heard: if a repeat is pending, return its token to cancel (back off); else null. */
-  onDuplicate(key: string): T | null { const t = this.pending.get(key); if (t === undefined) return null; this.pending.delete(key); return t; }
+  onDuplicate(key: string): T | null {
+    const t = this.pending.get(key);
+    if (t === undefined) return null;
+    this.pending.delete(key);
+    return t;
+  }
   /** The pending repeat for `key` fired (transmitted) — it can no longer be cancelled. */
-  fired(key: string): void { this.pending.delete(key); }
-  pendingCount(): number { return this.pending.size; }
+  fired(key: string): void {
+    this.pending.delete(key);
+  }
+  pendingCount(): number {
+    return this.pending.size;
+  }
 }

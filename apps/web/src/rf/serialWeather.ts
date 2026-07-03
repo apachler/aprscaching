@@ -21,7 +21,10 @@ export class WebSerialWeather {
   private closed = false;
   private buf = "";
 
-  constructor(private onLine: (line: string) => void, private baudRate = 2400) {}
+  constructor(
+    private onLine: (line: string) => void,
+    private baudRate = 2400,
+  ) {}
 
   async connect(): Promise<void> {
     const serial = (navigator as unknown as { serial: { requestPort(): Promise<SerialPortLike> } }).serial;
@@ -49,15 +52,30 @@ export class WebSerialWeather {
           }
           if (this.buf.length > 4096) this.buf = ""; // never let a noisy port grow unbounded
         }
-      } catch { /* port hiccup — outer loop re-acquires the reader */ }
-      finally { try { reader.releaseLock(); } catch { /* already released */ } }
+      } catch {
+        /* port hiccup — outer loop re-acquires the reader */
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+          /* already released */
+        }
+      }
     }
   }
 
   async disconnect(): Promise<void> {
     this.closed = true;
-    try { await this.reader?.cancel(); } catch { /* */ }
-    try { await this.port?.close(); } catch { /* */ }
+    try {
+      await this.reader?.cancel();
+    } catch {
+      /* */
+    }
+    try {
+      await this.port?.close();
+    } catch {
+      /* */
+    }
     this.port = null;
   }
 }
