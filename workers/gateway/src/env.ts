@@ -14,6 +14,11 @@ export interface Env {
   // secret is unset/'change-me' (auth.ts weakSecret): a default deploy can never mint a forgeable
   // admin cookie.
   SESSION_SECRET?: string;
+  // Server-side session lifetime in days (default 30) and an optional revocation epoch (unix
+  // seconds): sessions minted before SESSION_EPOCH are rejected — rotate all sessions without
+  // rotating secrets (SR-SEC-11).
+  SESSION_TTL_DAYS?: string;
+  SESSION_EPOCH?: string;
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
   // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin
@@ -118,6 +123,8 @@ export interface Env {
  */
 export const ENV_STRING_KEYS = [
   "SESSION_SECRET",
+  "SESSION_TTL_DAYS",
+  "SESSION_EPOCH",
   "ADMIN_CALLSIGNS",
   "INSTANCE",
   "FED_PRIVATE_KEY",

@@ -76,3 +76,86 @@ describe("SR-SEC-13 — WebAuthn requires configured APP_URL/RP_ID (never the Or
     );
   });
 });
+
+// ---- P1b: SR-SEC-11 session expiry + SR-SEC-12 register/finish-only account creation ----
+import { sessionExpired, handlePasskeyRegisterFinish } from "../src/auth.js";
+
+describe("SR-SEC-11 — sessions expire server-side", () => {
+  const env = {} as Env;
+  const DAY = 86_400_000;
+  it("a token within its lifetime is honored", () => {
+    expect(sessionExpired(Date.now() - 5 * DAY, env, Date.now())).toBe(false);
+  });
+  it("a token past the 30-day default is rejected even with a valid signature", () => {
+    expect(sessionExpired(Date.now() - 31 * DAY, env, Date.now())).toBe(true);
+  });
+  it("SESSION_TTL_DAYS tunes the lifetime", () => {
+    const short = { SESSION_TTL_DAYS: "1" } as Env;
+    expect(sessionExpired(Date.now() - 2 * DAY, short, Date.now())).toBe(true);
+    expect(sessionExpired(Date.now() - 0.5 * DAY, short, Date.now())).toBe(false);
+  });
+  it("a future-dated (forged-timestamp) token is rejected", () => {
+    expect(sessionExpired(Date.now() + DAY, env, Date.now())).toBe(true);
+  });
+  it("SESSION_EPOCH revokes every session minted before it", () => {
+    const now = Date.now();
+    const epochEnv = { SESSION_EPOCH: String(Math.floor(now / 1000) - 60) } as Env;
+    expect(sessionExpired(now - 3_600_000, epochEnv, now)).toBe(true); // minted an hour ago < epoch
+    expect(sessionExpired(now - 10_000, epochEnv, now)).toBe(false); // minted after the epoch
+  });
+});
+
+describe("SR-SEC-12 — accounts persist only on register/finish", () => {
+  it("register/begin for a NEW callsign writes no accounts row (squatting closed)", async () => {
+    const writes: string[] = [];
+    const stmt = (sql: string) => ({
+      bind: (..._a: unknown[]) => ({
+        run: async () => {
+          writes.push(sql);
+          return {};
+        },
+        first: async () => null, // no existing account, no session
+        all: async () => ({ results: [] }),
+      }),
+    });
+    const db = {
+      prepare: stmt,
+      batch: async (stmts: unknown[]) => {
+        // the batch used by storeChallenge — record what it would write
+        for (const s of stmts as { run: () => Promise<unknown> }[]) await s.run();
+        return [];
+      },
+    };
+    const env = { DB: db, APP_URL: "https://aprscaching.net" } as unknown as Env;
+    const res = await handlePasskeyRegisterBegin(
+      new Request("http://gw/auth/passkey/register/begin", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9" },
+        body: JSON.stringify({ callsign: "W1AW" }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(writes.some((w) => w.includes("INSERT INTO accounts"))).toBe(false); // the squat is gone
+    expect(writes.some((w) => w.includes("auth_challenges"))).toBe(true); // ceremony stashed
+  });
+
+  it("register/finish with no pending ceremony is refused (nothing to bind)", async () => {
+    const db = {
+      prepare: (_sql: string) => ({
+        bind: () => ({ first: async () => null, run: async () => ({}), all: async () => ({ results: [] }) }),
+      }),
+      batch: async () => [],
+    };
+    const env = { DB: db, APP_URL: "https://aprscaching.net" } as unknown as Env;
+    const res = await handlePasskeyRegisterFinish(
+      new Request("http://gw/auth/passkey/register/finish", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ callsign: "W1AW", credential: { response: { clientDataJSON: "e30" } } }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(400);
+  });
+});

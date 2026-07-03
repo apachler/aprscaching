@@ -2,6 +2,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
+import { rateLimited, clientIp } from "./corroborate_privacy.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -34,9 +35,18 @@ function webauthnUnconfigured(): Response {
   );
 }
 async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
-  await env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), cs, kind, value, Math.floor(Date.now() / 1000) + CHALLENGE_TTL)
-    .run();
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.batch([
+    // reap expired ceremonies while we're here — abandoned begins must not accumulate (SR-SEC-12)
+    env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now),
+    env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)").bind(
+      crypto.randomUUID(),
+      cs,
+      kind,
+      value,
+      now + CHALLENGE_TTL,
+    ),
+  ]);
 }
 async function takeChallenge(env: Env, cs: string, kind: string): Promise<string | null> {
   const row = await env.DB.prepare(
@@ -79,6 +89,8 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
   const origins = authOrigins(env);
   const rp = rpId(env);
   if (!origins || !rp) return webauthnUnconfigured();
+  if (rateLimited(`pkbegin:${clientIp(req)}`, Date.now(), 20, 60_000))
+    return json({ error: "rate limited" }, { status: 429 });
   const { callsign, email } = (await req.json().catch(() => ({}))) as { callsign?: string; email?: string };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -88,25 +100,29 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     .bind(cs)
     .first<{ account_id: string }>();
   let accountId: string;
+  let pendingNew = false;
   if (existing) {
     if ((await sessionCallsign(req, env)) !== cs)
       return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
     accountId = existing.account_id;
   } else {
+    // SR-SEC-12: do NOT insert the account here — an unauthenticated begin used to pre-claim the
+    // callsign row, letting anyone squat W1AW and lock out the real holder. The provisional
+    // account id (and email) ride inside the stored challenge and only become a row once the
+    // passkey ceremony completes in register/finish.
     accountId = crypto.randomUUID();
-    const now = Math.floor(Date.now() / 1000);
-    await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-      ).bind(cs, accountId, email ? String(email).trim().toLowerCase() : null, now),
-      // seed the held-callsign set with this call as the account's primary (the passkey binds here)
-      env.DB.prepare(
-        "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-      ).bind(accountId, cs.split("-")[0], now),
-    ]);
+    pendingNew = true;
   }
   const challenge = randomChallenge();
-  await storeChallenge(env, cs, "webauthn_reg", challenge);
+  await storeChallenge(
+    env,
+    cs,
+    "webauthn_reg",
+    JSON.stringify({
+      c: challenge,
+      ...(pendingNew ? { a: accountId, e: email ? String(email).trim().toLowerCase() : null } : {}),
+    }),
+  );
   const excl = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
   return json({
     challenge,
@@ -132,9 +148,20 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
-  const challenge = await takeChallenge(env, cs, "webauthn_reg");
-  if (!challenge || !credential?.response?.attestationObject)
+  const stashed = await takeChallenge(env, cs, "webauthn_reg");
+  if (!stashed || !credential?.response?.attestationObject)
     return json({ error: "no pending registration" }, { status: 400 });
+  // The stash is {c: challenge, a?: provisional accountId, e?: email} — `a` present means the
+  // account does not exist yet and is created below only once the ceremony verifies (SR-SEC-12).
+  let challenge: string;
+  let pending: { a?: string; e?: string | null } = {};
+  try {
+    const j = JSON.parse(stashed) as { c: string; a?: string; e?: string | null };
+    challenge = j.c;
+    pending = j;
+  } catch {
+    challenge = stashed; // pre-JSON stash from an in-flight ceremony (300 s TTL) — existing account
+  }
   try {
     const r = await verifyRegistration({
       clientDataJSON: b64urlToBytes(credential.response.clientDataJSON),
@@ -143,6 +170,24 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       origins,
       rpId: rp,
     });
+    if (pending.a) {
+      // Passkey proven — NOW create the account. If the callsign was claimed through another path
+      // during the ceremony window, refuse rather than bind this passkey to someone else's account.
+      const now = Math.floor(Date.now() / 1000);
+      const raced = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
+        .bind(cs)
+        .first<{ account_id: string }>();
+      if (raced) return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
+        ).bind(cs, pending.a, pending.e ?? null, now),
+        // seed the held-callsign set with this call as the account's primary (the passkey binds here)
+        env.DB.prepare(
+          "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
+        ).bind(pending.a, cs.split("-")[0], now),
+      ]);
+    }
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
@@ -363,7 +408,8 @@ export async function sessionCallsign(req: Request, env: Env): Promise<string | 
 /** Set-Cookie header value for a session bound to a callsign (the durable account behind it). */
 export async function issueSessionCookie(callsign: string, env: Env): Promise<string> {
   const token = await signSession(callsign.toUpperCase(), env);
-  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`;
+  const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
+  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${ttlDays * 86_400}`;
 }
 
 /** GET /auth/session — "who am I": the signed-in callsign + verification + email, or null. */
@@ -432,6 +478,20 @@ async function signSession(callsign: string, env: Env): Promise<string> {
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
   return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
 }
+/** SR-SEC-11: the cookie's Max-Age is only a client hint — enforce the lifetime server-side too,
+ *  or a captured token stays valid until the signing secret rotates. Tunable via SESSION_TTL_DAYS;
+ *  SESSION_EPOCH (unix seconds) lets an operator revoke every session minted before a point in
+ *  time without rotating secrets (e.g. after a device loss report). */
+export const SESSION_TTL_DAYS_DEFAULT = 30;
+export function sessionExpired(mintedAtMs: number, env: Env, nowMs: number): boolean {
+  if (!Number.isFinite(mintedAtMs)) return true;
+  const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
+  const age = nowMs - mintedAtMs;
+  if (age > ttlDays * 86_400_000) return true; // past its lifetime
+  if (age < -300_000) return true; // minted in the future (forged timestamp)
+  const epoch = Number(env.SESSION_EPOCH ?? 0);
+  return epoch > 0 && mintedAtMs < epoch * 1000; // operator-revoked generation
+}
 async function verifySession(token: string, env: Env): Promise<string | null> {
   try {
     const k = await key(env);
@@ -440,7 +500,10 @@ async function verifySession(token: string, env: Env): Promise<string | null> {
     const payload = atob(p!);
     const sig = Uint8Array.from(atob(s!), (c) => c.charCodeAt(0));
     const ok = await crypto.subtle.verify("HMAC", k, sig, new TextEncoder().encode(payload));
-    return ok ? payload.split(".")[0]! : null;
+    if (!ok) return null;
+    const [callsign, minted] = payload.split(".");
+    if (sessionExpired(Number(minted), env, Date.now())) return null;
+    return callsign!;
   } catch {
     return null;
   }
