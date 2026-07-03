@@ -30,6 +30,10 @@ export async function openSerialPtt(path: string, opts: PttOpts = {}): Promise<P
     const SerialPort = mod.SerialPort ?? mod.default?.SerialPort;
     if (!SerialPort) throw new Error("SerialPort export not found");
     const port = new SerialPort({ path, baudRate: opts.baudRate ?? 9600, autoOpen: true });
+    // SR-ING-12: without an `error`/`close` listener a USB unplug emits an unhandled 'error' that
+    // crashes the whole ingest process. Log and keep running — TX is simply unavailable until re-plugged.
+    port.on?.("error", (e: Error) => console.error(`[ptt] serial error on ${path}: ${e.message}`));
+    port.on?.("close", () => console.warn(`[ptt] serial port ${path} closed (radio unplugged?)`));
     const set = (on: boolean) =>
       new Promise<void>((res, rej) => {
         const active = opts.invert ? !on : on;
@@ -51,4 +55,5 @@ export async function openSerialPtt(path: string, opts: PttOpts = {}): Promise<P
 interface SerialLike {
   set(signals: { rts?: boolean; dtr?: boolean }, cb: (err: Error | null) => void): void;
   close(cb: () => void): void;
+  on?(event: string, cb: (...args: any[]) => void): void;
 }

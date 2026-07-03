@@ -149,6 +149,12 @@ export class NetromNodeRunner {
     setInterval(() => {
       for (const c of this.circuits) c.poll();
     }, 1000); // SR-PKT-06: drive circuit T1 retransmit/teardown
+    // SR-ING-09: evict stale MHeard entries so the map doesn't grow for the life of the process.
+    const heardTtl = 24 * 3600; // seconds
+    setInterval(() => {
+      const cutoff = Math.floor(Date.now() / 1000) - heardTtl;
+      for (const [cs, m] of this.heard) if (m.lastHeard < cutoff) this.heard.delete(cs);
+    }, 3_600_000).unref?.();
     console.log(`[netrom] node ${this.o.alias}:${this.o.mycall} active on ${this.port}`);
   }
 

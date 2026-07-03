@@ -68,9 +68,13 @@ export class AxudpListener {
       const p = axudpToPacket(Uint8Array.from(msg));
       if (p) this.onPacket(p);
     });
-    s.on("error", (e) => console.error("[axudp] socket error:", e.message));
-    s.bind(this.o.port, this.o.bind);
-    console.log(`[axudp] listening udp/${this.o.port} (tunnelled AX.25 — Tier C only)`);
+    s.on("error", (e: NodeJS.ErrnoException) => {
+      console.error("[axudp] socket error:", e.message);
+      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // SR-ING-11
+    });
+    s.bind(this.o.port, this.o.bind, () =>
+      console.log(`[axudp] listening udp/${this.o.port} (tunnelled AX.25 — Tier C only)`),
+    );
   }
 }
 
@@ -101,10 +105,14 @@ export class AxudpPort {
       const p = axudpToPacket(bytes); // also feed the Tier-C ingest (positions/etc.)
       if (p && this.onPacket) this.onPacket(p);
     });
-    s.on("error", (e) => console.error("[axudp] socket error:", e.message));
-    s.bind(this.o.port, this.o.bind);
-    console.log(
-      `[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`,
+    s.on("error", (e: NodeJS.ErrnoException) => {
+      console.error("[axudp] socket error:", e.message);
+      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // SR-ING-11
+    });
+    s.bind(this.o.port, this.o.bind, () =>
+      console.log(
+        `[axudp] port udp/${this.o.port} ↔ ${this.o.peers.map((p) => `${p.host}:${p.port}`).join(", ") || "(no peers)"} (Tier C)`,
+      ),
     );
   }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { EventEmitter } from "node:events";
+import { Backoff } from "./backoff.js";
 
 export interface AprsIsOpts {
   host: string;
@@ -18,8 +19,10 @@ export class AprsIs extends EventEmitter {
   private buf = "";
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
+  private backoff: Backoff;
   constructor(private o: AprsIsOpts) {
     super();
+    this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
   }
 
   start() {
@@ -27,14 +30,15 @@ export class AprsIs extends EventEmitter {
   }
 
   /** Schedule exactly one reconnect. Only `close` calls this (`close` always follows `error`),
-   *  and a stale socket's close is ignored — one failure = one attempt, never a storm (SR-ING-01). */
+   *  and a stale socket's close is ignored — one failure = one attempt, never a storm (SR-ING-01).
+   *  The delay backs off exponentially with jitter while the endpoint stays down (SR-ING-06). */
   private retry(gen: number) {
     if (gen !== this.gen || this.timer) return;
     this.emit("down");
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.connect();
-    }, this.o.retryMs ?? 3000);
+    }, this.backoff.next());
   }
 
   private connect() {
@@ -49,6 +53,7 @@ export class AprsIs extends EventEmitter {
     // no bytes arrive within idleMs (reset on every read) → destroy → `close` → one reconnect.
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {
+      this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       s.write(`user ${this.o.callsign} pass ${this.o.passcode} vers aprscaching 0.0 filter ${this.o.filter}\r\n`);
       this.emit("up");
     });

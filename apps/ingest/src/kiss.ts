@@ -4,11 +4,17 @@ import { kissFrames, kissWrap, decodeAx25, encodeAx25 } from "@aprsweb/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 import type { ParsedFrame } from "@aprsweb/aprs";
+import { Backoff } from "./backoff.js";
 
 export interface KissOpts {
   host: string;
   port: number;
+  retryMs?: number;
 }
+
+/** SR-ING-08: pointed at a non-KISS port a frame's terminating FEND never arrives and `buf` grows
+ *  forever. Bound it — past this many bytes with no complete frame the stream isn't KISS; drop it. */
+const KISS_RX_MAX_BYTES = 64 * 1024;
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
   onFrame?: (f: ParsedFrame) => void; // UI-decoded RF frame (for the APRS digipeater / igate)
@@ -24,10 +30,13 @@ export class KissTnc {
   private sock?: net.Socket;
   private connected = false;
   private buf: number[] = [];
+  private backoff: Backoff;
   constructor(
     private o: KissOpts,
     private h: KissHandlers,
-  ) {}
+  ) {
+    this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
+  }
 
   start() {
     this.connect();
@@ -58,14 +67,23 @@ export class KissTnc {
   private connect() {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
+    this.buf = []; // SR-ING-08: never carry a partial frame across a reconnect
     s.on("connect", () => {
       this.connected = true;
+      this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       console.log(`[kiss] connected ${this.o.host}:${this.o.port}`);
     });
     s.on("data", (chunk: Buffer) => {
       for (const b of chunk) this.buf.push(b);
       const lastFend = this.buf.lastIndexOf(0xc0);
-      if (lastFend <= 0) return;
+      if (lastFend <= 0) {
+        // SR-ING-08: no frame terminator yet — if the buffer has ballooned this isn't a KISS stream.
+        if (this.buf.length > KISS_RX_MAX_BYTES) {
+          console.warn(`[kiss] RX buffer over ${KISS_RX_MAX_BYTES} bytes with no frame — not KISS? resetting`);
+          this.buf = [];
+        }
+        return;
+      }
       const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
       this.buf = this.buf.slice(lastFend + 1);
       for (const raw of kissFrames(ready)) {
@@ -95,7 +113,7 @@ export class KissTnc {
     });
     s.on("close", () => {
       down();
-      setTimeout(() => this.connect(), 3000);
+      setTimeout(() => this.connect(), this.backoff.next()); // SR-ING-06: backoff + jitter
     });
   }
 }

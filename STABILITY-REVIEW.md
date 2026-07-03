@@ -398,21 +398,21 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-ING-05 (High) — forwarder leaks KISS socket + timer** (`forwarder.ts:122`): connect timeout
   rejects without `sock.destroy()` or `clearInterval(poll)`; Direwolf's few KISS slots fill, locking
   out the main ingest. *Fix:* `clearInterval(poll); sock?.destroy()` in the timeout + `onFail` paths.
-- [ ] **SR-ING-06 (Medium) — no backoff/jitter** (all transports, fixed 3 s). *Fix:* shared
+- [x] **SR-ING-06 (Medium) — no backoff/jitter** (all transports, fixed 3 s). *Fix:* shared
   `min(cap, base·2ⁿ)·(0.5+rand)` helper, reset after >60 s stable.
-- [ ] **SR-ING-07 (Medium) — outbox acked on a possibly-dead socket** (`uplink.ts:32-37`): `ready`
+- [x] **SR-ING-07 (Medium) — outbox acked on a possibly-dead socket** (`uplink.ts:32-37`): `ready`
   stays true until error/close; `write()` return + drain ignored → announces/weather acked and
   destroyed without reaching APRS-IS. *Fix:* report success only when the socket is verifiably alive.
-- [ ] **SR-ING-08 (Medium) — KISS RX buffer unbounded + survives reconnect** (`kiss.ts:44-49`): points
+- [x] **SR-ING-08 (Medium) — KISS RX buffer unbounded + survives reconnect** (`kiss.ts:44-49`): points
   at a non-KISS port → `this.buf` grows forever; stale partial frame prepended next connect. *Fix:*
   `buf=[]` at connect + ~64 KiB cap.
-- [ ] **SR-ING-09 (Low) — "heard" maps never evicted** (`igate.ts:25`, `netromnode.ts:28,103`). *Fix:*
+- [x] **SR-ING-09 (Low) — "heard" maps never evicted** (`igate.ts:25`, `netromnode.ts:28,103`). *Fix:*
   periodic sweep like `digipeater.ts`.
-- [ ] **SR-ING-10 (Low) — outbox poll failures swallowed** (`index.ts:247` `} catch {}`). *Fix:*
+- [x] **SR-ING-10 (Low) — outbox poll failures swallowed** (`index.ts:247` `} catch {}`). *Fix:*
   rate-limited error log + recovery line.
-- [ ] **SR-ING-11 (Low) — UDP/CoT listeners die on bind error** (`cotlisten.ts:34-35`, `axudp.ts`).
+- [x] **SR-ING-11 (Low) — UDP/CoT listeners die on bind error** (`cotlisten.ts:34-35`, `axudp.ts`).
   *Fix:* exit(1)/retry; move the "listening" log into the bind callback.
-- [ ] **SR-ING-12 (Low) — serial PTT no `error` listener** (`ptt.ts:25`; module unwired today). *Fix:*
+- [x] **SR-ING-12 (Low) — serial PTT no `error` listener** (`ptt.ts:25`; module unwired today). *Fix:*
   `port.on("error"/"close")`.
 
 ## Detail — Tri-runtime plumbing (`servers/{node,bun}`, `workers/gateway` DO/index/room)

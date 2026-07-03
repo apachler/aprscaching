@@ -3,6 +3,7 @@ import net from "node:net";
 import { parseTNC2, shouldRxIgate, rxIgateLine, txIgateTarget } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
 import type { KissTnc } from "./kiss.js";
+import { Backoff } from "./backoff.js";
 
 export interface IgateOpts {
   host: string;
@@ -31,16 +32,26 @@ export class Igate {
   private localTtl: number;
   private gen = 0; // connection generation — a replaced socket can never reconnect
   private timer?: ReturnType<typeof setTimeout>;
+  private backoff: Backoff;
+  private sweep?: ReturnType<typeof setInterval>;
 
   constructor(
     private kiss: KissTnc,
     private o: IgateOpts,
   ) {
     this.localTtl = (o.localTtlSec ?? 1800) * 1000;
+    this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
   }
 
   start(): void {
     this.connect();
+    // SR-ING-09: the "heard locally" map only ever grew — evict entries past twice the TTL so a
+    // months-long uptime doesn't accumulate every callsign ever heard.
+    this.sweep = setInterval(() => {
+      const cutoff = Date.now() - this.localTtl * 2;
+      for (const [cs, t] of this.heard) if (t < cutoff) this.heard.delete(cs);
+    }, this.localTtl);
+    this.sweep.unref?.();
   }
 
   /** Called for every RF frame heard via KISS. */
@@ -71,7 +82,7 @@ export class Igate {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.connect();
-    }, this.o.retryMs ?? 3000);
+    }, this.backoff.next()); // SR-ING-06: exponential backoff + jitter while APRS-IS stays down
   }
 
   private connect(): void {
@@ -85,6 +96,7 @@ export class Igate {
     s.setEncoding("utf8");
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy()); // SR-ING-02: detect a silently-dead uplink
     s.on("connect", () => {
+      this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       s.write(
         `user ${this.o.call} pass ${this.o.pass} vers aprscaching-igate 0.0 filter ${this.o.filter ?? "t/m"}\r\n`,
       );

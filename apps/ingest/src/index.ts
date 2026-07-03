@@ -299,9 +299,12 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
     : null;
   cwop?.start();
   const base = INGEST_URL.replace(/\/ingest$/, "");
+  let outboxFailing = false;
+  let outboxLoggedAt = 0;
   setInterval(async () => {
     try {
       const r = await fetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`); // a 401/500 poll is a failure, not "no items"
       const { items } = (await r.json()) as { items: any[] };
       const sent: number[] = [];
       for (const it of items ?? []) {
@@ -314,8 +317,19 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
           headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
           body: JSON.stringify({ ids: sent }),
         });
-    } catch {
-      /* retry next tick */
+      if (outboxFailing) {
+        console.log("[uplink] outbox poll recovered");
+        outboxFailing = false;
+      }
+    } catch (e) {
+      // SR-ING-10: don't swallow the failure forever — log once on transition + at most every 30 s,
+      // so a broken outbox poll is visible without flooding the SD card.
+      outboxFailing = true;
+      const nowMs = Date.now();
+      if (nowMs - outboxLoggedAt > 30_000) {
+        console.error(`[uplink] outbox poll failed (${(e as Error).message}); retrying`);
+        outboxLoggedAt = nowMs;
+      }
     }
   }, 4000);
   console.log("[uplink] announce + weather publisher active");
