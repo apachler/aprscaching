@@ -263,21 +263,21 @@ quorum) is explicitly launch-gating in `` and is the right home for most of thes
   `unvetted`. A hostile peer censors any instance's records network-wide (180-day suppression) and
   forges ADR-5 GDPR deletes. *Fix:* require `d.targetId.startsWith(origin + ":")` with the verified
   `wk.instance`. **Touches federation semantics — confirm.**
-- [ ] **SR-FED-03 (High) — `/federation/submit` impersonation + self-mint trusted.**
+- [x] **SR-FED-03 (High) — `/federation/submit` impersonation + self-mint trusted.**
   `federation_sync.ts:387-400` imports a submitter-supplied key, inserts `fed_peers ... trust='trusted'`,
   and checks only `rec.signer === b.instance` (self-consistent attacker strings); `FED_SUBMIT_INSTANCES`
   empty allows any name. *Fix:* bind `b.instance → publicKey` against the signed registry; default deny;
   never auto-`trusted` (use `unvetted`).
-- [ ] **SR-FED-04 (High) — peer key blindly re-pinned; rotation never verified.**
+- [x] **SR-FED-04 (High) — peer key blindly re-pinned; rotation never verified.**
   `federation_sync.ts:117-118` updates `public_key` to whatever the peer's `/.well-known` serves now;
   `verifyRotationRecord` is exported + tested but never called, and `signed:false` yields
   "nothing to verify". A hijacked domain swaps identity keys with no continuity check. *Fix:* pin on
   first sight; on change require a valid `RotationRecord` chain; refuse `signed:false` regression.
-- [ ] **SR-FED-05 (High) — account-move records unauthenticated.** `federation_sync.ts:255-265`:
+- [x] **SR-FED-05 (High) — account-move records unauthenticated.** `federation_sync.ts:255-265`:
   any peer asserts any callsign moved to any instance (no `origin === d.toInstance`), and `d.ts` is
   unbounded → `ts = 2^40` freezes the pointer forever. *Fix:* require `origin === d.toInstance`; clamp
   `d.ts <= now + skew`.
-- [ ] **SR-FED-06 (High) — sync fetches have no timeout.** `federation_sync.ts:35-39,200` use `fetch`
+- [x] **SR-FED-06 (High) — sync fetches have no timeout.** `federation_sync.ts:35-39,200` use `fetch`
   with no `AbortSignal.timeout` (gossip/corroborate use 3–5 s); `syncAllPeers` is sequential and runs
   before `pushToHub`/`relayPoll`/`runDigests`. One blackholed peer hangs the whole 5-min cron. *Fix:*
   `signal: AbortSignal.timeout(5000)` + per-peer budget.

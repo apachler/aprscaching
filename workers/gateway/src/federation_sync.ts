@@ -13,12 +13,14 @@ import { requireSysop } from "./admin.js";
 import {
   importVerifyKey, verifyRecordSig, FED_PROTOCOL_VERSION, importActiveKeys, activeFedKeys, type FedPublicKey,
   loadRegistry, registryKeyAllowed, buildFeed, feedPublicKey, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef,
+  verifyRotationRecord, type RotationRecord,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
+const PEER_FETCH_TIMEOUT_MS = 5000;   // SR-FED-06: a blackholed peer must not hang the whole sync cron
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -33,7 +35,7 @@ interface FeedRecord { type: string; id: string; cursor: number; data: Record<st
 interface Feed { instance: string; nextCursor: number; complete: boolean; items: FeedRecord[] }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const r = await fetch(url, { headers: { accept: "application/json" } });
+  const r = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS) });
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} <- ${url}`);
   return r.json() as Promise<T>;
 }
@@ -113,8 +115,19 @@ export async function syncAllPeers(env: Env): Promise<{ peers: number; caches: n
 
 async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
   const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; publicKeys?: FedPublicKey[]; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
+  const wk = await fetchJson<{ instance: string; signed: boolean; publicKey: string | null; publicKeys?: FedPublicKey[]; rotations?: RotationRecord[]; peers?: string[]; capabilities?: string[]; protocolVersions?: string[] }>(`${base}/.well-known/aprscaching`);
   const pub = wk.signed ? wk.publicKey : null;
+  const pinned = p.public_key;   // the key we last trusted for this peer (null on first sight)
+  const newActive = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
+
+  // SR-FED-04: never blindly re-pin. Once a peer is signed we refuse to drop to unsigned, and we only
+  // accept a *changed* key if the peer proves continuity with a rotation-record chain from the pinned
+  // key (each new key signed by its predecessor). A hijacked domain that simply swaps keys is rejected.
+  if (pinned) {
+    if (!pub) throw new Error(`peer ${wk.instance} regressed to unsigned — refusing (was pinned ${pinned.slice(0, 12)}…)`);
+    if (!newActive.includes(pinned) && !(await rotationChainReaches(pinned, newActive, wk.rotations)))
+      throw new Error(`peer ${wk.instance} key changed without a valid rotation proof — refusing (possible hijack)`);
+  }
   await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?").bind(wk.instance ?? null, pub, p.url).run();
 
   // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
@@ -133,9 +146,8 @@ async function syncPeer(env: Env, p: PeerRow): Promise<{ caches: number; finds: 
 
   // T4.2 anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
   // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
-  const activeStrings = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
   const registryEntry = (await loadRegistry(env)).get(wk.instance);
-  if (!registryKeyAllowed(registryEntry, activeStrings))
+  if (!registryKeyAllowed(registryEntry, newActive))
     throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
 
   // T4.1: verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
@@ -197,7 +209,7 @@ const SYNC_DEFS: SyncDef[] = [
 async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, verifyKeys: CryptoKey[], def: SyncDef): Promise<number> {
   let cursor = (p[def.cursorCol] as number) ?? 0, applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, { headers: { accept: "application/json" } });
+    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS) });
     if (res.status === 404) return applied;                                       // feed not supported → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
     const feed = (await res.json()) as Feed;
@@ -223,6 +235,25 @@ async function syncFeed(env: Env, base: string, p: PeerRow, instance: string, ve
  */
 export function idInNamespace(globalId: string | undefined | null, instance: string): boolean {
   return typeof globalId === "string" && globalId.startsWith(instance + ":");
+}
+
+/**
+ * SR-FED-04: is one of `targets` reachable from `from` through VALID rotation records (each new key
+ * signed by its predecessor)? Verifies every published record first, then walks prev→new edges. Bounds
+ * the walk to the number of records so a cyclic/oversized rotation list can't loop.
+ */
+export async function rotationChainReaches(from: string, targets: string[], rotations: RotationRecord[] | undefined): Promise<boolean> {
+  const want = new Set(targets);
+  if (want.has(from)) return true;
+  const edges: Array<{ prev: string; key: string }> = [];
+  for (const r of rotations ?? []) if (await verifyRotationRecord(r)) edges.push({ prev: r.prevKey, key: r.key });
+  const reach = new Set([from]);
+  for (let i = 0; i < edges.length; i++) {          // at most |edges| relaxations reach every node
+    let grew = false;
+    for (const e of edges) if (reach.has(e.prev) && !reach.has(e.key)) { reach.add(e.key); grew = true; if (want.has(e.key)) return true; }
+    if (!grew) break;
+  }
+  return false;
 }
 
 /** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
@@ -275,6 +306,10 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
 async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data as { callsign?: string; fromInstance?: string | null; toInstance?: string; ts?: number };
   if (!d.callsign || !d.toInstance) return;
+  // SR-FED-05: a peer may only assert a move TO itself — otherwise any peer redirects any callsign to
+  // any instance. And a far-future ts (e.g. 2^40) would freeze the pointer forever, so clamp it.
+  if (d.toInstance !== origin) return;
+  const ts = Math.min(Number(d.ts) || 0, now() + 300);
   await env.DB.prepare(
     `INSERT INTO remote_account_moves (callsign, from_instance, to_instance, ts, origin, mirrored_at)
      VALUES (?,?,?,?,?,?)
@@ -282,7 +317,7 @@ async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string
        from_instance = excluded.from_instance, to_instance = excluded.to_instance,
        ts = excluded.ts, origin = excluded.origin, mirrored_at = excluded.mirrored_at
      WHERE excluded.ts >= remote_account_moves.ts`,
-  ).bind(d.callsign.toUpperCase(), d.fromInstance ?? null, d.toInstance, d.ts ?? now(), origin, now()).run();
+  ).bind(d.callsign.toUpperCase(), d.fromInstance ?? null, d.toInstance, ts, origin, now()).run();
 }
 
 async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {
@@ -406,9 +441,20 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   let key: CryptoKey;
   try { key = await importVerifyKey(b.publicKey); } catch { return json({ ok: false, error: "bad public key" }, { status: 400 }); }
 
-  // Register the (operator-authorised) spoke as a TRUSTED, never-pulled peer so its mirrored records
-  // surface on the default map (T3.1) and carry a uniform trust binding. enabled=0 → never fetched; the
-  // synthetic `submit:<instance>` url keeps it out of the pull set. INSERT OR IGNORE respects a later block.
+  // SR-FED-03: a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
+  // binds this instance to a key, the submitted key MUST match it.
+  const regEntry = (await loadRegistry(env)).get(b.instance);
+  if (regEntry?.key && regEntry.key !== b.publicKey)
+    return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
+  // TOFU: once we've pinned a key for this submit-instance, it can't silently change (SR-FED-04 for the
+  // push path). A rotated spoke re-registers under a new instance id or the operator clears the row.
+  const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?").bind(`submit:${b.instance}`).first<{ public_key: string | null }>();
+  if (pinnedRow?.public_key && pinnedRow.public_key !== b.publicKey)
+    return json({ ok: false, error: "submitted key changed for a known instance — refusing" }, { status: 403 });
+
+  // Register the operator-authorised spoke (it holds FED_SUBMIT_SECRET) as a never-pulled peer so its
+  // mirrored records carry a uniform trust binding. enabled=0 → never fetched; the synthetic
+  // `submit:<instance>` url keeps it out of the pull set. INSERT OR IGNORE respects a later block.
   await env.DB.prepare(
     "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via, approved_at, enabled) VALUES (?, ?, ?, 'trusted', 'submitted', ?, 0)",
   ).bind(`submit:${b.instance}`, b.instance, b.publicKey, now()).run();
