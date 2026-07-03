@@ -10,15 +10,17 @@ import type { ParsedFrame } from "@aprsweb/aprs";
 import { SessionServer, NodeSession } from "@aprsweb/packet";
 import { parseAddr } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
+import { loadDotEnv, numEnv, portEnv } from "./config.js";
 
+loadDotEnv(); // SR-CFG-03: `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
 const env = process.env;
 const INGEST_URL = env.INGEST_URL ?? "http://127.0.0.1:8787/ingest";
 const SECRET = env.INGEST_SECRET ?? "change-me";
-const BATCH_MS = Number(env.BATCH_MS ?? 1500);
+const BATCH_MS = numEnv("BATCH_MS", 1500, { min: 100 }); // SR-CFG-02: floor so a blank value can't tight-loop
 
 const aprs = new AprsIs({
   host: env.APRSIS_HOST ?? "rotate.aprs2.net",
-  port: Number(env.APRSIS_PORT ?? 14580),
+  port: portEnv("APRSIS_PORT", 14580),
   callsign: env.APRSIS_CALLSIGN ?? "N0CALL",
   passcode: env.APRSIS_PASSCODE ?? "-1",
   filter: env.APRSIS_FILTER ?? "r/47.07/15.42/300",
@@ -27,14 +29,14 @@ const aprs = new AprsIs({
 let batch: Packet[] = [];
 const enqueue = (p: Packet) => batch.push(p);
 let spool: Packet[] = []; // SR-ING-03: undelivered packets, retried next tick
-const MAX_SPOOL = Number(env.INGEST_SPOOL_MAX ?? 5000); // bounded (drop-oldest) so a long outage can't OOM the Pi
+const MAX_SPOOL = numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }); // bounded (drop-oldest) so a long outage can't OOM the Pi
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
 if (env.KISS_TNC_HOST) {
   const frameSubs: ((f: ParsedFrame) => void)[] = [];
   const rawSubs: ((b: Uint8Array) => void)[] = [];
   const kiss = new KissTnc(
-    { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
+    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) },
     {
       onPacket: enqueue,
       onFrame: (f) => {
@@ -137,7 +139,7 @@ if (env.KISS_TNC_HOST) {
   if (env.IGATE_CALL && env.IGATE_PASS) {
     const igate = new Igate(kiss, {
       host: env.APRSIS_HOST ?? "rotate.aprs2.net",
-      port: Number(env.APRSIS_PORT ?? 14580),
+      port: portEnv("APRSIS_PORT", 14580),
       call: env.IGATE_CALL,
       pass: env.IGATE_PASS,
       filter: env.IGATE_FILTER,
@@ -149,18 +151,18 @@ if (env.KISS_TNC_HOST) {
   }
 }
 if (env.TAK_COT_PORT) {
-  new CotListener({ port: Number(env.TAK_COT_PORT), bind: env.TAK_COT_BIND }, enqueue).start();
+  new CotListener({ port: portEnv("TAK_COT_PORT", 6969), bind: env.TAK_COT_BIND }, enqueue).start();
   console.log("[cot] enabled");
 }
 if (env.MESH_HOST) {
-  new MeshtasticReader({ host: env.MESH_HOST, port: Number(env.MESH_PORT ?? 1883) }, enqueue).start();
+  new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1883) }, enqueue).start();
   console.log("[mesh] enabled");
 }
 // AGWPE TNC — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
 if (env.AGWPE_HOST) {
   const { AgwpeTnc } = await import("./agwpe.js");
   new AgwpeTnc(
-    { host: env.AGWPE_HOST, port: Number(env.AGWPE_PORT ?? 8000), radioPort: Number(env.AGWPE_RADIO_PORT ?? 0) },
+    { host: env.AGWPE_HOST, port: portEnv("AGWPE_PORT", 8000), radioPort: numEnv("AGWPE_RADIO_PORT", 0, { min: 0 }) },
     { onPacket: enqueue },
   ).start();
   console.log("[agwpe] enabled");
@@ -171,9 +173,9 @@ if (env.HOSTMODE_HOST) {
   new HostmodeTnc(
     {
       host: env.HOSTMODE_HOST,
-      port: Number(env.HOSTMODE_PORT ?? 3694),
+      port: portEnv("HOSTMODE_PORT", 3694),
       mycall: env.HOSTMODE_MYCALL,
-      radioPort: Number(env.HOSTMODE_RADIO_PORT ?? 0),
+      radioPort: numEnv("HOSTMODE_RADIO_PORT", 0, { min: 0 }),
     },
     { onPacket: enqueue },
   ).start();
@@ -183,7 +185,7 @@ if (env.HOSTMODE_HOST) {
 // first-party RF. With AXUDP_PEERS it's a bidirectional KISS-equivalent port (carries NET/ROM
 // crosslinks + FBB over the Internet leg); without, a plain RX-only listener.
 if (env.AXUDP_PORT) {
-  const opts = { port: Number(env.AXUDP_PORT), bind: env.AXUDP_BIND };
+  const opts = { port: portEnv("AXUDP_PORT", 10093), bind: env.AXUDP_BIND };
   if (env.AXUDP_PEERS) {
     const { AxudpPort, parseAxudpPeers } = await import("./axudp.js");
     const axPort = new AxudpPort({ ...opts, peers: parseAxudpPeers(env.AXUDP_PEERS) }, enqueue);
@@ -269,8 +271,8 @@ if (env.BBS_FORWARD === "1" && env.KISS_TNC_HOST && env.BBS_FORWARD_CALL) {
     base: INGEST_URL.replace(/\/ingest$/, ""),
     secret: SECRET,
     mycall: env.BBS_FORWARD_CALL,
-    kiss: { host: env.KISS_TNC_HOST, port: Number(env.KISS_TNC_PORT ?? 8001) },
-    pollMs: Number(env.BBS_FORWARD_POLL_MS ?? 60000),
+    kiss: { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) },
+    pollMs: numEnv("BBS_FORWARD_POLL_MS", 60000, { min: 1000 }),
     sid: env.BBS_FORWARD_SID,
   });
   console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
@@ -282,7 +284,7 @@ const SERVICE_CALL = env.APRSIS_SERVICE_CALL;
 if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
   const uplink = new AprsUplink({
     host: env.APRSIS_HOST ?? "rotate.aprs2.net",
-    port: Number(env.APRSIS_PORT ?? 14580),
+    port: portEnv("APRSIS_PORT", 14580),
     serviceCall: SERVICE_CALL,
     servicePass: env.APRSIS_SERVICE_PASS,
   });
@@ -292,7 +294,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
   const cwop = env.CWOP_HOST
     ? new AprsUplink({
         host: env.CWOP_HOST,
-        port: Number(env.CWOP_PORT ?? 14580),
+        port: portEnv("CWOP_PORT", 14580),
         serviceCall: SERVICE_CALL,
         servicePass: env.APRSIS_SERVICE_PASS,
       })

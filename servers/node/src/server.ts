@@ -23,7 +23,7 @@ import { Rooms } from "./rooms.js";
 import { makeFsMedia } from "./media.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT ?? 8787);
+const PORT = Number(process.env.PORT) || 8787; // SR-CFG-02: a blank/NaN PORT must not bind port 0
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");

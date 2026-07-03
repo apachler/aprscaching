@@ -1,6 +1,15 @@
 # Ingest-only: forward RF/IS to a REMOTE gateway (e.g. a Cloudflare Worker). No local DB/SPA.
 # This is the operator's local RF box in Topology 4, and the generic "operator RF node".
 # Up:  docker compose -f compose.ingest-only.yml up -d --build
+
+# SR-CFG: cap container logs so an unattended Pi can't fill its SD card (the json-file driver is
+# unbounded by default). ~30 MB/service retained.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   ingest:
     build: { context: .., dockerfile: deploy/Dockerfile }
@@ -15,3 +24,4 @@ services:
       INGEST_URL: ${INGEST_URL} # e.g. https://gateway.<you>.workers.dev/ingest
       INGEST_SECRET: ${INGEST_SECRET} # or per-operator peer key when feeding a shared gateway
     restart: unless-stopped
+    logging: *default-logging

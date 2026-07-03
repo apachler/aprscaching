@@ -489,10 +489,26 @@ Text decoders are hardened (length guards, null-returning); exposure is in the b
 _(SR-WEB-* — WebSocket reconnect/leak behavior, MapLibre source/marker leaks, offline-cache growth,
 device-key handling, no-emoji guard coverage. To be inserted.)_
 
-## Detail — Configuration & observability — PENDING (final agent)
+## Detail — Configuration & observability — ✅ DONE (2026-07-03)
 
-_(SR-CFG-* — full env-drift table across ingest/servers/gateway vs the `.env.example` files, startup
-validation, /healthz coverage per runtime, deploy/ scripts + log rotation on a Pi. To be inserted.)_
+The `SR-CFG-*` audit pass was completed. Findings + fixes:
+
+- [x] **SR-CFG-01 (Medium) — env drift.** 27 ingest env vars were read in `apps/ingest/src` but absent
+  from `.env.example` (AGWPE/hostmode/AXUDP/AXIP, the NET/ROM node, BBS node + FBB forwarding, CWOP,
+  `INGEST_SPOOL_MAX`, `DIGI_CONNECTED`/`DIGI_VISCOUS_MS`). *Fix:* all documented, grouped by subsystem,
+  in `.env.example`. A `comm` drift check now shows **zero** read-but-undocumented vars.
+- [x] **SR-CFG-02 (Medium) — unvalidated numeric env.** `Number(env.X ?? d)` returns `0` for an empty
+  string (the `??` only guards null/undefined) → `BATCH_MS=` was a ~1 ms flush loop and a blank port
+  dialled `0`. *Fix:* `apps/ingest/src/config.ts` `numEnv`/`portEnv` (blank/NaN → default with a warn,
+  clamp to `[min,max]`, ports to `[1,65535]`); applied across `index.ts`; `BATCH_MS` floored at 100 ms.
+  The Node + Bun servers' `PORT` now use `Number(PORT) || 8787` (a blank PORT can't bind 0).
+- [x] **SR-CFG-03 (Medium) — dev path never loads `.env`.** `pnpm dev`/`start` run plain `tsx`/`node`
+  with no dotenv, so the box silently started as `N0CALL`/`change-me`. *Fix:* `loadDotEnv()` at the top
+  of `index.ts` reads a cwd `.env` if present (real env always wins).
+- **Observability / deploy:** every runtime health-checks at **`/health`** (no `/healthz` is used
+  anywhere — the earlier note was speculative; `deploy/Caddyfile` + `setup.sh` reference `/health`
+  correctly). Docker log growth on an unattended Pi is now bounded — the compose files cap the
+  `json-file` driver at `max-size: 10m` / `max-file: 3` per service. Tests: `apps/ingest/test/config.test.ts`.
 
 ---
 

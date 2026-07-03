@@ -1,5 +1,14 @@
 # Base stack: gateway + ingest + Caddy. Topology 2 (OCI all-in-one) and any VPS.
 # Up:  docker compose up -d --build
+
+# SR-CFG: bound container logs (the json-file driver is unbounded by default) so an unattended box
+# can't fill its disk. ~30 MB/service retained.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   gateway:
     build: { context: .., dockerfile: deploy/Dockerfile }
@@ -10,6 +19,7 @@ services:
       PORT: "8080"
     volumes: ["data:/data"]
     restart: unless-stopped
+    logging: *default-logging
 
   ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
     image: aprscaching:local
@@ -25,6 +35,7 @@ services:
       BATCH_MS: ${BATCH_MS:-2000}
     depends_on: [gateway]
     restart: unless-stopped
+    logging: *default-logging
 
   caddy: # TLS + static SPA + reverse proxy
     image: caddy:2
@@ -38,5 +49,6 @@ services:
       - caddy_config:/config
     depends_on: [gateway]
     restart: unless-stopped
+    logging: *default-logging
 
 volumes: { data: {}, caddy_data: {}, caddy_config: {} }

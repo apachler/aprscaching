@@ -102,12 +102,10 @@ findings here at their real priority.
 
 - **`SR-WEB-*` — web app (`apps/web`).** WebSocket reconnect/leak behaviour, MapLibre source/marker
   leaks, offline-cache growth, device-key handling, no-emoji guard coverage. *Effort:* M to audit.
-- **`SR-CFG-*` — configuration & observability.** Full env-drift table across ingest/servers/gateway vs
-  the `.env.example` files (SR-CFG-01: ~26 ingest vars read but undocumented), startup validation of
-  numeric env (SR-CFG-02: `BATCH_MS=` → ~1 ms flush loop), the `pnpm dev` `.env` path (SR-CFG-03),
-  `/healthz` coverage per runtime, and `deploy/` scripts + log rotation on a Pi. *Effort:* M to audit,
-  then mostly S fixes. **P1-ish** once scoped — config drift is a silent-misconfiguration footgun for
-  self-hosters.
+- **`SR-CFG-*` — configuration & observability. ✅ DONE (2026-07-03).** Env drift closed (27 ingest
+  vars documented in `.env.example`, zero drift), numeric env validated (`config.ts` numEnv/portEnv +
+  a dotenv loader for the `pnpm dev` path), `/health` confirmed the single health path, and the
+  compose files now cap Docker log growth on an unattended Pi. See STABILITY-REVIEW.md `SR-CFG-*`.
 
 ## Engineering-quality follow-ups (not from the security audit)
 

@@ -10,3 +10,5 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN} # from a named tunnel created in the Cloudflare dashboard
     depends_on: [caddy]
     restart: unless-stopped
+    # SR-CFG: cap logs (compose anchors don't cross files, so this one is inline)
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
