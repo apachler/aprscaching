@@ -52,6 +52,7 @@ jobs:
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
+            INGEST_SECRET=ci-conformance-ingest-secret ALLOW_DEV_TOKENS=1 \
             pnpm --filter @aprsweb/node-gateway start &
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
@@ -71,7 +72,7 @@ jobs:
       - name: start wrangler dev + smoke
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
-          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\n' "$KEY" > workers/gateway/.dev.vars
+          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nALLOW_DEV_TOKENS=1\n' "$KEY" > workers/gateway/.dev.vars
           (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
@@ -96,9 +97,11 @@ jobs:
           FED_REGISTRY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$REG")
           FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
           DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
+            INGEST_SECRET=ci-conformance-ingest-secret ALLOW_DEV_TOKENS=1 \
             FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
             pnpm --filter @aprsweb/node-gateway start &
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
+            INGEST_SECRET=ci-conformance-ingest-secret ALLOW_DEV_TOKENS=1 \
             FED_SUBMIT_SECRET=submitsecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
             pnpm --filter @aprsweb/node-gateway start &
           PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 RELAY_SECRET=relaysecret node tools/smoke/federation.mjs
@@ -118,6 +121,7 @@ jobs:
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           DB_PATH="$RUNNER_TEMP/bun.db" PORT=8787 INSTANCE=ci.bun FED_PRIVATE_KEY="$KEY" \
+            INGEST_SECRET=ci-conformance-ingest-secret ALLOW_DEV_TOKENS=1 \
             bun run servers/bun/server.ts &
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
