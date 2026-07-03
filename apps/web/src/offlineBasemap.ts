@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// maplibre-gl v5 no longer leaks the ambient GeoJSON namespace; import it explicitly.
+import type * as GeoJSON from "geojson";
 import type { StyleSpecification } from "maplibre-gl";
 import { BRAND } from "./brand.js";
 

@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1100, // MapLibre v5's real chunk size (~1.03 MB; v4 was ~0.79 MB)
     modulePreload: {
       resolveDependencies: (_url, deps) => deps.filter((d) => !d.includes("maplibre")),
     },
