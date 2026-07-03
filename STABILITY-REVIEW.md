@@ -190,7 +190,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   `/bundle`, `/move`, and signed browser-ingest attributed to the victim. *Fix:* require a session
   bound to the callsign (or the ingest secret); reject `parsed.data.callsign` from anonymous requests.
   *Test:* `POST /keys/register` no cookie, `callsign:"OE8APR"` → 401.
-- [ ] **SR-SEC-03 (High) — reflected XSS in `/embed`.** `embed.ts:24` builds `cfg` and `:36` emits it
+- [x] **SR-SEC-03 (High) — reflected XSS in `/embed`.** `embed.ts:24` builds `cfg` and `:36` emits it
   raw as `<script>const CFG = ${cfg};`. `bbox` is used unescaped and `JSON.stringify` does not escape
   `<`/`/`, so `?bbox=</script><script>…</script>` breaks out (uppercased `cache` too — HTML tags are
   case-insensitive). No CSP; `x-frame-options: ALLOWALL`. Runs same-origin as the `acs` cookie. *Fix:*
@@ -207,12 +207,12 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   `{callsign:"W1AW", verified:true, keys:[theirKey]}` → a verified account they don't hold, device key
   registered. *Fix:* require the bundle signed by the source instance's federation key; never trust a
   client `verified` flag. **Touches federation — confirm.**
-- [ ] **SR-SEC-06 (High) — magic-link token returned in-band.** `email.ts:48` returns
+- [x] **SR-SEC-06 (High) — magic-link token returned in-band.** `email.ts:48` returns
   `{ devToken, devLink }` whenever `sendEmail` returns false, which happens simply because
   `EMAIL_API_KEY`/`EMAIL_FROM` are unset — no explicit dev guard. A production instance without email
   configured hands the login token to the caller → account takeover. *Fix:* gate `devToken` behind an
   explicit `ALLOW_DEV_TOKENS` (default off); otherwise fail closed.
-- [ ] **SR-SEC-07 (High) — brute-forceable APRS verification code.** `callsign.ts:23-27`
+- [x] **SR-SEC-07 (High) — brute-forceable APRS verification code.** `callsign.ts:23-27`
   (`confirmAprsChallenge`) requires no session and has no attempt limit; the code is a 6-digit
   `Math.random()` (`:9`). ~10⁶ unthrottled tries mark any callsign control-verified, defeating the H5
   TX gate. *Fix:* bind confirm to the session that started the challenge; rate-limit + lock after N
@@ -239,7 +239,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   `authOrigins = env.APP_URL ?? req.headers.get("Origin")` (rpId likewise). With env unset the
   origin/rpId binding validates against a client-supplied value. *Fix:* require `APP_URL`/`RP_ID`
   configured; never source the expected origin from headers.
-- [ ] **SR-SEC-14 (Low) — unauth `startAprsChallenge`** (`callsign.ts:6-21`) → outbound APRS spam +
+- [x] **SR-SEC-14 (Low) — unauth `startAprsChallenge`** (`callsign.ts:6-21`) → outbound APRS spam +
   code farming. *Fix:* require a session bound to the callsign; rate-limit.
 - [ ] **SR-SEC-15 (Low) — reflective CORS with credentials** (`app.ts:379-390`). Mitigated by
   `SameSite=Lax` today but fragile. *Fix:* allowlist origins.

@@ -22,6 +22,31 @@ describe("embed widget + QR", () => {
     expect(body).toContain("fitBounds");
   });
 
+  // SR-SEC-03: a payload that tries to break out of the inline <script> must be inert.
+  it("neutralises an XSS attempt in bbox (no raw </script> or injected tag)", async () => {
+    const attack = "</script><script>alert(1)</script>";
+    const res = handleEmbed(new Request("https://api.example/embed?bbox=" + encodeURIComponent(attack)), env);
+    const body = await res.text();
+    // the only legitimate </script> is the widget's own closing tag → exactly one
+    expect(body.match(/<\/script>/gi)?.length).toBe(2);   // two legit tags (external + inline), none injected
+    expect(body).not.toContain("<script>alert(1)");
+    // an invalid bbox is dropped to null, never reflected verbatim
+    expect(body).toContain('"bbox":null');
+    expect(res.headers.get("content-security-policy")).toContain("frame-ancestors *");
+  });
+
+  it("strips markup from the cache param before it reaches the page", async () => {
+    const res = handleEmbed(new Request("https://api.example/embed?cache=" + encodeURIComponent("</script><b>x")), env);
+    const body = await res.text();
+    expect(body.match(/<\/script>/gi)?.length).toBe(2);   // two legit tags (external + inline), none injected
+    expect(body).not.toContain("<b>x");
+  });
+
+  it("accepts a valid four-number bbox", async () => {
+    const body = await handleEmbed(new Request("https://api.example/embed?bbox=14,46,16,48"), env).text();
+    expect(body).toContain('"bbox":"14,46,16,48"');
+  });
+
   it("/embed/qr.svg?cache= returns an SVG QR of the cache share link", () => {
     const res = handleQr(new Request("https://api.example/embed/qr.svg?cache=AC-0001&size=180"), env);
     expect(res.status).toBe(200);

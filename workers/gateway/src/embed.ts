@@ -14,14 +14,32 @@ import { qrSvg } from "./qr.js";
 
 const escAttr = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
+/** SR-SEC-03: serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
+ *  escape `<`, `>`, `&`, or the line separators, so a raw value like `</script><script>…` breaks out
+ *  of the script element. Escaping these to \uXXXX keeps the value a string, never markup. */
+const jsonForScript = (o: unknown) =>
+  JSON.stringify(o).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+
+/** A bbox query param is trusted only if it is exactly four finite numbers; anything else → null. */
+function safeBbox(raw: string | null): string | null {
+  if (!raw) return null;
+  const p = raw.split(",");
+  if (p.length !== 4) return null;
+  const n = p.map(Number);
+  return n.every((x) => Number.isFinite(x)) ? n.join(",") : null;
+}
+
 /** GET /embed — a dependency-light MapLibre widget that reads the public API. */
 export function handleEmbed(req: Request, env: Env): Response {
   const u = new URL(req.url);
   const cache = u.searchParams.get("cache");
-  const bbox = u.searchParams.get("bbox");
+  const bbox = safeBbox(u.searchParams.get("bbox"));
   const api = u.origin;            // the gateway serves this page → its own origin hosts /api/v1
   const app = appBase(env);
-  const cfg = JSON.stringify({ api, app, cache: cache ? cache.toUpperCase() : null, bbox: bbox || null });
+  // cache code: letters/digits/hyphen only — never markup, even before JSON escaping
+  const safeCache = cache ? cache.toUpperCase().replace(/[^A-Z0-9-]/g, "") || null : null;
+  const cfg = jsonForScript({ api, app, cache: safeCache, bbox });
   const html = `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>aprscaching map</title>
@@ -59,7 +77,21 @@ map.on('load', async () => {
   } catch (e) { /* offline / blocked tiles — the map chrome still renders */ }
 });
 </script></body></html>`;
-  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "x-frame-options": "ALLOWALL" } });
+  return new Response(html, { headers: {
+    "content-type": "text/html; charset=utf-8",
+    // Embeddable by design (frame-ancestors *), but lock down what may execute/connect as
+    // defence-in-depth behind the JSON escaping above (SR-SEC-03). No plugins, no <base> hijack.
+    "content-security-policy": [
+      "default-src 'none'",
+      "script-src 'unsafe-inline' https://unpkg.com",
+      "style-src 'unsafe-inline' https://unpkg.com",
+      "img-src 'self' data: https://tile.openstreetmap.org",
+      `connect-src 'self' ${api}`,
+      "frame-ancestors *",
+      "base-uri 'none'",
+      "object-src 'none'",
+    ].join("; "),
+  } });
 }
 
 /** GET /embed/qr.svg — QR for a cache share link (?cache=) or an arbitrary URL (?url=). */

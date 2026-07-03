@@ -82,6 +82,8 @@ export interface Env {
   RP_ID?: string;           // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
   EMAIL_FROM?: string;      // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string;   // Resend-style API key; absent => dev mode (no real send)
+  ALLOW_DEV_TOKENS?: string; // "1"/"true" to return magic-link tokens in-band when email is unconfigured
+                             // (dev/CI only). Off by default → a mail-less instance fails closed (SR-SEC-06).
 
   // ---- push notifications (ADR-4b) — web push is off unless VAPID keys are set; email digest needs EMAIL_* ----
   VAPID_PUBLIC?: string;    // VAPID public key (base64url, uncompressed P-256 point)

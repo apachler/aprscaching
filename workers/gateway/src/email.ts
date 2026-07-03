@@ -44,8 +44,13 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   const link = `${appOrigin(req, env)}/auth/email/verify?token=${token}`;
   const sent = await sendEmail(env, e, "Your aprscaching sign-in link",
     `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`);
-  // dev mode (no provider): expose the token so CI / first-run can complete the ceremony.
-  return json(sent ? { sent: true, purpose } : { sent: false, purpose, devToken: token, devLink: link });
+  if (sent) return json({ sent: true, purpose });
+  // SR-SEC-06: the sign-in token must NOT be handed back to the caller on a real instance. Returning
+  // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
+  // explicit opt-in, never merely "email isn't configured". Off ⇒ fail closed.
+  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true")
+    return json({ sent: false, purpose, devToken: token, devLink: link });
+  return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
 }
 
 /** GET|POST /auth/email/verify — consume the token, open a session (create account on register). */

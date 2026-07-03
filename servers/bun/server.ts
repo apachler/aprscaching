@@ -72,6 +72,7 @@ const env: Env = {
   },
   INGEST_SECRET,
   SESSION_SECRET: process.env.SESSION_SECRET,
+  ALLOW_DEV_TOKENS: process.env.ALLOW_DEV_TOKENS,
   INSTANCE: process.env.INSTANCE,
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_KEY_HISTORY: process.env.FED_KEY_HISTORY,

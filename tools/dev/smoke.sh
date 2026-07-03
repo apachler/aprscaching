@@ -22,7 +22,7 @@ run_suite() {
   db="$(mktemp -u)-${suite}.db"
   log="$(mktemp)"
   # start in its own process group so we can reap pnpm AND its node/tsx children on teardown
-  setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" PORT="$port" \
+  setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" PORT="$port" ALLOW_DEV_TOKENS=1 \
     pnpm --filter @aprsweb/node-gateway start >"$log" 2>&1 &
   pid=$!
   # wait for /health (up to ~20s)
