@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * corroborate_privacy.ts — F4/T1.2 hardening + privacy coarsening for cross-instance corroboration.
  *
@@ -104,7 +105,7 @@ export function negStore(key: string, nowMs: number, ttlMs = NEG_TTL_MS): void {
 export function corroborationAuthorized(env: Env, req: Request): boolean {
   const secret = env.FED_CORROBORATION_SECRET;
   if (!secret) return true;
-  return req.headers.get("x-fed-secret") === secret;
+  return secretOk(req.headers.get("x-fed-secret"), secret);
 }
 
 /** Best-effort client ip for rate-limit keying (CF edge header, then XFF, then unknown). */

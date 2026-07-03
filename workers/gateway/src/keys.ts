@@ -11,7 +11,7 @@ import { json } from "./app.js";
 import { RegisterKeyRequest, authorshipMessage, ingestMessage, sha256Hex, stableStringify } from "@aprsweb/shared";
 import { importVerifyKey, fromB64 } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionCallsign, secretOk } from "./auth.js";
 
 export async function handleRegisterKey(req: Request, env: Env): Promise<Response> {
   const parsed = RegisterKeyRequest.safeParse(await req.json().catch(() => null));
@@ -26,7 +26,7 @@ export async function handleRegisterKey(req: Request, env: Env): Promise<Respons
   if (session) {
     callsign = (parsed.data.callsign ?? session).toUpperCase();
     if (base(callsign) !== base(session)) return json({ error: "callsign is not yours" }, { status: 403 });
-  } else if ((req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET && parsed.data.callsign) {
+  } else if (secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) && parsed.data.callsign) {
     callsign = parsed.data.callsign.toUpperCase();
   } else {
     return json({ error: "sign in to register a device key" }, { status: 401 });

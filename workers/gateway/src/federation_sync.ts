@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * federation_sync.ts — F2: the consumer side. Pull peers' /federation feeds, verify each record's
  * Ed25519 signature against the public key they publish at /.well-known/aprscaching, and mirror
@@ -549,7 +550,8 @@ async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Prom
 
 // ---- endpoints ----
 export async function handleFederationSync(req: Request, env: Env): Promise<Response> {
-  if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return new Response("unauthorized", { status: 401 });
+  if (!secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET))
+    return new Response("unauthorized", { status: 401 });
   const summary = await syncAllPeers(env);
   return json({ ok: true, ...summary });
 }
@@ -626,7 +628,8 @@ const PUSH_CURSORS = new Map<string, number>(); // "hub|type" -> last pushed cur
 export async function handleFederationSubmit(req: Request, env: Env): Promise<Response> {
   const secret = env.FED_SUBMIT_SECRET;
   if (!secret) return json({ ok: false, error: "submit disabled" }, { status: 403 });
-  if (req.headers.get("x-fed-secret") !== secret) return json({ ok: false, error: "unauthorized" }, { status: 401 });
+  if (!secretOk(req.headers.get("x-fed-secret"), secret))
+    return json({ ok: false, error: "unauthorized" }, { status: 401 });
   const b = (await req.json().catch(() => null)) as {
     instance?: string;
     publicKey?: string;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
@@ -45,16 +46,22 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
   return null;
 }
 
+/** Body ceiling (SR-SEC-10): INGEST_BATCH_MAX packets of a few hundred bytes fit comfortably in
+ *  5 MB; anything larger is refused BEFORE req.json() buffers it into memory. */
+const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
+
 /** Receive batched packets from the ingest box, persist positions, enrich the workbench, fan out live. */
 export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
-  const body = IngestBatch.safeParse(await req.json());
+  const len = Number(req.headers.get("content-length") ?? 0);
+  if (len > INGEST_BODY_MAX_BYTES) return json({ error: "batch too large" }, { status: 413 });
+  const body = IngestBatch.safeParse(await req.json().catch(() => null));
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
 
   // Auth: the shared secret (trusted backend / self-host ingest) OR a signed browser batch (H1.5):
   // an operator's device key, registered to their callsign, signs the batch — so a PUBLIC gateway
   // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
   // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
-  const trusted = req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+  const trusted = secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
   if (!trusted) {
     const signed = await verifySignedIngest(req, env, body.data.packets);
     if (!signed) return new Response("unauthorized", { status: 401 });

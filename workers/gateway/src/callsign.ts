@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId } from "./auth.js";
+import { sessionAccountId, secretOk, timingSafeEqual } from "./auth.js";
 
 const CHALLENGE_TTL_SEC = 15 * 60; // a code is good for 15 minutes
 const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks (SR-SEC-07)
@@ -11,15 +11,7 @@ function sixDigitCode(): string {
   const n = (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000) + 100000;
   return String(n);
 }
-/** Constant-time string compare so a wrong code can't be recovered by response timing (SR-SEC-08). */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-const ingestOk = (req: Request, env: Env) => (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
+const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 /** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {

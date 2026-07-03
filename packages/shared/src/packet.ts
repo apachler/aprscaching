@@ -19,7 +19,10 @@ export const Packet = z.object({
 });
 export type Packet = z.infer<typeof Packet>;
 
-export const IngestBatch = z.object({ packets: z.array(Packet) });
+/** Hard batch ceiling (SR-SEC-10): the ingest box flushes every few seconds, so a legitimate batch
+ *  is tens of packets — 1000 absorbs any reconnect backlog while bounding a hostile POST. */
+export const INGEST_BATCH_MAX = 1000;
+export const IngestBatch = z.object({ packets: z.array(Packet).max(INGEST_BATCH_MAX) });
 export type IngestBatch = z.infer<typeof IngestBatch>;
 
 /**

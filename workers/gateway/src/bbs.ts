@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * bbs.ts — store-and-forward message BBS (Stage 1, connectionless). A message base of personal mail
  * + bulletins. Personal mail is *held* until the addressee is next *heard* (deliverHeld, called from
@@ -146,7 +147,7 @@ export async function handleBbsRead(req: Request, env: Env, id: number): Promise
 }
 
 // -------------------------------------- connected-mode BBS session
-const ingestOk = (req: Request, env: Env) => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 /**
  * GET /api/bbs/session?call=CALL — the per-caller mail snapshot an inbound connected-mode BBS session

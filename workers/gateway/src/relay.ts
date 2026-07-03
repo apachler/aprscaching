@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
  * cannot be dialled inbound STILL serve its feed to the commons, by reusing the **poll-based rendezvous
@@ -37,7 +38,7 @@ const FEEDS: Record<string, FeedServeDef> = { caches: CACHE_FEED, finds: FIND_FE
 const now = () => Math.floor(Date.now() / 1000);
 const relayAuth = (req: Request, env: Env): boolean => {
   const s = env.FED_RELAY_SECRET;
-  return !!s && (req.headers.get("x-relay-secret") ?? "") === s;
+  return secretOk(req.headers.get("x-relay-secret"), s);
 };
 
 /** PURE: validate an untrusted relay-query body into a known kind + params, or null. */

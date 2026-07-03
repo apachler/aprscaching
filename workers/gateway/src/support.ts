@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * support.ts — supporter recognition + the public transparency ledger.
  *
@@ -18,7 +19,7 @@ import { sessionAccountId } from "./watch.js";
 const now = () => Math.floor(Date.now() / 1000);
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
-const ingestOk = (req: Request, env: Env): boolean => (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
+const ingestOk = (req: Request, env: Env): boolean => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 export interface LedgerRow {
   ts: number;

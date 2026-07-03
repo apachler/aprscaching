@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "./auth.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
  * into the pure ForwardRouter (@aprsweb/packet), resolves a destination to a partner, keeps the FBB
@@ -286,7 +287,7 @@ export function inboundRow(
   };
 }
 
-const ingestOk = (req: Request, env: Env) => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 /** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
 export async function handleForwardPool(req: Request, env: Env): Promise<Response> {

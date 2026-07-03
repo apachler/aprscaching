@@ -8,7 +8,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionCallsign, secretOk } from "./auth.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
 export function adminCalls(env: Env): Set<string> {
@@ -29,7 +29,7 @@ export async function isSysop(req: Request, env: Env): Promise<boolean> {
 }
 
 /** Ingest machine credential (shared with the forwarding pool / node mirror). */
-const ingestOk = (req: Request, env: Env): boolean => req.headers.get("x-ingest-secret") === env.INGEST_SECRET;
+const ingestOk = (req: Request, env: Env): boolean => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 /**
  * Guard a sysop-only endpoint: returns a 401/403 Response to short-circuit, or null to proceed. Pass

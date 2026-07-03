@@ -16,12 +16,12 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { actor } from "./caches.js";
-import { sessionCallsign, sessionAccountId } from "./auth.js";
+import { sessionCallsign, sessionAccountId, secretOk } from "./auth.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
 const now = () => Math.floor(Date.now() / 1000);
-const boxAuth = (req: Request, env: Env) => (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
+const boxAuth = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
 
 async function isVerified(env: Env, call: string): Promise<boolean> {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { secretOk } from "../auth.js";
 /** Import engine (M3): upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
 import { json } from "../app.js";
@@ -129,7 +130,8 @@ export async function runImport(env: Env, sourceId: string, scope: ImportScope):
 
 /** POST /api/import/:source — admin-only (x-ingest-secret). Body = ImportScope JSON. */
 export async function handleImport(req: Request, env: Env, sourceId: string): Promise<Response> {
-  if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return new Response("unauthorized", { status: 401 });
+  if (!secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET))
+    return new Response("unauthorized", { status: 401 });
   if (!SOURCES[sourceId])
     return json({ error: `unknown source '${sourceId}'`, sources: Object.keys(SOURCES) }, { status: 404 });
   const scope = (await req.json().catch(() => ({}))) as ImportScope;

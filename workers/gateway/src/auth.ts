@@ -12,18 +12,26 @@ import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, veri
 const SESSION_COOKIE = "acs";
 const CHALLENGE_TTL = 300;
 
-function authOrigins(req: Request, env: Env): string[] {
-  const o = env.APP_URL ?? req.headers.get("Origin");
-  return o ? [o] : [];
+/** SR-SEC-13: the expected WebAuthn origin/rpId MUST come from configuration. Falling back to the
+ *  request's Origin header validates the binding against an attacker-supplied value — any site could
+ *  satisfy the ceremony. Unconfigured ⇒ null, and the passkey endpoints refuse (fail closed);
+ *  the email magic-link path is unaffected. */
+function authOrigins(env: Env): string[] | null {
+  return env.APP_URL ? [env.APP_URL] : null;
 }
-function rpId(req: Request, env: Env): string {
+function rpId(env: Env): string | null {
   if (env.RP_ID) return env.RP_ID;
-  const o = env.APP_URL ?? req.headers.get("Origin");
   try {
-    return o ? new URL(o).hostname : "localhost";
+    return env.APP_URL ? new URL(env.APP_URL).hostname : null;
   } catch {
-    return "localhost";
+    return null;
   }
+}
+function webauthnUnconfigured(): Response {
+  return json(
+    { error: "passkeys require APP_URL (and optionally RP_ID) to be configured on this instance" },
+    { status: 503 },
+  );
 }
 async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
   await env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)")
@@ -68,6 +76,9 @@ type Cred = {
 
 /** POST /auth/passkey/register/begin {callsign, email?} — PublicKeyCredentialCreationOptions. */
 export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promise<Response> {
+  const origins = authOrigins(env);
+  const rp = rpId(env);
+  if (!origins || !rp) return webauthnUnconfigured();
   const { callsign, email } = (await req.json().catch(() => ({}))) as { callsign?: string; email?: string };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -99,7 +110,7 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
   const excl = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
   return json({
     challenge,
-    rp: { id: rpId(req, env), name: "APRScaching" },
+    rp: { id: rp, name: "APRScaching" },
     user: { id: bytesToB64url(new TextEncoder().encode(accountId)), name: cs, displayName: cs },
     pubKeyCredParams: [
       { type: "public-key", alg: -7 },
@@ -114,6 +125,9 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
 
 /** POST /auth/passkey/register/finish {callsign, credential} — verify attestation, open session. */
 export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promise<Response> {
+  const origins = authOrigins(env);
+  const rp = rpId(env);
+  if (!origins || !rp) return webauthnUnconfigured();
   const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -126,8 +140,8 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       clientDataJSON: b64urlToBytes(credential.response.clientDataJSON),
       attestationObject: b64urlToBytes(credential.response.attestationObject),
       challenge,
-      origins: authOrigins(req, env),
-      rpId: rpId(req, env),
+      origins,
+      rpId: rp,
     });
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -149,6 +163,9 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
 
 /** POST /auth/passkey/login/begin {callsign} — PublicKeyCredentialRequestOptions. */
 export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<Response> {
+  const origins = authOrigins(env);
+  const rp = rpId(env);
+  if (!origins || !rp) return webauthnUnconfigured();
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -159,7 +176,7 @@ export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<R
   await storeChallenge(env, cs, "webauthn_login", challenge);
   return json({
     challenge,
-    rpId: rpId(req, env),
+    rpId: rp,
     userVerification: "preferred",
     timeout: 60000,
     allowCredentials: creds.results.map((c) => ({ type: "public-key", id: c.id })),
@@ -168,6 +185,9 @@ export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<R
 
 /** POST /auth/passkey/login/finish {callsign, credential} — verify assertion, open session. */
 export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<Response> {
+  const origins = authOrigins(env);
+  const rp = rpId(env);
+  if (!origins || !rp) return webauthnUnconfigured();
   const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -187,8 +207,8 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
       coseKey: cred.public_key,
       storedCounter: cred.counter,
       challenge,
-      origins: authOrigins(req, env),
-      rpId: rpId(req, env),
+      origins,
+      rpId: rp,
     });
     await env.DB.prepare("UPDATE credentials SET counter=? WHERE id=?").bind(r.newCounter, credential.id).run();
     return json({ ok: true, callsign: cs }, { headers: { "set-cookie": await issueSessionCookie(cs, env) } });
@@ -365,6 +385,23 @@ export async function handleLogout(): Promise<Response> {
 }
 
 // --- minimal signed session (HMAC). Replace with your preferred session strategy. ---
+
+/** SR-SEC-08: constant-time string compare — a `===` on a secret leaks how many leading
+ *  characters matched via response timing. XOR-accumulate over the LONGER length so neither
+ *  the mismatch position nor (beyond an unavoidable coarse bound) the length short-circuits. */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const len = Math.max(a.length, b.length);
+  let diff = a.length === b.length ? 0 : 1;
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+/** The one gate for shared-secret headers (x-ingest-secret, x-fed-secret, x-relay-secret):
+ *  fail closed on an unset/empty expected secret, compare in constant time otherwise. */
+export function secretOk(given: string | null | undefined, expected: string | undefined): boolean {
+  if (typeof expected !== "string" || expected.length === 0) return false;
+  return timingSafeEqual(given ?? "", expected);
+}
 
 /** SR-SEC-01: a session signed with a known/default secret is forgeable for ANY callsign —
  *  including ADMIN_CALLSIGNS. Never mint or honor sessions on such a key. */

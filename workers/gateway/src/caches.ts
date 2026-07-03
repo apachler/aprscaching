@@ -14,7 +14,7 @@ import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./v
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionCallsign, secretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { emitTombstones } from "./tombstones.js";
@@ -128,7 +128,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
 }
 
 function ingestOk(req: Request, env: Env): boolean {
-  return (req.headers.get("x-ingest-secret") ?? "") === env.INGEST_SECRET;
+  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 }
 function baseCall(c: string): string {
   return c.toUpperCase().split("-")[0] ?? "";
