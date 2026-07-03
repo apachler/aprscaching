@@ -1,0 +1,21 @@
+# Dependencies & build output
+**/node_modules/
+**/dist/
+**/.wrangler/
+site/
+coverage/
+
+# Lockfiles & generated
+pnpm-lock.yaml
+*.min.js
+*.min.css
+
+# Runtime data / media / vendored assets
+**/data/
+**/*.mpeg
+**/*.woff
+**/*.woff2
+
+# Markdown/docs are prose — leave hand-formatting (tables, hard breaks) alone
+**/*.md
+docs/

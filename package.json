@@ -7,6 +7,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
     "check": "tools/dev/check.sh",
     "smoke": "tools/dev/smoke.sh",
     "e2e:audio": "node tools/e2e/audio-mic.mjs",
@@ -17,7 +21,14 @@
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "esbuild": "0.21.5",
-    "playwright-core": "^1.61.1"
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "playwright-core": "^1.61.1",
+    "prettier": "^3.9.4",
+    "typescript-eslint": "^8.62.1"
   }
 }
