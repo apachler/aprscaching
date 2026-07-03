@@ -1,0 +1,26 @@
+name: release-please
+
+# Automates versioning + CHANGELOG + release tags from Conventional Commits on the default branch.
+# It runs on `main` (the default branch after the go-public cutover); it is dormant until then.
+#
+# Bootstrap note: cut the FIRST 1.0.0 release by tagging v1.0.0 by hand (the desktop-release workflow
+# fires on the tag and the CHANGELOG is already seeded). The manifest below records 1.0.0 as released,
+# so release-please then takes over for 1.0.1+ automatically.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release PR, tags, and GitHub release
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
