@@ -260,7 +260,7 @@ browser ingest strips the IGate, no code path lifts a bare IS packet to B). The 
   configured; never source the expected origin from headers.
 - [x] **SR-SEC-14 (Low) — unauth `startAprsChallenge`** (`callsign.ts:6-21`) → outbound APRS spam +
   code farming. *Fix:* require a session bound to the callsign; rate-limit.
-- [ ] **SR-SEC-15 (Low) — reflective CORS with credentials** (`app.ts:379-390`). Mitigated by
+- [x] **SR-SEC-15 (Low) — reflective CORS with credentials** (`app.ts:379-390`). Mitigated by
   `SameSite=Lax` today but fragile. *Fix:* allowlist origins.
 
 ## Detail — Federation (`federation*.ts`, `tombstones.ts`, `corroborate.ts`, `relay.ts`)
@@ -375,7 +375,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [x] **SR-PKT-14 (Medium) — `hasBid()` stubbed false** (`fbb-scheduler.ts:47`): always answers `+`,
   so partners retransmit full bodies every session and A→B→A loops persist. *Fix:* carry a BID set from
   the pool; answer `-` for known BIDs.
-- [ ] **SR-PKT-15 (Low) — silent link reset on peer SABM** (`ax25/link.ts:111-117`): `reset()` discards
+- [x] **SR-PKT-15 (Low) — silent link reset on peer SABM** (`ax25/link.ts:111-117`): `reset()` discards
   unacked data and `to("connected")` is a no-op when already connected → host never told. *Fix:* emit
   `ev.error?.("link reset by peer")`.
 

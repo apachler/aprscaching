@@ -43,6 +43,39 @@ function harness(cfg: Partial<LinkConfig> = {}) {
   return { a, b, got, pump, advance, clk };
 }
 
+describe("SR-PKT-15 — a peer SABM on a live link tells the host", () => {
+  it("emits an error when a connected link is reset by an inbound SABM", () => {
+    const errs: string[] = [];
+    const link = new ConnectedLink(A, B, {
+      send: () => {},
+      deliver: () => {},
+      state: () => {},
+      error: (m) => errs.push(m),
+    });
+    // drive it to 'connected' via the peer's UA
+    link.connect();
+    link.onReceive({ dst: A, src: B, type: "UA", command: false, pf: true } as Ax25Frame);
+    expect(link.state).toBe("connected");
+    // a fresh SABM from the peer = re-establish; the host must be told (unacked data is discarded)
+    link.onReceive({ dst: A, src: B, type: "SABM", command: true, pf: true } as Ax25Frame);
+    expect(errs).toContain("link reset by peer");
+    expect(link.state).toBe("connected"); // still connected, but the reset was surfaced
+  });
+
+  it("does NOT emit on a first-time inbound connect (not yet connected)", () => {
+    const errs: string[] = [];
+    const link = new ConnectedLink(A, B, {
+      send: () => {},
+      deliver: () => {},
+      state: () => {},
+      error: (m) => errs.push(m),
+    });
+    link.onReceive({ dst: A, src: B, type: "SABM", command: true, pf: true } as Ax25Frame);
+    expect(errs).toEqual([]); // a normal incoming call, nothing to reset
+    expect(link.state).toBe("connected");
+  });
+});
+
 describe("ax25 connected-mode link", () => {
   it("SABM/UA handshake connects both ends", () => {
     const h = harness();

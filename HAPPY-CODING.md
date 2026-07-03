@@ -88,11 +88,12 @@ CoT regexes off the hot path · SR-PARSE-06 MGRS band letter for 80–84° (disp
 `cache_logs(cache_id, logger_call) WHERE log_type='found'` so racing/replayed POSTs don't double-count a
 verified find. Small migration; keeps the tier semantics untouched. *Effort:* S.
 
-## P3 — opportunistic / low-severity
+## P3 — opportunistic / low-severity — ✅ DONE (2026-07-03)
 
-Open Lows: SR-SEC-15 CORS origin allowlist (SameSite-mitigated today) · SR-PKT-15 emit an error on peer
-SABM link-reset (host currently never told). *Effort:* S each. Do these when touching the neighbouring
-code.
+Both open Lows are now closed: **SR-SEC-15** CORS credentials are allowlisted to APP_URL/CORS_ORIGINS
+(an unlisted origin still reaches the public Bearer-keyed read API but can't ride a session cookie);
+**SR-PKT-15** a peer SABM on an already-connected AX.25 link emits `"link reset by peer"` so the host
+learns its unacked data was discarded. Tested (`p3_cors.test.ts`, `link.test.ts`), full suite + smoke green.
 
 ## Two audit passes still PENDING (scope, then fold in)
 

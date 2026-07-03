@@ -93,6 +93,7 @@ export interface Env {
 
   // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string; // app origin for magic-link redirects, e.g. "https://aprscaching.com"
+  CORS_ORIGINS?: string; // SR-SEC-15: extra comma-separated origins allowed credentialed CORS (beyond APP_URL)
   RP_ID?: string; // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
   EMAIL_FROM?: string; // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string; // Resend-style API key; absent => dev mode (no real send)
@@ -179,6 +180,7 @@ export const ENV_STRING_KEYS = [
   "SPOTS_DXCLUSTER_URL",
   "SPOTS_RBN_URL",
   "APP_URL",
+  "CORS_ORIGINS",
   "RP_ID",
   "EMAIL_FROM",
   "EMAIL_API_KEY",

@@ -147,12 +147,12 @@ export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
-  if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req);
+  if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   const res = await route(req, env, ctx);
   // gossip ping (T2.1): a successful federated write coalesces into one "come pull" to our peers
   if (res.ok && isFederatedWrite(req.method, new URL(req.url).pathname))
     ctx.waitUntil(notifyPeers(env).catch(() => {}));
-  return withCors(res, req);
+  return withCors(res, req, env);
 }
 
 /**
@@ -522,16 +522,38 @@ export function xml(body: string, init: ResponseInit = {}): Response {
   });
 }
 
-/** Permissive CORS that reflects the request origin so the SPA (different origin) can call the API. */
-export function withCors(res: Response, req: Request): Response {
+/** SR-SEC-15: the origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
+ *  APP_URL plus any CORS_ORIGINS. Empty (unconfigured instance) preserves the legacy reflect-all
+ *  behaviour; a configured instance (production sets APP_URL) is locked down. */
+function corsAllowlist(env: Env): Set<string> {
+  const list = new Set<string>();
+  const add = (u?: string) => {
+    const s = u?.trim();
+    if (!s) return;
+    try {
+      list.add(new URL(s).origin);
+    } catch {
+      /* ignore a malformed entry */
+    }
+  };
+  add(env.APP_URL);
+  for (const o of (env.CORS_ORIGINS ?? "").split(",")) add(o);
+  return list;
+}
+
+/** CORS that reflects the request origin so the SPA (different origin) can call the API. Credentials
+ *  are echoed only for allowlisted origins (SR-SEC-15); other origins get non-credentialed access,
+ *  enough for the public Bearer-keyed read API but not to ride a user's session cookie. */
+export function withCors(res: Response, req: Request, env: Env): Response {
   const origin = req.headers.get("Origin");
   if (!origin) return res;
   const h = new Headers(res.headers);
   h.set("Access-Control-Allow-Origin", origin);
   h.set("Vary", "Origin");
-  h.set("Access-Control-Allow-Credentials", "true");
   h.set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS");
   h.set("Access-Control-Allow-Headers", req.headers.get("Access-Control-Request-Headers") ?? "content-type");
   h.set("Access-Control-Max-Age", "86400");
+  const allowed = corsAllowlist(env);
+  if (allowed.size === 0 || allowed.has(origin)) h.set("Access-Control-Allow-Credentials", "true");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }

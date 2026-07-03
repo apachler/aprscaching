@@ -160,7 +160,11 @@ export class ConnectedLink {
 
   // ----------------------------------------------------------------- U-frame handlers
   private onSabm(f: Ax25Frame, mod: 8 | 128): void {
-    // incoming connect, or peer re-establishing
+    // incoming connect, or peer re-establishing.
+    // SR-PKT-15: a SABM on an already-connected link is the peer RESETTING it — reset() drops any
+    // unacked TX + queued data and to("connected") is a no-op, so the host would otherwise never learn
+    // its data was discarded. Surface it as an error before we wipe the state.
+    if (this.state === "connected") this.ev.error?.("link reset by peer");
     this.mod = mod; // adopt the modulus the peer asked for (SABM/SABME)
     this.reset();
     this.tx("UA", false, f.pf);
