@@ -208,6 +208,7 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(Number(env.PORTSTATS_TTL_DAYS) || 7)),
     env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
     env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
+    env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(nowS * 1000), // SR-SEC-09 expired windows
   ]);
   // SR-FED-10: tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the

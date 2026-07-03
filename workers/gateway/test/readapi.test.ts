@@ -33,7 +33,7 @@ describe("public read API /api/v1 (ADR-4a)", () => {
 
   it("rate-limits per IP and 429s past the anonymous budget", async () => {
     const env = { API_RATE_ANON: "2", API_RATE_WINDOW_SEC: "60" } as unknown as Env;
-    const ip = { "x-forwarded-for": "203.0.113.7" };
+    const ip = { "cf-connecting-ip": "203.0.113.7" }; // edge-stamped — XFF alone is no longer trusted (SR-SEC-09)
     // /spots is disabled by default → exercises the gate without needing the DB
     const a = await handleApiV1(req("GET", "/spots", ip), env, "/spots");
     const b = await handleApiV1(req("GET", "/spots", ip), env, "/spots");

@@ -92,7 +92,10 @@ const server = Bun.serve<WsData, undefined>({
       if (srv.upgrade(req, { data: { region } })) return undefined;
       return new Response("websocket upgrade failed", { status: 400 });
     }
-    return handle(req, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
+    // SR-SEC-09: overwrite any client-supplied x-real-ip with the socket address (mirrors servers/node)
+    const fwd = new Request(req, { headers: new Headers(req.headers) });
+    fwd.headers.set("x-real-ip", srv.requestIP(req)?.address ?? "unknown");
+    return handle(fwd, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
   },
   websocket: {
     open(ws) {

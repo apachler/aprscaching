@@ -11,7 +11,7 @@ import { recordWatchHeard } from "./watch.js";
 import { recordRendezvous } from "./rendezvous.js";
 import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
-import { rateLimited } from "./corroborate_privacy.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
@@ -65,7 +65,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   if (!trusted) {
     const signed = await verifySignedIngest(req, env, body.data.packets);
     if (!signed) return new Response("unauthorized", { status: 401 });
-    if (rateLimited(`ingest:${signed.callsign}`, Date.now(), 240, 60_000))
+    if (await rateLimitedDurable(env, `ingest:${signed.callsign}`, Date.now(), 240, 60_000))
       return json({ error: "rate limited" }, { status: 429 });
   }
 

@@ -19,6 +19,9 @@ export interface Env {
   // rotating secrets (SR-SEC-11).
   SESSION_TTL_DAYS?: string;
   SESSION_EPOCH?: string;
+  // "1" when a reverse proxy (Caddy/CF tunnel, topology 2/3) fronts this instance — only then is
+  // x-forwarded-for trusted for rate-limit keying (SR-SEC-09).
+  TRUST_PROXY?: string;
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
   // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin
@@ -125,6 +128,7 @@ export const ENV_STRING_KEYS = [
   "SESSION_SECRET",
   "SESSION_TTL_DAYS",
   "SESSION_EPOCH",
+  "TRUST_PROXY",
   "ADMIN_CALLSIGNS",
   "INSTANCE",
   "FED_PRIVATE_KEY",

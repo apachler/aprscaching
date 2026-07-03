@@ -21,7 +21,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { clientIp, rateLimited } from "./corroborate_privacy.js";
+import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./workbench.js";
@@ -87,7 +87,7 @@ async function gate(req: Request, env: Env): Promise<{ tier: "anon" | "keyed"; k
     }
   }
   const bucket = key ? `apikey:${key}` : `apiip:${clientIp(req)}`;
-  if (rateLimited(bucket, Date.now(), max, windowSec(env) * 1000)) {
+  if (await rateLimitedDurable(env, bucket, Date.now(), max, windowSec(env) * 1000)) {
     return json(
       { error: "rate limit exceeded", tier, limit: max, windowSec: windowSec(env) },
       { status: 429, headers: { "retry-after": String(windowSec(env)), "x-ratelimit-limit": String(max) } },
@@ -112,7 +112,7 @@ function apiIndex(env: Env): Response {
 
 async function issueKey(req: Request, env: Env): Promise<Response> {
   // throttle issuance per IP so the free endpoint can't be farmed
-  if (rateLimited(`apikeyissue:${clientIp(req)}`, Date.now(), 5, 60_000))
+  if (await rateLimitedDurable(env, `apikeyissue:${clientIp(req, env)}`, Date.now(), 5, 60_000))
     return json({ error: "too many key requests; try again shortly" }, { status: 429 });
   const body = (await req.json().catch(() => ({}))) as { label?: string; ownerCall?: string };
   const key = "acg_" + crypto.randomUUID().replace(/-/g, "");

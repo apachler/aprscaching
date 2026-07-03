@@ -2,7 +2,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
-import { rateLimited, clientIp } from "./corroborate_privacy.js";
+import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -89,7 +89,7 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
   const origins = authOrigins(env);
   const rp = rpId(env);
   if (!origins || !rp) return webauthnUnconfigured();
-  if (rateLimited(`pkbegin:${clientIp(req)}`, Date.now(), 20, 60_000))
+  if (await rateLimitedDurable(env, `pkbegin:${clientIp(req, env)}`, Date.now(), 20, 60_000))
     return json({ error: "rate limited" }, { status: 429 });
   const { callsign, email } = (await req.json().catch(() => ({}))) as { callsign?: string; email?: string };
   const cs = String(callsign ?? "")

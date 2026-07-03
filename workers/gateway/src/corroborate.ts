@@ -25,7 +25,7 @@ import {
   bucketTs,
   corroborationAuthorized,
   clientIp,
-  rateLimited,
+  rateLimitedDurable,
   negCached,
   negStore,
 } from "./corroborate_privacy.js";
@@ -121,7 +121,10 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
 
   const cfg = coarsenConfig(env);
   const nowMs = Date.now();
-  if (rateLimited(`ip:${clientIp(req)}`, nowMs) || rateLimited(`call:${baseCall(b.callsign)}`, nowMs))
+  if (
+    (await rateLimitedDurable(env, `ip:${clientIp(req, env)}`, nowMs)) ||
+    (await rateLimitedDurable(env, `call:${baseCall(b.callsign)}`, nowMs))
+  )
     return json({ corroborated: false, error: "rate limited" }, { status: 429 });
 
   const key = probeKey(b, cfg);

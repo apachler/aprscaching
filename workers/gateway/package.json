@@ -11,7 +11,8 @@
     "./runtime": "./src/runtime.ts",
     "./live": "./src/live.ts",
     "./import": "./src/import/engine.ts",
-    "./federation_sync": "./src/federation_sync.ts"
+    "./federation_sync": "./src/federation_sync.ts",
+    "./corroborate_privacy": "./src/corroborate_privacy.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

@@ -102,6 +102,9 @@ const server = http.createServer(async (nreq, nres) => {
       if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
       else if (v != null) headers.set(k, v);
     }
+    // SR-SEC-09: the socket address is the ONLY client identity we mint ourselves — overwrite
+    // any client-supplied x-real-ip so rate-limit keying can trust it.
+    headers.set("x-real-ip", nreq.socket.remoteAddress ?? "unknown");
     const hasBody = method !== "GET" && method !== "HEAD";
     const request = new Request(url, { method, headers, body: hasBody ? await readBody(nreq) : undefined });
     // (readBody returns a string; the gateway API is JSON throughout)

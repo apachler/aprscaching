@@ -76,11 +76,45 @@ export const RL_WINDOW_MS = 60_000;
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
   const w = rlBuckets.get(key);
   if (!w || nowMs >= w.resetAt) {
+    // SR-FED-11: sweep expired windows once the map grows — long-lived Node/Bun processes
+    // otherwise accumulate one entry per key forever.
+    if (rlBuckets.size > 5000) for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
     rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs });
     return false;
   }
   w.count++;
   return w.count > max;
+}
+
+/**
+ * SR-SEC-09: the DURABLE fixed-window limiter — one D1/SQLite row per key, incremented and rolled
+ * over in a single upsert, so the budget survives isolate fan-out (Workers) and process restarts
+ * (Node/Bun) alike. Used by every abuse-facing gate (ADR-4a read API, corroboration, key issuance,
+ * signed ingest, passkey begin). Falls back to the in-memory limiter if the DB write fails —
+ * degraded protection beats an outage that 500s every read.
+ */
+export async function rateLimitedDurable(
+  env: Env,
+  key: string,
+  nowMs: number,
+  max = RL_MAX,
+  windowMs = RL_WINDOW_MS,
+): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare(
+      `INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         count    = CASE WHEN rate_limits.reset_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+         reset_at = CASE WHEN rate_limits.reset_at <= ? THEN ? ELSE rate_limits.reset_at END
+       RETURNING count`,
+    )
+      .bind(key, nowMs + windowMs, nowMs, nowMs, nowMs + windowMs)
+      .first<{ count: number }>();
+    if (row?.count != null) return row.count > max;
+  } catch {
+    /* fall through to the in-memory limiter */
+  }
+  return rateLimited(key, nowMs, max, windowMs);
 }
 
 const negMemo = new Map<string, number>(); // key -> expiry (ms)
@@ -108,11 +142,22 @@ export function corroborationAuthorized(env: Env, req: Request): boolean {
   return secretOk(req.headers.get("x-fed-secret"), secret);
 }
 
-/** Best-effort client ip for rate-limit keying (CF edge header, then XFF, then unknown). */
-export function clientIp(req: Request): string {
-  return (
-    req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "unknown"
-  );
+/**
+ * SR-SEC-09: client ip for rate-limit keying, from sources the CLIENT cannot choose.
+ *  - cf-connecting-ip: stamped by Cloudflare's edge (never client-forwarded).
+ *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
+ *    topology 2/3 behind Caddy/CF) — otherwise any direct client could rotate identities per request.
+ *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address, so a client-supplied
+ *    value never survives to this point on the self-host runtimes.
+ */
+export function clientIp(req: Request, env?: Env): string {
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf;
+  if (env?.TRUST_PROXY === "1") {
+    const xff = (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim();
+    if (xff) return xff;
+  }
+  return req.headers.get("x-real-ip") || "unknown";
 }
 
 export function coarsenConfig(env: Env): CoarsenConfig {
