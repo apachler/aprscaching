@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
-  "description": "aprscaching.com reborn — an APRScaching-first web workbench",
+  "description": "aprscaching.com reborn \u2014 an APRScaching-first web workbench",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
@@ -22,7 +22,7 @@
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "esbuild": "0.21.5",
+    "esbuild": "0.28.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",

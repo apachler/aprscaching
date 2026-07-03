@@ -14,13 +14,13 @@
     "@aprsweb/gateway": "workspace:*",
     "@aprsweb/shared": "workspace:*",
     "better-sqlite3": "^11.8.0",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.1.0",
     "@types/ws": "^8.5.12",
-    "tsx": "^4.16.0",
+    "tsx": "^4.22.5",
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"
   }
