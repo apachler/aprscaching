@@ -59,12 +59,17 @@ export function modulateAfsk1200(
 class Hdlc {
   private bits: number[] = [];
   private ones = 0;
+  // SR-PARSE-02: a valid AX.25 frame is ≤ ~330 bytes (~2640 bits). A steady 0101 tone (a soundcard
+  // IGate on noise, or crafted audio) never hits a flag or the >6-ones reset, so cap the accumulator
+  // and drop a frame that grows past any legal length instead of letting `bits` grow ~1200/s forever.
+  private static readonly MAX_BITS = 4096;
   constructor(private onFrame: (f: Uint8Array) => void) {}
   rx(bit: number): void {
     if (bit === 1) { this.ones++; this.bits.push(1); if (this.ones > 6) { this.bits.length = 0; this.ones = 0; } return; }
     if (this.ones === 5) { this.ones = 0; return; }                          // stuffed 0 → drop
     if (this.ones === 6) { this.ones = 0; this.bits.length = Math.max(0, this.bits.length - 7); this.finish(); this.bits.length = 0; return; } // flag
     this.ones = 0; this.bits.push(0);
+    if (this.bits.length > Hdlc.MAX_BITS) this.bits.length = 0;              // over-long, no flag → not a frame
   }
   private finish(): void {
     const n = this.bits.length;

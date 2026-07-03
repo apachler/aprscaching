@@ -36,11 +36,18 @@ export class RegionRoom {
     return new Response("expected websocket", { status: 426 });
   }
 
-  async webSocketMessage(ws: WebSocket, msg: string): Promise<void> {
-    const parsed = Subscribe.safeParse(JSON.parse(msg));
-    // persist per-connection subscription so it survives hibernation
-    if (parsed.success) ws.serializeAttachment(parsed.data);
+  async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer): Promise<void> {
+    // SR-RT-04: a hostile/buggy client can send non-JSON or a binary frame — neither must crash the DO.
+    try {
+      const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg);
+      const parsed = Subscribe.safeParse(JSON.parse(text));
+      if (parsed.success) ws.serializeAttachment(parsed.data);   // survives hibernation
+    } catch { /* ignore junk frames */ }
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> { try { ws.close(); } catch {} }
+  async webSocketClose(ws: WebSocket, code?: number, reason?: string): Promise<void> {
+    // SR-RT-13: echo a valid close code (1000 when the client sent a reserved/absent one).
+    try { ws.close(code && code >= 1000 && code < 5000 ? code : 1000, reason); } catch { /* already closing */ }
+  }
+  async webSocketError(ws: WebSocket): Promise<void> { try { ws.close(1011, "error"); } catch { /* noop */ } }
 }

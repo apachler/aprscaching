@@ -16,7 +16,7 @@ import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { WebSocketServer } from "ws";
 import { handle, runScheduled, syncAllPeers } from "@aprsweb/gateway/app";
-import type { Env } from "@aprsweb/gateway/env";
+import { stringEnvFrom, type Env } from "@aprsweb/gateway/env";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
 import { Rooms } from "./rooms.js";
@@ -81,35 +81,8 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
-  SESSION_SECRET: process.env.SESSION_SECRET,
-  ALLOW_DEV_TOKENS: process.env.ALLOW_DEV_TOKENS,
-  ADMIN_CALLSIGNS: process.env.ADMIN_CALLSIGNS,
-  INSTANCE: process.env.INSTANCE,
-  FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
-  FED_KEY_HISTORY: process.env.FED_KEY_HISTORY,
-  FED_ROTATIONS: process.env.FED_ROTATIONS,
-  FED_REGISTRY: process.env.FED_REGISTRY,
-  FED_REGISTRY_KEY: process.env.FED_REGISTRY_KEY,
-  FED_OPERATOR: process.env.FED_OPERATOR,
-  FED_APRS_CALL: process.env.FED_APRS_CALL,
-  FED_PEERS: process.env.FED_PEERS,
-  FED_DISCOVER: process.env.FED_DISCOVER,
-  FED_CORROBORATION_QUORUM: process.env.FED_CORROBORATION_QUORUM,
-  FED_AUTO_PROMOTE: process.env.FED_AUTO_PROMOTE,
-  TOMBSTONE_TTL_DAYS: process.env.TOMBSTONE_TTL_DAYS,
-  FED_CORROBORATION_SECRET: process.env.FED_CORROBORATION_SECRET,
-  FED_REVEAL_IGATE: process.env.FED_REVEAL_IGATE,
-  FED_CORROBORATION_GRID_DEG: process.env.FED_CORROBORATION_GRID_DEG,
-  FED_CORROBORATION_TIME_BUCKET_SEC: process.env.FED_CORROBORATION_TIME_BUCKET_SEC,
-  FED_CORROBORATION_DIST_BUCKET_M: process.env.FED_CORROBORATION_DIST_BUCKET_M,
-  FED_SUBMIT_SECRET: process.env.FED_SUBMIT_SECRET,
-  FED_SUBMIT_INSTANCES: process.env.FED_SUBMIT_INSTANCES,
-  FED_HUB_URL: process.env.FED_HUB_URL,
-  FED_RELAY_SECRET: process.env.FED_RELAY_SECRET,
-  OKAPI_BASE: process.env.OKAPI_BASE,
-  OKAPI_KEY: process.env.OKAPI_KEY,
-  BBS_CALL: process.env.BBS_CALL,
-  ...SOURCE,
+  ...stringEnvFrom(process.env),   // SR-RT-03: forward EVERY config key, not a hand-picked subset
+  ...SOURCE,                        // host-resolved SOURCE_* (git HEAD fallback) wins over the raw env
 };
 
 // ---- node:http <-> Web Request/Response ----
@@ -148,8 +121,12 @@ server.on("upgrade", (req, socket, head) => {
 
 server.listen(PORT, () => console.log(`aprscaching node-gateway listening on :${PORT}  (db: ${DB_PATH})`));
 
-// nightly TTL of firehose positions (logger positions kept longer for verification)
-setInterval(() => void runScheduled(env).catch((e) => console.error("scheduled:", e)), 24 * 3600 * 1000);
+// nightly TTL of firehose positions (logger positions kept longer for verification).
+// SR-RT-02: run once at startup too — a Pi that reboots more often than daily would otherwise never
+// prune, so the DB only grows. Idempotent (the digests mark alerts notified; the deletes are bounded).
+const runTtl = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
+runTtl();
+setInterval(runTtl, 24 * 3600 * 1000);
 
 // pull from federation peers on an interval (default 5 min; only if peers are configured)
 const FED_SYNC_MS = Number(process.env.FED_SYNC_INTERVAL_MS ?? 5 * 60 * 1000);

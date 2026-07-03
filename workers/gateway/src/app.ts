@@ -62,13 +62,36 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
   return withCors(res, req);
 }
 
-/** Scheduled work: TTL firehose positions (loggers kept longer) + pull from federation peers. */
+/**
+ * Frequent federation tasks (SR-RT-01): pull from peers, push to a hub, answer relay queries. Cheap +
+ * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
+ */
+export async function runFrequentSync(env: Env): Promise<void> {
+  try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
+  try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
+  try { await relayPoll(env); } catch (e) { console.error("relay poll:", (e as Error).message); }
+}
+
+/**
+ * The full nightly job: TTL-prune every always-growing table (SR-RT-05), then the federation sync and
+ * the watch-alert digests. Node/Bun run this once at boot + daily; the Worker runs it on the `0 4` cron.
+ */
 export async function runScheduled(env: Env): Promise<void> {
   const nowS = Math.floor(Date.now() / 1000);
   await env.DB.prepare("DELETE FROM positions WHERE source = 'firehose' AND ts < ?").bind(nowS - 7 * 24 * 3600).run();
   // raw packet ring (Stage 0.2) is a short-lived workbench diagnostic — prune hard (default 24h)
   const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
-  await env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(nowS - pktTtl).run();
+  // SR-RT-05: bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
+  // (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
+  const days = (n: number) => nowS - n * 24 * 3600;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(nowS - pktTtl),
+    env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(days(Number(env.MESSAGES_TTL_DAYS) || 7)),
+    env.DB.prepare("DELETE FROM sensor_readings WHERE ts < ?").bind(days(Number(env.SENSOR_TTL_DAYS) || 30)),
+    env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(Number(env.PORTSTATS_TTL_DAYS) || 7)),
+    env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
+    env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
+  ]);
   // tombstones are tiny + PII-free; retain long enough for every peer to converge (T1.3, default 180d)
   const tombTtl = (Number(env.TOMBSTONE_TTL_DAYS) || 180) * 24 * 3600;
   await env.DB.batch([
@@ -76,11 +99,7 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM remote_tombstones WHERE ts < ?").bind(nowS - tombTtl),
     env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?").bind(nowS - 3600), // relay rows are ephemeral
   ]);
-  try { await syncAllPeers(env); } catch (e) { console.error("federation sync:", (e as Error).message); }
-  // push-to-hub (T2.3): a NAT'd spoke contributes its records to a reachable hub (no-op unless configured)
-  try { await pushToHub(env); } catch (e) { console.error("push-to-hub:", (e as Error).message); }
-  // rendezvous relay (T2.3 path 2): a NAT'd spoke answers relay queries from its hub (no-op unless configured)
-  try { await relayPoll(env); } catch (e) { console.error("relay poll:", (e as Error).message); }
+  await runFrequentSync(env);
   // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
   try { await runDigests(env); } catch (e) { console.error("digests:", (e as Error).message); }
 }

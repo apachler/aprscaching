@@ -398,25 +398,25 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 
 ## Detail — Tri-runtime plumbing (`servers/{node,bun}`, `workers/gateway` DO/index/room)
 
-- [ ] **SR-RT-01 (High) — `scheduled()` ignores the cron.** ✓verified: `index.ts:26` runs
+- [x] **SR-RT-01 (High) — `scheduled()` ignores the cron.** ✓verified: `index.ts:26` runs
   `runScheduled` for both crons (`wrangler.toml:32`: `"0 4 * * *"` + `"*/15 * * * *"`), so the full
   nightly TTL/rollup/digest job runs 96×/day on Workers — a D1 rows_read cost bug and a digest-cadence
   divergence from Node/Bun. *Fix:* `event.cron === "0 4 * * *" ? runScheduled(env) : syncAllPeers(env)`.
-- [ ] **SR-RT-02 (High) — Node/Bun TTL never runs on frequent restart** (`server.ts:139`): plain
+- [x] **SR-RT-02 (High) — Node/Bun TTL never runs on frequent restart** (`server.ts:139`): plain
   `setInterval(24 h)` with no initial run; a Pi rebooting more often than daily never prunes. *Fix:*
   run once at startup then re-arm.
-- [ ] **SR-RT-03 (High) — servers drop most of `Env`** (`server.ts:44-100`): Bun omits `ADMIN_CALLSIGNS`
+- [x] **SR-RT-03 (High) — servers drop most of `Env`** (`server.ts:44-100`): Bun omits `ADMIN_CALLSIGNS`
   (no sysop possible); both omit `APP_URL`, `RP_ID`, `EMAIL_*`, `VAPID_*`, `PACKETS_TTL_HOURS`,
   `API_RATE_*`, `FIRST_PARTY_SITES`, etc. → features silently dead on self-host. *Fix:* build env from
   `process.env` filtered by an exported `ENV_KEYS`.
-- [ ] **SR-RT-04 (High) — DO `webSocketMessage` crashes on junk** (`room.ts:39-43`): unguarded
+- [x] **SR-RT-04 (High) — DO `webSocketMessage` crashes on junk** (`room.ts:39-43`): unguarded
   `JSON.parse`; also invoked with `ArrayBuffer` (the `msg:string` type is a lie). Node wraps this in
   try/catch. *Fix:* try/catch + decode binary.
-- [ ] **SR-RT-05 (High) — growing tables with no TTL** (`app.ts:66-78`): prunes only firehose
+- [x] **SR-RT-05 (High) — growing tables with no TTL** (`app.ts:66-78`): prunes only firehose
   positions, `packets_recent`, tombstones, relay queue. Unbounded: `messages` (also unindexed →
   `workbench.ts:78` full scans), `sensor_readings`, `port_stats`, `watch_alerts` (never deleted),
   `rendezvous_log`, `node_mheard`. *Fix:* extend `runScheduled` with bounded retention + `idx_messages_ts`.
-- [ ] **SR-RT-06 (High) — Node rooms no heartbeat/backpressure** (`rooms.ts:25-39`): no ping/isAlive
+- [x] **SR-RT-06 (High) — Node rooms no heartbeat/backpressure** (`rooms.ts:25-39`): no ping/isAlive
   sweep; `dispatch` ignores `bufferedAmount`. A half-open client (phone out of coverage) buffers the
   whole region firehose → slow OOM + leaked Set entry. *Fix:* 30 s heartbeat + `bufferedAmount` cap.
 - [ ] **SR-RT-07 (Medium) — TTL delete unindexed** (`app.ts:68`, schema `0001:91`): `DELETE ... WHERE
@@ -436,7 +436,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
   `media.ts:9`): `DELETE cache_stages` never calls `MEDIA.delete`; the `..`-strip guard is unsafe for
   any future raw-key caller. *Fix:* delete media on stage replace; allowlist regex + `path.resolve`
   containment.
-- [ ] **SR-RT-13 (Low) — DO close/error handlers** (`room.ts:45`): `close()` with no code/reason; no
+- [x] **SR-RT-13 (Low) — DO close/error handlers** (`room.ts:45`): `close()` with no code/reason; no
   `webSocketError`. *Fix:* echo `close(code, reason)` + add `webSocketError`.
 - [ ] **SR-RT-14 (Low) — Bun backpressure drop + double-scheduled sync** (`rooms.ts:38`, `server.ts:139`
   vs `app.ts:79`): Bun `send()` backpressure return ignored → dropped geofence prompts; `syncAllPeers`
@@ -451,7 +451,7 @@ Text decoders are hardened (length guards, null-returning); exposure is in the b
   browser mesh link via the read loop's catch), or — when the frame is a subarray — silently reads
   into the adjacent frame and plants a bogus station. *Fix:* `p+4 > b.length ? 0 : …` and `break` in
   `walk`. *Test:* `parseMeshPacket([0x0d,0x01,0x02])` → null, no throw.
-- [ ] **SR-PARSE-02 (High) — AFSK HDLC unbounded accumulator** (`afsk.ts:63-67`): a steady `0101` tone
+- [x] **SR-PARSE-02 (High) — AFSK HDLC unbounded accumulator** (`afsk.ts:63-67`): a steady `0101` tone
   hits neither the >6-ones reset nor a flag → `this.bits` grows ~1200/s forever on a soundcard IGate.
   *Fix:* drop when `bits.length > 4096`.
 - [ ] **SR-PARSE-03 (Medium) — object/item null-island** (`decode.ts:106-124`): `posFields` returns
