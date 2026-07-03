@@ -48,6 +48,18 @@ describe("FBB forwarding session over the loopback", () => {
     expect(B.queue).toHaveLength(0);
   });
 
+  it("SR-PKT-02: a short/partial FS reply keeps the un-verdicted messages queued (no silent drop)", () => {
+    const A = makeStore([
+      msg({ from: "OE8BBS", to: "DL1AAA", bid: "1_A", title: "one", body: "alpha" }),
+      msg({ from: "OE8BBS", to: "DL2BBB", bid: "2_A", title: "two", body: "bravo" }),
+    ]);
+    const s = new FbbSession(A, { initiator: true });
+    s.start();                                   // SID + FB×2 + F>  → phase await-fs
+    const r = s.feed("FS +");                    // only ONE verdict for TWO proposals
+    expect(r.out.join("\n")).toContain("one");   // the accepted message's body went out
+    expect(A.queue.map((m) => m.bid)).toEqual(["2_A"]);  // the un-verdicted one is STILL queued, not lost
+  });
+
   it("rejects a message the partner already holds (BID dedup) and doesn't resend", () => {
     const dup = msg({ from: "OE8BBS", to: "DL1ABC", bid: "1_OE8", title: "Dup", body: "already have this" });
     const A = makeStore([dup]);

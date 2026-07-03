@@ -93,6 +93,7 @@ export class NetromNodeRunner {
     this.broadcast();
     setInterval(() => this.broadcast(), bMs);
     setInterval(() => this.node.decay(), dMs);
+    setInterval(() => { for (const c of this.circuits) c.poll(); }, 1000);  // SR-PKT-06: drive circuit T1 retransmit/teardown
     console.log(`[netrom] node ${this.o.alias}:${this.o.mycall} active on ${this.port}`);
   }
 

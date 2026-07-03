@@ -67,7 +67,10 @@ export class FbbSession {
     const queued = this.store.outbound();
     this.offered.forEach((p, i) => {
       const v = verdicts[i];
-      if (v === "defer") return;                       // '=' → keep queued, offer again next time
+      // SR-PKT-02: a short/garbled FS reply leaves later verdicts undefined. Only an EXPLICIT accept or
+      // reject dequeues the message; anything else ('=' defer, missing, unknown) keeps it queued so a
+      // truncated `FS +` to a 5-proposal block can't silently drop the other four.
+      if (v !== "accept" && v !== "reject") return;
       if (v === "accept") {                            // '+' → send the body
         const m = queued.find((q) => q.bid === p.bid);
         if (m) out.push(m.title, ...m.body.split("\n"), CTRLZ);

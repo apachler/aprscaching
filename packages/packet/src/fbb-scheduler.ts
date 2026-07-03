@@ -36,6 +36,7 @@ export interface ForwardLink {
 export type LinkFactory = (partner: GwPartner) => ForwardLink;
 
 const SESSION_TIMEOUT_MS = 120_000;
+const CONNECT_TIMEOUT_MS = 30_000;   // SR-PKT-07: a partner that never answers must not block the slot forever
 
 /** Per-session FbbStore over a pool snapshot: the outbound queue drains as messages are sent; inbound is
  *  buffered and flushed to the gateway after the session (which dedups by BID). */
@@ -55,7 +56,7 @@ export class SessionStore implements FbbStore {
 
 export interface ForwarderOpts {
   api: ForwardApi; linkFactory: LinkFactory;
-  pollMs?: number; sid?: string; now?: () => number; sessionTimeoutMs?: number;
+  pollMs?: number; sid?: string; now?: () => number; sessionTimeoutMs?: number; connectTimeoutMs?: number;
 }
 
 export class BbsForwarder {
@@ -95,8 +96,18 @@ export class BbsForwarder {
     const store = new SessionStore(await this.o.api.pool(p.call));
     const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid });
     const link = this.o.linkFactory(p);
-    await link.connect();
 
+    // SR-PKT-07: bound the connect. If it never settles, disconnect and throw so `busy` is released
+    // (the caller's finally) instead of the partner being wedged forever.
+    let connectTimer: ReturnType<typeof setTimeout> | null = null;
+    await Promise.race([
+      link.connect(),
+      new Promise<void>((_res, rej) => { connectTimer = setTimeout(() => { link.disconnect(); rej(new Error("connect timeout")); }, this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS); }),
+    ]).finally(() => { if (connectTimer !== null) clearTimeout(connectTimer); });
+
+    // SR-PKT-03: only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
+    // close mid-body the messages were NOT delivered — leave them queued (BID dedup makes re-send safe).
+    let cleanDone = false;
     await new Promise<void>((resolve) => {
       let settled = false;
       const finish = () => { if (!settled) { settled = true; resolve(); } };
@@ -105,14 +116,14 @@ export class BbsForwarder {
       link.onData((bytes) => {
         const out = fwd.onData(bytes);
         if (out) link.send(out);
-        if (fwd.done) { clearTimeout(timer); link.disconnect(); finish(); }
+        if (fwd.done) { cleanDone = true; clearTimeout(timer); link.disconnect(); finish(); }
       });
       const open = fwd.start();
       if (open) link.send(open);
     });
 
     for (const m of store.inbox) await this.o.api.inbound(m, `rf-fbb:${p.call}`);
-    await this.o.api.markSent(p.call, store.sentBids);
-    return { forwarded: store.sentBids.length, received: store.inbox.length };
+    if (cleanDone) await this.o.api.markSent(p.call, store.sentBids);
+    return { forwarded: cleanDone ? store.sentBids.length : 0, received: store.inbox.length };
   }
 }

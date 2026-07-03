@@ -101,6 +101,19 @@ describe("connected-mode session server", () => {
     expect(sent).toBe(0);
   });
 
+  it("SR-PKT-05: refuses an extended (SABME) connect with DM, opening no session", () => {
+    const sent: Ax25Frame[] = [];
+    const server = new SessionServer({
+      send: (f) => sent.push(f),
+      services: [{ addr: A("OE8BBS"), app: (r) => new BbsSession(r.call, memStore()) }],
+    });
+    server.onFrame({ dst: A("OE8BBS"), src: A("OE1USR"), command: true, type: "SABME", pf: true });
+    expect(server.count()).toBe(0);                 // no mod-128 session stood up
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.type).toBe("DM");               // politely refused → peer falls back to SABM
+    expect(sent[0]!.dst).toEqual(A("OE1USR"));
+  });
+
   it("awaits an async app factory (BBS mail warm-up) before greeting, then serves from the snapshot", async () => {
     const rows: BbsMsgFull[] = [
       { id: 5, type: "P", from: "OE8APR", to: "OE1USR", subject: "welcome", postedAt: 1000, body: "hi there OE1USR", readAt: null },

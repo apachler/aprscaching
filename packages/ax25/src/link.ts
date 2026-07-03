@@ -173,7 +173,9 @@ export class ConnectedLink {
   // ----------------------------------------------------------------- timers
   private onT1(): void {
     if (this.state === "connecting") {
-      if (this.rc++ < this.cfg.n2) { this.tx("SABM", true, true); this.startT1(); } else this.fail("no answer to SABM");
+      // SR-PKT-04: retry with the SAME frame we connected with — a mod-128 link must resend SABME,
+      // not plain SABM (which would flip the peer to mod-8 and garble the control fields).
+      if (this.rc++ < this.cfg.n2) { this.tx(this.mod === 128 ? "SABME" : "SABM", true, true); this.startT1(); } else this.fail(`no answer to ${this.mod === 128 ? "SABME" : "SABM"}`);
     } else if (this.state === "disconnecting") {
       if (this.rc++ < this.cfg.n2) { this.tx("DISC", true, true); this.startT1(); } else { this.stopAll(); this.to("disconnected"); }
     } else if (this.state === "connected" || this.state === "recovering") {

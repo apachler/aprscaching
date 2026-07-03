@@ -48,6 +48,10 @@ export class SessionServer {
   onFrame(f: Ax25Frame): void {
     const svc = this.o.services.find((s) => sameAddr(s.addr, f.dst));
     if (!svc) return;                                     // not for one of our services
+    // SR-PKT-05: we only speak modulo-8 here (frames are decoded with extended=false). An extended
+    // SABME would make the link adopt mod-128 while we keep decoding mod-8 → a REJ-storm livelock.
+    // Refuse it with DM so the peer falls back to a plain SABM (mod-8) connect.
+    if (f.type === "SABME") { this.o.send({ dst: f.src, src: svc.addr, command: false, type: "DM", pf: f.pf }); return; }
     const key = this.key(f.src, svc.addr);
     const live = this.sessions.get(key);
     if (live) { live.link?.onReceive(f); return; }        // existing (or warming) session

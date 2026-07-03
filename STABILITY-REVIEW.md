@@ -316,23 +316,23 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
   data callback (`fbb-scheduler.ts:105-109`), an uncaught exception that kills the daemon remotely.
   *Fix:* `if (this.phase !== "recv-block") return { out: [] };` before line 123; bail on empty
   `pendingRx`. *Test:* `feed("FQ")` then `feed("\x1a")` → no throw.
-- [ ] **SR-PKT-02 (High) — short FS reply loses mail.** `fbb-session.ts:68-76`: a missing verdict
+- [x] **SR-PKT-02 (High) — short FS reply loses mail.** `fbb-session.ts:68-76`: a missing verdict
   falls through to `store.sent(p.bid)`; `FS +` to a 5-proposal block dequeues 4 messages without
   sending. *Fix:* treat missing verdict as defer (`if (v !== "accept" && v !== "reject") return;`).
-- [ ] **SR-PKT-03 (High) — premature `markSent` on timeout.** `fbb-scheduler.ts:103,114-115`:
+- [x] **SR-PKT-03 (High) — premature `markSent` on timeout.** `fbb-scheduler.ts:103,114-115`:
   `store.sent` runs while building body lines and `markSent` reconciles unconditionally, even on the
   120 s timeout / abnormal close → a link that dies mid-body drops the message forever. *Fix:* only
   `markSent` on clean FQ completion; mark nothing on timeout (BID dedup makes re-send safe).
-- [ ] **SR-PKT-04 (High) — SABME retries as SABM.** `ax25/link.ts:175-176` hard-codes `tx("SABM")` on
+- [x] **SR-PKT-04 (High) — SABME retries as SABM.** `ax25/link.ts:175-176` hard-codes `tx("SABM")` on
   T1 retry while `this.mod` stays 128 → modulus mismatch, garbled control fields, REJ/T1 churn to N2.
   *Fix:* `tx(this.mod === 128 ? "SABME" : "SABM", ...)` (mirror `reestablish()` :236).
-- [ ] **SR-PKT-05 (High) — SessionServer mis-decodes SABME.** `session-server.ts:42-45` decodes with
+- [x] **SR-PKT-05 (High) — SessionServer mis-decodes SABME.** `session-server.ts:42-45` decodes with
   default `extended=false` while the link adopts mod-128 on inbound SABME (`link.ts:92`) and replies UA
   → REJ-storm livelock. *Fix:* refuse SABME (reply DM) or track per-session `extended` and pass it.
-- [ ] **SR-PKT-06 (High) — NET/ROM circuits have no timers.** `netrom-circuit.ts:10-11,48-54,135-142`:
+- [x] **SR-PKT-06 (High) — NET/ROM circuits have no timers.** `netrom-circuit.ts:10-11,48-54,135-142`:
   a lost ConnReq/ConnAck/DiscAck/Info leaves the circuit stuck forever and leaks the object + growing
   `txq`. *Fix:* deadline-based T1 (clock-injected) retransmit/teardown; cap `txq`.
-- [ ] **SR-PKT-07 (High) — forwarder connect has no timeout.** `fbb-scheduler.ts:97-98`: `await
+- [x] **SR-PKT-07 (High) — forwarder connect has no timeout.** `fbb-scheduler.ts:97-98`: `await
   link.connect()` before the session timer starts; `busy.add` is only cleared in `finally`, which never
   runs if connect never settles → partner blocked forever. *Fix:* race `connect()` against a timeout.
 - [ ] **SR-PKT-08 (Medium) — warming slot never expires** (`session-server.ts:66-93`): a never-settling
@@ -347,7 +347,7 @@ Architecture is good (pure, clock-injected timers that can't pile up); the defec
 - [ ] **SR-PKT-11 (Medium) — hostile-peer OOM** (`link-app.ts:60-62`, `bbs.ts:141`, `fbb-session.ts:131`,
   `netrom-connect-through.ts:74`): `buf += dec(info)` uncapped; body pushes uncapped; FBB ignores its
   proposed `size`. *Fix:* cap `buf` (8 KiB → disconnect), cap body bytes, abort over-size recv-blocks.
-- [ ] **SR-PKT-12 (Medium) — ConnReq in any state + window=0** (`netrom-circuit.ts:87-101`): forged
+- [x] **SR-PKT-12 (Medium) — ConnReq in any state + window=0** (`netrom-circuit.ts:87-101`): forged
   ConnReq mid-transfer rewrites peer ids; `window = Math.min(info[0] ?? window, window)` → 0 wedges
   `pump()`. *Fix:* state/id check on ConnReq; clamp window ≥ 1.
 - [ ] **SR-PKT-13 (Medium) — CachedBbsStore silent discard** (`cached-bbs-store.ts:56`): tells the RF

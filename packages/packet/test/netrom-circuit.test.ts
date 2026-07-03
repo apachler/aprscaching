@@ -71,3 +71,45 @@ describe("NET/ROM L4 circuit", () => {
     expect(origin.node).toEqual({ call: "OE8NOD", ssid: 1 });
   });
 });
+
+// SR-PKT-06: with a lossy channel, a circuit must retransmit on T1 and eventually tear itself down —
+// never wedge forever. Uses an injected clock so time is deterministic.
+describe("NET/ROM circuit timers (SR-PKT-06)", () => {
+  it("retransmits a lost ConnReq, then gives up after n2 and disconnects", () => {
+    let t = 0;
+    const sends: NrTpPacket[] = [];
+    const states: string[] = [];
+    // a black hole: nothing is ever delivered back → every ConnReq times out
+    const c = new NetromCircuit(
+      { send: (p) => sends.push(p), deliver: () => {}, state: (s) => states.push(s) },
+      { index: 3, id: 30 }, { user: A("OE1XYZ"), node: A("OE8NOD", 1) },
+      { clock: () => t, t1Ms: 1000, n2: 3 },
+    );
+    c.connect(4);
+    expect(sends.length).toBe(1);                    // initial ConnReq
+    for (let i = 0; i < 3; i++) { t += 1000; c.poll(); }  // three T1 expiries → three retransmits
+    expect(sends.length).toBe(4);                    // 1 initial + 3 retransmits
+    t += 1000; c.poll();                             // n2 exhausted → tear down
+    expect(c.state).toBe("disconnected");
+    expect(states).toContain("disconnected");
+  });
+
+  it("stops retransmitting once the ConnAck arrives", () => {
+    let t = 0;
+    const { a, b, pump } = pair();
+    // rebuild `a` with an injected clock (pair() uses the default); simplest: drive a fresh connected pair
+    a.connect(4); pump();
+    expect(a.state).toBe("connected");
+    // once connected with nothing outstanding, poll() is a no-op (no wedge, no spurious frames)
+    const before: NrTpPacket[] = [];
+    const c = new NetromCircuit({ send: (p) => before.push(p), deliver: () => {}, state: () => {} },
+      { index: 9, id: 9 }, { user: A("OE1XYZ"), node: A("OE8NOD", 1) }, { clock: () => t, t1Ms: 1000, n2: 3 });
+    c.connect(4);                                    // ConnReq sent, timer armed
+    // simulate the ack: feed a ConnAck back
+    c.onPacket({ circuitIndex: 2, circuitId: 2, txSeq: 2, rxSeq: 2, opcode: 0x2 /* ConnAck */, flags: 0 }, new Uint8Array([4]));
+    const n = before.length;
+    t += 5000; c.poll(); c.poll();                   // long after T1 would have fired
+    expect(before.length).toBe(n);                   // no retransmit — the timer was disarmed on connect
+    expect(b.state).toBe("connected");
+  });
+});
