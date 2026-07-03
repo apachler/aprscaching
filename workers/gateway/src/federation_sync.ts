@@ -51,6 +51,7 @@ interface PeerRow {
   bulletins_cursor: number;
   enabled: number;
   trust: TrustLevel;
+  added_via?: string;
 }
 
 interface FeedRecord {

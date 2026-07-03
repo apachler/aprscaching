@@ -159,3 +159,32 @@ describe("SR-SEC-12 — accounts persist only on register/finish", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ---- P1f: SR-FED-07 corroboration quorum + reputation hardening ----
+import { evidenceMatches, effectiveQuorum, shouldAutoPromote } from "../src/corroborate.js";
+
+describe("SR-FED-07 — quorum + matched-evidence reputation", () => {
+  const cfg = { distBucketM: 100, timeBucketSec: 600 };
+
+  it("evidence matching the winner's coarse buckets earns credit; fabrications do not", () => {
+    const winner = { distanceM: 300, ts: 10_000 };
+    expect(evidenceMatches({ distanceM: 300, ts: 10_000 }, winner, cfg)).toBe(true); // same buckets
+    expect(evidenceMatches({ distanceM: 400, ts: 10_500 }, winner, cfg)).toBe(true); // adjacent bucket tolerance
+    expect(evidenceMatches({ distanceM: 900, ts: 10_000 }, winner, cfg)).toBe(false); // wrong distance guess
+    expect(evidenceMatches({ distanceM: 300, ts: 20_000 }, winner, cfg)).toBe(false); // wrong time guess
+  });
+
+  it("an auto-promoted contributor raises the quorum floor to 2 — it can never mint Tier A alone", () => {
+    expect(effectiveQuorum(1, false)).toBe(1); // vetted-only set: operator's configured quorum
+    expect(effectiveQuorum(1, true)).toBe(2); // farmed promotion present: needs an independent second
+    expect(effectiveQuorum(3, true)).toBe(3); // an operator-raised quorum is never lowered
+    expect(effectiveQuorum(0, false)).toBe(1); // quorum never collapses to zero
+  });
+
+  it("auto-promotion still requires a clean record (regression guard)", () => {
+    expect(shouldAutoPromote("unvetted", 5, 0, 5)).toBe(true);
+    expect(shouldAutoPromote("unvetted", 5, 1, 5)).toBe(false); // any contradiction blocks it
+    expect(shouldAutoPromote("trusted", 5, 0, 5)).toBe(false);
+    expect(shouldAutoPromote("unvetted", 5, 0, 0)).toBe(false); // disabled by default
+  });
+});

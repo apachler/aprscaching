@@ -176,6 +176,28 @@ export function shouldAutoPromote(trust: string, repConfirmed: number, repFailed
   return threshold > 0 && trust === "unvetted" && repFailed === 0 && repConfirmed >= threshold;
 }
 
+/** SR-FED-07: does a peer's evidence AGREE with the confirmed winner? Reputation only accrues for
+ *  evidence that independently matches (same coarse distance/time buckets) — an always-yes peer that
+ *  fabricates `corroborated:true` cannot guess the winner's buckets from the coarsened query, so it
+ *  stops farming rep_confirmed toward auto-promotion. Pure + testable. */
+export function evidenceMatches(
+  ev: Pick<Evidence, "distanceM" | "ts">,
+  winner: Pick<Evidence, "distanceM" | "ts">,
+  cfg: { distBucketM: number; timeBucketSec: number },
+): boolean {
+  return (
+    Math.abs((ev.distanceM ?? 0) - (winner.distanceM ?? 0)) <= cfg.distBucketM &&
+    Math.abs((ev.ts ?? 0) - (winner.ts ?? 0)) <= cfg.timeBucketSec
+  );
+}
+
+/** SR-FED-07: the effective quorum — when ANY auto-promoted peer contributed evidence to the winning
+ *  set, a lone corroborator is not enough: a farmed promotion must never single-handedly mint Tier A.
+ *  Pure + testable. */
+export function effectiveQuorum(baseQuorum: number, autoPromotedContributed: boolean): number {
+  return autoPromotedContributed ? Math.max(baseQuorum, 2) : Math.max(baseQuorum, 1);
+}
+
 /** Reward the peers whose corroboration was independently confirmed (the find reached Tier A): bump
  *  rep_confirmed, and auto-promote any unvetted peer that crosses the threshold (T1.1). */
 async function creditCorroboration(env: Env, urls: string[], threshold: number): Promise<void> {
@@ -256,13 +278,20 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
     }),
   );
 
-  // Tier A is decided from TRUSTED hits only (quorum unchanged); unvetted hits are advisory.
+  // Tier A is decided from TRUSTED hits only; unvetted hits are advisory. SR-FED-07: when an
+  // auto-promoted peer is among the evidence-bearing trusted set, one voice is not enough — a
+  // farmed promotion must corroborate ALONGSIDE an operator-vetted peer, never alone.
+  const autoPromotedContributed = probes.some(
+    (x) => x.ev && x.peer.trust === "trusted" && x.peer.added_via === "auto-promoted",
+  );
   const trustedHits = probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => x.ev as Evidence);
-  const winner = selectCorroboration(trustedHits, quorum);
+  const winner = selectCorroboration(trustedHits, effectiveQuorum(quorum, autoPromotedContributed));
   if (winner) {
+    // SR-FED-07: reputation accrues ONLY for evidence that independently matches the confirmed
+    // winner — answering "yes" with fabricated evidence no longer farms rep toward promotion.
     await creditCorroboration(
       env,
-      probes.filter((x) => x.ev).map((x) => x.peer.url),
+      probes.filter((x) => x.ev && evidenceMatches(x.ev, winner, cfg)).map((x) => x.peer.url),
       threshold,
     );
     // T1.1 contradiction signal: peers that DENIED a corroboration the trusted quorum confirmed lose rep.
