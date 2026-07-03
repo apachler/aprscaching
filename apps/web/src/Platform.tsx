@@ -106,7 +106,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
   const draftMarker = useRef<maplibregl.Marker | null>(null);
   const modeRef = useRef<Mode>("view");
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const callsign = session.callsign;
   const verified = session.verified;
