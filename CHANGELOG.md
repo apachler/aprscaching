@@ -36,10 +36,10 @@ and federating with other instances into one open network.
 
 ### Security
 
-- Full reliability & security hardening pass ahead of going public (see `STABILITY-REVIEW.md`): all
-  Critical and High findings fixed, each with a regression test — trust-model corroboration legs,
-  federation malicious-peer defenses, session/secret boot guards, ingest resilience, packet-stack
-  robustness, and 24/7 runtime hygiene.
+- Full reliability & security hardening pass ahead of going public: every Critical, High, Medium and
+  Low finding fixed, each with a regression test — trust-model corroboration legs, federation
+  malicious-peer defenses, session/secret boot guards, ingest resilience, packet-stack robustness,
+  tri-runtime parity, config validation, web-app lifecycle/device-key handling, and 24/7 runtime hygiene.
 
 [Unreleased]: https://github.com/apachler/aprscaching/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/apachler/aprscaching/releases/tag/v1.0.0

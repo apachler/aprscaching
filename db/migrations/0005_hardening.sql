@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- 0005 hardening — additive columns/indexes backing the STABILITY-REVIEW fixes. Post-baseline, so
+-- 0005 hardening — additive columns/indexes backing the reliability/security hardening fixes. Post-baseline, so
 -- self-hosters who already ran 0001–0004 pick these up on the next migrate; a fresh DB gets them too.
 
 -- SR-SEC-07: bind APRS control-verification to the initiating account and rate-limit the 6-digit

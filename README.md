@@ -215,8 +215,7 @@ Contributions from hams, developers, and cachers are welcome.
 - **[SECURITY.md](SECURITY.md)** — how to report a vulnerability privately.
 - **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** · **[SUPPORT.md](SUPPORT.md)** ·
   **[CHANGELOG.md](CHANGELOG.md)**
-- **[STABILITY-REVIEW.md](STABILITY-REVIEW.md)** — the reliability/security audit (every finding
-  resolved); **[TODO.md](TODO.md)** — the short post-1.0 deferred list.
+- **[TODO.md](TODO.md)** — the short post-1.0 deferred list (what's intentionally left for after 1.0).
 
 aprscaching is **free in full** — every feature, forever. Donations (when available) are
 recognition-only and never gate functionality.

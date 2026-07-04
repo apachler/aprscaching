@@ -54,7 +54,8 @@ network layer (that's the operator's edge/CDN concern).
 - Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, VAPID keys, etc.) — use
   `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
   rotate anything it flags.
-- A living reliability/security audit lives in [`STABILITY-REVIEW.md`](STABILITY-REVIEW.md) with stable
-  `SR-*` finding IDs; the Critical and High items are fixed, and remaining items are tracked openly.
+- A full reliability/security hardening pass was completed ahead of going public — every finding
+  (Critical through Low) was fixed with a regression test. Deferred capability work is tracked openly
+  in [`TODO.md`](TODO.md).
 
 Thank you for helping keep the open network safe.
