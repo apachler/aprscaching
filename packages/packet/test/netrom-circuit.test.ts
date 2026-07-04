@@ -48,7 +48,7 @@ describe("NET/ROM L4 circuit", () => {
   });
 
   it("carries an in-sequence message end-to-end", () => {
-    const { a, b, rxB, pump } = pair();
+    const { a, rxB, pump } = pair();
     a.connect();
     pump();
     a.send(new TextEncoder().encode("hello over netrom"));
@@ -57,7 +57,7 @@ describe("NET/ROM L4 circuit", () => {
   });
 
   it("fragments and reassembles a message larger than 236 bytes (more-follows)", () => {
-    const { a, b, rxB, pump } = pair();
+    const { a, rxB, pump } = pair();
     a.connect(8);
     pump();
     const big = "X".repeat(NR_MAX_INFO * 2 + 50); // 3 fragments

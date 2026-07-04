@@ -25,7 +25,7 @@ export function migrate(db: BetterSqlite3.Database, dir: string): string[] {
       ran.push(f);
     } catch (e) {
       db.exec("ROLLBACK");
-      throw new Error(`migration ${f} failed: ${(e as Error).message}`);
+      throw new Error(`migration ${f} failed: ${(e as Error).message}`, { cause: e });
     }
   }
   return ran;

@@ -55,7 +55,7 @@ function decodeDest(dest: string): {
       space = false;
     if (c >= "0" && c <= "9") {
       digit = c.charCodeAt(0) - 48;
-      mbit = 0;
+      // mbit stays 0 (the declaration default) for the 0–9 digit case.
     } else if (c >= "A" && c <= "J") {
       digit = c.charCodeAt(0) - 65;
       mbit = 1;

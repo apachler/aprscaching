@@ -38,7 +38,7 @@ describe("handleRegisterKey — registration is authenticated", () => {
   it("accepts the trusted ingest daemon (shared secret) for a heard callsign", async () => {
     const rows: unknown[][] = [];
     const db = {
-      prepare: (sql: string) => ({
+      prepare: (_sql: string) => ({
         bind: (...args: unknown[]) => ({
           run: async () => {
             rows.push(args);

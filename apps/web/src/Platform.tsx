@@ -207,6 +207,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
     document.documentElement.dataset.crt = resolveCrt(locSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveCrt reads only .theme/.crt, both listed
   }, [locSettings.theme, locSettings.crt]);
 
   // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
@@ -290,7 +291,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       openOnly(() => opener[key]?.());
     },
     [openOnly],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // One-shot ?view= deep-link, used by the Site map and sitemap.xml/api consumers. The map position
   // stays in MapLibre's #z/lat/lon hash, so this query param never collides with it.
@@ -331,7 +332,7 @@ export default function Platform({ session, startTour }: { session: SessionState
       if (s.selected != null) openOnly(() => setSelectedId(s.selected!));
     },
     [openOnly],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const viewLinked = useRef(false);
   useEffect(() => {
     if (viewLinked.current || !ready) return;
@@ -691,6 +692,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         stationMarkers.current.delete(cs);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openOnly is stable; listing it would rebuild all markers
   }, [stations, stationsOn, locSettings.theme]);
 
   // ---- feed heard callsigns from the live APRS layer into the tool host ----

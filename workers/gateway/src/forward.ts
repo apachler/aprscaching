@@ -142,7 +142,7 @@ export function normalizePartner(input: unknown): ForwardPartner | null {
       ),
     ].join("") || "PBT";
   const timebands = String(b.timebands ?? "")
-    .replace(/[^0-9,\-]/g, "")
+    .replace(/[^0-9,-]/g, "")
     .slice(0, 64);
   return {
     call,

@@ -8,7 +8,6 @@ const P = (o: Partial<Parameters<typeof partnerDue>[0]> = {}) => ({
   timebands: "",
   ...o,
 });
-const HOUR = 3600;
 // a fixed UTC instant: 2024-01-01T05:30:00Z → UTC hour 5
 const AT_0530Z = Date.UTC(2024, 0, 1, 5, 30, 0) / 1000;
 

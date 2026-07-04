@@ -24,18 +24,19 @@ export function ToolMapLayers({ map }: { map: maplibregl.Map | null }) {
 
   useEffect(() => {
     if (!map) return;
+    const store = markers.current; // stable Map; capture so the cleanup reads the same instance
     const sync = () => {
       const seen = new Set<string>();
       for (const { tool, spec } of host.mapLayers()) {
         spec.points.forEach((p, i) => {
           const key = `${tool}:${spec.id}:${i}`;
           seen.add(key);
-          let mk = markers.current.get(key);
+          let mk = store.get(key);
           if (!mk) {
             const el = document.createElement("div");
             el.className = "tool-map-pin";
             mk = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([p.lon, p.lat]).addTo(map);
-            markers.current.set(key, mk);
+            store.set(key, mk);
           } else {
             mk.setLngLat([p.lon, p.lat]);
           }
@@ -45,18 +46,18 @@ export function ToolMapLayers({ map }: { map: maplibregl.Map | null }) {
           el.title = p.label ?? `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
         });
       }
-      for (const [key, mk] of markers.current)
+      for (const [key, mk] of store)
         if (!seen.has(key)) {
           mk.remove();
-          markers.current.delete(key);
+          store.delete(key);
         }
     };
     sync();
     const id = setInterval(sync, 3000); // pick up background-mutated layers
     return () => {
       clearInterval(id);
-      for (const [, mk] of markers.current) mk.remove();
-      markers.current.clear();
+      for (const [, mk] of store) mk.remove();
+      store.clear();
     };
   }, [map, host]);
 

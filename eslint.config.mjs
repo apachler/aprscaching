@@ -38,7 +38,7 @@ export default tseslint.config(
       // Unused vars are worth surfacing but shouldn't block CI; `_`-prefixed are intentional.
       "@typescript-eslint/no-unused-vars": [
         "warn",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" },
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
       ],
       // TypeScript already resolves identifiers; `no-undef` only produces false positives here
       // (Cloudflare Worker globals like WebSocketPair, DOM/Node union, etc.).

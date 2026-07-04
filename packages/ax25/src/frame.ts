@@ -157,7 +157,7 @@ export function decodeFrame(bytes: Uint8Array, extended = false): Ax25Frame | nu
     // S frame
     type = S_REV[(ctrl >> 2) & 3]!;
     if (extended) {
-      const c2 = bytes[off++]!;
+      const c2 = bytes[off]!; // S-frame has no info field, so `off` isn't advanced past here
       isExt = true;
       nr = (c2 >> 1) & 0x7f;
       pf = !!(c2 & 1);

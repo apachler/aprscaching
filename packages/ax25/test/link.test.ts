@@ -12,15 +12,14 @@ function harness(cfg: Partial<LinkConfig> = {}) {
   const clk = { t: 0 };
   const queue: { to: "A" | "B"; f: Ax25Frame }[] = [];
   const got = { A: [] as string[], B: [] as string[] };
-  let a!: ConnectedLink, b!: ConnectedLink;
-  a = new ConnectedLink(
+  const a = new ConnectedLink(
     A,
     B,
     { send: (f) => queue.push({ to: "B", f }), deliver: (i) => got.A.push(dec.decode(i)), state: () => {} },
     cfg,
     () => clk.t,
   );
-  b = new ConnectedLink(
+  const b = new ConnectedLink(
     B,
     A,
     { send: (f) => queue.push({ to: "A", f }), deliver: (i) => got.B.push(dec.decode(i)), state: () => {} },
@@ -191,8 +190,7 @@ describe("ax25 modulo-128 (SABME) + SREJ", () => {
     const clk = { t: 0 };
     const queue: { to: "A" | "B"; bytes: Uint8Array; ext: boolean }[] = [];
     const got = { A: [] as string[], B: [] as string[] };
-    let a!: ConnectedLink, b!: ConnectedLink;
-    a = new ConnectedLink(
+    const a = new ConnectedLink(
       A,
       B,
       {
@@ -203,7 +201,7 @@ describe("ax25 modulo-128 (SABME) + SREJ", () => {
       { modulo: 128, window: 8 },
       () => clk.t,
     );
-    b = new ConnectedLink(
+    const b = new ConnectedLink(
       B,
       A,
       {

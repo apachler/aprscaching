@@ -315,6 +315,7 @@ export function MapTools(props: {
       type: "FeatureCollection",
       features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [home[1], home[0]] } }],
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the coord values, not home/target array identity
   }, [props.map, arc, home?.[0], home?.[1], target?.[0], target?.[1], props.styleEpoch]);
 
   if (!props.map) return null;

@@ -20,7 +20,6 @@ export function usePaged<T>(fetcher: (cursor: string | null) => Promise<PageResu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const load = useCallback(async (from: string | null, reset: boolean) => {
     setLoading(true);
     setError(null);
@@ -34,6 +33,8 @@ export function usePaged<T>(fetcher: (cursor: string | null) => Promise<PageResu
     } finally {
       setLoading(false);
     }
+    // caller-supplied `deps` drive refetch; `fetcher` is intentionally not tracked (would refetch on every render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => {

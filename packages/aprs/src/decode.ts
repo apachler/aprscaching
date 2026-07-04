@@ -51,7 +51,7 @@ function parseWeather(s: string): DecodedWeather {
     const m = re.exec(s);
     return m && m[1] !== "..." ? Number(m[1]) * scale : undefined;
   };
-  const head = /^[\/_]?(\d{3})\/(\d{3})/.exec(s) ?? /^(\d{3})\/(\d{3})/.exec(s);
+  const head = /^[/_]?(\d{3})\/(\d{3})/.exec(s) ?? /^(\d{3})\/(\d{3})/.exec(s);
   if (head) {
     wx.windDirDeg = Number(head[1]);
     wx.windKn = Number(head[2]);
@@ -72,7 +72,7 @@ function parseWeather(s: string): DecodedWeather {
   if (b !== undefined) wx.pressureHpa = round(b);
   return wx;
 }
-const isWeather = (s: string) => /^[\/_]?\d{3}\/\d{3}/.test(s) && /[tgrph]/.test(s);
+const isWeather = (s: string) => /^[/_]?\d{3}\/\d{3}/.test(s) && /[tgrph]/.test(s);
 
 export function decodeAprs(frame: ParsedFrame): AprsData {
   const p = frame.payload;

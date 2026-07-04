@@ -132,7 +132,7 @@ async function main() {
       "--no-sandbox",
     ],
   });
-  let decoded = "";
+  let decoded;
   try {
     const page = await browser.newPage();
     page.on("console", (m) => {

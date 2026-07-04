@@ -15,8 +15,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { actor } from "./caches.js";
-import { sessionCallsign, sessionAccountId, secretOk } from "./auth.js";
+import { sessionAccountId, secretOk } from "./auth.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);

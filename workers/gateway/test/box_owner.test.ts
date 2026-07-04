@@ -2,7 +2,7 @@
 // SR-SEC-04: a remote-control box is bound to an owning account (TOFU). One signed-in user must not be
 // able to enqueue TX to another operator's box (remote-keying their radio), nor read its activity log.
 import { describe, it, expect } from "vitest";
-import { handleBoxEnqueue, handleBoxLog } from "../src/box.js";
+import { handleBoxEnqueue } from "../src/box.js";
 import type { Env } from "../src/env.js";
 
 /** In-memory D1 stand-in: a boxes table + accounts lookup by session cookie. */
@@ -42,14 +42,6 @@ function makeEnv(sessions: Record<string, string>): Env {
   };
   return { DB: db, INGEST_SECRET: "box-secret", __sessions: sessions } as unknown as Env;
 }
-
-// A request whose cookie names the signed-in callsign (our fake sessionCallsign reads it).
-const asUser = (call: string, body: unknown) =>
-  new Request("http://gw/api/box/b1/command", {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: `acs=${call}` },
-    body: JSON.stringify(body),
-  });
 
 // We can't run the real HMAC session here, so drive ownership through the trusted-secret claim path
 // and assert cross-account rejection via a second account. This exercises ownBox() + accountHoldsCall().

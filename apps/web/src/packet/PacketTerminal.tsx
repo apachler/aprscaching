@@ -245,6 +245,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
     if (monitor.length < fedMon.current) fedMon.current = 0; // TNC closed/reopened → monitor reset
     for (let i = fedMon.current; i < monitor.length; i++) feedHeard(monitor[i]!.src, "RF");
     fedMon.current = monitor.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- append-only scan keyed on length; monitor[i] by index is intentional
   }, [monitor.length]);
 
   // Export the current pane as classic colour ANSI art (.ans T3): the monitor as plain

@@ -190,7 +190,8 @@ export class ToolHost {
       const l = this.busSubs.get(t);
       if (l) {
         const kept = l.filter((s) => s.tool !== r.tool.manifest.name);
-        kept.length ? this.busSubs.set(t, kept) : this.busSubs.delete(t);
+        if (kept.length) this.busSubs.set(t, kept);
+        else this.busSubs.delete(t);
       }
     }
     for (const n of r.svcs) {
@@ -414,7 +415,8 @@ export class ToolHost {
       const l = this.busSubs.get(t);
       if (l) {
         const k = l.filter((s) => s !== entry);
-        k.length ? this.busSubs.set(t, k) : this.busSubs.delete(t);
+        if (k.length) this.busSubs.set(t, k);
+        else this.busSubs.delete(t);
       }
     };
   }

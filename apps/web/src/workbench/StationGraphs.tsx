@@ -81,7 +81,7 @@ export function StationGraphs(props: { callsign: string }) {
   // Render the charts once we have data + the container; dynamic-import uPlot here.
   useEffect(() => {
     if (!open || !series || !host.current) return;
-    let disposers: (() => void)[] = [];
+    const disposers: (() => void)[] = [];
     let live = true;
     (async () => {
       const [mod] = await Promise.all([import("uplot"), import("uplot/dist/uPlot.min.css")]);
