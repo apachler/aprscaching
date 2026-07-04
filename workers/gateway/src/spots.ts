@@ -37,6 +37,19 @@ const pick = (o: Record<string, unknown>, ...keys: string[]): unknown => {
   for (const k of keys) if (o[k] != null && o[k] !== "") return o[k];
   return undefined;
 };
+/**
+ * Like {@link pick}, but coerces the first present value to a clean scalar string (objects/arrays →
+ * undefined). Spot feeds are arbitrary third-party JSON; an unexpected non-scalar value must never
+ * become an id/callsign/ref — `String({})` is "[object Object]", which would collide every such spot
+ * onto one bogus identity and corrupt de-duplication.
+ */
+const pickStr = (o: Record<string, unknown>, ...keys: string[]): string | undefined => {
+  const v = pick(o, ...keys);
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  if (typeof v === "boolean") return String(v);
+  return undefined;
+};
 const toUnix = (v: unknown): number => {
   if (typeof v === "number") return v > 1e12 ? Math.floor(v / 1000) : Math.floor(v);
   const t = Date.parse(String(v));
@@ -50,21 +63,21 @@ export function normalizePota(raw: unknown): Spot[] {
   for (const r of raw as Record<string, unknown>[]) {
     const lat = num(pick(r, "latitude", "lat")),
       lon = num(pick(r, "longitude", "lon", "lng"));
-    const callsign = String(pick(r, "activator", "callsign", "call") ?? "").toUpperCase();
+    const callsign = (pickStr(r, "activator", "callsign", "call") ?? "").toUpperCase();
     if (lat == null || lon == null || !callsign) continue;
     const freqHz = freqToHz(pick(r, "frequency", "freq") as string | number | undefined);
     out.push({
-      id: `pota:${pick(r, "spotId", "id") ?? `${callsign}:${pick(r, "reference") ?? ""}`}`,
+      id: `pota:${pickStr(r, "spotId", "id") ?? `${callsign}:${pickStr(r, "reference") ?? ""}`}`,
       source: "pota",
       callsign,
-      ref: (pick(r, "reference", "ref") as string) || undefined,
-      name: (pick(r, "name", "parkName", "locationName") as string) || undefined,
+      ref: pickStr(r, "reference", "ref") || undefined,
+      name: pickStr(r, "name", "parkName", "locationName") || undefined,
       lat,
       lon,
       freqHz,
       band: bandForHz(freqHz),
-      mode: (pick(r, "mode") as string)?.toUpperCase() || undefined,
-      comment: (pick(r, "comments", "comment", "text") as string) || undefined,
+      mode: pickStr(r, "mode")?.toUpperCase() || undefined,
+      comment: pickStr(r, "comments", "comment", "text") || undefined,
       spottedAt: toUnix(pick(r, "spotTime", "timeStamp", "time", "spottedAt")),
     });
   }
@@ -82,27 +95,27 @@ export function normalizeGma(raw: unknown): Spot[] {
   for (const r of arr as Record<string, unknown>[]) {
     const lat = num(pick(r, "LAT", "latitude", "lat")),
       lon = num(pick(r, "LON", "longitude", "lon"));
-    const callsign = String(pick(r, "ACTIVATOR", "CALL", "callsign", "activator") ?? "").toUpperCase();
+    const callsign = (pickStr(r, "ACTIVATOR", "CALL", "callsign", "activator") ?? "").toUpperCase();
     if (lat == null || lon == null || !callsign) continue;
     const freqHz = freqToHz(pick(r, "QRG", "FREQUENCY", "frequency", "freq") as string | number | undefined);
     // GMA carries DATE ("2024-06-01") + TIME ("1200"/"12:00") separately
-    const dateRaw = pick(r, "DATE", "date"),
-      timeRaw = String(pick(r, "TIME", "time") ?? "").replace(/:/g, "");
+    const dateRaw = pickStr(r, "DATE", "date"),
+      timeRaw = (pickStr(r, "TIME", "time") ?? "").replace(/:/g, "");
     const when = dateRaw
       ? `${dateRaw}T${timeRaw.padEnd(4, "0").slice(0, 2)}:${timeRaw.padEnd(4, "0").slice(2, 4)}:00Z`
       : pick(r, "spotTime", "timestamp");
     out.push({
-      id: `gma:${pick(r, "ID", "id") ?? `${callsign}:${pick(r, "REF", "ref") ?? ""}`}`,
+      id: `gma:${pickStr(r, "ID", "id") ?? `${callsign}:${pickStr(r, "REF", "ref") ?? ""}`}`,
       source: "gma",
       callsign,
-      ref: (pick(r, "REF", "ref", "reference") as string) || undefined,
-      name: (pick(r, "NAME", "name") as string) || undefined,
+      ref: pickStr(r, "REF", "ref", "reference") || undefined,
+      name: pickStr(r, "NAME", "name") || undefined,
       lat,
       lon,
       freqHz,
       band: bandForHz(freqHz),
-      mode: (pick(r, "MODE", "mode") as string)?.toUpperCase() || undefined,
-      comment: (pick(r, "TEXT", "comment", "comments") as string) || undefined,
+      mode: pickStr(r, "MODE", "mode")?.toUpperCase() || undefined,
+      comment: pickStr(r, "TEXT", "comment", "comments") || undefined,
       spottedAt: toUnix(when),
     });
   }
@@ -124,7 +137,7 @@ async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: n
     const lat = num(pick(d, "latitude", "lat")),
       lon = num(pick(d, "longitude", "lon"));
     if (lat == null || lon == null) return null;
-    const v = { lat, lon, name: (pick(d, "name", "summitName") as string) || undefined };
+    const v = { lat, lon, name: pickStr(d, "name", "summitName") || undefined };
     sotaSummits.set(code, v);
     return v;
   } catch {
@@ -137,15 +150,15 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
   if (!Array.isArray(raw)) return [];
   const out: Spot[] = [];
   for (const r of raw as Record<string, unknown>[]) {
-    const callsign = String(pick(r, "activatorCallsign", "callsign", "activator") ?? "").toUpperCase();
-    const summit = String(pick(r, "summitCode", "summit") ?? "");
-    const assoc = String(pick(r, "associationCode", "association") ?? "");
+    const callsign = (pickStr(r, "activatorCallsign", "callsign", "activator") ?? "").toUpperCase();
+    const summit = pickStr(r, "summitCode", "summit") ?? "";
+    const assoc = pickStr(r, "associationCode", "association") ?? "";
     const ref = summit.includes("/") || !assoc ? summit : `${assoc}/${summit}`;
     if (!callsign || !ref) continue;
     // prefer inline coords if the feed provides them, else resolve from the summit code
     let lat = num(pick(r, "latitude", "lat")),
       lon = num(pick(r, "longitude", "lon"));
-    let name = (pick(r, "summitName", "name") as string) || undefined;
+    let name = pickStr(r, "summitName", "name") || undefined;
     if (lat == null || lon == null) {
       const c = await sotaCoords(env, ref);
       if (!c) continue;
@@ -155,7 +168,7 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
     }
     const freqHz = freqToHz(pick(r, "frequency", "freq") as string | number | undefined);
     out.push({
-      id: `sota:${pick(r, "id") ?? `${callsign}:${ref}`}`,
+      id: `sota:${pickStr(r, "id") ?? `${callsign}:${ref}`}`,
       source: "sota",
       callsign,
       ref,
@@ -164,8 +177,8 @@ export async function normalizeSota(raw: unknown, env: Env): Promise<Spot[]> {
       lon,
       freqHz,
       band: bandForHz(freqHz),
-      mode: (pick(r, "mode") as string)?.toUpperCase() || undefined,
-      comment: (pick(r, "comment", "comments") as string) || undefined,
+      mode: pickStr(r, "mode")?.toUpperCase() || undefined,
+      comment: pickStr(r, "comment", "comments") || undefined,
       spottedAt: toUnix(pick(r, "timeStamp", "timestamp", "time", "spotTime")),
     });
   }
@@ -186,27 +199,27 @@ const recvSpot = (
   callKeys: string[],
   extra: Partial<Spot>,
 ): Spot | null => {
-  const callsign = String(pick(r, ...callKeys) ?? "").toUpperCase();
+  const callsign = (pickStr(r, ...callKeys) ?? "").toUpperCase();
   if (!callsign) return null;
   let lat = num(pick(r, "latitude", "lat")),
     lon = num(pick(r, "longitude", "lon"));
   if (lat == null || lon == null) {
-    const g = gridToLatLon(pick(r, "grid", "locator", "gridsquare", "senderLocator", "dxGrid") as string);
+    const g = gridToLatLon(pickStr(r, "grid", "locator", "gridsquare", "senderLocator", "dxGrid"));
     if (!g) return null;
     lat = g.lat;
     lon = g.lon;
   }
   const freqHz = freqToHz(pick(r, "frequency", "freq", "freqHz") as string | number | undefined);
   return {
-    id: `${src}:${pick(r, "id") ?? `${callsign}:${freqHz ?? ""}`}`,
+    id: `${src}:${pickStr(r, "id") ?? `${callsign}:${freqHz ?? ""}`}`,
     source: src,
     callsign,
-    ref: (pick(r, "ref", "grid", "locator", "senderLocator") as string) || undefined,
+    ref: pickStr(r, "ref", "grid", "locator", "senderLocator") || undefined,
     lat,
     lon,
     freqHz,
     band: bandForHz(freqHz),
-    mode: (pick(r, "mode") as string)?.toUpperCase() || undefined,
+    mode: pickStr(r, "mode")?.toUpperCase() || undefined,
     spottedAt: toUnix(pick(r, "flowStartSeconds", "timeStamp", "time", "date", "spotTime")),
     ...extra,
   };
@@ -232,7 +245,7 @@ export function normalizeDxCluster(raw: unknown): Spot[] {
   return (raw as Record<string, unknown>[])
     .map((r) =>
       recvSpot("dxcluster", r, ["dx", "spotted", "call", "callsign"], {
-        comment: (pick(r, "comment", "info", "text") as string) || "DX spot",
+        comment: pickStr(r, "comment", "info", "text") || "DX spot",
       }),
     )
     .filter((s): s is Spot => s != null);
@@ -244,7 +257,7 @@ export function normalizeRbn(raw: unknown): Spot[] {
   return (raw as Record<string, unknown>[])
     .map((r) =>
       recvSpot("rbn", r, ["dx", "call", "callsign"], {
-        comment: pick(r, "snr", "db") != null ? `RBN ${pick(r, "snr", "db")} dB` : "RBN spot",
+        comment: pick(r, "snr", "db") != null ? `RBN ${pickStr(r, "snr", "db") ?? ""} dB` : "RBN spot",
       }),
     )
     .filter((s): s is Spot => s != null);

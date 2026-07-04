@@ -53,7 +53,11 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
   opportunistically when touching neighbouring code, never let the count grow).
 - [ ] **Tighten the type-aware warnings** *(P3 · M)* — `lint:types` still reports softer warnings
   (`no-base-to-string`, `restrict-template-expressions`, `no-unnecessary-type-assertion`, …). Promote them
-  to errors rule-by-rule as the code is cleaned, the same way the fast config was tightened.
+  to errors rule-by-rule as the code is cleaned, the same way the fast config was tightened. The
+  *identity-collision* subset — arbitrary third-party JSON stringified into an id/callsign/externalId in
+  the spot + import parsers — is already coerced to scalars (`pickStr`/`str`); the residue is internal
+  type-narrowing noise on typed DB fields, and `no-unnecessary-type-assertion` stays a warning (it
+  false-positives on generic `.json()`/`unknown` returns under `projectService`).
 
 ## Deferred by design (reserved seams, opened on demand)
 

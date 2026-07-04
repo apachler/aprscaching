@@ -86,6 +86,19 @@ describe("spots — POTA normalizer (S1)", () => {
     expect(normalizePota({})).toEqual([]);
     expect(normalizePota([{ activator: "NOLAT" }])).toEqual([]);
   });
+
+  it("never lets a non-scalar API value become an id/callsign ('[object Object]')", () => {
+    // A hostile/broken feed sends objects where strings are expected. The identity fields must not
+    // stringify to "[object Object]" — else every such spot collides onto one bogus id/callsign.
+    const out = normalizePota([
+      { activator: { call: "X" }, id: { n: 1 }, reference: ["a"], latitude: 47.07, longitude: 15.42 },
+      { activator: "OE8APR", id: "abc", latitude: 47.1, longitude: 15.5 },
+    ]);
+    // the object-callsign spot is dropped (no usable callsign), not stored as "[OBJECT OBJECT]"
+    expect(out).toHaveLength(1);
+    expect(out[0]!.callsign).toBe("OE8APR");
+    expect(out.some((s) => /object Object/i.test(s.id) || /OBJECT/i.test(s.callsign))).toBe(false);
+  });
 });
 
 describe("spots — GMA normalizer (S3)", () => {
