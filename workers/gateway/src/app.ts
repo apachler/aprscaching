@@ -48,7 +48,7 @@ import {
   handleFederationRegistry,
   serveFeed,
 } from "./federation.js";
-import { handleWellKnownSource, handleSourceRedirect } from "./source.js";
+import { handleWellKnownSource, handleSourceRedirect, sourceInfo } from "./source.js";
 import { handleSupport, handleSupportPage, handleSupportPrefs, handleSupportConfirm } from "./support.js";
 import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots } from "./sitemap.js";
 import {
@@ -225,12 +225,36 @@ export async function runScheduled(env: Env): Promise<void> {
   }
 }
 
+/**
+ * GET /health — readiness by default, liveness with `?live`.
+ *
+ * A gateway process can be up while its database is unreachable or unmigrated; an orchestrator that
+ * only checks liveness would route traffic to it and every request would then fail. So the default
+ * probe pings the DB and reports 503 (`db: "down"`) until it answers — traffic is held until the
+ * instance is genuinely ready. `?live` skips the DB for cheap load-balancer polling (process-up only).
+ * The body carries the instance id + running source commit for at-a-glance ops visibility (no secrets).
+ */
+async function handleHealth(req: Request, env: Env): Promise<Response> {
+  if (new URL(req.url).searchParams.has("live")) return json({ ok: true, live: true });
+  let db: "up" | "down" = "up";
+  try {
+    await env.DB.prepare("SELECT 1 AS ok").first();
+  } catch {
+    db = "down";
+  }
+  const { commit } = sourceInfo(env);
+  return json(
+    { ok: db === "up", db, instance: env.INSTANCE ?? null, commit: commit ?? null },
+    { status: db === "up" ? 200 : 503 },
+  );
+}
+
 export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname,
     m = req.method;
 
-  if (p === "/health") return json({ ok: true });
+  if (p === "/health") return handleHealth(req, env);
 
   // AGPL §13 source link — the source this instance is running
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
