@@ -47,6 +47,10 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
 
 ## Engineering-quality follow-ups (opportunistic, not defects)
 
+- [x] **Platform overlay state** — the map workbench's "single-overlay" invariant (at most one top-level
+  surface open) is modelled as one `useOverlays()` value instead of a boolean-per-panel plus a
+  hand-maintained close-everything list, so opening one surface cannot leave another stuck open.
+
 - [x] **Type-aware ESLint** — a separate, slower `lint:types` job now runs `@typescript-eslint`
   type-checked rules over `workers/` + `packages/` (the trust-critical surface), gating the real
   promise/assertion bug-catchers while the by-design `any` boundaries stay off. See `eslint.config.types.mjs`.

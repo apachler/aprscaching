@@ -70,6 +70,7 @@ import { WorkbenchAppSurface } from "./workbench/WorkbenchAppSurface.js";
 import { MessagesPanel } from "./messages/MessagesPanel.js";
 import { StationPanel } from "./stations/StationPanel.js";
 import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
+import { useOverlays } from "./useOverlays.js";
 // The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
 const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
@@ -116,7 +117,8 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     setToolTxVerified(verified);
   }, [verified]);
-  const [showSignIn, setShowSignIn] = useState(false);
+  // Single-overlay model: at most one top-level surface is open — one value, not a boolean per panel.
+  const ov = useOverlays();
   const [tourOpen, setTourOpen] = useState(startTour);
   const [caches, setCaches] = useState<MapCache[]>([]);
   const [mode, setMode] = useState<Mode>("view");
@@ -126,15 +128,8 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
-  const [showBoard, setShowBoard] = useState(false);
-  const [showWB, setShowWB] = useState(false);
   const [wbApp, setWbApp] = useState<WorkbenchAppId | null>(null); // the launched workbench app surface (its own workspace)
   const { pins, toggle: togglePin } = usePinnedApps();
-  const [showNearby, setShowNearby] = useState(false);
-  const [showActivity, setShowActivity] = useState(false);
-  const [showMessages, setShowMessages] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
   // include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
   const [includeUnvetted, setIncludeUnvetted] = useState(false);
@@ -161,9 +156,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     spotFiltersRef.current = spotFilters;
   }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [showDocs, setShowDocs] = useState(false);
   const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
@@ -234,18 +226,8 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
   const closeAll = useCallback(() => {
-    setShowBoard(false);
-    setShowWB(false);
+    ov.close();
     setWbApp(null);
-    setShowNearby(false);
-    setShowActivity(false);
-    setShowMessages(false);
-    setShowProfile(false);
-    setShowSettings(false);
-    setShowAdmin(false);
-    setShowDocs(false);
-    setShowSignIn(false);
-    setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
     // and its draft marker, not leave it stuck on top of the destination panel.
     setMode("view");
@@ -255,7 +237,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     setSelectedId(null);
     setRemote(null);
     setPickedStation(null);
-  }, []);
+  }, [ov]);
   const openOnly = useCallback(
     (open: () => void) => {
       closeAll();
@@ -281,22 +263,22 @@ export default function Platform({ session, startTour }: { session: SessionState
     (key: string) => {
       const opener: Record<string, () => void> = {
         map: () => {},
-        nearby: () => setShowNearby(true),
-        filter: () => setShowFilter(true),
+        nearby: () => ov.open("nearby"),
+        filter: () => ov.open("filter"),
         hide: () => startHide(),
-        activity: () => setShowActivity(true),
-        ranks: () => setShowBoard(true),
-        messages: () => setShowMessages(true),
-        workbench: () => setShowWB(true),
+        activity: () => ov.open("activity"),
+        ranks: () => ov.open("board"),
+        messages: () => ov.open("messages"),
+        workbench: () => ov.open("workbench"),
         bbs: () => setWbApp("bbs"),
         terminal: () => setWbApp("terminal"),
-        profile: () => setShowProfile(true),
-        settings: () => setShowSettings(true),
-        docs: () => setShowDocs(true),
+        profile: () => ov.open("profile"),
+        settings: () => ov.open("settings"),
+        docs: () => ov.open("docs"),
       };
       openOnly(() => opener[key]?.());
     },
-    [openOnly],
+    [openOnly, ov],
   );
 
   // One-shot ?view= deep-link, used by the Site map and sitemap.xml/api consumers. The map position
@@ -820,17 +802,17 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
   const leftOpen =
-    showNearby ||
-    showActivity ||
-    showMessages ||
-    showProfile ||
-    showFilter ||
-    showBoard ||
-    showWB ||
+    ov.is("nearby") ||
+    ov.is("activity") ||
+    ov.is("messages") ||
+    ov.is("profile") ||
+    ov.is("filter") ||
+    ov.is("board") ||
+    ov.is("workbench") ||
     wbApp != null ||
     pickedStation != null ||
-    showSettings ||
-    showDocs ||
+    ov.is("settings") ||
+    ov.is("docs") ||
     mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
@@ -893,66 +875,66 @@ export default function Platform({ session, startTour }: { session: SessionState
         <TopBar
           callsign={callsign}
           verified={verified}
-          onAccount={() => openOnly(() => (session.signedIn ? setShowSettings(true) : setShowSignIn(true)))}
+          onAccount={() => openOnly(() => (session.signedIn ? ov.open("settings") : ov.open("signin")))}
           onHide={startHide}
           count={shown.length}
           queued={queued}
-          onFilters={() => openOnly(() => setShowFilter(true))}
+          onFilters={() => openOnly(() => ov.open("filter"))}
           filtered={filters.types.length > 0 || filters.q.length > 0}
           q={filters.q}
           onSearch={(v) => setFilters({ ...filters, q: v })}
           onSearchSubmit={runSearch}
           onPickCache={pickCacheHit}
           onPickStation={pickStationHit}
-          onNearby={() => openOnly(() => setShowNearby(true))}
-          onActivity={() => openOnly(() => setShowActivity(true))}
-          onProfile={() => openOnly(() => setShowProfile(true))}
-          onDocs={() => openOnly(() => setShowDocs(true))}
+          onNearby={() => openOnly(() => ov.open("nearby"))}
+          onActivity={() => openOnly(() => ov.open("activity"))}
+          onProfile={() => openOnly(() => ov.open("profile"))}
+          onDocs={() => openOnly(() => ov.open("docs"))}
           sysop={sysop}
-          onAdmin={() => openOnly(() => setShowAdmin(true))}
+          onAdmin={() => openOnly(() => ov.open("admin"))}
         />
         <div className="shell">
           <NavRail
             active={
-              showAdmin
+              ov.is("admin")
                 ? "admin"
-                : showNearby
+                : ov.is("nearby")
                   ? "nearby"
-                  : showActivity
+                  : ov.is("activity")
                     ? "activity"
-                    : showMessages
+                    : ov.is("messages")
                       ? "messages"
-                      : showBoard
+                      : ov.is("board")
                         ? "ranks"
                         : wbApp
                           ? wbApp
-                          : showWB
+                          : ov.is("workbench")
                             ? "workbench"
-                            : showProfile
+                            : ov.is("profile")
                               ? "profile"
-                              : showSettings
+                              : ov.is("settings")
                                 ? "settings"
                                 : "map"
             }
             onMap={closeAll}
-            onNearby={() => openOnly(() => setShowNearby(true))}
-            onActivity={() => openOnly(() => setShowActivity(true))}
-            onMessages={() => openOnly(() => setShowMessages(true))}
-            onRanks={() => openOnly(() => setShowBoard(true))}
-            onWorkbench={() => openOnly(() => setShowWB(true))}
-            onProfile={() => openOnly(() => setShowProfile(true))}
-            onSettings={() => openOnly(() => setShowSettings(true))}
+            onNearby={() => openOnly(() => ov.open("nearby"))}
+            onActivity={() => openOnly(() => ov.open("activity"))}
+            onMessages={() => openOnly(() => ov.open("messages"))}
+            onRanks={() => openOnly(() => ov.open("board"))}
+            onWorkbench={() => openOnly(() => ov.open("workbench"))}
+            onProfile={() => openOnly(() => ov.open("profile"))}
+            onSettings={() => openOnly(() => ov.open("settings"))}
             pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a && (sysop || !a.sysop))}
             onLaunchApp={launchApp}
             sysop={sysop}
-            onAdmin={() => openOnly(() => setShowAdmin(true))}
+            onAdmin={() => openOnly(() => ov.open("admin"))}
           />
 
           {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
           {mode === "hide" && (
             <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
           )}
-          {showNearby && mode === "view" && (
+          {ov.is("nearby") && mode === "view" && (
             <NearbyPanel
               caches={shown}
               stations={stations}
@@ -964,20 +946,20 @@ export default function Platform({ session, startTour }: { session: SessionState
                   setSelectedId(id);
                 } else openOnly(() => setSelectedId(id));
               }}
-              onClose={() => setShowNearby(false)}
+              onClose={() => ov.close()}
             />
           )}
-          {showActivity && mode === "view" && (
+          {ov.is("activity") && mode === "view" && (
             <ActivityPanel
               map={map.current}
-              onBoard={() => openOnly(() => setShowBoard(true))}
-              onClose={() => setShowActivity(false)}
+              onBoard={() => openOnly(() => ov.open("board"))}
+              onClose={() => ov.close()}
             />
           )}
-          {showMessages && mode === "view" && (
-            <MessagesPanel callsign={callsign} onClose={() => setShowMessages(false)} />
+          {ov.is("messages") && mode === "view" && (
+            <MessagesPanel callsign={callsign} onClose={() => ov.close()} />
           )}
-          {showFilter && mode === "view" && (
+          {ov.is("filter") && mode === "view" && (
             <FilterPanel
               filters={filters}
               setFilters={setFilters}
@@ -991,23 +973,23 @@ export default function Platform({ session, startTour }: { session: SessionState
               spotFilters={spotFilters}
               setSpotFilters={setSpotFilters}
               getViewState={getViewState}
-              onClose={() => setShowFilter(false)}
+              onClose={() => ov.close()}
             />
           )}
-          {showProfile && mode === "view" && (
+          {ov.is("profile") && mode === "view" && (
             <ProfilePanel
               callsign={callsign}
               map={map.current}
-              onWorkbench={() => openOnly(() => setShowWB(true))}
+              onWorkbench={() => openOnly(() => ov.open("workbench"))}
               onMail={() => launchApp("bbs")}
-              onSettings={() => openOnly(() => setShowSettings(true))}
-              onClose={() => setShowProfile(false)}
+              onSettings={() => openOnly(() => ov.open("settings"))}
+              onClose={() => ov.close()}
             />
           )}
-          {showBoard && mode === "view" && <CommunityPanel map={map.current} onClose={() => setShowBoard(false)} />}
-          {showWB && mode === "view" && (
+          {ov.is("board") && mode === "view" && <CommunityPanel map={map.current} onClose={() => ov.close()} />}
+          {ov.is("workbench") && mode === "view" && (
             <WorkbenchPanel
-              onClose={() => setShowWB(false)}
+              onClose={() => ov.close()}
               apps={visibleApps}
               pinned={pins}
               onLaunchApp={launchApp}
@@ -1034,16 +1016,16 @@ export default function Platform({ session, startTour }: { session: SessionState
               onClose={() => setPickedStation(null)}
             />
           )}
-          {showSignIn && (
+          {ov.is("signin") && (
             <SignIn
               onDone={() => {
                 session.refresh();
-                setShowSignIn(false);
+                ov.close();
               }}
-              onClose={() => setShowSignIn(false)}
+              onClose={() => ov.close()}
             />
           )}
-          {showSettings && (
+          {ov.is("settings") && (
             <SettingsPanel
               settings={locSettings}
               onApply={applySettings}
@@ -1054,17 +1036,17 @@ export default function Platform({ session, startTour }: { session: SessionState
                 map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })
               }
               session={session}
-              onSignIn={() => openOnly(() => setShowSignIn(true))}
-              onDocs={() => openOnly(() => setShowDocs(true))}
-              onClose={() => setShowSettings(false)}
+              onSignIn={() => openOnly(() => ov.open("signin"))}
+              onDocs={() => openOnly(() => ov.open("docs"))}
+              onClose={() => ov.close()}
             />
           )}
-          {showAdmin && sysop && mode === "view" && (
-            <AdminPanel callsign={callsign} map={map.current} onClose={() => setShowAdmin(false)} />
+          {ov.is("admin") && sysop && mode === "view" && (
+            <AdminPanel callsign={callsign} map={map.current} onClose={() => ov.close()} />
           )}
-          {showDocs && (
+          {ov.is("docs") && (
             <Suspense fallback={null}>
-              <DocsPanel initialSlug={docSlug} onClose={() => setShowDocs(false)} />
+              <DocsPanel initialSlug={docSlug} onClose={() => ov.close()} />
             </Suspense>
           )}
 
@@ -1146,7 +1128,7 @@ export default function Platform({ session, startTour }: { session: SessionState
           </div>
 
           {/* right-dock: cache detail / mirrored cache — docked right at ≥1024px (coexists with a left panel) */}
-          {detail && mode === "view" && !remote && !showBoard && (
+          {detail && mode === "view" && !remote && !ov.is("board") && (
             <DetailPanel
               detail={detail}
               callsign={callsign}
@@ -1159,18 +1141,18 @@ export default function Platform({ session, startTour }: { session: SessionState
               onLogged={reloadDetail}
             />
           )}
-          {remote && mode === "view" && !showBoard && (
+          {remote && mode === "view" && !ov.is("board") && (
             <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
           )}
         </div>
 
         {mode === "view" && (
           <TabBar
-            active={showNearby ? "nearby" : showActivity ? "activity" : showProfile ? "profile" : "map"}
+            active={ov.is("nearby") ? "nearby" : ov.is("activity") ? "activity" : ov.is("profile") ? "profile" : "map"}
             onMap={closeAll}
-            onNearby={() => openOnly(() => setShowNearby(true))}
-            onActivity={() => openOnly(() => setShowActivity(true))}
-            onProfile={() => openOnly(() => setShowProfile(true))}
+            onNearby={() => openOnly(() => ov.open("nearby"))}
+            onActivity={() => openOnly(() => ov.open("activity"))}
+            onProfile={() => openOnly(() => ov.open("profile"))}
             fabLabel={selectedId != null || nearPrompt ? "Log" : "Hide"}
             onFab={() => {
               if (nearPrompt) openOnly(() => setSelectedId(nearPrompt.cacheId));
