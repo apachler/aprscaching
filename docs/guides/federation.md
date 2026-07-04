@@ -1,7 +1,10 @@
 # Federation
 
 Any instance — Cloudflare-edge or self-hosted — can join one open network. Federation is built on
-**signed feeds and verified mirrors**, never on trusting a transport.
+**signed feeds and verified mirrors**, never on trusting a transport. Because a record's authenticity is
+in its signature and not its path, the same signed records travel over any transport — HTTP today, and
+amateur RF where a signature authenticates but never conceals (see
+[Amateur-radio compliance](../operate/rf-regulatory.md)).
 
 ## Signed feeds
 

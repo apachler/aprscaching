@@ -27,6 +27,7 @@ const NAV: { slug: string; section: string; title: string }[] = [
   { slug: "operate/rf-ingest", section: "Operating an instance", title: "RF ingest & transports" },
   { slug: "operate/packet", section: "Operating an instance", title: "Packet BBS & node" },
   { slug: "operate/rig-weather", section: "Operating an instance", title: "Rig control & weather" },
+  { slug: "operate/rf-regulatory", section: "Operating an instance", title: "Amateur-radio compliance" },
   { slug: "operate/administration", section: "Operating an instance", title: "Administration" },
   { slug: "reference/api", section: "Reference", title: "HTTP API" },
   { slug: "reference/configuration", section: "Reference", title: "Configuration" },

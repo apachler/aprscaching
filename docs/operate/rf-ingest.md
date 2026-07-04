@@ -59,3 +59,10 @@ digipeating: hold a repeat briefly and cancel it if a better-placed digi is hear
 Point `INGEST_URL` at a gateway on the same machine (`http://localhost:8787/ingest`) and run a Node gateway
 beside the box: RF in, map out, no internet. A cloud VM may also run an APRS-IS-only ingest for a baseline
 global feed, but that is never the only path for RF.
+
+## On-air legality
+
+Every transmit path above (digipeat, IGate, node, gated user TX) makes your station a control-operated —
+and, when automatic, unattended — amateur station. Before you enable TX, read
+[Amateur-radio compliance](rf-regulatory.md): encryption is prohibited (aprscaching signs but never
+conceals), identification and automatic-station rules apply, and you are the responsible control operator.
