@@ -112,7 +112,21 @@ const server = http.createServer(async (nreq, nres) => {
 
     nres.statusCode = response.status;
     response.headers.forEach((value, key) => nres.setHeader(key, value));
-    nres.end(Buffer.from(await response.arrayBuffer()));
+    // Server-Sent Events (the CoT push feed) are long-lived — pipe the body chunk-by-chunk instead
+    // of buffering to completion (which would hold every event until the stream closed, defeating SSE).
+    if (response.body && (response.headers.get("content-type") ?? "").includes("text/event-stream")) {
+      nreq.socket.setTimeout(0); // no idle timeout on a streaming connection
+      const reader = response.body.getReader();
+      nres.on("close", () => void reader.cancel().catch(() => {}));
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!nres.write(Buffer.from(value))) await new Promise((r) => nres.once("drain", r));
+      }
+      nres.end();
+    } else {
+      nres.end(Buffer.from(await response.arrayBuffer()));
+    }
   } catch (e) {
     nres.statusCode = e instanceof BodyTooLarge ? 413 : 500;
     nres.setHeader("content-type", "application/json");

@@ -100,7 +100,7 @@ import {
   handlePorts,
   handleMessages,
 } from "./workbench.js";
-import { handleCot } from "./cot.js";
+import { handleCot, handleCotStream } from "./cot.js";
 import { handleBadge } from "./badge.js";
 import {
   handleSetStages,
@@ -476,6 +476,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // workbench interop + transports
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
+  if (p === "/api/cot/stream" && m === "GET") return handleCotStream(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
   if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // gated user TX via the ingest box

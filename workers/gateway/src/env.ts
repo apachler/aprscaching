@@ -80,6 +80,8 @@ export interface Env {
   API_MAX_BBOX_DEG?: string; // max bbox side in degrees for /api/v1 reads (default 20)
 
   // ---- live activity spots — read-only aggregation, off unless explicitly enabled ----
+  COT_STREAM_INTERVAL_MS?: string; // SSE CoT feed poll cadence (default 15000; clamped 1s–2min)
+  COT_STREAM_MAX_MS?: string; // SSE CoT feed max connection lifetime before the client reconnects (default 5min)
   SPOTS_ENABLED?: string; // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)
   SPOTS_SOURCES?: string; // optional comma-separated allowlist of sources (else all built-in: pota…)
   SPOTS_TTL_SEC?: string; // aggregation cache TTL seconds (default 60; spots are ephemeral)
@@ -169,6 +171,8 @@ export const ENV_STRING_KEYS = [
   "API_RATE_ANON",
   "API_RATE_KEYED",
   "API_MAX_BBOX_DEG",
+  "COT_STREAM_INTERVAL_MS",
+  "COT_STREAM_MAX_MS",
   "SPOTS_ENABLED",
   "SPOTS_SOURCES",
   "SPOTS_TTL_SEC",

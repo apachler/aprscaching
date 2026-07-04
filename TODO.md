@@ -36,8 +36,9 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
   "it's a network" ham-retro aesthetic.
 - [ ] **Ham-radio QSO logbook** *(P3 · M)* — a worked-stations log (band/mode/freq/RST/grid) with **ADIF**
   import/export and optional LoTW/eQSL/QRZ sync, distinct from the cache logbook.
-- [ ] **CoT streaming feed** *(P3 · S)* — an SSE/long-poll TAK feed alongside the bbox snapshot, so
-  ATAK/WinTAK get push updates.
+- [x] **CoT streaming feed** — `GET /api/cot/stream` is a Server-Sent Events TAK feed alongside the
+  `/api/cot` bbox snapshot: it emits the snapshot then pushes station updates, so ATAK/WinTAK get live
+  pushes. The runtime shells stream `text/event-stream` bodies (the Node shell pipes rather than buffers).
 - [ ] **Live-room region sharding** *(P3 · M)* — shard the live WebSocket room by geohash so fan-out scales
   past a single global room.
 - [ ] **One-click POI overlay** *(P3 · S)* — a map-side toggle that live-queries a curated OSM/Wikidata set

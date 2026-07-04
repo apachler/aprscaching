@@ -534,6 +534,10 @@ export async function ingestSigned(
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
 }
+/** Streaming CoT/TAK feed (Server-Sent Events) — pushes station updates instead of a one-shot snapshot. */
+export function cotStreamUrl(bbox: BBox): string {
+  return `${API_BASE}/api/cot/stream?bbox=${bbox.join(",")}`;
+}
 
 /** A federation peer with its health metrics (operator observability). */
 export interface FedPeer {

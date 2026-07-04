@@ -55,7 +55,8 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 |--------|------|---------|
 | GET | `/ws?region=` | Upgrade to a region "room" (live positions/finds) |
 | GET | `/api/spots` | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED` |
-| GET | `/api/cot` | Cursor-on-Target feed for TAK |
+| GET | `/api/cot` | Cursor-on-Target snapshot for TAK (`bbox`) |
+| GET | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates |
 
 ## Federation
 
