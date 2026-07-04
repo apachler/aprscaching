@@ -9,6 +9,7 @@
     "test": "pnpm -r test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:types": "eslint --config eslint.config.types.mjs .",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
     "check": "tools/dev/check.sh",

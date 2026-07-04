@@ -18,7 +18,8 @@
 import type { Transport, Provenance } from "@aprsweb/shared";
 
 export interface RawProvenance {
-  heard_via: "rf" | "aprs_is" | "app" | string;
+  // The `& {}` keeps the known-value suggestions without the union collapsing to bare `string`.
+  heard_via: "rf" | "aprs_is" | "app" | (string & {});
   igate_call?: string | null;
   path?: string | null; // stored APRS path incl. the q-construct
   ts?: number;

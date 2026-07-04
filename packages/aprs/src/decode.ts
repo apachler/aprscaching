@@ -190,7 +190,7 @@ function decodeMessage(p: string): AprsData {
   const m = /^:(.{9}):(.*)$/s.exec(p);
   if (!m) return { kind: "other" };
   const addressee = m[1]!.trim();
-  let text = m[2]!;
+  const text = m[2]!;
   const out: AprsData = { kind: "message", addressee, text };
   if (/^ack/.test(text)) {
     out.ack = true;

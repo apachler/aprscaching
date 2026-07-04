@@ -148,7 +148,7 @@ async function importCose(cose: Uint8Array): Promise<{ key: CryptoKey; alg: numb
       alg: -257,
     };
   }
-  throw new Error("unsupported COSE key type " + kty);
+  throw new Error("unsupported COSE key type " + String(kty));
 }
 
 /** ASN.1-DER ECDSA-Sig-Value -> raw r||s (64 bytes) for Web Crypto ECDSA verify. */

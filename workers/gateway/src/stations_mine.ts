@@ -329,7 +329,7 @@ export async function handleMeCache(req: Request, env: Env): Promise<Response> {
     .first<{ callsign: string; lat: number; lon: number }>();
   let lat = beacon?.lat ?? null,
     lon = beacon?.lon ?? null;
-  let stationCall = beacon?.callsign ?? base;
+  const stationCall = beacon?.callsign ?? base;
   if (lat == null) {
     const acct = await env.DB.prepare("SELECT home_grid AS homeGrid FROM accounts WHERE callsign = ?")
       .bind(base)

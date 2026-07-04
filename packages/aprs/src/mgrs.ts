@@ -44,7 +44,7 @@ export function toMgrs(lat: number, lon: number, digits = 5): string {
       ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) * Math.sin(2 * φ) +
       ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * φ) -
       ((35 * e2 ** 3) / 3072) * Math.sin(6 * φ));
-  let easting =
+  const easting =
     k0 * N * (A + ((1 - T + C) * A ** 3) / 6 + ((5 - 18 * T + T ** 2 + 72 * C - 58 * ep2) * A ** 5) / 120) + 500000;
   let northing =
     k0 *
