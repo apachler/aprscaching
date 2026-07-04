@@ -31,10 +31,10 @@ import {
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
+import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
-const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -52,6 +52,8 @@ interface PeerRow {
   enabled: number;
   trust: TrustLevel;
   added_via?: string;
+  endpoints?: string | null; // typed endpoint set (JSON) — see fedtransport.ts
+  verified_via?: string | null; // identity attestation, e.g. 'ardc-lot' (never a data-trust input)
 }
 
 interface FeedRecord {
@@ -67,15 +69,6 @@ interface Feed {
   nextCursor: number;
   complete: boolean;
   items: FeedRecord[];
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const r = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS),
-  });
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} <- ${url}`);
-  return r.json() as Promise<T>;
 }
 
 function ours(env: Env): string | null {
@@ -218,8 +211,12 @@ async function syncPeer(
   env: Env,
   p: PeerRow,
 ): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
-  const base = p.url.replace(/\/+$/, "");
-  const wk = await fetchJson<{
+  // endpoint selection: the peer's typed endpoint set picks the sync transport (https, or plain
+  // http on a 44net/HAMNET name); packet endpoints are forward-mode and never pulled from here
+  const transport = syncTransportFor(p);
+  if (!transport) throw new Error("peer has no sync-capable endpoint");
+  const base = transport.baseUrl;
+  const wk = await transport.fetchJson<{
     instance: string;
     signed: boolean;
     publicKey: string | null;
@@ -228,7 +225,7 @@ async function syncPeer(
     peers?: string[];
     capabilities?: string[];
     protocolVersions?: string[];
-  }>(`${base}/.well-known/aprscaching`);
+  }>("/.well-known/aprscaching");
   const pub = wk.signed ? wk.publicKey : null;
   const pinned = p.public_key; // the key we last trusted for this peer (null on first sight)
   const newActive = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
@@ -283,7 +280,7 @@ async function syncPeer(
   const counts: Record<string, number> = {};
   for (const def of SYNC_DEFS)
     // iterate SYNC_DEFS to preserve the tombstones-first order
-    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKeys, def) : 0;
+    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, transport, p, wk.instance, verifyKeys, def) : 0;
   // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   await env.DB.prepare(
@@ -368,7 +365,7 @@ const SYNC_DEFS: SyncDef[] = [
  */
 async function syncFeed(
   env: Env,
-  base: string,
+  transport: FedSyncTransport,
   p: PeerRow,
   instance: string,
   verifyKeys: CryptoKey[],
@@ -377,10 +374,7 @@ async function syncFeed(
   let cursor = (p[def.cursorCol] as number) ?? 0,
     applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(`${base}${def.path}?since=${cursor}&limit=500`, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS),
-    });
+    const res = await transport.get(`${def.path}?since=${cursor}&limit=500`);
     if (res.status === 404) return applied; // feed not supported → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
     const feed = (await res.json()) as Feed;
@@ -656,7 +650,6 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
 
 /** type → applier, reusing the exact mirror path as pull-sync (display-only, idempotent by global id). */
 const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> = Object.fromEntries(
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- `apply` is a plain data property (a standalone applier fn), not Function.prototype.apply; no `this` is bound
   SYNC_DEFS.map((d) => [d.type, d.apply]),
 );
 

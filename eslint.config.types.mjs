@@ -46,8 +46,8 @@ export default tseslint.config(
       "@typescript-eslint/no-base-to-string": "warn", // review each object-stringification for intent
       "@typescript-eslint/restrict-template-expressions": "warn",
       // ERROR: an accidental async-without-await or an unbound method reference is a real defect. The
-      // few legitimate exceptions (the Durable Object hibernation handlers must be async; a data
-      // property that happens to be named `apply`) carry a documented inline disable at their site.
+      // few legitimate exceptions are exempted per-file below (inline disables would read as "unused
+      // directives" to the fast config, which doesn't enable these rules).
       "@typescript-eslint/require-await": "error",
       "@typescript-eslint/unbound-method": "error",
       // `Response.json()` and friends default their generic to `unknown`, and the linter's projectService
@@ -59,5 +59,17 @@ export default tseslint.config(
       // type-view-stable bug catchers — no-floating-promises, no-misused-promises, await-thenable,
       // no-for-in-array, no-redundant-type-constituents, restrict-plus-operands, … .
     },
+  },
+  {
+    // The Durable Object hibernation API mandates async webSocketMessage/Close/Error signatures;
+    // the handler bodies are synchronous by design.
+    files: ["workers/gateway/src/room.ts"],
+    rules: { "@typescript-eslint/require-await": "off" },
+  },
+  {
+    // SYNC_DEFS carries a plain data property named `apply` (a standalone applier function, no
+    // `this`) — the rule mistakes it for Function.prototype.apply.
+    files: ["workers/gateway/src/federation_sync.ts"],
+    rules: { "@typescript-eslint/unbound-method": "off" },
   },
 );

@@ -65,6 +65,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | GET | `/.well-known/aprscaching` | Instance discovery document | public |
 | GET | `/federation/caches`, `/finds`, `/bulletins`, `/keys`, `/tombstones`, `/account-moves`, `/registry` | Signed, cursor-paged feeds | public |
 | GET · POST | `/federation/peers` · `/peers/trust` | Peer list + health · set trust | sysop |
+| POST | `/federation/peers/44net` | Add a peer by ARDC-verified `<call>.ampr.org` binding (DNSSEC auto-admits, else confirm) | sysop |
 | POST | `/federation/sync` | Pull from all peers | x-ingest-secret |
 | POST | `/federation/corroborate` | Cross-instance corroboration query | public (rate-limited; `x-fed-secret` if configured) |
 | POST | `/federation/notify` | Gossip "come pull" ping | public |

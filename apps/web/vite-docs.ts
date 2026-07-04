@@ -30,6 +30,7 @@ const NAV: { slug: string; section: string; title: string }[] = [
   { slug: "operate/rf-regulatory", section: "Operating an instance", title: "Amateur-radio compliance" },
   { slug: "operate/administration", section: "Operating an instance", title: "Administration" },
   { slug: "reference/api", section: "Reference", title: "HTTP API" },
+  { slug: "reference/federation-wire", section: "Reference", title: "Federation wire format" },
   { slug: "reference/configuration", section: "Reference", title: "Configuration" },
   { slug: "reference/cli", section: "Reference", title: "Command-line tools" },
   { slug: "reference/data-model", section: "Reference", title: "Data model" },

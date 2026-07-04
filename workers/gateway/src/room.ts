@@ -43,7 +43,6 @@ export class RegionRoom {
     return new Response("expected websocket", { status: 426 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- the Durable Object hibernation API mandates an async handler signature
   async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer): Promise<void> {
     // A hostile/buggy client can send non-JSON or a binary frame — neither must crash the DO.
     try {
@@ -55,7 +54,6 @@ export class RegionRoom {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- the Durable Object hibernation API mandates an async handler signature
   async webSocketClose(ws: WebSocket, code?: number, reason?: string): Promise<void> {
     // Echo a valid close code (1000 when the client sent a reserved/absent one).
     try {
@@ -64,7 +62,6 @@ export class RegionRoom {
       /* already closing */
     }
   }
-  // eslint-disable-next-line @typescript-eslint/require-await -- the Durable Object hibernation API mandates an async handler signature
   async webSocketError(ws: WebSocket): Promise<void> {
     try {
       ws.close(1011, "error");

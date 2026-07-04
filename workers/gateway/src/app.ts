@@ -79,6 +79,7 @@ import {
 import { handleAdminWhoami } from "./admin.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
+import { handleFed44netAdd } from "./fed44net.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -344,6 +345,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
+  if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);

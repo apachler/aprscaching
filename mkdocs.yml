@@ -68,6 +68,7 @@ nav:
       - Administration: operate/administration.md
   - Reference:
       - HTTP API: reference/api.md
+      - Federation wire format: reference/federation-wire.md
       - Configuration: reference/configuration.md
       - Command-line tools: reference/cli.md
       - Data model: reference/data-model.md

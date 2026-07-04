@@ -2,9 +2,11 @@
 
 Any instance — Cloudflare-edge or self-hosted — can join one open network. Federation is built on
 **signed feeds and verified mirrors**, never on trusting a transport. Because a record's authenticity is
-in its signature and not its path, the same signed records travel over any transport — HTTP today, and
-amateur RF where a signature authenticates but never conceals (see
-[Amateur-radio compliance](../operate/rf-regulatory.md)).
+in its signature and not its path, the same signed records travel over any transport — HTTPS, plain HTTP
+on a 44net/HAMNET amateur-IP name, and the packet-radio carriers — and on amateur RF a signature
+authenticates but never conceals (see [Amateur-radio compliance](../operate/rf-regulatory.md)). The
+byte-level format, typed peer endpoints (https / 44net / ax25 / netrom / bbs), and the ARDC-verified
+44net onboarding flow are specified in the [Federation wire format](../reference/federation-wire.md).
 
 ## Signed feeds
 

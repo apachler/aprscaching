@@ -65,6 +65,34 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
   `no-base-to-string` on internal typed DB fields (type-narrowing noise), and `no-unnecessary-type-assertion`
   stays a **warning** — it false-positives on generic `.json()`/`unknown` returns under `projectService`.
 
+## Federation over RF (the wire contracts are in; the bindings land in this order)
+
+The CBOR signed wire format, typed peer endpoints, the two-tier transport seam (sync +
+store-and-forward), and ARDC-verified 44net onboarding are built — see
+[`docs/reference/federation-wire.md`](docs/reference/federation-wire.md). What rides on them next:
+
+- [ ] **Serve/consume CBOR frames on the sync surface** *(P2 · M)* — a `/federation/sync` exchange
+  carrying fedwire frames (the JSON feeds remain for the public read surface); flip the 2-instance
+  conformance suite to it.
+- [ ] **Advertise our own endpoint set + capability hints** *(P2 · S)* — the `/.well-known/aprscaching`
+  descriptor and the signed registry carry the instance's typed endpoints (https / 44net / ax25 /
+  netrom / bbs).
+- [ ] **44net onboarding wizard in the admin surface** *(P2 · S)* — emit the exact
+  `_aprscaching.<call>.ampr.org` TXT to paste into the ARDC portal; a one-click peer-add form over
+  `POST /federation/peers/44net`.
+- [ ] **Connected-mode sync binding** *(P2 · L)* — fedwire frames over an AX.25/NET-ROM circuit
+  (`apps/ingest` owns the radio; capability HELLO picks the compact tier); an aprscaching service
+  advertised on the node.
+- [ ] **Store-and-forward carrier over FBB forwarding** *(P2 · L)* — batched frames as a reserved
+  message class riding the BBS mesh (BID dedup; apply stays idempotent by gid); extend the rendezvous
+  relay to lease/answer over packet.
+- [ ] **Beacon tier** *(P3 · M)* — single-frame UI datagrams for tiny records (peer-announce,
+  tombstone, have-lists) on HF.
+- [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode
+  command set, BayCom compatibility as selectable node personalities.
+- [ ] **Shared compression dictionary** *(P3 · S)* — the `deflateDict1` versioned dictionary for the
+  compact/beacon tiers, shipped in `packages/shared`.
+
 ## Deferred by design (reserved seams, opened on demand)
 
 - [ ] **CI depth & deploy topologies** — exercise the `deploy/` topologies 1–4 in CI beyond the current
