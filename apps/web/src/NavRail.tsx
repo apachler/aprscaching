@@ -17,7 +17,6 @@ export function NavRail(props: {
   onWorkbench: () => void;
   onProfile: () => void;
   onSettings: () => void;
-  onDocs: () => void;
   pinnedApps?: WorkbenchApp[];
   onLaunchApp?: (id: WorkbenchApp["id"]) => void;
   sysop?: boolean;
@@ -46,8 +45,7 @@ export function NavRail(props: {
       {(props.pinnedApps ?? []).map((app) =>
         item(app.id, app.icon, app.label, () => props.onLaunchApp?.(app.id), "rail-pinned"),
       )}
-      {item("docs", "info", "Manual", props.onDocs, "rail-sp")}
-      {item("profile", "profile", "You", props.onProfile)}
+      {item("profile", "profile", "You", props.onProfile, "rail-sp")}
       {item("settings", "settings", "Setup", props.onSettings)}
       {/* operator-only: the instance-admin surface — hidden for normal users (server-gated too) */}
       {props.sysop && props.onAdmin && item("admin", "shield-check", "Admin", props.onAdmin)}

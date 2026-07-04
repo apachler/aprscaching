@@ -932,9 +932,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                               ? "profile"
                               : showSettings
                                 ? "settings"
-                                : showDocs
-                                  ? "docs"
-                                  : "map"
+                                : "map"
             }
             onMap={closeAll}
             onNearby={() => openOnly(() => setShowNearby(true))}
@@ -944,7 +942,6 @@ export default function Platform({ session, startTour }: { session: SessionState
             onWorkbench={() => openOnly(() => setShowWB(true))}
             onProfile={() => openOnly(() => setShowProfile(true))}
             onSettings={() => openOnly(() => setShowSettings(true))}
-            onDocs={() => openOnly(() => setShowDocs(true))}
             pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a && (sysop || !a.sysop))}
             onLaunchApp={launchApp}
             sysop={sysop}

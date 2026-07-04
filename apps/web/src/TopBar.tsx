@@ -59,8 +59,7 @@ export function TopBar(props: {
         </span>
       )}
       <span className="spacer" />
-      {/* Manual: the nav rail carries it at ≥1024px; below that the rail is hidden, so a compact
-          icon here is the dedicated tablet/mobile entry point (CSS hides it on desktop). */}
+      {/* Manual: the single entry point on every breakpoint — a compact icon in the top chrome. */}
       <button className="icon help-ic" onClick={props.onDocs} title="Manual" aria-label="Open the manual">
         <Icon name="info" size={16} />
       </button>
