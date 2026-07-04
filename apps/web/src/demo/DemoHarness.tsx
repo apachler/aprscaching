@@ -71,6 +71,7 @@ function AppShell({
           onWorkbench={noop}
           onProfile={noop}
           onSettings={noop}
+          onDocs={noop}
         />
         <div className="mapwrap">
           <div className="map" style={{ background: "var(--surface-2)" }} />

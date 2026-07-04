@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { docsPlugin } from "./vite-docs.js";
+
+// The manual lives in the repo-root `docs/` tree; bundle it into the SPA at build time (vite-docs.ts).
+const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs");
 
 // Vendor chunking + preload policy for the landing-vs-platform split:
 //  - React is an eager entry dependency → its own long-term-cacheable chunk.
@@ -10,7 +16,7 @@ import react from "@vitejs/plugin-react";
 //    for it into index.html; the signed-out landing therefore never fetches it. It loads on demand when
 //    Platform mounts (explore / sign-in). The warning limit reflects MapLibre's real size.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), docsPlugin(docsDir)],
   build: {
     chunkSizeWarningLimit: 1100, // MapLibre v5's real chunk size (~1.03 MB; v4 was ~0.79 MB)
     modulePreload: {

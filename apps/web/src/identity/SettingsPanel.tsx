@@ -13,7 +13,7 @@ import {
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
-import { Panel, Group, Row, Advanced, Switch, Ico } from "../ui/index.js";
+import { Panel, Group, Row, Advanced, Switch, Ico, Button } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../workbench/Watchlist.js";
@@ -42,6 +42,7 @@ export function SettingsPanel(props: {
   onFly: (lat: number, lon: number) => void;
   session: Sess;
   onSignIn: () => void;
+  onDocs?: () => void;
   onClose: () => void;
 }) {
   const s = props.settings;
@@ -300,6 +301,13 @@ export function SettingsPanel(props: {
 
       {match("About credits attribution Bruninga WB4APR APRS trademark licence open source") && (
         <Group title="About & credits" defaultOpen={false}>
+          {props.onDocs && (
+            <p>
+              <Button variant="link" onClick={props.onDocs}>
+                Read the full manual
+              </Button>
+            </p>
+          )}
           <p className="muted">
             APRScaching is a caching-first web workbench by <span className="mono">OE8APR</span>.
           </p>

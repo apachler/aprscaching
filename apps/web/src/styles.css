@@ -4022,3 +4022,192 @@ button.danger:hover {
     background: color-mix(in oklch, var(--warn) 9%, transparent);
   }
 }
+
+/* ── In-app manual (DocsPanel) ───────────────────────────────────────────────
+   The bundled docs/ markdown, rendered client-side (docs/markdown.ts). Two-column
+   sidebar + article once the wide panel has room; a single stacked column below. */
+.docs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+}
+@container panel (min-width: 40rem) {
+  .docs {
+    grid-template-columns: 190px 1fr;
+    align-items: start;
+  }
+  .docs-nav {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100dvh - 128px);
+    overflow: auto;
+    border-right: 1px solid var(--hair);
+    padding-right: var(--sp-2);
+  }
+}
+.docs-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.docs-navhead {
+  margin: var(--sp-2) 0 2px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.docs-nav button {
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font: inherit;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.docs-nav button:hover {
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+}
+.docs-nav button.on {
+  background: color-mix(in oklch, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.docs-nav button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.docs-body {
+  min-width: 0;
+  color: var(--ink);
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+.docs-body h1,
+.docs-body h2,
+.docs-body h3,
+.docs-body h4 {
+  color: var(--heading);
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  text-wrap: balance;
+}
+.docs-body h1 {
+  font-size: 1.5rem;
+  margin-top: 0;
+}
+.docs-body h2 {
+  font-size: 1.2rem;
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 0.2em;
+}
+.docs-body h3 {
+  font-size: 1.05rem;
+}
+.docs-body h4 {
+  font-size: 0.95rem;
+}
+.docs-body p,
+.docs-body ul,
+.docs-body ol,
+.docs-body blockquote,
+.docs-body table,
+.docs-body pre {
+  margin: 0.7em 0;
+}
+.docs-body ul,
+.docs-body ol {
+  padding-left: 1.4em;
+}
+.docs-body li {
+  margin: 0.2em 0;
+}
+.docs-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.docs-body a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.docs-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--field-bg);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  padding: 0.05em 0.35em;
+}
+.docs-body pre {
+  overflow-x: auto;
+  background: var(--field-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+.docs-body pre code {
+  border: none;
+  background: none;
+  padding: 0;
+}
+.docs-body blockquote {
+  border-left: 3px solid var(--line);
+  margin-left: 0;
+  padding: 0.1em 0 0.1em var(--sp-3);
+  color: var(--muted);
+}
+.docs-body hr {
+  border: none;
+  border-top: 1px solid var(--hair);
+  margin: 1.4em 0;
+}
+.docs-body table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.92em;
+}
+.docs-body th,
+.docs-body td {
+  border: 1px solid var(--hair);
+  padding: 5px 9px;
+  text-align: left;
+}
+.docs-body th {
+  background: var(--chip-bg);
+  color: var(--heading);
+}
+/* MkDocs-style admonitions: a coloured left rail + tinted body, keyed by type. */
+.doc-adm {
+  margin: 0.9em 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--accent) 8%, transparent);
+}
+.doc-adm-t {
+  margin: 0 0 0.3em;
+  font-weight: 600;
+  color: var(--heading);
+}
+.doc-adm > :last-child {
+  margin-bottom: 0;
+}
+.doc-adm-warning {
+  border-left-color: var(--warn);
+  background: color-mix(in oklch, var(--warn) 9%, transparent);
+}
+.doc-adm-danger {
+  border-left-color: var(--bad);
+  background: color-mix(in oklch, var(--bad) 9%, transparent);
+}
+.doc-adm-tip,
+.doc-adm-success {
+  border-left-color: var(--ok);
+  background: color-mix(in oklch, var(--ok) 9%, transparent);
+}

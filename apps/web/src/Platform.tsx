@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
@@ -70,6 +70,8 @@ import { WorkbenchAppSurface } from "./workbench/WorkbenchAppSurface.js";
 import { MessagesPanel } from "./messages/MessagesPanel.js";
 import { StationPanel } from "./stations/StationPanel.js";
 import { WORKBENCH_APPS, usePinnedApps, appById, type WorkbenchAppId, type WorkbenchApp } from "./workbench/apps.js";
+// The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
+const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
 const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 // keyless online basemap by default; `VITE_BASEMAP=offline` uses the self-contained grid.
@@ -161,6 +163,8 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
+  const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
@@ -239,6 +243,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     setShowProfile(false);
     setShowSettings(false);
     setShowAdmin(false);
+    setShowDocs(false);
     setShowSignIn(false);
     setShowFilter(false);
     // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
@@ -287,6 +292,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         terminal: () => setWbApp("terminal"),
         profile: () => setShowProfile(true),
         settings: () => setShowSettings(true),
+        docs: () => setShowDocs(true),
       };
       openOnly(() => opener[key]?.());
     },
@@ -300,9 +306,13 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (deepLinked.current) return;
     deepLinked.current = true;
     try {
-      const view = new URLSearchParams(window.location.search).get("view");
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get("view");
       const s = view ? surfaceByView(view) : null;
-      if (s) navigate(s.key);
+      if (s) {
+        if (s.key === "docs") setDocSlug(params.get("doc") || "index"); // ?view=docs&doc=<slug> deep-link
+        navigate(s.key);
+      }
     } catch {
       /* ignore */
     }
@@ -820,6 +830,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     wbApp != null ||
     pickedStation != null ||
     showSettings ||
+    showDocs ||
     mode === "hide";
   const rightOpen = (detail != null && !remote) || remote != null;
   useEffect(() => {
@@ -920,7 +931,9 @@ export default function Platform({ session, startTour }: { session: SessionState
                               ? "profile"
                               : showSettings
                                 ? "settings"
-                                : "map"
+                                : showDocs
+                                  ? "docs"
+                                  : "map"
             }
             onMap={closeAll}
             onNearby={() => openOnly(() => setShowNearby(true))}
@@ -930,6 +943,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             onWorkbench={() => openOnly(() => setShowWB(true))}
             onProfile={() => openOnly(() => setShowProfile(true))}
             onSettings={() => openOnly(() => setShowSettings(true))}
+            onDocs={() => openOnly(() => setShowDocs(true))}
             pinnedApps={pins.map(appById).filter((a): a is WorkbenchApp => !!a && (sysop || !a.sysop))}
             onLaunchApp={launchApp}
             sysop={sysop}
@@ -1043,11 +1057,17 @@ export default function Platform({ session, startTour }: { session: SessionState
               }
               session={session}
               onSignIn={() => openOnly(() => setShowSignIn(true))}
+              onDocs={() => openOnly(() => setShowDocs(true))}
               onClose={() => setShowSettings(false)}
             />
           )}
           {showAdmin && sysop && mode === "view" && (
             <AdminPanel callsign={callsign} map={map.current} onClose={() => setShowAdmin(false)} />
+          )}
+          {showDocs && (
+            <Suspense fallback={null}>
+              <DocsPanel initialSlug={docSlug} onClose={() => setShowDocs(false)} />
+            </Suspense>
           )}
 
           <div className="mapwrap">
