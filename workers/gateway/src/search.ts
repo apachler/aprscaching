@@ -6,7 +6,7 @@ import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from 
 /**
  * search.ts — enriched as-you-type suggestions. A single portable endpoint that
  * matches caches (by code / title / owner) and stations (by callsign) with prefix-first ranking.
- * Deliberately LIKE-based, NOT FTS5: Cloudflare D1 forbids virtual tables (see 0001_init.sql), so a
+ * Deliberately LIKE-based, NOT FTS5: Cloudflare D1 forbids virtual tables (see 0001_baseline.sql), so a
  * plain indexed LIKE keeps the query identical across all three runtimes (Worker/D1, Node, Bun) and
  * is plenty for suggest-sized result sets. The map already handles grid / lat-lon itself client-side.
  */

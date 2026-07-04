@@ -15,7 +15,7 @@ Everything for the APRScaching-first web workbench, by OE8APR. Greenfield.
                          auth/callsign/announce/outbox modules; D1 + R2 bindings
 - `apps/ingest/`       — APRS-IS client + batched forward + announce uplink (Fly/Pi)
 - `apps/web/`          — React + MapLibre SPA (placeholder; real design = M1)
-- `db/migrations/`     — `0001_init.sql` (caching + positions) · `0002_auth_announce.sql`
+- `db/migrations/`     — `0001_baseline.sql` (the full 1.0 schema, squashed; post-1.0 adds `NNNN_*.sql`)
 
 ## docs/ — planning evolution (context/history)
 - `01` web-app v1 → `02` cost-optimized → `03` feature-complete vs APRStac →
