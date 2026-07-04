@@ -8,10 +8,42 @@ import type { ServerWebSocket } from "bun";
 import { Subscribe } from "@aprsweb/shared";
 import { deliveriesFor, type LiveEnvelope } from "@aprsweb/gateway/live";
 
-export type WsData = { region: string; sub?: Subscribe };
+// A half-open client (phone that lost coverage) keeps its TCP socket up but never reads. Without a
+// liveness sweep it lingers in the Set forever; the backpressure guard in dispatch() then stops
+// buffering to it, but only the ping/pong sweep actually reaps it. Mirrors servers/node/rooms.ts.
+const HEARTBEAT_MS = 30_000;
+
+export type WsData = { region: string; sub?: Subscribe; alive?: boolean };
 
 export class BunRooms {
   private rooms = new Map<string, Set<ServerWebSocket<WsData>>>();
+
+  constructor() {
+    const t = setInterval(() => this.heartbeat(), HEARTBEAT_MS);
+    (t as unknown as { unref?: () => void }).unref?.(); // don't keep the process alive for the sweep
+  }
+
+  private heartbeat(): void {
+    for (const set of this.rooms.values()) {
+      for (const ws of set) {
+        if (ws.data.alive === false) {
+          try {
+            ws.terminate();
+          } catch {
+            /* noop */
+          }
+          set.delete(ws);
+          continue;
+        }
+        ws.data.alive = false;
+        try {
+          ws.ping();
+        } catch {
+          set.delete(ws); // socket closing/closed — drop it
+        }
+      }
+    }
+  }
 
   join(ws: ServerWebSocket<WsData>): void {
     const r = ws.data.region;
@@ -21,17 +53,27 @@ export class BunRooms {
       this.rooms.set(r, set);
     }
     set.add(ws);
+    ws.data.alive = true;
   }
   leave(ws: ServerWebSocket<WsData>): void {
     this.rooms.get(ws.data.region)?.delete(ws);
   }
+  /** A pong (or any client frame) proves the socket is still reading — keep it alive past the sweep. */
+  onPong(ws: ServerWebSocket<WsData>): void {
+    ws.data.alive = true;
+  }
   onMessage(ws: ServerWebSocket<WsData>, raw: string | Buffer): void {
+    ws.data.alive = true;
     try {
       const parsed = Subscribe.safeParse(JSON.parse(String(raw)));
       if (parsed.success) ws.data.sub = parsed.data;
     } catch {
       /* ignore malformed */
     }
+  }
+
+  count(region = "global"): number {
+    return this.rooms.get(region)?.size ?? 0;
   }
 
   /** Deliver live envelopes to each subscriber per its subscription (same semantics as the DO). */

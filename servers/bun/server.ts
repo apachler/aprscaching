@@ -104,6 +104,9 @@ const server = Bun.serve<WsData, undefined>({
     message(ws, msg) {
       rooms.onMessage(ws, msg);
     },
+    pong(ws) {
+      rooms.onPong(ws);
+    },
     close(ws) {
       rooms.leave(ws);
     },

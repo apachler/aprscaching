@@ -50,6 +50,17 @@ async function fetchText(url: string): Promise<string> {
   return r.text();
 }
 const num = (v: unknown) => Number(String(v));
+/**
+ * Coerce an arbitrary GeoJSON property to a clean scalar string. Objects/arrays/null yield "" rather
+ * than `String()`'s "[object Object]" — a non-scalar `reference`/`id` must not become a real externalId
+ * (every such feature would collide on the same bogus id and clobber each other on import).
+ */
+const str = (v: unknown): string => {
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  if (typeof v === "boolean") return String(v);
+  return "";
+};
 function mapGeocacheType(t: string | undefined): CacheType {
   const s = (t ?? "").toLowerCase();
   if (s.includes("multi")) return "multi";
@@ -160,13 +171,13 @@ export const SOURCES: Record<string, SourceAdapter> = {
       );
       return feats
         .map((f) => {
-          const ref = String(f.props.reference ?? f.props.ref ?? "");
+          const ref = str(f.props.reference) || str(f.props.ref);
           return {
             source: "bunker",
             externalId: ref,
             code: ref,
             type: "bunker" as CacheType,
-            title: String(f.props.name ?? ref),
+            title: str(f.props.name) || ref,
             lat: f.lat,
             lon: f.lon,
             sourceName: "WWBOTA",
@@ -368,16 +379,17 @@ export const SOURCES: Record<string, SourceAdapter> = {
       const source = scope.source ?? "geojson";
       const type = (scope.type ?? "traditional") as CacheType;
       return parseGeoJsonFeatures(await fetchText(scope.url)).map((f, i) => {
-        const ref = String(f.props.reference ?? f.props.ref ?? f.props.id ?? i);
-        const url = String(
-          f.props.url ?? (scope.deepLink ? scope.deepLink.replace("{ref}", encodeURIComponent(ref)) : ""),
-        );
+        // A non-scalar reference/ref/id must not become the externalId (every such feature would
+        // collide on "[object Object]"); fall through to the per-feature index, which is always unique.
+        const ref = str(f.props.reference) || str(f.props.ref) || str(f.props.id) || String(i);
+        const url =
+          str(f.props.url) || (scope.deepLink ? scope.deepLink.replace("{ref}", encodeURIComponent(ref)) : "");
         return {
           source,
           externalId: ref,
           code: ref,
           type,
-          title: String(f.props.name ?? f.props.title ?? ref),
+          title: str(f.props.name) || str(f.props.title) || ref,
           lat: f.lat,
           lon: f.lon,
           sourceName,
