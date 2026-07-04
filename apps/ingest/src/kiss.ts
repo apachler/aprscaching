@@ -12,7 +12,7 @@ export interface KissOpts {
   retryMs?: number;
 }
 
-/** SR-ING-08: pointed at a non-KISS port a frame's terminating FEND never arrives and `buf` grows
+/** Pointed at a non-KISS port a frame's terminating FEND never arrives and `buf` would grow
  *  forever. Bound it — past this many bytes with no complete frame the stream isn't KISS; drop it. */
 const KISS_RX_MAX_BYTES = 64 * 1024;
 export interface KissHandlers {
@@ -67,7 +67,7 @@ export class KissTnc {
   private connect() {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
-    this.buf = []; // SR-ING-08: never carry a partial frame across a reconnect
+    this.buf = []; // never carry a partial frame across a reconnect
     s.on("connect", () => {
       this.connected = true;
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
@@ -77,7 +77,7 @@ export class KissTnc {
       for (const b of chunk) this.buf.push(b);
       const lastFend = this.buf.lastIndexOf(0xc0);
       if (lastFend <= 0) {
-        // SR-ING-08: no frame terminator yet — if the buffer has ballooned this isn't a KISS stream.
+        // no frame terminator yet — if the buffer has ballooned this isn't a KISS stream.
         if (this.buf.length > KISS_RX_MAX_BYTES) {
           console.warn(`[kiss] RX buffer over ${KISS_RX_MAX_BYTES} bytes with no frame — not KISS? resetting`);
           this.buf = [];
@@ -113,7 +113,7 @@ export class KissTnc {
     });
     s.on("close", () => {
       down();
-      setTimeout(() => this.connect(), this.backoff.next()); // SR-ING-06: backoff + jitter
+      setTimeout(() => this.connect(), this.backoff.next()); // backoff + jitter
     });
   }
 }

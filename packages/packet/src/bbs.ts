@@ -3,7 +3,7 @@
  * bbs.ts — the FBB/MBL-style connected-mode BBS command interpreter. This is the pure
  * "brain" a connected AX.25 session talks to: it takes one input line at a time and returns the lines
  * to send back (and whether to disconnect), operating on an injected MessageStore. No I/O, so it's
- * exhaustively unit-testable; the ingest wires it to incoming connects (validate-at-deploy), and the
+ * exhaustively unit-testable; the ingest wires it to incoming connects, and the
  * web terminal can talk to it over a loopback. Command set mirrors F6FBB: L/LA/LB/LM/LL, R, S/SP/SB/
  * ST/SR, K, H, B, A, X (expert), I — with a subject+body collection prompt for sends.
  */
@@ -45,11 +45,11 @@ interface Pending {
   subject: string | null;
   replyTo: number | null;
   body: string[];
-  bodyBytes: number; // running size of the collected body (SR-PKT-11 OOM guard)
+  bodyBytes: number; // running size of the collected body (OOM guard)
   stage: "subject" | "body";
 }
 
-/** SR-PKT-11: a message body a peer streams (never sending /EX) must be bounded. 32 KiB is far
+/** A message body a peer streams (never sending /EX) must be bounded. 32 KiB is far
  *  beyond any real packet-BBS message; past it we abort the send rather than buffer without limit. */
 const MAX_BODY_BYTES = 32 * 1024;
 
@@ -234,7 +234,7 @@ export class BbsSession {
     }
     p.bodyBytes += line.length + 1;
     if (p.bodyBytes > MAX_BODY_BYTES) {
-      this.pending = null; // SR-PKT-11: over the body ceiling → abort the send, don't buffer forever
+      this.pending = null; // over the body ceiling → abort the send, don't buffer forever
       return this.out("Message too large - send aborted.");
     }
     p.body.push(line);

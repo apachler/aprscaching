@@ -26,7 +26,7 @@ export type TrustTier = z.infer<typeof TrustTier>;
 /** Per-cache minimum-trust override: only A or B may be required (C = "no requirement"). */
 export const MinTrust = z.enum(["A", "B"]);
 
-/** How far a cache federates (T3.3): public (default), unlisted (no description), local-only (never federates). */
+/** How far a cache federates: public (default), unlisted (no description), local-only (never federates). */
 export const FedScope = z.enum(["public", "unlisted", "local-only"]);
 export type FedScope = z.infer<typeof FedScope>;
 
@@ -55,7 +55,7 @@ export type AppGeo = z.infer<typeof AppGeo>;
 /** Free-form cache tags: up to 12, each a short trimmed token (deduped + lowercased by the gateway). */
 export const CacheTags = z.array(z.string().trim().min(1).max(24)).max(12);
 
-/** Who may rate a cache (owner-gated, F-6): only finders (default), any signed-in caller, or nobody. */
+/** Who may rate a cache (owner-gated): only finders (default), any signed-in caller, or nobody. */
 export const RatingPolicy = z.enum(["finders", "all", "off"]);
 export type RatingPolicy = z.infer<typeof RatingPolicy>;
 
@@ -78,13 +78,13 @@ export const CreateCacheRequest = z.object({
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
-  fedScope: FedScope.default("public"), // how far this cache federates (T3.3)
+  fedScope: FedScope.default("public"), // how far this cache federates
   code: z.string().trim().max(32).optional(), // explicit code (imports); else AC-#### is minted
   driveIn: z.boolean().optional(), // car-accessible cache (original APRSCaching "Drive-In")
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
-  ratingPolicy: RatingPolicy.optional(), // who may rate (F-6); default 'finders'
-  rendezvous: z.boolean().optional(), // living cache opts into mutual rendezvous logging (F-4)
+  ratingPolicy: RatingPolicy.optional(), // who may rate; default 'finders'
+  rendezvous: z.boolean().optional(), // living cache opts into mutual rendezvous logging
 });
 export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 
@@ -102,7 +102,7 @@ export const UpdateCacheRequest = z.object({
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
   minTrust: MinTrust.optional(),
-  fedScope: FedScope.optional(), // change federation scope (T3.3)
+  fedScope: FedScope.optional(), // change federation scope
   driveIn: z.boolean().optional(),
   country: z.string().trim().max(56).optional(),
   tags: CacheTags.optional(),
@@ -113,7 +113,7 @@ export type UpdateCacheRequest = z.infer<typeof UpdateCacheRequest>;
 
 const B64 = z.string().trim().min(16).max(512);
 
-/** Per-callsign signature attesting the logger authored this find (F0). */
+/** Per-callsign signature attesting the logger authored this find. */
 export const AuthorSig = z.object({
   authorKey: B64, // Ed25519 public key (raw, base64url)
   authorSig: B64, // signature over authorshipMessage(...)
@@ -131,7 +131,7 @@ export const LogRequest = z.object({
 });
 export type LogRequest = z.infer<typeof LogRequest>;
 
-/** Bind a device public key to a callsign (F0). */
+/** Bind a device public key to a callsign. */
 export const RegisterKeyRequest = z.object({
   callsign: Callsign,
   publicKey: B64,
@@ -161,13 +161,13 @@ export interface CacheSummary {
   sourceName: string | null; // attribution label when imported
   sourceUrl: string | null; // deep link to the source page
   minTrust: "A" | "B" | null;
-  fedScope: FedScope; // owner's federation scope (T3.3)
+  fedScope: FedScope; // owner's federation scope
   driveIn: boolean; // car-accessible (original APRSCaching "Drive-In")
   country: string | null; // ISO code or short name (owner-set)
   tags: string[]; // free-form tags
 }
 
-/** A cache as it appears on the map — native or mirrored from a federation peer (F2). */
+/** A cache as it appears on the map — native or mirrored from a federation peer. */
 export interface MapCache {
   globalId: string; // network-unique id, e.g. "oe.aprscaching.org:cache:42"
   id: number | null; // local numeric id (native only; null when mirrored)
@@ -182,7 +182,7 @@ export interface MapCache {
   lon: number | null;
   origin: string; // originating instance id
   mirrored: boolean;
-  originTrust: "native" | "trusted" | "unvetted"; // first-party, or the origin peer's T1.1 trust tier (blocked never surfaced)
+  originTrust: "native" | "trusted" | "unvetted"; // first-party, or the origin peer's trust tier (blocked never surfaced)
   source: string; // "native" or an import source ("sota","pota",…)
   sourceName: string | null; // attribution label for imported caches
   sourceUrl: string | null; // deep link to the source page
@@ -199,8 +199,8 @@ export interface CacheLogEntry {
   verifyMethod: string | null;
   distanceM: number | null;
   comment: string | null;
-  corroboratedBy?: string | null; // peer instance that corroborated a Tier-A find (F3)
-  signerKey?: string | null; // logger's device key that signed this find (F0)
+  corroboratedBy?: string | null; // peer instance that corroborated a Tier-A find
+  signerKey?: string | null; // logger's device key that signed this find
 }
 
 export interface CacheDetail extends CacheSummary {
@@ -214,21 +214,21 @@ export interface CacheDetail extends CacheSummary {
   logs: CacheLogEntry[]; // first keyset page, newest first
   logsCursor?: string | null; // cursor for the next logbook page, null if none
   logsHasMore?: boolean; // true when older logs exist beyond the embedded page
-  // M4 community
+  // community
   favorites: number;
   favorited: boolean;
   needsMaintenance: boolean;
   dnfStreak: number;
   lastFound: number | null;
-  // F-6 owner-gated rating
+  // owner-gated rating
   rating: { avg: number | null; count: number; mine: number | null; policy: RatingPolicy; canRate: boolean };
-  // F-4 living-cache rendezvous: recent meetings (empty unless this is a rendezvous living cache)
+  // living-cache rendezvous: recent meetings (empty unless this is a rendezvous living cache)
   rendezvous: { withCacheId: number; withCall: string; ts: number; lat: number | null; lon: number | null }[];
-  // M2 audio-cache
+  // audio-cache
   stageCount: number;
 }
 
-// ---- M2 audio-cache: staged multi-cache ----
+// ---- audio-cache: staged multi-cache ----
 export interface CacheStage {
   stageNo: number;
   unlock: "geo" | "audio" | "open" | "nfc";
@@ -240,7 +240,7 @@ export interface CacheStage {
   lon: number | null;
 }
 
-// ---- M2 enriched search: as-you-type suggestions across caches + stations ----
+// ---- enriched search: as-you-type suggestions across caches + stations ----
 export interface SearchHitCache {
   kind: "cache";
   id: number;
@@ -264,7 +264,7 @@ export interface SearchResults {
   stations: SearchHitStation[];
 }
 
-// ---- M4 community response shapes ----
+// ---- community response shapes ----
 export interface LeaderboardEntry {
   rank: number;
   loggerCall: string;
@@ -318,7 +318,7 @@ export interface ActivityItem {
   cacheTitle: string;
 }
 
-// ---- M5 workbench: live APRS stations + packet inspector ----
+// ---- workbench: live APRS stations + packet inspector ----
 export interface StationSummary {
   callsign: string;
   lat: number;
@@ -364,7 +364,7 @@ export interface StationWxKey {
   wuUrl: string | null;
   txIs?: boolean;
   txCwop?: boolean;
-  verified?: boolean; // W2/W3 TX opt-in + control-verified gate
+  verified?: boolean; // APRS-IS weather beacon / CWOP relay TX opt-in + control-verified gate
 }
 export interface OperatedStation {
   id: number;
@@ -386,7 +386,7 @@ export interface DecodedPacket {
   error?: string;
 }
 
-// ---- M6 interop: transports + messaging ----
+// ---- interop: transports + messaging ----
 export interface PortStat {
   port: string;
   rx: number;
@@ -415,7 +415,7 @@ export interface BbsMessage {
   origin: string;
   readAt: number | null;
   replyTo?: number | null;
-  threadId?: number | null; // FBB thread tree (P2)
+  threadId?: number | null; // FBB thread tree
   // personal-message delivery state (present on inbox listings):
   delivery?: "held" | "sent" | "acked" | "expired";
   lineNo?: number | null;

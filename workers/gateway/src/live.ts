@@ -13,7 +13,7 @@ import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprswe
 import { haversineMeters } from "@aprsweb/aprs";
 
 export const GEOFENCE_RADIUS_M = 150;
-export const LIVE_REGION = "global"; // single region for now; sharding is M6
+export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
 
 export interface LiveEnvelope {
   station?: StationDelta;

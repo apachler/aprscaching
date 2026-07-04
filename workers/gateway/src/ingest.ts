@@ -46,7 +46,7 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
   return null;
 }
 
-/** Body ceiling (SR-SEC-10): INGEST_BATCH_MAX packets of a few hundred bytes fit comfortably in
+/** Body ceiling: INGEST_BATCH_MAX packets of a few hundred bytes fit comfortably in
  *  5 MB; anything larger is refused BEFORE req.json() buffers it into memory. */
 const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -57,7 +57,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const body = IngestBatch.safeParse(await req.json().catch(() => null));
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
 
-  // Auth: the shared secret (trusted backend / self-host ingest) OR a signed browser batch (H1.5):
+  // Auth: the shared secret (trusted backend / self-host ingest) OR a signed browser batch:
   // an operator's device key, registered to their callsign, signs the batch — so a PUBLIC gateway
   // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
   // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
@@ -74,7 +74,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   let maxTs = 0;
-  // SR-FED-09: never trust a client timestamp verbatim. A future-dated fix would sit permanently
+  // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
   // [now − 7 d, now + 60 s] before anything is persisted.
   const nowS = Math.floor(Date.now() / 1000);
@@ -178,7 +178,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ),
     );
   }
-  // M6: per-transport RX counters, bucketed by hour (port_stats)
+  // per-transport RX counters, bucketed by hour (port_stats)
   const bucket = Math.floor((maxTs || Math.floor(Date.now() / 1000)) / 3600) * 3600;
   for (const [port, rx] of portRx) {
     stmts.push(
@@ -195,7 +195,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const heardCalls = new Set(positions.map((p) => p.src.toUpperCase()));
   for (const cs of heardCalls) await deliverHeld(env, cs);
 
-  // W1: raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)
+  // raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)
   try {
     await recordWatchHeard(
       env,
@@ -205,7 +205,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     console.error("watch alerts:", (e as Error).message);
   }
 
-  // F-4: record living-cache rendezvous for any opted-in living cache just heard (best-effort)
+  // record living-cache rendezvous for any opted-in living cache just heard (best-effort)
   try {
     await recordRendezvous(
       env,
@@ -215,7 +215,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     console.error("rendezvous:", (e as Error).message);
   }
 
-  // P4: per-port MHeard for the NET/ROM node (best-effort)
+  // per-port MHeard for the NET/ROM node (best-effort)
   try {
     await recordMheard(
       env,
@@ -225,7 +225,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     console.error("mheard:", (e as Error).message);
   }
 
-  // M2: live fan-out — station deltas + "you're near a cache" geofence prompts
+  // live fan-out — station deltas + "you're near a cache" geofence prompts
   const envelopes: LiveEnvelope[] = [];
   for (const p of positions) envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course));
   await dispatchLive(env, envelopes);

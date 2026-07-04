@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
-  "description": "aprscaching.com reborn \u2014 an APRScaching-first web workbench",
+  "description": "aprscaching \u2014 an APRScaching-first web workbench",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",

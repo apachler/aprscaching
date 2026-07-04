@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * rendezvous.ts — F-4 living-cache rendezvous. When a living cache (an aprs_living cache opted into
+ * rendezvous.ts — living-cache rendezvous. When a living cache (an aprs_living cache opted into
  * rendezvous) beacons, look for other opted-in living caches co-located and recently heard, and record
  * a mutual meeting. Deliberately separate from the verified-find tiers (verify.ts): a rendezvous is a
  * social record, never points/leaderboard credit, so two stations parking together can't farm finds.

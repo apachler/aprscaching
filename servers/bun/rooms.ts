@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * In-memory region rooms over Bun.serve's native WebSocket (Bun analogue of servers/node/rooms.ts,
- * which uses the `ws` package). Same subscribe/broadcast fan-out so the M2 geofence live layer works
+ * which uses the `ws` package). Same subscribe/broadcast fan-out so the geofence live layer works
  * under Bun too.
  */
 import type { ServerWebSocket } from "bun";
@@ -39,7 +39,7 @@ export class BunRooms {
     const set = this.rooms.get(region);
     if (!set) return;
     for (const ws of set) {
-      // SR-RT-14: Bun's send() returns -1 when the message was dropped under backpressure (a slow or
+      // Bun's send() returns -1 when the message was dropped under backpressure (a slow or
       // stalled consumer). Once that happens, stop piling more frames onto the same socket this
       // dispatch — continuing just grows the backpressure buffer; the consumer resyncs on its next poll.
       let backpressured = false;

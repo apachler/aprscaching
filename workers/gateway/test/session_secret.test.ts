@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-SEC-01: the session-signing key must never be a known/default value. With INGEST_SECRET at
+// The session-signing key must never be a known/default value. With INGEST_SECRET at
 // its committed "change-me" default (or unset), the session HMAC key is public → an attacker forges
 // an `acs` cookie for any callsign, including a sysop. The gateway must mint no session on a weak
 // secret, and must reject any cookie presented against one.
@@ -11,7 +11,7 @@ const envWith = (o: Partial<Env>) => ({ ...o }) as unknown as Env;
 const cookieReq = (setCookie: string) =>
   new Request("http://gw/api/whoami", { headers: { cookie: setCookie.split(";")[0]! } });
 
-describe("SR-SEC-01 — session secret must not be the default", () => {
+describe("session secret must not be the default", () => {
   it("weakSecret flags the default and empties", () => {
     expect(weakSecret(undefined)).toBe(true);
     expect(weakSecret("")).toBe(true);

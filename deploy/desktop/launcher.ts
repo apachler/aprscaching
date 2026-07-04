@@ -89,7 +89,7 @@ const env: Env = {
   FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
   FED_PEERS: process.env.FED_PEERS,
   FED_DISCOVER: process.env.FED_DISCOVER,
-  // AGPL §13 source (ADR-3): the build stamps BUILD_VERSION (git describe) as the commit/tag.
+  // AGPL §13 source link: the build stamps BUILD_VERSION (git describe) as the commit/tag.
   SOURCE_REPO: process.env.SOURCE_REPO,
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? (VERSION !== "dev" ? VERSION : undefined),
 };

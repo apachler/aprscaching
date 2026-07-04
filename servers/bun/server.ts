@@ -23,13 +23,13 @@ import { makeFsMedia } from "./media.ts";
 import { BunRooms, type WsData } from "./rooms.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 8787; // SR-CFG-02: a blank/NaN PORT must not bind port 0
+const PORT = Number(process.env.PORT) || 8787; // a blank/NaN PORT must not bind port 0
 const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? join(HERE, "data/media");
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
 
-// SR-SEC-01 boot guard: the session-signing key derives from this secret; booting with the
+// Boot guard: the session-signing key derives from this secret; booting with the
 // known default would let anyone forge a session cookie for any callsign (incl. the sysop).
 if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
   console.error(
@@ -78,8 +78,8 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
-  ...stringEnvFrom(process.env), // SR-RT-03: forward EVERY config key (Bun previously lacked ADMIN_CALLSIGNS etc.)
-  // AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source) — the resolved value wins
+  ...stringEnvFrom(process.env), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway
+  // AGPL §13 source: commit from env, else git (self-host-from-source) — the resolved value wins
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
 };
 
@@ -92,7 +92,7 @@ const server = Bun.serve<WsData, undefined>({
       if (srv.upgrade(req, { data: { region } })) return undefined;
       return new Response("websocket upgrade failed", { status: 400 });
     }
-    // SR-SEC-09: overwrite any client-supplied x-real-ip with the socket address (mirrors servers/node)
+    // overwrite any client-supplied x-real-ip with the socket address (mirrors servers/node)
     const fwd = new Request(req, { headers: new Headers(req.headers) });
     fwd.headers.set("x-real-ip", srv.requestIP(req)?.address ?? "unknown");
     return handle(fwd, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
@@ -112,7 +112,7 @@ const server = Bun.serve<WsData, undefined>({
 console.log(`aprscaching bun-gateway listening on :${server.port}  (db: ${DB_PATH})`);
 
 // nightly TTL of firehose positions (logger positions kept longer for verification).
-// SR-RT-02: run once at startup too — a box that reboots more often than daily never prunes otherwise.
+// Run once at startup too — a box that reboots more often than daily never prunes otherwise.
 const runTtl = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
 runTtl();
 setInterval(runTtl, 24 * 3600 * 1000);
@@ -123,7 +123,7 @@ if (env.FED_PEERS && FED_SYNC_MS > 0) {
   setInterval(() => void syncAllPeers(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
 }
 
-// ---- SR-RT-11: 24/7 process resilience (mirrors servers/node) ----
+// ---- 24/7 process resilience (mirrors servers/node) ----
 process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
 process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
 let shuttingDown = false;

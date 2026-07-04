@@ -38,7 +38,7 @@ describe("Goertzel tone detector", () => {
   });
 });
 
-describe("CW audio front-end → decodeMorse (F-5 usable on live signal)", () => {
+describe("CW audio front-end → decodeMorse (usable on a live signal)", () => {
   it("recovers text from a synthesised Morse tone end-to-end", () => {
     const samples = synth(encodeMorse("SOS"), 60);
     expect(decodeMorse(morseFromTiming(cwKeyEvents(samples, SR, { pitchHz: PITCH, windowMs: 6 })))).toBe("SOS");

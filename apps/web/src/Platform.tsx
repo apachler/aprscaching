@@ -85,8 +85,7 @@ const baseStyle = (): string | StyleSpecification =>
 
 type Mode = "view" | "hide";
 
-// Quick-tour steps are config-driven and DEFERRED to the content pass — one neutral
-// placeholder so the framework is live and testable without committing copy.
+// Quick-tour steps are config-driven — one neutral placeholder keeps the framework live and testable.
 const TOUR_STEPS: TourStep[] = [
   {
     title: "Quick tour",
@@ -112,7 +111,8 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   const callsign = session.callsign;
   const verified = session.verified;
-  // Keep the shared Tool host's TX gate in sync with the session so a tool's beacon/TX stays H5-gated.
+  // Keep the shared Tool host's TX gate in sync with the session so a tool's beacon/TX stays
+  // gated on callsign control-verification.
   useEffect(() => {
     setToolTxVerified(verified);
   }, [verified]);
@@ -136,7 +136,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [showProfile, setShowProfile] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
-  // T3.1: include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
+  // include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
   const [includeUnvetted, setIncludeUnvetted] = useState(false);
   const includeUnvettedRef = useRef(includeUnvetted);
   includeUnvettedRef.current = includeUnvetted;
@@ -217,7 +217,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
   // markers are overlays, not style layers, so they survive setStyle. But the style-LAYER overlays
   // (grid/rings/terminator/arc, the raster basemap, tracks) ARE wiped by setStyle, so we bump
-  // `styleEpoch` once the new style settles (SR-WEB) — the overlay owners key their setup on it and
+  // `styleEpoch` once the new style settles — the overlay owners key their setup on it and
   // re-add. Skips the mount run so we don't redundantly re-parse the style the map just initialised with.
   const themeAtMount = useRef(locSettings.theme);
   const [styleEpoch, setStyleEpoch] = useState(0);
@@ -422,7 +422,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
   }, [subscribeLive]);
 
-  // re-fetch the map when the unvetted-network toggle flips (T3.1)
+  // re-fetch the map when the unvetted-network toggle flips
   useEffect(() => {
     refresh();
   }, [includeUnvetted, refresh]);
@@ -447,7 +447,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [refresh]);
 
   // live WebSocket: geofence prompts ("you're near a cache") + live station deltas.
-  // SR-WEB: reconnect on close/error with exponential backoff + jitter — a server restart or a
+  // Reconnect on close/error with exponential backoff + jitter — a server restart or a
   // network blip must not silently kill live features until the page is reloaded. The retry timer is
   // effect-local and cleared on cleanup; `stopped` prevents a reconnect racing the unmount.
   useEffect(() => {

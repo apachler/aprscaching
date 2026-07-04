@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-FED-08: mirror upserts are version-monotonic — a replayed OLDER signed record must never roll
+// Mirror upserts are version-monotonic — a replayed OLDER signed record must never roll
 // a mirror back (e.g. to pre-redaction content). Runs the REAL upsert SQL against real SQLite via
 // the same D1 shim the node-gateway serves with.
 import { describe, it, expect } from "vitest";
@@ -25,7 +25,7 @@ const rec = (title: string, updatedAt: number) => ({
   data: { code: "PC-1", ownerCall: "OE8APR", title, type: "single", status: "active", updatedAt },
 });
 
-describe("SR-FED-08 — version-monotonic mirror upserts", () => {
+describe("version-monotonic mirror upserts", () => {
   it("a newer record overwrites; a replayed older record does NOT roll the mirror back", async () => {
     const { env } = freshEnv();
     await upsertRemoteCache(env, rec("original", 1000) as never, "peer.net");

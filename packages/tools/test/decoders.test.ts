@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { decodeMorse, encodeMorse, morseFromTiming, encodeVaricode, decodeVaricode } from "../src/index.js";
 
-describe("CW (Morse) decoder (F-5)", () => {
+describe("CW (Morse) decoder", () => {
   it("decodes dot/dash tokens to text", () => {
     expect(decodeMorse(".... . .-.. .-.. ---")).toBe("HELLO");
     expect(decodeMorse("-.-. --.-  -.. .")).toBe("CQ DE"); // double space = word gap
@@ -21,7 +21,7 @@ describe("CW (Morse) decoder (F-5)", () => {
   });
 });
 
-describe("PSK31 varicode codec (F-5)", () => {
+describe("PSK31 varicode codec", () => {
   it("round-trips text through the varicode bitstream", () => {
     const bits = encodeVaricode("cq de oe8apr 73");
     expect(/^0{2}[01]+0{2}$/.test(bits)).toBe(true); // idle-framed

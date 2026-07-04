@@ -126,7 +126,7 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   // Capture this callsign's federated find ids BEFORE anonymising — once logger_call becomes
   // WITHDRAWN we can't find them, and peers mirrored them with the real call (PII). The finds feed is
   // append-only by id, so an UPDATE never re-serves the anonymised row → a tombstone is the only way
-  // to purge the pre-deletion copies on peers (T1.3/ADR-5).
+  // to purge the pre-deletion copies on peers.
   const findIds = (await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=?").bind(cs).all<{ id: number }>())
     .results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
@@ -237,7 +237,7 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   const exists = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
   if (exists) return json({ error: "callsign already exists here" }, { status: 409 });
 
-  // SR-SEC-05: the bundle is CLIENT-supplied and unsigned by any source instance — the device-key
+  // The bundle is CLIENT-supplied and unsigned by any source instance — the device-key
   // assertion only proves the mover controls a key THEY put in the bundle, which says nothing about the
   // callsign. So we must NOT trust `bundle.verified` (that would let anyone import W1AW as "verified").
   // The account + its keys land UNVERIFIED; the operator re-proves control on this instance via the APRS
@@ -250,8 +250,8 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)",
     ).bind(cs, `from:${bundle.instance ?? "?"}`, now()),
-    // T3.2: announce the move to the network — the target attests "this callsign now homes here",
-    // signed at serve time on the account-move feed so peers can re-point attribution (ADR-2).
+    // announce the move to the network — the target attests "this callsign now homes here",
+    // signed at serve time on the account-move feed so peers can re-point attribution.
     env.DB.prepare("INSERT INTO account_moves (callsign, from_instance, to_instance, ts) VALUES (?,?,?,?)").bind(
       cs,
       bundle.instance ?? null,
@@ -269,7 +269,7 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   return json({ ok: true, callsign: cs, importedKeys: bundle.keys.length, from: bundle.instance ?? null });
 }
 
-// ----------------------------------------------------- federation: account-move feed (T3.2)
+// ----------------------------------------------------- federation: account-move feed
 interface MoveRow {
   seq: number;
   callsign: string;

@@ -22,7 +22,7 @@ describe("embed widget + QR", () => {
     expect(body).toContain("fitBounds");
   });
 
-  // SR-SEC-03: a payload that tries to break out of the inline <script> must be inert.
+  // A payload that tries to break out of the inline <script> must be inert.
   it("neutralises an XSS attempt in bbox (no raw </script> or injected tag)", async () => {
     const attack = "</script><script>alert(1)</script>";
     const res = handleEmbed(new Request("https://api.example/embed?bbox=" + encodeURIComponent(attack)), env);

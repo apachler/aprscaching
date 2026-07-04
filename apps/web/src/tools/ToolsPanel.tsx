@@ -100,7 +100,7 @@ function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
  * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
  * (packet terminal, BBS, node, or this web console) — not just here. Built-ins run in-process under the
  * capability model (off by default); imported tools are fetched by URL, permission-prompted, and run in
- * a locked-down Worker. TX-capable tools additionally require a verified callsign (H5). Nothing here
+ * a locked-down Worker. TX-capable tools additionally require a verified callsign. Nothing here
  * can bypass the trust engine.
  */
 interface Imported {
@@ -336,7 +336,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
 
       {decodersOn && (
         <div className="tool-sub">
-          <div className="ulabel">Decode (F-5)</div>
+          <div className="ulabel">Decode</div>
           <div className="row gap-2">
             <select value={decodeKind} onChange={(e) => setDecodeKind(e.target.value)}>
               {allDecoders.map((d) => (

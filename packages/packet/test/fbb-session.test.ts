@@ -69,7 +69,7 @@ describe("FBB forwarding session over the loopback", () => {
     expect(B.queue).toHaveLength(0);
   });
 
-  it("SR-PKT-02: a short/partial FS reply keeps the un-verdicted messages queued (no silent drop)", () => {
+  it("a short/partial FS reply keeps the un-verdicted messages queued (no silent drop)", () => {
     const A = makeStore([
       msg({ from: "OE8BBS", to: "DL1AAA", bid: "1_A", title: "one", body: "alpha" }),
       msg({ from: "OE8BBS", to: "DL2BBB", bid: "2_A", title: "two", body: "bravo" }),
@@ -103,8 +103,8 @@ describe("FBB forwarding session over the loopback", () => {
     expect(B.inbox).toHaveLength(0);
   });
 
-  // SR-PKT-01: a hostile peer sending lines after FQ (e.g. "FQ\r\x1a\r") must not crash the
-  // session — the ^Z used to hit pendingRx.shift() on an empty queue and throw in the socket callback.
+  // A hostile peer sending lines after FQ (e.g. "FQ\r\x1a\r") must not crash the session — a
+  // trailing ^Z must not hit pendingRx.shift() on an empty queue and throw in the socket callback.
   it("ignores any line after FQ — no throw, nothing stored", () => {
     const A = makeStore([]);
     const s = new FbbSession(A, { initiator: true });
@@ -112,7 +112,7 @@ describe("FBB forwarding session over the loopback", () => {
     s.feed("[PEER-1.0-F$]"); // their SID
     s.feed("FF"); // both empty → we answer FQ, phase=done
     expect(s.feed("FQ").out).toEqual([]); // trailing FQ after done
-    expect(() => s.feed("\x1a")).not.toThrow(); // the crashing line
+    expect(() => s.feed("\x1a")).not.toThrow(); // a stray ^Z after done
     expect(s.feed("\x1a").out).toEqual([]);
     expect(s.feed("junk title").out).toEqual([]);
     expect(A.inbox).toHaveLength(0);

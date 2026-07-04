@@ -29,7 +29,7 @@ const rec = (over: Partial<Parameters<typeof upsertImported>[1][number]>) => ({
   ...over,
 });
 
-describe("import upsert (M3)", () => {
+describe("import upsert", () => {
   let env: Env, db: Database.Database;
   beforeEach(() => {
     ({ env, db } = freshEnv());

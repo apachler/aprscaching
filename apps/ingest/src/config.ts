@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * config.ts — startup config helpers for the ingest daemon.
- *  - loadDotEnv (SR-CFG-03): the documented `pnpm dev` / `start` paths run plain `tsx`/`node` with no
- *    dotenv, so without this the box silently starts as N0CALL/change-me. Load a `.env` from cwd if
- *    present; a real process-env value always wins.
- *  - numEnv (SR-CFG-02): parse a numeric env var with validation + a floor. A blank/NaN value (e.g.
- *    `BATCH_MS=`) must NOT silently become 0 — that's a ~1 ms flush loop, or a socket dialling port 0.
+ *  - loadDotEnv: the `pnpm dev` / `start` paths run plain `tsx`/`node` with no dotenv, so without this
+ *    the box silently starts as N0CALL/change-me. Load a `.env` from cwd if present; a real process-env
+ *    value always wins.
+ *  - numEnv: parse a numeric env var with validation + a floor. A blank/NaN value (e.g. `BATCH_MS=`)
+ *    must NOT silently become 0 — that's a ~1 ms flush loop, or a socket dialling port 0.
  */
 import fs from "node:fs";
 
@@ -33,8 +33,8 @@ export function loadDotEnv(file = ".env"): void {
 
 /**
  * Parse a numeric env var. A missing/blank value → `def`; a non-numeric value → `def` (warned); a value
- * outside `[min,max]` is clamped (warned). This closes SR-CFG-02: `Number(env.X ?? d)` returns 0 for an
- * empty string (the `??` only guards null/undefined), which becomes a tight flush loop or port 0.
+ * outside `[min,max]` is clamped (warned). `Number(env.X ?? d)` returns 0 for an empty string (the `??`
+ * only guards null/undefined), which would become a tight flush loop or port 0.
  */
 export function numEnv(name: string, def: number, opts: { min?: number; max?: number } = {}): number {
   const raw = process.env[name];
@@ -55,5 +55,5 @@ export function numEnv(name: string, def: number, opts: { min?: number; max?: nu
   return n;
 }
 
-/** A TCP/UDP port from env, validated to [1,65535] (SR-CFG-02: a blank/NaN port must not dial 0). */
+/** A TCP/UDP port from env, validated to [1,65535] (a blank/NaN port must not dial 0). */
 export const portEnv = (name: string, def: number): number => numEnv(name, def, { min: 1, max: 65535 });

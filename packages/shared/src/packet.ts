@@ -19,7 +19,7 @@ export const Packet = z.object({
 });
 export type Packet = z.infer<typeof Packet>;
 
-/** Hard batch ceiling (SR-SEC-10): the ingest box flushes every few seconds, so a legitimate batch
+/** Hard batch ceiling: the ingest box flushes every few seconds, so a legitimate batch
  *  is tens of packets — 1000 absorbs any reconnect backlog while bounding a hostile POST. */
 export const INGEST_BATCH_MAX = 1000;
 export const IngestBatch = z.object({ packets: z.array(Packet).max(INGEST_BATCH_MAX) });
@@ -32,11 +32,11 @@ export type IngestBatch = z.infer<typeof IngestBatch>;
  * tunnel and a HAMNET-bridged KISS link are all just transports; none of them, on
  * their own, corroborate presence. Only a receiving site WE operate and can attest
  * for yields Tier-A uplift. So the verification engine MUST branch on
- * `firstPartyAttested` alone — never on `transport`. The enum keeps the deferred
- * RF / AXIP / HAMNET tracks pluggable without re-touching the trust engine.
+ * `firstPartyAttested` alone — never on `transport`. The enum keeps the
+ * RF / AXIP / HAMNET transports pluggable without re-touching the trust engine.
  */
 export const Transport = z.enum([
-  "aprs-is", // APRS-IS firehose (the only wired transport today)
+  "aprs-is", // APRS-IS firehose (the only wired transport in service)
   "app", // first-party in-app device geolocation (the Tier-B path)
   "axudp", // AX.25 over UDP (BPQ node mesh) — ingest listener/port built, feature-flagged off
   "axip", // AX.25 over raw IP proto 93 — ingest listener built (raw socket), feature-flagged off

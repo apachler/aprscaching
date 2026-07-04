@@ -46,7 +46,7 @@
 
 /* ---- Cogmind CP437 face: PxPlus IBM VGA 8x16 (int10h Oldschool PC Font Pack, CC BY-SA 4.0) ----
    Authentic DOS/VGA glyphs + box-drawing. Referenced ONLY by the Cogmind [data-theme="cogmind"]
-   --font-mono stack, so the browser never fetches it on the Modern / field path (docs/24 §1a·4). */
+   --font-mono stack, so the browser never fetches it on the Modern / field path. */
 @font-face {
   font-family: "PxPlus IBM VGA8";
   src: url("/fonts/WebPlus_IBM_VGA_8x16.woff") format("woff");
@@ -55,7 +55,7 @@
   font-display: swap;
 }
 
-/* ---- design tokens (OKLCH) — dark field-console by default, light as an option (M7) ----
+/* ---- design tokens (OKLCH) — dark field-console by default, light as an option ----
    Per .claude/rules/css.md: theming is token-driven in an @layer, colours are OKLCH, and the
    trust-tier / status palette derives from bases via color-mix() so brightness stays even across
    hues (sunlight legibility). We keep an explicit [data-theme] layer (not light-dark() alone)
@@ -93,7 +93,7 @@
     --warn: oklch(0.8 0.15 85);
     --bad: oklch(0.66 0.19 27);
 
-    /* operator surfaces (M8) — denser console chrome, derived in the same OKLCH family.
+    /* operator surfaces — denser console chrome, derived in the same OKLCH family.
        Used by the nav rail, side panels and data chips; the core --surface/--ink stay as-is so
        existing surfaces don't regress, and each surface opts in as it's restyled. */
     --rail-bg: oklch(0.2 0.012 230); /* nav rail / top bar chrome */
@@ -103,7 +103,7 @@
     --ink-tier: oklch(0.18 0.02 245); /* near-black ink on a solid tier chip */
 
     /* chrome + map surfaces that can't take the panel neutrals (they sit on dark chrome or the map).
-       Kept as tokens — not stray literals — so the Stage-3 Cogmind flip reskins them in one swap. */
+       Kept as tokens — not stray literals — so the Cogmind flip reskins them in one swap. */
     --page-bg: oklch(0.17 0.012 220); /* body base painted behind the (transparent) map */
     --chrome-ink: oklch(
       1 0 0
@@ -164,11 +164,11 @@
   }
 
   /* ───────────────────────────────────────────────────────────────────────────────────────────
-     COGMIND — the late-90s green-phosphor "flip" (docs/24). Selecting it IS the flip: a token swap,
+     COGMIND — the late-90s green-phosphor "flip". Selecting it IS the flip: a token swap,
      no per-component rebuild. Green-phosphor base + a disciplined DOS accent set (cyan/amber/red) used
      only where colour carries meaning (trust tiers, station types, TX/RX). Sharp corners, glow instead
      of drop-shadow, mono for all text. Derived in OKLCH so brightness stays even (sunlight AA). The
-     [data-shell="terminal"] TUI transformation of the workbench rides on top of this (later T1 slice).
+     [data-shell="terminal"] TUI transformation of the workbench rides on top of this.
      ─────────────────────────────────────────────────────────────────────────────────────────── */
   :root[data-theme="cogmind"] {
     color-scheme: dark;
@@ -223,8 +223,8 @@
     --r-md: 0px;
     --r-lg: 1px;
     --r-pill: 2px;
-    /* Cogmind prefers an authentic CP437/VGA face when one is present (installed locally, or a future
-       bundled `Px437 IBM VGA8` drop-in — docs/24 §1a·4), then falls back to the reliable stack. Pure
+    /* Cogmind prefers an authentic CP437/VGA face when one is present (installed locally, or a
+       bundled `Px437 IBM VGA8` drop-in), then falls back to the reliable stack. Pure
        CSS, no web-font fetch on the field path: the fallbacks already render box-drawing + block glyphs,
        and browsers skip any family that isn't available. */
     --font-mono:
@@ -496,7 +496,7 @@ label textarea {
   color: var(--muted);
   min-width: 3.5rem;
 }
-/* opt-in ham profile card (docs/13) */
+/* opt-in ham profile card */
 .profile-card {
   display: flex;
   gap: 12px;
@@ -577,7 +577,7 @@ label textarea {
   right: 12px;
 }
 
-/* ---- operator nav rail + 3-pane docking (≥1024px) — M8 ---- */
+/* ---- operator nav rail + 3-pane docking (≥1024px) ---- */
 .rail button {
   width: 48px;
   height: 48px;
@@ -877,7 +877,7 @@ button.station-pin.role {
   font-weight: 700;
 }
 
-/* live activity spots (docs/20 S2) — distinct amber marker + a tap card; cache "being activated now" */
+/* live activity spots — distinct amber marker + a tap card; cache "being activated now" */
 button.spot-pin {
   position: relative;
   width: 22px;
@@ -1100,7 +1100,7 @@ button.spot-pin::after {
   margin-right: 4px;
 }
 
-/* declarative tool panels (docs/28 `panel` capability) — a tool's typed nodes rendered by the host */
+/* declarative tool panels (the `panel` capability) — a tool's typed nodes rendered by the host */
 .tool-panels {
   display: grid;
   gap: 8px;
@@ -1209,7 +1209,7 @@ button.spot-pin::after {
   text-align: center;
 }
 
-/* tool-contributed map markers (docs/28 map surface) — a small tokened glyph */
+/* tool-contributed map markers (map surface) — a small tokened glyph */
 .tool-map-pin {
   font-size: 16px;
   line-height: 1;
@@ -1217,7 +1217,7 @@ button.spot-pin::after {
   text-shadow: 0 0 2px var(--surface);
 }
 
-/* field station (docs/16) — local RF stations + inbox, two columns on wide, stacked narrow */
+/* field station — local RF stations + inbox, two columns on wide, stacked narrow */
 .field-station {
   margin: 10px 0;
   padding: 8px 10px;
@@ -1371,9 +1371,9 @@ button.spot-pin::after {
   flex: none;
 }
 
-/* packet terminal (docs/25 P1) — the Graphic Packet layout: a numbered channel bar on top, ONE big
+/* packet terminal — the Graphic Packet layout: a numbered channel bar on top, ONE big
    central window (the selected channel, or channel 0 = monitor), a status line, command line, and a
-   function/macro bar. Built token-driven so the Stage-3 Cogmind flip is a skin swap. */
+   function/macro bar. Built token-driven so the Cogmind flip is a skin swap. */
 .packet-term {
   display: flex;
   flex-direction: column;
@@ -1763,7 +1763,7 @@ button.link:hover {
   display: block;
 }
 
-/* ---- operator data chips & verification (M8) ---- */
+/* ---- operator data chips & verification ---- */
 /* square trust-tier chip: solid tier colour, near-black letter (A/B/C) */
 .tierchip {
   display: inline-flex;
@@ -1981,7 +1981,7 @@ button.link:hover {
   margin: 16px 0 4px;
 }
 
-/* ---- Nearby: operator cache cards + station rows (M8 P3) ---- */
+/* ---- Nearby: operator cache cards + station rows ---- */
 .nearby-h {
   display: flex;
   align-items: baseline;
@@ -2152,7 +2152,7 @@ button.link:hover {
   color: var(--muted);
 }
 
-/* ---- map coordinate / grid readout (M8 P4) ---- */
+/* ---- map coordinate / grid readout ---- */
 .coordreadout {
   position: absolute;
   left: 12px;
@@ -2191,8 +2191,8 @@ button.link:hover {
   }
 }
 
-/* field-navigation map tools (docs/11 M2): grid / rings / ruler toggles + readouts */
-/* basemap layer switcher (docs/11 M2) — top-right, opt-in raster */
+/* field-navigation map tools: grid / rings / ruler toggles + readouts */
+/* basemap layer switcher — top-right, opt-in raster */
 .basemap-switch {
   position: absolute;
   right: 12px;
@@ -2279,7 +2279,7 @@ button.link:hover {
   cursor: not-allowed;
   background: none;
 }
-/* ---- track history + time-replay (docs/11 M3) ---- */
+/* ---- track history + time-replay ---- */
 .trackreplay {
   margin-top: 12px;
   padding-top: 10px;
@@ -2414,7 +2414,7 @@ button.link:hover {
   backdrop-filter: blur(6px);
 }
 
-/* ---- top-bar global search (M8 P3) + enriched suggest (docs/11 M2) ---- */
+/* ---- top-bar global search + enriched suggest ---- */
 .topsearch-wrap {
   display: none;
   position: relative;
@@ -2547,7 +2547,7 @@ button.link:hover {
   font-size: 12.5px;
 }
 
-/* ---- identity chip (top bar) + account callsign list (M9 Phase 1) ---- */
+/* ---- identity chip (top bar) + account callsign list ---- */
 .idchip {
   display: inline-flex;
   align-items: center;
@@ -2749,7 +2749,7 @@ button.link:hover {
   outline-offset: 2px;
 }
 
-/* share funnel: copy-link + printable QR on the cache detail (docs/11 M4) */
+/* share funnel: copy-link + printable QR on the cache detail */
 .sharecache {
   margin: 10px 0;
 }
@@ -2776,12 +2776,12 @@ button.link:hover {
   min-width: 0;
 }
 
-/* browser-direct RF live RX list (docs/16 H1) — cap height, scroll within the workbench group */
+/* browser-direct RF live RX list (Web Serial KISS) — cap height, scroll within the workbench group */
 .rf-rx {
   max-height: 320px;
   overflow: auto;
 }
-/* gated transmit block (docs/16 H5) — set apart from RX */
+/* gated transmit block (gated on callsign control-verification) — set apart from RX */
 .tx-block {
   border-top: 1px dashed var(--line);
   margin-top: 10px;
@@ -2791,7 +2791,7 @@ button.link:hover {
   margin: 8px 0 4px;
 }
 
-/* finds-over-time sparkline on the cache detail (docs/11) */
+/* finds-over-time sparkline on the cache detail */
 .findstrend {
   margin: 10px 0;
 }
@@ -2810,7 +2810,7 @@ button.link:hover {
   opacity: 0.85;
 }
 
-/* keyset "Load more" control (docs/11) — centered, recedes; the list bottoms out cleanly when hidden */
+/* keyset "Load more" control — centered, recedes; the list bottoms out cleanly when hidden */
 .loadmore {
   display: flex;
   justify-content: center;
@@ -3627,7 +3627,7 @@ button.danger:hover {
   width: min(360px, 70vw);
 }
 
-/* marketing landing (docs/18 — mechanics; content deferred). Brand hero = bg.jpg + blue overlay. */
+/* marketing landing (mechanics; placeholder content). Brand hero = bg.jpg + blue overlay. */
 .landing {
   position: relative;
   min-height: 100dvh;
@@ -3718,7 +3718,7 @@ button.danger:hover {
 }
 
 /* Cogmind: the marketing hero drops the colour photo + teal wash for a near-black phosphor field
-   (docs/24 — every surface is themed, incl. the landing). The wordmark is white text + a green icon,
+   (every surface is themed, incl. the landing). The wordmark is white text + a green icon,
    so it reads cleanly on black; text + the explore button go phosphor. */
 :where(:root[data-theme="cogmind"]) .landing {
   background: var(--page-bg);
@@ -3732,7 +3732,7 @@ button.danger:hover {
   border-color: var(--frame);
 }
 
-/* quick-tour framework (docs/18 — mechanics; steps deferred). Bottom-anchored accessible dialog. */
+/* quick-tour framework (mechanics; placeholder steps). Bottom-anchored accessible dialog. */
 .tour-scrim {
   position: fixed;
   inset: 0;
@@ -3782,9 +3782,9 @@ button.danger:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
-   COGMIND chrome reskins (docs/24 §4.3) — PRESENTATION ONLY, scoped to [data-theme="cogmind"] via
+   COGMIND chrome reskins — PRESENTATION ONLY, scoped to [data-theme="cogmind"] via
    :where() so specificity stays low and the Modern theme is completely untouched. The palette/font/
-   radius already flipped through tokens (T1a); this adds the terminal *character*: framed CRT
+   radius flip through tokens; this adds the terminal *character*: framed CRT
    surfaces, bracketed badges, terminal load/input affordances. No DOM changes, no a11y regressions.
    ═══════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -3878,7 +3878,7 @@ button.danger:hover {
   font-size: 12px;
 }
 
-/* ─── Cogmind [data-shell="terminal"]: workbench apps become bordered CRT windows (docs/24 §6a) ───
+/* ─── Cogmind [data-shell="terminal"]: workbench apps become bordered CRT windows ───
    Same DOM, same components — only presentation flips. The wide workbench Panels (terminal, BBS,
    node, tools, decoder, rig, remote) get a phosphor frame + a full-width title bar; the app's own
    status/command rows already read as a terminal. Scoped to the theme, so Modern is untouched. */
@@ -3960,7 +3960,7 @@ button.danger:hover {
   margin-right: 4px;
 }
 
-/* ─── CRT FX — opt-in scanline + phosphor glow (docs/24 §1a·3, §5) ────────────────────────────────
+/* ─── CRT FX — opt-in scanline + phosphor glow ────────────────────────────────
    Off by default; enabled only when the user turns it on AND Cogmind is active (data-crt="on", set by
    resolveCrt). ONE cheap, static, compositor-friendly overlay layer (a repeating-linear-gradient +
    vignette, pointer-events:none) — never a blur, per css.md. The optional flicker is gated behind

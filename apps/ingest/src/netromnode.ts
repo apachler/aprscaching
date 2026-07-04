@@ -148,8 +148,8 @@ export class NetromNodeRunner {
     setInterval(() => this.node.decay(), dMs);
     setInterval(() => {
       for (const c of this.circuits) c.poll();
-    }, 1000); // SR-PKT-06: drive circuit T1 retransmit/teardown
-    // SR-ING-09: evict stale MHeard entries so the map doesn't grow for the life of the process.
+    }, 1000); // drive circuit T1 retransmit/teardown
+    // evict stale MHeard entries so the map doesn't grow for the life of the process.
     const heardTtl = 24 * 3600; // seconds
     setInterval(() => {
       const cutoff = Math.floor(Date.now() / 1000) - heardTtl;
@@ -166,7 +166,7 @@ export class NetromNodeRunner {
     if (f.type !== "UI" || f.pid !== PID_NETROM || !f.info) return;
 
     // A directed NET/ROM frame (not the "NODES" broadcast): switch it — deliver locally to its circuit,
-    // transit-forward it toward its destination, or drop (TTL/no-route/loop). F2.
+    // transit-forward it toward its destination, or drop (TTL/no-route/loop).
     if (f.dst.call !== NODES_DST.call) {
       const pkt = decodeNetrom(f.info);
       if (!pkt) return;

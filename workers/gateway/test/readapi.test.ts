@@ -6,7 +6,7 @@ import type { Env } from "../src/env.js";
 const req = (method: string, rest: string, headers: Record<string, string> = {}) =>
   new Request(`https://api.example/api/v1${rest}`, { method, headers });
 
-describe("public read API /api/v1 (ADR-4a)", () => {
+describe("public read API /api/v1", () => {
   it("index advertises version, limits and the endpoint catalogue", async () => {
     const res = await handleApiV1(req("GET", ""), {} as Env, "");
     expect(res.status).toBe(200);
@@ -33,7 +33,7 @@ describe("public read API /api/v1 (ADR-4a)", () => {
 
   it("rate-limits per IP and 429s past the anonymous budget", async () => {
     const env = { API_RATE_ANON: "2", API_RATE_WINDOW_SEC: "60" } as unknown as Env;
-    const ip = { "cf-connecting-ip": "203.0.113.7" }; // edge-stamped — XFF alone is no longer trusted (SR-SEC-09)
+    const ip = { "cf-connecting-ip": "203.0.113.7" }; // edge-stamped — XFF alone is not trusted
     // /spots is disabled by default → exercises the gate without needing the DB
     const a = await handleApiV1(req("GET", "/spots", ip), env, "/spots");
     const b = await handleApiV1(req("GET", "/spots", ip), env, "/spots");

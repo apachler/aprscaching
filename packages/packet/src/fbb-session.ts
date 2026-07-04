@@ -4,7 +4,7 @@
  * spec. Two BBSes exchange personal/bulletin mail over a connected AX.25 link with **reverse forwarding**:
  * after each block the send direction flips. Pure + line-oriented (no I/O) — the ingest drives it over a
  * real ConnectedLink; the loopback harness drives it headlessly. ASCII-first; the binary B0/B1 (LZHUF)
- * modes are a documented follow-on (``). This is the interop bridge to the classic packet network.
+ * modes are a documented follow-on. This is the interop bridge to the classic packet network.
  *
  * Wire recap (F6FBB): SID advertises the `F` flag; proposal `FB <type> <FROM> <@AT> <TO> <BID> <size>`
  * (≤5/block) then `F>`; reply `FS ±=…` (+ accept, - reject, = defer); each accepted message is sent as
@@ -32,7 +32,7 @@ export interface FbbStore {
 
 const CTRLZ = "\x1a";
 const MAX_BLOCK = 5;
-/** SR-PKT-11: a peer that streams a body and never sends ^Z must not grow `rxAcc` without bound.
+/** A peer that streams a body and never sends ^Z must not grow `rxAcc` without bound.
  *  Cap the received body at the larger of the peer's own proposed `size` (with slack) and a floor,
  *  but never past this hard ceiling — beyond it the block is hostile/broken and we abort the session. */
 const MAX_RECV_BYTES = 64 * 1024;
@@ -47,7 +47,7 @@ export class FbbSession {
   private accepting: Proposal[] = []; // inbound proposals we accepted, awaiting their bodies
   private rxAcc: string[] = []; // body lines of the message currently being received
   private rxTitle: string | null = null;
-  private rxBytes = 0; // running size of the current inbound body (SR-PKT-11 OOM guard)
+  private rxBytes = 0; // running size of the current inbound body (OOM guard)
   private pendingRx: Proposal[] = []; // accepted inbound proposals whose bodies we're awaiting
 
   constructor(
@@ -95,7 +95,7 @@ export class FbbSession {
     const queued = this.store.outbound();
     this.offered.forEach((p, i) => {
       const v = verdicts[i];
-      // SR-PKT-02: a short/garbled FS reply leaves later verdicts undefined. Only an EXPLICIT accept or
+      // A short/garbled FS reply leaves later verdicts undefined. Only an EXPLICIT accept or
       // reject dequeues the message; anything else ('=' defer, missing, unknown) keeps it queued so a
       // truncated `FS +` to a 5-proposal block can't silently drop the other four.
       if (v !== "accept" && v !== "reject") return;
@@ -163,7 +163,7 @@ export class FbbSession {
     }
 
     // any line after FQ (or in an unexpected state) is ignored — a hostile peer sending
-    // "FQ\r^Z\r" must not reach the recv-block code below (SR-PKT-01: pendingRx is empty there)
+    // "FQ\r^Z\r" must not reach the recv-block code below (pendingRx is empty there)
     if (this.phase !== "recv-block") return { out: [] };
 
     // phase === "recv-block": read title / body / ^Z for each accepted message, in order
@@ -195,7 +195,7 @@ export class FbbSession {
       if (this.pendingRx.length === 0) return { out: this.turnToPropose() }; // block done → reverse
       return { out: [] };
     }
-    // SR-PKT-11: enforce the peer's own proposed size (with slack), never past the hard ceiling —
+    // Enforce the peer's own proposed size (with slack), never past the hard ceiling —
     // a never-terminated body must not buffer without bound.
     this.rxBytes += raw.length + 1;
     const proposed = this.pendingRx[0]?.size ?? 0;

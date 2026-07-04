@@ -10,8 +10,8 @@ const b64u = (buf: ArrayBuffer) => {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };
 
-// SR-SEC-02: registering a device key binds it to a callsign, and destructive account actions
-// (delete / bundle / move) authorise against "any registered key" — so anonymous registration was
+// Registering a device key binds it to a callsign, and destructive account actions
+// (delete / bundle / move) authorise against "any registered key" — so anonymous registration is
 // an account-takeover primitive. Anonymous ⇒ 401; a session may only bind its own base call.
 describe("handleRegisterKey — registration is authenticated", () => {
   const dbNever = {
@@ -61,7 +61,7 @@ describe("handleRegisterKey — registration is authenticated", () => {
   });
 });
 
-describe("per-callsign authorship (F0)", () => {
+describe("per-callsign authorship", () => {
   const fields = {
     cache: "AC-0001",
     instance: "oe.aprscaching.org",

@@ -3,7 +3,7 @@
  * host.ts — the Tool host. Registers tools, activates enabled ones with a capability-
  * limited ToolContext, dispatches events, and collects their contributions (commands, monitor
  * colourisers, decoders). Every context method enforces the tool's granted capabilities; the gated
- * 'tx'/'beacon' surfaces additionally pass an injected TX gate (the H5 / control-verification check) at
+ * 'tx'/'beacon' surfaces additionally pass an injected TX gate (the control-verification check) at
  * call time — a Tool can never transmit without it, and never touches verify.ts trust.
  *
  * INVARIANT: the host ROUTES, it never interprets. Every method here is a generic verb
@@ -92,7 +92,7 @@ export interface Tool {
 }
 
 export interface ToolHostOpts {
-  /** Returns true when transmitting is currently allowed (verified callsign + opt-in, H5). */
+  /** Returns true when transmitting is currently allowed (verified callsign + opt-in). */
   txGate?: () => boolean;
   onLog?: (tool: string, msg: string) => void;
   /** Actually transmit an info string (wired to the RF/announce path); gated by the host already. */

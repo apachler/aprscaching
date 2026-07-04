@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * keys.ts — F0: per-callsign device keys. A logger holds an Ed25519 keypair on their device and
+ * keys.ts — per-callsign device keys. A logger holds an Ed25519 keypair on their device and
  * registers the public key against their callsign. Find logs are then signed by that key, so the
  * authorship of a find is cryptographically attributable to a callsign and verifiable network-wide
  * (not merely asserted by an instance). Whether a key is *authorised* for a callsign is the job of
@@ -16,7 +16,7 @@ import { sessionCallsign, secretOk } from "./auth.js";
 export async function handleRegisterKey(req: Request, env: Env): Promise<Response> {
   const parsed = RegisterKeyRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
-  // SR-SEC-02: registering a key BINDS it to a callsign, and account.ts authorises destructive
+  // Registering a key BINDS it to a callsign, and account.ts authorises destructive
   // account actions (delete/bundle/move) by "any registered key" — so registration itself must be
   // authenticated. A signed-in session registers for its own base call (any SSID of it); the
   // trusted ingest daemon (shared secret) registers for the callsign it heard. Never an anonymous body.

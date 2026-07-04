@@ -42,7 +42,7 @@ function harness(cfg: Partial<LinkConfig> = {}) {
   return { a, b, got, pump, advance, clk };
 }
 
-describe("SR-PKT-15 — a peer SABM on a live link tells the host", () => {
+describe("a peer SABM on a live link tells the host", () => {
   it("emits an error when a connected link is reset by an inbound SABM", () => {
     const errs: string[] = [];
     const link = new ConnectedLink(A, B, {

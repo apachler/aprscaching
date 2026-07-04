@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { secretOk } from "./auth.js";
 /**
- * federation_sync.ts — F2: the consumer side. Pull peers' /federation feeds, verify each record's
+ * federation_sync.ts — the consumer side. Pull peers' /federation feeds, verify each record's
  * Ed25519 signature against the public key they publish at /.well-known/aprscaching, and mirror
  * the records locally (remote_caches / remote_finds). Per-peer cursors make it incremental.
  *
@@ -34,7 +34,7 @@ import { upsertRemoteBulletin } from "./bbs.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
-const PEER_FETCH_TIMEOUT_MS = 5000; // SR-FED-06: a blackholed peer must not hang the whole sync cron
+const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -84,7 +84,7 @@ function ours(env: Env): string | null {
 
 /**
  * Seed fed_peers from the FED_PEERS env (idempotent). FED_PEERS are operator-curated, so they are
- * `manual` + `trusted` by definition (T1.1) — a manual peer the operator explicitly `blocked` stays
+ * `manual` + `trusted` by definition — a manual peer the operator explicitly `blocked` stays
  * blocked (quarantine wins over re-seeding); `approved_at` is stamped once and preserved.
  */
 async function seedPeers(env: Env): Promise<void> {
@@ -103,7 +103,7 @@ async function seedPeers(env: Env): Promise<void> {
       .bind(url, now())
       .run();
   }
-  // registry discovery (T4.2): seed peers from the verified signed registry as `unvetted` (operator
+  // registry discovery: seed peers from the verified signed registry as `unvetted` (operator
   // promotes). Carries the registry-bound key + instance so the anti-spoof check has them. No-op
   // unless FED_REGISTRY is configured + valid. INSERT OR IGNORE never downgrades a known peer.
   for (const e of (await loadRegistry(env)).values()) {
@@ -119,8 +119,8 @@ async function seedPeers(env: Env): Promise<void> {
 
 /**
  * Seed from FED_PEERS then return the **fetchable** peers — `enabled` and not `blocked` (quarantined
- * peers are never contacted, T1.1). Shared by sync (mirrors trusted + unvetted) and corroboration
- * (which further narrows to `trusted` only, T1.2).
+ * peers are never contacted). Shared by sync (mirrors trusted + unvetted) and corroboration
+ * (which further narrows to `trusted` only).
  */
 export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
   await seedPeers(env);
@@ -129,7 +129,7 @@ export async function listEnabledPeers(env: Env): Promise<PeerRow[]> {
 }
 
 /**
- * Sync a single peer by its instance id — the gossip-ping target (T2.1). Only an enabled, non-blocked
+ * Sync a single peer by its instance id — the gossip-ping target. Only an enabled, non-blocked
  * peer we already follow is synced; the pull is signature-verified as usual. Returns whether it ran.
  */
 export async function syncPeerByInstance(env: Env, instance: string): Promise<boolean> {
@@ -151,7 +151,7 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
   }
 }
 
-// SR-RT-14: Node/Bun drive a periodic federation-sync interval AND the nightly `runScheduled` (which
+// Node/Bun drive a periodic federation-sync interval AND the nightly `runScheduled` (which
 // also calls this) — near boot they can overlap and double-pull every peer. Coalesce per-env: a caller
 // arriving while a run is in flight *joins* it and gets the same real result rather than starting a
 // second concurrent pull. An explicit /federation/sync therefore still returns real counts even if it
@@ -233,7 +233,7 @@ async function syncPeer(
   const pinned = p.public_key; // the key we last trusted for this peer (null on first sight)
   const newActive = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
 
-  // SR-FED-04: never blindly re-pin. Once a peer is signed we refuse to drop to unsigned, and we only
+  // never blindly re-pin. Once a peer is signed we refuse to drop to unsigned, and we only
   // accept a *changed* key if the peer proves continuity with a rotation-record chain from the pinned
   // key (each new key signed by its predecessor). A hijacked domain that simply swaps keys is rejected.
   if (pinned) {
@@ -248,7 +248,7 @@ async function syncPeer(
 
   // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
   // Discovered peers start `unvetted` — mirrored-but-flagged, excluded from corroboration until an
-  // operator promotes them (T1.1). INSERT OR IGNORE never downgrades a peer already known/trusted.
+  // operator promotes them. INSERT OR IGNORE never downgrades a peer already known/trusted.
   if (env.FED_DISCOVER) {
     for (const url of (wk.peers ?? []).slice(0, 50)) {
       const u = String(url).trim().replace(/\/+$/, "");
@@ -265,26 +265,26 @@ async function syncPeer(
   if (wk.instance && wk.instance === ours(env))
     return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
 
-  // T4.2 anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
+  // anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
   // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
   const registryEntry = (await loadRegistry(env)).get(wk.instance);
   if (!registryKeyAllowed(registryEntry, newActive))
     throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
 
-  // T4.1: verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
+  // verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
   // can rotate its key without breaking federation, and a revoked/leaked key is rejected. Falls back to
   // the legacy single `publicKey` for older peers.
   const verifyKeys = await importActiveKeys(wk.publicKeys, pub, now());
-  // capability negotiation (T2.2): a peer that speaks our protocol version has an authoritative
+  // capability negotiation: a peer that speaks our protocol version has an authoritative
   // capability list → skip feeds it doesn't advertise; a legacy peer (no version match) is tried for
   // every known feed and a 404 is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered
-  // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass (T1.3).
+  // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass.
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
   const counts: Record<string, number> = {};
   for (const def of SYNC_DEFS)
     // iterate SYNC_DEFS to preserve the tombstones-first order
     counts[def.type] = toSync.has(def.type) ? await syncFeed(env, base, p, wk.instance, verifyKeys, def) : 0;
-  // observability (T4.3): record a successful sync — time, count, cumulative total, per-feed breakdown
+  // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   await env.DB.prepare(
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
@@ -303,7 +303,7 @@ async function syncPeer(
 }
 
 /**
- * Capability negotiation (T2.2, pure/testable): which of our feed defs to pull from a peer. A peer that
+ * Capability negotiation (pure/testable): which of our feed defs to pull from a peer. A peer that
  * advertises our protocol version has an authoritative capability list → pull only the feeds it offers;
  * a legacy peer (no version match / no list) is tried for every known feed (a 404 is handled gracefully
  * by syncFeed). Order is preserved, so the tombstones-first invariant survives.
@@ -362,7 +362,7 @@ const SYNC_DEFS: SyncDef[] = [
 ];
 
 /**
- * Generalized feed consumer (T2.2): pull pages, verify+accept each record, apply it, advance the
+ * Generalized feed consumer: pull pages, verify+accept each record, apply it, advance the
  * peer cursor — one loop for every record type. A 404 means the peer doesn't serve this feed (an
  * older peer, or one with the capability disabled) → skip it gracefully, never failing the whole sync.
  */
@@ -386,7 +386,7 @@ async function syncFeed(
     const feed = (await res.json()) as Feed;
     for (const rec of feed.items ?? []) {
       if (!(await accept(env, rec, verifyKeys, instance))) continue;
-      // SR-FED-01: the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
+      // the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
       // feed.instance (both attacker-controlled). A peer inherits only its own namespace + trust.
       await def.apply(env, rec, instance);
       applied++;
@@ -400,7 +400,7 @@ async function syncFeed(
 }
 
 /**
- * SR-FED-01/02: a federated global id (record id or tombstone target) belongs to exactly one
+ * A federated global id (record id or tombstone target) belongs to exactly one
  * instance — its namespace prefix `<instance>:`. A peer may only serve/overwrite/tombstone ids in
  * ITS OWN namespace; anything else is an impersonation/censorship attempt. Pure + exported for test.
  */
@@ -409,7 +409,7 @@ export function idInNamespace(globalId: string | undefined | null, instance: str
 }
 
 /**
- * SR-FED-04: is one of `targets` reachable from `from` through VALID rotation records (each new key
+ * Is one of `targets` reachable from `from` through VALID rotation records (each new key
  * signed by its predecessor)? Verifies every published record first, then walks prev→new edges. Bounds
  * the walk to the number of records so a cyclic/oversized rotation list can't loop.
  */
@@ -437,14 +437,14 @@ export async function rotationChainReaches(
   return false;
 }
 
-/** A peer already tombstoned this global id — don't re-mirror it (T1.3 suppression). */
+/** A peer already tombstoned this global id — don't re-mirror it. */
 async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
   return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?")
     .bind(globalId)
     .first<{ x: number }>());
 }
 
-/** Does the record verify under ANY of the peer's active keys (T4.1)? Empty set = unsigned peer (skip). */
+/** Does the record verify under ANY of the peer's active keys? Empty set = unsigned peer (skip). */
 async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boolean> {
   if (!keys.length) return true; // unsigned peer — nothing to verify against (legacy behaviour)
   for (const k of keys) if (await verifyRecordSig(k, rec)) return true;
@@ -453,7 +453,7 @@ async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boo
 
 async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instance: string): Promise<boolean> {
   if (!(await verifiesUnderAny(verifyKeys, rec))) return false; // bad/unrecognised signature
-  // SR-FED-01: the signature covers {type,id,data} but NOT signer — so a peer could serve a record
+  // the signature covers {type,id,data} but NOT signer — so a peer could serve a record
   // in another instance's namespace, signed with its own key, and overwrite that instance's genuine
   // mirror (inheriting its trust). A peer may only serve records IN ITS OWN namespace, self-signed.
   if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
@@ -464,7 +464,7 @@ async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instan
 }
 
 /**
- * Apply a peer's tombstone (T1.3): verify-then-purge. Deletes any mirrored cache/find whose global id
+ * Apply a peer's tombstone: verify-then-purge. Deletes any mirrored cache/find whose global id
  * matches `targetId` (the global-id namespace makes kind unambiguous), and records it so the record
  * is never re-mirrored. PII-free — the tombstone carries only signed ids + a timestamp.
  */
@@ -472,8 +472,8 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   const d = rec.data as { kind?: string; targetId?: string; ts?: number };
   const target = d.targetId;
   if (!target) return;
-  // SR-FED-02: a peer may only tombstone records in ITS OWN namespace. Without this a hostile peer
-  // deletes ("censors") any instance's mirrored records network-wide and forges ADR-5 GDPR deletes.
+  // a peer may only tombstone records in ITS OWN namespace. Without this a hostile peer
+  // deletes ("censors") any instance's mirrored records network-wide and forges GDPR deletes.
   // `origin` is the verified serving peer (wk.instance), passed by syncFeed.
   if (!idInNamespace(target, origin)) return;
   await env.DB.batch([
@@ -485,11 +485,11 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   ]);
 }
 
-/** Apply a peer's account-move (T3.2): record the callsign's latest known home, last-writer by ts. */
+/** Apply a peer's account-move: record the callsign's latest known home, last-writer by ts. */
 async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data as { callsign?: string; fromInstance?: string | null; toInstance?: string; ts?: number };
   if (!d.callsign || !d.toInstance) return;
-  // SR-FED-05: a peer may only assert a move TO itself — otherwise any peer redirects any callsign to
+  // a peer may only assert a move TO itself — otherwise any peer redirects any callsign to
   // any instance. And a far-future ts (e.g. 2^40) would freeze the pointer forever, so clamp it.
   if (d.toInstance !== origin) return;
   const ts = Math.min(Number(d.ts) || 0, now() + 300);
@@ -517,7 +517,7 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
 
 export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
-  // SR-FED-08: version-monotonic — a replayed OLDER signed record (stale cursor, hostile replay)
+  // version-monotonic — a replayed OLDER signed record (stale cursor, hostile replay)
   // must never roll a mirror back, e.g. to pre-redaction content. Only a record at least as new
   // (by the origin's own updated_at) may overwrite.
   await env.DB.prepare(
@@ -561,7 +561,7 @@ export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: strin
 
 export async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
-  // SR-FED-08: finds are events keyed by the origin's own ts — same monotonic rule as caches so a
+  // finds are events keyed by the origin's own ts — same monotonic rule as caches so a
   // replayed older copy (e.g. with a since-redacted comment) can't overwrite the current mirror.
   await env.DB.prepare(
     `INSERT INTO remote_finds
@@ -613,7 +613,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
        FROM fed_peers ORDER BY url`,
     ).all<Record<string, unknown>>()
   ).results;
-  // T4.3: derive a health signal + error rate so an operator scans state without doing the math.
+  // derive a health signal + error rate so an operator scans state without doing the math.
   const peers = rows.map((p) => {
     const okN = Number(p.sync_ok ?? 0),
       errN = Number(p.sync_err ?? 0);
@@ -630,7 +630,7 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
 }
 
 /**
- * Operator control (T1.1): set a peer's trust level. Sysop-only (signed-in instance operator) or the
+ * Operator control: set a peer's trust level. Sysop-only (signed-in instance operator) or the
  * ingest secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
  * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
  */
@@ -652,7 +652,7 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   return json({ ok: true, url, trust });
 }
 
-// ---- push-to-hub (T2.3): NAT/firewall peers contribute without inbound reachability ----
+// ---- push-to-hub: NAT/firewall peers contribute without inbound reachability ----
 
 /** type → applier, reusing the exact mirror path as pull-sync (display-only, idempotent by global id). */
 const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> = Object.fromEntries(
@@ -664,11 +664,11 @@ const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_F
 const PUSH_CURSORS = new Map<string, number>(); // "hub|type" -> last pushed cursor (in-memory; re-push on restart is idempotent)
 
 /**
- * HUB endpoint (T2.3): accept a spoke's signed records and mirror them as if we had pulled them
+ * HUB endpoint: accept a spoke's signed records and mirror them as if we had pulled them
  * (push-mode mirroring — same remote_* tables, same display-only semantics). Secret-gated; optionally
  * restricted to an instance allowlist. Each record is verified against the supplied key and MUST name
  * the submitter as its signer, so a spoke can only contribute records as ITSELF — never impersonate
- * another instance. Downstream re-serving of submitted records needs the instance-key registry (T4.2).
+ * another instance. Downstream re-serving of submitted records needs the instance-key registry.
  */
 export async function handleFederationSubmit(req: Request, env: Env): Promise<Response> {
   const secret = env.FED_SUBMIT_SECRET;
@@ -697,13 +697,13 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     return json({ ok: false, error: "bad public key" }, { status: 400 });
   }
 
-  // SR-FED-03: a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
+  // a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
   // binds this instance to a key, the submitted key MUST match it.
   const regEntry = (await loadRegistry(env)).get(b.instance);
   if (regEntry?.key && regEntry.key !== b.publicKey)
     return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
-  // TOFU: once we've pinned a key for this submit-instance, it can't silently change (SR-FED-04 for the
-  // push path). A rotated spoke re-registers under a new instance id or the operator clears the row.
+  // TOFU: once we've pinned a key for this submit-instance, it can't silently change (the same
+  // no-silent-swap rule as the pull path). A rotated spoke re-registers under a new instance id or the operator clears the row.
   const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?")
     .bind(`submit:${b.instance}`)
     .first<{ public_key: string | null }>();
@@ -730,7 +730,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     if (!idInNamespace(rec.id, b.instance)) {
       rejected++;
       continue;
-    } // SR-FED-01: only the submitter's own namespace
+    } // only the submitter's own namespace
     if (!(await verifyRecordSig(key, rec))) {
       rejected++;
       continue;
@@ -746,7 +746,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
 }
 
 /**
- * SPOKE side (T2.3): push our signed records to a configured hub (push-mode mirroring) when we can't be
+ * SPOKE side: push our signed records to a configured hub (push-mode mirroring) when we can't be
  * pulled. Incremental via in-memory cursors; idempotent (the hub upserts by global id), so a restart that
  * re-pushes from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
  */

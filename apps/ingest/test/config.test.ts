@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-CFG-02/03: numeric env validation (a blank BATCH_MS must NOT become a 1 ms loop / port 0) and the
-// dotenv loader the documented `pnpm dev`/`start` paths rely on.
+// Numeric env validation (a blank BATCH_MS must NOT become a 1 ms loop / port 0) and the dotenv
+// loader the documented `pnpm dev`/`start` paths rely on.
 import { describe, it, expect, afterEach } from "vitest";
 import { numEnv, portEnv, loadDotEnv } from "../src/config.js";
 import fs from "node:fs";
@@ -13,7 +13,7 @@ afterEach(() => {
   Object.assign(process.env, saved);
 });
 
-describe("SR-CFG-02 — numEnv validates + floors", () => {
+describe("numEnv validates + floors", () => {
   it("a blank value falls back to the default (not 0)", () => {
     process.env.T_BATCH = "";
     expect(numEnv("T_BATCH", 1500, { min: 100 })).toBe(1500);
@@ -44,7 +44,7 @@ describe("SR-CFG-02 — numEnv validates + floors", () => {
   });
 });
 
-describe("SR-CFG-03 — loadDotEnv", () => {
+describe("loadDotEnv", () => {
   it("loads KEY=VALUE lines without overwriting existing env", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acfg-"));
     const file = path.join(dir, ".env");

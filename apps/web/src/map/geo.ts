@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Maidenhead pair bases (lon and lat share them): field=18 letters, square=10 digits,
-// subsquare=24 letters, then extended digit/letter pairs for higher precision (F-7).
+// subsquare=24 letters, then extended digit/letter pairs for higher precision.
 const MH_BASES = [18, 10, 24, 10, 24];
 /**
  * Maidenhead grid locator from lat/lon — the ham-native coordinate the UI shows. `chars` selects the
- * precision: 6 (default, ~5 km, back-compat with existing callers) up to 10 (extended subsquare,
- * ~0.5 km). Even values 2..10; the 6-char output is identical to the previous implementation.
+ * precision: 6 (default, ~5 km) up to 10 (extended subsquare, ~0.5 km). Even values 2..10.
  */
 export function maidenhead(lat: number, lon: number, chars = 6): string {
   const n = Math.max(2, Math.min(10, chars - (chars % 2)));

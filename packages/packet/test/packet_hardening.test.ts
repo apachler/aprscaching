@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// P2a — packet-stack hostile-peer robustness (SR-PKT-08/09/10/11/13/14). These exercise the abnormal
-// paths the loopback happy-path tests don't: a hung warm-up, a SABM flood, a poisoning NODES sprayer,
-// an un-terminated byte stream, a failing BBS backend, and FBB loop-suppression.
+// Packet-stack hostile-peer robustness. These exercise the abnormal paths the loopback happy-path
+// tests don't: a hung warm-up, a SABM flood, a poisoning NODES sprayer, an un-terminated byte
+// stream, a failing BBS backend, and FBB loop-suppression.
 import { describe, it, expect } from "vitest";
 import { SessionServer } from "../src/session-server.js";
 import { TerminalSession } from "../src/session.js";
@@ -21,7 +21,7 @@ const ticks = async (n = 30) => {
   for (let i = 0; i < n; i++) await Promise.resolve();
 };
 
-describe("SR-PKT-08 — the warming slot is reaped past its deadline", () => {
+describe("the warming slot is reaped past its deadline", () => {
   it("a factory that never settles frees the slot on poll(), not forever", () => {
     let t = 0;
     const events: string[] = [];
@@ -46,7 +46,7 @@ describe("SR-PKT-08 — the warming slot is reaped past its deadline", () => {
   });
 });
 
-describe("SR-PKT-09 — bounded channels + scrollback", () => {
+describe("bounded channels + scrollback", () => {
   it("refuses auto-accepted channels past the cap", () => {
     const s = new TerminalSession(
       "OE8APR-1",
@@ -87,7 +87,7 @@ describe("SR-PKT-09 — bounded channels + scrollback", () => {
   });
 });
 
-describe("SR-PKT-10 — NODES table is bounded + rate-limited", () => {
+describe("NODES table is bounded + rate-limited", () => {
   const bcast = (senderAlias: string, dests: NodesDest[]): Uint8Array => encodeNodesBroadcast(senderAlias, dests)[0]!;
 
   it("defaults maxRoutes so an unconfigured node can't grow unbounded", () => {
@@ -126,7 +126,7 @@ describe("SR-PKT-10 — NODES table is bounded + rate-limited", () => {
   });
 });
 
-describe("SR-PKT-11 — hostile-peer OOM guards", () => {
+describe("hostile-peer OOM guards", () => {
   it("link-app drops the link when 8 KiB arrive with no line terminator", () => {
     let disconnected = false;
     const app: LineApp = { greeting: () => [], handle: () => ({ lines: [] }) };
@@ -188,7 +188,7 @@ describe("SR-PKT-11 — hostile-peer OOM guards", () => {
   });
 });
 
-describe("SR-PKT-13 — CachedBbsStore never silently discards a write", () => {
+describe("CachedBbsStore never silently discards a write", () => {
   it("retries a failing backend and surfaces the give-up (no silent .catch)", async () => {
     const errors: Array<{ op: string; id: number }> = [];
     const backend: CachedBbsBackend = {
@@ -217,7 +217,7 @@ describe("SR-PKT-13 — CachedBbsStore never silently discards a write", () => {
   });
 });
 
-describe("SR-PKT-14 — FBB loop suppression via a real BID set", () => {
+describe("FBB loop suppression via a real BID set", () => {
   it("answers hasBid() true for held + about-to-forward BIDs", () => {
     const queued: FbbMessage[] = [
       { type: "P", from: "OE8BBS", at: "WW", to: "DL1ABC", bid: "OUT_1", title: "t", body: "b" },

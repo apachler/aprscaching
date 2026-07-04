@@ -15,7 +15,7 @@ import {
 import { haversineMeters } from "@aprsweb/aprs";
 import type { Env } from "../src/env.js";
 
-describe("corroboration privacy coarsening (F4/T1.2)", () => {
+describe("corroboration privacy coarsening", () => {
   it("snapToGrid lands on the cell centroid and is idempotent", () => {
     const a = snapToGrid(47.2003, 15.0501, 0.005);
     const b = snapToGrid(a.lat, a.lon, 0.005);
@@ -61,7 +61,7 @@ describe("corroboration privacy coarsening (F4/T1.2)", () => {
   });
 });
 
-describe("corroboration abuse limits (F4/T1.2)", () => {
+describe("corroboration abuse limits", () => {
   it("rateLimited trips once a key exceeds its budget, and resets after the window", () => {
     const key = "ip:test-A",
       t0 = 1_000_000;
@@ -92,7 +92,7 @@ describe("corroboration abuse limits (F4/T1.2)", () => {
     );
   });
 
-  it("clientIp trusts only unforgeable sources (SR-SEC-09)", () => {
+  it("clientIp trusts only unforgeable sources", () => {
     expect(clientIp(new Request("http://x", { headers: { "cf-connecting-ip": "1.2.3.4" } }))).toBe("1.2.3.4");
     // a client-supplied XFF is IGNORED unless the operator declares a reverse proxy
     expect(clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }))).toBe("unknown");

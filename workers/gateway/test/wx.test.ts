@@ -4,7 +4,7 @@ import { parseWx, wxUrls, makeWxKey } from "../src/wx.js";
 
 const bag = (o: Record<string, string>) => (k: string) => o[k.toLowerCase()];
 
-describe("weather W1 — Ecowitt/WU parse", () => {
+describe("weather direct PWS ingest — Ecowitt/WU parse", () => {
   it("converts an Ecowitt 'customized' push (imperial → metric)", () => {
     const wx = parseWx(
       bag({
@@ -45,7 +45,7 @@ describe("weather W1 — Ecowitt/WU parse", () => {
   });
 });
 
-describe("weather W1 — paste URLs + key format (the exact strings a PWS is pointed at)", () => {
+describe("weather direct PWS ingest — paste URLs + key format (the exact strings a PWS is pointed at)", () => {
   it("wxUrls builds the Ecowitt path + WU-Rapidfire URL with the station id encoded", () => {
     const u = wxUrls("https://api.aprscaching.net", "OE8APR-13", "wx_abc123");
     expect(u.ecowittPath).toBe("https://api.aprscaching.net/api/wx/submit?key=wx_abc123");

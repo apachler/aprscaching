@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
  * afsk.ts — a Bell-202 1200-baud AFSK modem. The modulator
- * turns an AX.25 frame into PCM (also the basis for gated AFSK TX); the demodulator turns PCM back
+ * turns an AX.25 frame into PCM (also the basis for AFSK TX, gated on callsign control-verification);
+ * the demodulator turns PCM back
  * into AX.25 frames via a non-coherent mark/space correlator + DPLL bit recovery + HDLC deframing
  * with an X.25 FCS check. Pure DSP — the browser supplies the audio (Web Audio); no hardware here.
  *
@@ -80,7 +81,7 @@ export function modulateAfsk1200(
 class Hdlc {
   private bits: number[] = [];
   private ones = 0;
-  // SR-PARSE-02: a valid AX.25 frame is ≤ ~330 bytes (~2640 bits). A steady 0101 tone (a soundcard
+  // A valid AX.25 frame is ≤ ~330 bytes (~2640 bits). A steady 0101 tone (a soundcard
   // IGate on noise, or crafted audio) never hits a flag or the >6-ones reset, so cap the accumulator
   // and drop a frame that grows past any legal length instead of letting `bits` grow ~1200/s forever.
   private static readonly MAX_BITS = 4096;

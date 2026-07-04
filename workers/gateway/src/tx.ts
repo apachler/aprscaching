@@ -6,11 +6,11 @@ import { isCallsignVerified } from "./callsign.js";
 import { encodeAprsMessage, encodeAprsPosition } from "@aprsweb/aprs";
 
 /**
- * tx.ts — path-A gated user TX. A signed-in, control-verified user asks the peer to inject
+ * tx.ts — gated user TX via the ingest box. A signed-in, control-verified user asks the peer to inject
  * a beacon or message into APRS-IS **under the user's own call** as third-party traffic (`}USERCALL>…`;
  * the ingest box does the encapsulation on drain — see announce.ts). The gate is our control-verification
- * (H5) — never a passcode (transport ≠ authorization). We enqueue to `aprs_outbox` with
- * `src_call` = the verified user call; the box drains + injects (validate-at-deploy). RF legality holds:
+ * — never a passcode (transport ≠ authorization). We enqueue to `aprs_outbox` with
+ * `src_call` = the verified user call; the box drains + injects. RF legality holds:
  * the wire source is a real, control-verified licensed call.
  */
 export interface UserTxBody {
@@ -32,7 +32,7 @@ export function buildTxPayload(
   body: UserTxBody,
 ): { ok: true; kind: string; payload: string; tocall: string } | { ok: false; error: string } {
   const kind = String(body.kind ?? "").toLowerCase();
-  const tocall = String(body.tocall ?? "APZACG").toUpperCase(); // TOCALL config lands with P1
+  const tocall = String(body.tocall ?? "APZACG").toUpperCase(); // default self-assigned TOCALL
   if (kind === "message") {
     const to = String(body.addressee ?? "")
       .toUpperCase()
@@ -60,7 +60,7 @@ export async function handleUserTx(req: Request, env: Env): Promise<Response> {
   const callsign = (await sessionCallsign(req, env))?.toUpperCase();
   if (!callsign) return json({ error: "sign in to transmit" }, { status: 401 });
   if (!(await isCallsignVerified(env, callsign))) {
-    return json({ error: `verify ${callsign} to transmit — control-verification required (H5)` }, { status: 403 });
+    return json({ error: `verify ${callsign} to transmit — control-verification required` }, { status: 403 });
   }
   const built = buildTxPayload((await req.json().catch(() => ({}))) as UserTxBody);
   if (!built.ok) return json({ error: built.error }, { status: 400 });

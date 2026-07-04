@@ -12,8 +12,8 @@ const pad5 = (n: number) => String(Math.floor(n) % 100000).padStart(5, "0");
 
 /** Latitude → MGRS band letter. */
 function band(lat: number): string {
-  // SR-PARSE-06: the X band is a 12° span (72–84°), not just ≥84. Without this, 80–84° indexes
-  // BANDS[20] (undefined) and wrongly returns "Z".
+  // The X band is a 12° span (72–84°), not just ≥84. Otherwise 80–84° would index
+  // BANDS[20] (undefined) and wrongly return "Z".
   if (lat >= 72) return "X";
   if (lat < -80) return "C";
   return BANDS[Math.floor((lat + 80) / 8)] ?? "Z";

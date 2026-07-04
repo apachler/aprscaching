@@ -3,7 +3,7 @@
  * cwdsp.ts — the CW (Morse) audio FRONT-END. `decodeMorse`/`morseFromTiming`
  * (morse.ts) are pure but need a keyed on/off envelope; this turns raw PCM audio (the Web Audio mic
  * samples) into that envelope by measuring tone energy at the CW pitch with a Goertzel single-bin detector
- * and thresholding it. Output feeds `morseFromTiming` → `decodeMorse`, so the F-5 CW decoder works on a
+ * and thresholding it. Output feeds `morseFromTiming` → `decodeMorse`, so the CW decoder works on a
  * live signal, not just a hand-typed dot/dash string. Pure + unit-tested against a synthesised tone; the
  * live mic capture is a thin browser wrapper (validate-at-deploy). PSK31's BPSK demod (carrier + phase
  * recovery at 31.25 baud) is the remaining front-end seam.

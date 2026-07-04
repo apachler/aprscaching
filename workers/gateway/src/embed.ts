@@ -15,7 +15,7 @@ import { qrSvg } from "./qr.js";
 const escAttr = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** SR-SEC-03: serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
+/** Serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
  *  escape `<`, `>`, `&`, or the line separators, so a raw value like `</script><script>…` breaks out
  *  of the script element. Escaping these to \uXXXX keeps the value a string, never markup. */
 const jsonForScript = (o: unknown) =>
@@ -86,7 +86,7 @@ map.on('load', async () => {
     headers: {
       "content-type": "text/html; charset=utf-8",
       // Embeddable by design (frame-ancestors *), but lock down what may execute/connect as
-      // defence-in-depth behind the JSON escaping above (SR-SEC-03). No plugins, no <base> hijack.
+      // defence-in-depth behind the JSON escaping above. No plugins, no <base> hijack.
       "content-security-policy": [
         "default-src 'none'",
         "script-src 'unsafe-inline' https://unpkg.com",

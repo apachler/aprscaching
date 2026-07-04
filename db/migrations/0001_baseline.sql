@@ -1,23 +1,19 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
--- 0001_baseline — the full schema squashed into one pre-1.0 baseline (greenfield: no production
--- data existed, so the historical 0001–0008 migration chain was collapsed here). A fresh DB on
--- any runtime (D1 / better-sqlite3 / bun:sqlite) applies this single file; sections below preserve
--- the original thematic order: core · identity/trust · features · depth · hardening · ttl index ·
--- rate limits · find idempotency.
+-- 0001_baseline — the full 1.0 schema in one baseline file. A fresh DB on any runtime
+-- (D1 / better-sqlite3 / bun:sqlite) applies this single file; sections below group the schema:
+-- core · identity/trust · features · depth · hardening · ttl index · rate limits · find idempotency.
 
 
 -- ============================================================================================
--- from 0001_core.sql
+-- Caching & APRS core
 -- ============================================================================================
--- 0001 core  —  consolidated initial schema (part 1 of 4)
--- Caching & APRS core — caches, logs, positions, stations, sensors, messages; accounts &
--- auth (passkeys + APRS-message verification); the first federation mirror; corroboration;
+-- Caches, logs, positions, stations, sensors, messages; accounts &
+-- auth (passkeys + APRS-message verification); the federation mirror; corroboration;
 -- per-operator signing keys; heritage imports; multi-stage caches; the store-and-forward BBS base.
--- Squashed baseline: greenfield deploys create the whole schema from these four files.
 
 -- ─── init ───
 -- aprscaching.com — D1 schema (SQLite)
--- Greenfield. APRScaching is the core; positions power presence verification.
+-- APRScaching is the core; positions power presence verification.
 
 ------------------------------------------------------------------- IDENTITY
 CREATE TABLE accounts (
@@ -55,7 +51,7 @@ CREATE TABLE caches (
 
 -- spatial lookup for "caches in a bbox" / geofence loading.
 -- NB: Cloudflare D1 does not allow CREATE VIRTUAL TABLE (rtree/fts), so we use a plain
--- lat/lon index. A range scan on lat + lon filter is plenty for M1/M2 cache volumes.
+-- lat/lon index. A range scan on lat + lon filter is plenty for expected cache volumes.
 CREATE INDEX idx_caches_geo ON caches(lat, lon);
 CREATE INDEX idx_caches_status ON caches(status);
 
@@ -127,7 +123,6 @@ CREATE TABLE messages (
 CREATE TABLE port_stats (port TEXT, ts INTEGER, rx INTEGER, tx INTEGER, PRIMARY KEY (port, ts));
 
 -- ─── auth announce ───
--- 0002_auth_announce.sql
 -- Auth layer (passkey identity + async callsign-control badge) and the APRS-IS announce outbox.
 
 -------------------------------------------------- IDENTITY: passkeys (WebAuthn)
@@ -160,7 +155,7 @@ CREATE TABLE callsign_verifications (
   verified_at INTEGER
 );
 
--------------------------------------------------- ACCOUNT FLAGS (added to 0001)
+-------------------------------------------------- ACCOUNT FLAGS
 ALTER TABLE accounts ADD COLUMN announce_is INTEGER NOT NULL DEFAULT 0; -- opt-in: publish finds to APRS-IS
 ALTER TABLE accounts ADD COLUMN announce_tocall TEXT DEFAULT 'APZACG';  -- experimental tocall until registered
 
@@ -180,7 +175,7 @@ CREATE TABLE aprs_outbox (
 CREATE INDEX idx_outbox_status ON aprs_outbox(status, ts);
 
 -- ─── federation mirror ───
--- 0003: federation mirror (F2) — peers we pull from, and the records we mirror locally.
+-- Federation mirror — peers we pull from, and the records we mirror locally.
 -- Mirrored rows are display-only: never treated as our own, never re-published in our feeds.
 
 CREATE TABLE fed_peers (
@@ -216,11 +211,11 @@ CREATE TABLE remote_finds (
 CREATE INDEX idx_remote_finds_cache ON remote_finds(cache_global_id);
 
 -- ─── corroboration ───
--- 0004: cross-instance verification (F3). Record which peer corroborated a Tier-A find via RF.
+-- Cross-instance verification. Record which peer corroborated a Tier-A find via RF.
 ALTER TABLE cache_logs ADD COLUMN corroborated_by TEXT;
 
 -- ─── callsign keys ───
--- 0005: per-callsign signing (F0). Device keys bound to callsigns; finds carry the logger's signature.
+-- Per-callsign signing. Device keys bound to callsigns; finds carry the logger's signature.
 
 CREATE TABLE callsign_keys (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,7 +247,7 @@ CREATE INDEX idx_remote_keys_call ON remote_keys(callsign);
 ALTER TABLE fed_peers ADD COLUMN keys_cursor INTEGER NOT NULL DEFAULT 0;
 
 -- ─── imports ───
--- 0006: import / heritage (M3). Imported caches carry a source attribution + deep link, and
+-- Import / heritage. Imported caches carry a source attribution + deep link, and
 -- re-importing updates in place (dedup on source + external_id).
 
 ALTER TABLE caches ADD COLUMN source_url  TEXT;     -- deep link to the source's page for this item
@@ -263,10 +258,10 @@ ALTER TABLE caches ADD COLUMN imported_at INTEGER;  -- last time this row was (r
 CREATE UNIQUE INDEX idx_caches_external ON caches(source, external_id) WHERE external_id IS NOT NULL;
 
 -- ─── stages ───
--- M2 audio-cache: extend the cache_stages scaffold from 0001 (cache_id, stage_no, lat, lon,
--- clue, unlock) with an audio-clue media key + a per-stage geofence radius, and add the
--- per-finder unlock ledger. Stage 0 is the public start; later stages reveal once the finder
--- unlocks the prior stage (a geofence at it, or after its audio clue).
+-- Audio-cache staging: the cache_stages table (cache_id, stage_no, lat, lon, clue, unlock) carries
+-- an audio-clue media key + a per-stage geofence radius, plus the per-finder unlock ledger. Stage 0
+-- is the public start; later stages reveal once the finder unlocks the prior stage (a geofence at
+-- it, or after its audio clue).
 ALTER TABLE cache_stages ADD COLUMN media_key TEXT;
 ALTER TABLE cache_stages ADD COLUMN radius_m INTEGER NOT NULL DEFAULT 60;
 
@@ -291,10 +286,10 @@ CREATE TABLE account_events (
 );
 
 -- ─── bbs ───
--- BBS store-and-forward message base (Stage 1: connectionless / APRS-message delivery).
+-- BBS store-and-forward message base (connectionless / APRS-message delivery).
 -- Personal mail is held until the addressee is heard, then forwarded as an APRS message with
 -- ack tracking + retry. Bulletins are retrievable and deduped by BID across forwarding. The
--- format (P/B type, BID) is MBL/FBB-compatible so a future connected-mode gateway can bridge.
+-- format (P/B type, BID) is MBL/FBB-compatible so a connected-mode gateway can bridge.
 CREATE TABLE bbs_messages (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   bid        TEXT UNIQUE,                       -- e.g. "42_oe.aprscaching.org" — dedup across peers
@@ -324,20 +319,18 @@ CREATE TABLE bbs_delivery (
 CREATE INDEX idx_bbs_delivery_call ON bbs_delivery(to_call, status);
 
 -- ============================================================================================
--- from 0002_identity_trust.sql
+-- Durable identity & federation trust
 -- ============================================================================================
--- 0002 identity trust  —  consolidated initial schema (part 2 of 4)
--- Durable identity & federation trust — a surrogate account_id (callsign becomes mutable),
+-- A surrogate account_id (callsign becomes mutable),
 -- multiple verified base callsigns per person, supporter recognition (recognition-only, never a
 -- feature gate), peer trust tiers + quarantine, GDPR tombstones, owner-field scope, account moves,
 -- federation observability, and free per-IP-raising API keys.
--- Squashed baseline: greenfield deploys create the whole schema from these four files.
 
 -- ─── identity auth ───
--- M9 identity & auth: durable accounts (surrogate id) + email magic-link recovery.
--- Additive only — nothing here gates logging yet (that lands with the web sign-in UI). The
+-- Identity & auth: durable accounts (surrogate id) + email magic-link recovery.
+-- Additive only — none of this gates logging. The
 -- surrogate account_id makes the callsign a mutable, uniquely-held attribute (rename + re-verify).
--- WebAuthn passkeys reuse the existing `credentials` + `auth_challenges` tables from 0002 (S2).
+-- WebAuthn passkeys reuse the `credentials` + `auth_challenges` tables.
 
 ALTER TABLE accounts ADD COLUMN account_id TEXT;   -- durable identity (callsign is mutable)
 ALTER TABLE accounts ADD COLUMN email TEXT;         -- recovery / magic-link address
@@ -364,7 +357,7 @@ CREATE TABLE callsign_history (
 );
 
 -- ─── account callsigns ───
--- Multiple verified base calls per account (the ham-correct identity model §19).
+-- Multiple verified base calls per account (the ham-correct identity model).
 -- An account (person) is not one callsign: it holds one or more *base* callsigns, each verified
 -- independently (the APRS message-challenge proves control of the license = the base call). The
 -- active operating callsign (accounts.callsign) is just whichever held call the session is bound to.
@@ -372,7 +365,7 @@ CREATE TABLE callsign_history (
 --
 -- Additive only. accounts.callsign stays the active-call anchor; account_id stays the durable id.
 -- credentials/passkeys stay bound to the account's primary call (login is by the primary call),
--- so switching the active call no longer moves credentials.
+-- so switching the active call does not move credentials.
 
 CREATE TABLE IF NOT EXISTS account_callsigns (
   account_id  TEXT NOT NULL,             -- durable account (accounts.account_id)
@@ -389,8 +382,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_account_callsigns_call ON account_callsign
 
 -- ─── supporter recognition ───
 -- Supporter recognition + transparency ledger. RECOGNITION ONLY — never a feature gate.
--- (Migration number pinned to 0012 per; lands after 0011_account_callsigns, fills the
---  reserved gap. The migrator applies by filename, so this is safe to add after later migrations.)
 
 -- accounts.tier is a thank-you level (free | supporter); hide_nag suppresses the support prompt.
 -- NO core handler may read tier/entitlements to RESTRICT anything — donations unlock nothing functional.
@@ -411,7 +402,7 @@ CREATE TABLE IF NOT EXISTS ledger (
 CREATE INDEX IF NOT EXISTS idx_ledger_ts ON ledger (ts);
 
 -- Recognition entitlements ONLY (reserved seam) — keyed recognition flags, never functional limits.
--- The M4 badge + hide-nag use accounts.tier/hide_nag directly; this is for future recognition keys.
+-- The supporter badge + hide-nag use accounts.tier/hide_nag directly; this is for future recognition keys.
 CREATE TABLE IF NOT EXISTS entitlements (
   account_id TEXT NOT NULL,
   key        TEXT NOT NULL,             -- supporter_badge | … (recognition only)
@@ -420,15 +411,15 @@ CREATE TABLE IF NOT EXISTS entitlements (
 );
 
 -- ─── peer trust ───
--- 0012_peer_trust.sql — F4/T1.1: peer trust tiers + quarantine (launch-gating).
+-- Peer trust tiers + quarantine.
 --
--- Federation becomes peer-approved by default, open-pull opt-in. Each peer carries a trust level and
+-- Federation is peer-approved by default, open-pull opt-in. Each peer carries a trust level and
 -- records inherit their origin peer's trust at read time:
 --   • trusted  — operator-curated (FED_PEERS manual peers); counts toward corroboration quorum + map.
 --   • unvetted — auto-discovered (FED_DISCOVER); mirrored but FLAGGED — excluded from verification
---                (the corroboration quorum, T1.2) and from the default map until promoted.
+--                (the corroboration quorum) and from the default map until promoted.
 --   • blocked  — never fetched (sync or corroborate).
--- Reputation counters feed operator promote/demote (auto-promotion past a threshold lands later).
+-- Reputation counters feed operator promote/demote.
 ALTER TABLE fed_peers ADD COLUMN trust         TEXT    NOT NULL DEFAULT 'unvetted'; -- trusted | unvetted | blocked
 ALTER TABLE fed_peers ADD COLUMN added_via     TEXT;                                -- manual | discovered
 ALTER TABLE fed_peers ADD COLUMN approved_at   INTEGER;                             -- unix-seconds an operator trusted it
@@ -436,7 +427,7 @@ ALTER TABLE fed_peers ADD COLUMN rep_confirmed INTEGER NOT NULL DEFAULT 0;      
 ALTER TABLE fed_peers ADD COLUMN rep_failed    INTEGER NOT NULL DEFAULT 0;          -- corroborations contradicted
 
 -- ─── tombstones ───
--- 0014_tombstones.sql — F4/T1.3 + ADR-5: signed tombstones for GDPR delete propagation.
+-- Signed tombstones for GDPR delete propagation.
 --
 -- A delete on one instance must remove the PII-bearing mirrored copies on peers. Anonymising a find
 -- locally is not enough: the finds feed cursor is append-only by id, so an UPDATE never re-serves the
@@ -470,7 +461,7 @@ CREATE TABLE remote_tombstones (
 ALTER TABLE fed_peers ADD COLUMN tombstones_cursor INTEGER NOT NULL DEFAULT 0;
 
 -- ─── fed scope ───
--- 0015_fed_scope.sql — F6/T3.3: owner-controlled federation scope + spoiler protection.
+-- Owner-controlled federation scope + spoiler protection.
 --
 -- Owners choose how far a cache travels on the network:
 --   public     — federates with description (the default); the hint is NEVER federated (spoiler).
@@ -481,12 +472,12 @@ ALTER TABLE fed_peers ADD COLUMN tombstones_cursor INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE caches ADD COLUMN fed_scope TEXT NOT NULL DEFAULT 'public'; -- public | unlisted | local-only
 
 -- ─── account moves ───
--- 0016_account_moves.sql — F6/T3.2: account-move as a signed federation record (pairs with ADR-2).
+-- Account-move as a signed federation record.
 --
 -- When an account moves instances (proven by the device-key migration assertion at the target), the
 -- TARGET publishes a signed move announcement so the whole network — not just source+target — learns
--- the callsign changed homes. Device-key signatures (F0) already make finds portable; this just adds
--- the "who hosts whom now" dimension. Rides the generalized feed envelope (T2.2) as type `account-move`.
+-- the callsign changed homes. Device-key signatures already make finds portable; this just adds
+-- the "who hosts whom now" dimension. Rides the generalized feed envelope as type `account-move`.
 
 -- Our own move announcements — served on /federation/account-moves (signed at serve time).
 CREATE TABLE account_moves (
@@ -511,12 +502,12 @@ CREATE TABLE remote_account_moves (
 ALTER TABLE fed_peers ADD COLUMN moves_cursor INTEGER NOT NULL DEFAULT 0;
 
 -- ─── fed observability ───
--- 0017_fed_observability.sql — F7/T4.3: federation observability.
+-- Federation observability.
 --
 -- Per-peer sync metrics so an operator can see the health of the network: successful/failed sync
 -- counts, the last SUCCESSFUL sync time (vs last_sync = last attempt → lag = now - last_ok), the
 -- cumulative records mirrored, and the last sync's per-feed breakdown. Extends fed_peers.last_sync/
--- last_error (already present). Feeds the T1.1 reputation loop with measured inputs.
+-- last_error. Feeds the reputation loop with measured inputs.
 ALTER TABLE fed_peers ADD COLUMN last_ok        INTEGER;                 -- last SUCCESSFUL sync (unix s)
 ALTER TABLE fed_peers ADD COLUMN sync_ok        INTEGER NOT NULL DEFAULT 0; -- successful sync count
 ALTER TABLE fed_peers ADD COLUMN sync_err       INTEGER NOT NULL DEFAULT 0; -- failed sync count
@@ -538,18 +529,17 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE INDEX IF NOT EXISTS idx_api_keys_owner ON api_keys (owner_call);
 
 -- ============================================================================================
--- from 0003_features.sql
+-- User features & the workbench data plane
 -- ============================================================================================
--- 0003 features  —  consolidated initial schema (part 3 of 4)
--- User features & the workbench data plane — remote box command channel, watchlist alerts,
+-- Remote box command channel, watchlist alerts,
 -- saved map views, web-push subscriptions, opt-in ham profile, weather ingest + WX TX, the user's
 -- own station registry, and the cross-instance corroborator credit.
--- Squashed baseline: greenfield deploys create the whole schema from these four files.
 
 -- ─── box commands ───
 -- Remote station control: a per-box command queue the operator's ingest box pulls
--- over its existing outbound connection (no inbound ports). TX-capable commands are control-verified
--- (H5); RX-only boxes only ever receive read commands. Distinct from federation peer identity.
+-- over its existing outbound connection (no inbound ports). TX-capable commands are gated on
+-- callsign control-verification; RX-only boxes only ever receive read commands. Distinct from
+-- federation peer identity.
 CREATE TABLE IF NOT EXISTS box_commands (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   box_id     TEXT NOT NULL,
@@ -567,8 +557,8 @@ CREATE INDEX IF NOT EXISTS idx_box_commands_poll ON box_commands (box_id, status
 
 -- ─── watchlist ───
 -- Watchlist alerts. Watch callsigns per ACCOUNT (survives
--- callsign changes, ADR-2); raise an in-app alert when a watched call is heard on the network or heard
--- near a cache. Push/email delivery is the ADR-4b layer on top; this is the in-app fallback + store.
+-- callsign changes); raise an in-app alert when a watched call is heard on the network or heard
+-- near a cache. Push/email delivery is the layer on top; this is the in-app fallback + store.
 CREATE TABLE IF NOT EXISTS watch_calls (
   account_id TEXT NOT NULL,
   callsign   TEXT NOT NULL,                 -- base call (no SSID)
@@ -605,8 +595,8 @@ CREATE TABLE IF NOT EXISTS saved_views (
 CREATE INDEX IF NOT EXISTS idx_saved_views_owner ON saved_views (owner_call);
 
 -- ─── notifications ───
--- Push + email-digest delivery (ADR-4b M4). Web-push subscriptions (the enhancement) and
--- the email digest of unseen watch alerts (the MANDATORY fallback). In-app alerts already exist (W1).
+-- Push + email-digest delivery. Web-push subscriptions (the enhancement) and
+-- the email digest of unseen watch alerts (the MANDATORY fallback). In-app alerts already exist.
 CREATE TABLE IF NOT EXISTS push_subs (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id TEXT NOT NULL,
@@ -623,7 +613,7 @@ ALTER TABLE watch_alerts ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE accounts ADD COLUMN notify_digest INTEGER NOT NULL DEFAULT 1;
 
 -- ─── profile ───
--- Thin, opt-in ham profile. display_name + home_grid already exist (0001); add the rest.
+-- Thin, opt-in ham profile. display_name + home_grid live on accounts; these columns add the rest.
 -- All fields are opt-in and self-curated; they live inside the existing GDPR export/erase.
 ALTER TABLE accounts ADD COLUMN avatar_url     TEXT;     -- opt-in image URL
 ALTER TABLE accounts ADD COLUMN bio            TEXT;     -- short plain text, length-capped + tag-stripped server-side
@@ -679,7 +669,7 @@ ALTER TABLE wx_keys ADD COLUMN station_id INTEGER;
 -- Tier-A find directly on the log, so the corroborator leaderboard credits the operator who actually
 -- did the RF corroboration — whether it happened on THIS instance (the matched position's gating
 -- IGate) or on a federated peer that revealed its IGate (FED_REVEAL_IGATE, both-opt-in). Peer-
--- corroborated finds previously had no matched_position_id and so earned no IGate credit.
+-- corroborated finds have no matched_position_id, so the IGate is recorded here directly.
 ALTER TABLE cache_logs ADD COLUMN corroborator_igate TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_logs_corroborator ON cache_logs (corroborator_igate);
@@ -687,30 +677,28 @@ CREATE INDEX IF NOT EXISTS idx_logs_corroborator ON cache_logs (corroborator_iga
 -- ─── weather tx ───
 -- Weather TX. Per-PWS opt-in flags (off by default,
 -- gated on a control-verified callsign) and a beacon throttle, plus an outbox target so the ingest
--- box routes a queued WX report to standard APRS-IS (W2) or to CWOP/NOAA (W3).
-ALTER TABLE wx_keys ADD COLUMN tx_is       INTEGER NOT NULL DEFAULT 0;  -- W2: beacon to APRS-IS
-ALTER TABLE wx_keys ADD COLUMN tx_cwop     INTEGER NOT NULL DEFAULT 0;  -- W3: relay to CWOP (NOAA)
+-- box routes a queued WX report to standard APRS-IS or to CWOP/NOAA.
+ALTER TABLE wx_keys ADD COLUMN tx_is       INTEGER NOT NULL DEFAULT 0;  -- APRS-IS weather beacon
+ALTER TABLE wx_keys ADD COLUMN tx_cwop     INTEGER NOT NULL DEFAULT 0;  -- CWOP relay (NOAA)
 ALTER TABLE wx_keys ADD COLUMN last_beacon INTEGER;                     -- throttle (epoch s)
 
 ALTER TABLE aprs_outbox ADD COLUMN target TEXT NOT NULL DEFAULT 'is';   -- is | cwop  (drain routing)
 
 -- ============================================================================================
--- from 0004_depth.sql
+-- Depth
 -- ============================================================================================
--- 0004 depth  —  consolidated initial schema (part 4 of 4)
--- Depth — bulletin federation, position telemetry, the raw-packet workbench ring, cache
+-- Bulletin federation, position telemetry, the raw-packet workbench ring, cache
 -- metadata / ratings / NFC unlock / media, living-cache rendezvous, threaded BBS + hierarchical
 -- forwarding + partners + forward log, the NET/ROM node, account preferences, and the federation relay queue.
--- Squashed baseline: greenfield deploys create the whole schema from these four files.
 
 -- ─── bbs federation ───
--- Bulletin federation (BBS #1): peers exchange bulletins over the signed feed mechanism, deduped by
+-- Bulletin federation: peers exchange bulletins over the signed feed mechanism, deduped by
 -- BID. A per-peer cursor makes the bulletin pull incremental, like the cache/find/key feeds.
 ALTER TABLE fed_peers ADD COLUMN bulletins_cursor INTEGER NOT NULL DEFAULT 0;
 
 -- ─── position telemetry ───
 -- Telemetry history: the station table keeps only the *latest* speed/altitude/
--- course, so a track had no motion history to graph. Carry the per-fix telemetry onto positions too,
+-- course, so it holds no motion history to graph. Carry the per-fix telemetry onto positions too,
 -- so the workbench can chart speed/altitude/course over time alongside the weather series. Back-data
 -- stays NULL; new fixes fill it. Cheap, additive, all three runtimes (D1 / better-sqlite3 / bun).
 ALTER TABLE positions ADD COLUMN speed_kn    REAL;
@@ -866,8 +854,8 @@ CREATE INDEX idx_mheard_heard ON node_mheard (last_heard);
 -- Account UI-preferences sync. A person's device-independent UI settings (theme, units/locale,
 -- pinned workbench apps, basemap choice) follow the ACCOUNT, not the browser — so signing in on a
 -- second device restores them. One small JSON blob per account (validated + size-capped server-side);
--- guests keep the same settings in localStorage only. Keyed by account_id (person), per ADR-1/ADR-2:
--- prefs belong to the person, not a bare callsign. All three runtimes. Inside the GDPR export/erase.
+-- guests keep the same settings in localStorage only. Keyed by account_id (person): prefs belong to
+-- the person, not a bare callsign. All three runtimes. Inside the GDPR export/erase.
 CREATE TABLE account_prefs (
   account_id TEXT PRIMARY KEY,
   prefs      TEXT NOT NULL DEFAULT '{}',
@@ -927,24 +915,23 @@ CREATE TABLE fed_relay_queue (
 CREATE INDEX idx_fed_relay_lease ON fed_relay_queue (instance, status, created_at);
 
 -- ============================================================================================
--- from 0005_hardening.sql
+-- Reliability & security hardening
 -- ============================================================================================
--- 0005 hardening — additive columns/indexes backing the reliability/security hardening fixes. Post-baseline, so
--- self-hosters who already ran 0001–0004 pick these up on the next migrate; a fresh DB gets them too.
+-- Additive columns/indexes backing the reliability/security hardening invariants.
 
--- SR-SEC-07: bind APRS control-verification to the initiating account and rate-limit the 6-digit
--- code. Without these the confirm endpoint was unauthenticated, unthrottled, and used Math.random —
--- ~10^6 unthrottled guesses marked any callsign verified.
+-- Bind APRS control-verification to the initiating account and rate-limit the 6-digit code. Without
+-- this binding and throttle, an unauthenticated confirm endpoint allows ~10^6 unthrottled guesses to
+-- mark any callsign verified.
 ALTER TABLE callsign_verifications ADD COLUMN account_id TEXT;                    -- the account that started the challenge
 ALTER TABLE callsign_verifications ADD COLUMN attempts    INTEGER NOT NULL DEFAULT 0;  -- wrong-code guesses; locks after a cap
 ALTER TABLE callsign_verifications ADD COLUMN created_at  INTEGER NOT NULL DEFAULT 0;  -- challenge issue time (expiry window)
 
--- SR-RT-05: the firehose/workbench message log grew unbounded and was scanned without an index
--- (workbench.ts). Index it so the TTL delete and the per-station reads are cheap.
+-- The firehose/workbench message log is TTL-pruned and scanned per station (workbench.ts). Index it
+-- so the TTL delete and the per-station reads are cheap.
 CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages (ts);
 
--- SR-SEC-04: bind a remote-control box to an owning account (claimed TOFU on first control from a
--- session). Without this, any signed-in user could enqueue TX commands to another operator's box —
+-- Bind a remote-control box to an owning account (claimed TOFU on first control from a session).
+-- Without this binding, any signed-in user could enqueue TX commands to another operator's box —
 -- remote-keying someone else's radio. The box itself still leases/acks with the ingest secret.
 CREATE TABLE IF NOT EXISTS boxes (
   box_id     TEXT PRIMARY KEY,
@@ -953,21 +940,21 @@ CREATE TABLE IF NOT EXISTS boxes (
 );
 
 -- ============================================================================================
--- from 0006_ttl_index.sql
+-- Firehose TTL index
 -- ============================================================================================
--- SR-RT-07: the nightly firehose TTL (`DELETE FROM positions WHERE source='firehose' AND ts<?`)
--- had no usable index and full-scanned the largest table in the schema — on the synchronous
--- better-sqlite3 runtime that stalls the whole event loop once positions grows. This index makes
--- the prune (and any source+time query) a range scan; the delete itself is batched in app.ts.
+-- The nightly firehose TTL (`DELETE FROM positions WHERE source='firehose' AND ts<?`) would
+-- otherwise full-scan the largest table in the schema — on the synchronous better-sqlite3 runtime
+-- that stalls the whole event loop as positions grows. This index makes the prune (and any
+-- source+time query) a range scan; the delete itself is batched in app.ts.
 CREATE INDEX IF NOT EXISTS idx_pos_source_ts ON positions (source, ts);
 
 -- ============================================================================================
--- from 0007_rate_limits.sql
+-- Rate-limit counters
 -- ============================================================================================
--- SR-SEC-09: durable fixed-window rate-limit counters. The previous limiter was a module-level
--- Map — on Workers it resets per isolate (a fan-out silently multiplies every budget), and on any
--- runtime it forgets on restart. One row per (key), rolled over in place; the nightly job prunes
--- expired windows. reset_at is unix MILLISECONDS (matches the callers' Date.now() windows).
+-- Durable fixed-window rate-limit counters. An in-memory Map limiter resets per isolate on Workers
+-- (a fan-out silently multiplies every budget) and forgets on restart, so counters live in the DB:
+-- one row per (key), rolled over in place; the nightly job prunes expired windows. reset_at is unix
+-- MILLISECONDS (matches the callers' Date.now() windows).
 CREATE TABLE IF NOT EXISTS rate_limits (
   key      TEXT PRIMARY KEY,
   count    INTEGER NOT NULL DEFAULT 0,
@@ -975,16 +962,16 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 
 -- ============================================================================================
--- from 0008_find_idempotency.sql
+-- Find idempotency
 -- ============================================================================================
--- SR-TRUST-04: a verified find must be idempotent. `cache_logs` had no uniqueness on
--- (cache_id, logger_call) for `found` logs and handleLog did no already-found check, so a racing or
--- replayed POST ran verify + insert + owner-alert + announce + gossip twice and double-counted the
--- find on the leaderboard. This adds the guard the code now relies on (INSERT OR IGNORE + a pre-check).
+-- A verified find must be idempotent. Without uniqueness on (cache_id, logger_call) for `found`
+-- logs and an already-found check in handleLog, a racing or replayed POST would run verify + insert
+-- + owner-alert + announce + gossip twice and double-count the find on the leaderboard. This is the
+-- guard the code relies on (INSERT OR IGNORE + a pre-check).
 --
--- Dedup first (keep the earliest found per cache+logger) so the unique index can be created. Safe to
--- collapse in-migration: there is no production data yet. Tier semantics are untouched — this only
--- prevents a *duplicate* found row for the same (cache_id, logger_call).
+-- Dedup first (keep the earliest found per cache+logger) so the unique index can be created. Tier
+-- semantics are untouched — this only prevents a *duplicate* found row for the same
+-- (cache_id, logger_call).
 DELETE FROM cache_logs
 WHERE log_type = 'found'
   AND id NOT IN (

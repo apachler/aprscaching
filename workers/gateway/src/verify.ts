@@ -93,9 +93,9 @@ export interface VerifyDeps {
   /** for aprs_living: the cache-station's positions in the same window */
   cacheStationPositions?: PositionRow[];
   /** BASE callsigns the logger controls (own call, held account calls, registered stations) —
-   *  a fix gated by any of these can never corroborate the logger's own find (SR-TRUST-01) */
+   *  a fix gated by any of these can never corroborate the logger's own find */
   loggerOwnIgates?: Set<string>;
-  /** request/log time (unix s) — Tier-B app-reading freshness is checked against this (SR-TRUST-03) */
+  /** request/log time (unix s) — Tier-B app-reading freshness is checked against this */
   now?: number;
 }
 
@@ -117,7 +117,7 @@ function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
 }
 
 /**
- * SR-TRUST-02 "plausible track": a matched Tier-A fix must be reachable from the logger's own
+ * "plausible track": a matched Tier-A fix must be reachable from the logger's own
  * neighbouring fixes at a sane ground speed. A single forged/replayed beacon dropped at the cache
  * while the real track is elsewhere implies an impossible speed → not a real presence. With no other
  * fix in the window there is nothing to contradict (benign single-beacon case) → allowed.
@@ -148,7 +148,7 @@ function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyR
     if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // self-gated => not corroborated
     const d = haversineMeters(p.lat, p.lon, cache.lat, cache.lon);
     if (d <= policy.radiusM && plausibleTrack(p, deps, policy)) {
-      // near AND reachable (SR-TRUST-02)
+      // near AND reachable
       return { verified: true, tier: "A", method: "aprs_rf", matchedPositionId: p.id, distanceM: d };
     }
   }
@@ -161,7 +161,7 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
   if (!cs.length) return null;
   for (const p of deps.loggerPositions) {
     if (!p.firstPartyAttested) continue; // Tier A demands an attested first-party fix
-    if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // same rule as tryRf (SR-TRUST-01)
+    if (policy.requireIndependentIgate && !independentlyGated(p, deps)) continue; // same rule as tryRf
     // nearest cache-station fix in time
     let best: PositionRow | null = null,
       bestSkew = Infinity;
@@ -175,7 +175,6 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
     if (!best || bestSkew > policy.livingSkewSec) continue;
     const d = haversineMeters(p.lat, p.lon, best.lat, best.lon);
     if (d <= policy.radiusM && plausibleTrack(p, deps, policy)) {
-      // SR-TRUST-02
       return { verified: true, tier: "A", method: "aprs_rf", matchedPositionId: p.id, distanceM: d };
     }
   }
@@ -190,7 +189,7 @@ function tryApp(
   policy: VerifyPolicy,
 ): VerifyResult | null {
   if (!appGeo || cache.lat == null || cache.lon == null) return null;
-  // SR-TRUST-03: the reading must be contemporaneous with the log — an attacker-supplied `ts` that is
+  // the reading must be contemporaneous with the log — an attacker-supplied `ts` that is
   // stale or fabricated (a days-old/replayed reading at the cache coords) must NOT reach Tier B. When
   // `now` is known (the request boundary passes it), require the reading within ±appMaxAgeSec.
   if (deps.now != null) {

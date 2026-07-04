@@ -23,7 +23,7 @@ export class AprsUplink {
   }
 
   /** One reconnect per failure: only `close` schedules (it always follows `error`), stale sockets
-   *  and already-scheduled timers are ignored (SR-ING-01). Delay backs off with jitter (SR-ING-06). */
+   *  and already-scheduled timers are ignored. Delay backs off with jitter. */
   private retry(gen: number) {
     if (gen !== this.gen || this.timer) return;
     this.timer = setTimeout(() => {
@@ -46,7 +46,7 @@ export class AprsUplink {
       this.ready = true;
     });
     s.on("error", () => {
-      this.ready = false; // SR-ING-07: a socket in error is NOT a place to ack an outbox write against
+      this.ready = false; // a socket in error is NOT a place to ack an outbox write against
     });
     s.on("close", () => {
       this.ready = false;
@@ -61,10 +61,10 @@ export class AprsUplink {
    */
   publish(item: { src_call: string; tocall: string; payload: string }): boolean {
     const s = this.sock;
-    // SR-ING-07: only report success when the socket is verifiably alive. `ready` alone stays true
-    // until error/close fires, so a write onto a half-dead socket used to be acked (and the outbox
-    // item deleted) without ever reaching APRS-IS. Gate on writable/!destroyed and catch a throw so
-    // the caller keeps the item queued for the next tick.
+    // Only report success when the socket is verifiably alive. `ready` alone stays true until
+    // error/close fires, so a write onto a half-dead socket would be acked (and the outbox item
+    // deleted) without ever reaching APRS-IS. Gate on writable/!destroyed and catch a throw so the
+    // caller keeps the item queued for the next tick.
     if (!this.ready || !s || !s.writable || s.destroyed) return false;
     const inner = `${item.src_call}>${item.tocall},TCPIP*:${item.payload}`;
     const frame = `${this.o.serviceCall}>${item.tocall},TCPIP*:}${inner}\r\n`;

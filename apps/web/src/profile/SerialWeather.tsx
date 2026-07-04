@@ -8,7 +8,7 @@ import { useToast, Ico } from "../ui/index.js";
 
 /**
  * Browser-direct PWS over Web Serial: read a Peet Bros / Ultimeter station on USB in the
- * browser, decode each line, and post the reading to your own station via the W1 ingest — no cloud
+ * browser, decode each line, and post the reading to your own station via direct PWS ingest — no cloud
  * daemon. Chromium-only and session-bound; a non-supporting browser gets a one-line fallback (the
  * push URLs still work). Submissions are throttled to once a minute.
  */

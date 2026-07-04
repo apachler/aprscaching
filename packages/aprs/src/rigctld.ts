@@ -13,7 +13,7 @@
  * companion owns the TCP socket. Frequencies are in Hz, matching cat.ts.
  */
 
-/** Build a set-frequency line: `F <hz>`. Frequency is RX-side tuning (not H5-gated), same as cat.ts. */
+/** Build a set-frequency line: `F <hz>`. Frequency is RX-side tuning (not keying-gated), same as cat.ts. */
 export function rigctldSetFreq(hz: number): string {
   return `F ${Math.round(hz)}\n`;
 }
@@ -29,7 +29,7 @@ export function rigctldSetMode(mode: string, passbandHz = 0): string {
 export function rigctldGetMode(): string {
   return "m\n";
 }
-/** Build a set-PTT line: `T <0|1>`. Keying is H5-gated at the call site, never here. */
+/** Build a set-PTT line: `T <0|1>`. Keying is gated on callsign control-verification at the call site, never here. */
 export function rigctldSetPtt(on: boolean): string {
   return `T ${on ? 1 : 0}\n`;
 }
@@ -105,7 +105,7 @@ export class RigctldClient {
   async getMode(): Promise<{ mode: string; passbandHz: number } | null> {
     return parseModeReply(await this.tx.send(rigctldGetMode()));
   }
-  /** PTT keying — the CALLER must H5-gate (verified callsign) before invoking this. */
+  /** PTT keying — the CALLER must gate on callsign control-verification (verified callsign) before invoking this. */
   async setPtt(on: boolean): Promise<RprtResult> {
     return parseRprt(await this.tx.send(rigctldSetPtt(on)));
   }

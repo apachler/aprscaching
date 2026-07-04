@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// CI guard (docs Stage 3 / Cogmind): keep colour emoji out of rendered UI so the ASCII Cogmind theme
+// CI guard (Cogmind): keep colour emoji out of rendered UI so the ASCII Cogmind theme
 // stays emoji-free. Emoji are legal ONLY where they get swapped for a CP437/ASCII glyph at render:
 //   • inside an <Ico e="…" c="…" /> element (Modern emoji → Cogmind ASCII),
 //   • in a data glyph declaration (a `glyph:` / `cog:` / `emoji:` field),
@@ -17,8 +17,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-// SR-WEB: scan `src` AND `public` — the service worker (public/sw.js, whose notification title/body
-// reaches users) and public tool scripts were previously unscanned, so a raw emoji there shipped unflagged.
+// Scan `src` AND `public` — the service worker (public/sw.js, whose notification title/body
+// reaches users) and public tool scripts render to users, so a raw emoji there must be flagged.
 const ROOTS = [join(ROOT, "src"), join(ROOT, "public")];
 
 /** True if `cp` is a colour emoji we must not render raw. */

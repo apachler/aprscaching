@@ -10,7 +10,7 @@ export interface AprsIsOpts {
   passcode: string;
   filter: string;
   retryMs?: number;
-  idleMs?: number; // SR-ING-02: no bytes (not even the server's ~20 s '#' keepalive) for this long ⇒ dead
+  idleMs?: number; // no bytes (not even the server's ~20 s '#' keepalive) for this long ⇒ dead
 }
 
 /** Persistent APRS-IS client: connects, logs in with a filter, auto-reconnects, emits lines. */
@@ -30,8 +30,8 @@ export class AprsIs extends EventEmitter {
   }
 
   /** Schedule exactly one reconnect. Only `close` calls this (`close` always follows `error`),
-   *  and a stale socket's close is ignored — one failure = one attempt, never a storm (SR-ING-01).
-   *  The delay backs off exponentially with jitter while the endpoint stays down (SR-ING-06). */
+   *  and a stale socket's close is ignored — one failure = one attempt, never a storm.
+   *  The delay backs off exponentially with jitter while the endpoint stays down. */
   private retry(gen: number) {
     if (gen !== this.gen || this.timer) return;
     this.emit("down");
@@ -49,7 +49,7 @@ export class AprsIs extends EventEmitter {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
-    // SR-ING-02: a half-dead server keeps the TCP session up but stops sending. setTimeout fires when
+    // A half-dead server keeps the TCP session up but stops sending. setTimeout fires when
     // no bytes arrive within idleMs (reset on every read) → destroy → `close` → one reconnect.
     s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy());
     s.on("connect", () => {

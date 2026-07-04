@@ -10,7 +10,7 @@ function degMin(deg: number, isLat: boolean): string {
   const hemi = isLat ? (deg < 0 ? "S" : "N") : deg < 0 ? "W" : "E";
   const v = Math.abs(deg);
   let d = Math.floor(v);
-  // SR-PARSE-04: round the whole minutes value to hundredths as an integer and carry a `60.00`
+  // Round the whole minutes value to hundredths as an integer and carry a `60.00`
   // overflow into the degrees — `m.toFixed(2)` alone yields e.g. `0460.00N`, which strict
   // APRS-IS / CWOP / NOAA parsers reject.
   let cm = Math.round((v - d) * 60 * 100); // hundredth-minutes

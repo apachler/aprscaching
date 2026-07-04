@@ -266,7 +266,7 @@ export function DetailPanel(props: {
   );
 }
 
-/** Owner-gated 1–5 star rating (F-6). Shows the aggregate; lets a permitted caller set/replace theirs. */
+/** Owner-gated 1–5 star rating. Shows the aggregate; lets a permitted caller set/replace theirs. */
 function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheRating; onToast: (m: string) => void }) {
   const [r, setR] = useState(props.rating);
   const [hover, setHover] = useState(0);

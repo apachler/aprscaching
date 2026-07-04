@@ -31,7 +31,7 @@ export interface ForwardApi {
   pool(call: string): Promise<FbbMessage[]>;
   inbound(message: FbbMessage, origin: string): Promise<void>;
   markSent(partner: string, bids: string[]): Promise<void>;
-  /** SR-PKT-14: BIDs we already hold (recent window). Lets a session answer `-` to a re-proposal so a
+  /** BIDs we already hold (recent window). Lets a session answer `-` to a re-proposal so a
    *  partner stops resending bodies we already have and A→B→A loops die. Optional — omitted → pool-only. */
   heldBids?(call: string): Promise<string[]>;
 }
@@ -47,7 +47,7 @@ export interface ForwardLink {
 export type LinkFactory = (partner: GwPartner) => ForwardLink;
 
 const SESSION_TIMEOUT_MS = 120_000;
-const CONNECT_TIMEOUT_MS = 30_000; // SR-PKT-07: a partner that never answers must not block the slot forever
+const CONNECT_TIMEOUT_MS = 30_000; // a partner that never answers must not block the slot forever
 
 /** Per-session FbbStore over a pool snapshot: the outbound queue drains as messages are sent; inbound is
  *  buffered and flushed to the gateway after the session (which dedups by BID). */
@@ -59,7 +59,7 @@ export class SessionStore implements FbbStore {
     private queue: FbbMessage[],
     heldBids: Iterable<string> = [],
   ) {
-    // SR-PKT-14: a BID we already hold (or are about to forward) is answered `-` so the partner
+    // A BID we already hold (or are about to forward) is answered `-` so the partner
     // stops resending its body every session and A→B→A forward loops terminate.
     this.held = new Set([...heldBids, ...queue.map((m) => m.bid)]);
   }
@@ -145,7 +145,7 @@ export class BbsForwarder {
     const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid });
     const link = this.o.linkFactory(p);
 
-    // SR-PKT-07: bound the connect. If it never settles, disconnect and throw so `busy` is released
+    // Bound the connect. If it never settles, disconnect and throw so `busy` is released
     // (the caller's finally) instead of the partner being wedged forever.
     let connectTimer: ReturnType<typeof setTimeout> | null = null;
     await Promise.race([
@@ -160,7 +160,7 @@ export class BbsForwarder {
       if (connectTimer !== null) clearTimeout(connectTimer);
     });
 
-    // SR-PKT-03: only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
+    // Only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
     // close mid-body the messages were NOT delivered — leave them queued (BID dedup makes re-send safe).
     let cleanDone = false;
     await new Promise<void>((resolve) => {

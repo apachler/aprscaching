@@ -43,7 +43,7 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
     expect(r.verified).toBe(false);
   });
 
-  // SR-TRUST-01: self-gating is judged by BASE call — running your IGate under another SSID
+  // self-gating is judged by BASE call — running your IGate under another SSID
   // (OE8APR-9 beacon gated by OE8APR-10) is still self-gating and must never mint Tier A.
   it("does NOT grant tier A when the fix was gated by another SSID of the logger's own call", () => {
     const r = verifyFind(CACHE, undefined, {
@@ -79,9 +79,9 @@ describe("verifyFind — tier A (RF, independently gated)", () => {
   });
 });
 
-// SR-TRUST-02: a Tier-A match must be reachable from the logger's own neighbouring fixes at a sane
+// A Tier-A match must be reachable from the logger's own neighbouring fixes at a sane
 // speed — a single forged beacon dropped at the cache while the real track is 111 km away is a teleport.
-describe("verifyFind — tier A plausible track (SR-TRUST-02)", () => {
+describe("verifyFind — tier A plausible track", () => {
   it("rejects a matched fix a neighbouring fix cannot reach in the elapsed time (teleport)", () => {
     const r = verifyFind(CACHE, undefined, {
       loggerPositions: [
@@ -121,7 +121,7 @@ describe("verifyFind — tier B (first-party app geolocation)", () => {
     expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
   });
 
-  // SR-TRUST-03: when the request time is known, a stale/fabricated app reading must not reach B.
+  // When the request time is known, a stale/fabricated app reading must not reach B.
   it("rejects a stale app reading when log time is known", () => {
     const nowT = 1_800_000_000;
     const stale: AppGeo = { ...NEAR, accuracyM: 20, ts: nowT - 86_400 }; // a day old

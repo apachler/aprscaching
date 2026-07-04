@@ -14,7 +14,7 @@ export interface CotFix {
   comment?: string;
 }
 
-// SR-PARSE-05: ~7 attribute reads per event each used to compile a fresh RegExp. There is only a
+// ~7 attribute reads per event would each compile a fresh RegExp. There is only a
 // handful of distinct (tag, name) pairs, so cache the compiled matcher per pair (no `g` flag → no
 // lastIndex state to worry about when reused). Keeps the hot CoT ingest path off the GC.
 const attrReCache = new Map<string, RegExp>();

@@ -2,13 +2,13 @@
 /**
  * In-memory region rooms — the Node analogue of the RegionRoom Durable Object. No hibernation
  * (a self-host process is always up), but the same subscribe/broadcast fan-out so the live layer
- * (M2 geofence prompts) works off-Cloudflare too.
+ * (geofence prompts) works off-Cloudflare too.
  */
 import type { WebSocket } from "ws";
 import { Subscribe } from "@aprsweb/shared";
 import { deliveriesFor, type LiveEnvelope } from "@aprsweb/gateway/live";
 
-// SR-RT-06: a half-open client (phone that lost coverage) keeps its TCP socket up but never reads.
+// A half-open client (phone that lost coverage) keeps its TCP socket up but never reads.
 // Without a liveness sweep it lingers in the Set forever, and without a backpressure cap the region
 // firehose buffers into its send queue until the process OOMs.
 const HEARTBEAT_MS = 30_000;

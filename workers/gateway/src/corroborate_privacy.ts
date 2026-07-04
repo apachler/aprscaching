@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { secretOk } from "./auth.js";
 /**
- * corroborate_privacy.ts — F4/T1.2 hardening + privacy coarsening for cross-instance corroboration.
+ * corroborate_privacy.ts — hardening + privacy coarsening for cross-instance corroboration.
  *
  * The corroboration endpoint must NOT become a precise "where was <callsign> at time T" oracle
  *. Two defenses, both pure + unit-tested:
@@ -76,7 +76,7 @@ export const RL_WINDOW_MS = 60_000;
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
   const w = rlBuckets.get(key);
   if (!w || nowMs >= w.resetAt) {
-    // SR-FED-11: sweep expired windows once the map grows — long-lived Node/Bun processes
+    // sweep expired windows once the map grows — long-lived Node/Bun processes
     // otherwise accumulate one entry per key forever.
     if (rlBuckets.size > 5000) for (const [k, v] of rlBuckets) if (nowMs >= v.resetAt) rlBuckets.delete(k);
     rlBuckets.set(key, { count: 1, resetAt: nowMs + windowMs });
@@ -87,9 +87,9 @@ export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs =
 }
 
 /**
- * SR-SEC-09: the DURABLE fixed-window limiter — one D1/SQLite row per key, incremented and rolled
+ * The DURABLE fixed-window limiter — one D1/SQLite row per key, incremented and rolled
  * over in a single upsert, so the budget survives isolate fan-out (Workers) and process restarts
- * (Node/Bun) alike. Used by every abuse-facing gate (ADR-4a read API, corroboration, key issuance,
+ * (Node/Bun) alike. Used by every abuse-facing gate (read API, corroboration, key issuance,
  * signed ingest, passkey begin). Falls back to the in-memory limiter if the DB write fails —
  * degraded protection beats an outage that 500s every read.
  */
@@ -143,7 +143,7 @@ export function corroborationAuthorized(env: Env, req: Request): boolean {
 }
 
 /**
- * SR-SEC-09: client ip for rate-limit keying, from sources the CLIENT cannot choose.
+ * Client ip for rate-limit keying, from sources the CLIENT cannot choose.
  *  - cf-connecting-ip: stamped by Cloudflare's edge (never client-forwarded).
  *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
  *    topology 2/3 behind Caddy/CF) — otherwise any direct client could rotate identities per request.

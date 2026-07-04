@@ -35,7 +35,7 @@ export interface SessionServerOpts {
   clock?: () => number;
   cfg?: Partial<LinkConfig>;
   maxSessions?: number; // refuse new connects past this (a station can still be served)
-  /** Drop a slot still warming after this long (SR-PKT-08); default 30 s. A hung/never-settling app
+  /** Drop a slot still warming after this long; default 30 s. A hung/never-settling app
    *  factory must not pin the key (swallowing the peer's SABM retransmits) or eat a `maxSessions` slot. */
   warmupDeadlineMs?: number;
   onEvent?: (e: { kind: "connect" | "disconnect" | "refused"; service: string; remote: string }) => void;
@@ -68,7 +68,7 @@ export class SessionServer {
   onFrame(f: Ax25Frame): void {
     const svc = this.o.services.find((s) => sameAddr(s.addr, f.dst));
     if (!svc) return; // not for one of our services
-    // SR-PKT-05: we only speak modulo-8 here (frames are decoded with extended=false). An extended
+    // We only speak modulo-8 here (frames are decoded with extended=false). An extended
     // SABME would make the link adopt mod-128 while we keep decoding mod-8 → a REJ-storm livelock.
     // Refuse it with DM so the peer falls back to a plain SABM (mod-8) connect.
     if (f.type === "SABME") {
@@ -127,7 +127,7 @@ export class SessionServer {
   }
 
   /** Drive T1/T3 timers on every live link (the ingest calls this on a ~1s interval). Also reaps any
-   *  slot still `warming` past the deadline (SR-PKT-08) so a hung factory can't pin the key forever. */
+   *  slot still `warming` past the deadline so a hung factory can't pin the key forever. */
   poll(): void {
     const deadline = this.o.warmupDeadlineMs ?? WARMUP_DEADLINE_MS_DEFAULT;
     const now = (this.o.clock ?? Date.now)();

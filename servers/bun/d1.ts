@@ -10,7 +10,7 @@
 import { Database } from "bun:sqlite";
 import type { SqlDatabase, SqlStatement, SqlResult } from "@aprsweb/gateway/runtime";
 
-/** D1 accepts null/number/string/blob. SR-RT-08: real D1 throws `D1_TYPE_ERROR` on an `undefined`
+/** D1 accepts null/number/string/blob. Real D1 throws `D1_TYPE_ERROR` on an `undefined`
  *  bind — throw the same instead of coercing to null, so a parity bug fails on Bun too, not only on
  *  Workers. Booleans stay coerced to 0/1 for convenience. */
 function norm(values: unknown[]): unknown[] {
@@ -40,7 +40,7 @@ class Stmt implements SqlStatement {
     // a row-returning statement (SELECT / PRAGMA table_info / … / INSERT … RETURNING) has columns.
     if (q.columnNames.length > 0) {
       const results = q.all(...(this.params as never[])) as unknown[];
-      // SR-RT-09: SELECT → zeroed meta (as D1); a `… RETURNING` writer carries real rows-affected/rowid.
+      // SELECT → zeroed meta (as D1); a `… RETURNING` writer carries real rows-affected/rowid.
       if (!isDml(this.sql)) return { results, meta: { last_row_id: 0, changes: 0 } };
       const m = this.db.query("SELECT changes() AS c, last_insert_rowid() AS r").get() as { c: number; r: number };
       return { results, meta: { last_row_id: Number(m.r), changes: Number(m.c) } };

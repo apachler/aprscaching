@@ -7,8 +7,8 @@ import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Ico } from ".
  * MessagesPanel — APRS text messaging as a first-class platform surface (its own inbox), NOT the BBS.
  * BBS is store-and-forward mail/bulletins between platform accounts; APRS messages are live radio
  * messages addressed to callsigns. They are deliberately kept separate — a BBS personal message is
- * never sourced from APRS. Your own callsign's traffic is highlighted. Read view for now (TX is
- * H5-gated and lives with the RF path); compose lands later.
+ * never sourced from APRS. Your own callsign's traffic is highlighted. Read view; transmit is gated
+ * on callsign control-verification and lives with the RF path.
  */
 export function MessagesPanel(props: { callsign: string; onClose: () => void }) {
   const fmt = useFmt();

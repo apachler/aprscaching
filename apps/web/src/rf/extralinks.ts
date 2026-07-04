@@ -15,9 +15,10 @@ import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.j
 /**
  * extralinks.ts — two more browser-direct RF ingests behind the same RfLink contract as the KISS
  * reader:
- *   H4  WebAudioAfsk      — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
- *   H3  WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → POSITION_APP → fix.
- * Both stay RX-only and Tier C (no independent IGate); send() is gated off (H5). Chromium-only.
+ *   WebAudioAfsk        — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
+ *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → POSITION_APP → fix.
+ * Both stay RX-only and Tier C (no independent IGate); send() is gated on callsign
+ * control-verification. Chromium-only.
  */
 
 export const webAudioSupported = (): boolean =>
@@ -48,7 +49,7 @@ function ax25ToRfFrame(ax: Uint8Array): RfFrame | null {
   }
 }
 
-// ---------------------------------------------------------------- H4: soundcard AFSK
+// ---------------------------------------------------------------- soundcard Bell-202 AFSK
 export class WebAudioAfsk implements RfLink {
   private ctx: AudioContext | null = null;
   private stream: MediaStream | null = null;
@@ -82,7 +83,7 @@ export class WebAudioAfsk implements RfLink {
   }
 
   async send(_frame: TxFrame): Promise<void> {
-    throw new Error("AFSK transmit is gated (H5) and not enabled here");
+    throw new Error("AFSK transmit is gated on callsign control-verification and not enabled here");
   }
 
   async disconnect(): Promise<void> {
@@ -107,7 +108,7 @@ export class WebAudioAfsk implements RfLink {
   }
 }
 
-// ---------------------------------------------------------------- H3: Meshtastic over Web Serial
+// ---------------------------------------------------------------- Meshtastic over Web Serial
 /** Synthesize an RfFrame from a Meshtastic position fix so it flows through the same ingest path. */
 function meshFixToRfFrame(fix: MeshFix): RfFrame {
   const frame: ParsedFrame = { src: fix.node, dst: "MESH", path: [], payload: "", raw: "" };

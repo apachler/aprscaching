@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 /**
  * meshtastic.ts — parse a Meshtastic MQTT JSON envelope (the gateway's "JSON output" mode) into a
- * position fix. Pure; the connector (apps/ingest) handles the MQTT transport. Protobuf/BLE/serial
- * paths are deeper work tracked separately.
+ * position fix. Pure; the connector (apps/ingest) handles the MQTT transport. Native protobuf
+ * (MQTT ServiceEnvelope and browser-direct serial/BLE FromRadio) parsing lives further down.
  *
  * Envelope shape (position): { from, sender:"!hex", type:"position",
  *   payload:{ latitude_i, longitude_i, altitude } }
@@ -182,8 +182,8 @@ export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
 }
 
 /**
- * Parse a Meshtastic FromRadio frame (serial/BLE H3) into a position fix, or null — the original
- * browser-direct path. FromRadio.packet(2) → MeshPacket. Non-position events yield null here (position is
+ * Parse a Meshtastic FromRadio frame (browser-direct Meshtastic over serial/BLE) into a position fix,
+ * or null. FromRadio.packet(2) → MeshPacket. Non-position events yield null here (position is
  * what the map consumes); use `parseMeshPacket` directly for text/nodeinfo.
  */
 export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
@@ -194,7 +194,7 @@ export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
 }
 
 /**
- * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf Path A) into a typed event, or null.
+ * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf, ingest-box path) into a typed event, or null.
  * ServiceEnvelope{ packet(1,MeshPacket), channel_id(2), gateway_id(3) } → `parseMeshPacket`. This is the
  * native protobuf MQTT path (many brokers publish protobuf, not the JSON `parseMeshtasticJson` handles).
  */

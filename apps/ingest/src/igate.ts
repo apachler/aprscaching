@@ -13,7 +13,7 @@ export interface IgateOpts {
   filter?: string; // APRS-IS server-side filter for the IS->RF direction (default messages)
   localTtlSec?: number; // how long a station counts as "heard locally"
   retryMs?: number;
-  idleMs?: number; // SR-ING-02: destroy a silently-dead uplink after this long with no bytes
+  idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
 }
 
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
@@ -45,8 +45,8 @@ export class Igate {
 
   start(): void {
     this.connect();
-    // SR-ING-09: the "heard locally" map only ever grew — evict entries past twice the TTL so a
-    // months-long uptime doesn't accumulate every callsign ever heard.
+    // Evict "heard locally" entries past twice the TTL so a months-long uptime doesn't accumulate
+    // every callsign ever heard.
     this.sweep = setInterval(() => {
       const cutoff = Date.now() - this.localTtl * 2;
       for (const [cs, t] of this.heard) if (t < cutoff) this.heard.delete(cs);
@@ -76,13 +76,13 @@ export class Igate {
   }
 
   /** One reconnect per failure: only `close` schedules (it always follows `error`), stale sockets
-   *  and already-scheduled timers are ignored (SR-ING-01). */
+   *  and already-scheduled timers are ignored. */
   private retry(gen: number): void {
     if (gen !== this.gen || this.timer) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.connect();
-    }, this.backoff.next()); // SR-ING-06: exponential backoff + jitter while APRS-IS stays down
+    }, this.backoff.next()); // exponential backoff + jitter while APRS-IS stays down
   }
 
   private connect(): void {
@@ -94,7 +94,7 @@ export class Igate {
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
     s.setEncoding("utf8");
-    s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy()); // SR-ING-02: detect a silently-dead uplink
+    s.setTimeout(this.o.idleMs ?? 90_000, () => s.destroy()); // detect a silently-dead uplink
     s.on("connect", () => {
       this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       s.write(

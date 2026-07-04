@@ -27,9 +27,9 @@ export interface TermTransport extends Transport {
 export type MakeTransport = (onFrame: (f: Ax25Frame) => void, onClose: (e?: Error) => void) => TermTransport;
 
 /**
- * PacketTerminal — the Graphic-Packet-reborn web terminal: multi-channel connected-mode
+ * PacketTerminal — a Graphic-Packet-style web terminal: multi-channel connected-mode
  * over Web Serial/KISS, a monitor pane, a per-channel status line, a function-key macro bar and a
- * command line. Built from semantic elements + theme tokens so the Stage-3 Cogmind flip is a token
+ * command line. Built from semantic elements + theme tokens so a Cogmind-style theme flip is a token
  * swap (the channel windows become box-drawing green-screen panes, the monitor colourises by the
  * NAMES.GP type). Chromium-only (Web Serial); RX/TX stays operator-local and never touches the trust
  * tiers — this is workbench.
@@ -138,7 +138,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
 
       // GPAUTO scripted-session engine: the terminal OWNS the connection and offers a generic
       // `session.script` service to tools; the sched-query tool supplies the steps + shows progress. The
-      // host only routes — it has no idea what the script is (the §5f invariant applied to automation).
+      // host only routes — it has no idea what the script is (the host-routing invariant applied to automation).
       const port: ScriptSession = {
         connect: (call) => session.connect(call),
         send: (id, text) =>
@@ -248,7 +248,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
     // eslint-disable-next-line react-hooks/exhaustive-deps -- append-only scan keyed on length; monitor[i] by index is intentional
   }, [monitor.length]);
 
-  // Export the current pane as classic colour ANSI art (.ans T3): the monitor as plain
+  // Export the current pane as classic colour ANSI art (.ans): the monitor as plain
   // phosphor lines, a connected channel with its ANSI colour preserved (parse → re-emit as SGR).
   function exportAns() {
     const lines: AnsiLine[] = viewMon

@@ -198,7 +198,7 @@ export function kissForwardLink(o: {
           clearInterval(poll);
           s.destroy();
           reject(e);
-        }); // SR-ING-05: don't leak the socket/timer
+        }); // don't leak the socket/timer
         s.on("close", () => {
           clearInterval(poll);
           fireClose();
@@ -223,8 +223,8 @@ export function kissForwardLink(o: {
             settle();
           }
         }, 200);
-        // SR-ING-05: on connect timeout, tear down the KISS socket + poll timer (else Direwolf's few
-        // slots fill and lock out the main ingest); destroying triggers `close` which clears `poll`.
+        // On connect timeout, tear down the KISS socket + poll timer (else Direwolf's few slots fill
+        // and lock out the main ingest); destroying triggers `close` which clears `poll`.
         setTimeout(() => {
           clearInterval(wait);
           if (link.state !== "connected") {

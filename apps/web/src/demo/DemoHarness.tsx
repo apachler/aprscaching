@@ -3,7 +3,7 @@
  * DemoHarness — a hardware-free design surface for the packet/BBS shells. Reached at `/?demo=packet`,
  * `/?demo=bbs`, or `/?demo=1` (both). Renders the REAL components wired to the in-process simulator
  * (loopback KISS peer + canned BBS API) so the UI can be designed and screenshotted without a TNC,
- * gateway, or sign-in. This is the bench the Stage-3 Cogmind "flip" is built on.
+ * gateway, or sign-in. This is the bench the Cogmind "flip" is built on.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { PacketTerminal } from "../packet/PacketTerminal.js";
@@ -156,8 +156,8 @@ export function DemoHarness({ which }: { which: string }) {
     );
   }
   if (which === "app-rig") {
-    // A demo operator with a control-verified callsign, so the connected tune UI is shown (RX-side,
-    // no H5 gate on tuning). The fake serial port is already installed above.
+    // A demo operator with a control-verified callsign, so the connected tune UI is shown (RX-side;
+    // tuning is not gated on callsign control-verification). The fake serial port is already installed above.
     return (
       <AppShell
         active="workbench"

@@ -4,7 +4,7 @@ import { json } from "./app.js";
 import { issueSessionCookie } from "./auth.js";
 
 /**
- * Email magic-link auth (M9): the passwordless recovery / no-authenticator path that complements
+ * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
  * passkeys. `start` issues a one-time token and emails a link; `verify` consumes it and opens a
  * session (creating the account on first register). When no email provider is configured (dev/CI),
  * `start` returns the token in-band so headless flows and first-run can proceed without real mail.
@@ -55,7 +55,7 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     `Sign in to aprscaching:\n${link}\n\nThis link expires in 15 minutes. If you didn't request it, ignore this email.`,
   );
   if (sent) return json({ sent: true, purpose });
-  // SR-SEC-06: the sign-in token must NOT be handed back to the caller on a real instance. Returning
+  // The sign-in token must NOT be handed back to the caller on a real instance. Returning
   // it in-band is a dev/CI convenience that is account-takeover in production — gate it behind an
   // explicit opt-in, never merely "email isn't configured". Off ⇒ fail closed.
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true")

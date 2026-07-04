@@ -9,8 +9,8 @@
  *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
  *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
  *
- * Gating (non-negotiable H5 +): every TX-capable command requires a *verified*
- * callsign; RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
+ * Gating (non-negotiable): every TX-capable command requires a callsign gated on control-verification;
+ * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
  * from the federation/APRS service identity.
  */
 import type { Env } from "./env.js";
@@ -31,7 +31,7 @@ async function isVerified(env: Env, call: string): Promise<boolean> {
 }
 
 /**
- * SR-SEC-04: authorize a session to control `boxId`. TOFU — the first account to control a box claims
+ * Authorize a session to control `boxId`. TOFU — the first account to control a box claims
  * ownership; thereafter only that account may enqueue to it. Returns the owning accountId, or null if
  * this session is not allowed to control the box.
  */
@@ -66,7 +66,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   const kind = String(body.kind ?? "").toLowerCase();
   if (!ALL_KINDS.has(kind))
     return json({ error: `unknown command kind; one of ${[...ALL_KINDS].join(", ")}` }, { status: 400 });
-  // authorize: a signed-in operator session that OWNS this box (SR-SEC-04), or the box secret (trusted
+  // authorize: a signed-in operator session that OWNS this box, or the box secret (trusted
   // backend / the operator's own box). Read commands need no callsign; TX commands require a verified one.
   const me = await sessionAccountId(req, env);
   const trusted = boxAuth(req, env);
@@ -80,7 +80,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
     if (me && !trusted && !(await accountHoldsCall(env, me.accountId, callsign)))
       return json({ error: `${callsign} is not held by your account` }, { status: 403 });
     if (!(await isVerified(env, callsign)))
-      return json({ error: `verify ${callsign} to transmit — control-verification required (H5)` }, { status: 403 });
+      return json({ error: `verify ${callsign} to transmit — control-verification required` }, { status: 403 });
   }
 
   const ins = await env.DB.prepare(
@@ -129,12 +129,12 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
   return json({ ok: true });
 }
 
-/** GET /api/box/:id/log — operator view of recent commands + their status (for the R2 UI). */
+/** GET /api/box/:id/log — operator view of recent commands + their status. */
 export async function handleBoxLog(req: Request, env: Env, boxId: string): Promise<Response> {
   const me = await sessionAccountId(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in to view box activity" }, { status: 401 });
-  // SR-SEC-04: a box's activity is visible only to its owner (or the trusted backend). An unclaimed
+  // a box's activity is visible only to its owner (or the trusted backend). An unclaimed
   // box has no owner yet → only the box secret can read it until someone claims it by controlling it.
   if (me && !trusted) {
     const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?")

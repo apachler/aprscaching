@@ -119,7 +119,7 @@ export class AxipListener {
  * feed the Tier-C ingest AND the connected-mode consumers (`onRaw`/`onFrame`), so NET/ROM crosslinks + FBB
  * forwarding can run over the AXIP internet leg; `sendFrame` egresses a full AX.25 frame to each configured
  * peer. TX here is **operator-config-gated** (the sysop sets `AXIP_PEERS`) internet node-transport, NOT
- * on-air keying — the H5 verified-callsign RF-TX gate is a separate concern (the box tx path). Tunnelled
+ * on-air keying — the callsign control-verification RF-TX gate is a separate concern (the box tx path). Tunnelled
  * frames are never first-party attested either way (transport ≠ trust). Raw-socket send is validate-at-deploy.
  */
 export class AxipPort {

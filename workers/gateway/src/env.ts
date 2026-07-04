@@ -8,7 +8,7 @@ export interface Env {
   MEDIA?: MediaStore; // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
   INGEST_SECRET: string;
-  // Dedicated session-signing secret (SR-SEC-01). Optional: absent ⇒ derived from INGEST_SECRET
+  // Dedicated session-signing secret. Optional: absent ⇒ derived from INGEST_SECRET
   // (single-operator self-host convenience) — but that couples the ingest-box credential to user
   // sessions, so shared gateways SHOULD set it. Sessions are refused entirely while the effective
   // secret is unset/'change-me' (auth.ts weakSecret): a default deploy can never mint a forgeable
@@ -16,11 +16,11 @@ export interface Env {
   SESSION_SECRET?: string;
   // Server-side session lifetime in days (default 30) and an optional revocation epoch (unix
   // seconds): sessions minted before SESSION_EPOCH are rejected — rotate all sessions without
-  // rotating secrets (SR-SEC-11).
+  // rotating secrets.
   SESSION_TTL_DAYS?: string;
   SESSION_EPOCH?: string;
   // "1" when a reverse proxy (Caddy/CF tunnel, topology 2/3) fronts this instance — only then is
-  // x-forwarded-for trusted for rate-limit keying (SR-SEC-09).
+  // x-forwarded-for trusted for rate-limit keying.
   TRUST_PROXY?: string;
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
@@ -28,45 +28,45 @@ export interface Env {
   // endpoints locked; the ingest still uses INGEST_SECRET). The operator sets their own signed-in call.
   ADMIN_CALLSIGNS?: string;
 
-  // ---- federation (F1) — all optional; absent => feeds served unsigned ----
+  // ---- federation — all optional; absent => feeds served unsigned ----
   INSTANCE?: string; // canonical instance id/domain, e.g. "oe.aprscaching.org"
   FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed
-  FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations (T4.1)
-  FED_ROTATIONS?: string; // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old (T4.1)
-  // ---- signed instance registry / namespace authority (T4.2) — all optional ----
+  FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations
+  FED_ROTATIONS?: string; // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old
+  // ---- signed instance registry / namespace authority — all optional ----
   FED_REGISTRY?: string; // signed registry doc {entries:[{instance,url?,key?,operator?,aprsCall?}],at,sig,signer}
   FED_REGISTRY_KEY?: string; // the registry authority's Ed25519 public key (base64url) used to verify FED_REGISTRY
-  FED_REGISTRY_DNS?: string; // alt source (T4.2): a DNS TXT record name carrying `url=…;key=…` to the signed registry
+  FED_REGISTRY_DNS?: string; // alt source: a DNS TXT record name carrying `url=…;key=…` to the signed registry
   FED_OPERATOR?: string; // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string; // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
   FED_AMATEUR_ENDPOINT?: string; // reserved: optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral
   FIRST_PARTY_SITES?: string; // provenance seam: allowlist of IGate/site calls we operate + attest → Tier-A origin
   FED_PEERS?: string; // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string; // if set, auto-add peers advertised by peers (transitive discovery)
-  FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (F4/T1.2; default 1)
-  FED_AUTO_PROMOTE?: string; // confirmed-corroboration count to auto-promote an unvetted peer to trusted (T1.1; 0=off)
-  TOMBSTONE_TTL_DAYS?: string; // retention for delete tombstones before GC (F4/T1.3; default 180)
-  PACKETS_TTL_HOURS?: string; // retention for the workbench raw-packet ring (Stage 0.2; default 24)
-  // ---- SR-RT-05: retention (days) for the always-growing diagnostic/telemetry tables (all optional) ----
+  FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (default 1)
+  FED_AUTO_PROMOTE?: string; // confirmed-corroboration count to auto-promote an unvetted peer to trusted (0=off)
+  TOMBSTONE_TTL_DAYS?: string; // retention for delete tombstones before GC (default 180)
+  PACKETS_TTL_HOURS?: string; // retention for the workbench raw-packet ring (default 24)
+  // ---- retention (days) for the diagnostic/telemetry tables (all optional) ----
   MESSAGES_TTL_DAYS?: string; // firehose message log (default 7)
   SENSOR_TTL_DAYS?: string; // weather/sensor readings (default 30)
   PORTSTATS_TTL_DAYS?: string; // per-port RX/TX counters (default 7)
   ALERTS_TTL_DAYS?: string; // seen watch-alerts (default 30)
   MHEARD_TTL_DAYS?: string; // NET/ROM node mheard rows (default 7)
-  // ---- corroboration hardening + privacy coarsening (F4/T1.2) — all optional ----
+  // ---- corroboration hardening + privacy coarsening — all optional ----
   FED_CORROBORATION_SECRET?: string; // if set, /federation/corroborate requires x-fed-secret (peer allowlist)
   FED_REVEAL_IGATE?: string; // if set, corroboration responses include the exact IGate (both peers opt in)
   FED_CORROBORATION_GRID_DEG?: string; // request center grid-snap size in degrees (default 0.005 ≈ 550 m)
   FED_CORROBORATION_TIME_BUCKET_SEC?: string; // request/response time bucket (default 600)
   FED_CORROBORATION_DIST_BUCKET_M?: string; // response distance bucket in metres (default 100)
 
-  // ---- push-to-hub: NAT/firewall peers contribute without inbound reachability (F5/T2.3) ----
+  // ---- push-to-hub: NAT/firewall peers contribute without inbound reachability ----
   FED_SUBMIT_SECRET?: string; // HUB: if set, enables POST /federation/submit, gated by x-fed-secret. SPOKE: the secret it pushes with.
   FED_SUBMIT_INSTANCES?: string; // HUB: optional comma-separated allowlist of submitter instance ids (else any non-self)
   FED_HUB_URL?: string; // SPOKE: a reachable hub to push our signed records to (push-mode mirroring)
-  FED_RELAY_SECRET?: string; // HUB+SPOKE: shared secret for the rendezvous relay (T2.3 path 2); enables it when set
+  FED_RELAY_SECRET?: string; // HUB+SPOKE: shared secret for the rendezvous relay; enables it when set
 
-  // ---- imports (M3) — OpenCaching OKAPI ----
+  // ---- imports — OpenCaching OKAPI ----
   OKAPI_BASE?: string; // e.g. https://www.opencaching.de
   OKAPI_KEY?: string; // free per-node consumer key (Level-1)
 
@@ -91,16 +91,16 @@ export interface Env {
   SPOTS_DXCLUSTER_URL?: string; // DX-cluster JSON endpoint (off unless set; mappable only with a grid)
   SPOTS_RBN_URL?: string; // RBN reception JSON endpoint (off unless set; mappable only with a grid)
 
-  // ---- M9 identity & auth — all optional; absent => dev mode (email token returned in-band) ----
+  // ---- identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string; // app origin for magic-link redirects, e.g. "https://aprscaching.com"
-  CORS_ORIGINS?: string; // SR-SEC-15: extra comma-separated origins allowed credentialed CORS (beyond APP_URL)
+  CORS_ORIGINS?: string; // extra comma-separated origins allowed credentialed CORS (beyond APP_URL)
   RP_ID?: string; // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.com"
   EMAIL_FROM?: string; // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string; // Resend-style API key; absent => dev mode (no real send)
   ALLOW_DEV_TOKENS?: string; // "1"/"true" to return magic-link tokens in-band when email is unconfigured
-  // (dev/CI only). Off by default → a mail-less instance fails closed (SR-SEC-06).
+  // (dev/CI only). Off by default → a mail-less instance fails closed.
 
-  // ---- push notifications (ADR-4b) — web push is off unless VAPID keys are set; email digest needs EMAIL_* ----
+  // ---- push notifications — web push is off unless VAPID keys are set; email digest needs EMAIL_* ----
   VAPID_PUBLIC?: string; // VAPID public key (base64url, uncompressed P-256 point)
   VAPID_PRIVATE?: string; // VAPID private key 'd' (base64url)
   VAPID_SUBJECT?: string; // contact for the push service, e.g. "mailto:admin@aprscaching.net"
@@ -112,7 +112,7 @@ export interface Env {
   SUPPORT_GITHUB?: string;
   SUPPORT_OPENCOLLECTIVE?: string;
 
-  // ---- AGPL §13 source link (ADR-3) — the running instance's published source ----
+  // ---- AGPL §13 source link — the running instance's published source ----
   SOURCE_REPO?: string; // repo URL; absent => upstream default. Self-hosters who MODIFY code MUST set this to their fork.
   SOURCE_COMMIT?: string; // commit (or tag) the instance is running; host-resolved at build/start
   SOURCE_TAG?: string; // optional release tag
@@ -120,10 +120,10 @@ export interface Env {
 }
 
 /**
- * SR-RT-03: the canonical list of string-valued config keys the self-host servers (Node/Bun) must
- * forward from `process.env` into `Env`. Previously the servers hand-picked a subset, so features like
- * sysop admin, magic-link email, push, rate limits, and first-party attestation were silently dead on
- * self-host. Keep this in sync with the optional string fields above — one source of truth for both runtimes.
+ * The canonical list of string-valued config keys the self-host servers (Node/Bun) forward from
+ * `process.env` into `Env`. It covers every optional string field above — sysop admin, magic-link
+ * email, push, rate limits, and first-party attestation are all live on self-host. Keep this in sync
+ * with the optional string fields above — one source of truth for both runtimes.
  */
 export const ENV_STRING_KEYS = [
   "SESSION_SECRET",

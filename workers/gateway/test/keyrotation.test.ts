@@ -15,7 +15,7 @@ const b64u = (buf: ArrayBuffer) => {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };
 
-describe("active key selection (F7/T4.1)", () => {
+describe("active key selection", () => {
   const t = 1000;
   it("keeps current keys, drops revoked + out-of-window", () => {
     const keys: FedPublicKey[] = [
@@ -33,7 +33,7 @@ describe("active key selection (F7/T4.1)", () => {
   });
 });
 
-describe("rotation-record continuity (F7/T4.1)", () => {
+describe("rotation-record continuity", () => {
   it("verifies a new key vouched for by the previous key, rejects tampering", async () => {
     const prev = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
     const next = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
@@ -55,9 +55,9 @@ describe("rotation-record continuity (F7/T4.1)", () => {
   });
 });
 
-// SR-FED-04: the sync must only accept a peer's CHANGED key when a valid rotation chain proves
-// continuity from the previously-pinned key. A hijacked domain that just swaps keys has no such proof.
-describe("rotationChainReaches — SR-FED-04 key-change continuity", () => {
+// The sync must only accept a peer's CHANGED key when a valid rotation chain proves continuity from
+// the previously-pinned key. A hijacked domain that just swaps keys has no such proof.
+describe("rotationChainReaches — key-change continuity", () => {
   async function kp() {
     const k = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     return { x: b64u(await crypto.subtle.exportKey("raw", k.publicKey)), priv: k.privateKey };

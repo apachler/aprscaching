@@ -181,7 +181,7 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
   defined and used per `.claude/rules/css.md`. MUST NOT hard-code values or use inline styles for
   tokenable properties.
 - **Our own visual identity:** our accent (not APRStac's teal), our cache-type glyph set, our type.
-  Borrow patterns from APRStac, not the skin (see `` §15).
+  Borrow patterns from APRStac, not the skin.
 
 ---
 

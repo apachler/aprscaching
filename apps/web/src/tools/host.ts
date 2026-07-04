@@ -8,9 +8,9 @@
 import { useEffect, useReducer } from "react";
 import { ToolHost, builtinTools } from "@aprsweb/tools";
 
-// TX gate (H5): a module flag the app keeps in sync with the signed-in session's verified state, so a
-// tool's scheduleBeacon/requestTx is allowed only for a verified callsign — exactly as before, just
-// shared. Set from Platform on session change (setToolTxVerified).
+// TX gate: a module flag the app keeps in sync with the signed-in session's verified state, so a
+// tool's scheduleBeacon/requestTx is allowed only for a verified callsign — real on-air keying
+// requires a verified callsign. Set from Platform on session change (setToolTxVerified).
 let txVerified = false;
 export function setToolTxVerified(v: boolean): void {
   txVerified = v;

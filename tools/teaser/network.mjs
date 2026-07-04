@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Capture the M6 workbench Network section: transports + TAK/CoT feed + messages.
+// Capture the workbench Network section: transports + TAK/CoT feed + messages.
 import { chromium } from "playwright";
 import fs from "node:fs";
 const BASE = process.env.BASE ?? "http://127.0.0.1:4180";
@@ -25,8 +25,8 @@ await page.$eval(".panel.right", (el) => {
   el.scrollTop = el.scrollHeight;
 });
 await page.waitForTimeout(500);
-await page.screenshot({ path: OUT + "11-m6-network.png" });
-console.log("11-m6-network");
+await page.screenshot({ path: OUT + "11-network.png" });
+console.log("11-network");
 await ctx.close();
 await browser.close();
-console.log("m6 shoot complete ->", OUT);
+console.log("network shoot complete ->", OUT);

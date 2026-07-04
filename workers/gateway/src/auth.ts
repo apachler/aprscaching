@@ -13,7 +13,7 @@ import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 const SESSION_COOKIE = "acs";
 const CHALLENGE_TTL = 300;
 
-/** SR-SEC-13: the expected WebAuthn origin/rpId MUST come from configuration. Falling back to the
+/** The expected WebAuthn origin/rpId MUST come from configuration. Falling back to the
  *  request's Origin header validates the binding against an attacker-supplied value — any site could
  *  satisfy the ceremony. Unconfigured ⇒ null, and the passkey endpoints refuse (fail closed);
  *  the email magic-link path is unaffected. */
@@ -37,7 +37,7 @@ function webauthnUnconfigured(): Response {
 async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   await env.DB.batch([
-    // reap expired ceremonies while we're here — abandoned begins must not accumulate (SR-SEC-12)
+    // reap expired ceremonies while we're here — abandoned begins must not accumulate
     env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now),
     env.DB.prepare("INSERT INTO auth_challenges (id, callsign, kind, value, expires_at) VALUES (?, ?, ?, ?, ?)").bind(
       crypto.randomUUID(),
@@ -106,10 +106,10 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
       return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
     accountId = existing.account_id;
   } else {
-    // SR-SEC-12: do NOT insert the account here — an unauthenticated begin used to pre-claim the
-    // callsign row, letting anyone squat W1AW and lock out the real holder. The provisional
-    // account id (and email) ride inside the stored challenge and only become a row once the
-    // passkey ceremony completes in register/finish.
+    // Do NOT insert the account here — an unauthenticated begin that pre-claimed the callsign row
+    // would let anyone squat W1AW and lock out the real holder. The provisional account id (and
+    // email) ride inside the stored challenge and only become a row once the passkey ceremony
+    // completes in register/finish.
     accountId = crypto.randomUUID();
     pendingNew = true;
   }
@@ -152,7 +152,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   if (!stashed || !credential?.response?.attestationObject)
     return json({ error: "no pending registration" }, { status: 400 });
   // The stash is {c: challenge, a?: provisional accountId, e?: email} — `a` present means the
-  // account does not exist yet and is created below only once the ceremony verifies (SR-SEC-12).
+  // account does not exist yet and is created below only once the ceremony verifies.
   let challenge: string;
   let pending: { a?: string; e?: string | null } = {};
   try {
@@ -160,7 +160,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     challenge = j.c;
     pending = j;
   } catch {
-    challenge = stashed; // pre-JSON stash from an in-flight ceremony (300 s TTL) — existing account
+    challenge = stashed; // a bare (non-JSON) stash is the challenge itself — an existing account
   }
   try {
     const r = await verifyRegistration({
@@ -432,7 +432,7 @@ export async function handleLogout(): Promise<Response> {
 
 // --- minimal signed session (HMAC). Replace with your preferred session strategy. ---
 
-/** SR-SEC-08: constant-time string compare — a `===` on a secret leaks how many leading
+/** Constant-time string compare — a `===` on a secret leaks how many leading
  *  characters matched via response timing. XOR-accumulate over the LONGER length so neither
  *  the mismatch position nor (beyond an unavoidable coarse bound) the length short-circuits. */
 export function timingSafeEqual(a: string, b: string): boolean {
@@ -449,7 +449,7 @@ export function secretOk(given: string | null | undefined, expected: string | un
   return timingSafeEqual(given ?? "", expected);
 }
 
-/** SR-SEC-01: a session signed with a known/default secret is forgeable for ANY callsign —
+/** A session signed with a known/default secret is forgeable for ANY callsign —
  *  including ADMIN_CALLSIGNS. Never mint or honor sessions on such a key. */
 export function weakSecret(s: string | undefined): boolean {
   return !s || s === "change-me";
@@ -478,7 +478,7 @@ async function signSession(callsign: string, env: Env): Promise<string> {
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
   return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
 }
-/** SR-SEC-11: the cookie's Max-Age is only a client hint — enforce the lifetime server-side too,
+/** The cookie's Max-Age is only a client hint — enforce the lifetime server-side too,
  *  or a captured token stays valid until the signing secret rotates. Tunable via SESSION_TTL_DAYS;
  *  SESSION_EPOCH (unix seconds) lets an operator revoke every session minted before a point in
  *  time without rotating secrets (e.g. after a device loss report). */

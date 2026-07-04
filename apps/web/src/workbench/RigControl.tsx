@@ -7,7 +7,8 @@ import { useToast } from "../ui/index.js";
 /**
  * Rig control: connect a transceiver over Web Serial CAT and one-click tune it — the
  * APRS calling frequency, or any frequency. Tuning only sets the VFO (no transmit), so it isn't
- * H5-gated. Spot cards reuse the same shared controller to tune to a spot's freq+mode. Chromium-only.
+ * gated on callsign control-verification. Spot cards reuse the same shared controller to tune to a
+ * spot's freq+mode. Chromium-only.
  */
 const RIGS: { id: CatRig; label: string; baud: number }[] = [
   { id: "kenwood", label: "Kenwood / modern Yaesu (ASCII)", baud: 38400 },

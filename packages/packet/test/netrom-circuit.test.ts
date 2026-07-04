@@ -103,9 +103,9 @@ describe("NET/ROM L4 circuit", () => {
   });
 });
 
-// SR-PKT-06: with a lossy channel, a circuit must retransmit on T1 and eventually tear itself down —
+// With a lossy channel, a circuit must retransmit on T1 and eventually tear itself down —
 // never wedge forever. Uses an injected clock so time is deterministic.
-describe("NET/ROM circuit timers (SR-PKT-06)", () => {
+describe("NET/ROM circuit timers", () => {
   it("retransmits a lost ConnReq, then gives up after n2 and disconnects", () => {
     let t = 0;
     const sends: NrTpPacket[] = [];

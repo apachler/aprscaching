@@ -142,7 +142,7 @@ export function toggleFavorite(
   return call(`/api/caches/${cacheId}/favorite`, { method: "POST", body: JSON.stringify({ callsign, on }) });
 }
 export type CacheRating = CacheDetail["rating"];
-/** Submit a 1–5 star rating (owner-gated, F-6) — returns the updated aggregate. */
+/** Submit a 1–5 star rating (owner-gated) — returns the updated aggregate. */
 export function rateCache(cacheId: number, stars: number, callsign?: string): Promise<{ rating: CacheRating }> {
   return call(`/api/caches/${cacheId}/rate`, { method: "POST", body: JSON.stringify({ stars, callsign }) });
 }
@@ -159,7 +159,7 @@ export function getSpots(
   return call(`/api/spots?${q.toString()}`);
 }
 
-// ---- M5 workbench: live stations + packet inspector ----
+// ---- workbench: live stations + packet inspector ----
 export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }> {
   return call(`/api/stations?bbox=${bbox.join(",")}`);
 }
@@ -330,7 +330,7 @@ export function putPrefs(prefs: AccountPrefs): Promise<{ ok: boolean; prefs: Acc
   return call(`/api/prefs`, { method: "PUT", body: JSON.stringify({ prefs }) });
 }
 
-// ---- notification prefs + push subscription (ADR-4b) ----
+// ---- notification prefs + push subscription ----
 export function getNotifyPrefs(): Promise<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean }> {
   return call(`/api/notify/prefs`);
 }
@@ -362,7 +362,7 @@ export interface WxKeyInfo {
   wuUrl: string | null;
   txIs?: boolean;
   txCwop?: boolean;
-  verified?: boolean; // W2/W3 TX opt-in + control-verified gate
+  verified?: boolean; // APRS-IS weather beacon / CWOP relay TX opt-in + control-verified gate
 }
 /** Read the caller's PWS push key + ready-to-paste station URLs (null key until issued). */
 export function getWxKey(): Promise<WxKeyInfo> {
@@ -372,8 +372,8 @@ export function getWxKey(): Promise<WxKeyInfo> {
 export function issueWxKey(): Promise<WxKeyInfo> {
   return call(`/api/wx/key`, { method: "POST" });
 }
-/** Submit one in-browser-decoded PWS reading to the W1 ingest, using the caller's key.
- *  Metric → the imperial query params parseWx already understands, so it reuses the whole W1 path. */
+/** Submit one in-browser-decoded PWS reading to the direct PWS ingest, using the caller's key.
+ *  Metric → the imperial query params parseWx already understands, so it reuses the whole ingest path. */
 export function submitWxReading(
   key: string,
   r: {
@@ -403,7 +403,7 @@ export interface WxTxState {
   txCwop: boolean;
   verified: boolean;
 }
-/** Toggle APRS-IS beacon (W2) / CWOP relay (W3) for the home or a registry-station PWS. */
+/** Toggle APRS-IS weather beacon / CWOP relay for the home or a registry-station PWS. */
 export function setWxTx(body: { stationId?: number; txIs: boolean; txCwop: boolean }): Promise<WxTxState> {
   return call(`/api/wx/tx`, { method: "POST", body: JSON.stringify(body) });
 }
@@ -535,7 +535,7 @@ export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
 }
 
-/** A federation peer with its T4.3 health metrics (operator observability). */
+/** A federation peer with its health metrics (operator observability). */
 export interface FedPeer {
   url: string;
   instance: string | null;
@@ -589,7 +589,7 @@ export function deleteForwardRule(id: number): Promise<{ ok: boolean }> {
   return call(`/api/bbs/forward/${id}`, { method: "DELETE" });
 }
 
-// ---- M2 audio-cache: staged multi-cache ----
+// ---- audio-cache: staged multi-cache ----
 import type { CacheStage } from "@aprsweb/shared";
 export type { CacheStage };
 export function getStages(cacheId: number, callsign?: string): Promise<{ stages: CacheStage[] }> {
@@ -674,7 +674,7 @@ export function postBbsMessage(body: {
 }): Promise<{ ok: boolean; id: number; type: string; threadId?: number }> {
   return call(`/api/bbs/messages`, { method: "POST", body: JSON.stringify(body) });
 }
-/** A BBS conversation (root + replies), oldest first (P2 thread tree). */
+/** A BBS conversation (root + replies), oldest first (thread tree). */
 export function getBbsThread(id: number): Promise<{ threadId: number; messages: BbsMessage[] }> {
   return call(`/api/bbs/thread/${id}`);
 }
@@ -760,8 +760,8 @@ export interface LogResult {
   distanceM?: number;
   reason?: string;
   announced?: boolean;
-  corroboratedBy?: string | null; // peer instance that granted Tier A (F3)
-  signerKey?: string | null; // device key that signed the find (F0)
+  corroboratedBy?: string | null; // peer instance that granted Tier A
+  signerKey?: string | null; // device key that signed the find
   queued?: boolean; // saved offline, will sync when connectivity returns
 }
 
@@ -841,7 +841,7 @@ export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }
   return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);
 }
 
-// ---- auth (M9): session, passkey ceremonies, email magic-link ----
+// ---- auth: session, passkey ceremonies, email magic-link ----
 export type Session = { callsign: string | null; verified?: boolean; email?: string | null };
 export function getSession(): Promise<Session> {
   return call(`/auth/session`);
@@ -961,7 +961,7 @@ export function getInstance(): Promise<string> {
   return instanceCache;
 }
 
-/** AGPL §13 (ADR-3): the source the running instance reports, + the redirect link to it. */
+/** AGPL §13: the source the running instance reports, + the redirect link to it. */
 export type SourceInfo = {
   repo: string;
   commit: string | null;

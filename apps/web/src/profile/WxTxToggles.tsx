@@ -6,7 +6,7 @@ import { useToast } from "../ui/index.js";
 
 /**
  * Weather TX opt-in: beacon the PWS reading to APRS-IS and/or relay it to CWOP/NOAA.
- * Gated like H5 — off by default, and only available on a control-verified callsign (when unverified
+ * Gated on callsign control-verification — off by default, and only available on a control-verified callsign (when unverified
  * we show a one-line reason instead of dead controls, per ui-ux). Shared by the home -13 PWS and the
  * per-station weather panel; `stationId` targets a registry station.
  */

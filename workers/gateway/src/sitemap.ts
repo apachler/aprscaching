@@ -54,7 +54,7 @@ export function handleSitemapJson(_req: Request, env: Env): Response {
     app: base,
     surfaces: SURFACES.map((s) => ({ ...s, url: surfaceUrl(env, s.view) })),
     feeds: FEEDS.map((f) => ({ ...f, url: `${base}${f.path}` })),
-    readApi: { version: "v1", path: "/api/v1", access: "free, rate-limited (ADR-4a)" },
+    readApi: { version: "v1", path: "/api/v1", access: "free, rate-limited" },
   });
 }
 
@@ -92,7 +92,7 @@ ${groupHtml}
 <section><h2>For machines</h2><ul>
 <li><a href="${e(base)}/sitemap.xml">sitemap.xml</a><div class=m>XML sitemap for crawlers.</div></li>
 <li><a href="${e(base)}/api/sitemap">/api/sitemap</a><div class=m>JSON surface manifest + feed catalogue.</div></li>
-<li><a href="${e(base)}/api/v1">/api/v1</a><div class=m>Public read API — free, rate-limited (ADR-4a).</div></li>
+<li><a href="${e(base)}/api/v1">/api/v1</a><div class=m>Public read API — free, rate-limited.</div></li>
 </ul></section>
 <footer><a href="${e(base)}/support">Support</a> · <a href="${e(base)}/source">Source (AGPL-3.0)</a></footer>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });

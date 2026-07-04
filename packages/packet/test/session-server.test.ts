@@ -139,7 +139,7 @@ describe("connected-mode session server", () => {
     expect(sent).toBe(0);
   });
 
-  it("SR-PKT-05: refuses an extended (SABME) connect with DM, opening no session", () => {
+  it("refuses an extended (SABME) connect with DM, opening no session", () => {
     const sent: Ax25Frame[] = [];
     const server = new SessionServer({
       send: (f) => sent.push(f),

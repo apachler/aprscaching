@@ -7,7 +7,7 @@ import type { MediaStore } from "@aprsweb/gateway/runtime";
 export function makeFsMedia(root: string): MediaStore {
   fs.mkdirSync(root, { recursive: true });
   const base = path.resolve(root);
-  // SR-RT-12: allowlist the server-built key shape + assert path.resolve containment (a `..`-strip is
+  // allowlist the server-built key shape + assert path.resolve containment (a `..`-strip is
   // defeatable) so no media key can escape the store root.
   const safe = (key: string): string => {
     if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) || key.includes("..")) throw new Error(`unsafe media key: ${key}`);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-SEC-15: reflective CORS must not echo credentials for an arbitrary origin. Credentials are
+// Reflective CORS must not echo credentials for an arbitrary origin. Credentials are
 // allowed only for APP_URL / CORS_ORIGINS; other origins get non-credentialed CORS (enough for the
 // public Bearer-keyed read API, not enough to ride a session cookie).
 import { describe, it, expect } from "vitest";
@@ -11,7 +11,7 @@ const reqFrom = (origin?: string) =>
 const cors = (origin: string | undefined, env: Partial<Env>) =>
   withCors(new Response("ok"), reqFrom(origin), env as Env);
 
-describe("SR-SEC-15 — CORS credentials are allowlisted", () => {
+describe("CORS credentials are allowlisted", () => {
   it("echoes credentials only for an allowlisted origin", () => {
     const env = { APP_URL: "https://aprscaching.net" };
     const good = cors("https://aprscaching.net", env);
@@ -30,7 +30,7 @@ describe("SR-SEC-15 — CORS credentials are allowlisted", () => {
     expect(cors("https://nope.example", env).headers.get("Access-Control-Allow-Credentials")).toBeNull();
   });
 
-  it("an unconfigured instance keeps the permissive legacy behaviour", () => {
+  it("an unconfigured instance keeps the permissive default behaviour", () => {
     const anyOrigin = cors("https://anything.example", {});
     expect(anyOrigin.headers.get("Access-Control-Allow-Credentials")).toBe("true");
   });

@@ -12,11 +12,11 @@ import { parseAddr } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
 
-loadDotEnv(); // SR-CFG-03: `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
+loadDotEnv(); // `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
 const env = process.env;
 const INGEST_URL = env.INGEST_URL ?? "http://127.0.0.1:8787/ingest";
 const SECRET = env.INGEST_SECRET ?? "change-me";
-const BATCH_MS = numEnv("BATCH_MS", 1500, { min: 100 }); // SR-CFG-02: floor so a blank value can't tight-loop
+const BATCH_MS = numEnv("BATCH_MS", 1500, { min: 100 }); // floor so a blank value can't tight-loop
 
 const aprs = new AprsIs({
   host: env.APRSIS_HOST ?? "rotate.aprs2.net",
@@ -28,7 +28,7 @@ const aprs = new AprsIs({
 
 let batch: Packet[] = [];
 const enqueue = (p: Packet) => batch.push(p);
-let spool: Packet[] = []; // SR-ING-03: undelivered packets, retried next tick
+let spool: Packet[] = []; // undelivered packets, retried next tick
 const MAX_SPOOL = numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }); // bounded (drop-oldest) so a long outage can't OOM the Pi
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
@@ -246,9 +246,9 @@ setInterval(async () => {
       headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
       body: JSON.stringify({ packets }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`); // SR-ING-04: a 401/413/500 is NOT success
+    if (!res.ok) throw new Error(`HTTP ${res.status}`); // a 401/413/500 is NOT success
   } catch (e) {
-    // SR-ING-03: keep the packets and retry next tick, bounded (drop-oldest) so an hours-long gateway
+    // keep the packets and retry next tick, bounded (drop-oldest) so an hours-long gateway
     // outage can't grow memory without limit. Rate-limit the log so a dead gateway can't flood the SD card.
     spool = packets.slice(-MAX_SPOOL);
     const nowMs = Date.now();
@@ -289,7 +289,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
     servicePass: env.APRSIS_SERVICE_PASS,
   });
   uplink.start();
-  // W3: an optional separate uplink to CWOP (feeds NOAA). Items with target='cwop' go here; when no
+  // CWOP relay: an optional separate uplink to CWOP (feeds NOAA). Items with target='cwop' go here; when no
   // CWOP server is configured we fall back to standard APRS-IS, which also reaches CWOP-registered IDs.
   const cwop = env.CWOP_HOST
     ? new AprsUplink({
@@ -310,7 +310,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
       const { items } = (await r.json()) as { items: any[] };
       const sent: number[] = [];
       for (const it of items ?? []) {
-        const link = it.target === "cwop" && cwop ? cwop : uplink; // W3 → CWOP, else standard APRS-IS
+        const link = it.target === "cwop" && cwop ? cwop : uplink; // target=cwop → CWOP relay, else standard APRS-IS
         if (link.publish(it)) sent.push(it.id);
       }
       if (sent.length)
@@ -324,7 +324,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
         outboxFailing = false;
       }
     } catch (e) {
-      // SR-ING-10: don't swallow the failure forever — log once on transition + at most every 30 s,
+      // don't swallow the failure forever — log once on transition + at most every 30 s,
       // so a broken outbox poll is visible without flooding the SD card.
       outboxFailing = true;
       const nowMs = Date.now();

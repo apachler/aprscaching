@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-SEC-07: the APRS control-verification confirm was unauthenticated, unthrottled, and matched a
-// Math.random 6-digit code — ~10^6 unthrottled guesses verified any callsign. It must now require a
-// session or the trusted ingest secret, lock after a few wrong guesses, and expire.
+// The APRS control-verification confirm requires a session or the trusted ingest secret, locks after
+// a few wrong guesses, and expires — without those, an unauthenticated, unthrottled endpoint matching
+// a Math.random 6-digit code lets ~10^6 guesses verify any callsign.
 import { describe, it, expect } from "vitest";
 import { startAprsChallenge, confirmAprsChallenge } from "../src/callsign.js";
 import type { Env } from "../src/env.js";
@@ -78,7 +78,7 @@ async function readCode(env: Env): Promise<string> {
   return r!.challenge;
 }
 
-describe("SR-SEC-07 — APRS verification is authenticated + throttled", () => {
+describe("APRS verification is authenticated + throttled", () => {
   it("rejects an anonymous start (no session, no ingest secret) with 401", async () => {
     const res = await startAprsChallenge(anonReq("start", { callsign: "OE8APR" }), makeEnv());
     expect(res.status).toBe(401);

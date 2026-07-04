@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-SEC-09: the durable rate limiter — one upsert-rolled D1/SQLite row per key, so the budget
+// The durable rate limiter — one upsert-rolled D1/SQLite row per key, so the budget
 // survives Worker isolate fan-out and Node/Bun restarts. Runs against real SQLite via the shim.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
@@ -18,7 +18,7 @@ function freshEnv(extra: Partial<Env> = {}): Env {
   return { DB: makeD1(sqlite), ...extra } as unknown as Env;
 }
 
-describe("SR-SEC-09 — durable fixed-window rate limiting", () => {
+describe("durable fixed-window rate limiting", () => {
   it("allows up to max, then 429s, within one window", async () => {
     const env = freshEnv();
     const t = 1_000_000;
@@ -41,7 +41,7 @@ describe("SR-SEC-09 — durable fixed-window rate limiting", () => {
   });
 
   it("the budget is shared across 'isolates' (two limiter callers, one DB)", async () => {
-    // the point of SR-SEC-09: two Workers isolates share the D1 row, so the budget cannot be
+    // two Workers isolates share the D1 row, so the budget cannot be
     // multiplied by fan-out. Simulated by interleaving calls against the same env.
     const env = freshEnv();
     const t = 1_000_000;
@@ -51,7 +51,7 @@ describe("SR-SEC-09 — durable fixed-window rate limiting", () => {
   });
 });
 
-describe("SR-SEC-09 — clientIp comes from sources the client cannot choose", () => {
+describe("clientIp comes from sources the client cannot choose", () => {
   const reqWith = (h: Record<string, string>) => new Request("http://gw/x", { headers: h });
 
   it("cf-connecting-ip (edge-stamped) always wins", () => {

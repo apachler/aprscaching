@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * tombstones.ts — F4/T1.3 + ADR-5: signed, PII-free delete propagation.
+ * tombstones.ts — signed, PII-free delete propagation.
  *
- * When an instance erases data (a GDPR account delete, later an explicit cache/find delete) it emits
+ * When an instance erases data (a GDPR account delete, or an explicit cache/find delete) it emits
  * a **tombstone**: a tiny signed record naming the *global id* of the removed record — never a
  * callsign or any other personal datum. Peers fetch the tombstone feed, verify the origin's
  * signature, and purge the matching mirrored record (`federation_sync.ts:syncTombstones`). This is
@@ -58,7 +58,7 @@ export async function emitTombstones(env: Env, origin: string, items: TombstoneI
   return items.length;
 }
 
-/** Tombstone feed via the generalized envelope (T2.2) — cursor = monotonic seq, signed at serve time. */
+/** Tombstone feed via the generalized envelope — cursor = monotonic seq, signed at serve time. */
 export const TOMBSTONE_FEED: FeedServeDef<TombstoneRow> = {
   type: "tombstone",
   selectRows: async (env, since, limit) =>

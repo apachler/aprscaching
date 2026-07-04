@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * backoff.ts — SR-ING-06: shared exponential-backoff-with-jitter for every reconnecting transport.
+ * backoff.ts — shared exponential-backoff-with-jitter for every reconnecting transport.
  * A fixed 3 s reconnect (a) hammers a down server and spams the SD-card log, and (b) synchronises every
  * box in the field onto the same `rotate.aprs2.net` cadence. This computes `min(cap, base·2ⁿ)·(0.5+rand)`
  * so the delay grows while an endpoint stays unreachable and the jitter desynchronises independent boxes.

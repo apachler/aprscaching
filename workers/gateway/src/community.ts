@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * community.ts — M4: profiles, leaderboards, badges, favorites/watches, activity feed, cache health.
+ * community.ts — profiles, leaderboards, badges, favorites/watches, activity feed, cache health.
  * Built on the existing tables (cache_logs, caches, achievements, favorites, watches, accounts).
  * A find counts toward stats/points only when verified; points reward distinct caches + trust tier.
  */
@@ -262,7 +262,7 @@ export async function cacheHealth(
     .first<{ ts: number | null }>();
   return { needsMaintenance: dnfStreak >= 3, dnfStreak, lastFound: lf?.ts ?? null };
 }
-// ---------------------------------------------------------------- rating (F-6, owner-gated)
+// ---------------------------------------------------------------- rating (1–5 stars, owner-gated)
 type RatingPolicy = "finders" | "all" | "off";
 
 /** True if `callsign` is permitted to rate this cache under its policy (a verified finder, or anyone). */

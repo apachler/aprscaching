@@ -23,13 +23,13 @@ import { Rooms } from "./rooms.js";
 import { makeFsMedia } from "./media.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 8787; // SR-CFG-02: a blank/NaN PORT must not bind port 0
+const PORT = Number(process.env.PORT) || 8787; // a blank/NaN PORT must not bind port 0
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
 
-// SR-SEC-01 boot guard: the session-signing key derives from this secret; booting with the
+// Boot guard: the session-signing key derives from this secret; booting with the
 // known default would let anyone forge a session cookie for any callsign (incl. the sysop).
 if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
   console.error(
@@ -48,7 +48,7 @@ sqlite.pragma("foreign_keys = ON");
 const ran = migrate(sqlite, MIGRATIONS_DIR);
 console.log(ran.length ? `migrations applied: ${ran.join(", ")}` : "migrations up to date");
 
-// ---- AGPL §13 source (ADR-3): commit from env, else git (self-host-from-source) ----
+// ---- AGPL §13 source: commit from env, else git (self-host-from-source) ----
 function gitHead(): string | undefined {
   try {
     return (
@@ -71,7 +71,7 @@ const SOURCE = {
 const rooms = new Rooms();
 const env: Env = {
   DB: makeD1(sqlite),
-  TILES: {}, // R2 unused in M1
+  TILES: {}, // R2 unused
   MEDIA: makeFsMedia(MEDIA_DIR),
   ROOMS: {
     idFromName: (n) => n,
@@ -88,7 +88,7 @@ const env: Env = {
     }),
   },
   INGEST_SECRET,
-  ...stringEnvFrom(process.env), // SR-RT-03: forward EVERY config key, not a hand-picked subset
+  ...stringEnvFrom(process.env), // forward EVERY config key, not a hand-picked subset
   ...SOURCE, // host-resolved SOURCE_* (git HEAD fallback) wins over the raw env
 };
 
@@ -102,7 +102,7 @@ const server = http.createServer(async (nreq, nres) => {
       if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
       else if (v != null) headers.set(k, v);
     }
-    // SR-SEC-09: the socket address is the ONLY client identity we mint ourselves — overwrite
+    // The socket address is the ONLY client identity we mint ourselves — overwrite
     // any client-supplied x-real-ip so rate-limit keying can trust it.
     headers.set("x-real-ip", nreq.socket.remoteAddress ?? "unknown");
     const hasBody = method !== "GET" && method !== "HEAD";
@@ -135,7 +135,7 @@ server.on("upgrade", (req, socket, head) => {
 server.listen(PORT, () => console.log(`aprscaching node-gateway listening on :${PORT}  (db: ${DB_PATH})`));
 
 // nightly TTL of firehose positions (logger positions kept longer for verification).
-// SR-RT-02: run once at startup too — a Pi that reboots more often than daily would otherwise never
+// Run once at startup too — a Pi that reboots more often than daily would otherwise never
 // prune, so the DB only grows. Idempotent (the digests mark alerts notified; the deletes are bounded).
 const runTtl = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
 runTtl();
@@ -147,7 +147,7 @@ if (env.FED_PEERS && FED_SYNC_MS > 0) {
   setInterval(() => void syncAllPeers(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
 }
 
-/** SR-RT-10: the bridge buffers the whole body BEFORE routing/auth, so without a ceiling one
+/** The bridge buffers the whole body BEFORE routing/auth, so without a ceiling one
  *  multi-GB anonymous POST OOMs the Pi. 20 MB clears every legitimate payload (the largest is a
  *  cache-media upload); past it the socket is destroyed and the request answered 413. */
 const BODY_MAX_BYTES = 20 * 1024 * 1024;
@@ -174,7 +174,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-// ---- SR-RT-11: 24/7 process resilience ----
+// ---- 24/7 process resilience ----
 // One stray rejection must not kill an unattended gateway (there is no supervisor on a Pi by
 // default): log and keep serving. SIGTERM/SIGINT close the listener, checkpoint SQLite (WAL) and
 // exit cleanly so systemd/docker stops are never data-lossy.

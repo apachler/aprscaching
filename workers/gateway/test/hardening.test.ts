@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// P1 go-public hardening: SR-SEC-08 (timing-safe secret compares), SR-SEC-10 (ingest caps),
-// SR-SEC-13 (WebAuthn origin/rpId must be configured, never taken from the Origin header).
+// Go-public hardening: timing-safe secret compares, ingest caps, and WebAuthn origin/rpId must
+// be configured, never taken from the Origin header.
 import { describe, it, expect } from "vitest";
 import { IngestBatch, INGEST_BATCH_MAX } from "@aprsweb/shared";
 import { timingSafeEqual, secretOk } from "../src/auth.js";
@@ -14,7 +14,7 @@ const dbNever = {
   },
 } as unknown;
 
-describe("SR-SEC-08 — constant-time secret comparison", () => {
+describe("constant-time secret comparison", () => {
   it("matches equal strings and rejects unequal ones", () => {
     expect(timingSafeEqual("s3cret", "s3cret")).toBe(true);
     expect(timingSafeEqual("s3cret", "s3creT")).toBe(false);
@@ -30,7 +30,7 @@ describe("SR-SEC-08 — constant-time secret comparison", () => {
   });
 });
 
-describe("SR-SEC-10 — ingest batch + body caps", () => {
+describe("ingest batch + body caps", () => {
   const packet = { src: "OE8APR-9", payload: "=4712.00N/01503.00E>", ts: 1000 };
 
   it(`the batch schema rejects more than ${INGEST_BATCH_MAX} packets`, () => {
@@ -51,7 +51,7 @@ describe("SR-SEC-10 — ingest batch + body caps", () => {
   });
 });
 
-describe("SR-SEC-13 — WebAuthn requires configured APP_URL/RP_ID (never the Origin header)", () => {
+describe("WebAuthn requires configured APP_URL/RP_ID (never the Origin header)", () => {
   const attacker = (path: string) =>
     new Request(`http://gw${path}`, {
       method: "POST",
@@ -77,10 +77,10 @@ describe("SR-SEC-13 — WebAuthn requires configured APP_URL/RP_ID (never the Or
   });
 });
 
-// ---- P1b: SR-SEC-11 session expiry + SR-SEC-12 register/finish-only account creation ----
+// ---- session expiry + register/finish-only account creation ----
 import { sessionExpired, handlePasskeyRegisterFinish } from "../src/auth.js";
 
-describe("SR-SEC-11 — sessions expire server-side", () => {
+describe("sessions expire server-side", () => {
   const env = {} as Env;
   const DAY = 86_400_000;
   it("a token within its lifetime is honored", () => {
@@ -105,7 +105,7 @@ describe("SR-SEC-11 — sessions expire server-side", () => {
   });
 });
 
-describe("SR-SEC-12 — accounts persist only on register/finish", () => {
+describe("accounts persist only on register/finish", () => {
   it("register/begin for a NEW callsign writes no accounts row (squatting closed)", async () => {
     const writes: string[] = [];
     const stmt = (sql: string) => ({
@@ -160,10 +160,10 @@ describe("SR-SEC-12 — accounts persist only on register/finish", () => {
   });
 });
 
-// ---- P1f: SR-FED-07 corroboration quorum + reputation hardening ----
+// ---- corroboration quorum + reputation hardening ----
 import { evidenceMatches, effectiveQuorum, shouldAutoPromote } from "../src/corroborate.js";
 
-describe("SR-FED-07 — quorum + matched-evidence reputation", () => {
+describe("quorum + matched-evidence reputation", () => {
   const cfg = { distBucketM: 100, timeBucketSec: 600 };
 
   it("evidence matching the winner's coarse buckets earns credit; fabrications do not", () => {

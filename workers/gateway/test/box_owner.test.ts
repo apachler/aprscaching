@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-SEC-04: a remote-control box is bound to an owning account (TOFU). One signed-in user must not be
+// A remote-control box is bound to an owning account (TOFU). One signed-in user must not be
 // able to enqueue TX to another operator's box (remote-keying their radio), nor read its activity log.
 import { describe, it, expect } from "vitest";
 import { handleBoxEnqueue } from "../src/box.js";
@@ -45,7 +45,7 @@ function makeEnv(sessions: Record<string, string>): Env {
 
 // We can't run the real HMAC session here, so drive ownership through the trusted-secret claim path
 // and assert cross-account rejection via a second account. This exercises ownBox() + accountHoldsCall().
-describe("SR-SEC-04 — box control is owner-bound", () => {
+describe("box control is owner-bound", () => {
   it("the trusted backend (ingest secret) may always enqueue", async () => {
     const env = makeEnv({});
     const req = new Request("http://gw/api/box/b1/command", {

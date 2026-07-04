@@ -159,7 +159,7 @@ async function step(name, fn) {
 // "Packet terminal" group being attached, retrying once.
 let navSeq = 0; // bump per goto so the URL is never byte-identical (same-URL goto = no reload → stale surface)
 async function openWorkbench(page) {
-  const marker = () => page.locator(".wb-apps").first(); // the launcher grid (workbench is a pure launcher now)
+  const marker = () => page.locator(".wb-apps").first(); // the launcher grid (workbench is a pure launcher)
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto(`${BASE}/?view=workbench&n=${++navSeq}#11.5/47.078/15.43`, { waitUntil: "load" });
     await ready(page);
@@ -198,7 +198,7 @@ async function gotoDemo(page, variant, waitSel) {
   await page.waitForSelector(waitSel, { timeout: 12000 });
   await page.waitForTimeout(800);
 }
-// Launch a workbench app from the drawer's launcher (every app opens its own surface now) and wait for
+// Launch a workbench app from the drawer's launcher (every app opens its own surface) and wait for
 // it. Used for the apps that work against the seeded gateway (tools, node, decoder) — the hardware ones
 // (terminal, rig, remote) + BBS are shown via the ?demo= sims instead.
 async function launchWbApp(page, label, waitSel) {
@@ -531,7 +531,7 @@ for (const v of VIEWS) {
   });
   await step("packet", async () => {
     await gotoDemo(page, "app-packet", ".pt-window");
-    await shot(page, v.id, "packet", "Packet terminal — Graphic Packet reborn");
+    await shot(page, v.id, "packet", "Packet terminal");
   });
   await step("bbs", async () => {
     await gotoDemo(page, "app-bbs", ".bbs-body");

@@ -70,7 +70,7 @@ export class AxudpListener {
     });
     s.on("error", (e: NodeJS.ErrnoException) => {
       console.error("[axudp] socket error:", e.message);
-      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // SR-ING-11
+      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // retry the bind once the address frees up
     });
     s.bind(this.o.port, this.o.bind, () =>
       console.log(`[axudp] listening udp/${this.o.port} (tunnelled AX.25 — Tier C only)`),
@@ -107,7 +107,7 @@ export class AxudpPort {
     });
     s.on("error", (e: NodeJS.ErrnoException) => {
       console.error("[axudp] socket error:", e.message);
-      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // SR-ING-11
+      if (e.code === "EADDRINUSE") setTimeout(() => s.bind(this.o.port, this.o.bind), 5000).unref?.(); // retry the bind once the address frees up
     });
     s.bind(this.o.port, this.o.bind, () =>
       console.log(

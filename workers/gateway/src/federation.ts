@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * federation.ts — F1: read-only, mirrorable, signed feeds.
+ * federation.ts — read-only, mirrorable, signed feeds.
  *
  * An instance publishes its caches and find logs so peers can mirror them and build a global
  * catalog. Records are Ed25519-signed by the instance (WebCrypto — same code on
  * Cloudflare Workers and Node) so a mirror can verify provenance + integrity. The envelope is
- * shaped so per-callsign signing can slot in later (signer becomes a callsign, not the instance).
+ * shaped so per-callsign signing slots in without a format change (signer becomes a callsign, not the instance).
  *
  *   GET /.well-known/aprscaching        instance descriptor + public key + peers
  *   GET /federation/caches?since=<ts>   signed cache records (cursor = updated_at high-water mark)
@@ -18,7 +18,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
-/** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation (T2.2). */
+/** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
 export const FED_PROTOCOL_VERSION = "0.2";
 const PROTOCOL_VERSIONS = ["0.1", "0.2"];
 
@@ -69,7 +69,7 @@ interface KeyRow {
 }
 
 function cacheData(r: CacheRow) {
-  // T3.3 redaction: the hint is a spoiler and NEVER federates; an `unlisted` cache withholds its
+  // Redaction: the hint is a spoiler and NEVER federates; an `unlisted` cache withholds its
   // description too (location/title only). `local-only` caches are filtered out before this (CACHE_FEED).
   return {
     code: r.code,
@@ -103,7 +103,7 @@ function findData(r: FindRow, instance: string) {
     verifyMethod: r.verify_method,
     distanceM: r.distance_m,
     comment: r.comment,
-    // per-callsign authorship signature (F0): self-contained, verifiable by anyone
+    // per-callsign authorship signature: self-contained, verifiable by anyone
     authorKey: r.signer_key,
     authorSig: r.author_sig,
     signedAt: r.signed_at,
@@ -154,7 +154,7 @@ function loadKey(env: Env): Promise<FedKey | null> {
     const key = await crypto.subtle.importKey("pkcs8", fromB64(pkcs8), { name: "Ed25519" }, false, ["sign"]);
     return { key, publicX: pub, jwk: { kty: "OKP", crv: "Ed25519", x: pub } };
   })().catch((e) => {
-    // SR-FED-13: a configured key that fails to import is a TRANSIENT error — memoizing it as null
+    // A configured key that fails to import is a TRANSIENT error — memoizing it as null
     // would make the instance silently serve unsigned feeds for its whole life. Log it and clear the
     // cache so the next call retries instead of sticking on the failure.
     console.error("federation signing key load failed (will retry):", (e as Error).message);
@@ -169,7 +169,7 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
   return b64url(await crypto.subtle.sign("Ed25519", fk.key, msg));
 }
 
-// ---- key rotation + multi-key + revocation (T4.1) ----
+// ---- key rotation + multi-key + revocation ----
 export interface FedPublicKey {
   x: string;
   since?: number;
@@ -199,7 +199,7 @@ async function instanceKeys(env: Env): Promise<FedPublicKey[]> {
   return [...(fk ? [{ x: fk.publicX } as FedPublicKey] : []), ...history];
 }
 
-/** Pure (T4.1): the non-revoked, in-window key strings from a published key list — the accept set. */
+/** Pure: the non-revoked, in-window key strings from a published key list — the accept set. */
 export function activeFedKeys(keys: FedPublicKey[], nowS: number): string[] {
   return keys
     .filter(
@@ -227,7 +227,7 @@ export async function importActiveKeys(
   return out;
 }
 
-// ---- signed instance registry / namespace authority (T4.2) ----
+// ---- signed instance registry / namespace authority ----
 export interface RegistryEntry {
   instance: string;
   url?: string;
@@ -270,7 +270,7 @@ async function registryToMap(doc: SignedRegistry, key: string): Promise<Map<stri
 }
 
 /**
- * Parse a federation-registry DNS `TXT` record (T4.2, pure) — a `k=v;k=v` string that anchors the signed
+ * Parse a federation-registry DNS `TXT` record (pure) — a `k=v;k=v` string that anchors the signed
  * registry off DNS instead of an env var: `url=<https URL to the signed registry JSON>; key=<authority
  * base64url>`. Later keys win; unknown tokens ignored. Returns `{}` when neither field is present.
  */
@@ -287,7 +287,7 @@ export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
   return out;
 }
 
-/** Fetch the registry via a DNS `TXT` anchor (T4.2): DoH-resolve FED_REGISTRY_DNS, follow its url+key. */
+/** Fetch the registry via a DNS `TXT` anchor: DoH-resolve FED_REGISTRY_DNS, follow its url+key. */
 async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
   const name = env.FED_REGISTRY_DNS;
   if (!name) return new Map();
@@ -313,7 +313,7 @@ async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
 }
 
 /** Load + verify the federation registry → instance→entry map. Source: FED_REGISTRY env, else a DNS TXT
- *  anchor (FED_REGISTRY_DNS, T4.2). Empty when absent/invalid/forged. */
+ *  anchor (FED_REGISTRY_DNS). Empty when absent/invalid/forged. */
 export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
   if (env.FED_REGISTRY && env.FED_REGISTRY_KEY) {
     try {
@@ -325,7 +325,7 @@ export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>
   return registryFromDns(env);
 }
 
-/** Anti-spoof (T4.2, pure): if the registry binds this instance to a key, its published keys MUST
+/** Anti-spoof (pure): if the registry binds this instance to a key, its published keys MUST
  *  include it; an unregistered instance (or one with no bound key) falls back to TOFU. */
 export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeyStrings: string[]): boolean {
   if (!entry || !entry.key) return true;
@@ -380,7 +380,7 @@ export async function feedSigner(
   return (type, id, data) => sign(fk, type, id, data);
 }
 
-/** Import a peer's raw Ed25519 public key (base64url) for verifying its feed (F2). */
+/** Import a peer's raw Ed25519 public key (base64url) for verifying its feed. */
 export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", fromB64(rawB64url), { name: "Ed25519" }, false, ["verify"]);
 }
@@ -433,16 +433,16 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     signed: !!fk,
     publicKey: fk?.publicX ?? null, // current raw Ed25519 public key (base64url) — legacy single-key field
     publicKeyJwk: fk?.jwk ?? null,
-    publicKeys: await instanceKeys(env), // T4.1: current + previous keys + revocations, each {x,since?,until?,revoked?}
-    rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // T4.1: continuity proofs (new key signed by old)
-    operator: env.FED_OPERATOR ?? null, // T4.2: self-published operator + APRS service address
+    publicKeys: await instanceKeys(env), // current + previous keys + revocations, each {x,since?,until?,revoked?}
+    rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // continuity proofs (new key signed by old)
+    operator: env.FED_OPERATOR ?? null, // self-published operator + APRS service address
     aprsCall: env.FED_APRS_CALL ?? null,
     peers,
   });
 }
 
 /**
- * Generalized feed envelope (T2.2). Every record type rides ONE serve path: select rows, shape each
+ * Generalized feed envelope. Every record type rides ONE serve path: select rows, shape each
  * into `{type,id,cursor,data}`, sign at serve time, and emit the standard
  * `{instance,type,since,nextCursor,count,complete,items}` envelope. A new feed type is just a
  * `FeedServeDef` (used by tombstones.ts and future presence/badge/account-move feeds) — no bespoke
@@ -462,7 +462,7 @@ function feedParams(req: Request): { since: number; limit: number } {
   };
 }
 
-/** Build the signed record items for a feed page (shared by serveFeed and the push-to-hub client, T2.3). */
+/** Build the signed record items for a feed page (shared by serveFeed and the push-to-hub client). */
 export async function buildFeed(
   env: Env,
   instance: string,
@@ -494,12 +494,12 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
   return json({ instance, type: def.type, since, nextCursor, count: items.length, complete, items });
 }
 
-/** This instance's raw Ed25519 public key (base64url), or null if unsigned — for push-to-hub (T2.3). */
+/** This instance's raw Ed25519 public key (base64url), or null if unsigned — for push-to-hub. */
 export async function feedPublicKey(env: Env): Promise<string | null> {
   return (await loadKey(env))?.publicX ?? null;
 }
 
-// only NATIVE caches are federated; imported third-party data stays local (M3 decision)
+// only NATIVE caches are federated; imported third-party data stays local
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   selectRows: async (env, since, limit) =>

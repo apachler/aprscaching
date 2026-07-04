@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/** Minimal uncompressed APRS position parser (lat/lon). MIC-E/compressed/weather = M1+. */
+/** Minimal uncompressed APRS position parser (lat/lon). MIC-E/compressed/weather are not parsed here. */
 export interface PositionFix {
   lat: number;
   lon: number;
@@ -34,7 +34,7 @@ export function formatPosition(lat: number, lon: number, o: FormatPositionOpts =
   const dm = (v: number, deg: number) => {
     const a = Math.abs(v);
     let d = Math.floor(a);
-    // SR-PARSE-04: carry a `60.00'` rounding overflow into degrees so we never emit e.g. `4560.00N`.
+    // Carry a `60.00'` rounding overflow into degrees so we never emit e.g. `4560.00N`.
     let cm = Math.round((a - d) * 60 * 100);
     if (cm >= 6000) {
       d += 1;

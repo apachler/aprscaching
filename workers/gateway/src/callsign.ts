@@ -4,7 +4,7 @@ import { json } from "./app.js";
 import { sessionAccountId, secretOk, timingSafeEqual } from "./auth.js";
 
 const CHALLENGE_TTL_SEC = 15 * 60; // a code is good for 15 minutes
-const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks (SR-SEC-07)
+const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks
 
 /** A cryptographically-random 6-digit code (Math.random is predictable → brute-forceable). */
 function sixDigitCode(): string {
@@ -15,9 +15,9 @@ const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-
 
 /** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
-  // SR-SEC-07/14: a challenge may be requested only by a signed-in account (the confirm is bound to
+  // a challenge may be requested only by a signed-in account (the confirm is bound to
   // it) or the trusted backend (ingest secret — e.g. a CLI/LoTW flow). A public, unauthenticated
-  // caller can no longer farm codes or spam outbound APRS.
+  // caller cannot farm codes or spam outbound APRS.
   const me = await sessionAccountId(req, env);
   if (!me && !ingestOk(req, env)) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };

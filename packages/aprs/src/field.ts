@@ -87,7 +87,8 @@ export function messageForMe(msg: LocalMessage, myCall: string): boolean {
 
 /**
  * (B) Build the ACK info field for a message addressed to us, or null if none is due (no msgNo, or it's
- * itself an ack/rej, or not for us). Send it back over the radio via KISS (H5-gated) — client-side.
+ * itself an ack/rej, or not for us). Send it back over the radio via KISS (gated on callsign
+ * control-verification) — client-side.
  */
 export function ackReply(msg: LocalMessage, myCall: string): string | null {
   if (!msg.msgNo || !messageForMe(msg, myCall)) return null;

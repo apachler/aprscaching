@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-TRUST-04: the partial unique index (migration 0008) makes a verified find idempotent per
+// The partial unique index (migration 0008) makes a verified find idempotent per
 // (cache_id, logger_call) — a racing/replayed found POST can't double-insert (and thus can't
 // double-count on the leaderboard). Runs against real SQLite so it exercises the actual index.
 import { describe, it, expect } from "vitest";
@@ -23,7 +23,7 @@ const insertFound = (db: Database.Database, cacheId: number, logger: string) =>
     )
     .run(cacheId, logger, 1000).changes;
 
-describe("SR-TRUST-04 — find-log idempotency", () => {
+describe("find-log idempotency", () => {
   it("a second found for the same (cache, logger) is ignored", () => {
     const db = freshDb();
     expect(insertFound(db, 1, "DL1ABC")).toBe(1); // first lands

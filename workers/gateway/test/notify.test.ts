@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { composeDigest, b64urlToBytes, bytesToB64url } from "../src/notify.js";
 
-describe("notify — email digest + helpers (ADR-4b)", () => {
+describe("notify — email digest + helpers", () => {
   it("composeDigest summarises alerts, pluralising correctly", () => {
     const one = composeDigest([
       { callsign: "OE8APR", kind: "near_cache", detail: "OE8APR heard near AC-0001 — Schlossberg", ts: 1 },

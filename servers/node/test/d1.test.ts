@@ -34,7 +34,7 @@ describe("D1-compatible SQLite shim", () => {
     expect(res.results.map((r) => r.name)).toEqual(["a", "b"]);
   });
 
-  it("SR-RT-08: throws on an undefined bind (Cloudflare D1 parity), coerces boolean -> 0/1", () => {
+  it("throws on an undefined bind (Cloudflare D1 parity), coerces boolean -> 0/1", () => {
     const db = freshDb();
     // real D1 rejects an undefined bind with D1_TYPE_ERROR — the shim must too, so a latent bug
     // fails on Node/Bun in CI instead of only 500-ing on Workers.
@@ -48,11 +48,11 @@ describe("D1-compatible SQLite shim", () => {
     expect(row?.n).toBe(1);
   });
 
-  it("SR-RT-09: a RETURNING writer carries real changes()/last_insert_rowid() meta", async () => {
+  it("a RETURNING writer carries real changes()/last_insert_rowid() meta", async () => {
     const db = freshDb();
     const r = await db.prepare("INSERT INTO t (name, n) VALUES (?, ?) RETURNING id").bind("z", 7).run();
     expect(r.results).toHaveLength(1); // rows came back
-    expect(r.meta.changes).toBe(1); // …and meta reflects the write (was zeroed before)
+    expect(r.meta.changes).toBe(1); // …and meta reflects the write
     expect(r.meta.last_row_id).toBe(1);
     // a plain SELECT still reports zeroed meta, as D1 does
     const sel = await db.prepare("SELECT * FROM t").all();

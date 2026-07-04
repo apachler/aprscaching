@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-ING-06: the reconnect delay must grow while an endpoint stays down and desync across boxes via
-// jitter, then reset once the endpoint is reachable again.
+// The reconnect delay must grow while an endpoint stays down and desync across boxes via jitter,
+// then reset once the endpoint is reachable again.
 import { describe, it, expect } from "vitest";
 import { Backoff } from "../src/backoff.js";
 
-describe("SR-ING-06 — exponential backoff with jitter", () => {
+describe("exponential backoff with jitter", () => {
   it("grows the base term geometrically, capped, and resets", () => {
     // rand fixed at 0 → factor (0.5 + 0) = 0.5 → delay = 0.5 * min(cap, base*2^n)
     const b = new Backoff({ baseMs: 1000, capMs: 8000, rand: () => 0 });

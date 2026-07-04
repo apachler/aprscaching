@@ -147,7 +147,7 @@ export class ConnectedLink {
         this.ev.error?.("FRMR from peer — resetting");
         return this.reestablish();
       default:
-        return; // UI/XID/TEST — not handled at this layer in P0
+        return; // UI/XID/TEST — not handled at this layer
     }
   }
 
@@ -161,7 +161,7 @@ export class ConnectedLink {
   // ----------------------------------------------------------------- U-frame handlers
   private onSabm(f: Ax25Frame, mod: 8 | 128): void {
     // incoming connect, or peer re-establishing.
-    // SR-PKT-15: a SABM on an already-connected link is the peer RESETTING it — reset() drops any
+    // A SABM on an already-connected link is the peer RESETTING it — reset() drops any
     // unacked TX + queued data and to("connected") is a no-op, so the host would otherwise never learn
     // its data was discarded. Surface it as an error before we wipe the state.
     if (this.state === "connected") this.ev.error?.("link reset by peer");
@@ -254,7 +254,7 @@ export class ConnectedLink {
   // ----------------------------------------------------------------- timers
   private onT1(): void {
     if (this.state === "connecting") {
-      // SR-PKT-04: retry with the SAME frame we connected with — a mod-128 link must resend SABME,
+      // Retry with the SAME frame we connected with — a mod-128 link must resend SABME,
       // not plain SABM (which would flip the peer to mod-8 and garble the control fields).
       if (this.rc++ < this.cfg.n2) {
         this.tx(this.mod === 128 ? "SABME" : "SABM", true, true);

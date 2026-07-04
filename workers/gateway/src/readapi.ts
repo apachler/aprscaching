@@ -100,7 +100,7 @@ function apiIndex(env: Env): Response {
   return json({
     protocol: "aprscaching-readapi/1",
     version: "v1",
-    access: "read-only · free (ADR-4a)",
+    access: "read-only · free",
     rateLimits: { window_seconds: windowSec(env), anonymous: anonMax(env), with_key: keyedMax(env) },
     keys: "POST /api/v1/keys for a free key; send it as Authorization: Bearer <key> or ?key=.",
     pagination:

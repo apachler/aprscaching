@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * push.ts — browser Web Push subscription flow (ADR-4b). Registers the service worker, asks
+ * push.ts — browser Web Push subscription flow. Registers the service worker, asks
  * permission, subscribes with the instance VAPID key, and registers the subscription with the
  * gateway. All feature-detected and best-effort; on iOS this only works inside an installed PWA.
  */

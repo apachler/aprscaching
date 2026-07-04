@@ -28,7 +28,7 @@ const LINK_LABEL: Record<LinkKind, string> = {
 /**
  * Workbench → RF (browser): connect a KISS TNC over Web Serial (USB) or Web Bluetooth (BLE) and
  * decode live RF here, no server. Optionally forward to a gateway — signed with
- * your device key for a public gateway (H1.5), or with an ingest secret for self-host. Chromium-only.
+ * your device key for a public gateway, or with an ingest secret for self-host. Chromium-only.
  */
 export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const fmt = useFmt();
@@ -39,7 +39,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const signedIn = props.callsign.length >= 3;
   const base = props.callsign.toUpperCase().split("-")[0] ?? "";
 
-  // H5 gated TX — OFF by default; only available on a control-verified callsign + explicit opt-in.
+  // Transmit, gated on callsign control-verification — OFF by default; only available on a control-verified callsign + explicit opt-in.
   const [txOn, setTxOn] = useState(false);
   const [ssid, setSsid] = useState("7");
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
@@ -77,7 +77,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const [, forceField] = useReducer((n: number) => n + 1, 0);
   useEffect(() => fieldStation.subscribe(() => forceField()), []);
 
-  /** (B) ACK a message heard for us over the radio — H5-gated, reuses the KISS TX path. */
+  /** ACK a message heard for us over the radio — gated on callsign control-verification, reuses the KISS TX path. */
   async function ackMessage(mm: LocalMessage) {
     const info = ackReply(mm, props.callsign);
     if (!info || !linkRef.current || !txOn) return;
@@ -92,7 +92,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     }
   }
 
-  /** (D) Sync-back: replay locally-heard receptions to a gateway once online (via the forward path). */
+  /** Sync-back: replay locally-heard receptions to a gateway once online (via the forward path). */
   async function syncBack() {
     const heard = fieldStation.heardForSync();
     const keep = new Set(
@@ -205,7 +205,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     }
   }
 
-  // H5 transmit — gated on a verified callsign + opt-in; every send is a deliberate, confirmed action.
+  // Transmit, gated on callsign control-verification + opt-in; every send is a deliberate, confirmed action.
   async function tx(payload: string, what: string) {
     const l = linkRef.current;
     if (!l || !props.verified || !txOn) return;
@@ -283,7 +283,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <button
                 onClick={() => connect("audio")}
                 disabled={busy}
-                title="Decode APRS audio from a radio via the soundcard — no TNC (H4)"
+                title="Decode APRS audio from a radio via the soundcard — no TNC"
               >
                 {busy ? "…" : "Soundcard AFSK"}
               </button>
@@ -292,7 +292,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <button
                 onClick={() => connect("mesh")}
                 disabled={busy}
-                title="Read a Meshtastic/LoRa node's positions over USB (H3)"
+                title="Read a Meshtastic/LoRa node's positions over USB"
               >
                 {busy ? "…" : "Meshtastic node"}
               </button>
@@ -358,7 +358,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
       {link && (
         <div className="tx-block">
-          <h4>Transmit (H5)</h4>
+          <h4>Transmit</h4>
           {!props.verified ? (
             <p className="muted">
               Transmit is for <strong>licensed, control-verified</strong> operators only — verify your callsign in

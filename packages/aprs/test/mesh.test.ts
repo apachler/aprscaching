@@ -100,8 +100,8 @@ describe("meshtastic — native MQTT ServiceEnvelope + typed events", () => {
     expect(parseMeshPacket(u8(...encrypted))).toBeNull();
   });
 
-  // SR-PARSE-01: a truncated fixed32 must neither throw (RangeError tore down the mesh read
-  // loop) nor read past the frame boundary into an adjacent frame's bytes.
+  // A truncated fixed32 must neither throw nor read past the frame boundary into an adjacent
+  // frame's bytes.
   it("survives a truncated fixed32 — no throw, null result", () => {
     expect(parseMeshPacket(u8(0x0d, 0x01, 0x02))).toBeNull(); // tag(1,fixed32) + only 2 of 4 bytes
     expect(parseMeshPacket(u8(0x0d))).toBeNull(); // tag alone

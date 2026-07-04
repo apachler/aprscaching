@@ -7,7 +7,7 @@ import { Row, Badge, EmptyState, useToast, Ico } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
- * them over its existing outbound connection. TX is gated on callsign control-verification (H5):
+ * them over its existing outbound connection. TX is gated on callsign control-verification:
  * unverified operators get RX/status only, with the transmit controls disabled + a reason.
  */
 export function RemoteControl(props: { callsign: string; verified: boolean; map: maplibregl.Map | null }) {
@@ -86,9 +86,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       {!signedIn ? (
         <p className="muted">Sign in to control a box.</p>
       ) : (
-        !props.verified && (
-          <p className="muted">Verify your callsign to transmit — RX &amp; status only until then (H5).</p>
-        )
+        !props.verified && <p className="muted">Verify your callsign to transmit — RX &amp; status only until then.</p>
       )}
 
       <div className="row wrap gap-2">

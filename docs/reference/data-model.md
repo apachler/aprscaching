@@ -2,8 +2,7 @@
 
 The gateway's schema lives as ordered SQL migrations under `db/migrations/`, applied identically on every
 runtime (D1's `wrangler d1 migrations apply`, or the Node/Bun migration runner, which tracks applied files by
-name). The 1.0 schema is a single squashed **`0001_baseline.sql`** — greenfield had no production data, so the
-historical build-up was collapsed into one baseline. To add schema after 1.0, add the next-numbered
+name). The 1.0 schema is a single **`0001_baseline.sql`**. To add schema after 1.0, add the next-numbered
 `NNNN_name.sql` file — never edit an applied migration.
 
 Spatial lookups use a plain lat/lon index (D1 does not support rtree virtual tables). Firehose positions are
@@ -26,7 +25,7 @@ The baseline groups into a handful of domains:
 ## Baseline and beyond
 
 - `0001_baseline` establishes the whole 1.0 schema — caches, logs, positions, accounts, the workbench tables,
-  federation, BBS/node, and engagement — with internal section headers preserving the original thematic order.
+  federation, BBS/node, and engagement — with internal section headers grouping it by domain.
 - Post-1.0 schema changes land as new `NNNN_name.sql` files applied on top of the baseline.
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —

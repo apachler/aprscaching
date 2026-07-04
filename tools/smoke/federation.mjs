@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Two-instance federation conformance (F2): a PUBLISHER and a SUBSCRIBER, both already running.
+// Two-instance federation conformance: a PUBLISHER and a SUBSCRIBER, both already running.
 // Seeds the publisher, triggers a pull-sync on the subscriber, and asserts the subscriber mirrored
 // the publisher's (signature-verified) cache onto its own map.
 //
@@ -8,7 +8,7 @@
 const PUB = process.env.PUB ?? "http://127.0.0.1:8801";
 const SUB = process.env.SUB ?? "http://127.0.0.1:8802";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
-const SUBMIT_SECRET = process.env.SUBMIT_SECRET ?? "submitsecret"; // SUB is started as a hub with this (T2.3)
+const SUBMIT_SECRET = process.env.SUBMIT_SECRET ?? "submitsecret"; // SUB is started as a hub with this
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 
@@ -101,7 +101,7 @@ ok("no duplicate mirror after re-sync", (list2.data?.caches ?? []).filter((c) =>
 const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": "" });
 ok("sync with an invalid secret -> 401", noauth.status === 401, `status=${noauth.status}`);
 
-// ---- F3: cross-instance verification (the network effect) ----
+// ---- cross-instance verification (the network effect) ----
 // The logger's RF position is heard only by the PUBLISHER's IGate (independent of the logger).
 // The cache + the find live on the SUBSCRIBER, which has NO local RF fix — it must reach Tier A
 // by querying the publisher's corroboration pool.
@@ -157,7 +157,7 @@ ok(
 const ghost = await call(SUB, "POST", `/api/caches/${sid}/logs`, { loggerCall: "GHOST9", logType: "found" });
 ok("an un-heard logger does NOT reach Tier A", ghost.data?.tier !== "A", JSON.stringify(ghost.data));
 
-// ---- F0: per-callsign signing ----
+// ---- per-callsign signing ----
 function stableStringify(v) {
   if (v === null || typeof v !== "object") return JSON.stringify(v);
   if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
@@ -272,7 +272,7 @@ ok(
   JSON.stringify(peers2.data),
 );
 
-// ---- F4/T1.1: peer trust tiers + quarantine ----
+// ---- peer trust tiers + quarantine ----
 // The subscriber's only peer is the publisher, listed in FED_PEERS → it must be manual + trusted.
 const pall = await call(SUB, "GET", "/federation/peers");
 const peerRec = (pall.data?.peers ?? []).find((p) => p.instance === pubInstance) ?? {};
@@ -366,7 +366,7 @@ ok(
   JSON.stringify(reLog.data),
 );
 
-// ---- F4/T1.3 + ADR-5: signed tombstones (GDPR delete propagation) ----
+// ---- signed tombstones (GDPR delete propagation) ----
 const accMsg = (action, cs, at) =>
   stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: pubInstance, at });
 const tkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
@@ -445,7 +445,7 @@ ok(
   JSON.stringify(peersT.data),
 );
 
-// ---- F5/T2.1: gossip ping (push-to-pull) ----
+// ---- gossip ping (push-to-pull) ----
 // publish a fresh cache on PUB, then ping SUB directly — it must pull immediately (no manual /sync)
 const G_TITLE = "Gossip Cache " + now();
 await call(PUB, "POST", "/api/caches", { title: G_TITLE, type: "single", lat: 47.09, lon: 15.44, ownerCall: "OE8APR" });
@@ -460,7 +460,7 @@ ok("a rapid repeat notify is coalesced", notif2.data?.coalesced === true, JSON.s
 // The notify pull runs OFF the response path (handleFederationNotify → ctx.waitUntil(syncPeer…)),
 // so the mirror appears asynchronously — poll for it. A generous ≈15 s budget absorbs a loaded CI
 // runner (this job boots two gateways); the background sync normally lands in <1 s, so this guards
-// against scheduler contention, not a real wait. (Was 3 s — too tight, the source of the flake.)
+// against scheduler contention, not a real wait.
 let gMirrored = false;
 for (let i = 0; i < 60 && !gMirrored; i++) {
   await new Promise((r) => setTimeout(r, 250));
@@ -469,7 +469,7 @@ for (let i = 0; i < 60 && !gMirrored; i++) {
 }
 ok("the notify triggered an immediate pull — cache mirrored without a manual sync", gMirrored);
 
-// ---- F5/T2.2: generalized envelope + capability negotiation ----
+// ---- generalized envelope + capability negotiation ----
 const wk2 = await call(PUB, "GET", "/.well-known/aprscaching");
 ok(
   "descriptor advertises protocolVersions incl. 0.2",
@@ -488,7 +488,7 @@ ok(
   `status=${bogusFeed.status}`,
 );
 
-// ---- F5/T2.3: push-to-hub (NAT/firewall peers contribute via submit) ----
+// ---- push-to-hub (NAT/firewall peers contribute via submit) ----
 // the publisher has no submit secret configured → the endpoint is disabled there
 ok(
   "submit is disabled where no secret is configured -> 403",
@@ -571,7 +571,7 @@ const sub3 = await call(
 );
 ok("a spoke cannot submit as the hub's own instance -> 400", sub3.status === 400, JSON.stringify(sub3.data));
 
-// SR-FED-01: a spoke may only submit records IN ITS OWN namespace. A record whose id targets ANOTHER
+// A spoke may only submit records IN ITS OWN namespace. A record whose id targets ANOTHER
 // instance (here the publisher's) — signed by the spoke — must be rejected, never overwriting the
 // genuine mirror. The signature is valid (spoke-signed), so ONLY the namespace check stops it.
 const evilTitle = "HIJACKED " + now();
@@ -593,18 +593,18 @@ const subEvil = await call(
   { "x-fed-secret": SUBMIT_SECRET },
 );
 ok(
-  "SR-FED-01: a cross-namespace submission is rejected (no origin spoof / overwrite)",
+  "a cross-namespace submission is rejected (no origin spoof / overwrite)",
   subEvil.data?.applied === 0 && subEvil.data?.rejected === 1,
   JSON.stringify(subEvil.data),
 );
 const evilMap = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
 ok(
-  "SR-FED-01: the hijack record never lands on the map",
+  "the hijack record never lands on the map",
   !(evilMap.data?.caches ?? []).some((c) => c.title === evilTitle),
   evilTitle,
 );
 
-// ---- F6/T3.1: federated catalog on the map (origin + trust tagging; unvetted hidden by default) ----
+// ---- federated catalog on the map (origin + trust tagging; unvetted hidden by default) ----
 const GBBOX = "15,46,16,48"; // covers the gossip cache (47.09,15.44) mirrored from the trusted publisher
 const m0 = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
 const gossipOnSub = (m0.data?.caches ?? []).find((c) => c.title === G_TITLE);
@@ -643,7 +643,7 @@ ok(
   "missing after re-promote",
 );
 
-// ---- F6/T3.3: owner-controlled field redaction (hint never federates; unlisted hides description; local-only never) ----
+// ---- owner-controlled field redaction (hint never federates; unlisted hides description; local-only never) ----
 const HINT = "under the third rock from the bench";
 const mkScoped = (title, fedScope) =>
   call(PUB, "POST", "/api/caches", {
@@ -684,7 +684,7 @@ ok(
 ok("a local-only cache never enters the feed at all", !locRec, cLoc.data?.cache?.title);
 ok("no hint text leaks anywhere in the caches feed", !new RegExp(HINT).test(JSON.stringify(cfeed.data)));
 
-// ---- F6/T3.2: account-move as a signed federation record ----
+// ---- account-move as a signed federation record ----
 // migrate OE7MOV onto the publisher (device-key assertion bound to oe.pub) → it announces the move
 const mkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const mpub = b64u(await crypto.subtle.exportKey("raw", mkp.publicKey));
@@ -733,7 +733,7 @@ ok(
   JSON.stringify(mpeers.data),
 );
 
-// ---- F7/T4.3: federation observability ----
+// ---- federation observability ----
 const hpeers = await call(SUB, "GET", "/federation/peers");
 const pubPeer = (hpeers.data?.peers ?? []).find((p) => p.instance === pubInstance);
 ok(
@@ -755,14 +755,14 @@ ok(
   pubPeer?.last_ok != null && (pubPeer?.errorRate ?? 1) < 0.5,
   JSON.stringify({ last_ok: pubPeer?.last_ok, errorRate: pubPeer?.errorRate }),
 );
-// T1.1 reputation: the publisher corroborated finds that reached Tier A → it earned rep_confirmed
+// reputation: the publisher corroborated finds that reached Tier A → it earned rep_confirmed
 ok(
   "a corroborating peer earns reputation (rep_confirmed > 0)",
   (pubPeer?.rep_confirmed ?? 0) > 0,
   JSON.stringify({ rep_confirmed: pubPeer?.rep_confirmed }),
 );
 
-// ---- F7/T4.1: key rotation + multi-key + revocation ----
+// ---- key rotation + multi-key + revocation ----
 // The publisher is started with FED_KEY_HISTORY (an extra active key + a revoked one), so every
 // mirror assertion above already exercises multi-key verification (current key ∈ the active set).
 const wkk = await call(PUB, "GET", "/.well-known/aprscaching");
@@ -778,7 +778,7 @@ ok(
   JSON.stringify(pks.map((k) => [k.x?.slice(0, 6), !!k.revoked])),
 );
 
-// ---- F7/T4.2: signed instance registry / namespace authority ----
+// ---- signed instance registry / namespace authority ----
 // The subscriber is started with a signed FED_REGISTRY binding oe.pub → the publisher's real key, so
 // every mirror assertion above already passed the anti-spoof check (the published key matched the
 // registry). A mismatched key would have thrown and blocked the sync (unit-tested separately).
@@ -794,13 +794,13 @@ ok(
   JSON.stringify({ operator: wkk.data?.operator, aprsCall: wkk.data?.aprsCall }),
 );
 
-// ---- F5/T2.3 path 2: the rendezvous relay queue (poll-based, box-command seam) ----
+// ---- the rendezvous relay queue (poll-based, box-command seam) ----
 // Only asserted when the instances were started with a relay secret (CI sets it); proves the transport:
 // a requester enqueues a feed query for a spoke instance, the spoke leases + answers, the requester reads it.
 const RELAY_SECRET = process.env.RELAY_SECRET;
 if (RELAY_SECRET) {
   const spoke = "oe.spoke";
-  // SR-FED-12: lease/answer are bound to a per-spoke token = HMAC(RELAY_SECRET, "relay-spoke:<instance>"),
+  // lease/answer are bound to a per-spoke token = HMAC(RELAY_SECRET, "relay-spoke:<instance>"),
   // so a secret-holder can't drain another instance's queue by naming it. The requester side (enqueue,
   // result) still uses the flat secret.
   const spokeToken = async (instance) => {
@@ -852,7 +852,7 @@ if (RELAY_SECRET) {
     "x-relay-secret": "wrong",
   });
   ok("relay: a bad secret is rejected", noauth.status === 401, String(noauth.status));
-  // SR-FED-12: a spoke's token for its OWN instance cannot lease a DIFFERENT instance's queue.
+  // a spoke's token for its OWN instance cannot lease a DIFFERENT instance's queue.
   const wrongInstance = await call(PUB, "GET", "/federation/relay/lease?instance=oe.other", undefined, sh);
   ok(
     "relay: a per-spoke token can't lease another instance",
@@ -861,7 +861,7 @@ if (RELAY_SECRET) {
   );
 }
 
-// ---- F4/T1.2: corroboration privacy coarsening + endpoint hardening ----
+// ---- corroboration privacy coarsening + endpoint hardening ----
 // (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
 // Isolate this probe from the shared in-memory rate-limit bucket. corroborate.ts keys on
 // `ip:${clientIp}` OR `call:${baseCall}`; over localhost clientIp is "unknown", so EVERY earlier

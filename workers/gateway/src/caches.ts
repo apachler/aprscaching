@@ -164,7 +164,7 @@ interface RemoteCacheRow {
   source: string;
   external_id: string | null;
   min_trust: string | null;
-  origin_trust: string; // joined from fed_peers (T3.1): 'trusted' | 'unvetted' (blocked is filtered out)
+  origin_trust: string; // joined from fed_peers: 'trusted' | 'unvetted' (blocked is filtered out)
 }
 
 function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
@@ -211,9 +211,9 @@ function remoteMapCache(r: RemoteCacheRow): MapCache {
 }
 
 // ---------------------------------------------------------------- list (map layer)
-// Aggregates native caches + caches mirrored from federation peers (F2), each tagged with its origin's
-// trust (T3.1). Trust policy: native always shown; `trusted`-origin mirrors shown by default; `unvetted`
-// (auto-discovered, T1.1) hidden unless `?includeUnvetted=1`; `blocked` never surfaced. The trust is a
+// Aggregates native caches + caches mirrored from federation peers, each tagged with its origin's
+// trust. Trust policy: native always shown; `trusted`-origin mirrors shown by default; `unvetted`
+// (auto-discovered) hidden unless `?includeUnvetted=1`; `blocked` never surfaced. The trust is a
 // read-time join to fed_peers, so promoting/blocking a peer takes effect immediately, no re-mirror.
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
@@ -363,7 +363,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
     const code = b.code ?? `AC-${String(id).padStart(4, "0")}`;
     await env.DB.prepare("UPDATE caches SET code = ? WHERE id = ?").bind(code, id).run();
     const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
-    await awardHideBadge(env, owner); // M4: hider badges
+    await awardHideBadge(env, owner); // hider badges
     return json({ cache: toSummary(row!) }, { status: 201 });
   } catch (e) {
     const msg = (e as Error).message ?? "";
@@ -433,7 +433,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
       id,
     )
     .run();
-  // T3.3: turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
+  // turning a cache local-only must RETRACT copies already mirrored on peers — emit a cache
   // tombstone so they purge it (a public→unlisted change re-propagates the redacted version via the
   // bumped updated_at instead). Re-widening a local-only cache later won't un-suppress it on peers.
   if (m.fed_scope === "local-only" && existing.fed_scope !== "local-only") {
@@ -474,7 +474,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Per-callsign authorship (F0): if the logger signed the log with their device key, verify it
+  // Per-callsign authorship: if the logger signed the log with their device key, verify it
   // (signature valid AND key registered to the callsign) and persist it as portable provenance.
   let signerKey: string | null = null,
     authorSig: string | null = null,
@@ -499,7 +499,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     signedAt = a.signedAt;
   }
 
-  // SR-TRUST-04: a found is idempotent per (cache, logger). Checked AFTER author-signature
+  // a found is idempotent per (cache, logger). Checked AFTER author-signature
   // verification (a tampered replay still 400s), BEFORE re-running verify + insert + owner-alert +
   // announce + gossip. A racing pair that both miss this is caught by the INSERT OR IGNORE below.
   if (logType === "found") {
@@ -534,7 +534,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   const since = now - DEFAULT_POLICY.windowSec;
   const lp = await env.DB.prepare(
-    // SR-FED-09: `ts <= now+60` — without the upper bound a future-dated fix sits inside the window forever
+    // `ts <= now+60` — without the upper bound a future-dated fix sits inside the window forever
     "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
   )
     .bind(loggerCall, since, now + 60)
@@ -556,7 +556,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
   const attest = (rows: PositionRow[]): PositionRow[] =>
     rows.map((p) => ({ ...p, firstPartyAttested: provenanceOf(p, attestedSites).firstPartyAttested }));
 
-  // SR-TRUST-01: Tier-A independence — every base callsign the logger controls (their own call,
+  // Tier-A independence — every base callsign the logger controls (their own call,
   // all base calls held by their account, their registered stations). A beacon gated by any of
   // these is self-gated and can never corroborate the logger's own find.
   const loggerOwnIgates = new Set<string>([baseCall(loggerCall)]);
@@ -578,7 +578,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     loggerPositions: attest(lp.results),
     cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
     loggerOwnIgates,
-    now, // SR-TRUST-03: app-reading freshness is judged against log time
+    now, // app-reading freshness is judged against log time
   });
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the
@@ -589,7 +589,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       ? (lp.results.find((p) => p.id === result.matchedPositionId)?.igate_call ?? null)
       : null;
 
-  // F3: if we couldn't reach Tier A locally, ask peers whether the logger was independently
+  // if we couldn't reach Tier A locally, ask peers whether the logger was independently
   // heard on RF near the cache (cross-instance corroboration). A hit upgrades the find to Tier A.
   let corroboratedBy: string | null = null;
   if (result.tier !== "A" && cache.lat != null && cache.lon != null) {
@@ -619,7 +619,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
       : null;
 
-  // SR-TRUST-04: INSERT OR IGNORE against the partial unique index (0008). If a concurrent found for
+  // INSERT OR IGNORE against the partial unique index (0008). If a concurrent found for
   // the same (cache, logger) beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
   const ins = await env.DB.prepare(
     `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
@@ -653,7 +653,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       method: result.method,
     });
 
-  // M4: award find badges (idempotent; counts verified finds inside)
+  // award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
 
   // Cache-owner loop: tell the owner their cache was found (in-app alert + push), unless

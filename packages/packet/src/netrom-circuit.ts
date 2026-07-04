@@ -15,7 +15,7 @@ import { encodeAddress, decodeAddress, type Ax25Address } from "@aprsweb/ax25";
 
 export const NR_MAX_INFO = 236; // 256-byte AX.25 frame − 20-byte net+transport header
 const MOD = 256; // 8-bit transport sequence numbers → windows up to 127
-const MAX_TXQ = 2048; // SR-PKT-06: bound the outbound fragment queue (backpressure, no OOM)
+const MAX_TXQ = 2048; // bound the outbound fragment queue (backpressure, no OOM)
 
 export type CircuitState = "disconnected" | "connecting" | "connected" | "disconnecting";
 export interface NrTpPacket {
@@ -44,7 +44,7 @@ export class NetromCircuit {
   private sent: Array<{ seq: number; info: Uint8Array; more: boolean }> = []; // unacked window (for retransmit)
   private rxFrag: Uint8Array[] = []; // reassembly buffer for more-follows fragments
 
-  // SR-PKT-06: clock-injected T1 so a lost ConnReq/Info/DiscReq is retransmitted and the circuit is
+  // Clock-injected T1 so a lost ConnReq/Info/DiscReq is retransmitted and the circuit is
   // eventually torn down instead of wedging forever. The host drives `poll()` on an interval.
   private clock: () => number;
   private t1Ms: number;
@@ -158,7 +158,7 @@ export class NetromCircuit {
       frags.push(info.slice(off, off + NR_MAX_INFO));
       if (info.length === 0) break;
     }
-    if (this.txq.length + frags.length > MAX_TXQ) return; // SR-PKT-06: backpressure — drop rather than grow without bound
+    if (this.txq.length + frags.length > MAX_TXQ) return; // backpressure — drop rather than grow without bound
     frags.forEach((f, i) => this.txq.push({ info: f, more: i < frags.length - 1 }));
     if (this.state === "connected") this.pump();
   }
@@ -214,7 +214,7 @@ export class NetromCircuit {
     // their circuit id is echoed in the txSeq/rxSeq slots of the ack
     this.yourIndex = tp.txSeq;
     this.yourId = tp.rxSeq;
-    // SR-PKT-12: never adopt a zero window — it would wedge pump() forever. Clamp to ≥1.
+    // Never adopt a zero window — it would wedge pump() forever. Clamp to ≥1.
     this.window = Math.max(1, Math.min(info[0] || this.window, this.window));
     this.disarm(); // connect acknowledged
     this.to("connected");

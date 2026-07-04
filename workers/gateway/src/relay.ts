@@ -13,7 +13,7 @@ import { secretOk } from "./auth.js";
  *
  * Trust is unchanged: a relayed answer is a signed feed page, verified exactly like a pulled one — the
  * relay is pure transport. The spoke answers `feed`
- * queries in v1 (restoring downstream re-serving of a firewalled peer's feed); `corroborate` is a
+ * queries (downstream re-serving of a firewalled peer's feed); `corroborate` is a
  * reserved kind (live cross-instance quorum is the deploy-gated extension). Gated by `FED_RELAY_SECRET`.
  */
 import type { Env } from "./env.js";
@@ -42,8 +42,8 @@ const relayAuth = (req: Request, env: Env): boolean => {
 };
 
 /**
- * SR-FED-12: a spoke must only be able to lease/answer queries addressed to ITS OWN instance. The flat
- * `x-relay-secret` alone let any secret-holder pass `?instance=other` and drain another spoke's queue.
+ * A spoke must only be able to lease/answer queries addressed to ITS OWN instance. The flat
+ * `x-relay-secret` alone would let any secret-holder pass `?instance=other` and drain another spoke's queue.
  * Bind the credential to the instance with a per-spoke token = HMAC(FED_RELAY_SECRET, "relay-spoke:<instance>").
  * The spoke derives the same token from the shared secret; no extra config or table needed.
  */
@@ -125,7 +125,7 @@ export async function handleRelayEnqueue(req: Request, env: Env, instance: strin
 export async function handleRelayLease(req: Request, env: Env): Promise<Response> {
   const instance = (new URL(req.url).searchParams.get("instance") ?? env.INSTANCE ?? "").toLowerCase();
   if (!instance) return json({ error: "instance required" }, { status: 400 });
-  // SR-FED-12: a spoke may only lease queries for its own instance (per-spoke token), not any it names.
+  // A spoke may only lease queries for its own instance (per-spoke token), not any it names.
   if (!(await spokeAuth(req, env, instance))) return new Response("unauthorized", { status: 401 });
   const rows = (
     await env.DB.prepare(
@@ -153,7 +153,7 @@ export async function handleRelayAnswer(req: Request, env: Env): Promise<Respons
     instance?: string;
   };
   const inst = (instance ?? env.INSTANCE ?? "").toLowerCase();
-  // SR-FED-12: authenticate as the spoke, and scope the write to rows addressed to that spoke, so a
+  // Authenticate as the spoke, and scope the write to rows addressed to that spoke, so a
   // secret-holder can't answer (and thereby suppress) another instance's queued queries.
   if (!(await spokeAuth(req, env, inst))) return new Response("unauthorized", { status: 401 });
   if (!id || !result) return json({ error: "id and result required" }, { status: 400 });
@@ -186,7 +186,7 @@ export async function relayPoll(env: Env): Promise<void> {
     secret = env.FED_RELAY_SECRET;
   if (!hub || !secret) return;
   const instance = (env.INSTANCE ?? "").toLowerCase();
-  // SR-FED-12: present a per-spoke token bound to our own instance (alongside the shared secret for
+  // Present a per-spoke token bound to our own instance (alongside the shared secret for
   // backward compat) so the hub scopes what we can lease/answer to our own queue.
   const token = (await relaySpokeToken(env, instance)) ?? "";
   const h = { "content-type": "application/json", "x-relay-secret": secret, "x-relay-token": token };

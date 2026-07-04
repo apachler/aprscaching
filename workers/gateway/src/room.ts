@@ -44,7 +44,7 @@ export class RegionRoom {
   }
 
   async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer): Promise<void> {
-    // SR-RT-04: a hostile/buggy client can send non-JSON or a binary frame — neither must crash the DO.
+    // A hostile/buggy client can send non-JSON or a binary frame — neither must crash the DO.
     try {
       const text = typeof msg === "string" ? msg : new TextDecoder().decode(msg);
       const parsed = Subscribe.safeParse(JSON.parse(text));
@@ -55,7 +55,7 @@ export class RegionRoom {
   }
 
   async webSocketClose(ws: WebSocket, code?: number, reason?: string): Promise<void> {
-    // SR-RT-13: echo a valid close code (1000 when the client sent a reserved/absent one).
+    // Echo a valid close code (1000 when the client sent a reserved/absent one).
     try {
       ws.close(code && code >= 1000 && code < 5000 ? code : 1000, reason);
     } catch {

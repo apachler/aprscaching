@@ -149,14 +149,14 @@ export { syncAllPeers } from "./federation_sync.js";
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   const res = await route(req, env, ctx);
-  // gossip ping (T2.1): a successful federated write coalesces into one "come pull" to our peers
+  // gossip ping: a successful federated write coalesces into one "come pull" to our peers
   if (res.ok && isFederatedWrite(req.method, new URL(req.url).pathname))
     ctx.waitUntil(notifyPeers(env).catch(() => {}));
   return withCors(res, req, env);
 }
 
 /**
- * Frequent federation tasks (SR-RT-01): pull from peers, push to a hub, answer relay queries. Cheap +
+ * Frequent federation tasks: pull from peers, push to a hub, answer relay queries. Cheap +
  * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
  */
 export async function runFrequentSync(env: Env): Promise<void> {
@@ -178,12 +178,12 @@ export async function runFrequentSync(env: Env): Promise<void> {
 }
 
 /**
- * The full nightly job: TTL-prune every always-growing table (SR-RT-05), then the federation sync and
+ * The full nightly job: TTL-prune every always-growing table, then the federation sync and
  * the watch-alert digests. Node/Bun run this once at boot + daily; the Worker runs it on the `0 4` cron.
  */
 export async function runScheduled(env: Env): Promise<void> {
   const nowS = Math.floor(Date.now() / 1000);
-  // SR-RT-07: prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
+  // Prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
   // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
   // Node runtime a single mega-DELETE stalls every request until it finishes. 40 × 5000 caps one
   // nightly run at 200k rows; any remainder simply ages into the next night. Range-scanned via
@@ -196,9 +196,9 @@ export async function runScheduled(env: Env): Promise<void> {
       .run();
     if ((r.meta?.changes ?? 0) < 5000) break;
   }
-  // raw packet ring (Stage 0.2) is a short-lived workbench diagnostic — prune hard (default 24h)
+  // raw packet ring is a short-lived workbench diagnostic — prune hard (default 24h)
   const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
-  // SR-RT-05: bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
+  // Bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
   // (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
   const days = (n: number) => nowS - n * 24 * 3600;
   await env.DB.batch([
@@ -208,16 +208,16 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(Number(env.PORTSTATS_TTL_DAYS) || 7)),
     env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
     env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
-    env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(nowS * 1000), // SR-SEC-09 expired windows
+    env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(nowS * 1000), // expired windows
   ]);
-  // SR-FED-10: tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
+  // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
-  // erased record with nothing left to suppress it (ADR-5). Only the ephemeral relay queue is pruned.
+  // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
   await env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?")
     .bind(nowS - 3600)
     .run();
   await runFrequentSync(env);
-  // ADR-4b: email each account its un-notified watch alerts (no-op without an email provider)
+  // email each account its un-notified watch alerts (no-op without an email provider)
   try {
     await runDigests(env);
   } catch (e) {
@@ -232,7 +232,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   if (p === "/health") return json({ ok: true });
 
-  // AGPL §13 source link (ADR-3) — the source this instance is running
+  // AGPL §13 source link — the source this instance is running
   if (p === "/.well-known/source" && m === "GET") return handleWellKnownSource(req, env);
   if (p === "/source" && m === "GET") return handleSourceRedirect(req, env);
 
@@ -276,7 +276,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/prefs" && m === "GET") return handlePrefsGet(req, env);
   if (p === "/api/prefs" && m === "PUT") return handlePrefsPut(req, env);
 
-  // push + email-digest delivery (ADR-4b) — subscriptions + prefs; in-app W1 alerts are the source
+  // push + email-digest delivery — subscriptions + prefs; in-app alerts are the source
   if (p === "/api/push/key" && m === "GET") return handlePushKey(req, env);
   if (p === "/api/push/subscribe" && m === "POST") return handlePushSubscribe(req, env);
   if (p === "/api/push/unsubscribe" && m === "POST") return handlePushUnsubscribe(req, env);
@@ -312,22 +312,22 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);
   if (badgeMatch && m === "GET") return handleBadge(req, env, badgeMatch[1]!);
 
-  // federation (F1): discovery + read-only signed feeds for mirroring
+  // federation: discovery + read-only signed feeds for mirroring
   if (p === "/.well-known/aprscaching" && m === "GET") return handleWellKnown(req, env);
   if (p === "/federation/caches" && m === "GET") return handleFederationCaches(req, env);
   if (p === "/federation/finds" && m === "GET") return handleFederationFinds(req, env);
-  if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED); // BBS #1
+  if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
-  if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // T1.1 operator promote/block
+  if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);
-  if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // T1.3/ADR-5 delete propagation
-  if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // T2.1 gossip push-to-pull
-  if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // T2.3 push-to-hub (NAT/firewall peers)
-  if (p === "/federation/account-moves" && m === "GET") return handleFederationAccountMoves(req, env); // T3.2 account-move feed
-  if (p === "/federation/registry" && m === "GET") return handleFederationRegistry(req, env); // T4.2 signed instance registry
+  if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // delete propagation
+  if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // gossip push-to-pull
+  if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // push-to-hub (NAT/firewall peers)
+  if (p === "/federation/account-moves" && m === "GET") return handleFederationAccountMoves(req, env); // account-move feed
+  if (p === "/federation/registry" && m === "GET") return handleFederationRegistry(req, env); // signed instance registry
 
   // account data lifecycle (GDPR export/erasure + portability across peers)
   if (p === "/api/account/import" && m === "POST") return handleAccountImport(req, env);
@@ -340,7 +340,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (op === "move") return handleAccountMove(req, env, cs);
   }
 
-  // per-callsign device keys (F0)
+  // per-callsign device keys
   if (p === "/keys/register" && m === "POST") return handleRegisterKey(req, env);
   const keyMatch = /^\/keys\/([A-Za-z0-9-]+)$/.exec(p);
   if (keyMatch && m === "GET" && keyMatch[1] !== "register") return handleGetKeys(req, env, keyMatch[1]!);
@@ -356,7 +356,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     return env.ROOMS.get(env.ROOMS.idFromName(region)).fetch(req);
   }
 
-  // auth (M9 identity: passkey + email magic-link). Sessions attribute logs once gating lands.
+  // auth (passkey + email magic-link). Sessions attribute logs and gate announce.
   if (p === "/auth/claim" && m === "POST") return handleClaim(req, env);
   if (p === "/auth/passkey/register/begin" && m === "POST") return handlePasskeyRegisterBegin(req, env);
   if (p === "/auth/passkey/register/finish" && m === "POST") return handlePasskeyRegisterFinish(req, env);
@@ -403,14 +403,14 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // enriched as-you-type search across caches + stations
   if (p === "/api/search" && m === "GET") return handleSearch(req, env);
 
-  // community / gamification (M4)
+  // community / gamification
   if (p === "/api/leaderboard" && m === "GET") return handleLeaderboard(req, env);
   if (p === "/api/corroborators" && m === "GET") return handleCorroborators(req, env);
   if (p === "/api/activity" && m === "GET") return handleActivity(req, env);
   const profileMatch = /^\/api\/profile\/([A-Za-z0-9-]+)$/.exec(p);
   if (profileMatch && m === "GET") return handleProfile(req, env, profileMatch[1]!);
 
-  // workbench (M5): packet inspector + live station registry
+  // workbench: packet inspector + live station registry
   if (p === "/api/decode" && m === "POST") return handleDecode(req);
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   const seriesMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/series$/.exec(p);
@@ -429,36 +429,36 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (bbsReadMatch && m === "POST") return handleBbsRead(req, env, Number(bbsReadMatch[1]));
   const bbsThreadMatch = /^\/api\/bbs\/thread\/(\d+)$/.exec(p);
   if (bbsThreadMatch && m === "GET") return handleBbsThread(req, env, Number(bbsThreadMatch[1]));
-  // P3 forwarding + hierarchical routing + White Pages
+  // forwarding + hierarchical routing + White Pages
   if (p === "/api/bbs/route" && m === "GET") return handleBbsRoute(req, env);
   if (p === "/api/bbs/wp" && (m === "GET" || m === "POST")) return handleWhitePages(req, env);
   if (p === "/api/bbs/forward" && (m === "GET" || m === "POST")) return handleForwardRules(req, env);
   const fwdDel = /^\/api\/bbs\/forward\/(\d+)$/.exec(p);
   if (fwdDel && m === "DELETE") return handleForwardRuleDelete(req, env, Number(fwdDel[1]));
-  // F4 FBB forwarding partners (per-partner transport config)
+  // FBB forwarding partners (per-partner transport config)
   if (p === "/api/bbs/partners" && (m === "GET" || m === "POST")) return handleForwardPartners(req, env);
   const partnerDel = /^\/api\/bbs\/partners\/(\d+)$/.exec(p);
   if (partnerDel && m === "DELETE") return handleForwardPartnerDelete(req, env, Number(partnerDel[1]));
-  // F4 forwarding pool (ingest scheduler ↔ gateway store; x-ingest-secret gated)
+  // forwarding pool (ingest scheduler ↔ gateway store; x-ingest-secret gated)
   // connected-mode BBS session snapshot + kill
   if (p === "/api/bbs/session" && m === "GET") return handleBbsSession(req, env);
   if (p === "/api/bbs/kill" && m === "POST") return handleBbsKill(req, env);
   if (p === "/api/bbs/forward/pool" && m === "GET") return handleForwardPool(req, env);
   if (p === "/api/bbs/forward/inbound" && m === "POST") return handleForwardInbound(req, env);
   if (p === "/api/bbs/forward/sent" && m === "POST") return handleForwardSent(req, env);
-  // P4 NET/ROM node: NODES table + MHeard + sysop admin
+  // NET/ROM node: NODES table + MHeard + sysop admin
   if (p === "/api/node/nodes" && (m === "GET" || m === "POST")) return handleNodeNodes(req, env);
   if (p === "/api/node/mheard" && m === "GET") return handleNodeMheard(req, env);
 
-  // workbench interop + transports (M6)
+  // workbench interop + transports
   if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
-  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // P3 — gated user TX (path A)
+  if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // gated user TX via the ingest box
 
-  // audio-cache: stages + media (M2)
+  // audio-cache: stages + media
   if (p.startsWith("/api/media/") && m === "GET") return handleGetMedia(req, env, p.slice("/api/media/".length));
-  // cache media gallery (F-3): list (public) · add/delete (owner)
+  // cache media gallery: list (public) · add/delete (owner)
   const cacheMediaMatch = /^\/api\/caches\/(\d+)\/media$/.exec(p);
   if (cacheMediaMatch) {
     const id = Number(cacheMediaMatch[1]);
@@ -500,7 +500,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // generalized + back-compat logging (cacheId in body)
   if ((p === "/api/logs" || p === "/api/logs/find") && m === "POST") return handleLog(req, env);
 
-  // M3 import: POST /api/import/:source (admin)
+  // import: POST /api/import/:source (admin)
   const importMatch = /^\/api\/import\/([a-z]+)$/.exec(p);
   if (importMatch && m === "POST") return handleImport(req, env, importMatch[1]!);
 
@@ -522,9 +522,9 @@ export function xml(body: string, init: ResponseInit = {}): Response {
   });
 }
 
-/** SR-SEC-15: the origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
- *  APP_URL plus any CORS_ORIGINS. Empty (unconfigured instance) preserves the legacy reflect-all
- *  behaviour; a configured instance (production sets APP_URL) is locked down. */
+/** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
+ *  APP_URL plus any CORS_ORIGINS. Empty (unconfigured instance) reflects all origins;
+ *  a configured instance (production sets APP_URL) is locked down. */
 function corsAllowlist(env: Env): Set<string> {
   const list = new Set<string>();
   const add = (u?: string) => {
@@ -542,7 +542,7 @@ function corsAllowlist(env: Env): Set<string> {
 }
 
 /** CORS that reflects the request origin so the SPA (different origin) can call the API. Credentials
- *  are echoed only for allowlisted origins (SR-SEC-15); other origins get non-credentialed access,
+ *  are echoed only for allowlisted origins; other origins get non-credentialed access,
  *  enough for the public Bearer-keyed read API but not to ride a user's session cookie. */
 export function withCors(res: Response, req: Request, env: Env): Response {
   const origin = req.headers.get("Origin");

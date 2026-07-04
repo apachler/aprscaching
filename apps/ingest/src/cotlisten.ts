@@ -22,8 +22,8 @@ export class CotListener {
   start() {
     const s = dgram.createSocket({ type: "udp4", reuseAddr: true });
     this.sock = s;
-    // SR-ING-11: a bind failure (port busy) used to kill the listener permanently with one log line.
-    // Retry the bind on EADDRINUSE so a transient conflict at boot self-heals.
+    // A bind failure (port busy) must not kill the listener permanently. Retry the bind on EADDRINUSE
+    // so a transient conflict at boot self-heals.
     s.on("error", (e: NodeJS.ErrnoException) => {
       console.error("[cot]", e.message);
       if (e.code === "EADDRINUSE") {

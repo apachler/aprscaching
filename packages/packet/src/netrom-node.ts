@@ -31,8 +31,8 @@ const OBS_INIT = 6; // NET/ROM initial obsolescence count
 const DEFAULT_PATH_QUALITY = 192; // link quality assumed for a directly-heard neighbour
 const DEFAULT_TOP_N = 3; // best routes we re-advertise
 const DEFAULT_MIN_OBS_BROADCAST = 5; // only re-advertise routes at/above this obsolescence (BPQ default)
-const DEFAULT_MAX_ROUTES = 500; // SR-PKT-10: table cap so a forged-broadcast flood can't grow it unbounded
-const DEFAULT_MAX_LEARNS_PER_WINDOW = 200; // SR-PKT-10: per-neighbour learn budget (routes/window)
+const DEFAULT_MAX_ROUTES = 500; // table cap so a forged-broadcast flood can't grow it unbounded
+const DEFAULT_MAX_LEARNS_PER_WINDOW = 200; // per-neighbour learn budget (routes/window)
 const DEFAULT_LEARN_WINDOW_MS = 60_000;
 
 export interface NetromNodeConfig {
@@ -41,9 +41,9 @@ export interface NetromNodeConfig {
   /** Only re-advertise routes whose obsolescence ≥ this (stale routes stay routable but stop propagating). */
   minObsToBroadcast?: number;
   /** Cap the table size; a new route past the cap evicts the worst-quality *unlocked* route (if worse).
-   *  Defaults to 500 (SR-PKT-10) so an unconfigured node is not left with an unbounded table. */
+   *  Defaults to 500 so an unconfigured node is not left with an unbounded table. */
   maxRoutes?: number;
-  /** SR-PKT-10: cap how many routes a single neighbour can teach us per window, so a hostile peer
+  /** Cap how many routes a single neighbour can teach us per window, so a hostile peer
    *  spraying forged high-quality broadcasts can't churn/poison the table. Default 200 / 60 s. */
   maxLearnsPerWindow?: number;
   learnWindowMs?: number;
@@ -62,7 +62,7 @@ export class NetromNode {
     return addrStr(a).toUpperCase();
   }
 
-  /** SR-PKT-10: consume one unit of a neighbour's fixed-window learn budget; false once spent. */
+  /** Consume one unit of a neighbour's fixed-window learn budget; false once spent. */
   private learnAllowed(neighbor: Ax25Address): boolean {
     const max = this.opts.maxLearnsPerWindow ?? DEFAULT_MAX_LEARNS_PER_WINDOW;
     const win = this.opts.learnWindowMs ?? DEFAULT_LEARN_WINDOW_MS;
@@ -119,12 +119,12 @@ export class NetromNode {
     const path = this.opts.pathQuality ?? DEFAULT_PATH_QUALITY;
     let n = 0;
     // the neighbour is a direct route at path quality
-    if (!this.learnAllowed(neighbor)) return 0; // SR-PKT-10: over budget → drop this whole broadcast
+    if (!this.learnAllowed(neighbor)) return 0; // over budget → drop this whole broadcast
     this.learn({ dest: neighbor, alias: decoded.senderAlias || addrStr(neighbor), neighbor, quality: path, port });
     n++;
     for (const d of decoded.dests) {
       if (this.key(d.dest) === this.key(this.ident.call)) continue; // never learn a route to ourself
-      if (!this.learnAllowed(neighbor)) break; // SR-PKT-10: budget spent mid-broadcast → stop learning
+      if (!this.learnAllowed(neighbor)) break; // budget spent mid-broadcast → stop learning
       this.learn({ dest: d.dest, alias: d.alias, neighbor, quality: combineQuality(d.quality, path), port });
       n++;
     }

@@ -37,7 +37,7 @@ const meta = (m: BbsMsgFull): BbsMsgMeta => ({
   postedAt: m.postedAt,
 });
 
-/** SR-PKT-13: how a cached store retries a failed backend write and how it surfaces a give-up. */
+/** How a cached store retries a failed backend write and how it surfaces a give-up. */
 export interface CachedBbsStoreOpts {
   clock?: () => number; // wall clock for postedAt (default Date.now)
   maxRetries?: number; // backend write attempts before giving up (default 3)
@@ -138,7 +138,7 @@ export class CachedBbsStore implements MessageStore {
       replyTo: m.replyTo ?? null,
     };
     this.cache.push(full); // optimistic — visible immediately in this session
-    // SR-PKT-13: retry the backend write with backoff; on final failure flag it + report, never a silent drop.
+    // Retry the backend write with backoff; on final failure flag it + report, never a silent drop.
     void this.withRetry("post", id, () => this.backend.post(m)).then((realId) => {
       if (realId != null) full.id = realId;
     });

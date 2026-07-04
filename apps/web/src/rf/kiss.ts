@@ -98,7 +98,7 @@ function makeFeeder(onFrame: (f: RfFrame) => void): (chunk: Uint8Array) => void 
 /** A live RF link; both Web Serial and Web Bluetooth implement it. */
 export interface RfLink {
   disconnect(): Promise<void>;
-  /** Transmit a frame (H5 — gated UI-side on a verified callsign + opt-in). May throw if RX-only. */
+  /** Transmit a frame (gated UI-side on callsign control-verification + opt-in). May throw if RX-only. */
   send(frame: TxFrame): Promise<void>;
 }
 
@@ -151,7 +151,7 @@ export class WebSerialKiss implements RfLink {
     }
   }
 
-  /** Transmit a frame over the serial port (H5). Throws if the port has no writable stream. */
+  /** Transmit a frame over the serial port (gated on callsign control-verification). Throws if the port has no writable stream. */
   async send(frame: TxFrame): Promise<void> {
     if (!this.port?.writable) throw new Error("port is not writable");
     const writer = this.port.writable.getWriter();
@@ -179,10 +179,10 @@ export class WebSerialKiss implements RfLink {
   }
 }
 
-// ---- H2: BLE-KISS over Web Bluetooth (Mobilinkd TNC4 & friends use the Nordic UART Service) ----
+// ---- BLE-KISS over Web Bluetooth (Mobilinkd TNC4 & friends use the Nordic UART Service) ----
 const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const NUS_RX_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // device → host notifications (KISS bytes)
-const NUS_TX_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // host → device writes (TX, H5)
+const NUS_TX_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // host → device writes (TX, gated on callsign control-verification)
 
 /** Is browser-direct RF available over Bluetooth? (Web Bluetooth — Chromium, secure context.) */
 export const webBluetoothSupported = (): boolean =>
@@ -231,7 +231,7 @@ export class WebBluetoothKiss implements RfLink {
     this.closed = false;
   }
 
-  /** Transmit a frame over BLE (H5). Chunked to 20 bytes for the default ATT MTU. Throws if RX-only. */
+  /** Transmit a frame over BLE (gated on callsign control-verification). Chunked to 20 bytes for the default ATT MTU. Throws if RX-only. */
   async send(frame: TxFrame): Promise<void> {
     if (!this.txChar) throw new Error("this TNC has no writable TX characteristic");
     const bytes = kissWrap(encodeAx25(frame));

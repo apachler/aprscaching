@@ -6,7 +6,8 @@
  *   - "icom"      CI-V binary `FE FE <addr> E0 05 <freq BCD LE> FD`
  *   - "yaesu-bin" classic 5-byte binary CAT (FT-817/857/897): BCD freq (10 Hz units) + opcode
  * Pure: produces the bytes to write; the browser owns the serial transport. Set-frequency is RX-side
- * (it only tunes), so it is NOT H5-gated. APRS calling frequencies live here for one-click tune.
+ * (it only tunes), so it is not gated on callsign control-verification. APRS calling frequencies live
+ * here for one-click tune.
  */
 export type CatRig = "kenwood" | "icom" | "yaesu-bin";
 

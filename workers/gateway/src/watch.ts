@@ -2,8 +2,8 @@
 /**
  * watch.ts — watchlist + alerts. An operator watches callsigns (per account); when a
  * watched call is heard on the network — and especially near a cache — an in-app alert is recorded.
- * That in-app feed is the ADR-4b fallback; push/email delivery layers on top later. Watched calls are
- * keyed by account (ADR-2), so they survive a callsign change.
+ * That in-app feed is the mandatory fallback; push and email delivery layer on top. Watched calls are
+ * keyed by account, so they survive a callsign change.
  *
  *   GET    /api/watch            list my watched calls + unseen alert count
  *   POST   /api/watch            add { callsign }
@@ -153,7 +153,7 @@ export async function recordWatchHeard(env: Env, heard: { src: string; lat: numb
     )
       .bind(w.acct, w.callsign, cache ? "near_cache" : "heard", detail, cache?.id ?? null, p.lat, p.lon, t)
       .run();
-    // ADR-4b: best-effort web push now; the email digest batches the rest on a schedule
+    // best-effort web push; the email digest batches the rest on a schedule
     try {
       await pushAlert(env, w.acct);
     } catch {

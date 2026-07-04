@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// P2d parser correctness — SR-PARSE-03/04/06.
+// Parser correctness.
 import { describe, it, expect } from "vitest";
 import { decodeAprs } from "../src/decode.js";
 import { encodeAprsPosition } from "../src/encode.js";
@@ -8,11 +8,11 @@ import { toMgrs } from "../src/mgrs.js";
 
 const frame = (payload: string) => ({ src: "OE8APR", dst: "APRS", path: [] as string[], payload, raw: "" });
 
-describe("SR-PARSE-03 — a non-position object/item is not planted on null island", () => {
+describe("a non-position object/item is not planted on null island", () => {
   it("omits coords for an object with no fix", () => {
     const d = decodeAprs(frame(";SHORTOBJ *111111z")) as { kind: string; lat?: number; lon?: number };
     expect(d.kind).toBe("object");
-    expect(d.lat).toBeUndefined(); // was {lat:0, lon:0} → a phantom station at 0,0
+    expect(d.lat).toBeUndefined(); // not {lat:0, lon:0} — that would be a phantom station at 0,0
     expect(d.lon).toBeUndefined();
   });
 
@@ -25,7 +25,7 @@ describe("SR-PARSE-03 — a non-position object/item is not planted on null isla
   });
 });
 
-describe("SR-PARSE-04 — the encoder never emits 60.00 minutes", () => {
+describe("the encoder never emits 60.00 minutes", () => {
   it("carries a rounding overflow into degrees (encodeAprsPosition)", () => {
     // 47.99999° → 47°59.9994' rounds to 60.00' → must carry to 48°00.00'
     const p = encodeAprsPosition(47.99999, 15, "/>");
@@ -45,13 +45,13 @@ describe("SR-PARSE-04 — the encoder never emits 60.00 minutes", () => {
   });
 });
 
-describe("SR-PARSE-06 — MGRS band letter is correct in 80–84°", () => {
+describe("MGRS band letter is correct in 80–84°", () => {
   it("returns X (not Z) for a latitude in the 72–84° X band", () => {
     const m = toMgrs(82, 10); // inside coverage, in the X band
     expect(m).not.toBe("");
     expect(/\s/.test(m)).toBe(true);
     const band = m.match(/^\d+([C-X])/)?.[1];
-    expect(band).toBe("X"); // BANDS[20] was undefined → "Z" before
+    expect(band).toBe("X"); // BANDS[20] is X, not Z
   });
 
   it("still empty above 84°", () => {

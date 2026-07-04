@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * notify.ts — push + email-digest delivery (ADR-4b M4) over the W1 watch alerts. The email
- * digest is the MANDATORY fallback (iOS/no-push); web push is the enhancement. In-app alerts (W1)
+ * notify.ts — push + email-digest delivery over the watch alerts. The email
+ * digest is the MANDATORY fallback (iOS/no-push); web push is the enhancement. In-app alerts
  * remain the always-on baseline.
  *
  *   GET  /api/push/key          VAPID public key (null when push isn't configured)
@@ -127,7 +127,7 @@ export async function runDigests(env: Env): Promise<void> {
 // We send a PAYLOAD-LESS push (just the VAPID auth): valid Web Push that wakes the service worker,
 // which renders a generic "watchlist alert" and can pull the detail from /api/watch/alerts. This
 // avoids the RFC-8291 aes128gcm payload encryption entirely — the specific text already lives in the
-// in-app feed (W1) and the email digest.
+// in-app feed and the email digest.
 export async function pushAlert(env: Env, accountId: string): Promise<void> {
   if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return; // disabled unless configured
   const subs = (

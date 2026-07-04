@@ -54,12 +54,12 @@ const BANDS: ReadonlyArray<[number, number, string]> = [
   [1_240_000_000, 1_300_000_000, "23cm"],
 ];
 
-// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24 (F-7).
+// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24.
 const MH_BASES = [18, 10, 24, 10, 24];
 /**
  * Maidenhead grid locator → lat/lon (centre of the smallest cell). Accepts 4/6/8/10-char grids — the
  * canonical parser shared by the gateway (profile locator validation), spots and tools, so the 10-char
- * locator (F-7) is honoured everywhere, not just in the web `gridCenter`.
+ * locator is honoured everywhere, not just in the web `gridCenter`.
  */
 export function gridToLatLon(grid: string | undefined | null): { lat: number; lon: number } | null {
   const g = String(grid ?? "")

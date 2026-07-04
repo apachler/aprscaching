@@ -3,7 +3,7 @@
  * builtins/index.ts — the curated built-in Tools. Each is a plain module implementing the
  * Tool interface (no sandbox needed — they're first-party + trusted), demonstrating every extension
  * point: a monitor colouriser (off the NAMES.GP registry), a CTEXT macro pack (/commands), an
- * auto-responder (on_connect greeting), a beacon scheduler (TX-gated), and the F-5 PSK31 + CW decoders.
+ * auto-responder (on_connect greeting), a beacon scheduler (TX-gated), and the PSK31 + CW decoders.
  * The event payloads may carry a `reply` callback so a tool can answer a connected session generically.
  */
 import { StationRegistry } from "@aprsweb/packet";
@@ -86,7 +86,7 @@ export function autoResponderTool(): Tool {
 }
 
 // ---- small pure helpers for the tools below ----
-// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24 (F-7).
+// Maidenhead pair bases: field 18 · square 10 · subsquare 24 · ext-square 10 · ext-subsquare 24.
 const MH_BASES = [18, 10, 24, 10, 24];
 /** Maidenhead locator → lat/lon (centre of the smallest cell); accepts 4/6/8/10-char. Null if malformed. */
 function gridToLatLon(loc: string): { lat: number; lon: number } | null {
@@ -129,7 +129,7 @@ function ago(ms: number): string {
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
 }
 
-/** (Tool 1) Watch/alert — highlight + log heard callsigns you `/watch` (GP/LinPac WATCH/CATCH). Records
+/** Watch/alert — highlight + log heard callsigns you `/watch` (GP/LinPac WATCH/CATCH). Records
  *  from the `on_frame` feed (every source — terminal RF, APRS, …), so alerts fire even off the Monitor
  *  tab; the colouriser only highlights the line when the monitor pane is visible. */
 export function watchAlertTool(): Tool {
@@ -197,7 +197,7 @@ export function watchAlertTool(): Tool {
   };
 }
 
-/** (Tool 2) MHeard — a rolling recently-heard-stations panel (GP/LinPac MHEARD), aggregated across ALL
+/** MHeard — a rolling recently-heard-stations panel (GP/LinPac MHEARD), aggregated across ALL
  *  sources that feed `on_frame`: the packet terminal (RF/TNC) and the live APRS layer today, plus any
  *  future source (a second TNC, DX cluster, …). Source-agnostic: a feeder just dispatches on_frame with
  *  a `source` label — see apps/web `feedHeard`. Works whatever terminal view is active. */
@@ -244,7 +244,7 @@ export function mheardTool(): Tool {
   };
 }
 
-/** (Tool 4) Auto-status — periodically transmit a status line via on_tick (GP timed macros); TX-gated. */
+/** Auto-status — periodically transmit a status line via on_tick (GP timed macros); TX-gated. */
 export function autoStatusTool(): Tool {
   return {
     manifest: {
@@ -289,7 +289,7 @@ export function autoStatusTool(): Tool {
   };
 }
 
-/** (Tool 5) Grid & bearing — distance + bearing between Maidenhead locators; result shown in a panel. */
+/** Grid & bearing — distance + bearing between Maidenhead locators; result shown in a panel. */
 export function gridTool(): Tool {
   const panel = (
     a: string,
@@ -340,7 +340,7 @@ export function gridTool(): Tool {
   };
 }
 
-/** (Tool 8) 7PLUS reassembler — parse + stitch multi-part 7plus messages (decoder capability). */
+/** 7PLUS reassembler — parse + stitch multi-part 7plus messages (decoder capability). */
 export function sevenPlusTool(): Tool {
   return {
     manifest: {
@@ -402,7 +402,7 @@ export function unitConverterTool(): Tool {
   };
 }
 
-/** (GP cw) CW/Morse encoder — `/cw <text>` → dot/dash, the send-side companion to the F-5 CW decoder. */
+/** (GP cw) CW/Morse encoder — `/cw <text>` → dot/dash, the send-side companion to the CW decoder. */
 export function cwEncoderTool(): Tool {
   return {
     manifest: {
@@ -505,7 +505,7 @@ export function infoResponderTool(): Tool {
 }
 
 /** (GP msg) Away-note responder — when the operator flags away, greet a connecting peer and let them
- *  leave a short note (NOT a mailbox — see §5d BBS/PMS divergence; ephemeral, capped, local). */
+ *  leave a short note (NOT a mailbox — ephemeral, capped, local). */
 export function awayNoteTool(): Tool {
   const KEY = "away.notes";
   return {
@@ -840,7 +840,7 @@ export function beaconSchedulerTool(): Tool {
   };
 }
 
-/** Built-in signal decoders — the F-5 CW + PSK31 decoders (pure; audio front-end is browser-side). */
+/** Built-in signal decoders — the CW + PSK31 decoders (pure; audio front-end is browser-side). */
 export function decoderTools(): Tool {
   return {
     manifest: {
@@ -850,7 +850,7 @@ export function decoderTools(): Tool {
       version: v,
       permissions: ["decoder"],
       surfaces: ["web"],
-      description: "Decode PSK31 varicode + CW (Morse) — the audio-cache F-5 decoders.",
+      description: "Decode PSK31 varicode + CW (Morse) — the audio-cache decoders.",
     },
     activate(ctx) {
       ctx.addDecoder({ id: "cw", label: "CW (Morse)", kind: "cw", decode: decodeMorse });
@@ -911,7 +911,7 @@ export function builtinTools(): Tool[] {
     autoStatusTool(),
     gridTool(),
     sevenPlusTool(),
-    // GP-archive additions: remote responders + IPC producer/consumers.
+    // GP-archive tools: remote responders + IPC producer/consumers.
     unitConverterTool(),
     cwEncoderTool(),
     stationDbTool(),

@@ -328,7 +328,7 @@ export function SettingsPanel(props: {
   );
 }
 
-/** AGPL §13 (ADR-3): a visible link to the exact source this instance is running. */
+/** AGPL §13: a visible link to the exact source this instance is running. */
 function SourceLink() {
   const [src, setSrc] = useState<SourceInfo | null>(null);
   useEffect(() => {

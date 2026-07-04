@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * ptt.ts — RTS/DTR push-to-talk over a serial port.
- * For the no-TNC / soundcard TX path (pairs H4/H5), the operator keys the radio by asserting a serial
- * control line. We load `serialport` dynamically so it stays an OPTIONAL dependency — without it the
+ * For the no-TNC / soundcard TX path (soundcard Bell-202 AFSK, keying gated on callsign
+ * control-verification), the operator keys the radio by asserting a serial control line. We load
+ * `serialport` dynamically so it stays an OPTIONAL dependency — without it the
  * box still runs (KISS/AGWPE/hostmode TNCs do their own keying); only soundcard-PTT is unavailable.
  * This is validate-at-deploy: it needs the package, the cable and a real radio.
  */
@@ -30,7 +31,7 @@ export async function openSerialPtt(path: string, opts: PttOpts = {}): Promise<P
     const SerialPort = mod.SerialPort ?? mod.default?.SerialPort;
     if (!SerialPort) throw new Error("SerialPort export not found");
     const port = new SerialPort({ path, baudRate: opts.baudRate ?? 9600, autoOpen: true });
-    // SR-ING-12: without an `error`/`close` listener a USB unplug emits an unhandled 'error' that
+    // without an `error`/`close` listener a USB unplug emits an unhandled 'error' that
     // crashes the whole ingest process. Log and keep running — TX is simply unavailable until re-plugged.
     port.on?.("error", (e: Error) => console.error(`[ptt] serial error on ${path}: ${e.message}`));
     port.on?.("close", () => console.warn(`[ptt] serial port ${path} closed (radio unplugged?)`));

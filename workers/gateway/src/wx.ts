@@ -111,7 +111,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
 
   // Resolve where this reading lands + how to place it on the map. A key bound to a registry station
   // uses that station's callsign + EXPLICIT coordinates (so a remote mountain PWS sits at
-  // its real location); a legacy key falls back to the operator's <call>-13 home PWS placed from
+  // its real location); a home key falls back to the operator's <call>-13 home PWS placed from
   // their home grid.
   let station = `${row.callsign.toUpperCase()}-13`;
   let place: { lat: number; lon: number } | null = null;
@@ -169,7 +169,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
       .run();
   }
 
-  // W2/W3: if this PWS opted into TX (and its callsign is control-verified), enqueue an APRS WX
+  // If this PWS opted into TX (and its callsign is control-verified), enqueue an APRS WX
   // beacon — to standard APRS-IS and/or to CWOP/NOAA — throttled. Never blocks the ingest ack.
   await maybeBeaconWx(env, { key, station, baseCall: row.callsign.toUpperCase().split("-")[0]!, place, wx });
 
@@ -192,7 +192,7 @@ function toWxFields(wx: WxReading): WxEncodeFields {
 }
 
 /**
- * Queue a WX beacon for a verified, opted-in PWS. Gated like H5: TX is off by
+ * Queue a WX beacon for a verified, opted-in PWS. Gated on callsign control-verification: TX is off by
  * default; both the verified-callsign check and the per-station opt-in must pass. A WX report needs
  * a position, so a station with no coordinates is skipped. Throttled to WX_BEACON_MIN_SEC.
  */
@@ -208,7 +208,7 @@ async function maybeBeaconWx(
   if (!k || (!k.txIs && !k.txCwop)) return;
   if (!o.place) return; // a WX report must carry a position
   if (now() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return; // throttle
-  if (!(await isCallsignVerified(env, o.baseCall))) return; // control-verified gate (W2/W3)
+  if (!(await isCallsignVerified(env, o.baseCall))) return; // control-verified gate
 
   const info = encodeAprsWeather(o.place.lat, o.place.lon, toWxFields(o.wx));
   const ts = now();
@@ -225,7 +225,7 @@ async function maybeBeaconWx(
   await env.DB.prepare("UPDATE wx_keys SET last_beacon = ? WHERE key = ?").bind(ts, o.key).run();
 }
 
-/** Generate a PWS push key. Shared by the legacy home-PWS endpoint and per-station keys. */
+/** Generate a PWS push key. Shared by the home-PWS endpoint and per-station keys. */
 export function makeWxKey(): string {
   const b = new Uint8Array(12);
   crypto.getRandomValues(b);
@@ -240,7 +240,7 @@ export function wxUrls(origin: string, station: string, key: string): { ecowittP
   };
 }
 
-/** GET/POST /api/wx/key — read or (re)issue the caller's legacy home (<call>-13) PWS push key + URLs. */
+/** GET/POST /api/wx/key — read or (re)issue the caller's home (<call>-13) PWS push key + URLs. */
 export async function handleWxKey(req: Request, env: Env): Promise<Response> {
   const cs = await sessionCallsign(req, env);
   if (!cs) return json({ error: "sign in to set up a weather station" }, { status: 401 });
@@ -273,9 +273,9 @@ export async function handleWxKey(req: Request, env: Env): Promise<Response> {
 }
 
 /**
- * POST /api/wx/tx — toggle a PWS's APRS-IS beacon (W2) and/or CWOP relay (W3). Gated: requires a
- * signed-in session AND a control-verified callsign to ENABLE either (TX is off by default, H5
- * parity). `stationId` targets a registry station's key; omitted targets the home <call>-13 key.
+ * POST /api/wx/tx — toggle a PWS's APRS-IS weather beacon and/or CWOP relay. Gated: requires a
+ * signed-in session AND a control-verified callsign to ENABLE either (TX is off by default).
+ * `stationId` targets a registry station's key; omitted targets the home <call>-13 key.
  */
 export async function handleWxTx(req: Request, env: Env): Promise<Response> {
   const cs = await sessionCallsign(req, env);

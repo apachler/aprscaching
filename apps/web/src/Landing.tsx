@@ -3,18 +3,17 @@ import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
 
 /**
- * Marketing landing shell — MECHANICS ONLY. The hero copy, feature sections, and screenshots are
- * deferred while the platform is in active development; this is the structural gate with
- * the three signed-out CTAs. Register/Login open the existing callsign-led sign-in; Explore drops
- * the visitor into the read-only platform. The footer carries the canonical site-wide links — the
- * Site map is a real crawlable page (/sitemap), not an in-app panel.
+ * Marketing landing shell — the structural gate with the three signed-out CTAs (hero copy, feature
+ * sections, and screenshots are placeholders). Register/Login open the callsign-led sign-in; Explore
+ * drops the visitor into the read-only platform. The footer carries the canonical site-wide links —
+ * the Site map is a real crawlable page (/sitemap), not an in-app panel.
  */
 export function Landing(props: { onRegister: () => void; onLogin: () => void; onExplore: () => void }) {
   return (
     <main className="landing">
       <div className="landing-inner">
         <img className="landing-logo" src={ASSET.wordmark} alt="APRScaching" />
-        {/* HERO slogan set; feature/how-it-works/screenshot sections are deferred — see */}
+        {/* HERO slogan; feature/how-it-works/screenshot sections are placeholders. */}
         <p className="landing-slogan">Geocaching, on the air.</p>
         <div className="landing-cta">
           <button className="primary" onClick={props.onRegister}>

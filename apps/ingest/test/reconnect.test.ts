@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// SR-ING-01: one transport failure must schedule exactly ONE reconnect. The old code retried on
-// both `error` and `close` (a socket failure emits both), doubling the outstanding attempts each
-// cycle — an exponential login storm against APRS-IS. Against a server that drops every
-// connection, attempts must stay LINEAR in elapsed time.
+// One transport failure must schedule exactly ONE reconnect. Retrying on both `error` and `close`
+// (a socket failure emits both) would double the outstanding attempts each cycle — an exponential
+// login storm against APRS-IS. Against a server that drops every connection, attempts must stay
+// LINEAR in elapsed time.
 import { describe, it, expect } from "vitest";
 import net from "node:net";
 import { AprsIs } from "../src/aprsis.js";
@@ -24,7 +24,7 @@ function dropServer(): Promise<{ port: number; count: () => number; close: () =>
   });
 }
 
-describe("SR-ING-01 — reconnect is linear, never a storm", () => {
+describe("reconnect is linear, never a storm", () => {
   it("AprsIs: ~1 attempt per retry interval against a dropping server", async () => {
     const srv = await dropServer();
     const is = new AprsIs({
@@ -39,7 +39,7 @@ describe("SR-ING-01 — reconnect is linear, never a storm", () => {
     is.start();
     await sleep(400); // ~10 retry cycles
     srv.close();
-    // linear ⇒ ≈ 1 + 400/40 = 11 attempts; the double-retry bug gives 2^n ≫ 60 in the same window
+    // linear ⇒ ≈ 1 + 400/40 = 11 attempts; a double-retry storm would give 2^n ≫ 60 in the same window
     expect(srv.count()).toBeGreaterThanOrEqual(3); // it IS retrying
     expect(srv.count()).toBeLessThanOrEqual(20); // …but linearly
   });
@@ -61,9 +61,9 @@ describe("SR-ING-01 — reconnect is linear, never a storm", () => {
   });
 });
 
-// SR-ING-02: a server that accepts the connection but then sends nothing (a half-dead uplink) must be
+// A server that accepts the connection but then sends nothing (a half-dead uplink) must be
 // detected via the idle timeout — the client tears the socket down and reconnects.
-describe("SR-ING-02 — a silently-dead uplink is detected and recycled", () => {
+describe("a silently-dead uplink is detected and recycled", () => {
   it("AprsIs recycles a connection that goes idle", async () => {
     let conns = 0;
     const srv = net.createServer((s) => {

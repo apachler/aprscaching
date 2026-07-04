@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * stages.ts — M2 audio-cache: staged multi-caches. A cache can have ordered stages; stage 0 is the
+ * stages.ts — staged multi-caches. A cache can have ordered stages; stage 0 is the
  * published start, and each later stage's coordinates stay hidden until the finder unlocks the
  * previous stage — by being physically at it (geofence) or after its audio clue. Audio lives in the
  * MEDIA store (R2 on CF, filesystem on Node).
@@ -61,7 +61,7 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   if (!who || who !== owner) return json({ error: "only the owner may set stages" }, { status: 403 });
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
-  // SR-RT-12: replacing the stage list drops rows that point at stored audio clues — collect those
+  // Replacing the stage list drops rows that point at stored audio clues — collect those
   // media keys first so we can free the objects afterwards instead of orphaning them in R2/FS forever.
   const orphaned = env.MEDIA
     ? (
@@ -224,7 +224,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   });
 }
 
-// ---- cache media gallery (F-3): owner-managed images/audio/files on a cache ----
+// ---- cache media gallery: owner-managed images/audio/files on a cache ----
 const MEDIA_LIMIT = 10_000_000; // 10 MB per item
 function mediaKind(ct: string): "image" | "audio" | "file" {
   if (/^image\//.test(ct)) return "image";

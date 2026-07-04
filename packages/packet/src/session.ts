@@ -74,7 +74,7 @@ export class TerminalSession {
     private cfg: Partial<LinkConfig> = {},
     private clock: () => number = () => Date.now(),
     private monitorCap = 500,
-    // SR-PKT-09: bound per-channel scrollback and the live channel count so a hostile peer spamming
+    // Bound per-channel scrollback and the live channel count so a hostile peer spamming
     // SABMs / a flood of RX lines can't grow memory without limit.
     private lineCap = 2000,
     private channelCap = 64,
@@ -141,7 +141,7 @@ export class TerminalSession {
     this.notify();
   }
 
-  /** SR-PKT-09: reclaim channels whose link is disconnected (used to bound growth under a SABM flood). */
+  /** Reclaim channels whose link is disconnected (bounds growth under a SABM flood). */
   private reapDisconnected(): void {
     for (const c of this.channels.filter((c) => c.state === "disconnected")) {
       this.links.delete(c.id);
@@ -156,7 +156,7 @@ export class TerminalSession {
     if (f.type !== "UI" && sameAddr(f.dst, this.local)) {
       let ch = this.channels.find((c) => sameAddr(c.remote, f.src));
       // an incoming SABM from a station we have no channel for → accept the call (auto-open a channel).
-      // SR-PKT-09: bound the live channel count — at the cap, first reap any disconnected channels
+      // Bound the live channel count — at the cap, first reap any disconnected channels
       // (the UI keeps a just-closed one; only stale ones are collected); if still full, drop the SABM.
       if (!ch && f.type === "SABM") {
         if (this.channels.length >= this.channelCap) this.reapDisconnected();
@@ -178,7 +178,7 @@ export class TerminalSession {
   }
 
   // ---- internals ----
-  /** Push a line into a channel, trimming the oldest to keep scrollback bounded (SR-PKT-09). */
+  /** Push a line into a channel, trimming the oldest to keep scrollback bounded. */
   private pushLine(ch: Channel, line: TermLine): void {
     ch.lines.push(line);
     if (ch.lines.length > this.lineCap) ch.lines.splice(0, ch.lines.length - this.lineCap);

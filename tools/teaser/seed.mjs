@@ -161,7 +161,7 @@ if (heroId) {
   console.log("seeded logbook on hero cache id", heroId);
 }
 
-// ---- Demo Phase A: populate the data-driven surfaces (Live stations, station pages, weather graphs,
+// ---- Demo data: populate the data-driven surfaces (Live stations, station pages, weather graphs,
 // track history, activity feed, ranks). The gateway DECODES the APRS `payload`, so seed real payloads. ----
 const T = now();
 const ingest = (packets) => j("POST", "/ingest", { packets }, { "x-ingest-secret": SECRET });

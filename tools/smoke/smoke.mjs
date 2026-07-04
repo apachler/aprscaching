@@ -50,7 +50,7 @@ async function waitHealthy() {
 console.log(`smoke: ${BASE}`);
 ok("health", await waitHealthy());
 
-// ---- M9 auth: email magic-link register -> session (the headless-exercisable path) ----
+// ---- auth: email magic-link register -> session (the headless-exercisable path) ----
 {
   const email = `smoke+${now()}@example.test`;
   const callsign = `OE${now() % 1000}X`;
@@ -94,7 +94,7 @@ ok(
 );
 const id = created.data?.cache?.id;
 
-// F-1: the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
+// the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
 const vCache = await call("POST", "/api/caches", {
   title: "Virtual Landmark",
   type: "virtual",
@@ -108,7 +108,7 @@ ok(
   `status=${vCache.status} ${JSON.stringify(vCache.data?.cache)}`,
 );
 
-// F-8: drive-in flag + country + tags (deduped/lowercased), round-tripped through create + detail
+// drive-in flag + country + tags (deduped/lowercased), round-tripped through create + detail
 const metaCache = await call("POST", "/api/caches", {
   title: "Drive-In Lookout",
   type: "single",
@@ -175,7 +175,7 @@ ok("ingest stores 1 position", ing.data?.ok === true && ing.data?.stored === 1, 
 const ta = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE3RF", logType: "found" });
 ok("Tier A verified (aprs_rf)", ta.data?.verified === true && ta.data?.tier === "A", JSON.stringify(ta.data));
 
-// F-6: owner-gated rating — default policy 'finders' lets a verified finder rate, blocks a non-finder
+// owner-gated rating — default policy 'finders' lets a verified finder rate, blocks a non-finder
 const rateFinder = await call("POST", `/api/caches/${id}/rate`, { callsign: "DL1ABC", stars: 4 });
 ok(
   "a verified finder can rate (1–5)",
@@ -195,7 +195,7 @@ ok(
 const dnf = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ", logType: "dnf" });
 ok("DNF logged, unverified", dnf.data?.logged === true && dnf.data?.verified === false, JSON.stringify(dnf.data));
 
-// --- S4: web logging/hiding is gated behind a session (the over-APRS path stays open via secret) ---
+// --- web logging/hiding is gated behind a session (the over-APRS path stays open via secret) ---
 const noAuthLog = await fetch(`${BASE}/api/caches/${id}/logs`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -242,7 +242,7 @@ ok(
   JSON.stringify((sessDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)),
 );
 
-// S5: change the active callsign — re-binds the session and resets verification to pending
+// change the active callsign — re-binds the session and resets verification to pending
 const chg = await fetch(`${BASE}/auth/callsign`, {
   method: "POST",
   headers: { "content-type": "application/json", cookie },
@@ -366,7 +366,7 @@ ok("bad ingest secret -> 401", badSecret.status === 401, `status=${badSecret.sta
 const missing = await call("GET", "/api/caches/999999");
 ok("unknown cache -> 404", missing.status === 404, `status=${missing.status}`);
 
-// AGPL §13 source link (ADR-3) — every instance exposes its running source
+// AGPL §13 source link — every instance exposes its running source
 const srcDesc = await call("GET", "/.well-known/source");
 ok(
   "AGPL §13 source descriptor (repo + AGPL licence)",
@@ -411,7 +411,7 @@ ok(
   JSON.stringify({ n: lp2.data?.logs?.length, more: lp2.data?.hasMore }),
 );
 
-// ---- federation (F1): discovery + signed, mirrorable feeds ----
+// ---- federation: discovery + signed, mirrorable feeds ----
 const wk = await call("GET", "/.well-known/aprscaching");
 ok("well-known descriptor", (wk.data?.protocol ?? "").startsWith("aprscaching-federation"), JSON.stringify(wk.data));
 const fc = await call("GET", "/federation/caches?since=0&limit=500");
@@ -456,7 +456,7 @@ async function verifyRecord(pubJwk, rec) {
   }
 }
 
-// ---- F0: per-callsign signing (single instance, exercised on both runtimes) ----
+// ---- per-callsign signing (single instance, exercised on both runtimes) ----
 const b64u = (buf) => {
   let s = "";
   for (const x of new Uint8Array(buf)) s += String.fromCharCode(x);
@@ -467,7 +467,7 @@ const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
 const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw });
 ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data));
 
-// SR-TRUST-04: a found is now idempotent per (cache, logger). DL1ABC already found `id` above, so the
+// A found is idempotent per (cache, logger). DL1ABC already found `id` above, so the
 // signed-find + tamper checks below run against their OWN fresh cache (a duplicate would short-circuit
 // before echoing signerKey; a tampered *replay* is still rejected by the signature check, tested here).
 const sfCache = await call("POST", "/api/caches", {
@@ -560,8 +560,8 @@ const tampered = await call("POST", `/api/caches/${sfId}/logs`, {
 });
 ok("tampered author signature -> 400", tampered.status === 400, `status=${tampered.status}`);
 
-// ---- M4: community / gamification ----
-// leaderboard credit now requires a control-verified callsign — an unverified logger is excluded
+// ---- community / gamification ----
+// leaderboard credit requires a control-verified callsign — an unverified logger is excluded
 const lbPre = await call("GET", "/api/leaderboard?metric=finds");
 ok(
   "unverified callsign earns no leaderboard credit",
@@ -612,7 +612,7 @@ ok(
   JSON.stringify(act.data?.activity?.length),
 );
 
-// ---- M5: workbench — packet inspector + live station registry ----
+// ---- the workbench — packet inspector + live station registry ----
 const dec = await call("POST", "/api/decode", {
   raw: "OE8APR-9>APRS,WIDE1-1,qAR,OE8XXX:!4704.00N/01526.00E>088/036Going home",
 });
@@ -711,7 +711,7 @@ ok(
   JSON.stringify({ packets: rawPkts.data?.packets }),
 );
 
-// ---- M6: interop (CoT/TAK bridge) + transports + messaging ----
+// ---- interop (CoT/TAK bridge) + transports + messaging ----
 const msgIngest = await call(
   "POST",
   "/ingest",
@@ -779,7 +779,7 @@ ok(
   badgeSvg.slice(0, 80),
 );
 
-// ---- M2 audio-cache: staged multi-cache + media ----
+// ---- audio-cache: staged multi-cache + media ----
 const multi = await call("POST", "/api/caches", {
   title: "Staged Hunt",
   type: "multi",
@@ -855,7 +855,7 @@ ok(
 const mdetail = await call("GET", `/api/caches/${mid}`);
 ok("detail reports stageCount", mdetail.data?.cache?.stageCount === 3, JSON.stringify(mdetail.data?.cache?.stageCount));
 
-// F-3: cache media gallery — owner uploads an image, it lists + serves, non-owner can't delete, owner can
+// cache media gallery — owner uploads an image, it lists + serves, non-owner can't delete, owner can
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 const addMedia = await fetch(`${BASE}/api/caches/${mid}/media?title=Hint%20photo`, {
   method: "POST",
@@ -891,7 +891,7 @@ const delOwner = await fetch(`${BASE}/api/caches/${mid}/media/${addJson.item?.id
 });
 ok("owner deletes cache media", delOwner.status === 200, `status=${delOwner.status}`);
 
-// F-4: living-cache rendezvous — two opted-in living caches co-located + both beaconing log each other
+// living-cache rendezvous — two opted-in living caches co-located + both beaconing log each other
 const lcA = await call("POST", "/api/caches", {
   title: "Living A",
   type: "aprs_living",
@@ -957,7 +957,7 @@ ok(
   JSON.stringify(rdvB.data?.cache?.rendezvous),
 );
 
-// F-2: NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
+// NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
 const nfcCache = await call("POST", "/api/caches", {
   title: "Tag Hunt",
   type: "two_stage",
@@ -1093,7 +1093,7 @@ const bbsB = await call("POST", "/api/bbs/messages", {
 });
 ok("BBS accepts a bulletin", bbsB.data?.type === "B", JSON.stringify(bbsB.data));
 
-// P2: FBB thread tree + typing + SR (reply chains into a thread; T traffic typing)
+// FBB thread tree + typing + SR (reply chains into a thread; T traffic typing)
 ok(
   "a root personal message threads to itself",
   bbsP.data?.threadId === msgId,
@@ -1128,7 +1128,7 @@ const bbsT = await call("POST", "/api/bbs/messages", {
 });
 ok("BBS accepts NTS traffic (type T)", bbsT.data?.type === "T", JSON.stringify(bbsT.data));
 
-// P3: forwarding + hierarchical routing + White Pages
+// forwarding + hierarchical routing + White Pages
 const fwdDefault = await call("GET", `/api/bbs/route?addr=${encodeURIComponent("W1AW @ W1XYZ.MA.USA.NOAM")}`);
 ok(
   "unmatched address routes to the ip-fed catch-all",
@@ -1156,7 +1156,7 @@ ok(
   JSON.stringify(wpRoute.data),
 );
 
-// P4: NET/ROM node — MHeard populated from ingest + sysop NODES table
+// NET/ROM node — MHeard populated from ingest + sysop NODES table
 const mheard = await call("GET", "/api/node/mheard");
 ok(
   "node MHeard lists stations heard via ingest",
@@ -1559,7 +1559,7 @@ ok(
 );
 ok("GET /v/:slug 404s for an unknown slug", (await call("GET", "/v/zzzz9999")).status === 404);
 
-// push + email-digest delivery (ADR-4b) — uses the OE9WL session from the watchlist block
+// push + email-digest delivery — uses the OE9WL session from the watchlist block
 ok(
   "GET /api/push/key returns the VAPID key (null unless configured)",
   (await call("GET", "/api/push/key")).status === 200,

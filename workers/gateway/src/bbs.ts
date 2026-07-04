@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { secretOk } from "./auth.js";
 /**
- * bbs.ts — store-and-forward message BBS (Stage 1, connectionless). A message base of personal mail
+ * bbs.ts — store-and-forward message BBS (connectionless). A message base of personal mail
  * + bulletins. Personal mail is *held* until the addressee is next *heard* (deliverHeld, called from
  * ingest), then *forwarded* as a standard APRS message via the outbox, with line-number ack tracking
- * and bounded retry. Bulletins are retrievable. BID + P/B typing are MBL/FBB-compatible so a future
+ * and bounded retry. Bulletins are retrievable. BID + P/B typing are MBL/FBB-compatible so a
  * connected-mode gateway can bridge to real F6FBB/BPQ32 nodes.
  */
 import type { Env } from "./env.js";
@@ -38,7 +38,7 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   const posted = now();
   const expires = b.lifetimeSec ? posted + b.lifetimeSec : type === "B" ? posted + 30 * 86400 : null;
 
-  // SR (reply): inherit the parent's conversation root so replies chain into a thread
+  // Reply: inherit the parent's conversation root so replies chain into a thread
   let replyTo: number | null = null,
     threadRoot: number | null = null;
   if (b.replyTo) {
@@ -219,7 +219,7 @@ export async function handleBbsSent(req: Request, env: Env): Promise<Response> {
   });
 }
 
-// ---------------------------------------------------------------- bulletin federation (BBS #1)
+// ---------------------------------------------------------------- bulletin federation
 interface BulletinRow {
   id: number;
   bid: string | null;
