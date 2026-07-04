@@ -67,6 +67,9 @@ jobs:
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
           ALLOW_DEV_TOKENS: "1"
+          # Tier A is default-deny — it needs the operator to attest their receiving sites. The smoke
+          # suite gates its RF fixes through OE8XXX, so name it as an attested site for the Tier-A path.
+          FIRST_PARTY_SITES: OE8XXX
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
@@ -93,7 +96,8 @@ jobs:
           INGEST_SECRET: ci-conformance-ingest-secret
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
-          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nALLOW_DEV_TOKENS=1\n' "$KEY" > workers/gateway/.dev.vars
+          # FIRST_PARTY_SITES=OE8XXX names the smoke suite's gating IGate as attested (Tier A is default-deny).
+          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\n' "$KEY" > workers/gateway/.dev.vars
           (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
@@ -144,6 +148,8 @@ jobs:
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
           ALLOW_DEV_TOKENS: "1"
+          # Tier A is default-deny — name the smoke suite's gating IGate (OE8XXX) as an attested site.
+          FIRST_PARTY_SITES: OE8XXX
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           DB_PATH="$RUNNER_TEMP/bun.db" PORT=8787 INSTANCE=ci.bun FED_PRIVATE_KEY="$KEY" \

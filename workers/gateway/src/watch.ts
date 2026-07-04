@@ -13,7 +13,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionAccountId as resolveAccount } from "./auth.js";
 import { pushAlert } from "./notify.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 
@@ -22,18 +22,13 @@ const base = (c: string) => c.toUpperCase().split("-")[0]!;
 const HEARD_THROTTLE_SEC = 3600; // at most one "heard" alert per watched call per hour
 const NEAR_CACHE_DEG = 0.0045; // ~500 m bounding box for the near-a-cache tie-in
 
-/** The account behind the current session (resolved from its callsign), or null if signed out. */
+/**
+ * The account id behind the current session, or null if signed out. A bare-string convenience over
+ * the canonical resolver in auth.ts — the many watchlist/notify/wx/support callers key rows by
+ * `account_id` alone and never need the active callsign.
+ */
 export async function sessionAccountId(req: Request, env: Env): Promise<string | null> {
-  const cs = await sessionCallsign(req, env);
-  if (!cs) return null;
-  const a = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
-    .bind(base(cs))
-    .first<{ account_id: string }>();
-  if (a) return a.account_id;
-  const b = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign = ?")
-    .bind(cs.toUpperCase())
-    .first<{ account_id: string }>();
-  return b?.account_id ?? null;
+  return (await resolveAccount(req, env))?.accountId ?? null;
 }
 
 export async function handleWatchList(req: Request, env: Env): Promise<Response> {

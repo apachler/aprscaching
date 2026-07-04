@@ -3,8 +3,9 @@ import { describe, it, expect } from "vitest";
 import { provenanceOf, qConstructOf, parseAttestedSites } from "../src/provenance.js";
 
 describe("provenance — derive firstPartyAttested", () => {
-  it("attests an RF fix with a qAR construct and an independent gating site", () => {
-    const pv = provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX", ts: 5 });
+  it("attests an RF fix with a qAR construct gated by an operator-attested site", () => {
+    const sites = parseAttestedSites("OE8XXX");
+    const pv = provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX", ts: 5 }, sites);
     expect(pv.firstPartyAttested).toBe(true);
     expect(pv.transport).toBe("aprs-is");
     expect(pv.qConstruct).toBe("qAR");
@@ -12,13 +13,29 @@ describe("provenance — derive firstPartyAttested", () => {
     expect(pv.heardAt).toBe(5);
   });
 
+  it("does NOT attest a bare firehose qAR when no allowlist is configured (default-deny)", () => {
+    // The firehose carries frames gated by arbitrary IGates; a qAR alone is not proof this operator
+    // heard it. Without an explicit FIRST_PARTY_SITES the fix must stay below Tier A.
+    const pv = provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX", ts: 5 });
+    expect(pv.firstPartyAttested).toBe(false);
+    expect(pv.siteId).toBe("OE8XXX");
+    // an empty allowlist is treated the same as none
+    expect(
+      provenanceOf({ heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX" }, parseAttestedSites(""))
+        .firstPartyAttested,
+    ).toBe(false);
+  });
+
   it("does NOT attest an injected (qAC) APRS-IS beacon — transport laundering blocked", () => {
     const pv = provenanceOf({ heard_via: "aprs_is", igate_call: "OE8XXX", path: "TCPIP*,qAC,T2" });
     expect(pv.firstPartyAttested).toBe(false);
   });
 
-  it("does NOT attest an RF fix with no gating site", () => {
-    expect(provenanceOf({ heard_via: "rf", igate_call: null, path: "WIDE1-1,qAR" }).firstPartyAttested).toBe(false);
+  it("does NOT attest an RF fix with no gating site, even with an allowlist set", () => {
+    const sites = parseAttestedSites("OE8MINE");
+    expect(
+      provenanceOf({ heard_via: "rf", igate_call: null, path: "WIDE1-1,qAR" }, sites).firstPartyAttested,
+    ).toBe(false);
   });
 
   it("does NOT attest an app-geo fix (that is the Tier-B path, not Tier A)", () => {

@@ -32,7 +32,9 @@ echo "==> build web (offline grid basemap)"
 echo "==> reset local D1 + start worker"
 cleanup; sleep 1
 ( cd "$ROOT/workers/gateway" && rm -rf .wrangler && CI=1 npx wrangler d1 migrations apply aprscaching --local )
-( cd "$ROOT/workers/gateway" && CI=1 npx wrangler dev --port "$PORT_API" --local --ip 127.0.0.1 ) >"$OUT/wrangler.log" 2>&1 &
+# Tier A is default-deny; the demo seed gates its RF find through OE8XXX, so attest it so the teaser
+# logbook shows the intended Tier-A (RF) entry.
+( cd "$ROOT/workers/gateway" && CI=1 npx wrangler dev --port "$PORT_API" --local --ip 127.0.0.1 --var FIRST_PARTY_SITES:OE8XXX ) >"$OUT/wrangler.log" 2>&1 &
 wait_url "http://127.0.0.1:$PORT_API/health" || { echo "worker did not start"; exit 1; }
 
 echo "==> start web preview"

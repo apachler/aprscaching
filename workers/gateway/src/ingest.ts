@@ -13,6 +13,9 @@ import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 
+/** Base call (no SSID, no digipeat `*`), uppercased — the licence identity behind a callsign. */
+const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
+
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
   lat: number;
@@ -62,12 +65,22 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
   // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
   const trusted = secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+  let signer: { callsign: string } | null = null;
   if (!trusted) {
-    const signed = await verifySignedIngest(req, env, body.data.packets);
-    if (!signed) return new Response("unauthorized", { status: 401 });
-    if (await rateLimitedDurable(env, `ingest:${signed.callsign}`, Date.now(), 240, 60_000))
+    signer = await verifySignedIngest(req, env, body.data.packets);
+    if (!signer) return new Response("unauthorized", { status: 401 });
+    if (await rateLimitedDurable(env, `ingest:${signer.callsign}`, Date.now(), 240, 60_000))
       return json({ error: "rate limited" }, { status: 429 });
   }
+  // A signed batch authenticates ONE operator. On a PUBLIC gateway it may carry only that operator's
+  // own traffic (any SSID of their base call) — otherwise a signed key would let anyone inject
+  // positions/stations/messages/mheard attributed to arbitrary callsigns. Relaying third-party RF is
+  // the trusted path's job (self-host ingest secret / apps/ingest), so foreign-src frames are dropped
+  // from an untrusted batch rather than stored under a callsign the signer does not hold.
+  const signerBase = signer ? baseCall(signer.callsign) : null;
+  const packets = signerBase
+    ? body.data.packets.filter((p) => baseCall(p.src) === signerBase)
+    : body.data.packets;
 
   const stmts: SqlStatement[] = [];
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
@@ -79,7 +92,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // [now − 7 d, now + 60 s] before anything is persisted.
   const nowS = Math.floor(Date.now() / 1000);
   const clampTs = (t: number) => Math.min(Math.max(t, nowS - 7 * 24 * 3600), nowS + 60);
-  for (const p of body.data.packets) {
+  for (const p of packets) {
     p.ts = clampTs(p.ts);
     portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
     if (p.ts > maxTs) maxTs = p.ts;
@@ -219,7 +232,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   try {
     await recordMheard(
       env,
-      body.data.packets.map((p) => ({ src: p.src, port: p.port })),
+      packets.map((p) => ({ src: p.src, port: p.port })),
     );
   } catch (e) {
     console.error("mheard:", (e as Error).message);

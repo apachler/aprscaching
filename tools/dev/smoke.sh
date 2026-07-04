@@ -12,8 +12,11 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 SUITES="${*:-${SUITES:-smoke geofence}}"
-# SR-SEC-01: the gateway refuses to boot on the 'change-me' default — generate a per-run secret.
+# The gateway refuses to boot on the 'change-me' default secret — generate a per-run one.
 SECRET="${INGEST_SECRET:-smoke-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')}"
+# Tier A is default-deny: it requires the operator to attest their own receiving sites. The smoke
+# suite gates its RF fixes through OE8XXX, so name it here for the conformance run to reach Tier A.
+FIRST_PARTY_SITES="${FIRST_PARTY_SITES:-OE8XXX}"
 fail=0
 
 run_suite() {
@@ -23,6 +26,7 @@ run_suite() {
   log="$(mktemp)"
   # start in its own process group so we can reap pnpm AND its node/tsx children on teardown
   setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" PORT="$port" ALLOW_DEV_TOKENS=1 \
+    FIRST_PARTY_SITES="$FIRST_PARTY_SITES" \
     pnpm --filter @aprsweb/node-gateway start >"$log" 2>&1 &
   pid=$!
   # wait for /health (up to ~20s)

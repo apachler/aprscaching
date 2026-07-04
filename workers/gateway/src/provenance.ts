@@ -6,12 +6,13 @@
  * that boolean (never the transport), so the transport-vs-trust rule lives here and cannot leak into
  * trust branching: "transport convenience is not trust uplift."
  *
- * Attestation today:
- *   - A position heard on RF (`heard_via = 'rf'`) with an RF-originated q-construct (qAR/qAO) and an
- *     independent gating IGate is treated as first-party attested. In the single-instance launch the
- *     gating IGate IS, operationally, the receiving site feeding this instance.
- *   - If the operator pins an explicit allowlist (`FIRST_PARTY_SITES`), attestation narrows to gates
- *     on that list — the honest posture for the deferred owned-RF / HAMNET track.
+ * Attestation is default-deny — the operator must name the receiving sites they attest:
+ *   - First-party attestation requires a non-empty operator allowlist (`FIRST_PARTY_SITES`). A
+ *     position heard on RF (`heard_via = 'rf'`) with an RF-originated q-construct (qAR/qAO) whose
+ *     gating IGate is on that list is first-party attested.
+ *   - With no allowlist set, nothing is first-party attested. The APRS-IS firehose carries frames
+ *     gated by arbitrary IGates, so a bare `qAR` is not proof this operator heard the frame — Tier A
+ *     stays closed until the operator names their own sites.
  *   - Everything else (bare APRS-IS injection qAC/qAX, app geo, any tunnelled transport) → not
  *     attested → cannot reach Tier A.
  */
@@ -56,14 +57,16 @@ function transportOf(p: RawProvenance): Transport {
 }
 
 /**
- * Derive provenance for a stored position. `attestedSites` (operator allowlist) narrows attestation
- * when non-empty; when empty we fall back to the qAR-RF + independent-IGate single-instance rule.
+ * Derive provenance for a stored position. `firstPartyAttested` requires a non-empty operator
+ * allowlist (`attestedSites`) that names the gating IGate. An empty (or absent) allowlist attests
+ * nothing: a bare firehose `qAR` never reaches Tier A (default-deny). Tier A opens only once the
+ * operator explicitly names the receiving sites they stand behind.
  */
 export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Provenance {
   const qConstruct = qConstructOf(p.path);
   const igate = (p.igate_call ?? "").toUpperCase();
   const rfOriginated = p.heard_via === "rf" && (!qConstruct || RF_QCONSTRUCT.test(qConstruct));
-  const siteOk = attestedSites && attestedSites.size > 0 ? attestedSites.has(igate) : !!igate;
+  const siteOk = !!attestedSites && attestedSites.size > 0 && !!igate && attestedSites.has(igate);
   const firstPartyAttested = rfOriginated && siteOk;
   return {
     transport: transportOf(p),

@@ -264,13 +264,23 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
 
 const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
 
-/** Resolve the durable account behind the signed-in session (by its active callsign). */
+/**
+ * Resolve the durable account behind the signed-in session — the single canonical resolver used
+ * everywhere (`watch.ts` re-exports a bare-string wrapper over it). A person holds one or more BASE
+ * calls in `account_callsigns` (the durable multi-call model), so that mapping is authoritative and
+ * is consulted first; the `accounts` row (active-call anchor) is the fallback for a single-call
+ * account that predates any `account_callsigns` entry. Returns the account id + the active callsign.
+ */
 export async function sessionAccountId(
   req: Request,
   env: Env,
 ): Promise<{ accountId: string; callsign: string } | null> {
   const cur = await sessionCallsign(req, env);
   if (!cur) return null;
+  const viaBase = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
+    .bind(baseOf(cur))
+    .first<{ account_id: string }>();
+  if (viaBase) return { accountId: viaBase.account_id, callsign: cur };
   const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
     .bind(cur)
     .first<{ account_id: string }>();
