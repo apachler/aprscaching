@@ -656,6 +656,7 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
 
 /** type → applier, reusing the exact mirror path as pull-sync (display-only, idempotent by global id). */
 const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Promise<void>> = Object.fromEntries(
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- `apply` is a plain data property (a standalone applier fn), not Function.prototype.apply; no `this` is bound
   SYNC_DEFS.map((d) => [d.type, d.apply]),
 );
 

@@ -45,8 +45,11 @@ export default tseslint.config(
       // --- WARN: real but lower-value / judgement-dependent; tighten to error over time (TODO.md).
       "@typescript-eslint/no-base-to-string": "warn", // review each object-stringification for intent
       "@typescript-eslint/restrict-template-expressions": "warn",
-      "@typescript-eslint/require-await": "warn", // platform-mandated async signatures (DO handlers) are fine
-      "@typescript-eslint/unbound-method": "warn",
+      // ERROR: an accidental async-without-await or an unbound method reference is a real defect. The
+      // few legitimate exceptions (the Durable Object hibernation handlers must be async; a data
+      // property that happens to be named `apply`) carry a documented inline disable at their site.
+      "@typescript-eslint/require-await": "error",
+      "@typescript-eslint/unbound-method": "error",
       // `Response.json()` and friends default their generic to `unknown`, and the linter's projectService
       // view of that default disagrees with the build's — so this rule flags necessary assertions as
       // "unnecessary". Left as a WARN (never auto-fixed in CI) so it can't remove a load-bearing cast.

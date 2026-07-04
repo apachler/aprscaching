@@ -56,13 +56,14 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
   promise/assertion bug-catchers while the by-design `any` boundaries stay off. See `eslint.config.types.mjs`.
 - [x] **Burn down the lint warnings** — the fast `pnpm lint` is at **0 warnings**; keep it there (clear
   opportunistically when touching neighbouring code, never let the count grow).
-- [ ] **Tighten the type-aware warnings** *(P3 · M)* — `lint:types` still reports softer warnings
-  (`no-base-to-string`, `restrict-template-expressions`, `no-unnecessary-type-assertion`, …). Promote them
-  to errors rule-by-rule as the code is cleaned, the same way the fast config was tightened. The
-  *identity-collision* subset — arbitrary third-party JSON stringified into an id/callsign/externalId in
-  the spot + import parsers — is already coerced to scalars (`pickStr`/`str`); the residue is internal
-  type-narrowing noise on typed DB fields, and `no-unnecessary-type-assertion` stays a warning (it
-  false-positives on generic `.json()`/`unknown` returns under `projectService`).
+- [ ] **Tighten the type-aware warnings** *(P3 · M)* — promote `lint:types` warnings to errors rule-by-rule
+  as the code is cleaned. **Done so far:** `require-await` and `unbound-method` are now **errors** (the
+  handful of legitimate exceptions — the Durable Object hibernation handlers must be async; a data
+  property named `apply` — carry a documented inline disable); the *identity-collision* subset of
+  `no-base-to-string`/`restrict-template-expressions` (arbitrary third-party JSON stringified into an
+  id/callsign/externalId in the spot + import parsers) is coerced to scalars (`pickStr`/`str`). **Left:**
+  `no-base-to-string` on internal typed DB fields (type-narrowing noise), and `no-unnecessary-type-assertion`
+  stays a **warning** — it false-positives on generic `.json()`/`unknown` returns under `projectService`.
 
 ## Deferred by design (reserved seams, opened on demand)
 

@@ -433,7 +433,7 @@ export async function handleSession(req: Request, env: Env): Promise<Response> {
 }
 
 /** POST /auth/logout — clear the session cookie. */
-export async function handleLogout(): Promise<Response> {
+export function handleLogout(): Response {
   return json(
     { ok: true },
     { headers: { "set-cookie": `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0` } },
