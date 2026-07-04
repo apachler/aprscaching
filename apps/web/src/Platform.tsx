@@ -907,6 +907,7 @@ export default function Platform({ session, startTour }: { session: SessionState
           onNearby={() => openOnly(() => setShowNearby(true))}
           onActivity={() => openOnly(() => setShowActivity(true))}
           onProfile={() => openOnly(() => setShowProfile(true))}
+          onDocs={() => openOnly(() => setShowDocs(true))}
           sysop={sysop}
           onAdmin={() => openOnly(() => setShowAdmin(true))}
         />

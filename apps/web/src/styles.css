@@ -3492,6 +3492,10 @@ button.danger:hover {
   .topbar .nav-desktop {
     display: none;
   }
+  /* the nav rail carries the Manual at ≥1024px, so the top-bar shortcut is redundant there */
+  .topbar .help-ic {
+    display: none;
+  }
 }
 /* tablet (681–1023px): the row carries nav + Hide + identity, so drop the secondary "N caches in
    view" / queued counts to give the search box usable width (they return on the roomy desktop rail). */
