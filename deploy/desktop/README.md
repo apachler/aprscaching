@@ -53,4 +53,4 @@ Unsigned binaries trip macOS Gatekeeper and Windows SmartScreen.
 ## Caveats
 "One exe" = **one binary per OS/arch** (cross-built from a single machine), ~50–100 MB each (the Bun
 runtime is inside). The desktop app is a single-user local instance — for shared/always-on use, see
-the other topologies in ``.
+the other topologies in `deploy/`.
