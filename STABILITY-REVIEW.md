@@ -11,7 +11,7 @@
 
 ## Production Readiness Score: 58 → 88 / 100
 
-> **Update 2 (2026-07-03, P1 batch) — the entire go-public P1 set from HAPPY-CODING.md is fixed**,
+> **Update 2 (2026-07-03, P1 batch) — the entire go-public P1 set is fixed**,
 > each with tests: SR-SEC-08/09/10/11/12/13 (timing-safe compares · durable un-spoofable rate
 > limiting + migration 0007 · ingest caps · server-side session expiry/epoch · register/finish-only
 > accounts · WebAuthn fail-closed), SR-FED-07/08/09/10/11 (quorum + matched-evidence reputation —
@@ -22,9 +22,8 @@
 > wrangler 4, better-sqlite3 12, React 19, MapLibre 5, zod 4, Vite 8) — all CI-green.
 >
 > **Update 1 — all 8 Criticals AND all 27 High findings fixed**, each with a regression test;
-> ticked in the detail sections below. Remaining open items (P2/P3 Mediums + Lows) stay tracked in
-> `HAPPY-CODING.md` — this document is the record of *what was found*, HAPPY-CODING.md of *what is
-> left to do*.
+> ticked in the detail sections below. This document is the record of *what was found* and how each
+> finding was resolved; intentionally-deferred capability work lives in `TODO.md`.
 >
 > Green across `pnpm -r build`, `pnpm -r test` (230+ tests incl. the new P1 suites), the Node/SQLite
 > smoke + geofence conformance, and the two-instance federation e2e (92 assertions). Schema:
@@ -34,7 +33,7 @@
 > Score 88: every `SR-*` finding is now closed — the Criticals/Highs, the P1 batch, the P2/P3
 > Mediums/Lows, AND both deep-read passes (`SR-WEB-*`, `SR-CFG-*`) are fixed + tested. Neither pass
 > surfaced a Critical. The only remaining gaps are capability work that genuinely needs a live site
-> (owned-RF Tier A, hardware validation) — tracked in HAPPY-CODING.md, not defects.
+> (owned-RF Tier A, hardware validation) — tracked in `TODO.md`, not defects.
 
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live

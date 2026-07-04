@@ -31,6 +31,15 @@ the 1.0 tag, and why.
 - **One-click POI overlay** — a map-side toggle that live-queries a curated OSM/Wikidata set (peaks, castles,
   lighthouses) for the current viewport as a switchable layer, respecting each source's attribution.
 
+## Engineering-quality follow-ups (opportunistic, not defects)
+- **Type-aware ESLint** — the flat config is intentionally non-type-aware for speed/friction. Once the
+  baseline is stable, add a separate, slower `lint:types` job enabling `@typescript-eslint` type-checked
+  rules on `workers/` + `packages/`. *P3 · M.*
+- **Burn down the lint warnings** — the green baseline carries a handful of warnings (mostly unused vars /
+  `no-explicit-any`-adjacent). Clear opportunistically when touching the neighbouring code; never let the
+  count grow. *P3 · S.*
+
 ## Deferred by design (see the roadmap for the rest)
-- **CI depth**, additional deployment-topology exercises, and the federation push-to-hub *rendezvous relay's*
-  corroboration path are tracked in `` / `` — reserved seams, opened when there's a concrete need.
+- **CI depth**, additional deployment-topology exercises (`deploy/` topologies 1–4 beyond the current
+  tri-runtime conformance), and the federation push-to-hub *rendezvous relay's* corroboration path are
+  reserved seams, opened when there's a concrete need.

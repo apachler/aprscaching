@@ -7,8 +7,8 @@ body:
       value: |
         The platform is feature-complete for 1.0; the roadmap beyond that is deliberately conservative.
         Proposals that fit the mission (amateur-radio-first, free-in-full, trust-follows-corroboration)
-        and don't add commercial/telemetry surface are most welcome. Check `TODO.md` / `HAPPY-CODING.md`
-        first — it may already be planned.
+        and don't add commercial/telemetry surface are most welcome. Check `TODO.md` first — it may
+        already be planned.
   - type: textarea
     id: problem
     attributes:

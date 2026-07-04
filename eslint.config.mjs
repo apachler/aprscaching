@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Flat ESLint config — deliberately light. Formatting is Prettier's job (eslint-config-prettier turns
 // the stylistic rules off), so these rules target real correctness/foot-guns only. Non-type-aware
-// (fast, no per-package project wiring); tighten rule-by-rule over time (see HAPPY-CODING.md).
+// (fast, no per-package project wiring); tighten rule-by-rule over time (see TODO.md).
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -48,7 +48,7 @@ export default tseslint.config(
       // `while (n--)` style guards are used intentionally in the pure state machines.
       "no-constant-condition": ["error", { checkLoops: false }],
       // --- stylistic / cleanup: surfaced as warnings so they don't block CI at the 1.0 baseline;
-      //     tighten to error over time (HAPPY-CODING.md). Genuinely-dangerous rules stay errors above.
+      //     tighten to error over time (TODO.md). Genuinely-dangerous rules stay errors above.
       "no-empty": ["warn", { allowEmptyCatch: true }],
       "no-useless-escape": "warn",
       "prefer-const": "warn",
