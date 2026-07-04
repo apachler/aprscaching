@@ -93,6 +93,7 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
     if (m.isStyleLoaded()) setup();
     else m.once("load", setup);
     return () => {
+      m.off("load", setup); // SR-WEB: deregister the one-shot if we unmount before it fires
       for (const l of ["trk-line-l", "trk-pts-l", "trk-head-l"]) if (m.getLayer(l)) m.removeLayer(l);
       for (const id of Object.values(SRC)) if (m.getSource(id)) m.removeSource(id);
     };

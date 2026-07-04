@@ -31,9 +31,10 @@
 > migrations 0005–0007. The repo is professionalized for going public (community-health files,
 > hardened + SHA-pinned CI, CodeQL, Dependabot, DCO, release-please, ESLint+Prettier enforced).
 >
-> Score 88: the remaining gap is the two deep-read passes still **PENDING** (`SR-WEB-*`, `SR-CFG-*`),
-> the open P2/P3 Mediums/Lows, and owned-RF Tier A / hardware validation, which genuinely need a
-> live site. Neither pending pass has surfaced a Critical; both are scoped in HAPPY-CODING.md.
+> Score 88: every `SR-*` finding is now closed — the Criticals/Highs, the P1 batch, the P2/P3
+> Mediums/Lows, AND both deep-read passes (`SR-WEB-*`, `SR-CFG-*`) are fixed + tested. Neither pass
+> surfaced a Critical. The only remaining gaps are capability work that genuinely needs a live site
+> (owned-RF Tier A, hardware validation) — tracked in HAPPY-CODING.md, not defects.
 
 Justification: the *architecture* is genuinely strong — a single shared gateway app across three
 runtimes, a transport-blind trust engine, signed authorship/federation, a real DO-hibernation live
@@ -484,10 +485,38 @@ Text decoders are hardened (length guards, null-returning); exposure is in the b
 - [x] **SR-PARSE-06 (Low) — MGRS band wrong 80–84°** (`mgrs.ts:14-17`): `BANDS[20]` undefined → `"Z"`.
   Display-only. *Fix:* `if (lat >= 72) return "X";`.
 
-## Detail — Web app (`apps/web`) — PENDING (final agent)
+## Detail — Web app (`apps/web`) — ✅ DONE (2026-07-04)
 
-_(SR-WEB-* — WebSocket reconnect/leak behavior, MapLibre source/marker leaks, offline-cache growth,
-device-key handling, no-emoji guard coverage. To be inserted.)_
+The `SR-WEB-*` audit pass was completed (scoped by a read-only agent, then fixed). Findings + fixes:
+
+- [x] **SR-WEB-01 (Medium) — live WebSocket never reconnects** (`Platform.tsx:435`): the socket was
+  opened once with no `onclose`/`onerror`, so a server restart or network blip silently killed all live
+  features (geofence prompts, live stations) until a full reload. *Fix:* reconnect on close/error with
+  exponential backoff + jitter, timer held effect-local and cleared on cleanup, `stopped` guard against
+  an unmount race. (No leak — the single-socket teardown was already correct.)
+- [x] **SR-WEB-02 (Medium) — `setStyle` orphans style-layer overlays** (`Platform.tsx:216`): a theme
+  switch calls `m.setStyle()`, wiping the grid/rings/terminator/arc, the raster basemap, and track
+  layers; their owners only added them once (`[map]`-keyed), so they were gone until interaction. *Fix:*
+  a `styleEpoch` bumped on the post-`setStyle` `idle` (not `styledata` → no `setData` feedback loop),
+  threaded to `MapTools`/`BasemapSwitcher`, whose idempotent setup re-runs on it.
+- [x] **SR-WEB-03 (Low) — MapLibre setup effects lacked cleanup + leaked `once('load')`**
+  (`MapTools.tsx`, `BasemapSwitcher.tsx`, `TrackReplay.tsx`): *Fix:* each setup effect now removes its
+  sources/layers and `m.off('load', …)` on cleanup.
+- [x] **SR-WEB-04 (Medium) — device signing key extractable in localStorage** (`crypto.ts:41`): the
+  Ed25519 private key was generated `extractable:true` and persisted as plaintext PKCS8 in localStorage
+  (XSS/extension exfiltratable). *Fix:* persist a **non-extractable** `CryptoKey` in IndexedDB (import
+  the PKCS8 back as non-extractable, discard the extractable original); the public key stays a
+  localStorage string. Existing keys migrate transparently (same key → no re-registration).
+- [x] **SR-WEB-05 (Low) — device-key generation race** (`crypto.ts:33`): two concurrent callers each
+  minted a key and clobbered the registered public key. *Fix:* memoize the in-flight promise so all
+  callers await one generation.
+- [x] **SR-WEB-06 (Low) — no-emoji guard coverage gap** (`test/no-emoji.mjs:19,43`): scanned only
+  `src/**/*.{ts,tsx}`, missing `public/sw.js` (the service-worker notification text reaches users) and
+  public tool scripts. *Fix:* scan `src` + `public` and widen the extension filter to `.js/.jsx/.mjs`
+  (now 101 files, clean).
+- **Clean:** offline/storage growth (`offlineArea.ts` is single-key + 2000-cap; `offlineBasemap.ts` is a
+  pure style builder; no IndexedDB/CacheStorage tile growth; `public/sw.js` is push-only, no fetch cache),
+  and the marker layer (cache/station/spot markers are diffed against a `seen` set and `.remove()`d).
 
 ## Detail — Configuration & observability — ✅ DONE (2026-07-03)
 

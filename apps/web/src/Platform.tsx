@@ -210,9 +210,12 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [locSettings.theme, locSettings.crt]);
 
   // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
-  // markers are overlays, not style layers, so they survive setStyle and need no re-add. Skips the
-  // mount run so we don't redundantly re-parse the style the map just initialised with.
+  // markers are overlays, not style layers, so they survive setStyle. But the style-LAYER overlays
+  // (grid/rings/terminator/arc, the raster basemap, tracks) ARE wiped by setStyle, so we bump
+  // `styleEpoch` once the new style settles (SR-WEB) — the overlay owners key their setup on it and
+  // re-add. Skips the mount run so we don't redundantly re-parse the style the map just initialised with.
   const themeAtMount = useRef(locSettings.theme);
+  const [styleEpoch, setStyleEpoch] = useState(0);
   useEffect(() => {
     const m = map.current;
     if (!m || themeAtMount.current === locSettings.theme) {
@@ -221,6 +224,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
     themeAtMount.current = locSettings.theme;
     m.setStyle(baseStyle());
+    m.once("idle", () => setStyleEpoch((e) => e + 1)); // idle (not styledata) → no setData feedback loop
   }, [locSettings.theme]);
 
   // single-overlay model: close everything, then a nav handler opens exactly one surface
@@ -431,45 +435,72 @@ export default function Platform({ session, startTour }: { session: SessionState
     };
   }, [refresh]);
 
-  // live WebSocket: geofence prompts ("you're near a cache")
+  // live WebSocket: geofence prompts ("you're near a cache") + live station deltas.
+  // SR-WEB: reconnect on close/error with exponential backoff + jitter — a server restart or a
+  // network blip must not silently kill live features until the page is reloaded. The retry timer is
+  // effect-local and cleared on cleanup; `stopped` prevents a reconnect racing the unmount.
   useEffect(() => {
-    const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
-    ws.current = s;
-    s.addEventListener("open", () => {
-      const m = map.current;
-      if (m) {
-        const b = m.getBounds();
-        subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-      }
-    });
-    s.addEventListener("message", (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "near_cache") setNearPrompt(msg);
-        else if (msg.type === "station" && stationsOnRef.current) {
-          setStations((prev) => {
-            const next = prev.filter((p) => p.callsign !== msg.callsign);
-            next.unshift({
-              callsign: msg.callsign,
-              lat: msg.lat,
-              lon: msg.lon,
-              symbol: msg.symbol ?? null,
-              course: msg.course ?? null,
-              speedKn: null,
-              altitudeM: null,
-              comment: null,
-              lastSeen: msg.lastSeen,
-            });
-            return next.slice(0, 500);
-          });
+    let stopped = false;
+    let retryMs = 1000;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      if (stopped) return;
+      const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
+      ws.current = s;
+      s.addEventListener("open", () => {
+        retryMs = 1000; // reachable again → reset the backoff
+        const m = map.current;
+        if (m) {
+          const b = m.getBounds();
+          subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
         }
-      } catch {
-        /* ignore */
-      }
-    });
+      });
+      s.addEventListener("message", (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "near_cache") setNearPrompt(msg);
+          else if (msg.type === "station" && stationsOnRef.current) {
+            setStations((prev) => {
+              const next = prev.filter((p) => p.callsign !== msg.callsign);
+              next.unshift({
+                callsign: msg.callsign,
+                lat: msg.lat,
+                lon: msg.lon,
+                symbol: msg.symbol ?? null,
+                course: msg.course ?? null,
+                speedKn: null,
+                altitudeM: null,
+                comment: null,
+                lastSeen: msg.lastSeen,
+              });
+              return next.slice(0, 500);
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+      s.addEventListener("error", () => {
+        try {
+          s.close();
+        } catch {
+          /* close → schedules the reconnect */
+        }
+      });
+      s.addEventListener("close", () => {
+        if (stopped || ws.current !== s) return;
+        ws.current = null;
+        const delay = Math.min(retryMs, 30_000) * (0.5 + Math.random());
+        retryMs = Math.min(retryMs * 2, 30_000);
+        reconnectTimer = setTimeout(connect, delay);
+      });
+    };
+    connect();
     return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       try {
-        s.close();
+        ws.current?.close();
       } catch {
         /* */
       }
@@ -1039,8 +1070,8 @@ export default function Platform({ session, startTour }: { session: SessionState
                 </div>
               </div>
             )}
-            {ready && <BasemapSwitcher map={map.current} />}
-            {ready && <MapTools map={map.current} home={home} target={target} />}
+            {ready && <BasemapSwitcher map={map.current} styleEpoch={styleEpoch} />}
+            {ready && <MapTools map={map.current} home={home} target={target} styleEpoch={styleEpoch} />}
             {!ready && (
               <div className="splash">
                 <img src={ASSET.wordmark} alt="APRScaching" />

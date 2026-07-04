@@ -16,7 +16,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// SR-WEB: scan `src` AND `public` — the service worker (public/sw.js, whose notification title/body
+// reaches users) and public tool scripts were previously unscanned, so a raw emoji there shipped unflagged.
+const ROOTS = [join(ROOT, "src"), join(ROOT, "public")];
 
 /** True if `cp` is a colour emoji we must not render raw. */
 function isEmoji(cp) {
@@ -40,12 +43,12 @@ function walk(dir, out) {
     const s = statSync(p);
     if (s.isDirectory()) {
       if (name !== "node_modules") walk(p, out);
-    } else if (/\.(ts|tsx)$/.test(name)) out.push(p);
+    } else if (/\.(ts|tsx|js|jsx|mjs)$/.test(name)) out.push(p);
   }
 }
 
 const files = [];
-walk(SRC, files);
+for (const root of ROOTS) walk(root, files);
 const violations = [];
 for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");

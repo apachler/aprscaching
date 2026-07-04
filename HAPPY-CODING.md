@@ -95,13 +95,17 @@ Both open Lows are now closed: **SR-SEC-15** CORS credentials are allowlisted to
 **SR-PKT-15** a peer SABM on an already-connected AX.25 link emits `"link reset by peer"` so the host
 learns its unacked data was discarded. Tested (`p3_cors.test.ts`, `link.test.ts`), full suite + smoke green.
 
-## Two audit passes still PENDING (scope, then fold in)
+## Two audit passes — ✅ BOTH DONE
 
-The stability review left two subsystem deep-reads open; do the read, then add `SR-WEB-*` / `SR-CFG-*`
-findings here at their real priority.
+Both subsystem deep-reads were completed and their findings fixed; the stability-review open set is now
+empty (every SR-* finding ticked). Details live in STABILITY-REVIEW.md under each `Detail —` section.
 
-- **`SR-WEB-*` — web app (`apps/web`).** WebSocket reconnect/leak behaviour, MapLibre source/marker
-  leaks, offline-cache growth, device-key handling, no-emoji guard coverage. *Effort:* M to audit.
+- **`SR-WEB-*` — web app (`apps/web`). ✅ DONE (2026-07-04).** WS reconnect-with-backoff (was: live
+  features died silently on any drop); `setStyle`/theme-switch overlay re-add via a `styleEpoch`;
+  MapLibre setup-effect cleanup + `once('load')` deregistration; the device signing key moved to a
+  non-extractable IndexedDB `CryptoKey` (was: extractable PKCS8 in localStorage) with a generation-race
+  guard; the no-emoji guard widened to `public/` (sw.js) + `.js/.mjs`. Offline/storage + marker
+  diffing were audited clean. See STABILITY-REVIEW.md `SR-WEB-*`.
 - **`SR-CFG-*` — configuration & observability. ✅ DONE (2026-07-03).** Env drift closed (27 ingest
   vars documented in `.env.example`, zero drift), numeric env validated (`config.ts` numEnv/portEnv +
   a dotenv loader for the `pnpm dev` path), `/health` confirmed the single health path, and the

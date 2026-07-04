@@ -12,8 +12,8 @@ import {
   type Authorship,
 } from "@aprsweb/shared";
 
-const PRIV = "acs.key.priv",
-  PUB = "acs.key.pub";
+const PRIV = "acs.key.priv", // legacy: an *extractable* pkcs8 in localStorage (migrated away, see below)
+  PUB = "acs.key.pub"; // the public key is not secret — a base64url string in localStorage is fine
 
 const b64 = (buf: ArrayBuffer) => {
   let s = "";
@@ -28,22 +28,86 @@ const unb64 = (s: string) => {
   return o;
 };
 
+// SR-WEB: the private signing key lives in IndexedDB as a NON-extractable CryptoKey — an XSS on the
+// origin can still *use* it while on the page, but (unlike the old extractable pkcs8 in localStorage)
+// cannot export/exfiltrate the key material. IndexedDB structured-clones a CryptoKey and preserves
+// its non-extractable flag.
+const IDB_NAME = "acs-keys",
+  IDB_STORE = "keys",
+  IDB_KEY = "device-priv";
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbGet(key: string): Promise<CryptoKey | undefined> {
+  const db = await idbOpen();
+  try {
+    return await new Promise((res, rej) => {
+      const req = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => res(req.result as CryptoKey | undefined);
+      req.onerror = () => rej(req.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+async function idbPut(key: string, val: CryptoKey): Promise<void> {
+  const db = await idbOpen();
+  try {
+    await new Promise<void>((res, rej) => {
+      const req = db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE).put(val, key);
+      req.onsuccess = () => res();
+      req.onerror = () => rej(req.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 let cached: { publicKey: string; priv: CryptoKey } | null = null;
+let inflight: Promise<{ publicKey: string; priv: CryptoKey }> | null = null;
+
+async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
+  const storedPub = localStorage.getItem(PUB);
+  const idbPriv = await idbGet(IDB_KEY).catch(() => undefined);
+  if (storedPub && idbPriv) return { publicKey: storedPub, priv: idbPriv };
+
+  // Migrate an existing extractable key: re-import the old localStorage pkcs8 as NON-extractable into
+  // IndexedDB, then delete the extractable copy. Same key → no re-registration.
+  const legacy = localStorage.getItem(PRIV);
+  if (storedPub && legacy) {
+    const priv = await crypto.subtle.importKey("pkcs8", unb64(legacy), { name: "Ed25519" }, false, ["sign"]);
+    await idbPut(IDB_KEY, priv).catch(() => {});
+    localStorage.removeItem(PRIV);
+    return { publicKey: storedPub, priv };
+  }
+
+  // Fresh: generate, export the public key once, then persist ONLY a non-extractable private key.
+  const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+  const publicKey = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
+  const pkcs8 = await crypto.subtle.exportKey("pkcs8", kp.privateKey);
+  const priv = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, ["sign"]);
+  await idbPut(IDB_KEY, priv).catch(() => {});
+  localStorage.setItem(PUB, publicKey);
+  localStorage.removeItem(PRIV);
+  return { publicKey, priv };
+}
 
 async function deviceKey(): Promise<{ publicKey: string; priv: CryptoKey }> {
   if (cached) return cached;
-  const storedPub = localStorage.getItem(PUB),
-    storedPriv = localStorage.getItem(PRIV);
-  if (storedPub && storedPriv) {
-    const priv = await crypto.subtle.importKey("pkcs8", unb64(storedPriv), { name: "Ed25519" }, false, ["sign"]);
-    return (cached = { publicKey: storedPub, priv });
-  }
-  const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
-  const pkcs8 = b64(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
-  const publicKey = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
-  localStorage.setItem(PRIV, pkcs8);
-  localStorage.setItem(PUB, publicKey);
-  return (cached = { publicKey, priv: kp.privateKey });
+  // SR-WEB: coalesce concurrent callers (signAuthorship + devicePublicKey, etc.) so two racing calls
+  // can't each generate a key and clobber the registered public key.
+  if (!inflight)
+    inflight = loadOrCreate()
+      .then((k) => (cached = k))
+      .finally(() => {
+        inflight = null;
+      });
+  return inflight;
 }
 
 export interface AuthorSig {

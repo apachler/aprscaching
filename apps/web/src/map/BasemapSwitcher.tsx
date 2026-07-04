@@ -43,7 +43,7 @@ function ensureRaster(m: maplibregl.Map) {
     m.addLayer({ id: "bm-sat-l", type: "raster", source: "bm-sat", layout: { visibility: "none" } }, overlay);
 }
 
-export function BasemapSwitcher(props: { map: maplibregl.Map | null }) {
+export function BasemapSwitcher(props: { map: maplibregl.Map | null; styleEpoch?: number }) {
   const [base, setBase] = useState<Base>(() => {
     try {
       return (localStorage.getItem("acs.basemap") as Base) || "vector";
@@ -81,7 +81,12 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null }) {
     } catch {
       /* private mode */
     }
-  }, [props.map, base]);
+    // SR-WEB: deregister the one-shot load handler so toggling while the style is unloaded doesn't
+    // restack listeners. Re-runs on styleEpoch (theme setStyle) → ensureRaster re-adds the wiped layers.
+    return () => {
+      m.off("load", apply);
+    };
+  }, [props.map, base, props.styleEpoch]);
 
   if (!props.map) return null;
   const opts: { key: Base; label: string; title: string }[] = [

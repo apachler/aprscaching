@@ -109,6 +109,7 @@ export function MapTools(props: {
   map: maplibregl.Map | null;
   home?: [number, number] | null; // your QTH [lat,lon] (from your profile locator)
   target?: [number, number] | null; // the selected cache [lat,lon]
+  styleEpoch?: number; // bumps when the base style is swapped (theme change) → re-add our layers
 }) {
   const fmt = useFmt();
   const [grid, setGrid] = useState(false);
@@ -196,7 +197,15 @@ export function MapTools(props: {
     };
     if (m.isStyleLoaded()) setup();
     else m.once("load", setup);
-  }, [props.map]);
+    // SR-WEB: remove our sources/layers on unmount, and deregister the one-shot load handler if we
+    // unmount before it fires. Re-runs on styleEpoch (theme setStyle) to re-add — setup is idempotent.
+    return () => {
+      m.off("load", setup);
+      for (const id of ["mt-night-l", "mt-grid-l", "mt-rings-l", "mt-ruler-l", "mt-ruler-p", "mt-arc-l", "mt-home-p"])
+        if (m.getLayer(id)) m.removeLayer(id);
+      for (const id of Object.values(SRC)) if (m.getSource(id)) m.removeSource(id);
+    };
+  }, [props.map, props.styleEpoch]);
 
   // grid + rings recompute on view move (and when toggled)
   useEffect(() => {
@@ -222,7 +231,7 @@ export function MapTools(props: {
     return () => {
       m.off("moveend", redraw);
     };
-  }, [props.map, grid, rings]);
+  }, [props.map, grid, rings, props.styleEpoch]); // re-populate after a theme setStyle re-adds the sources
 
   // ruler: click to drop up to two points
   useEffect(() => {
@@ -283,7 +292,7 @@ export function MapTools(props: {
     draw();
     const iv = setInterval(draw, 60_000);
     return () => clearInterval(iv);
-  }, [props.map, term]);
+  }, [props.map, term, props.styleEpoch]);
 
   // bearing arc: great-circle line from your QTH to the selected cache (+ home marker)
   const home = props.home,
@@ -306,7 +315,7 @@ export function MapTools(props: {
       type: "FeatureCollection",
       features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [home[1], home[0]] } }],
     });
-  }, [props.map, arc, home?.[0], home?.[1], target?.[0], target?.[1]]);
+  }, [props.map, arc, home?.[0], home?.[1], target?.[0], target?.[1], props.styleEpoch]);
 
   if (!props.map) return null;
   const measure =
