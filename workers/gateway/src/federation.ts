@@ -16,6 +16,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { parseEndpoints } from "@aprsweb/shared";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -405,7 +406,7 @@ export async function verifyRecordSig(
   return crypto.subtle.verify("Ed25519", key, fromB64(rec.sig), msg);
 }
 
-function instanceOf(req: Request, env: Env): string {
+export function instanceOf(req: Request, env: Env): string {
   return env.INSTANCE ?? new URL(req.url).host;
 }
 
@@ -429,6 +430,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       "moves",
       "bulletins",
       "notify",
+      fk ? "sync-cbor" : null, // the CBOR sync surface exists only where frames can carry signatures
       env.FED_SUBMIT_SECRET ? "submit" : null,
     ].filter(Boolean),
     endpoints: {
@@ -447,6 +449,9 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // continuity proofs (new key signed by old)
     operator: env.FED_OPERATOR ?? null, // self-published operator + APRS service address
     aprsCall: env.FED_APRS_CALL ?? null,
+    // Typed transport endpoints this instance is reachable on (https / 44net / ax25 / netrom /
+    // bbs) — the instance's own multi-address set, distinct from `endpoints` (the feed-path map).
+    addresses: parseEndpoints(parseJsonArray(env.FED_ENDPOINTS)),
     peers,
   });
 }

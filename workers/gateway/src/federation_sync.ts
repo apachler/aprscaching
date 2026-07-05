@@ -32,6 +32,8 @@ import {
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
+import { verifyFedFrame } from "./fedcbor.js";
+import { decodeFedSyncPage, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -277,17 +279,30 @@ async function syncPeer(
   // every known feed and a 404 is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered
   // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass.
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
+  // encoding preference: a signed peer advertising the CBOR sync surface is pulled as fedwire
+  // frames; anything else stays on the JSON feeds. Per-feed 404 falls back to JSON gracefully.
+  const preferCbor = !!wk.capabilities?.includes(SYNC_CBOR_CAPABILITY);
   const counts: Record<string, number> = {};
-  for (const def of SYNC_DEFS)
+  const encodings = new Set<string>();
+  for (const def of SYNC_DEFS) {
     // iterate SYNC_DEFS to preserve the tombstones-first order
-    counts[def.type] = toSync.has(def.type) ? await syncFeed(env, transport, p, wk.instance, verifyKeys, def) : 0;
-  // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
+    if (!toSync.has(def.type)) {
+      counts[def.type] = 0;
+      continue;
+    }
+    const r = await syncFeed(env, transport, p, wk.instance, verifyKeys, newActive, preferCbor, def);
+    counts[def.type] = r.applied;
+    encodings.add(r.encoding);
+  }
+  // observability: record a successful sync — time, count, cumulative total, per-feed breakdown,
+  // and which wire encoding served it (surfaced via /federation/peers → last_counts)
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const encoding = encodings.size === 1 ? [...encodings][0] : encodings.size ? "mixed" : "none";
   await env.DB.prepare(
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
        mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
   )
-    .bind(now(), now(), total, JSON.stringify(counts), p.url)
+    .bind(now(), now(), total, JSON.stringify({ ...counts, encoding }), p.url)
     .run();
   return {
     caches: counts.cache ?? 0,
@@ -369,28 +384,63 @@ async function syncFeed(
   p: PeerRow,
   instance: string,
   verifyKeys: CryptoKey[],
+  activeKeys: string[],
+  preferCbor: boolean,
   def: SyncDef,
-): Promise<number> {
+): Promise<{ applied: number; encoding: "cbor" | "json" }> {
   let cursor = (p[def.cursorCol] as number) ?? 0,
-    applied = 0;
+    applied = 0,
+    cbor = preferCbor;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await transport.get(`${def.path}?since=${cursor}&limit=500`);
-    if (res.status === 404) return applied; // feed not supported → forward-compat skip
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
-    const feed = (await res.json()) as Feed;
-    for (const rec of feed.items ?? []) {
-      if (!(await accept(env, rec, verifyKeys, instance))) continue;
-      // the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
-      // feed.instance (both attacker-controlled). A peer inherits only its own namespace + trust.
-      await def.apply(env, rec, instance);
-      applied++;
+    let next = cursor,
+      complete = true;
+    if (cbor) {
+      // CBOR sync: fedwire frames, each verified over its bytes verbatim under the peer's
+      // active keys — then through the SAME acceptance checks + applier as the JSON path.
+      const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}&limit=500`);
+      if (res.status === 404) {
+        cbor = false; // capability advertised but surface absent → fall back to JSON for this feed
+        continue;
+      }
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
+      const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
+      for (const fb of pg.frames) {
+        const f = await verifyFedFrame(fb, activeKeys);
+        if (!f) continue; // malformed / key outside the peer's set / bad signature
+        if (f.record.origin !== instance) continue; // origin must be the verified serving peer
+        const rec: FeedRecord = {
+          type: def.type,
+          id: f.record.gid,
+          cursor: f.record.v,
+          data: bodyFromWire(f.record.body),
+          signer: f.record.signer,
+        };
+        if (!(await acceptUnsigned(env, rec, instance))) continue;
+        await def.apply(env, rec, instance);
+        applied++;
+      }
+      next = pg.nextCursor ?? cursor;
+      complete = pg.complete;
+    } else {
+      const res = await transport.get(`${def.path}?since=${cursor}&limit=500`);
+      if (res.status === 404) return { applied, encoding: "json" }; // feed not supported → forward-compat skip
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
+      const feed = (await res.json()) as Feed;
+      for (const rec of feed.items ?? []) {
+        if (!(await accept(env, rec, verifyKeys, instance))) continue;
+        // the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
+        // feed.instance (both attacker-controlled). A peer inherits only its own namespace + trust.
+        await def.apply(env, rec, instance);
+        applied++;
+      }
+      next = feed.nextCursor ?? cursor;
+      complete = feed.complete;
     }
-    const next = feed.nextCursor ?? cursor;
     await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
-    if (feed.complete || next === cursor) break;
+    if (complete || next === cursor) break;
     cursor = next;
   }
-  return applied;
+  return { applied, encoding: cbor ? "cbor" : "json" };
 }
 
 /**
@@ -447,9 +497,17 @@ async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boo
 
 async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instance: string): Promise<boolean> {
   if (!(await verifiesUnderAny(verifyKeys, rec))) return false; // bad/unrecognised signature
-  // the signature covers {type,id,data} but NOT signer — so a peer could serve a record
-  // in another instance's namespace, signed with its own key, and overwrite that instance's genuine
-  // mirror (inheriting its trust). A peer may only serve records IN ITS OWN namespace, self-signed.
+  return acceptUnsigned(env, rec, instance);
+}
+
+/**
+ * The non-cryptographic acceptance checks, shared by both sync encodings (the JSON path verifies
+ * the per-record signature first; the CBOR path verifies the fedwire frame first — then both land
+ * here so namespace/signer/tombstone semantics can never diverge between encodings).
+ * A peer may only serve records IN ITS OWN namespace, self-attested — otherwise it could overwrite
+ * another instance's genuine mirror (inheriting its trust).
+ */
+async function acceptUnsigned(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
   if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
   if (rec.signer && rec.signer !== instance) return false; // and self-attested as that peer
   if (rec.signer && rec.signer === ours(env)) return false; // never mirror our own

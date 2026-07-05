@@ -34,6 +34,32 @@ A receiver verifies the signature **over the received payload bytes verbatim** (
 against the origin's published key set, then applies by `(type, gid, v)`. Cursors are per-transport
 delivery hints, not the source of truth — the content address is.
 
+## The sync surface
+
+`GET /federation/sync/<type>?since=&limit=` (type ∈ `cache · find · key · tombstone · account-move ·
+bulletin`) serves a CBOR page of frames:
+
+```
+page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …] }   (application/cbor)
+```
+
+The page envelope is unsigned — each record carries its own signature. A signed instance advertises
+the surface as the `sync-cbor` capability in its descriptor; a consumer that sees it pulls frames
+and verifies each under the peer's active keys, then runs the **same** namespace/self-attestation/
+tombstone acceptance checks and the same appliers as the JSON feeds, so the two encodings can never
+diverge in mirror semantics. An unsigned instance (no frame signatures possible) does not serve the
+surface, and consumers fall back to the JSON feeds. `/federation/peers` reports which encoding the
+last sync used (`lastCounts.encoding`).
+
+**Scaled fields.** The deterministic codec carries no floats, so fractional record fields travel as
+integer twins and map back on receipt:
+
+| JSON field | Wire field | Scale |
+|---|---|---|
+| `lat` / `lon` | `latE7` / `lonE7` | ×10⁷ (1e-7°, ~1 cm) |
+| `difficulty` / `terrain` | `difficultyX10` / `terrainX10` | ×10 (half-steps exact) |
+| `distanceM` | `distanceCm` | ×100 (centimetres) |
+
 ## Peer endpoints
 
 A peer's identity is its instance id + published signing keys. Its **addresses are data**: an

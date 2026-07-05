@@ -41,6 +41,7 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 | `FIRST_PARTY_SITES` | Allowlist of IGate/site callsigns you operate and attest — the only Tier-A origin. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can) | — |
 | `FED_CORROBORATION_QUORUM` | Distinct instances required to promote a find to Tier A | `1` |
 | `DOH_URL` | DNS-over-HTTPS resolver for 44net peer onboarding (must return the DNSSEC AD flag) | Cloudflare |
+| `FED_ENDPOINTS` | This instance's typed transport endpoints (JSON array of `{transport,address,priority}`), published as `addresses` in the descriptor | — |
 | `FED_AUTO_PROMOTE` | Confirmed-corroboration count to auto-promote an unvetted peer (`0` = off) | `0` |
 | `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` requires `x-fed-secret` | — |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration responses (both peers opt in) | off |

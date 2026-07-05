@@ -47,6 +47,25 @@ const pubWk = await call(PUB, "GET", "/.well-known/aprscaching");
 ok("publisher is signed", pubWk.data?.signed === true, JSON.stringify(pubWk.data));
 const pubInstance = pubWk.data?.instance;
 
+// a signed instance advertises the CBOR sync surface + (when configured) its typed addresses
+ok(
+  "publisher advertises sync-cbor",
+  (pubWk.data?.capabilities ?? []).includes("sync-cbor"),
+  JSON.stringify(pubWk.data?.capabilities),
+);
+ok("descriptor addresses is an array", Array.isArray(pubWk.data?.addresses), JSON.stringify(pubWk.data?.addresses));
+
+// the CBOR sync surface serves fedwire frames: application/cbor, page envelope = map(4)
+{
+  const res = await fetch(PUB + "/federation/sync/cache?since=0");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  ok(
+    "GET /federation/sync/cache serves a CBOR page",
+    res.status === 200 && (res.headers.get("content-type") ?? "").includes("application/cbor") && bytes[0] === 0xa4,
+    `status=${res.status} ct=${res.headers.get("content-type")} b0=${bytes[0]?.toString(16)}`,
+  );
+}
+
 // seed the publisher: a cache + a verified find
 const TITLE = "Federated Schlossberg " + now();
 const created = await call(PUB, "POST", "/api/caches", {
@@ -72,6 +91,17 @@ ok("subscriber sync ran", sync.data?.ok === true, JSON.stringify(sync.data));
 ok("sync mirrored >= 1 cache", (sync.data?.caches ?? 0) >= 1, JSON.stringify(sync.data));
 ok("sync mirrored >= 1 find", (sync.data?.finds ?? 0) >= 1, JSON.stringify(sync.data));
 ok("sync had no peer errors", (sync.data?.errors ?? []).length === 0, JSON.stringify(sync.data?.errors));
+
+// the subscriber pulled over the CBOR sync surface (lastCounts records the wire encoding used)
+{
+  const peers = await call(SUB, "GET", "/federation/peers");
+  const pubPeer = (peers.data?.peers ?? []).find((x) => x.instance === pubInstance);
+  ok(
+    "subscriber synced over the CBOR wire",
+    pubPeer?.lastCounts?.encoding === "cbor",
+    JSON.stringify(pubPeer?.lastCounts),
+  );
+}
 
 // subscriber discovered + recorded the peer (signed)
 const peers = await call(SUB, "GET", "/federation/peers");

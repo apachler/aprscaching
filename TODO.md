@@ -71,12 +71,16 @@ The CBOR signed wire format, typed peer endpoints, the two-tier transport seam (
 store-and-forward), and ARDC-verified 44net onboarding are built — see
 [`docs/reference/federation-wire.md`](docs/reference/federation-wire.md). What rides on them next:
 
-- [ ] **Serve/consume CBOR frames on the sync surface** *(P2 · M)* — a `/federation/sync` exchange
-  carrying fedwire frames (the JSON feeds remain for the public read surface); flip the 2-instance
-  conformance suite to it.
-- [ ] **Advertise our own endpoint set + capability hints** *(P2 · S)* — the `/.well-known/aprscaching`
-  descriptor and the signed registry carry the instance's typed endpoints (https / 44net / ax25 /
-  netrom / bbs).
+- [x] **Serve/consume CBOR frames on the sync surface** — `GET /federation/sync/<type>` serves signed
+  fedwire frames; consumers prefer it via the `sync-cbor` capability (JSON feeds remain as the
+  fallback + compatibility surface), and the 2-instance conformance suite asserts the CBOR path.
+- [x] **Advertise our own endpoint set** — the `/.well-known/aprscaching` descriptor publishes the
+  instance's typed endpoints (`FED_ENDPOINTS` → `addresses`).
+- [ ] **Endpoint sets in the signed registry** *(P3 · S)* — carry per-instance typed endpoints in
+  `FED_REGISTRY` entries (the registry signing tooling gains an `addresses` field).
+- [ ] **Retire the JSON per-record signatures** *(P3 · M)* — once the relay and push-to-hub paths carry
+  fedwire frames, the stableStringify signing base goes away and CBOR is the only signed form
+  end-to-end.
 - [ ] **44net onboarding wizard in the admin surface** *(P2 · S)* — emit the exact
   `_aprscaching.<call>.ampr.org` TXT to paste into the ARDC portal; a one-click peer-add form over
   `POST /federation/peers/44net`.

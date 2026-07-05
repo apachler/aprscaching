@@ -277,7 +277,7 @@ interface MoveRow {
   to_instance: string;
   ts: number;
 }
-const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
+export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
   type: "account-move",
   selectRows: async (env, since, limit) =>
     (

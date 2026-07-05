@@ -80,6 +80,7 @@ export interface Env {
   API_MAX_BBOX_DEG?: string; // max bbox side in degrees for /api/v1 reads (default 20)
 
   // ---- live activity spots — read-only aggregation, off unless explicitly enabled ----
+  FED_ENDPOINTS?: string; // this instance's typed transport endpoints (JSON array of {transport,address,priority}) — published in the descriptor
   DOH_URL?: string; // DNS-over-HTTPS resolver for 44net peer onboarding (default cloudflare-dns.com; must return the DNSSEC AD flag)
   COT_STREAM_INTERVAL_MS?: string; // SSE CoT feed poll cadence (default 15000; clamped 1s–2min)
   COT_STREAM_MAX_MS?: string; // SSE CoT feed max connection lifetime before the client reconnects (default 5min)
@@ -172,6 +173,7 @@ export const ENV_STRING_KEYS = [
   "API_RATE_ANON",
   "API_RATE_KEYED",
   "API_MAX_BBOX_DEG",
+  "FED_ENDPOINTS",
   "DOH_URL",
   "COT_STREAM_INTERVAL_MS",
   "COT_STREAM_MAX_MS",
