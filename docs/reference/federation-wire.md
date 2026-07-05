@@ -97,6 +97,27 @@ configured. The effective profile picks the record tier:
 `negotiateCaps` resolves the slower rate class, smaller MTU/batch, best mutually-supported
 compression, and smaller record set; operator policy may clamp further.
 
+## Store-and-forward over FBB
+
+A forward link has no live handshake, so a batch of frames rides an FBB bulletin exactly as it rides
+an HTTP sync page — the same signed frames, a different carrier. `encodeFedBbsBatch` packs the frames
+into a text-safe bulletin body addressed to the reserved category `ACSFED`:
+
+```
+ACSFED1 <frame-count> <BID>
+<base64 of the CBOR frame array, wrapped at 64 columns>
+```
+
+The body is 7-bit clean and whitespace-tolerant, so classic FBB line limits and CR/LF handling never
+corrupt it. The **BID is content-addressed** (a 64-bit FNV-1a over the payload): identical batches
+carry the same BID, so a bulletin flooded across the mesh dedups by BID at every relay, and
+`decodeFedBbsBatch` re-derives it to reject a truncated or forged body rather than half-apply it.
+
+The receiver verifies every frame's signature against the claimed origin's registered keys and
+applies each idempotently by global id — a bulletin cannot lift trust or reach outside its origin's
+namespace, and an origin the instance does not already know stays quarantined, exactly as an
+HTTP-sync peer does.
+
 ## 44net verified onboarding
 
 ARDC's portal reviews an amateur licence before delegating `<call>.ampr.org` (its Level-of-Trust
