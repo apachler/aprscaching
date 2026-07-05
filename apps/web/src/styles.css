@@ -1332,6 +1332,32 @@ button.spot-pin::after {
 .link-btn:focus-visible {
   color: var(--bad);
 }
+/* 44net onboarding wizard (Instance admin → Federation): add-a-peer row, the no-DNSSEC confirm
+   card (warn-tinted via color-mix — no hand-maintained hex), and the be-reachable disclosure. */
+.fed44net {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.fed44net .comment {
+  font-size: 12px;
+  color: var(--muted);
+}
+.fed44net .confirmbox {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--warn) 8%, transparent);
+}
+.fed44net .disclosure-body {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0 4px 12px;
+  border-left: 1px solid var(--hair);
+}
+
 /* FBB forwarding-partner add form (Settings → Network) — a sectioned grid, not one long scroll */
 .partner-form {
   display: grid;

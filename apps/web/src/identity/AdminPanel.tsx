@@ -4,6 +4,9 @@ import type maplibregl from "maplibre-gl";
 import {
   listFederationPeers,
   setPeerTrust,
+  add44netPeer,
+  getFedDescriptor,
+  type Fed44netResult,
   listForwardPartners,
   saveForwardPartner,
   deleteForwardPartner,
@@ -77,42 +80,194 @@ function FederationAdmin() {
       toast((e as Error).message);
     }
   };
-  if (peers.length === 0) return <EmptyState>No federation peers configured.</EmptyState>;
   return (
-    <ul className="logs">
-      {peers.map((p) => (
-        <li key={p.url}>
-          <Badge kind={p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"} title={`trust: ${p.trust}`}>
-            {p.health}
-          </Badge>
-          <span className="mono">{p.instance ?? p.url}</span>
-          <span className="muted">
-            {" "}
-            · {p.trust}
-            {p.added_via ? ` (${p.added_via})` : ""}
-            {p.signed ? " · signed" : ""}
-          </span>
+    <>
+      <Fed44netWizard onAdmitted={refresh} />
+      {peers.length === 0 && <EmptyState>No federation peers configured.</EmptyState>}
+      <ul className="logs">
+        {peers.map((p) => (
+          <li key={p.url}>
+            <Badge
+              kind={p.health === "ok" ? "found" : p.health === "error" ? "dnf" : "warn"}
+              title={`trust: ${p.trust}`}
+            >
+              {p.health}
+            </Badge>
+            <span className="mono">{p.instance ?? p.url}</span>
+            <span className="muted">
+              {" "}
+              · {p.trust}
+              {p.added_via ? ` (${p.added_via})` : ""}
+              {p.signed ? " · signed" : ""}
+            </span>
+            <div className="comment">
+              {p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · {p.mirrored_total} mirrored
+              {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
+              {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
+              {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+            </div>
+            {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
+            <div className="row">
+              <button disabled={p.trust === "trusted"} onClick={() => trust(p.url, "trusted")}>
+                Trust
+              </button>
+              <button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
+                Unvet
+              </button>
+              <button className="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
+                Block
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * 44net verified onboarding. ARDC's portal reviews a licence before delegating `<call>.ampr.org`,
+ * so adding a peer by callsign resolves its `_aprscaching` TXT binding: DNSSEC-validated bindings
+ * admit in one click, anything else shows the resolved key for an explicit operator confirm (a
+ * trust-on-first-use pin). The disclosure underneath emits this instance's OWN TXT record to paste
+ * into the ARDC portal so other operators can add us the same way.
+ */
+function Fed44netWizard(props: { onAdmitted: () => void }) {
+  const toast = useToast();
+  const [callsign, setCallsign] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<Fed44netResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (confirm: boolean) => {
+    const cs = (pending?.resolved?.callsign ?? callsign).trim();
+    if (!cs) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await add44netPeer(cs, confirm);
+      if (r.requiresConfirm) setPending(r);
+      else if (r.ok) {
+        setPending(null);
+        setCallsign("");
+        toast(`Peer ${r.peer?.instance ?? cs} admitted (${r.admitted === "dnssec" ? "DNSSEC-verified" : "pinned"})`);
+        props.onAdmitted();
+      }
+    } catch (e) {
+      setPending(null);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fed44net">
+      <div className="row">
+        <input
+          placeholder="Add a peer by callsign (44net)"
+          value={callsign}
+          onChange={(e) => {
+            setCallsign(e.target.value.toUpperCase());
+            setPending(null);
+            setError(null);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && !busy && !pending && void submit(false)}
+          aria-label="Peer callsign on 44net"
+        />
+        <button className="primary" disabled={busy || !callsign.trim() || !!pending} onClick={() => void submit(false)}>
+          {busy && !pending ? "Resolving…" : "Look up"}
+        </button>
+      </div>
+      <div className="comment">
+        Resolves the peer's ARDC-verified <span className="mono">&lt;call&gt;.ampr.org</span> binding.
+      </div>
+      {error && <div className="comment error">{error}</div>}
+      {pending?.resolved && (
+        <div className="confirmbox">
+          <div>
+            <Badge kind="warn">no DNSSEC</Badge> <span className="mono">{pending.resolved.host}</span> ·{" "}
+            <span className="mono">{pending.resolved.instance}</span>
+          </div>
+          <div className="comment mono">key {pending.resolved.publicKey.slice(0, 16)}…</div>
           <div className="comment">
-            {p.last_ok ? `synced ${fmt.ago(p.last_ok)}` : "never synced"} · {p.mirrored_total} mirrored
-            {p.rep_confirmed > 0 && ` · ${p.rep_confirmed} confirmed`}
-            {p.rep_failed > 0 && ` · ${p.rep_failed} contradicted`}
-            {p.sync_err > 0 && ` · ${Math.round(p.errorRate * 100)}% errors`}
+            The resolver could not DNSSEC-validate this binding
+            {pending.descriptorChecked ? " (the live descriptor matches it)" : " and the peer was not reachable"} —
+            confirming pins this key for the peer.
           </div>
-          {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
           <div className="row">
-            <button disabled={p.trust === "trusted"} onClick={() => trust(p.url, "trusted")}>
-              Trust
+            <button className="primary" disabled={busy} onClick={() => void submit(true)}>
+              Confirm &amp; pin
             </button>
-            <button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
-              Unvet
-            </button>
-            <button className="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
-              Block
+            <button disabled={busy} onClick={() => setPending(null)}>
+              Cancel
             </button>
           </div>
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+      <MyTxtRecord />
+    </div>
+  );
+}
+
+/** The instance's own DNS binding — what an operator pastes into the ARDC portal to be addable. */
+function MyTxtRecord() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [desc, setDesc] = useState<Awaited<ReturnType<typeof getFedDescriptor>> | null>(null);
+  const [call, setCall] = useState("");
+  useEffect(() => {
+    if (!open || desc) return;
+    getFedDescriptor()
+      .then((d) => {
+        setDesc(d);
+        if (!call && d.aprsCall) setCall(d.aprsCall.split("-")[0] ?? "");
+      })
+      .catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on first open; `call` is only seeded
+  }, [open, desc]);
+
+  const record =
+    desc?.signed && desc.publicKey && call.trim()
+      ? `_aprscaching.${call.trim().toLowerCase()}.ampr.org  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}"`
+      : null;
+  return (
+    <div className="disclosure">
+      <button className="link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? "▾" : "▸"} Be reachable on 44net
+      </button>
+      {open && (
+        <div className="disclosure-body">
+          {desc && !desc.signed ? (
+            <div className="comment">Configure a federation signing key to publish a verifiable 44net binding.</div>
+          ) : (
+            <>
+              <div className="row">
+                <input
+                  placeholder="Your base callsign"
+                  value={call}
+                  onChange={(e) => setCall(e.target.value.toUpperCase())}
+                  aria-label="Your base callsign"
+                />
+                <button
+                  disabled={!record}
+                  onClick={() => {
+                    if (record) void navigator.clipboard.writeText(record).then(() => toast("TXT record copied"));
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+              {record && <div className="comment mono">{record}</div>}
+              <div className="comment">
+                Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
+                (portal.ampr.org) — other instances can then add you by callsign, verified.
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

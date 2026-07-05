@@ -392,8 +392,7 @@ async function syncFeed(
     applied = 0,
     cbor = preferCbor;
   for (let page = 0; page < MAX_PAGES; page++) {
-    let next = cursor,
-      complete = true;
+    let next: number, complete: boolean;
     if (cbor) {
       // CBOR sync: fedwire frames, each verified over its bytes verbatim under the peer's
       // active keys — then through the SAME acceptance checks + applier as the JSON path.

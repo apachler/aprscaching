@@ -33,9 +33,9 @@ describe("provenance — derive firstPartyAttested", () => {
 
   it("does NOT attest an RF fix with no gating site, even with an allowlist set", () => {
     const sites = parseAttestedSites("OE8MINE");
-    expect(
-      provenanceOf({ heard_via: "rf", igate_call: null, path: "WIDE1-1,qAR" }, sites).firstPartyAttested,
-    ).toBe(false);
+    expect(provenanceOf({ heard_via: "rf", igate_call: null, path: "WIDE1-1,qAR" }, sites).firstPartyAttested).toBe(
+      false,
+    );
   });
 
   it("does NOT attest an app-geo fix (that is the Tier-B path, not Tier A)", () => {

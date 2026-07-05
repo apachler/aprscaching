@@ -44,7 +44,13 @@ describe("cborEncode — RFC 8949 Appendix A golden vectors", () => {
       ]),
       "a201020304",
     ],
-    [m([["a", 1], ["b", [2, 3]]]), "a26161016162820203"],
+    [
+      m([
+        ["a", 1],
+        ["b", [2, 3]],
+      ]),
+      "a26161016162820203",
+    ],
   ];
   for (const [value, expected] of vectors) {
     it(`encodes ${JSON.stringify(value instanceof Map ? [...value] : value)} -> ${expected}`, () => {

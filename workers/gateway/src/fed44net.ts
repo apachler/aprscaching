@@ -96,9 +96,16 @@ async function descriptorMatches(
     });
     if (!res.ok) return { checked: false, ok: true, detail: `descriptor unreachable (${res.status})` };
     const wk = (await res.json()) as { instance?: string; publicKey?: string | null; publicKeys?: FedPublicKey[] };
-    const keys = activeFedKeys(wk.publicKeys ?? (wk.publicKey ? [{ x: wk.publicKey }] : []), Math.floor(Date.now() / 1000));
+    const keys = activeFedKeys(
+      wk.publicKeys ?? (wk.publicKey ? [{ x: wk.publicKey }] : []),
+      Math.floor(Date.now() / 1000),
+    );
     if (wk.instance !== expected.instance)
-      return { checked: true, ok: false, detail: `descriptor instance '${wk.instance}' != DNS 'inst=${expected.instance}'` };
+      return {
+        checked: true,
+        ok: false,
+        detail: `descriptor instance '${wk.instance}' != DNS 'inst=${expected.instance}'`,
+      };
     if (!keys.includes(expected.publicKey))
       return { checked: true, ok: false, detail: "the DNS-advertised key is not among the descriptor's active keys" };
     return { checked: true, ok: true };

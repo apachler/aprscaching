@@ -956,9 +956,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               onClose={() => ov.close()}
             />
           )}
-          {ov.is("messages") && mode === "view" && (
-            <MessagesPanel callsign={callsign} onClose={() => ov.close()} />
-          )}
+          {ov.is("messages") && mode === "view" && <MessagesPanel callsign={callsign} onClose={() => ov.close()} />}
           {ov.is("filter") && mode === "view" && (
             <FilterPanel
               filters={filters}

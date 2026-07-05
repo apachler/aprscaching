@@ -79,7 +79,13 @@ describe("resolve44net", () => {
   it("resolves the TXT with the DNSSEC AD flag", async () => {
     stubNet(dohAnswer({ ad: true, txt: TXT }));
     const r = await resolve44net(envWith({}), "oe8apr");
-    expect(r).toEqual({ callsign: "OE8APR", host: "oe8apr.ampr.org", instance: "oe.pub", publicKey: KEY, dnssec: true });
+    expect(r).toEqual({
+      callsign: "OE8APR",
+      host: "oe8apr.ampr.org",
+      instance: "oe.pub",
+      publicKey: KEY,
+      dnssec: true,
+    });
   });
   it("rejects SSIDs, missing records and foreign TXT content", async () => {
     await expect(resolve44net(envWith({}), "OE8APR-7")).rejects.toThrow(/base callsign/);

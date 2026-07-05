@@ -93,7 +93,12 @@ const P_INSTANCE = 1,
   P_COMPLETE = 3,
   P_FRAMES = 4;
 
-export function encodeFedSyncPage(instance: string, nextCursor: number, complete: boolean, frames: Uint8Array[]): Uint8Array {
+export function encodeFedSyncPage(
+  instance: string,
+  nextCursor: number,
+  complete: boolean,
+  frames: Uint8Array[],
+): Uint8Array {
   const m: CborMap = new Map<number, CborValue>([
     [P_INSTANCE, instance],
     [P_NEXT, nextCursor],

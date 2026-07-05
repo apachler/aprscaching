@@ -566,6 +566,42 @@ export function setPeerTrust(url: string, trust: "trusted" | "unvetted" | "block
   return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust }) });
 }
 
+export interface Fed44netResolved {
+  callsign: string;
+  host: string;
+  instance: string;
+  publicKey: string;
+  dnssec: boolean;
+}
+export interface Fed44netResult {
+  ok?: boolean;
+  admitted?: "dnssec" | "operator-confirmed";
+  peer?: { url: string; instance: string; callsign: string; trust: string };
+  requiresConfirm?: boolean;
+  resolved?: Fed44netResolved;
+  descriptorChecked?: boolean;
+  error?: string;
+}
+/**
+ * Operator: add a peer by its ARDC-verified `<call>.ampr.org` binding (sysop-gated). A
+ * DNSSEC-validated binding admits directly; otherwise the response carries the resolved binding and
+ * a second call with `confirm: true` pins it.
+ */
+export function add44netPeer(callsign: string, confirm = false): Promise<Fed44netResult> {
+  return call(`/federation/peers/44net`, { method: "POST", body: JSON.stringify({ callsign, confirm }) });
+}
+
+/** The instance's federation descriptor — instance id + signing key, used to compose DNS records. */
+export function getFedDescriptor(): Promise<{
+  instance: string;
+  signed: boolean;
+  publicKey: string | null;
+  aprsCall: string | null;
+  operator: string | null;
+}> {
+  return call(`/.well-known/aprscaching`);
+}
+
 // ---- instance operator (sysop) admin ----
 /** Is the signed-in account the instance operator? Drives whether the admin surface is revealed. */
 export function adminWhoami(): Promise<{ sysop: boolean; callsign: string | null; configured: boolean }> {

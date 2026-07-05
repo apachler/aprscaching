@@ -78,9 +78,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // the trusted path's job (self-host ingest secret / apps/ingest), so foreign-src frames are dropped
   // from an untrusted batch rather than stored under a callsign the signer does not hold.
   const signerBase = signer ? baseCall(signer.callsign) : null;
-  const packets = signerBase
-    ? body.data.packets.filter((p) => baseCall(p.src) === signerBase)
-    : body.data.packets;
+  const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
 
   const stmts: SqlStatement[] = [];
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
