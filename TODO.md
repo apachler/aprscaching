@@ -90,12 +90,15 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
 - [ ] **Connected-mode sync binding** *(P2 · L)* — fedwire frames over an AX.25/NET-ROM circuit
   (`apps/ingest` owns the radio; capability HELLO picks the compact tier); an aprscaching service
   advertised on the node.
-- [ ] **Store-and-forward carrier over FBB forwarding** *(P2 · L)* — the wire envelope is in:
-  `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED` bulletin with a
-  content-addressed BID for mesh dedup (`packages/shared`, tested). What remains: the gateway forward
-  transport that enqueues bulletins onto the BBS mesh, and the trust-gated receive path (verify each
-  frame against the claimed origin's keys, apply idempotently by gid, quarantine unknown origins) —
-  plus extending the rendezvous relay to lease/answer over packet.
+- [ ] **Store-and-forward carrier over FBB forwarding** *(P2 · L)* — the wire envelope and the
+  trust-gated receive are in. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a
+  text-safe `ACSFED` bulletin with a content-addressed BID for mesh dedup (`packages/shared`), and
+  `applyFedBbsBulletin` verifies each frame against its claimed origin's keys (last-pinned peer key +
+  signed-registry binding), applies idempotently by gid through the same appliers as an HTTP pull, and
+  quarantines unknown or blocked origins — receiving a frame lifts no trust and introduces no peer.
+  What remains: the gateway forward transport that enqueues bulletins onto the BBS mesh, the BBS-ingest
+  hook that routes an incoming `ACSFED` bulletin into `applyFedBbsBulletin`, and extending the
+  rendezvous relay to lease/answer over packet.
 - [ ] **Beacon tier** *(P3 · M)* — single-frame UI datagrams for tiny records (peer-announce,
   tombstone, have-lists) on HF.
 - [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode

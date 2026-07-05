@@ -28,12 +28,14 @@ import {
   type FeedServeDef,
   verifyRotationRecord,
   type RotationRecord,
+  type RegistryEntry,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { verifyFedFrame } from "./fedcbor.js";
 import { decodeFedSyncPage, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
+import { decodeFedFrame, decodeFedBbsBatch, type FedRecordKind } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -564,6 +566,125 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
   )
     .bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, now())
     .run();
+}
+
+// ---- store-and-forward receive: a federation bulletin that arrived over the FBB mesh ----
+
+/** Fedwire record kind → the sync feed that applies it; kinds with no local applier map to null. */
+const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
+  cache: "cache",
+  find: "find",
+  key: "key",
+  tombstone: "tombstone",
+  accountMove: "account-move",
+  bulletin: "bulletin",
+  peer: null, // peer-announce carries no mirror record
+};
+const SYNC_DEF_BY_TYPE = new Map(SYNC_DEFS.map((d) => [d.type, d]));
+
+export interface FedBbsApplyResult {
+  /** Was the body a federation bulletin at all (vs an ordinary BBS message)? */
+  federation: boolean;
+  /** The bulletin's content-addressed BID — the caller dedups the mesh by this. */
+  bid: string | null;
+  /** Frames verified, accepted, and applied to a mirror. */
+  applied: number;
+  /** Frames dropped because the claimed origin is unknown (no pinned key, no registry binding) or blocked. */
+  quarantined: number;
+  /** Frames dropped as malformed, badly signed, or violating the origin's namespace. */
+  rejected: number;
+}
+
+/**
+ * Receive a store-and-forward federation bulletin off the FBB mesh. Each frame is verified against
+ * ITS CLAIMED ORIGIN's keys — the key we last pinned for that peer plus any the signed registry
+ * binds to it — then run through the SAME namespace / self-attest / tombstone checks and the
+ * idempotent-by-gid appliers as an HTTP pull, so the two carriers can never diverge. A frame from an
+ * origin the instance does not already know, or one an operator has blocked, is quarantined and never
+ * applied: receiving a frame over any carrier introduces no peer and lifts no trust. Apply is
+ * idempotent by global id, so a bulletin flooded to us more than once converges.
+ */
+export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBbsApplyResult> {
+  const batch = decodeFedBbsBatch(body);
+  if (!batch) return { federation: false, bid: null, applied: 0, quarantined: 0, rejected: 0 };
+  const registry = await loadRegistry(env);
+  const keyCache = new Map<string, string[] | "blocked">();
+  let applied = 0,
+    quarantined = 0,
+    rejected = 0;
+  for (const fb of batch.frames) {
+    // read the claimed origin as a key SELECTOR — a valid signature under a key we independently
+    // bind to that origin is still required below, so a forged claim buys nothing.
+    let origin: string;
+    try {
+      origin = decodeFedFrame(fb).record.origin;
+    } catch {
+      rejected++;
+      continue;
+    }
+    if (origin === ours(env)) {
+      rejected++;
+      continue; // never mirror our own records back in
+    }
+    const allowed = await originKeys(env, origin, registry, keyCache);
+    if (allowed === "blocked" || !allowed.length) {
+      quarantined++;
+      continue; // blocked peer, or an origin we have no key for → can't (and won't) apply
+    }
+    const f = await verifyFedFrame(fb, allowed);
+    if (!f || f.record.origin !== origin) {
+      rejected++;
+      continue; // bad signature, key outside the origin's set, or payload origin mismatch
+    }
+    const def = SYNC_DEF_BY_TYPE.get(SYNC_TYPE_BY_KIND[f.record.kind] ?? "");
+    if (!def) {
+      rejected++;
+      continue;
+    }
+    const rec: FeedRecord = {
+      type: def.type,
+      id: f.record.gid,
+      cursor: f.record.v,
+      data: bodyFromWire(f.record.body),
+      signer: f.record.signer,
+    };
+    if (!(await acceptUnsigned(env, rec, origin))) {
+      rejected++;
+      continue; // gid outside origin's namespace / not self-attested / tombstoned
+    }
+    await def.apply(env, rec, origin);
+    applied++;
+  }
+  return { federation: true, bid: batch.bid, applied, quarantined, rejected };
+}
+
+/**
+ * The keys a claimed origin's frames may be signed under: the key we last pinned for that peer plus
+ * any the signed registry binds to its instance id. `"blocked"` when an operator has quarantined the
+ * peer; an empty set when the origin is entirely unknown — either way its frames never apply.
+ */
+async function originKeys(
+  env: Env,
+  origin: string,
+  registry: Map<string, RegistryEntry>,
+  cache: Map<string, string[] | "blocked">,
+): Promise<string[] | "blocked"> {
+  const hit = cache.get(origin);
+  if (hit !== undefined) return hit;
+  const row = await env.DB.prepare("SELECT public_key, trust FROM fed_peers WHERE instance = ? AND enabled = 1 LIMIT 1")
+    .bind(origin)
+    .first<{ public_key: string | null; trust: TrustLevel }>();
+  if (row?.trust === "blocked") {
+    cache.set(origin, "blocked");
+    return "blocked";
+  }
+  const keys = new Set<string>();
+  if (row?.public_key) keys.add(row.public_key);
+  const regKey = registry.get(origin)?.key;
+  if (regKey) keys.add(regKey);
+  const arr = [...keys];
+  cache.set(origin, arr);
+  return arr;
 }
 
 export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {
