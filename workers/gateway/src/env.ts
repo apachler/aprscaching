@@ -39,7 +39,6 @@ export interface Env {
   FED_REGISTRY_DNS?: string; // alt source: a DNS TXT record name carrying `url=…;key=…` to the signed registry
   FED_OPERATOR?: string; // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string; // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
-  FED_AMATEUR_ENDPOINT?: string; // reserved: optional 44net/HAMNET addr or ampr.org host; reachability only, trust-neutral
   FIRST_PARTY_SITES?: string; // provenance seam: allowlist of IGate/site calls we operate + attest → Tier-A origin
   FED_PEERS?: string; // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string; // if set, auto-add peers advertised by peers (transitive discovery)
@@ -144,7 +143,6 @@ export const ENV_STRING_KEYS = [
   "FED_REGISTRY_DNS",
   "FED_OPERATOR",
   "FED_APRS_CALL",
-  "FED_AMATEUR_ENDPOINT",
   "FIRST_PARTY_SITES",
   "FED_PEERS",
   "FED_DISCOVER",

@@ -16,7 +16,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { parseEndpoints } from "@aprsweb/shared";
+import { parseEndpoints, type FedEndpoint } from "@aprsweb/shared";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -247,11 +247,12 @@ export interface RegistryEntry {
   aprsCall?: string;
   since?: number;
   /**
-   * Reserved seam: an optional 44net / HAMNET address or ampr.org hostname for this node,
-   * so a peer can be reached over amateur space without coupling the serverless front-end to any IP
-   * space. Trust-neutral — reachability/addressing only, never a trust uplift.
+   * The instance's typed transport endpoints (https / 44net / ax25 / netrom / bbs), so a peer can be
+   * reached over amateur space without coupling the serverless front-end to any IP block. Signed by the
+   * registry authority, so it is a tamper-proof directory of who-is-reachable-where — but reachability
+   * and addressing only, never a trust uplift.
    */
-  amateurEndpoint?: string;
+  addresses?: FedEndpoint[];
 }
 export interface SignedRegistry {
   entries: RegistryEntry[];
@@ -276,7 +277,10 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
 async function registryToMap(doc: SignedRegistry, key: string): Promise<Map<string, RegistryEntry>> {
   const m = new Map<string, RegistryEntry>();
   if (!(await verifyRegistry(doc, key))) return m; // reject an unsigned / forged registry
-  for (const e of doc.entries) if (e?.instance) m.set(e.instance, e);
+  // The registry is authority-signed, but still normalize each entry's endpoint set through the
+  // typed validator so a malformed address never rides the registry into a peer record.
+  for (const e of doc.entries)
+    if (e?.instance) m.set(e.instance, e.addresses ? { ...e, addresses: parseEndpoints(e.addresses) } : e);
   return m;
 }
 
@@ -346,12 +350,13 @@ export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeySt
 /** This instance's own registry self-attestation (what it publishes about itself). */
 export async function selfRegistryEntry(env: Env, instance: string): Promise<RegistryEntry> {
   const fk = await loadKey(env);
+  const addresses = parseEndpoints(parseJsonArray(env.FED_ENDPOINTS));
   return {
     instance,
     key: fk?.publicX,
     operator: env.FED_OPERATOR,
     aprsCall: env.FED_APRS_CALL,
-    ...(env.FED_AMATEUR_ENDPOINT ? { amateurEndpoint: env.FED_AMATEUR_ENDPOINT } : {}),
+    ...(addresses.length ? { addresses } : {}),
   };
 }
 

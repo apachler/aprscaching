@@ -77,6 +77,12 @@ Sync transports (request/response) pick the lowest-priority endpoint that resolv
 legacy peer `url` is the https fallback. Forward transports are fire-and-forget carriers whose
 limits are operator configuration — frames apply idempotently on arrival, whatever path they took.
 
+An instance publishes its own endpoint set from `FED_ENDPOINTS` in two places: its
+`/.well-known/aprscaching` descriptor (`addresses`) and, when a registry authority signs it, its
+registry entry (`addresses`). The registry copy is authority-signed, so it is a tamper-proof
+directory of who-is-reachable-where — still addressing only, never a trust uplift. Every address is
+re-validated through the typed endpoint validator on load, so a malformed entry never rides in.
+
 ## Link capabilities
 
 Sync links exchange capabilities on connect and intersect them; forward links are statically

@@ -76,14 +76,17 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   fallback + compatibility surface), and the 2-instance conformance suite asserts the CBOR path.
 - [x] **Advertise our own endpoint set** — the `/.well-known/aprscaching` descriptor publishes the
   instance's typed endpoints (`FED_ENDPOINTS` → `addresses`).
-- [ ] **Endpoint sets in the signed registry** *(P3 · S)* — carry per-instance typed endpoints in
-  `FED_REGISTRY` entries (the registry signing tooling gains an `addresses` field).
+- [x] **Endpoint sets in the signed registry** — a registry entry carries the instance's typed
+  endpoints (`addresses`), re-validated on load so a malformed address never rides in; the self-entry
+  publishes them from `FED_ENDPOINTS`, and the signing tooling documents the field. The registry is a
+  tamper-proof directory of who-is-reachable-where (addressing only, never a trust uplift).
 - [ ] **Retire the JSON per-record signatures** *(P3 · M)* — once the relay and push-to-hub paths carry
   fedwire frames, the stableStringify signing base goes away and CBOR is the only signed form
   end-to-end.
-- [ ] **44net onboarding wizard in the admin surface** *(P2 · S)* — emit the exact
-  `_aprscaching.<call>.ampr.org` TXT to paste into the ARDC portal; a one-click peer-add form over
-  `POST /federation/peers/44net`.
+- [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
+  callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
+  explicit trust-on-first-use pin) and emits this instance's own `_aprscaching.<call>.ampr.org` TXT to
+  paste into the ARDC portal.
 - [ ] **Connected-mode sync binding** *(P2 · L)* — fedwire frames over an AX.25/NET-ROM circuit
   (`apps/ingest` owns the radio; capability HELLO picks the compact tier); an aprscaching service
   advertised on the node.

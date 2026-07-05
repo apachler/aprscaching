@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Sign a federation instance registry (T4.2). Reads the entries JSON array on argv[2] (or stdin) and
+// Sign a federation instance registry. Reads the entries JSON array on argv[2] (or stdin) and
 // signs it with a registry-AUTHORITY key, emitting the values consumers set:
 //   • FED_REGISTRY     — the signed document {entries,at,sig,signer}
 //   • FED_REGISTRY_KEY — the authority public key (peers verify the registry against this)
 //
 //   node tools/fedkey/signregistry.mjs '[{"instance":"oe.net","url":"https://oe.aprscaching.net","key":"<pub>","operator":"OE8APR","aprsCall":"OE8APR-12"}]'
+//
+// An entry MAY carry `addresses`: the instance's typed transport endpoints, signed by the authority so
+// the registry doubles as a tamper-proof directory of who-is-reachable-where (addressing only, never a
+// trust uplift). Each is {transport: https|44net|ax25|netrom|bbs, address, priority?}, e.g.
+//   {"instance":"oe.net","key":"<pub>","addresses":[{"transport":"44net","address":"oe8apr.ampr.org","priority":10}]}
 //
 // Reuse one authority key across signings by passing it in AUTHORITY (base64 {pkcs8,pub}); else a fresh
 // one is minted and printed. The registry binds each instance id to its key so a peer can't impersonate
