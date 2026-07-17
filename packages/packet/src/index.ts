@@ -23,3 +23,4 @@ export * from "./fbb-forward.js";
 export * from "./forward-schedule.js";
 export * from "./fbb-scheduler.js";
 export * from "./fedsync-link.js";
+export * from "./node-personalities.js";

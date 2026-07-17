@@ -112,8 +112,11 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   into the shared trust-gated pipeline — a known origin's peer-announce refreshes its endpoints
   (update-only; a beacon never introduces a peer), tombstones apply by gid, unknown origins are
   quarantined.
-- [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode
-  command set, BayCom compatibility as selectable node personalities.
+- [x] **Node personalities beyond NET/ROM+BPQ** — `NODE_PERSONALITY` selects the node's command
+  surface (`netrom` | `flexnet` | `tnn` | `baycom`): FlexNet-style destinations-with-RTT (a
+  presentation mapping from NET/ROM quality — routing stays on the native metric), the TheNetNode
+  command set with German-flavoured labels, and a terse BayCom-style box — one routing brain, the
+  operator's preferred conversation.
 - [x] **Shared compression dictionary** — the `deflateDict1` preset dictionary ships in
   `packages/shared` (immutable wire contract, versioned by capability id); the zlib codec around it
   lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb

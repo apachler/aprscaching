@@ -7,7 +7,7 @@ import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprsweb/aprs";
 import type { ParsedFrame } from "@aprsweb/aprs";
-import { SessionServer, NodeSession } from "@aprsweb/packet";
+import { SessionServer } from "@aprsweb/packet";
 import { parseAddr } from "@aprsweb/ax25";
 import type { Packet } from "@aprsweb/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
@@ -93,8 +93,12 @@ if (env.KISS_TNC_HOST) {
     });
     rawSubs.push((b) => node.onRaw(b));
     node.start();
+    // NODE_PERSONALITY picks the command surface (netrom | flexnet | tnn | baycom) — one routing
+    // brain, the operator's preferred conversation.
+    const { makeNodeSession } = await import("@aprsweb/packet");
     const nodeApp = (r: import("@aprsweb/ax25").Ax25Address) =>
-      new NodeSession(
+      makeNodeSession(
+        env.NODE_PERSONALITY,
         r.call,
         node.nodeStore(() => [...users]),
         env.NETROM_ALIAS!,
