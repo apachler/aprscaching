@@ -20,6 +20,26 @@ const now = () => Math.floor(Date.now() / 1000);
 const ENQUEUE_TYPES = ["tombstone", "cache", "find", "key", "account-move", "bulletin"] as const;
 
 /**
+ * Pack signed frames into an `ACSFED` bulletin and store it as a local BBS bulletin for the
+ * forwarding pool to carry. Shared by the feed-snapshot enqueue and the relay's packet leg. The
+ * content BID hits `bbs_messages.bid` (UNIQUE), so identical content never double-posts.
+ */
+export async function enqueueAcsfedBulletin(
+  env: Env,
+  frames: Uint8Array[],
+): Promise<{ bid: string; enqueued: number }> {
+  const bull = encodeFedBbsBatch(frames);
+  const fromCall = (env.FED_APRS_CALL ?? env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
+  const res = await env.DB.prepare(
+    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
+     VALUES (?, 'B', ?, ?, ?, ?, ?, 'local')`,
+  )
+    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, now())
+    .run();
+  return { bid: bull.bid, enqueued: res.meta.changes ? 1 : 0 };
+}
+
+/**
  * POST /federation/bbs/enqueue {types?, since?, limit?} — sysop or the operator's ingest box (the
  * forwarding scheduler triggers it on its own cadence). Packs the local records of the requested
  * feeds (default: all, tombstones first) into ONE bulletin addressed to the reserved category.
@@ -45,20 +65,13 @@ export async function handleFedBbsEnqueue(req: Request, env: Env): Promise<Respo
   }
   if (!frames.length) return json({ ok: true, frames: 0, enqueued: 0 });
 
-  const bull = encodeFedBbsBatch(frames);
-  const fromCall = (env.FED_APRS_CALL ?? env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
-  const res = await env.DB.prepare(
-    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
-     VALUES (?, 'B', ?, ?, ?, ?, ?, 'local')`,
-  )
-    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, now())
-    .run();
+  const bull = await enqueueAcsfedBulletin(env, frames);
   return json({
     ok: true,
     bid: bull.bid,
     frames: frames.length,
-    enqueued: res.meta.changes ? 1 : 0,
-    deduped: !res.meta.changes,
+    enqueued: bull.enqueued,
+    deduped: !bull.enqueued,
     cursors,
   });
 }

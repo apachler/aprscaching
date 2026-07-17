@@ -33,9 +33,11 @@ import {
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
-import { verifyFedFrame } from "./fedcbor.js";
+import { verifyFedFrame, signFedRecord } from "./fedcbor.js";
 import { decodeFedSyncPage, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
-import { decodeFedFrame, decodeFedBbsBatch, type FedRecordKind } from "@aprsweb/shared";
+import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
+import { enqueueAcsfedBulletin } from "./fedforward.js";
+import { decodeFedFrame, decodeFedBbsBatch, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -579,6 +581,8 @@ const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
   accountMove: "account-move",
   bulletin: "bulletin",
   peer: null, // peer-announce carries no mirror record
+  relayQuery: null, // relay traffic is dispatched to the relay handler, not a mirror applier
+  relayAnswer: null,
 };
 const SYNC_DEF_BY_TYPE = new Map(SYNC_DEFS.map((d) => [d.type, d]));
 
@@ -636,6 +640,16 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
       rejected++;
       continue; // bad signature, key outside the origin's set, or payload origin mismatch
     }
+    if (f.record.kind === "relayQuery" || f.record.kind === "relayAnswer") {
+      if (!idInNamespace(f.record.gid, origin)) {
+        rejected++;
+        continue;
+      }
+      const r = await handleRelayFrame(env, f.record);
+      if (r === "applied") applied++;
+      else if (r === "rejected") rejected++;
+      continue; // "elsewhere": addressed to another instance riding the same flood — not ours to count
+    }
     const def = SYNC_DEF_BY_TYPE.get(SYNC_TYPE_BY_KIND[f.record.kind] ?? "");
     if (!def) {
       rejected++;
@@ -656,6 +670,62 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
     applied++;
   }
   return { federation: true, bid: batch.bid, applied, quarantined, rejected };
+}
+
+/**
+ * Relay traffic off the store-and-forward carrier. A `relayQuery` addressed to this instance is
+ * answered from the local DB and the signed `relayAnswer` goes back onto the mesh; a `relayAnswer`
+ * addressed to this instance lands in the relay queue for its requester, scoped to rows addressed
+ * to the ANSWERING instance — a spoke can only ever answer its own queue, the same rule the HTTP
+ * leg enforces with the per-spoke token. Frames addressed to other instances ride the same flood
+ * legitimately; they are simply not ours.
+ */
+async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "rejected" | "elsewhere"> {
+  const us = (ours(env) ?? "").toLowerCase();
+  const target = typeof rec.body.target === "string" ? rec.body.target.toLowerCase() : "";
+  if (!us || target !== us) return "elsewhere";
+  const id = Number(rec.body.id);
+  if (!Number.isInteger(id) || id <= 0) return "rejected";
+
+  if (rec.kind === "relayQuery") {
+    const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
+    let params: unknown;
+    try {
+      params = JSON.parse(paramsJson);
+    } catch {
+      return "rejected";
+    }
+    const q = parseRelayQuery({ kind: rec.body.kind, params });
+    if (!q) return "rejected";
+    const result = await answerRelayQuery(q, { feed: (p) => feedSource(env, p) });
+    const at = now();
+    const frame = await signFedRecord(env, {
+      kind: "relayAnswer",
+      gid: `${us}:relay:${id}:a`,
+      origin: us,
+      v: at,
+      at,
+      signer: us,
+      body: { id, target: rec.origin, resultJson: JSON.stringify(result) },
+    });
+    if (!frame) return "rejected"; // an unsigned spoke cannot answer over the air
+    await enqueueAcsfedBulletin(env, [frame]);
+    return "applied";
+  }
+
+  if (typeof rec.body.resultJson !== "string") return "rejected";
+  let result: unknown;
+  try {
+    result = JSON.parse(rec.body.resultJson);
+  } catch {
+    return "rejected";
+  }
+  const res = await env.DB.prepare(
+    "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND instance=? AND status IN ('queued','leased')",
+  )
+    .bind(JSON.stringify(result), now(), id, rec.origin.toLowerCase())
+    .run();
+  return res.meta.changes ? "applied" : "rejected";
 }
 
 /**

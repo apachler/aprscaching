@@ -18,7 +18,10 @@ import { secretOk } from "./auth.js";
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { requireSysop } from "./admin.js";
 import { buildFeed, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef } from "./federation.js";
+import { signFedRecord } from "./fedcbor.js";
+import { enqueueAcsfedBulletin } from "./fedforward.js";
 
 export type RelayKind = "feed" | "corroborate";
 export interface ParsedRelayQuery {
@@ -97,7 +100,7 @@ export async function answerRelayQuery(
 }
 
 /** The spoke's real feed source: build a signed feed page for `params.feed` from `params.since`. */
-async function feedSource(env: Env, params: Record<string, unknown>): Promise<unknown> {
+export async function feedSource(env: Env, params: Record<string, unknown>): Promise<unknown> {
   const name = String(params.feed ?? "caches");
   const def = FEEDS[name];
   if (!def) throw new Error(`unknown feed '${name}'`);
@@ -173,6 +176,53 @@ export async function handleRelayResult(req: Request, env: Env, id: string): Pro
     .first<{ status: string; answer: string | null }>();
   if (!row) return json({ error: "no such query" }, { status: 404 });
   return json({ status: row.status, answer: row.answer ? JSON.parse(row.answer) : null });
+}
+
+// ------------------------------------------------------------------ packet-carried leg
+/**
+ * POST /federation/relay/:instance/dispatch — the hub packs a packet-only spoke's queued relay
+ * queries into an `ACSFED` bulletin of signed `relayQuery` frames and marks them leased; the FBB
+ * mesh carries the bulletin out, and the spoke's answers come back the same way as signed
+ * `relayAnswer` frames (the store-and-forward receive lands them in this queue). The frame
+ * signatures bind both directions to their instances — the per-spoke HMAC token exists only on the
+ * HTTP legs, so no secret material ever rides the air.
+ */
+export async function handleRelayDispatch(req: Request, env: Env, instance: string): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowIngest: true });
+  if (denied) return denied;
+  const spoke = instance.toLowerCase();
+  const hub = (env.INSTANCE ?? "").toLowerCase();
+  if (!hub) return json({ error: "INSTANCE required" }, { status: 500 });
+  const rows = (
+    await env.DB.prepare(
+      "SELECT id, kind, params FROM fed_relay_queue WHERE instance = ? AND status = 'queued' ORDER BY created_at LIMIT 25",
+    )
+      .bind(spoke)
+      .all<{ id: number; kind: string; params: string }>()
+  ).results;
+  if (!rows.length) return json({ ok: true, dispatched: 0 });
+
+  const at = now();
+  const frames: Uint8Array[] = [];
+  for (const r of rows) {
+    const frame = await signFedRecord(env, {
+      kind: "relayQuery",
+      gid: `${hub}:relay:${r.id}`,
+      origin: hub,
+      v: at,
+      at,
+      signer: hub,
+      body: { id: r.id, target: spoke, kind: r.kind, paramsJson: r.params },
+    });
+    if (!frame) return json({ error: "instance is unsigned — configure FED_PRIVATE_KEY" }, { status: 409 });
+    frames.push(frame);
+  }
+  const bull = await enqueueAcsfedBulletin(env, frames);
+  const t = now();
+  await env.DB.batch(
+    rows.map((r) => env.DB.prepare("UPDATE fed_relay_queue SET status='leased', leased_at=? WHERE id=?").bind(t, r.id)),
+  );
+  return json({ ok: true, dispatched: rows.length, bid: bull.bid, enqueued: bull.enqueued });
 }
 
 // ------------------------------------------------------------------ spoke-side poller

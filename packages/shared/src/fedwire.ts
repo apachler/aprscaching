@@ -31,6 +31,12 @@ export const FED_RECORD_TYPE = {
   tombstone: 5,
   accountMove: 6,
   peer: 7,
+  // Rendezvous-relay traffic over store-and-forward carriers: a hub's query for a spoke's feed and
+  // the spoke's answer, each signed by its sender. The signature replaces the HTTP relay's per-spoke
+  // token — nothing secret ever rides the air. Cargo (params/result) travels as JSON text inside the
+  // body: relayed feed pages carry floats, which the deterministic CBOR codec refuses by design.
+  relayQuery: 8,
+  relayAnswer: 9,
 } as const;
 export type FedRecordKind = keyof typeof FED_RECORD_TYPE;
 

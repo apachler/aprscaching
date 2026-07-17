@@ -62,7 +62,14 @@ import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
-import { handleRelayEnqueue, handleRelayLease, handleRelayAnswer, handleRelayResult, relayPoll } from "./relay.js";
+import {
+  handleRelayEnqueue,
+  handleRelayLease,
+  handleRelayAnswer,
+  handleRelayResult,
+  handleRelayDispatch,
+  relayPoll,
+} from "./relay.js";
 import { handleUserTx } from "./tx.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
@@ -334,6 +341,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (relayR && m === "GET") return handleRelayResult(req, env, relayR[1]!);
   if (p === "/federation/relay/lease" && m === "GET") return handleRelayLease(req, env);
   if (p === "/federation/relay/answer" && m === "POST") return handleRelayAnswer(req, env);
+  // packet leg: pack a spoke's queued queries into an ACSFED bulletin for the FBB mesh (sysop/ingest)
+  const relayD = /^\/federation\/relay\/([A-Za-z0-9_.-]+)\/dispatch$/.exec(p);
+  if (relayD && m === "POST") return handleRelayDispatch(req, env, relayD[1]!);
 
   // embeddable network badge (QRZ.com / signatures): /badge/OE8APR.svg
   const badgeMatch = /^\/badge\/([A-Za-z0-9-]+)\.svg$/.exec(p);

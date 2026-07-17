@@ -90,16 +90,19 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
 - [ ] **Connected-mode sync binding** *(P2 · L)* — fedwire frames over an AX.25/NET-ROM circuit
   (`apps/ingest` owns the radio; capability HELLO picks the compact tier); an aprscaching service
   advertised on the node.
-- [ ] **Store-and-forward carrier over FBB forwarding** *(P2 · L)* — the carrier itself is in, both
-  halves. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED`
-  bulletin with a content-addressed BID for mesh dedup (`packages/shared`); `POST
-  /federation/bbs/enqueue` signs local feed records (tombstones first, same producer as the HTTP sync
-  surface) into one such bulletin that the existing forwarding rules/pool/scheduler carry like any
-  other; and the forward-inbound hook routes an arriving `ACSFED` bulletin through
-  `applyFedBbsBulletin`, which verifies each frame against its claimed origin's keys (last-pinned peer
-  key + signed-registry binding), applies idempotently by gid, and quarantines unknown or blocked
-  origins — receiving a frame lifts no trust and introduces no peer. What remains: extending the
-  rendezvous relay to lease/answer over packet.
+- [x] **Store-and-forward carrier over FBB forwarding** — complete, including the relay's packet
+  leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED` bulletin
+  with a content-addressed BID for mesh dedup (`packages/shared`); `POST /federation/bbs/enqueue`
+  signs local feed records (tombstones first, same producer as the HTTP sync surface) into one such
+  bulletin that the existing forwarding rules/pool/scheduler carry like any other; the
+  forward-inbound hook routes an arriving `ACSFED` bulletin through `applyFedBbsBulletin`, which
+  verifies each frame against its claimed origin's keys (last-pinned peer key + signed-registry
+  binding), applies idempotently by gid, and quarantines unknown or blocked origins — receiving a
+  frame lifts no trust and introduces no peer. The rendezvous relay rides the same carrier: `POST
+  /federation/relay/<instance>/dispatch` packs a packet-only spoke's queued queries into signed
+  `relayQuery` frames, the spoke answers off its receive path with signed `relayAnswer` frames, and
+  the hub lands them scoped to the answering instance's own queue — signatures bind both directions,
+  so no relay secret ever rides the air.
 - [ ] **Beacon tier** *(P3 · M)* — single-frame UI datagrams for tiny records (peer-announce,
   tombstone, have-lists) on HF.
 - [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode

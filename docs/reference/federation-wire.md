@@ -133,6 +133,16 @@ Both halves ride the existing BBS machinery:
 `ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
 category is asked for explicitly.
 
+The rendezvous relay rides the same carrier for a packet-only spoke. `POST
+/federation/relay/<instance>/dispatch` (sysop/ingest) packs the spoke's queued queries into signed
+`relayQuery` frames and marks them leased; the spoke's receive path answers each from its own DB and
+sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
+scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.
+The frame signatures bind both directions to their instances; the per-spoke HMAC token exists only on
+the HTTP lease/answer legs, so no secret material ever rides the air. Relay cargo (query params, the
+answered feed page) travels as JSON text inside the CBOR bodies — feed pages carry floats, which the
+deterministic codec refuses by design.
+
 ## 44net verified onboarding
 
 ARDC's portal reviews an amateur licence before delegating `<call>.ampr.org` (its Level-of-Trust
