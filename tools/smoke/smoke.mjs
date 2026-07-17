@@ -5,6 +5,8 @@
 //
 //   BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
 
+import { cborDecode as miniDecode, frameParts, signingBytes, decodePage } from "./fedwire-mini.mjs";
+
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
 const now = () => Math.floor(Date.now() / 1000);
@@ -426,8 +428,20 @@ const ff2 = await call("GET", `/federation/finds?since=${ff.data?.nextCursor ?? 
 ok("finds cursor advances (empty past nextCursor)", (ff2.data?.items?.length ?? 0) === 0);
 
 if (wk.data?.signed) {
-  const rec = (fc.data?.items ?? [])[0];
-  ok("signed cache record verifies against published key", rec ? await verifyRecord(wk.data.publicKeyJwk, rec) : false);
+  // signatures live on the CBOR sync surface: pull a fedwire frame and verify its domain-separated
+  // Ed25519 signature against the instance's published key (the JSON feed above is unsigned browse)
+  const syncRes = await fetch(`${BASE}/federation/sync/cache?since=0&limit=10`);
+  const page = syncRes.ok ? decodePage(new Uint8Array(await syncRes.arrayBuffer())) : { frames: [] };
+  const frame0 = page.frames[0];
+  let frameOk = false;
+  if (frame0) {
+    const parts = frameParts(frame0);
+    const key = await crypto.subtle.importKey("jwk", wk.data.publicKeyJwk, { name: "Ed25519" }, false, ["verify"]);
+    const sigOk = await crypto.subtle.verify("Ed25519", key, parts.sig, signingBytes(parts.payload));
+    const gid = miniDecode(parts.payload).get(2);
+    frameOk = sigOk && typeof gid === "string" && gid.includes(":cache:");
+  }
+  ok("signed cache frame on the sync surface verifies against published key", frameOk);
 } else {
   console.log("• federation unsigned (no FED_PRIVATE_KEY) — signature check skipped");
 }
@@ -439,21 +453,6 @@ function stableStringify(v) {
     .sort()
     .map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`)
     .join(",")}}`;
-}
-function b64urlToBytes(s) {
-  const bin = atob(String(s).replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-async function verifyRecord(pubJwk, rec) {
-  try {
-    const key = await crypto.subtle.importKey("jwk", pubJwk, { name: "Ed25519" }, false, ["verify"]);
-    const msg = new TextEncoder().encode(stableStringify({ type: rec.type, id: rec.id, data: rec.data }));
-    return await crypto.subtle.verify("Ed25519", key, b64urlToBytes(rec.sig), msg);
-  } catch {
-    return false;
-  }
 }
 
 // ---- per-callsign signing (single instance, exercised on both runtimes) ----
