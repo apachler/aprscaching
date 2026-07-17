@@ -3,8 +3,18 @@
 // receiver that knows the instance hears it and refreshes the peer's self-attested endpoints, and a
 // receiver that does NOT know it quarantines the frame — a beacon can never introduce a peer.
 import { describe, it, expect, beforeAll } from "vitest";
-import { decodeFedBeacon, decodeFedFrame, encodeFedBeacon, MAX_BEACON_BYTES } from "@aprsweb/shared";
-import { handleBeaconEmit, handleBeaconRx } from "../src/fedbeacon.js";
+import {
+  decodeFedBeacon,
+  decodeFedFrame,
+  encodeFedBeacon,
+  encodeFedSyncPage,
+  encodeFedPayload,
+  encodeFedFrame,
+  fedSigningBytes,
+  MAX_BEACON_BYTES,
+  type FedRecord,
+} from "@aprsweb/shared";
+import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "../src/fedbeacon.js";
 import type { Env } from "../src/env.js";
 
 const SECRET = "test-ingest-secret-0123456789";
@@ -121,5 +131,97 @@ describe("beacon tier: emit + trust-gated receive", () => {
     const junk = encodeFedBeacon(Uint8Array.from({ length: 40 }, (_, i) => i));
     const r = (await (await handleBeaconRx(rxPost(junk), env)).json()) as Record<string, number | boolean>;
     expect(r).toMatchObject({ federation: true, applied: 0, rejected: 1 });
+  });
+});
+
+describe("connected-mode page delivery (/federation/frames)", () => {
+  function tombDb(known: boolean, tombs: unknown[][]) {
+    return {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            return {
+              async first() {
+                if (sql.includes("FROM fed_peers")) return known ? { public_key: publicX, trust: "trusted" } : null;
+                return null;
+              },
+              async all() {
+                return { results: [] };
+              },
+              async run() {
+                if (sql.includes("remote_tombstones")) tombs.push(args);
+                return { meta: { changes: 1 } };
+              },
+              // the tombstone applier batches its delete + insert
+            };
+          },
+        };
+      },
+      async batch(stmts: { run(): Promise<unknown> }[]) {
+        for (const s of stmts) await s.run();
+        return [];
+      },
+    };
+  }
+  const postPage = (bytes: Uint8Array) =>
+    new Request("http://gw/federation/frames", {
+      method: "POST",
+      headers: { "x-ingest-secret": SECRET, "content-type": "application/cbor" },
+      body: bytes as BodyInit,
+    });
+
+  it("verifies + applies the frames of a delivered page through the shared pipeline", async () => {
+    const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+    const pub = b64url(await crypto.subtle.exportKey("raw", kp.publicKey));
+    const record: FedRecord = {
+      kind: "tombstone",
+      gid: "oe.peer:tomb:1",
+      origin: "oe.peer",
+      v: 5,
+      at: 1000,
+      signer: "oe.peer",
+      body: { kind: "cache", targetId: "oe.peer:cache:9", ts: 1000 },
+    };
+    const payload = encodeFedPayload(record);
+    const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", kp.privateKey, fedSigningBytes(payload)));
+    const page = encodeFedSyncPage("oe.peer", 5, true, [encodeFedFrame(payload, pub, sig)]);
+
+    const tombs: unknown[][] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            return {
+              async first() {
+                if (sql.includes("FROM fed_peers")) return { public_key: pub, trust: "trusted" };
+                return null;
+              },
+              async all() {
+                return { results: [] };
+              },
+              async run() {
+                if (sql.includes("remote_tombstones")) tombs.push(args);
+                return { meta: { changes: 1 } };
+              },
+            };
+          },
+        };
+      },
+      async batch(stmts: { run(): Promise<unknown> }[]) {
+        for (const s of stmts) await s.run();
+        return [];
+      },
+    };
+    const env = { DB: db, INSTANCE: "oe.us", INGEST_SECRET: SECRET } as unknown as Env;
+    const r = (await (await handleFramesRx(postPage(page), env)).json()) as Record<string, number | boolean>;
+    expect(r).toMatchObject({ federation: true, frames: 1, applied: 1, quarantined: 0, rejected: 0 });
+    expect(tombs).toHaveLength(1);
+    expect(String(tombs[0]![0])).toBe("oe.peer:cache:9"); // the tombstone landed on its target
+  });
+
+  it("refuses a body that is not a CBOR page", async () => {
+    const env = { DB: tombDb(false, []), INSTANCE: "oe.us", INGEST_SECRET: SECRET } as unknown as Env;
+    const res = await handleFramesRx(postPage(new TextEncoder().encode("not cbor")), env);
+    expect(res.status).toBe(400);
   });
 });

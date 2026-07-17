@@ -86,48 +86,10 @@ export function bodyFromWire(body: Record<string, unknown>): Record<string, unkn
   return out;
 }
 
-// ---- the CBOR page envelope ----
-
-const P_INSTANCE = 1,
-  P_NEXT = 2,
-  P_COMPLETE = 3,
-  P_FRAMES = 4;
-
-export function encodeFedSyncPage(
-  instance: string,
-  nextCursor: number,
-  complete: boolean,
-  frames: Uint8Array[],
-): Uint8Array {
-  const m: CborMap = new Map<number, CborValue>([
-    [P_INSTANCE, instance],
-    [P_NEXT, nextCursor],
-    [P_COMPLETE, complete],
-    [P_FRAMES, frames as CborValue[]],
-  ]);
-  return cborEncode(m);
-}
-
-export interface FedSyncPage {
-  instance: string;
-  nextCursor: number;
-  complete: boolean;
-  frames: Uint8Array[];
-}
-
-export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
-  const m = cborDecode(bytes);
-  if (!(m instanceof Map)) throw new Error("fedsync: page is not a map");
-  const instance = m.get(P_INSTANCE);
-  const nextCursor = m.get(P_NEXT);
-  const complete = m.get(P_COMPLETE);
-  const frames = m.get(P_FRAMES);
-  if (typeof instance !== "string" || typeof nextCursor !== "number" || typeof complete !== "boolean")
-    throw new Error("fedsync: malformed page envelope");
-  if (!Array.isArray(frames) || frames.some((f) => !(f instanceof Uint8Array)))
-    throw new Error("fedsync: frames must be byte strings");
-  return { instance, nextCursor, complete, frames: frames as Uint8Array[] };
-}
+// The CBOR page envelope codec lives in @aprsweb/shared (both circuit ends use it); re-exported so
+// the gateway's sync surface, consumer, and tests keep one import site.
+import { encodeFedSyncPage, decodeFedSyncPage } from "@aprsweb/shared";
+export { encodeFedSyncPage, decodeFedSyncPage, type FedSyncPage } from "@aprsweb/shared";
 
 /**
  * Build the signed fedwire frames for one feed's local records since a cursor. The shared producer

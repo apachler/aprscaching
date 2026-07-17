@@ -87,9 +87,12 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
   explicit trust-on-first-use pin) and emits this instance's own `_aprscaching.<call>.ampr.org` TXT to
   paste into the ARDC portal.
-- [ ] **Connected-mode sync binding** *(P2 · L)* — fedwire frames over an AX.25/NET-ROM circuit
-  (`apps/ingest` owns the radio; capability HELLO picks the compact tier); an aprscaching service
-  advertised on the node.
+- [x] **Connected-mode sync binding** — the `ACSL1` line protocol (HELLO caps negotiation → one CBOR
+  sync page per request, `deflateDict1`-compressed when negotiated) rides the existing session
+  machinery; `FedSyncApp` mounts as a node service sourcing pages from the local gateway, the pull
+  side delivers pages to `POST /federation/frames` into the shared trust-gated pipeline, and the
+  session driver gained ordered async command handling to support I/O-backed apps. Dialing the RF
+  circuit is validate-at-deploy, like FBB forwarding.
 - [x] **Store-and-forward carrier over FBB forwarding** — complete, including the relay's packet
   leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED` bulletin
   with a content-addressed BID for mesh dedup (`packages/shared`); `POST /federation/bbs/enqueue`

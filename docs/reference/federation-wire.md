@@ -133,6 +133,28 @@ Both halves ride the existing BBS machinery:
 `ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
 category is asked for explicitly.
 
+## Connected-mode sync (AX.25 / NET-ROM circuits)
+
+Pull-sync over a packet circuit is a line protocol riding the same session machinery as the BBS and
+the node, so it works through connect-through and stays legible on a monitor:
+
+```
+server greets:  ACSL1 H <b64(cbor caps)>       both ends intersect LinkCaps deterministically
+client:         ACSL1 H <b64(cbor caps)>
+client:         ACSL1 R <b64(cbor {type, since, limit})>
+server:         ACSL1 P <b64(page bytes)>      one CBOR sync page per request
+either:         ACSL1 E <text>
+```
+
+On links that negotiated `deflateDict1`, page payloads are dictionary-compressed before base64. The
+server clamps the limit to the negotiated `batchMax` and halves it until the reply fits the session
+line budget. Both ends are operator-local: the serving side sources pages from its own gateway's
+CBOR sync surface (mount `FedSyncApp` as a node service), and the pulling side delivers each page to
+its own gateway at `POST /federation/frames` (ingest-gated), where the shared trust-gated pipeline
+verifies every frame against its origin's keys — the page envelope's claimed instance is ignored,
+and the ingest holds no keys. Dialing the RF circuit itself rides the same driver stack as FBB
+forwarding and is validate-at-deploy.
+
 ## Beacon tier
 
 One signed fedwire frame in one unconnected AX.25 UI datagram (`ACSB1` magic + the frame verbatim,

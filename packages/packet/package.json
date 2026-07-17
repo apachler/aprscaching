@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@aprsweb/ax25": "workspace:*",
-    "@aprsweb/aprs": "workspace:*"
+    "@aprsweb/aprs": "workspace:*",
+    "@aprsweb/shared": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^4.1.9"

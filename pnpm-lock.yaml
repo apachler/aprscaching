@@ -133,6 +133,9 @@ importers:
       '@aprsweb/ax25':
         specifier: workspace:*
         version: link:../ax25
+      '@aprsweb/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       vitest:
         specifier: ^4.1.9

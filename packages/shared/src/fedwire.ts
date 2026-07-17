@@ -155,6 +155,49 @@ export function decodeFedFrame(bytes: Uint8Array): FedFrame {
   };
 }
 
+// ---- the sync page envelope: one pull's worth of frames, over HTTP or a circuit ----
+
+const P_INSTANCE = 1,
+  P_NEXT = 2,
+  P_COMPLETE = 3,
+  P_FRAMES = 4;
+
+export function encodeFedSyncPage(
+  instance: string,
+  nextCursor: number,
+  complete: boolean,
+  frames: Uint8Array[],
+): Uint8Array<ArrayBuffer> {
+  const m: CborMap = new Map<number, CborValue>([
+    [P_INSTANCE, instance],
+    [P_NEXT, nextCursor],
+    [P_COMPLETE, complete],
+    [P_FRAMES, frames as CborValue[]],
+  ]);
+  return cborEncode(m);
+}
+
+export interface FedSyncPage {
+  instance: string;
+  nextCursor: number;
+  complete: boolean;
+  frames: Uint8Array[];
+}
+
+export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
+  const m = cborDecode(bytes);
+  if (!(m instanceof Map)) throw new Error("fedsync: page is not a map");
+  const instance = m.get(P_INSTANCE);
+  const nextCursor = m.get(P_NEXT);
+  const complete = m.get(P_COMPLETE);
+  const frames = m.get(P_FRAMES);
+  if (typeof instance !== "string" || typeof nextCursor !== "number" || typeof complete !== "boolean")
+    throw new Error("fedsync: malformed page envelope");
+  if (!Array.isArray(frames) || frames.some((f) => !(f instanceof Uint8Array)))
+    throw new Error("fedsync: frames must be byte strings");
+  return { instance, nextCursor, complete, frames: frames as Uint8Array[] };
+}
+
 // ---- coordinates: 1e-7-degree integers (~1 cm), byte-deterministic across every encoder ----
 
 export function toE7(deg: number): number {

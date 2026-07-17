@@ -13,6 +13,7 @@ import { requireSysop } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
 import { applyFedFrames } from "./federation_sync.js";
+import { decodeFedSyncPage } from "./fedsync.js";
 import { encodeFedBeacon, decodeFedBeacon, parseEndpoints, MAX_BEACON_BYTES, type FedEndpoint } from "@aprsweb/shared";
 
 const MAX_RX_BYTES = 4096; // a heard datagram is small by nature; refuse anything bulk
@@ -67,4 +68,27 @@ export async function handleBeaconRx(req: Request, env: Env): Promise<Response> 
   if (!frame) return json({ federation: false, applied: 0, quarantined: 0, rejected: 0 });
   const r = await applyFedFrames(env, [frame]);
   return json({ federation: true, ...r });
+}
+
+const MAX_PAGE_BYTES = 4 * 1024 * 1024; // a sync page is bounded server-side; refuse bulk uploads
+
+/**
+ * POST /federation/frames — the ingest box delivers a CBOR sync page it pulled over a connected-mode
+ * circuit (the fedsync link). The page envelope's claimed instance is IGNORED: every frame inside
+ * carries its own origin and verifies against that origin's keys in the shared pipeline, so a
+ * mislabelled or hostile page buys nothing.
+ */
+export async function handleFramesRx(req: Request, env: Env): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowIngest: true });
+  if (denied) return denied;
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.length > MAX_PAGE_BYTES) return json({ error: "page too large" }, { status: 413 });
+  let frames: Uint8Array[];
+  try {
+    frames = decodeFedSyncPage(bytes).frames;
+  } catch {
+    return json({ error: "not a CBOR sync page" }, { status: 400 });
+  }
+  const r = await applyFedFrames(env, frames);
+  return json({ federation: true, frames: frames.length, ...r });
 }

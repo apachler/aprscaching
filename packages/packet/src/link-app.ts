@@ -9,11 +9,20 @@
  */
 import { ConnectedLink, type Ax25Frame, type Ax25Address, type LinkConfig, type LinkState } from "@aprsweb/ax25";
 
+/** One command's outcome: reply lines, and optionally tear down or route onward. */
+export interface LineReply {
+  lines: string[];
+  disconnect?: boolean;
+  connect?: string;
+}
+
 /** A line-oriented packet app: a greeting on connect, then one reply per command line. `connect` asks the
- *  server to route the session onward (NET/ROM connect-through) to the named destination. */
+ *  server to route the session onward (NET/ROM connect-through) to the named destination. `handle` MAY
+ *  be async (an app whose replies come from I/O, e.g. the federation sync service fetching a page) —
+ *  the driver serializes lines strictly in order either way. */
 export interface LineApp {
   greeting(): string[];
-  handle(input: string): { lines: string[]; disconnect?: boolean; connect?: string };
+  handle(input: string): LineReply | Promise<LineReply>;
 }
 
 /**
@@ -73,6 +82,44 @@ export function makeLineDriver(
     },
     disconnectUser: () => io.disconnect(),
   };
+  // A sync `handle` runs inline exactly as before; an async one PAUSES the pump until it settles, so
+  // commands are processed and answered strictly in arrival order (H before R matters). `gen` fences a
+  // reply that settles after the link went down — it must not leak into a later session.
+  let busy = false;
+  let gen = 0;
+  const apply = (r: LineReply) => {
+    push(r.lines);
+    if (r.connect && io.onConnect) io.onConnect(r.connect, relay);
+    if (r.disconnect) io.disconnect();
+  };
+  const pump = () => {
+    while (!busy) {
+      const i = buf.search(/[\r\n]/);
+      if (i < 0) return;
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      const r = app.handle(line);
+      if (r instanceof Promise) {
+        busy = true;
+        const g = gen;
+        r.then(
+          (rr) => {
+            busy = false;
+            if (g === gen) {
+              apply(rr);
+              pump();
+            }
+          },
+          () => {
+            busy = false;
+            if (g === gen) io.disconnect(); // an app that throws mid-command is not recoverable
+          },
+        );
+        return;
+      }
+      apply(r);
+    }
+  };
   return {
     onData(info) {
       if (relaySink) {
@@ -85,15 +132,7 @@ export function makeLineDriver(
         io.disconnect(); // no line terminator in 8 KiB → hostile/garbage stream, tear down
         return;
       }
-      let i: number;
-      while ((i = buf.search(/[\r\n]/)) >= 0) {
-        const line = buf.slice(0, i);
-        buf = buf.slice(i + 1);
-        const r = app.handle(line);
-        push(r.lines);
-        if (r.connect && io.onConnect) io.onConnect(r.connect, relay);
-        if (r.disconnect) io.disconnect();
-      }
+      pump();
     },
     onUp() {
       if (!greeted) {
@@ -105,6 +144,8 @@ export function makeLineDriver(
       greeted = false;
       buf = "";
       relaySink = null;
+      busy = false;
+      gen++;
     },
   };
 }
