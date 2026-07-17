@@ -34,7 +34,7 @@ import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { verifyFedFrame, signFedRecord } from "./fedcbor.js";
-import { decodeFedSyncPage, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
+import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { decodeFedFrame, decodeFedBbsBatch, parseEndpoints, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
@@ -957,6 +957,52 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   if (!secret) return json({ ok: false, error: "submit disabled" }, { status: 403 });
   if (!secretOk(req.headers.get("x-fed-secret"), secret))
     return json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  // The CBOR form: a sync page of fedwire frames — the same signed bytes every other carrier moves.
+  // The page's instance declares the submitter; every frame must be signed by ONE key (a submission
+  // is one spoke), verified over the frame bytes verbatim. The JSON body remains the compatibility
+  // surface for older spokes.
+  if ((req.headers.get("content-type") ?? "").includes("application/cbor")) {
+    let page: ReturnType<typeof decodeFedSyncPage>;
+    try {
+      page = decodeFedSyncPage(new Uint8Array(await req.arrayBuffer()));
+    } catch {
+      return json({ ok: false, error: "not a CBOR sync page" }, { status: 400 });
+    }
+    const records: FeedRecord[] = [];
+    let rejected = 0;
+    let submitKey: string | null = null;
+    for (const fb of page.frames) {
+      let signerKey: string;
+      try {
+        signerKey = decodeFedFrame(fb).signerKey;
+      } catch {
+        rejected++;
+        continue;
+      }
+      submitKey ??= signerKey;
+      const f = await verifyFedFrame(fb, [submitKey]);
+      if (!f || f.record.origin !== page.instance) {
+        rejected++;
+        continue; // bad signature, a second key smuggled into the batch, or a foreign origin
+      }
+      const type = SYNC_TYPE_BY_KIND[f.record.kind];
+      if (!type) {
+        rejected++;
+        continue;
+      }
+      records.push({
+        type,
+        id: f.record.gid,
+        cursor: f.record.v,
+        data: bodyFromWire(f.record.body),
+        signer: f.record.signer,
+      });
+    }
+    if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
+    return submitRecords(env, page.instance, submitKey, records, rejected, null);
+  }
+
   const b = (await req.json().catch(() => null)) as {
     instance?: string;
     publicKey?: string;
@@ -964,32 +1010,47 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   } | null;
   if (!b?.instance || !b.publicKey || !Array.isArray(b.records))
     return json({ ok: false, error: "instance, publicKey, records required" }, { status: 400 });
-  if (b.instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
-  const allow = (env.FED_SUBMIT_INSTANCES ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (allow.length && !allow.includes(b.instance))
-    return json({ ok: false, error: "instance not allowed" }, { status: 403 });
-
   let key: CryptoKey;
   try {
     key = await importVerifyKey(b.publicKey);
   } catch {
     return json({ ok: false, error: "bad public key" }, { status: 400 });
   }
+  return submitRecords(env, b.instance, b.publicKey, b.records, 0, key);
+}
+
+/**
+ * The submit core both encodings share: allowlist, the registry + TOFU key binding, spoke
+ * registration, and the per-record acceptance rules. `jsonVerifyKey` is non-null on the JSON path,
+ * where each record still carries a stableStringify signature; CBOR frames arrive pre-verified.
+ */
+async function submitRecords(
+  env: Env,
+  instance: string,
+  publicKey: string,
+  records: FeedRecord[],
+  preRejected: number,
+  jsonVerifyKey: CryptoKey | null,
+): Promise<Response> {
+  if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
+  const allow = (env.FED_SUBMIT_INSTANCES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (allow.length && !allow.includes(instance))
+    return json({ ok: false, error: "instance not allowed" }, { status: 403 });
 
   // a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
   // binds this instance to a key, the submitted key MUST match it.
-  const regEntry = (await loadRegistry(env)).get(b.instance);
-  if (regEntry?.key && regEntry.key !== b.publicKey)
+  const regEntry = (await loadRegistry(env)).get(instance);
+  if (regEntry?.key && regEntry.key !== publicKey)
     return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
   // TOFU: once we've pinned a key for this submit-instance, it can't silently change (the same
   // no-silent-swap rule as the pull path). A rotated spoke re-registers under a new instance id or the operator clears the row.
   const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?")
-    .bind(`submit:${b.instance}`)
+    .bind(`submit:${instance}`)
     .first<{ public_key: string | null }>();
-  if (pinnedRow?.public_key && pinnedRow.public_key !== b.publicKey)
+  if (pinnedRow?.public_key && pinnedRow.public_key !== publicKey)
     return json({ ok: false, error: "submitted key changed for a known instance — refusing" }, { status: 403 });
 
   // Register the operator-authorised spoke (it holds FED_SUBMIT_SECRET) as a never-pulled peer so its
@@ -998,41 +1059,47 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   await env.DB.prepare(
     "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via, approved_at, enabled) VALUES (?, ?, ?, 'trusted', 'submitted', ?, 0)",
   )
-    .bind(`submit:${b.instance}`, b.instance, b.publicKey, now())
+    .bind(`submit:${instance}`, instance, publicKey, now())
     .run();
 
   let applied = 0,
-    rejected = 0;
-  for (const rec of b.records) {
+    rejected = preRejected;
+  for (const rec of records) {
     const apply = APPLIERS[rec.type];
-    if (!apply || rec.signer !== b.instance) {
+    if (!apply || rec.signer !== instance) {
       rejected++;
       continue;
     } // unknown type / wrong (or absent) signer
-    if (!idInNamespace(rec.id, b.instance)) {
+    if (!idInNamespace(rec.id, instance)) {
       rejected++;
       continue;
     } // only the submitter's own namespace
-    if (!(await verifyRecordSig(key, rec))) {
+    if (jsonVerifyKey && !(await verifyRecordSig(jsonVerifyKey, rec))) {
       rejected++;
       continue;
-    } // integrity
+    } // JSON-path integrity (CBOR frames were verified over their bytes already)
     if (await isTombstoned(env, rec.id)) {
       rejected++;
       continue;
     } // already purged by a tombstone
-    await apply(env, rec, b.instance);
+    await apply(env, rec, instance);
     applied++;
   }
   return json({ ok: true, applied, rejected });
 }
 
+// A hub that can't parse a CBOR page (older software) answers 400 — remember per hub and stay on
+// the JSON compatibility surface for the rest of this process's life.
+const HUB_JSON_ONLY = new Set<string>();
+
 /**
  * SPOKE side: push our signed records to a configured hub (push-mode mirroring) when we can't be
- * pulled. Incremental via in-memory cursors; idempotent (the hub upserts by global id), so a restart that
- * re-pushes from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
+ * pulled. Prefers the CBOR wire (a sync page of fedwire frames — the same signed bytes as every
+ * other carrier), falling back to the JSON submit body for an older hub. Incremental via in-memory
+ * cursors; idempotent (the hub upserts by global id), so a restart that re-pushes from 0 is
+ * harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
  */
-export async function pushToHub(env: Env): Promise<{ pushed: number } | null> {
+export async function pushToHub(env: Env, fetchFn: typeof fetch = fetch): Promise<{ pushed: number } | null> {
   const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
   const secret = env.FED_SUBMIT_SECRET;
   if (!hub || !secret || !env.INSTANCE) return null;
@@ -1043,17 +1110,43 @@ export async function pushToHub(env: Env): Promise<{ pushed: number } | null> {
     const ckey = `${hub}|${def.type}`;
     let cursor = PUSH_CURSORS.get(ckey) ?? 0;
     for (let page = 0; page < MAX_PAGES; page++) {
-      const { items, nextCursor, complete } = await buildFeed(env, env.INSTANCE, def, cursor, 500);
-      if (!items.length) break;
-      const res = await fetch(`${hub}/federation/submit`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-fed-secret": secret },
-        body: JSON.stringify({ instance: env.INSTANCE, publicKey, records: items }),
-        signal: AbortSignal.timeout(5000),
-      });
+      let res: Response;
+      let count: number;
+      let nextCursor: number;
+      let complete: boolean;
+      if (!HUB_JSON_ONLY.has(hub)) {
+        const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500);
+        if (!built) return null; // no signing key — nothing verifiable to push
+        if (!built.frames.length) break;
+        count = built.frames.length;
+        nextCursor = built.nextCursor;
+        complete = built.frames.length < 500;
+        res = await fetchFn(`${hub}/federation/submit`, {
+          method: "POST",
+          headers: { "content-type": "application/cbor", "x-fed-secret": secret },
+          body: encodeFedSyncPage(env.INSTANCE, nextCursor, complete, built.frames) as BodyInit,
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.status === 400) {
+          HUB_JSON_ONLY.add(hub); // older hub — drop to the JSON compatibility surface
+          continue; // re-send this page as JSON
+        }
+      } else {
+        const feed = await buildFeed(env, env.INSTANCE, def, cursor, 500);
+        if (!feed.items.length) break;
+        count = feed.items.length;
+        nextCursor = feed.nextCursor;
+        complete = feed.complete;
+        res = await fetchFn(`${hub}/federation/submit`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-fed-secret": secret },
+          body: JSON.stringify({ instance: env.INSTANCE, publicKey, records: feed.items }),
+          signal: AbortSignal.timeout(5000),
+        });
+      }
       if (!res.ok) return { pushed }; // stop; retry next cycle from the same cursor
       PUSH_CURSORS.set(ckey, nextCursor);
-      pushed += items.length;
+      pushed += count;
       if (complete || nextCursor === cursor) break;
       cursor = nextCursor;
     }

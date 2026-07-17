@@ -80,9 +80,11 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   endpoints (`addresses`), re-validated on load so a malformed address never rides in; the self-entry
   publishes them from `FED_ENDPOINTS`, and the signing tooling documents the field. The registry is a
   tamper-proof directory of who-is-reachable-where (addressing only, never a trust uplift).
-- [ ] **Retire the JSON per-record signatures** *(P3 · M)* — once the relay and push-to-hub paths carry
-  fedwire frames, the stableStringify signing base goes away and CBOR is the only signed form
-  end-to-end.
+- [ ] **Retire the JSON per-record signatures** *(P3 · S)* — every push path now carries fedwire
+  frames: push-to-hub submits CBOR pages (JSON fallback for an older hub), relay feed answers serve a
+  CBOR page on request, and sync prefers the CBOR surface. The stableStringify signing base remains
+  SOLELY for the JSON compatibility feeds older peers pull; removing it is a network flag-day (every
+  deployed peer must speak CBOR first) — an operator/release decision, not further code.
 - [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
   callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
   explicit trust-on-first-use pin) and emits this instance's own `_aprscaching.<call>.ampr.org` TXT to

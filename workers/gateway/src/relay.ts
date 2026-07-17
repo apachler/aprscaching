@@ -22,6 +22,7 @@ import { requireSysop } from "./admin.js";
 import { buildFeed, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
+import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
 
 export type RelayKind = "feed" | "corroborate";
 export interface ParsedRelayQuery {
@@ -99,14 +100,40 @@ export async function answerRelayQuery(
   }
 }
 
-/** The spoke's real feed source: build a signed feed page for `params.feed` from `params.since`. */
+/** Relay feed name → the sync feed type the CBOR producer speaks. */
+const SYNC_TYPE_BY_FEED: Record<string, string> = { caches: "cache", finds: "find", keys: "key" };
+
+const b64 = (bytes: Uint8Array): string => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x4000) s += String.fromCharCode(...bytes.subarray(i, i + 0x4000));
+  return btoa(s);
+};
+
+/**
+ * The spoke's real feed source: build a signed feed page for `params.feed` from `params.since`.
+ * `encoding: "cbor"` answers with a base64 fedwire sync page instead of the JSON items — the same
+ * signed frames as every other carrier, so per-record JSON signatures aren't needed on that path.
+ */
 export async function feedSource(env: Env, params: Record<string, unknown>): Promise<unknown> {
-  const name = String(params.feed ?? "caches");
+  const name = typeof params.feed === "string" ? params.feed : "caches";
   const def = FEEDS[name];
   if (!def) throw new Error(`unknown feed '${name}'`);
   const since = Math.max(0, Number(params.since ?? 0) || 0);
   const limit = Math.min(Math.max(Number(params.limit ?? 200) || 200, 1), 1000);
-  const built = await buildFeed(env, env.INSTANCE ?? "local", def, since, limit);
+  const instance = env.INSTANCE ?? "local";
+  if (params.encoding === "cbor") {
+    const built = await buildFedFrames(env, instance, SYNC_TYPE_BY_FEED[name]!, since, limit);
+    if (!built) throw new Error("instance is unsigned — no CBOR frames");
+    return {
+      feed: name,
+      since,
+      encoding: "cbor",
+      nextCursor: built.nextCursor,
+      complete: built.frames.length < limit,
+      pageB64: b64(encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames)),
+    };
+  }
+  const built = await buildFeed(env, instance, def, since, limit);
   return { feed: name, since, ...built };
 }
 

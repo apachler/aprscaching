@@ -133,6 +133,15 @@ Both halves ride the existing BBS machinery:
 `ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
 category is asked for explicitly.
 
+## Push paths
+
+Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed frames to
+`/federation/submit` (`application/cbor`; one submission is one key — a second key smuggled into the
+batch is rejected), falling back to the JSON submit body when an older hub refuses the page. Relay
+feed answers can carry a CBOR page too (`params.encoding: "cbor"` → a base64 fedwire page instead of
+JSON-signed items). The stableStringify per-record signature remains solely on the JSON
+compatibility feeds.
+
 ## Connected-mode sync (AX.25 / NET-ROM circuits)
 
 Pull-sync over a packet circuit is a line protocol riding the same session machinery as the BBS and
