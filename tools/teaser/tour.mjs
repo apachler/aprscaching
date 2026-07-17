@@ -489,6 +489,12 @@ for (const v of VIEWS) {
       await page.waitForTimeout(400);
       await shot(page, v.id, "profile", "Profile");
     });
+    // Messages lives on the desktop rail only; small viewports reach it via the ?view= deep-link
+    // (the Site-map contract), so the teaser still shows the surface on every breakpoint.
+    await step("messages", async () => {
+      await openView(page, "messages", ".panel");
+      await shot(page, v.id, "messages", "APRS messages");
+    });
     for (const tool of await advancedTools(page)) {
       await step(tool.name, async () => {
         await closeAll(page);
@@ -499,6 +505,16 @@ for (const v of VIEWS) {
       });
     }
   }
+
+  // The in-app manual: its single entry point is the compact help icon in the top chrome (present on
+  // every breakpoint) — outside both discovery contracts, so it gets its own scripted step.
+  await step("manual", async () => {
+    await closeAll(page);
+    if (!(await clickAny(page, ["header .help-ic"]))) throw new Error("manual icon not found");
+    await page.waitForSelector(".docs", { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(450);
+    await shot(page, v.id, "manual", "Manual — the in-app docs");
+  });
 
   // --- Workbench deep-dive: the launcher, the NET/ROM node + Tools plugins (real seeded app), then the
   // hardware/gated surfaces in demo mode (populated sims): GP packet terminal, BBS, CAT rig, remote box.
