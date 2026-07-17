@@ -49,7 +49,7 @@ class ByteWriter {
     this.buf.set(b, this.len);
     this.len += b.length;
   }
-  take(): Uint8Array {
+  take(): Uint8Array<ArrayBuffer> {
     return this.buf.slice(0, this.len);
   }
 }
@@ -138,8 +138,8 @@ export function compareBytes(a: Uint8Array, b: Uint8Array): number {
   return a.length - b.length;
 }
 
-/** Encode a value as canonical deterministic CBOR. */
-export function cborEncode(v: CborValue): Uint8Array {
+/** Encode a value as canonical deterministic CBOR. Always freshly allocated (ArrayBuffer-backed). */
+export function cborEncode(v: CborValue): Uint8Array<ArrayBuffer> {
   const w = new ByteWriter();
   encodeInto(w, v);
   return w.take();
@@ -155,9 +155,9 @@ class ByteReader {
     if (this.off >= this.buf.length) throw new Error("cbor: truncated");
     return this.buf[this.off++]!;
   }
-  slice(n: number): Uint8Array {
+  slice(n: number): Uint8Array<ArrayBuffer> {
     if (this.off + n > this.buf.length) throw new Error("cbor: truncated");
-    const out = this.buf.slice(this.off, this.off + n);
+    const out = this.buf.slice(this.off, this.off + n); // .slice copies into a fresh ArrayBuffer
     this.off += n;
     return out;
   }

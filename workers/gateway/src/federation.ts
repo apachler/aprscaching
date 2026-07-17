@@ -174,7 +174,10 @@ async function sign(fk: FedKey, type: string, id: string, data: unknown): Promis
  * Sign arbitrary bytes with the instance key — the CBOR wire format (fedcbor.ts) builds its
  * domain-separated signing bytes itself and only needs the raw Ed25519 primitive + the public key.
  */
-export async function signRaw(env: Env, msg: Uint8Array): Promise<{ sig: Uint8Array; publicX: string } | null> {
+export async function signRaw(
+  env: Env,
+  msg: Uint8Array<ArrayBuffer>,
+): Promise<{ sig: Uint8Array<ArrayBuffer>; publicX: string } | null> {
   const fk = await loadKey(env);
   if (!fk) return null;
   return { sig: new Uint8Array(await crypto.subtle.sign("Ed25519", fk.key, msg)), publicX: fk.publicX };

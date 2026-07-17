@@ -62,7 +62,7 @@ const F_PAYLOAD = 1,
   F_SIG = 3;
 
 /** Encode a record's payload (the bytes the signature covers, minus the domain prefix). */
-export function encodeFedPayload(r: FedRecord): Uint8Array {
+export function encodeFedPayload(r: FedRecord): Uint8Array<ArrayBuffer> {
   const type = FED_RECORD_TYPE[r.kind];
   if (!type) throw new Error(`fedwire: unknown record kind ${r.kind}`);
   const m: CborMap = new Map<number, CborValue>([
@@ -106,7 +106,7 @@ export function decodeFedPayload(bytes: Uint8Array): FedRecord {
 const domainBytes = new TextEncoder().encode(FED_DOMAIN);
 
 /** The exact bytes an Ed25519 signature covers: the domain prefix + the canonical payload. */
-export function fedSigningBytes(payload: Uint8Array): Uint8Array {
+export function fedSigningBytes(payload: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(domainBytes.length + payload.length);
   out.set(domainBytes, 0);
   out.set(payload, domainBytes.length);
@@ -114,7 +114,7 @@ export function fedSigningBytes(payload: Uint8Array): Uint8Array {
 }
 
 /** Assemble the wire frame around a signed payload. */
-export function encodeFedFrame(payload: Uint8Array, signerKey: string, sig: Uint8Array): Uint8Array {
+export function encodeFedFrame(payload: Uint8Array, signerKey: string, sig: Uint8Array): Uint8Array<ArrayBuffer> {
   const m: CborMap = new Map<number, CborValue>([
     [F_PAYLOAD, payload],
     [F_KEY, signerKey],
@@ -124,9 +124,9 @@ export function encodeFedFrame(payload: Uint8Array, signerKey: string, sig: Uint
 }
 
 export interface FedFrame {
-  payload: Uint8Array; // verbatim signed payload bytes — verify against these, never a re-encode
+  payload: Uint8Array<ArrayBuffer>; // verbatim signed payload bytes — verify against these, never a re-encode
   signerKey: string; // raw Ed25519 public key, base64url
-  sig: Uint8Array;
+  sig: Uint8Array<ArrayBuffer>;
   record: FedRecord; // the decoded payload, for convenience
 }
 
@@ -139,7 +139,14 @@ export function decodeFedFrame(bytes: Uint8Array): FedFrame {
   const sig = m.get(F_SIG);
   if (!(payload instanceof Uint8Array) || !(sig instanceof Uint8Array) || typeof signerKey !== "string")
     throw new Error("fedwire: malformed frame");
-  return { payload, signerKey, sig, record: decodeFedPayload(payload) };
+  // Decoded byte strings are fresh copies (the CBOR reader slices, never subarrays), so they are
+  // ArrayBuffer-backed by construction — the CborValue union just erases that; type-level only.
+  return {
+    payload: payload as Uint8Array<ArrayBuffer>,
+    signerKey,
+    sig: sig as Uint8Array<ArrayBuffer>,
+    record: decodeFedPayload(payload),
+  };
 }
 
 // ---- coordinates: 1e-7-degree integers (~1 cm), byte-deterministic across every encoder ----
