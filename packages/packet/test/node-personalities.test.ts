@@ -4,6 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { makeNodeSession, qualityToRtt, NODE_PERSONALITIES } from "../src/node-personalities.js";
 import type { NodeStore } from "../src/netrom.js";
+import type { LineReply } from "../src/link-app.js";
 
 const store: NodeStore = {
   nodes: () => [
@@ -16,7 +17,12 @@ const store: NodeStore = {
   info: () => "APRScaching node under test",
 };
 
-const lines = (r: { lines: string[] } | Promise<never>) => (r as { lines: string[] }).lines.join("\n");
+/** Every personality here answers synchronously; unwrap the LineApp union accordingly. */
+const sync = (r: LineReply | Promise<LineReply>): LineReply => {
+  if (r instanceof Promise) throw new Error("personality apps answer synchronously");
+  return r;
+};
+const lines = (r: LineReply | Promise<LineReply>) => sync(r).lines.join("\n");
 
 describe("node personalities", () => {
   it("qualityToRtt inverts monotonically: better quality → lower displayed RTT", () => {
@@ -33,9 +39,9 @@ describe("node personalities", () => {
     expect(d).toContain("OE8XBB " + qualityToRtt(120));
     expect(lines(s.handle("D OE6XXX"))).toContain(`rtt ${qualityToRtt(200)}`);
     expect(lines(s.handle("L"))).toContain("rtt");
-    const c = s.handle("C OE8XBB") as { connect?: string };
+    const c = sync(s.handle("C OE8XBB"));
     expect(c.connect).toBe("OE8XBB");
-    expect((s.handle("Q") as { disconnect?: boolean }).disconnect).toBe(true);
+    expect(sync(s.handle("Q")).disconnect).toBe(true);
   });
 
   it("tnn: German-flavoured surface over the same store", () => {
@@ -44,7 +50,7 @@ describe("node personalities", () => {
     expect(lines(s.handle("N"))).toContain("GRAZ:OE6XXX");
     expect(lines(s.handle("MH"))).toContain("Gehoert");
     expect(lines(s.handle("XYZZY"))).toContain("Unbekanntes Kommando");
-    expect((s.handle("QUIT") as { disconnect?: boolean }).disconnect).toBe(true);
+    expect(sync(s.handle("QUIT")).disconnect).toBe(true);
   });
 
   it("baycom: terse minimal box", () => {
@@ -52,7 +58,7 @@ describe("node personalities", () => {
     expect(s.greeting().join("\n")).toContain("BayCom");
     expect(lines(s.handle("H"))).toBe("C I M U Q\n>");
     expect(lines(s.handle("M"))).toContain("OE8APR-9");
-    expect((s.handle("Q") as { disconnect?: boolean }).disconnect).toBe(true);
+    expect(sync(s.handle("Q")).disconnect).toBe(true);
   });
 
   it("unknown or absent personality falls back to the native node CLI", () => {
