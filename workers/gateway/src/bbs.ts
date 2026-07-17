@@ -10,6 +10,7 @@ import { secretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import type { FeedServeDef } from "./federation.js";
+import { FED_BBS_CATEGORY } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_ATTEMPTS = 5;
@@ -127,11 +128,15 @@ export async function handleBbsBulletins(req: Request, env: Env): Promise<Respon
   const u = new URL(req.url);
   const cat = u.searchParams.get("category");
   const n = now();
+  // The reserved federation category (ACSFED) is machine carrier traffic, not human mail — it is
+  // hidden from the default listing but still reachable by asking for the category explicitly.
   let sql = "SELECT * FROM bbs_messages WHERE type='B' AND (expires_at IS NULL OR expires_at > ?)";
   const binds: unknown[] = [n];
   if (cat) {
     sql += " AND to_call=?";
     binds.push(cat.toUpperCase());
+  } else {
+    sql += ` AND to_call != '${FED_BBS_CATEGORY}'`;
   }
   sql += " ORDER BY posted_at DESC LIMIT 200";
   const rows = (

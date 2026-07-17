@@ -130,20 +130,22 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
 }
 
 /**
- * Serve one CBOR sync page. Unknown feed type → 404 (the same forward-compat contract as the JSON
- * feeds); an unsigned instance → 404 too, so a consumer falls back to the JSON surface — CBOR sync
- * exists only where every frame can carry a signature.
+ * Build the signed fedwire frames for one feed's local records since a cursor. The shared producer
+ * behind every carrier: the HTTP sync surface serves the frames as a CBOR page, and the FBB
+ * store-and-forward path packs the same frames into an `ACSFED` bulletin — one signing base, two
+ * carriers. Null when the instance has no signing key (frames cannot exist unsigned).
  */
-export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
+export async function buildFedFrames(
+  env: Env,
+  instance: string,
+  feedType: string,
+  since: number,
+  limit: number,
+): Promise<{ frames: Uint8Array[]; nextCursor: number } | null> {
   const def = FEED_FOR_TYPE[feedType];
   const kind = KIND_FOR_TYPE[feedType];
-  if (!def || !kind) return json({ error: "unknown feed" }, { status: 404 });
-  const u = new URL(req.url);
-  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
-  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
-  const instance = instanceOf(req, env);
+  if (!def || !kind) return { frames: [], nextCursor: since };
   const at = Math.floor(Date.now() / 1000);
-
   const rows = await def.selectRows(env, since, limit);
   let nextCursor = since;
   const frames: Uint8Array[] = [];
@@ -160,11 +162,28 @@ export async function handleFedSync(req: Request, env: Env, feedType: string): P
     };
     const payload = encodeFedPayload(record);
     const signed = await signRaw(env, fedSigningBytes(payload));
-    if (!signed) return json({ error: "instance is unsigned" }, { status: 404 });
+    if (!signed) return null;
     frames.push(encodeFedFrame(payload, signed.publicX, signed.sig));
     if (cursor > nextCursor) nextCursor = cursor;
   }
-  return new Response(encodeFedSyncPage(instance, nextCursor, frames.length < limit, frames) as BodyInit, {
-    headers: { "content-type": "application/cbor" },
-  });
+  return { frames, nextCursor };
+}
+
+/**
+ * Serve one CBOR sync page. Unknown feed type → 404 (the same forward-compat contract as the JSON
+ * feeds); an unsigned instance → 404 too, so a consumer falls back to the JSON surface — CBOR sync
+ * exists only where every frame can carry a signature.
+ */
+export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
+  if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
+  const u = new URL(req.url);
+  const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
+  const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
+  const instance = instanceOf(req, env);
+  const built = await buildFedFrames(env, instance, feedType, since, limit);
+  if (!built) return json({ error: "instance is unsigned" }, { status: 404 });
+  return new Response(
+    encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames) as BodyInit,
+    { headers: { "content-type": "application/cbor" } },
+  );
 }

@@ -11,6 +11,8 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprsweb/packet";
+import { isFedBbsCategory } from "@aprsweb/shared";
+import { applyFedBbsBulletin, type FedBbsApplyResult } from "./federation_sync.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -336,8 +338,19 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   )
     .bind(row.bid, row.type, row.from, row.to, row.title || null, row.body, row.posted, row.origin)
     .run();
+  // A bulletin addressed to the reserved federation category is carrier traffic: on first sight
+  // (BID-new — a re-flooded copy dedups above) its frames go through the trust-gated
+  // store-and-forward receive, which verifies each against its claimed origin's keys and applies
+  // idempotently by gid. The arrival path never lifts trust — quarantine/verification live there.
+  let federation: FedBbsApplyResult | undefined;
+  if (isFedBbsCategory(row.to) && res.meta.changes) federation = await applyFedBbsBulletin(env, row.body);
   if (row.type === "P") await learnWhitePages(env, row.from, row.origin); // FBB White Pages: learn HomeBBS from P-mail
-  return json({ ok: true, stored: res.meta.changes ? 1 : 0, deduped: !res.meta.changes });
+  return json({
+    ok: true,
+    stored: res.meta.changes ? 1 : 0,
+    deduped: !res.meta.changes,
+    ...(federation && { federation }),
+  });
 }
 
 /** POST /api/bbs/forward/sent {partner, bids} — mark messages forwarded to a partner (don't re-offer). */

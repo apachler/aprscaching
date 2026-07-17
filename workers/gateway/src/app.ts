@@ -81,6 +81,7 @@ import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleFedSync } from "./fedsync.js";
+import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -350,6 +351,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // CBOR sync surface — fedwire frames (the canonical signed form); consumers prefer it over the JSON feeds
   const fedSync = /^\/federation\/sync\/([a-z-]+)$/.exec(p);
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);
+  // store-and-forward send: pack local records into an ACSFED bulletin for the FBB mesh (sysop/ingest)
+  if (p === "/federation/bbs/enqueue" && m === "POST") return handleFedBbsEnqueue(req, env);
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);

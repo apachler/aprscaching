@@ -118,6 +118,21 @@ applies each idempotently by global id — a bulletin cannot lift trust or reach
 namespace, and an origin the instance does not already know stays quarantined, exactly as an
 HTTP-sync peer does.
 
+Both halves ride the existing BBS machinery:
+
+- **Send** — `POST /federation/bbs/enqueue {types?, since?, limit?}` (sysop or the operator's ingest
+  box) signs the local feed records (tombstones first) into fedwire frames — the same producer the
+  HTTP sync surface uses — packs them into one `ACSFED` bulletin, and stores it as a local BBS
+  bulletin. The forwarding rules, pool, and partner scheduler then carry it like any other bulletin;
+  the content BID lands in `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
+- **Receive** — an inbound forwarded message addressed to `ACSFED` triggers the trust-gated apply on
+  first sight (a re-flooded copy dedups on its BID before the apply). The claimed origin only selects
+  which key set to verify against — the key pinned for that peer plus its signed-registry binding; an
+  unknown or operator-blocked origin is quarantined, never applied.
+
+`ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
+category is asked for explicitly.
+
 ## 44net verified onboarding
 
 ARDC's portal reviews an amateur licence before delegating `<call>.ampr.org` (its Level-of-Trust
