@@ -111,8 +111,11 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   quarantined.
 - [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode
   command set, BayCom compatibility as selectable node personalities.
-- [ ] **Shared compression dictionary** *(P3 · S)* — the `deflateDict1` versioned dictionary for the
-  compact/beacon tiers, shipped in `packages/shared`.
+- [x] **Shared compression dictionary** — the `deflateDict1` preset dictionary ships in
+  `packages/shared` (immutable wire contract, versioned by capability id); the zlib codec around it
+  lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb
+  bound and an integrity-checked container so corrupt input fails decode instead of yielding wrong
+  bytes.
 
 ## Deferred by design (reserved seams, opened on demand)
 
