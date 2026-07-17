@@ -89,6 +89,7 @@ import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.
 import { handleFed44netAdd } from "./fed44net.js";
 import { handleFedSync } from "./fedsync.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
+import { handleBeaconEmit, handleBeaconRx } from "./fedbeacon.js";
 import { handleCorroborate } from "./corroborate.js";
 import { handleRegisterKey, handleGetKeys } from "./keys.js";
 import { handleImport } from "./import/engine.js";
@@ -363,6 +364,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (fedSync && m === "GET") return handleFedSync(req, env, fedSync[1]!);
   // store-and-forward send: pack local records into an ACSFED bulletin for the FBB mesh (sysop/ingest)
   if (p === "/federation/bbs/enqueue" && m === "POST") return handleFedBbsEnqueue(req, env);
+  // beacon tier: GET = this instance's presence datagram (the ingest box transmits it);
+  // POST = a heard datagram into the trust-gated pipeline (ingest-gated)
+  if (p === "/federation/beacon" && m === "GET") return handleBeaconEmit(req, env);
+  if (p === "/federation/beacon" && m === "POST") return handleBeaconRx(req, env);
   if (p === "/federation/sync" && m === "POST") return handleFederationSync(req, env);
   if (p === "/federation/corroborate" && m === "POST") return handleCorroborate(req, env);
   if (p === "/federation/keys" && m === "GET") return handleFederationKeys(req, env);

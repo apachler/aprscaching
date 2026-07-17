@@ -37,7 +37,7 @@ import { verifyFedFrame, signFedRecord } from "./fedcbor.js";
 import { decodeFedSyncPage, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
-import { decodeFedFrame, decodeFedBbsBatch, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
+import { decodeFedFrame, decodeFedBbsBatch, parseEndpoints, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
 
 const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
@@ -599,24 +599,29 @@ export interface FedBbsApplyResult {
   rejected: number;
 }
 
+export interface FedFramesResult {
+  applied: number;
+  quarantined: number;
+  rejected: number;
+}
+
 /**
- * Receive a store-and-forward federation bulletin off the FBB mesh. Each frame is verified against
- * ITS CLAIMED ORIGIN's keys — the key we last pinned for that peer plus any the signed registry
- * binds to it — then run through the SAME namespace / self-attest / tombstone checks and the
- * idempotent-by-gid appliers as an HTTP pull, so the two carriers can never diverge. A frame from an
- * origin the instance does not already know, or one an operator has blocked, is quarantined and never
- * applied: receiving a frame over any carrier introduces no peer and lifts no trust. Apply is
- * idempotent by global id, so a bulletin flooded to us more than once converges.
+ * The trust-gated apply pipeline every non-HTTP carrier feeds — FBB bulletins, HF beacon datagrams,
+ * connected-mode circuit pages. Each frame is verified against ITS CLAIMED ORIGIN's keys — the key
+ * we last pinned for that peer plus any the signed registry binds to it — then run through the SAME
+ * namespace / self-attest / tombstone checks and the idempotent-by-gid appliers as an HTTP pull, so
+ * carriers can never diverge. A frame from an origin the instance does not already know, or one an
+ * operator has blocked, is quarantined and never applied: receiving a frame over any carrier
+ * introduces no peer and lifts no trust. Apply is idempotent by global id, so frames delivered more
+ * than once (multi-path flood, replays) converge.
  */
-export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBbsApplyResult> {
-  const batch = decodeFedBbsBatch(body);
-  if (!batch) return { federation: false, bid: null, applied: 0, quarantined: 0, rejected: 0 };
+export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<FedFramesResult> {
   const registry = await loadRegistry(env);
   const keyCache = new Map<string, string[] | "blocked">();
   let applied = 0,
     quarantined = 0,
     rejected = 0;
-  for (const fb of batch.frames) {
+  for (const fb of frames) {
     // read the claimed origin as a key SELECTOR — a valid signature under a key we independently
     // bind to that origin is still required below, so a forged claim buys nothing.
     let origin: string;
@@ -650,6 +655,14 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
       else if (r === "rejected") rejected++;
       continue; // "elsewhere": addressed to another instance riding the same flood — not ours to count
     }
+    if (f.record.kind === "peer") {
+      if (!idInNamespace(f.record.gid, origin)) {
+        rejected++;
+        continue;
+      }
+      applied += (await applyPeerAnnounce(env, f.record, origin)) ? 1 : 0;
+      continue;
+    }
     const def = SYNC_DEF_BY_TYPE.get(SYNC_TYPE_BY_KIND[f.record.kind] ?? "");
     if (!def) {
       rejected++;
@@ -669,7 +682,34 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
     await def.apply(env, rec, origin);
     applied++;
   }
-  return { federation: true, bid: batch.bid, applied, quarantined, rejected };
+  return { applied, quarantined, rejected };
+}
+
+/**
+ * A verified peer-announce (an HF presence beacon) refreshes a KNOWN peer's self-attested endpoint
+ * set — addressing only, never a trust input, and strictly an UPDATE: hearing an announce never
+ * inserts a peer, so a beacon can't introduce anyone (RX ≠ trust). Endpoints are re-validated
+ * through the typed validator so a malformed address never rides an announce in.
+ */
+async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Promise<boolean> {
+  const addresses = parseEndpoints(rec.body.addresses);
+  if (!addresses.length) return false;
+  const res = await env.DB.prepare("UPDATE fed_peers SET endpoints=? WHERE instance=?")
+    .bind(JSON.stringify(addresses), origin)
+    .run();
+  return !!res.meta.changes;
+}
+
+/**
+ * Receive a store-and-forward federation bulletin off the FBB mesh: decode the `ACSFED` envelope,
+ * then feed its frames through the shared trust-gated pipeline. The caller dedups by the
+ * content-addressed BID before invoking (a re-flooded copy never re-applies).
+ */
+export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBbsApplyResult> {
+  const batch = decodeFedBbsBatch(body);
+  if (!batch) return { federation: false, bid: null, applied: 0, quarantined: 0, rejected: 0 };
+  const r = await applyFedFrames(env, batch.frames);
+  return { federation: true, bid: batch.bid, ...r };
 }
 
 /**

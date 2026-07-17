@@ -133,6 +133,19 @@ Both halves ride the existing BBS machinery:
 `ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
 category is asked for explicitly.
 
+## Beacon tier
+
+One signed fedwire frame in one unconnected AX.25 UI datagram (`ACSB1` magic + the frame verbatim,
+bounded to a single-frame fit) — for links where even a BBS session is a luxury. `GET
+/federation/beacon` serves this instance's presence datagram: a signed `peer` record carrying its
+typed endpoint set, trimmed from the lowest priority up until it fits; the operator's ingest box
+fetches and transmits it on its own schedule (TX stays operator-local and gated). A heard datagram
+goes to `POST /federation/beacon` (ingest-gated) and into the same trust-gated pipeline as every
+carrier — a verified peer-announce from a KNOWN origin refreshes that peer's self-attested endpoints
+(an UPDATE only: hearing a beacon never inserts a peer), an unknown origin is quarantined, and tiny
+records (tombstones) apply idempotently by gid. There is no batch envelope and no BID at this tier;
+the global id is the dedup.
+
 The rendezvous relay rides the same carrier for a packet-only spoke. `POST
 /federation/relay/<instance>/dispatch` (sysop/ingest) packs the spoke's queued queries into signed
 `relayQuery` frames and marks them leased; the spoke's receive path answers each from its own DB and

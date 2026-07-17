@@ -103,8 +103,12 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   `relayQuery` frames, the spoke answers off its receive path with signed `relayAnswer` frames, and
   the hub lands them scoped to the answering instance's own queue — signatures bind both directions,
   so no relay secret ever rides the air.
-- [ ] **Beacon tier** *(P3 · M)* — single-frame UI datagrams for tiny records (peer-announce,
-  tombstone, have-lists) on HF.
+- [x] **Beacon tier** — one signed frame in one UI datagram (`ACSB1`). `GET /federation/beacon`
+  serves the instance's signed presence record (identity + typed endpoints, trimmed to the
+  single-frame fit) for the ingest box to transmit; `POST /federation/beacon` feeds a heard datagram
+  into the shared trust-gated pipeline — a known origin's peer-announce refreshes its endpoints
+  (update-only; a beacon never introduces a peer), tombstones apply by gid, unknown origins are
+  quarantined.
 - [ ] **Node personalities beyond NET/ROM+BPQ** *(P3 · L)* — FlexNet RTT autorouting, TheNetNode
   command set, BayCom compatibility as selectable node personalities.
 - [ ] **Shared compression dictionary** *(P3 · S)* — the `deflateDict1` versioned dictionary for the

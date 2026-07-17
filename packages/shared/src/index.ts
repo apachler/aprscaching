@@ -6,6 +6,7 @@ export * from "./canon.js";
 export * from "./cbor.js";
 export * from "./fedwire.js";
 export * from "./fedbbs.js";
+export * from "./fedbeacon.js";
 export * from "./surfaces.js";
 export * from "./spots.js";
 export * from "./page.js";
