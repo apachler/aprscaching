@@ -106,8 +106,9 @@ const server = http.createServer(async (nreq, nres) => {
     // any client-supplied x-real-ip so rate-limit keying can trust it.
     headers.set("x-real-ip", nreq.socket.remoteAddress ?? "unknown");
     const hasBody = method !== "GET" && method !== "HEAD";
+    // readBody returns raw bytes — the gateway speaks JSON on most routes but BINARY on the
+    // federation wire (CBOR sync pages, beacon datagrams); a utf8 round-trip would corrupt those.
     const request = new Request(url, { method, headers, body: hasBody ? await readBody(nreq) : undefined });
-    // (readBody returns a string; the gateway API is JSON throughout)
     const response = await handle(request, env, { waitUntil: (p) => void p.catch(() => {}) });
 
     nres.statusCode = response.status;
@@ -170,7 +171,7 @@ class BodyTooLarge extends Error {
     super("request body too large");
   }
 }
-function readBody(req: http.IncomingMessage): Promise<string> {
+function readBody(req: http.IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
@@ -183,7 +184,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
       }
       chunks.push(c as Buffer);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => resolve(Uint8Array.from(Buffer.concat(chunks))));
     req.on("error", reject);
   });
 }

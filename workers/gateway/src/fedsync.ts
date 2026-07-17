@@ -1,29 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * fedsync.ts — the CBOR federation sync surface. `GET /federation/sync/<type>?since=&limit=` serves
- * the same records as the JSON feeds, but as fedwire frames: deterministic CBOR payloads signed
- * under the domain-separated instance key (fedcbor.ts). The frame bytes are the canonical signed
- * form — a consumer verifies them verbatim and can forward them over any carrier unchanged.
+ * fedsync.ts — the CBOR federation sync surface, the only wire mirroring consumes.
+ * `GET /federation/sync/<type>?since=&limit=` serves fedwire frames: deterministic CBOR payloads
+ * signed under the domain-separated instance key (fedcbor.ts). The frame bytes are the canonical
+ * signed form — a consumer verifies them verbatim and can forward them over any carrier unchanged.
+ * (The JSON feeds serve the same records unsigned, as a transparency/browse surface only.)
  *
- * The page envelope is CBOR too (unsigned — each record carries its own signature, matching the
- * JSON feed model): {1 instance, 2 nextCursor, 3 complete, 4 [frame bytes…]}.
+ * The page envelope is CBOR too (unsigned — each record carries its own signature):
+ * {1 instance, 2 nextCursor, 3 complete, 4 [frame bytes…]}.
  *
  * Bodies are the JSON feed `data` objects with every fractional field scaled to an integer twin
  * (the deterministic codec refuses floats): lat/lon ↔ latE7/lonE7 (1e-7°), difficulty/terrain ↔
- * ×10, distanceM ↔ centimetres. The consumer maps them back before apply, so both sync encodings
- * feed the identical mirror/tombstone logic.
+ * ×10, distanceM ↔ centimetres. The consumer maps them back before apply.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import {
-  cborEncode,
-  cborDecode,
-  type CborMap,
-  type CborValue,
-  encodeFedPayload,
-  type FedRecord,
-  type FedRecordKind,
-} from "@aprsweb/shared";
+import { encodeFedPayload, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
 import { signRaw } from "./federation.js";
 import { fedSigningBytes, encodeFedFrame } from "@aprsweb/shared";
 import { CACHE_FEED, FIND_FEED, KEY_FEED, instanceOf, type FeedServeDef } from "./federation.js";
@@ -88,7 +80,7 @@ export function bodyFromWire(body: Record<string, unknown>): Record<string, unkn
 
 // The CBOR page envelope codec lives in @aprsweb/shared (both circuit ends use it); re-exported so
 // the gateway's sync surface, consumer, and tests keep one import site.
-import { encodeFedSyncPage, decodeFedSyncPage } from "@aprsweb/shared";
+import { encodeFedSyncPage } from "@aprsweb/shared";
 export { encodeFedSyncPage, decodeFedSyncPage, type FedSyncPage } from "@aprsweb/shared";
 
 /**

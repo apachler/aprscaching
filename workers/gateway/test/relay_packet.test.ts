@@ -7,7 +7,7 @@
 // The instance signing key is memoized process-wide, so hub and spoke share one keypair here (each
 // pins it for the other); refusing a WRONG key is covered by the receive tests.
 import { describe, it, expect, beforeAll } from "vitest";
-import { decodeFedBbsBatch, decodeFedFrame } from "@aprsweb/shared";
+import { decodeFedBbsBatch, decodeFedFrame, decodeFedSyncPage } from "@aprsweb/shared";
 import { handleRelayDispatch } from "../src/relay.js";
 import { applyFedBbsBulletin } from "../src/federation_sync.js";
 import type { Env } from "../src/env.js";
@@ -133,9 +133,11 @@ describe("rendezvous relay over the FBB carrier", () => {
     const aRec = decodeFedFrame(decodeFedBbsBatch(answerBody)!.frames[0]!).record;
     expect(aRec).toMatchObject({ kind: "relayAnswer", origin: "oe.spoke" });
     expect(aRec.body.target).toBe("oe.hub");
-    const result = JSON.parse(String(aRec.body.resultJson)) as { ok: boolean; data?: { items?: unknown[] } };
+    const result = JSON.parse(String(aRec.body.resultJson)) as { ok: boolean; data?: { pageB64?: string } };
     expect(result.ok).toBe(true);
-    expect(result.data?.items).toHaveLength(1); // the spoke's cache, served as a signed feed page
+    // the answer carries a CBOR page of signed frames — the spoke's cache rides inside it
+    const pageBytes = Uint8Array.from(atob(String(result.data?.pageB64)), (c) => c.charCodeAt(0));
+    expect(decodeFedSyncPage(pageBytes).frames).toHaveLength(1);
 
     // hub: the answer bulletin arrives; the queue row for (id, answering instance) is answered
     const backSinks: Sinks = { bbs: [], queueUpdates: [] };

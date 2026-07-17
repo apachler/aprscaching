@@ -12,16 +12,11 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import {
-  importVerifyKey,
-  verifyRecordSig,
   FED_PROTOCOL_VERSION,
-  importActiveKeys,
   activeFedKeys,
   type FedPublicKey,
   loadRegistry,
   registryKeyAllowed,
-  buildFeed,
-  feedPublicKey,
   CACHE_FEED,
   FIND_FEED,
   KEY_FEED,
@@ -34,7 +29,7 @@ import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
 import { syncTransportFor, type FedSyncTransport } from "./fedtransport.js";
 import { verifyFedFrame, signFedRecord } from "./fedcbor.js";
-import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames, bodyFromWire, SYNC_CBOR_CAPABILITY } from "./fedsync.js";
+import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames, bodyFromWire } from "./fedsync.js";
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { decodeFedFrame, decodeFedBbsBatch, parseEndpoints, type FedRecord, type FedRecordKind } from "@aprsweb/shared";
@@ -62,19 +57,13 @@ interface PeerRow {
   verified_via?: string | null; // identity attestation, e.g. 'ardc-lot' (never a data-trust input)
 }
 
+/** A record on its way to an applier — the decoded form of a verified fedwire frame. */
 interface FeedRecord {
   type: string;
   id: string;
   cursor: number;
   data: Record<string, unknown>;
-  sig?: string;
   signer?: string;
-}
-interface Feed {
-  instance: string;
-  nextCursor: number;
-  complete: boolean;
-  items: FeedRecord[];
 }
 
 function ours(env: Env): string | null {
@@ -274,39 +263,30 @@ async function syncPeer(
   if (!registryKeyAllowed(registryEntry, newActive))
     throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
 
-  // verify against ANY of the peer's active (non-revoked, in-window) published keys — so a peer
-  // can rotate its key without breaking federation, and a revoked/leaked key is rejected. Falls back to
-  // the legacy single `publicKey` for older peers.
-  const verifyKeys = await importActiveKeys(wk.publicKeys, pub, now());
   // capability negotiation: a peer that speaks our protocol version has an authoritative
-  // capability list → skip feeds it doesn't advertise; a legacy peer (no version match) is tried for
-  // every known feed and a 404 is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered
-  // tombstones-FIRST so a delete suppresses re-mirroring of a stale record later in the same pass.
+  // capability list → skip feeds it doesn't advertise; otherwise every known feed is tried and a 404
+  // is treated as "not supported" (syncFeed below). SYNC_DEFS is ordered tombstones-FIRST so a
+  // delete suppresses re-mirroring of a stale record later in the same pass. The CBOR sync surface
+  // is the only mirror wire — a peer without it (or unsigned) simply has nothing verifiable to
+  // mirror, and its feeds are skipped via the same 404 contract.
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
-  // encoding preference: a signed peer advertising the CBOR sync surface is pulled as fedwire
-  // frames; anything else stays on the JSON feeds. Per-feed 404 falls back to JSON gracefully.
-  const preferCbor = !!wk.capabilities?.includes(SYNC_CBOR_CAPABILITY);
   const counts: Record<string, number> = {};
-  const encodings = new Set<string>();
   for (const def of SYNC_DEFS) {
     // iterate SYNC_DEFS to preserve the tombstones-first order
     if (!toSync.has(def.type)) {
       counts[def.type] = 0;
       continue;
     }
-    const r = await syncFeed(env, transport, p, wk.instance, verifyKeys, newActive, preferCbor, def);
-    counts[def.type] = r.applied;
-    encodings.add(r.encoding);
+    counts[def.type] = await syncFeed(env, transport, p, wk.instance, newActive, def);
   }
-  // observability: record a successful sync — time, count, cumulative total, per-feed breakdown,
-  // and which wire encoding served it (surfaced via /federation/peers → last_counts)
+  // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
+  // (surfaced via /federation/peers → last_counts)
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const encoding = encodings.size === 1 ? [...encodings][0] : encodings.size ? "mixed" : "none";
   await env.DB.prepare(
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
        mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
   )
-    .bind(now(), now(), total, JSON.stringify({ ...counts, encoding }), p.url)
+    .bind(now(), now(), total, JSON.stringify({ ...counts, encoding: "cbor" }), p.url)
     .run();
   return {
     caches: counts.cache ?? 0,
@@ -378,72 +358,48 @@ const SYNC_DEFS: SyncDef[] = [
 ];
 
 /**
- * Generalized feed consumer: pull pages, verify+accept each record, apply it, advance the
- * peer cursor — one loop for every record type. A 404 means the peer doesn't serve this feed (an
- * older peer, or one with the capability disabled) → skip it gracefully, never failing the whole sync.
+ * Generalized feed consumer: pull CBOR sync pages, verify each fedwire frame over its bytes
+ * verbatim under the peer's active keys, run the acceptance checks, apply, advance the peer cursor
+ * — one loop for every record type. A 404 means the peer doesn't serve this feed → skip it
+ * gracefully, never failing the whole sync. The origin is ALWAYS the verified serving peer
+ * (wk.instance), never anything the payload claims — a peer inherits only its own namespace + trust.
  */
 async function syncFeed(
   env: Env,
   transport: FedSyncTransport,
   p: PeerRow,
   instance: string,
-  verifyKeys: CryptoKey[],
   activeKeys: string[],
-  preferCbor: boolean,
   def: SyncDef,
-): Promise<{ applied: number; encoding: "cbor" | "json" }> {
+): Promise<number> {
   let cursor = (p[def.cursorCol] as number) ?? 0,
-    applied = 0,
-    cbor = preferCbor;
+    applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
-    let next: number, complete: boolean;
-    if (cbor) {
-      // CBOR sync: fedwire frames, each verified over its bytes verbatim under the peer's
-      // active keys — then through the SAME acceptance checks + applier as the JSON path.
-      const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}&limit=500`);
-      if (res.status === 404) {
-        cbor = false; // capability advertised but surface absent → fall back to JSON for this feed
-        continue;
-      }
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
-      const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
-      for (const fb of pg.frames) {
-        const f = await verifyFedFrame(fb, activeKeys);
-        if (!f) continue; // malformed / key outside the peer's set / bad signature
-        if (f.record.origin !== instance) continue; // origin must be the verified serving peer
-        const rec: FeedRecord = {
-          type: def.type,
-          id: f.record.gid,
-          cursor: f.record.v,
-          data: bodyFromWire(f.record.body),
-          signer: f.record.signer,
-        };
-        if (!(await acceptUnsigned(env, rec, instance))) continue;
-        await def.apply(env, rec, instance);
-        applied++;
-      }
-      next = pg.nextCursor ?? cursor;
-      complete = pg.complete;
-    } else {
-      const res = await transport.get(`${def.path}?since=${cursor}&limit=500`);
-      if (res.status === 404) return { applied, encoding: "json" }; // feed not supported → forward-compat skip
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- ${def.path}`);
-      const feed = (await res.json()) as Feed;
-      for (const rec of feed.items ?? []) {
-        if (!(await accept(env, rec, verifyKeys, instance))) continue;
-        // the origin is ALWAYS the verified serving peer (wk.instance), NEVER rec.signer or
-        // feed.instance (both attacker-controlled). A peer inherits only its own namespace + trust.
-        await def.apply(env, rec, instance);
-        applied++;
-      }
-      next = feed.nextCursor ?? cursor;
-      complete = feed.complete;
+    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}&limit=500`);
+    if (res.status === 404) return applied; // feed not served here → forward-compat skip
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
+    const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
+    for (const fb of pg.frames) {
+      const f = await verifyFedFrame(fb, activeKeys);
+      if (!f) continue; // malformed / key outside the peer's set / bad signature
+      if (f.record.origin !== instance) continue; // origin must be the verified serving peer
+      const rec: FeedRecord = {
+        type: def.type,
+        id: f.record.gid,
+        cursor: f.record.v,
+        data: bodyFromWire(f.record.body),
+        signer: f.record.signer,
+      };
+      if (!(await acceptUnsigned(env, rec, instance))) continue;
+      await def.apply(env, rec, instance);
+      applied++;
     }
+    const next = pg.nextCursor ?? cursor;
     await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
-    if (complete || next === cursor) break;
+    if (pg.complete || next === cursor) break;
     cursor = next;
   }
-  return { applied, encoding: cbor ? "cbor" : "json" };
+  return applied;
 }
 
 /**
@@ -491,24 +447,10 @@ async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
     .first<{ x: number }>());
 }
 
-/** Does the record verify under ANY of the peer's active keys? Empty set = unsigned peer (skip). */
-async function verifiesUnderAny(keys: CryptoKey[], rec: FeedRecord): Promise<boolean> {
-  if (!keys.length) return true; // unsigned peer — nothing to verify against (legacy behaviour)
-  for (const k of keys) if (await verifyRecordSig(k, rec)) return true;
-  return false;
-}
-
-async function accept(env: Env, rec: FeedRecord, verifyKeys: CryptoKey[], instance: string): Promise<boolean> {
-  if (!(await verifiesUnderAny(verifyKeys, rec))) return false; // bad/unrecognised signature
-  return acceptUnsigned(env, rec, instance);
-}
-
 /**
- * The non-cryptographic acceptance checks, shared by both sync encodings (the JSON path verifies
- * the per-record signature first; the CBOR path verifies the fedwire frame first — then both land
- * here so namespace/signer/tombstone semantics can never diverge between encodings).
- * A peer may only serve records IN ITS OWN namespace, self-attested — otherwise it could overwrite
- * another instance's genuine mirror (inheriting its trust).
+ * The non-cryptographic acceptance checks every carrier shares, applied after the fedwire frame's
+ * signature verified. A peer may only serve records IN ITS OWN namespace, self-attested — otherwise
+ * it could overwrite another instance's genuine mirror (inheriting its trust).
  */
 async function acceptUnsigned(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
   if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
@@ -958,71 +900,54 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   if (!secretOk(req.headers.get("x-fed-secret"), secret))
     return json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  // The CBOR form: a sync page of fedwire frames — the same signed bytes every other carrier moves.
-  // The page's instance declares the submitter; every frame must be signed by ONE key (a submission
-  // is one spoke), verified over the frame bytes verbatim. The JSON body remains the compatibility
-  // surface for older spokes.
-  if ((req.headers.get("content-type") ?? "").includes("application/cbor")) {
-    let page: ReturnType<typeof decodeFedSyncPage>;
-    try {
-      page = decodeFedSyncPage(new Uint8Array(await req.arrayBuffer()));
-    } catch {
-      return json({ ok: false, error: "not a CBOR sync page" }, { status: 400 });
-    }
-    const records: FeedRecord[] = [];
-    let rejected = 0;
-    let submitKey: string | null = null;
-    for (const fb of page.frames) {
-      let signerKey: string;
-      try {
-        signerKey = decodeFedFrame(fb).signerKey;
-      } catch {
-        rejected++;
-        continue;
-      }
-      submitKey ??= signerKey;
-      const f = await verifyFedFrame(fb, [submitKey]);
-      if (!f || f.record.origin !== page.instance) {
-        rejected++;
-        continue; // bad signature, a second key smuggled into the batch, or a foreign origin
-      }
-      const type = SYNC_TYPE_BY_KIND[f.record.kind];
-      if (!type) {
-        rejected++;
-        continue;
-      }
-      records.push({
-        type,
-        id: f.record.gid,
-        cursor: f.record.v,
-        data: bodyFromWire(f.record.body),
-        signer: f.record.signer,
-      });
-    }
-    if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
-    return submitRecords(env, page.instance, submitKey, records, rejected, null);
-  }
-
-  const b = (await req.json().catch(() => null)) as {
-    instance?: string;
-    publicKey?: string;
-    records?: FeedRecord[];
-  } | null;
-  if (!b?.instance || !b.publicKey || !Array.isArray(b.records))
-    return json({ ok: false, error: "instance, publicKey, records required" }, { status: 400 });
-  let key: CryptoKey;
+  // A submission is a sync page of fedwire frames — the same signed bytes every other carrier
+  // moves. The page's instance declares the submitter; every frame must be signed by ONE key (a
+  // submission is one spoke), verified over the frame bytes verbatim.
+  if (!(req.headers.get("content-type") ?? "").includes("application/cbor"))
+    return json({ ok: false, error: "submit is application/cbor (a fedwire sync page)" }, { status: 415 });
+  let page: ReturnType<typeof decodeFedSyncPage>;
   try {
-    key = await importVerifyKey(b.publicKey);
+    page = decodeFedSyncPage(new Uint8Array(await req.arrayBuffer()));
   } catch {
-    return json({ ok: false, error: "bad public key" }, { status: 400 });
+    return json({ ok: false, error: "not a CBOR sync page" }, { status: 400 });
   }
-  return submitRecords(env, b.instance, b.publicKey, b.records, 0, key);
+  const records: FeedRecord[] = [];
+  let rejected = 0;
+  let submitKey: string | null = null;
+  for (const fb of page.frames) {
+    let signerKey: string;
+    try {
+      signerKey = decodeFedFrame(fb).signerKey;
+    } catch {
+      rejected++;
+      continue;
+    }
+    submitKey ??= signerKey;
+    const f = await verifyFedFrame(fb, [submitKey]);
+    if (!f || f.record.origin !== page.instance) {
+      rejected++;
+      continue; // bad signature, a second key smuggled into the batch, or a foreign origin
+    }
+    const type = SYNC_TYPE_BY_KIND[f.record.kind];
+    if (!type) {
+      rejected++;
+      continue;
+    }
+    records.push({
+      type,
+      id: f.record.gid,
+      cursor: f.record.v,
+      data: bodyFromWire(f.record.body),
+      signer: f.record.signer,
+    });
+  }
+  if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
+  return submitRecords(env, page.instance, submitKey, records, rejected);
 }
 
 /**
- * The submit core both encodings share: allowlist, the registry + TOFU key binding, spoke
- * registration, and the per-record acceptance rules. `jsonVerifyKey` is non-null on the JSON path,
- * where each record still carries a stableStringify signature; CBOR frames arrive pre-verified.
+ * The submit core: allowlist, the registry + TOFU key binding, spoke registration, and the
+ * per-record acceptance rules. Frames arrive pre-verified over their bytes.
  */
 async function submitRecords(
   env: Env,
@@ -1030,7 +955,6 @@ async function submitRecords(
   publicKey: string,
   records: FeedRecord[],
   preRejected: number,
-  jsonVerifyKey: CryptoKey | null,
 ): Promise<Response> {
   if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
   const allow = (env.FED_SUBMIT_INSTANCES ?? "")
@@ -1074,10 +998,6 @@ async function submitRecords(
       rejected++;
       continue;
     } // only the submitter's own namespace
-    if (jsonVerifyKey && !(await verifyRecordSig(jsonVerifyKey, rec))) {
-      rejected++;
-      continue;
-    } // JSON-path integrity (CBOR frames were verified over their bytes already)
     if (await isTombstoned(env, rec.id)) {
       rejected++;
       continue;
@@ -1088,67 +1008,36 @@ async function submitRecords(
   return json({ ok: true, applied, rejected });
 }
 
-// A hub that can't parse a CBOR page (older software) answers 400 — remember per hub and stay on
-// the JSON compatibility surface for the rest of this process's life.
-const HUB_JSON_ONLY = new Set<string>();
-
 /**
  * SPOKE side: push our signed records to a configured hub (push-mode mirroring) when we can't be
- * pulled. Prefers the CBOR wire (a sync page of fedwire frames — the same signed bytes as every
- * other carrier), falling back to the JSON submit body for an older hub. Incremental via in-memory
- * cursors; idempotent (the hub upserts by global id), so a restart that re-pushes from 0 is
- * harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
+ * pulled — a sync page of fedwire frames, the same signed bytes as every other carrier. Incremental
+ * via in-memory cursors; idempotent (the hub upserts by global id), so a restart that re-pushes
+ * from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
  */
 export async function pushToHub(env: Env, fetchFn: typeof fetch = fetch): Promise<{ pushed: number } | null> {
   const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
   const secret = env.FED_SUBMIT_SECRET;
   if (!hub || !secret || !env.INSTANCE) return null;
-  const publicKey = await feedPublicKey(env);
-  if (!publicKey) return null; // unsigned instance: the hub couldn't verify our records
   let pushed = 0;
   for (const def of PUSH_FEEDS) {
     const ckey = `${hub}|${def.type}`;
     let cursor = PUSH_CURSORS.get(ckey) ?? 0;
     for (let page = 0; page < MAX_PAGES; page++) {
-      let res: Response;
-      let count: number;
-      let nextCursor: number;
-      let complete: boolean;
-      if (!HUB_JSON_ONLY.has(hub)) {
-        const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500);
-        if (!built) return null; // no signing key — nothing verifiable to push
-        if (!built.frames.length) break;
-        count = built.frames.length;
-        nextCursor = built.nextCursor;
-        complete = built.frames.length < 500;
-        res = await fetchFn(`${hub}/federation/submit`, {
-          method: "POST",
-          headers: { "content-type": "application/cbor", "x-fed-secret": secret },
-          body: encodeFedSyncPage(env.INSTANCE, nextCursor, complete, built.frames) as BodyInit,
-          signal: AbortSignal.timeout(5000),
-        });
-        if (res.status === 400) {
-          HUB_JSON_ONLY.add(hub); // older hub — drop to the JSON compatibility surface
-          continue; // re-send this page as JSON
-        }
-      } else {
-        const feed = await buildFeed(env, env.INSTANCE, def, cursor, 500);
-        if (!feed.items.length) break;
-        count = feed.items.length;
-        nextCursor = feed.nextCursor;
-        complete = feed.complete;
-        res = await fetchFn(`${hub}/federation/submit`, {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-fed-secret": secret },
-          body: JSON.stringify({ instance: env.INSTANCE, publicKey, records: feed.items }),
-          signal: AbortSignal.timeout(5000),
-        });
-      }
+      const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500);
+      if (!built) return null; // no signing key — nothing verifiable to push
+      if (!built.frames.length) break;
+      const complete = built.frames.length < 500;
+      const res = await fetchFn(`${hub}/federation/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/cbor", "x-fed-secret": secret },
+        body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames) as BodyInit,
+        signal: AbortSignal.timeout(5000),
+      });
       if (!res.ok) return { pushed }; // stop; retry next cycle from the same cursor
-      PUSH_CURSORS.set(ckey, nextCursor);
-      pushed += count;
-      if (complete || nextCursor === cursor) break;
-      cursor = nextCursor;
+      PUSH_CURSORS.set(ckey, built.nextCursor);
+      pushed += built.frames.length;
+      if (complete || built.nextCursor === cursor) break;
+      cursor = built.nextCursor;
     }
   }
   return { pushed };

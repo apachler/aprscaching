@@ -43,13 +43,13 @@ bulletin`) serves a CBOR page of frames:
 page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …] }   (application/cbor)
 ```
 
-The page envelope is unsigned — each record carries its own signature. A signed instance advertises
-the surface as the `sync-cbor` capability in its descriptor; a consumer that sees it pulls frames
-and verifies each under the peer's active keys, then runs the **same** namespace/self-attestation/
-tombstone acceptance checks and the same appliers as the JSON feeds, so the two encodings can never
-diverge in mirror semantics. An unsigned instance (no frame signatures possible) does not serve the
-surface, and consumers fall back to the JSON feeds. `/federation/peers` reports which encoding the
-last sync used (`lastCounts.encoding`).
+The page envelope is unsigned — each record carries its own signature. This is the **only wire
+mirroring consumes**: a consumer pulls frames, verifies each under the peer's active keys, then runs
+the namespace/self-attestation/tombstone acceptance checks and the appliers. A signed instance
+advertises the surface as the `sync-cbor` capability in its descriptor. An unsigned instance (no
+frame signatures possible) does not serve the surface and cannot be mirrored. The JSON feeds
+(`/federation/feed/*`) are an unsigned transparency/browse surface only — nothing consumes them for
+mirroring.
 
 **Scaled fields.** The deterministic codec carries no floats, so fractional record fields travel as
 integer twins and map back on receipt:
@@ -136,11 +136,11 @@ category is asked for explicitly.
 ## Push paths
 
 Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed frames to
-`/federation/submit` (`application/cbor`; one submission is one key — a second key smuggled into the
-batch is rejected), falling back to the JSON submit body when an older hub refuses the page. Relay
-feed answers can carry a CBOR page too (`params.encoding: "cbor"` → a base64 fedwire page instead of
-JSON-signed items). The stableStringify per-record signature remains solely on the JSON
-compatibility feeds.
+`/federation/submit` (`application/cbor` only — any other content type is answered 415; one
+submission is one key — a second key smuggled into the batch is rejected). Relay feed answers carry
+a CBOR page (`pageB64`, a base64 fedwire page). Every mirrored record travels as a signed fedwire
+frame; the stableStringify signing base exists only for standalone signed documents (the registry,
+key-rotation records, account operations), never for feed records.
 
 ## Connected-mode sync (AX.25 / NET-ROM circuits)
 

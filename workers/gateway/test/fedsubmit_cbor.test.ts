@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The CBOR wire on the push paths: a spoke submits a sync page of signed fedwire frames to a hub
-// (one submission, one key — a smuggled second key is rejected), the spoke prefers CBOR and falls
-// back to JSON for an older hub, and a relay feed answer can carry a CBOR page instead of
-// JSON-signed items.
+// The push paths speak only the CBOR wire: a spoke submits a sync page of signed fedwire frames to
+// a hub (one submission, one key — a smuggled second key is rejected), and a relay feed answer
+// carries a CBOR page of the same frames.
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   encodeFedSyncPage,
@@ -159,7 +158,7 @@ function spokeDb() {
   };
 }
 
-describe("pushToHub prefers CBOR, falls back to JSON", () => {
+describe("pushToHub speaks the CBOR wire only", () => {
   it("pushes a CBOR page when the hub accepts it", async () => {
     const seen: { ct: string; body: Uint8Array }[] = [];
     const fetchFn = (async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -184,32 +183,29 @@ describe("pushToHub prefers CBOR, falls back to JSON", () => {
     expect(page.frames).toHaveLength(1);
   });
 
-  it("drops to the JSON compatibility surface when the hub answers 400 to CBOR", async () => {
+  it("stops on a hub error and retries next cycle from the same cursor — never a JSON body", async () => {
     const cts: string[] = [];
     const fetchFn = (async (_url: RequestInfo | URL, init?: RequestInit) => {
-      const ct = String((init?.headers as Record<string, string>)["content-type"]);
-      cts.push(ct);
-      if (ct.includes("cbor")) return new Response("bad", { status: 400 });
-      return new Response(JSON.stringify({ ok: true, applied: 1, rejected: 0 }));
+      cts.push(String((init?.headers as Record<string, string>)["content-type"]));
+      return new Response("bad", { status: 400 });
     }) as typeof fetch;
     const env = {
       DB: spokeDb(),
       INSTANCE: "oe.spoke",
       FED_PRIVATE_KEY: keyEnvVal,
-      FED_HUB_URL: "http://hub-legacy.test",
+      FED_HUB_URL: "http://hub-erroring.test",
       FED_SUBMIT_SECRET: SECRET,
     } as unknown as Env;
     const r = await pushToHub(env, fetchFn);
-    expect(r?.pushed).toBe(1);
-    expect(cts[0]).toContain("cbor");
-    expect(cts[1]).toContain("json"); // the same page re-sent on the compatibility surface
+    expect(r?.pushed).toBe(0);
+    expect(cts).toEqual(["application/cbor"]); // one attempt, no second body of any kind
   });
 });
 
-describe("relay feed answers in CBOR", () => {
-  it("encoding=cbor answers with a base64 sync page of signed frames", async () => {
+describe("relay feed answers", () => {
+  it("answers with a base64 sync page of signed frames", async () => {
     const env = { DB: spokeDb(), INSTANCE: "oe.spoke", FED_PRIVATE_KEY: keyEnvVal } as unknown as Env;
-    const r = (await feedSource(env, { feed: "caches", since: 0, encoding: "cbor" })) as {
+    const r = (await feedSource(env, { feed: "caches", since: 0 })) as {
       encoding: string;
       pageB64: string;
       complete: boolean;

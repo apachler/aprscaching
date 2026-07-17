@@ -72,19 +72,19 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
 [`docs/reference/federation-wire.md`](docs/reference/federation-wire.md). What rides on them next:
 
 - [x] **Serve/consume CBOR frames on the sync surface** — `GET /federation/sync/<type>` serves signed
-  fedwire frames; consumers prefer it via the `sync-cbor` capability (JSON feeds remain as the
-  fallback + compatibility surface), and the 2-instance conformance suite asserts the CBOR path.
+  fedwire frames; consumers pull it exclusively (the JSON feeds are an unsigned transparency/browse
+  surface), and the 2-instance conformance suite asserts the CBOR path.
 - [x] **Advertise our own endpoint set** — the `/.well-known/aprscaching` descriptor publishes the
   instance's typed endpoints (`FED_ENDPOINTS` → `addresses`).
 - [x] **Endpoint sets in the signed registry** — a registry entry carries the instance's typed
   endpoints (`addresses`), re-validated on load so a malformed address never rides in; the self-entry
   publishes them from `FED_ENDPOINTS`, and the signing tooling documents the field. The registry is a
   tamper-proof directory of who-is-reachable-where (addressing only, never a trust uplift).
-- [ ] **Retire the JSON per-record signatures** *(P3 · S)* — every push path now carries fedwire
-  frames: push-to-hub submits CBOR pages (JSON fallback for an older hub), relay feed answers serve a
-  CBOR page on request, and sync prefers the CBOR surface. The stableStringify signing base remains
-  SOLELY for the JSON compatibility feeds older peers pull; removing it is a network flag-day (every
-  deployed peer must speak CBOR first) — an operator/release decision, not further code.
+- [x] **Retire the JSON per-record signatures** — the CBOR fedwire frame is the only signed record
+  encoding: sync consumes `/federation/sync/<type>` exclusively, `/federation/submit` accepts only
+  `application/cbor` (415 otherwise), relay feed answers always carry a CBOR page, and the JSON feeds
+  serve unsigned browse items. The stableStringify signing base survives only for standalone signed
+  documents (registry, key rotation, account operations, find-log device signatures).
 - [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
   callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
   explicit trust-on-first-use pin) and emits this instance's own `_aprscaching.<call>.ampr.org` TXT to

@@ -19,7 +19,6 @@ import { secretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
-import { buildFeed, CACHE_FEED, FIND_FEED, KEY_FEED, type FeedServeDef } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
@@ -35,9 +34,6 @@ export interface RelayResult {
   data?: unknown;
   error?: string;
 }
-
-/** The feeds a spoke may serve over the relay, by name (same signed records as pull-sync / push-to-hub). */
-const FEEDS: Record<string, FeedServeDef> = { caches: CACHE_FEED, finds: FIND_FEED, keys: KEY_FEED };
 
 const now = () => Math.floor(Date.now() / 1000);
 const relayAuth = (req: Request, env: Env): boolean => {
@@ -110,31 +106,26 @@ const b64 = (bytes: Uint8Array): string => {
 };
 
 /**
- * The spoke's real feed source: build a signed feed page for `params.feed` from `params.since`.
- * `encoding: "cbor"` answers with a base64 fedwire sync page instead of the JSON items — the same
- * signed frames as every other carrier, so per-record JSON signatures aren't needed on that path.
+ * The spoke's real feed source: answer with a base64 fedwire sync page — the same signed frames as
+ * every other carrier; the requester's gateway verifies each frame when it consumes the page.
  */
 export async function feedSource(env: Env, params: Record<string, unknown>): Promise<unknown> {
   const name = typeof params.feed === "string" ? params.feed : "caches";
-  const def = FEEDS[name];
-  if (!def) throw new Error(`unknown feed '${name}'`);
+  const type = SYNC_TYPE_BY_FEED[name];
+  if (!type) throw new Error(`unknown feed '${name}'`);
   const since = Math.max(0, Number(params.since ?? 0) || 0);
   const limit = Math.min(Math.max(Number(params.limit ?? 200) || 200, 1), 1000);
   const instance = env.INSTANCE ?? "local";
-  if (params.encoding === "cbor") {
-    const built = await buildFedFrames(env, instance, SYNC_TYPE_BY_FEED[name]!, since, limit);
-    if (!built) throw new Error("instance is unsigned — no CBOR frames");
-    return {
-      feed: name,
-      since,
-      encoding: "cbor",
-      nextCursor: built.nextCursor,
-      complete: built.frames.length < limit,
-      pageB64: b64(encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames)),
-    };
-  }
-  const built = await buildFeed(env, instance, def, since, limit);
-  return { feed: name, since, ...built };
+  const built = await buildFedFrames(env, instance, type, since, limit);
+  if (!built) throw new Error("instance is unsigned — no verifiable frames to serve");
+  return {
+    feed: name,
+    since,
+    encoding: "cbor",
+    nextCursor: built.nextCursor,
+    complete: built.frames.length < limit,
+    pageB64: b64(encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames)),
+  };
 }
 
 // ------------------------------------------------------------------ hub-side endpoints

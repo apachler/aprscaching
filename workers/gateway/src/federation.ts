@@ -124,11 +124,6 @@ export function stableStringify(v: unknown): string {
     .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
     .join(",")}}`;
 }
-function b64url(buf: ArrayBuffer): string {
-  let s = "";
-  for (const b of new Uint8Array(buf)) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 export function fromB64(b64: string): ArrayBuffer {
   const bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/"));
   const out = new Uint8Array(bin.length);
@@ -165,11 +160,6 @@ function loadKey(env: Env): Promise<FedKey | null> {
   keyCache = p;
   return p;
 }
-async function sign(fk: FedKey, type: string, id: string, data: unknown): Promise<string> {
-  const msg = new TextEncoder().encode(stableStringify({ type, id, data }));
-  return b64url(await crypto.subtle.sign("Ed25519", fk.key, msg));
-}
-
 /**
  * Sign arbitrary bytes with the instance key — the CBOR wire format (fedcbor.ts) builds its
  * domain-separated signing bytes itself and only needs the raw Ed25519 primitive + the public key.
@@ -386,32 +376,9 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
   }
 }
 
-/**
- * Serve-time feed signer (shared with new feeds, e.g. tombstones). Returns a closure that signs a
- * `{type,id,data}` record exactly like the caches/finds/keys feeds, or null if the instance has no
- * FED_PRIVATE_KEY (feeds are then served unsigned). Callers set `rec.signer = instance` when signed.
- */
-export async function feedSigner(
-  env: Env,
-): Promise<((type: string, id: string, data: unknown) => Promise<string>) | null> {
-  const fk = await loadKey(env);
-  if (!fk) return null;
-  return (type, id, data) => sign(fk, type, id, data);
-}
-
-/** Import a peer's raw Ed25519 public key (base64url) for verifying its feed. */
+/** Import a peer's raw Ed25519 public key (base64url) for verifying its frames. */
 export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", fromB64(rawB64url), { name: "Ed25519" }, false, ["verify"]);
-}
-
-/** Verify a feed record's signature against the canonical {type,id,data}. */
-export async function verifyRecordSig(
-  key: CryptoKey,
-  rec: { type: string; id: string; data: unknown; sig?: string },
-): Promise<boolean> {
-  if (!rec.sig) return false;
-  const msg = new TextEncoder().encode(stableStringify({ type: rec.type, id: rec.id, data: rec.data }));
-  return crypto.subtle.verify("Ed25519", key, fromB64(rec.sig), msg);
 }
 
 export function instanceOf(req: Request, env: Env): string {
@@ -465,11 +432,11 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
 }
 
 /**
- * Generalized feed envelope. Every record type rides ONE serve path: select rows, shape each
- * into `{type,id,cursor,data}`, sign at serve time, and emit the standard
- * `{instance,type,since,nextCursor,count,complete,items}` envelope. A new feed type is just a
- * `FeedServeDef` (used by tombstones.ts and future presence/badge/account-move feeds) — no bespoke
- * endpoint or signing code.
+ * Generalized feed envelope. Every record type rides ONE serve path: select rows, shape each into
+ * `{type,id,cursor,data}`, and emit the standard `{instance,type,since,nextCursor,count,complete,
+ * items}` envelope. A new feed type is just a `FeedServeDef` — no bespoke endpoint code. The JSON
+ * feeds are a transparency/browse surface: signatures live on the CBOR sync surface, the only wire
+ * mirroring consumes.
  */
 export interface FeedServeDef<Row = any> {
   type: string;
@@ -485,7 +452,7 @@ function feedParams(req: Request): { since: number; limit: number } {
   };
 }
 
-/** Build the signed record items for a feed page (shared by serveFeed and the push-to-hub client). */
+/** Build the record items for a feed page (the browse surface — mirroring pulls CBOR frames). */
 export async function buildFeed(
   env: Env,
   instance: string,
@@ -493,18 +460,12 @@ export async function buildFeed(
   since: number,
   limit: number,
 ): Promise<{ items: Record<string, unknown>[]; nextCursor: number; complete: boolean }> {
-  const sign = await feedSigner(env);
   const rows = await def.selectRows(env, since, limit);
   let nextCursor = since;
   const items: Record<string, unknown>[] = [];
   for (const r of rows) {
     const { id, cursor, data } = def.recordOf(r, instance);
-    const rec: Record<string, unknown> = { type: def.type, id, cursor, data };
-    if (sign) {
-      rec.sig = await sign(def.type, id, data);
-      rec.signer = instance;
-    }
-    items.push(rec);
+    items.push({ type: def.type, id, cursor, data, signer: instance });
     if (cursor > nextCursor) nextCursor = cursor;
   }
   return { items, nextCursor, complete: items.length < limit };
@@ -515,11 +476,6 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
   const instance = instanceOf(req, env);
   const { items, nextCursor, complete } = await buildFeed(env, instance, def, since, limit);
   return json({ instance, type: def.type, since, nextCursor, count: items.length, complete, items });
-}
-
-/** This instance's raw Ed25519 public key (base64url), or null if unsigned — for push-to-hub. */
-export async function feedPublicKey(env: Env): Promise<string | null> {
-  return (await loadKey(env))?.publicX ?? null;
 }
 
 // only NATIVE caches are federated; imported third-party data stays local

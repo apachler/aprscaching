@@ -5,6 +5,16 @@
 //
 //   PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 node tools/smoke/federation.mjs
 
+import {
+  cborDecode as miniDecode,
+  buildFrame,
+  frameFromParts,
+  frameParts,
+  signingBytes,
+  encodePage,
+  decodePage,
+} from "./fedwire-mini.mjs";
+
 const PUB = process.env.PUB ?? "http://127.0.0.1:8801";
 const SUB = process.env.SUB ?? "http://127.0.0.1:8802";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
@@ -437,26 +447,32 @@ ok(
   JSON.stringify(tdel.data),
 );
 
-// the tombstone feed serves a signed, PII-free find tombstone, verifiable against the publisher key
-const tfeed = await call(PUB, "GET", "/federation/tombstones?since=0&limit=500");
-const trec = (tfeed.data?.items ?? []).find((r) => r.data?.kind === "find" && /:find:/.test(r.data?.targetId ?? ""));
-ok(
-  "tombstone feed carries a signed find tombstone",
-  !!trec && !!trec.sig && trec.signer === pubInstance,
-  JSON.stringify(trec),
-);
+// the CBOR sync surface serves a signed, PII-free find tombstone, verifiable against the publisher key
+const tpageRes = await fetch(PUB + "/federation/sync/tombstone?since=0&limit=500");
+const tpage = decodePage(new Uint8Array(await tpageRes.arrayBuffer()));
+let tframe = null;
+for (const fb of tpage.frames) {
+  const parts = frameParts(fb);
+  const rec = miniDecode(parts.payload);
+  const body = rec.get(7);
+  if (body?.get?.("kind") === "find" && /:find:/.test(String(body.get("targetId") ?? ""))) {
+    tframe = { parts, rec, body };
+    break;
+  }
+}
+ok("tombstone sync page carries a find-tombstone frame", !!tframe, `frames=${tpage.frames.length}`);
 ok(
   "tombstone is PII-free (no callsign on the wire)",
-  !!trec && !/TOMB1/.test(JSON.stringify(trec)),
-  JSON.stringify(trec?.data),
+  !!tframe && !new TextDecoder("latin1").decode(tframe.parts.payload).includes("TOMB1"),
 );
 let tsigOk = false;
-if (trec) {
+if (tframe) {
   const pk = await crypto.subtle.importKey("raw", ub64(pubWk.data.publicKey), { name: "Ed25519" }, false, ["verify"]);
-  const msg = new TextEncoder().encode(stableStringify({ type: "tombstone", id: trec.id, data: trec.data }));
-  tsigOk = await crypto.subtle.verify("Ed25519", pk, ub64(trec.sig), msg);
+  tsigOk =
+    tframe.parts.signerKey === pubWk.data.publicKey &&
+    (await crypto.subtle.verify("Ed25519", pk, tframe.parts.sig, signingBytes(tframe.parts.payload)));
 }
-ok("tombstone signature verifies against the publisher key", tsigOk);
+ok("tombstone frame verifies against the publisher key (domain-separated Ed25519)", tsigOk);
 
 // subscriber syncs → applies the tombstone (purges the mirrored find) + re-mirrors the now-archived
 // cache; the cache drops off the subscriber map
@@ -529,45 +545,45 @@ ok(
   (await call(SUB, "POST", "/federation/submit", { instance: "oe.spoke", publicKey: "x", records: [] })).status === 401,
 );
 
-// a NAT'd spoke "oe.spoke" (which the subscriber does NOT pull) pushes a signed cache it owns
+// a NAT'd spoke "oe.spoke" (which the subscriber does NOT pull) pushes a page of signed frames.
+// The frames are built with the smoke's OWN minimal encoder — a cross-implementation check of the
+// canonical form; a byte of divergence and the hub rejects the frame.
+const submitCbor = (base, pageBytes, headers = {}) =>
+  fetch(base + "/federation/submit", {
+    method: "POST",
+    headers: { "content-type": "application/cbor", "x-fed-secret": SUBMIT_SECRET, ...headers },
+    body: pageBytes,
+  }).then(async (res) => ({ status: res.status, data: await res.json().catch(() => null) }));
+
 const skp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const spub = b64u(await crypto.subtle.exportKey("raw", skp.publicKey));
-const spokeData = {
+const spokeBody = {
   code: "SP-0001",
   ownerCall: "OE0SPK",
   title: "Spoke Cache " + now(),
   type: "single",
   status: "active",
-  lat: 47.5,
-  lon: 16.0,
+  latE7: 475000000,
+  lonE7: 160000000,
   createdAt: now(),
   updatedAt: now(),
 };
-const spokeId = "oe.spoke:cache:1";
-const spokeSig = b64u(
-  await crypto.subtle.sign(
-    "Ed25519",
-    skp.privateKey,
-    new TextEncoder().encode(stableStringify({ type: "cache", id: spokeId, data: spokeData })),
-  ),
+const spokeFrame = await buildFrame(
+  {
+    kind: 1,
+    gid: "oe.spoke:cache:1",
+    origin: "oe.spoke",
+    v: spokeBody.updatedAt,
+    at: now(),
+    signer: "oe.spoke",
+    body: spokeBody,
+  },
+  skp.privateKey,
+  spub,
 );
-const spokeRec = {
-  type: "cache",
-  id: spokeId,
-  cursor: spokeData.updatedAt,
-  data: spokeData,
-  sig: spokeSig,
-  signer: "oe.spoke",
-};
-const sub1 = await call(
-  SUB,
-  "POST",
-  "/federation/submit",
-  { instance: "oe.spoke", publicKey: spub, records: [spokeRec] },
-  { "x-fed-secret": SUBMIT_SECRET },
-);
+const sub1 = await submitCbor(SUB, encodePage("oe.spoke", spokeBody.updatedAt, true, [spokeFrame]));
 ok(
-  "hub accepts a signed submission from a spoke (applied 1)",
+  "hub accepts a spoke's page of signed frames (applied 1)",
   sub1.data?.ok === true && sub1.data?.applied === 1,
   JSON.stringify(sub1.data),
 );
@@ -578,50 +594,56 @@ ok(
   JSON.stringify((smap.data?.caches ?? []).map((c) => c.origin)),
 );
 
-// integrity: a tampered record is rejected; impersonating the hub's own instance is refused
-const tampered = { ...spokeRec, data: { ...spokeData, title: "TAMPERED" } };
-const sub2 = await call(
-  SUB,
-  "POST",
-  "/federation/submit",
-  { instance: "oe.spoke", publicKey: spub, records: [tampered] },
-  { "x-fed-secret": SUBMIT_SECRET },
+// integrity: a frame whose payload doesn't match its signature is rejected; impersonating the
+// hub's own instance is refused; a JSON submit body is refused outright (CBOR is the only wire)
+const spokeParts = frameParts(spokeFrame);
+const tamperedBody = { ...spokeBody, title: "TAMPERED" };
+const tamperedFrame = await buildFrame(
+  { kind: 1, gid: "oe.spoke:cache:1", origin: "oe.spoke", v: now(), at: now(), signer: "oe.spoke", body: tamperedBody },
+  skp.privateKey,
+  spub,
 );
+const forged = frameFromParts(frameParts(tamperedFrame).payload, spub, spokeParts.sig); // stolen sig, new content
+const sub2 = await submitCbor(SUB, encodePage("oe.spoke", now(), true, [spokeFrame, forged]));
 ok(
-  "a tampered submission is rejected (signature integrity)",
-  sub2.data?.applied === 0 && sub2.data?.rejected === 1,
+  "a forged frame (payload/signature mismatch) is rejected",
+  sub2.data?.applied === 1 && sub2.data?.rejected === 1,
   JSON.stringify(sub2.data),
 );
-const sub3 = await call(
-  SUB,
-  "POST",
-  "/federation/submit",
-  { instance: "oe.sub", publicKey: spub, records: [] },
-  { "x-fed-secret": SUBMIT_SECRET },
+const hubFrame = await buildFrame(
+  { kind: 1, gid: "oe.sub:cache:1", origin: "oe.sub", v: now(), at: now(), signer: "oe.sub", body: spokeBody },
+  skp.privateKey,
+  spub,
 );
+const sub3 = await submitCbor(SUB, encodePage("oe.sub", now(), true, [hubFrame]));
 ok("a spoke cannot submit as the hub's own instance -> 400", sub3.status === 400, JSON.stringify(sub3.data));
-
-// A spoke may only submit records IN ITS OWN namespace. A record whose id targets ANOTHER
-// instance (here the publisher's) — signed by the spoke — must be rejected, never overwriting the
-// genuine mirror. The signature is valid (spoke-signed), so ONLY the namespace check stops it.
-const evilTitle = "HIJACKED " + now();
-const evilData = { ...spokeData, title: evilTitle };
-const evilId = `${pubInstance}:cache:999999`; // the PUBLISHER's namespace
-const evilSig = b64u(
-  await crypto.subtle.sign(
-    "Ed25519",
-    skp.privateKey,
-    new TextEncoder().encode(stableStringify({ type: "cache", id: evilId, data: evilData })),
-  ),
-);
-const evilRec = { type: "cache", id: evilId, cursor: now(), data: evilData, sig: evilSig, signer: "oe.spoke" };
-const subEvil = await call(
+const jsonRefused = await call(
   SUB,
   "POST",
   "/federation/submit",
-  { instance: "oe.spoke", publicKey: spub, records: [evilRec] },
+  { instance: "oe.spoke", publicKey: spub, records: [] },
   { "x-fed-secret": SUBMIT_SECRET },
 );
+ok("a JSON submit body is refused (CBOR is the only signed wire) -> 415", jsonRefused.status === 415);
+
+// A spoke may only submit records IN ITS OWN namespace. A frame whose gid targets ANOTHER
+// instance (here the publisher's) — validly spoke-signed — must be rejected, never overwriting the
+// genuine mirror. The signature verifies, so ONLY the namespace check stops it.
+const evilTitle = "HIJACKED " + now();
+const evilFrame = await buildFrame(
+  {
+    kind: 1,
+    gid: `${pubInstance}:cache:999999`,
+    origin: "oe.spoke",
+    v: now(),
+    at: now(),
+    signer: "oe.spoke",
+    body: { ...spokeBody, title: evilTitle },
+  },
+  skp.privateKey,
+  spub,
+);
+const subEvil = await submitCbor(SUB, encodePage("oe.spoke", now(), true, [evilFrame]));
 ok(
   "a cross-namespace submission is rejected (no origin spoof / overwrite)",
   subEvil.data?.applied === 0 && subEvil.data?.rejected === 1,
@@ -735,24 +757,30 @@ const imp = await call(PUB, "POST", "/api/account/import", {
 });
 ok("account import (move) accepted on the publisher", imp.data?.ok === true, JSON.stringify(imp.data));
 
-const mfeed = await call(PUB, "GET", "/federation/account-moves?since=0&limit=100");
-const mrec = (mfeed.data?.items ?? []).find((r) => r.data?.callsign === "OE7MOV");
+const mpageRes = await fetch(PUB + "/federation/sync/account-move?since=0&limit=100");
+const mpage = decodePage(new Uint8Array(await mpageRes.arrayBuffer()));
+let mframe = null;
+for (const fb of mpage.frames) {
+  const parts = frameParts(fb);
+  const body = miniDecode(parts.payload).get(7);
+  if (body?.get?.("callsign") === "OE7MOV") {
+    mframe = { parts, body };
+    break;
+  }
+}
 ok(
-  "account-move feed carries the signed move (homed to the publisher)",
-  !!mrec &&
-    mrec.data.toInstance === pubInstance &&
-    mrec.data.fromInstance === "oe.origin" &&
-    !!mrec.sig &&
-    mrec.signer === pubInstance,
-  JSON.stringify(mrec),
+  "the account-move sync page carries the move (homed to the publisher)",
+  !!mframe && mframe.body.get("toInstance") === pubInstance && mframe.body.get("fromInstance") === "oe.origin",
+  `frames=${mpage.frames.length}`,
 );
 let mvOk = false;
-if (mrec) {
+if (mframe) {
   const pk = await crypto.subtle.importKey("raw", ub64(pubWk.data.publicKey), { name: "Ed25519" }, false, ["verify"]);
-  const msg = new TextEncoder().encode(stableStringify({ type: "account-move", id: mrec.id, data: mrec.data }));
-  mvOk = await crypto.subtle.verify("Ed25519", pk, ub64(mrec.sig), msg);
+  mvOk =
+    mframe.parts.signerKey === pubWk.data.publicKey &&
+    (await crypto.subtle.verify("Ed25519", pk, mframe.parts.sig, signingBytes(mframe.parts.payload)));
 }
-ok("the move record signature verifies against the publisher key", mvOk);
+ok("the move frame verifies against the publisher key (domain-separated Ed25519)", mvOk);
 
 const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
 ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));
