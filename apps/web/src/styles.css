@@ -291,7 +291,10 @@ h2 {
   min-width: 0;
   position: relative;
 }
-.map {
+/* MapLibre stamps `.maplibregl-map { position: relative }` onto this same element; a bare `.map`
+   selector ties it on specificity, leaving the winner to bundle CSS order. The parent-qualified
+   selector outranks it, so the map fills `.mapwrap` regardless of stylesheet order. */
+.mapwrap > .map {
   position: absolute;
   inset: 0;
 }
