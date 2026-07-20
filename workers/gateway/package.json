@@ -27,8 +27,8 @@
     "@aprsweb/packet": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260706.1",
-    "wrangler": "^4.107.0",
+    "@cloudflare/workers-types": "^5.20260719.1",
+    "wrangler": "^4.112.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }
