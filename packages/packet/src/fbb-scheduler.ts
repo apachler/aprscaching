@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: MIT
+/**
+ * fbb-scheduler.ts — the FBB forwarding scheduler brain, pure + I/O-free. On each tick it
+ * asks the gateway (`ForwardApi`) for partners, picks the due ones (`partnerDue`), and per partner runs an
+ * FBB session (`FbbForwarder`) over a connected-mode `ForwardLink`, reconciling the results back: pull the
+ * pool, push inbound, mark sent. Both the gateway API and the link are injected, so the whole loop is
+ * exercised headlessly (loopback link + in-memory api); the ingest supplies the fetch/KISS implementations.
+ */
+import { FbbForwarder } from "./fbb-forward.js";
+import { partnerDue } from "./forward-schedule.js";
+import type { FbbMessage, FbbStore } from "./fbb-session.js";
+
+/** A forwarding partner as returned by the gateway `/api/bbs/partners`. */
+export interface GwPartner {
+  id: number;
+  call: string;
+  ha: string | null;
+  connectScript: string;
+  proto: "rf-fbb" | "axudp" | "ip-fed";
+  intervalMin: number;
+  timebands: string;
+  requestReverse: boolean;
+  msgtypes: string;
+  maxBlock: number;
+  enabled: boolean;
+}
+
+/** The gateway forwarding-pool API the scheduler drives (implemented over REST by the ingest). */
+export interface ForwardApi {
+  partners(): Promise<GwPartner[]>;
+  pool(call: string): Promise<FbbMessage[]>;
+  inbound(message: FbbMessage, origin: string): Promise<void>;
+  markSent(partner: string, bids: string[]): Promise<void>;
+  /** BIDs we already hold (recent window). Lets a session answer `-` to a re-proposal so a
+   *  partner stops resending bodies we already have and A→B→A loops die. Optional — omitted → pool-only. */
+  heldBids?(call: string): Promise<string[]>;
+}
+
+/** A connected-mode byte duplex to a partner: connect, exchange bytes, close. */
+export interface ForwardLink {
+  connect(): Promise<void>;
+  send(bytes: Uint8Array): void;
+  onData(cb: (bytes: Uint8Array) => void): void;
+  onClose(cb: () => void): void;
+  disconnect(): void;
+}
+export type LinkFactory = (partner: GwPartner) => ForwardLink;
+
+const SESSION_TIMEOUT_MS = 120_000;
+const CONNECT_TIMEOUT_MS = 30_000; // a partner that never answers must not block the slot forever
+
+/** Per-session FbbStore over a pool snapshot: the outbound queue drains as messages are sent; inbound is
+ *  buffered and flushed to the gateway after the session (which dedups by BID). */
+export class SessionStore implements FbbStore {
+  readonly inbox: FbbMessage[] = [];
+  readonly sentBids: string[] = [];
+  private held: Set<string>;
+  constructor(
+    private queue: FbbMessage[],
+    heldBids: Iterable<string> = [],
+  ) {
+    // A BID we already hold (or are about to forward) is answered `-` so the partner
+    // stops resending its body every session and A→B→A forward loops terminate.
+    this.held = new Set([...heldBids, ...queue.map((m) => m.bid)]);
+  }
+  outbound(): FbbMessage[] {
+    return this.queue;
+  }
+  hasBid(bid: string): boolean {
+    return this.held.has(bid);
+  }
+  accept(m: FbbMessage): void {
+    this.held.add(m.bid); // within a session, don't re-accept the same BID twice
+    this.inbox.push(m);
+  }
+  sent(bid: string): void {
+    this.sentBids.push(bid);
+    const i = this.queue.findIndex((q) => q.bid === bid);
+    if (i >= 0) this.queue.splice(i, 1);
+  }
+}
+
+export interface ForwarderOpts {
+  api: ForwardApi;
+  linkFactory: LinkFactory;
+  pollMs?: number;
+  sid?: string;
+  /** Offer LZHUF-B1 compressed forwarding. It only engages when the partner's SID also advertises `B`,
+   *  so it is safe to leave on — a peer without compression negotiates back to plain ASCII forwarding. */
+  compress?: boolean;
+  now?: () => number;
+  sessionTimeoutMs?: number;
+  connectTimeoutMs?: number;
+}
+
+export class BbsForwarder {
+  private lastRun = new Map<string, number>();
+  private timer?: ReturnType<typeof setInterval>;
+  private busy = new Set<string>();
+  private now: () => number;
+
+  constructor(private o: ForwarderOpts) {
+    this.now = o.now ?? (() => Math.floor(Date.now() / 1000));
+  }
+
+  start(): void {
+    this.timer = setInterval(() => {
+      void this.tick();
+    }, this.o.pollMs ?? 60_000);
+    void this.tick();
+  }
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /** One scheduler pass: forward every partner that is due now. */
+  async tick(): Promise<void> {
+    let partners: GwPartner[];
+    try {
+      partners = await this.o.api.partners();
+    } catch (e) {
+      console.error("[forward] partner poll failed:", (e as Error).message);
+      return;
+    }
+    const nowSec = this.now();
+    for (const p of partners.filter((x) => x.proto === "rf-fbb" || x.proto === "axudp")) {
+      if (this.busy.has(p.call)) continue;
+      if (!partnerDue(p, this.lastRun.get(p.call) ?? null, nowSec)) continue;
+      this.lastRun.set(p.call, nowSec);
+      this.busy.add(p.call);
+      try {
+        await this.runSession(p);
+      } catch (e) {
+        console.error(`[forward] ${p.call} session failed:`, (e as Error).message);
+      } finally {
+        this.busy.delete(p.call);
+      }
+    }
+  }
+
+  /** Run one FBB forwarding session with a partner and reconcile the results back to the gateway. */
+  async runSession(p: GwPartner): Promise<{ forwarded: number; received: number }> {
+    const [pool, held] = await Promise.all([
+      this.o.api.pool(p.call),
+      this.o.api.heldBids ? this.o.api.heldBids(p.call) : Promise.resolve<string[]>([]),
+    ]);
+    const store = new SessionStore(pool, held);
+    const fwd = new FbbForwarder(store, { initiator: true, sid: this.o.sid, compress: this.o.compress });
+    const link = this.o.linkFactory(p);
+
+    // Bound the connect. If it never settles, disconnect and throw so `busy` is released
+    // (the caller's finally) instead of the partner being wedged forever.
+    let connectTimer: ReturnType<typeof setTimeout> | null = null;
+    await Promise.race([
+      link.connect(),
+      new Promise<void>((_res, rej) => {
+        connectTimer = setTimeout(() => {
+          link.disconnect();
+          rej(new Error("connect timeout"));
+        }, this.o.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
+      }),
+    ]).finally(() => {
+      if (connectTimer !== null) clearTimeout(connectTimer);
+    });
+
+    // Only reconcile `markSent` when the session ended cleanly (FQ). On a timeout or abnormal
+    // close mid-body the messages were NOT delivered — leave them queued (BID dedup makes re-send safe).
+    let cleanDone = false;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      const timer = setTimeout(() => {
+        link.disconnect();
+        finish();
+      }, this.o.sessionTimeoutMs ?? SESSION_TIMEOUT_MS);
+      link.onClose(() => {
+        clearTimeout(timer);
+        finish();
+      });
+      link.onData((bytes) => {
+        const out = fwd.onData(bytes);
+        if (out) link.send(out);
+        if (fwd.done) {
+          cleanDone = true;
+          clearTimeout(timer);
+          link.disconnect();
+          finish();
+        }
+      });
+      const open = fwd.start();
+      if (open) link.send(open);
+    });
+
+    for (const m of store.inbox) await this.o.api.inbound(m, `rf-fbb:${p.call}`);
+    if (cleanDone) await this.o.api.markSent(p.call, store.sentBids);
+    return { forwarded: cleanDone ? store.sentBids.length : 0, received: store.inbox.length };
+  }
+}

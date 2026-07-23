@@ -1,0 +1,28 @@
+# JNOS interop peer: AXUDP interface to the acs container, NET/ROM node + telnet console.
+# Command shapes per config.c/nrcmd.c of jnos2:
+#   attach axudp <name> <mtu> <remote-hostid> [callsign] [UDP src port] [UDP dest port]
+#   attach netrom must precede every "netrom interface" line
+hostname jnos.interop
+ax25 mycall OE9NOS-1
+# JNOS runs its OWN IP stack: the axudp interface transmits through send_udp/ip_route, so it
+# needs a NOS-level route to the world. The tun device pairs with the container-side script in
+# start.sh (address 172.31.94.1 peer .2, masquerade out eth0).
+attach tun tun0 1500 0
+ifconfig tun0 ipaddress 172.31.94.2 netmask 0xfffffffc mtu 1500
+route add default tun0
+attach axudp axu0 256 172.31.93.10 OE9NOS-1 10093 10093
+ifconfig axu0 description "AXUDP to acs (static address - NOS resolves names itself)"
+# frame trace to a file — the CI failure dump reads it to see JNOS's view of the wire
+trace axu0 0x211 /opt/jnos/axu0.trace
+attach netrom
+netrom call OE9NOS-1
+netrom alias NOS
+netrom interface axu0 192
+# broadcast the NODES table often enough to land inside the CI polling window,
+# and push one out immediately so the first assertion window sees it
+netrom nodetimer 30
+netrom bcnodes axu0
+start netrom
+start telnet
+start ax25
+mbox secure off

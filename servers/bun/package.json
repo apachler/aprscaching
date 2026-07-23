@@ -1,0 +1,18 @@
+{
+  "name": "@aprscaching/bun-gateway",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "description": "Bun-runtime self-host / single-binary core (Topology 0): the gateway on Bun + bun:sqlite.",
+  "scripts": {
+    "start": "bun run server.ts",
+    "dev": "bun --watch server.ts",
+    "build": "echo 'bun runtime — no tsc build (bun:sqlite + Bun globals are runtime-resolved)'",
+    "test": "echo 'no unit tests — Bun conformance runs the tools/smoke suites in CI'"
+  },
+  "dependencies": {
+    "@aprscaching/gateway": "workspace:*",
+    "@aprscaching/shared": "workspace:*"
+  }
+}

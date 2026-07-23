@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * NavRail — the operator nav rail shown beside the map at ≥1024px (the denser shack context).
+ * Real <nav>/<button> with the inline-SVG Icon set. Hidden below the breakpoint (CSS). Core
+ * destinations are fixed; shack apps the user has PINNED render after Shack (see shack/apps).
+ */
+import { Icon, type IconName } from "./ui/index.js";
+import type { ShackApp } from "./shack/apps.js";
+
+export function NavRail(props: {
+  active: string;
+  onMap: () => void;
+  onNearby: () => void;
+  onActivity: () => void;
+  onMessages: () => void;
+  onRanks: () => void;
+  onShack: () => void;
+  onProfile: () => void;
+  onSettings: () => void;
+  pinnedApps?: ShackApp[];
+  onLaunchApp?: (id: ShackApp["id"]) => void;
+  sysop?: boolean;
+  onAdmin?: () => void; // instance-operator only — the Instance-admin surface
+}) {
+  const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
+    <button
+      className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`}
+      onClick={onClick}
+      title={label}
+      aria-current={props.active === key ? "page" : undefined}
+    >
+      <Icon name={icon} size={21} />
+      <span>{label}</span>
+    </button>
+  );
+  return (
+    <nav className="rail" aria-label="Primary">
+      {item("map", "map", "Map", props.onMap)}
+      {item("nearby", "locate", "Nearby", props.onNearby)}
+      {item("activity", "bench", "Activity", props.onActivity)}
+      {item("messages", "message", "Messages", props.onMessages)}
+      {item("ranks", "ranks", "Ranks", props.onRanks)}
+      {item("shack", "tools", "Shack", props.onShack)}
+      {(props.pinnedApps ?? []).length > 0 && <span className="rail-div" aria-hidden="true" />}
+      {(props.pinnedApps ?? []).map((app) =>
+        item(app.id, app.icon, app.label, () => props.onLaunchApp?.(app.id), "rail-pinned"),
+      )}
+      {item("profile", "profile", "You", props.onProfile, "rail-sp")}
+      {item("settings", "settings", "Settings", props.onSettings)}
+      {/* operator-only: the instance-admin surface — hidden for normal users (server-gated too) */}
+      {props.sysop && props.onAdmin && item("admin", "shield-check", "Admin", props.onAdmin)}
+    </nav>
+  );
+}

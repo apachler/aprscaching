@@ -1,0 +1,3 @@
+# JNOS console/FTP users: username password root-path permissions
+# 0x7fff grants the full permission set — this peer exists only inside the CI network
+interop interop /opt/jnos 0x7fff

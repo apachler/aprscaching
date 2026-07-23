@@ -1,0 +1,55 @@
+name: RF hardware report
+description: A TNC, radio, Web-Serial/BLE, Meshtastic, or KISS problem — anything on the air path.
+labels: ["rf-hardware"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RF issues live or die on the details. The more of the radio path you can describe, the faster
+        we can help. RX ≠ trust — hearing a packet is separate from it verifying (that's `verify.ts`).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What were you trying to do (RX / TX / IGate / digipeat / decode), and what went wrong?
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Connection path
+      options:
+        - Web Serial (browser, USB KISS TNC)
+        - Web Bluetooth (BLE-KISS, e.g. Mobilinkd)
+        - KISS-over-TCP (apps/ingest)
+        - Soundcard AFSK (in-browser Bell-202)
+        - Meshtastic / LoRa
+        - CAT / rig control (Hamlib rigctld or Web Serial CAT)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Radio + TNC/interface
+      description: e.g. Kenwood TH-D75 · NinoTNC · DigiRig · Mobilinkd TNC4 · RTL-SDR + Direwolf · ESP32 Meshtastic
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host / browser / OS
+      description: e.g. Chromium 130 on Linux · Raspberry Pi 4 running apps/ingest · Windows desktop binary
+    validations:
+      required: true
+  - type: textarea
+    id: frames
+    attributes:
+      label: Frames / decode output
+      description: Raw KISS/AX.25 or the decoded packet(s), plus the raw-packet shack view if you have it.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Baud/tone settings, PTT method, antenna/coax notes, whether other software sees the same radio fine.

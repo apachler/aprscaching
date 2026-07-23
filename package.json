@@ -1,0 +1,39 @@
+{
+  "name": "aprscaching",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "description": "aprscaching \u2014 an APRS geocaching game and ham-radio Shack",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:types": "eslint --config eslint.config.types.mjs .",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,css,yml,yaml}\"",
+    "check": "tools/dev/check.sh",
+    "smoke": "tools/dev/smoke.sh",
+    "e2e:audio": "node tools/e2e/audio-mic.mjs",
+    "verify": "tools/dev/verify.sh",
+    "dev:web": "pnpm --filter @aprscaching/web dev",
+    "dev:gateway": "pnpm --filter @aprscaching/gateway dev",
+    "dev:ingest": "pnpm --filter @aprscaching/ingest dev"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "esbuild": "0.28.1",
+    "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "playwright-core": "^1.61.1",
+    "prettier": "^3.9.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0"
+  }
+}

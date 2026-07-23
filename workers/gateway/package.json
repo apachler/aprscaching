@@ -1,0 +1,36 @@
+{
+  "name": "@aprscaching/gateway",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./app": "./src/app.ts",
+    "./env": "./src/env.ts",
+    "./runtime": "./src/runtime.ts",
+    "./live": "./src/live.ts",
+    "./import": "./src/import/engine.ts",
+    "./federation_sync": "./src/federation_sync.ts",
+    "./corroborate_privacy": "./src/corroborate_privacy.ts"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "migrate": "wrangler d1 migrations apply aprscaching --local",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprscaching/aprs": "workspace:*",
+    "@aprscaching/shared": "workspace:*",
+    "@aprscaching/packet": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260719.1",
+    "wrangler": "^4.112.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "private": true
+}

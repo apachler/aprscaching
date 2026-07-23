@@ -1,0 +1,28 @@
+{
+  "name": "@aprscaching/node-gateway",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "description": "Portable self-host runtime: the aprscaching gateway on Node + SQLite (no Cloudflare).",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprscaching/gateway": "workspace:*",
+    "@aprscaching/shared": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^26.1.1",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "private": true
+}

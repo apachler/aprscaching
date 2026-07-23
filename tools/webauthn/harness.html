@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>wa</title></head><body><script>
+const u2b=s=>{const b=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4));const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
+const b2u=b=>{const u=new Uint8Array(b);let s='';for(const x of u)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
+const post=async(gw,p,body)=>{const r=await fetch(gw+p,{method:'POST',headers:{'content-type':'application/json'},credentials:'include',body:JSON.stringify(body)});return{status:r.status,body:await r.json()};};
+window.acReg=async(gw,cs)=>{const beg=await post(gw,'/auth/passkey/register/begin',{callsign:cs});if(beg.status!==200)return{step:'begin',...beg};const o=beg.body;
+  const c=await navigator.credentials.create({publicKey:{challenge:u2b(o.challenge),rp:o.rp,user:{id:u2b(o.user.id),name:o.user.name,displayName:o.user.displayName},pubKeyCredParams:o.pubKeyCredParams,timeout:o.timeout,attestation:o.attestation,authenticatorSelection:o.authenticatorSelection,excludeCredentials:(o.excludeCredentials||[]).map(x=>({type:x.type,id:u2b(x.id)}))}});
+  return await post(gw,'/auth/passkey/register/finish',{callsign:cs,credential:{id:c.id,response:{clientDataJSON:b2u(c.response.clientDataJSON),attestationObject:b2u(c.response.attestationObject),transports:c.response.getTransports?c.response.getTransports():[]}}});};
+window.acLogin=async(gw,cs,tamper)=>{const beg=await post(gw,'/auth/passkey/login/begin',{callsign:cs});if(beg.status!==200)return{step:'begin',...beg};const o=beg.body;
+  const a=await navigator.credentials.get({publicKey:{challenge:u2b(o.challenge),rpId:o.rpId,timeout:o.timeout,userVerification:o.userVerification,allowCredentials:(o.allowCredentials||[]).map(x=>({type:x.type,id:u2b(x.id)}))}});
+  let sig=b2u(a.response.signature); if(tamper){sig=(sig[0]==='A'?'B':'A')+sig.slice(1);}
+  return await post(gw,'/auth/passkey/login/finish',{callsign:cs,credential:{id:a.id,response:{clientDataJSON:b2u(a.response.clientDataJSON),authenticatorData:b2u(a.response.authenticatorData),signature:sig}}});};
+</script></body></html>

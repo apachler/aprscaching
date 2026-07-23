@@ -1,0 +1,4 @@
+# Generated teaser artifacts (frames, manifests, logs, assembled video/poster) — tooling is tracked, output is not.
+tour/
+out/
+node_modules/

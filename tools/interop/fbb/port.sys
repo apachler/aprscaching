@@ -1,0 +1,11 @@
+# FBB ports for the interop container: kernel AX.25 (bridged to AXUDP by ax25ipd) + telnet 6300.
+# The telnet-only subset of this file is validated live in the sandbox runbook; the kernel-AX.25
+# com validates in the interop CI workflow (host ax25 module + privileged container).
+ 2 2
+#Com Interface Address Baud
+ 1   9        0       115200
+ 2   9        189C    0
+#TNC NbCh Com MultCh Pacln Maxfr NbFwd MxBloc M/P-Fwd Mode Freq
+ 0   0    0   0      0     0     0     0      00/01   ---- File-fwd.
+ 1   4    1   axudp  236   2     2     10     00/01   XUWY AXUDP
+ 2   4    2   0      250   2     4     10     00/01   TUY  Telnet

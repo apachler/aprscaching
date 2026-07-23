@@ -1,0 +1,25 @@
+{
+  "name": "@aprscaching/tools",
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprscaching/packet": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apachler/aprscaching.git",
+    "directory": "packages/tools"
+  },
+  "homepage": "https://aprscaching.net",
+  "author": "OE8APR"
+}

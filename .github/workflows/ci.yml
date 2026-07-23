@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Least privilege: every job here only reads the repo.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint + format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run format:check
+
+  lint-types:
+    name: lint (type-aware, slow)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Type-checked rules over the trust-critical workers/ + MIT packages/ surface. Slower than the
+      # fast lint (it builds the TS program), so it's a separate job — see eslint.config.types.mjs.
+      - run: pnpm run lint:types
+
+  test:
+    name: unit tests + builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r test
+      - run: pnpm -r build
+
+  conformance-node:
+    name: conformance (Node + SQLite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: start node-gateway + smoke
+        # INGEST_SECRET must be shared by BOTH the gateway (boot guard) AND the smoke client
+        # (it sends x-ingest-secret to authorise writes) → set it at step scope, not inline.
+        env:
+          INGEST_SECRET: ci-conformance-ingest-secret
+          ALLOW_DEV_TOKENS: "1"
+          # Tier A is default-deny — it needs the operator to attest their receiving sites. The smoke
+          # suite gates its RF fixes through OE8XXX, so name it as an attested site for the Tier-A path.
+          FIRST_PARTY_SITES: OE8XXX
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          DB_PATH="$RUNNER_TEMP/acs.db" PORT=8787 INSTANCE=ci.node FED_PRIVATE_KEY="$KEY" \
+            pnpm --filter @aprscaching/node-gateway start &
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+
+  conformance-worker:
+    name: conformance (Cloudflare Worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: migrate local D1
+        working-directory: workers/gateway
+        run: CI=1 npx wrangler d1 migrations apply aprscaching --local
+      - name: start wrangler dev + smoke
+        # The Worker reads INGEST_SECRET from .dev.vars; the smoke client reads it from its own
+        # environment — both must carry the same value or the ingest-authorised writes 401.
+        env:
+          INGEST_SECRET: ci-conformance-ingest-secret
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          # FIRST_PARTY_SITES=OE8XXX names the smoke suite's gating IGate as attested (Tier A is default-deny).
+          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\n' "$KEY" > workers/gateway/.dev.vars
+          (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+
+  conformance-federation:
+    name: conformance (federation — 2 instances)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: publisher + subscriber + federation smoke
+        # Shared by the two gateways (boot guard) AND the federation smoke client (ingest writes).
+        env:
+          INGEST_SECRET: ci-conformance-ingest-secret
+          ALLOW_DEV_TOKENS: "1"
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          PUBPUB=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$KEY")
+          PUB2=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
+          PUB3=$(node -e "process.stdout.write(JSON.parse(Buffer.from(process.argv[1],'base64')).pub)" "$(node tools/fedkey/genkey.mjs --raw)")
+          HIST="[{\"x\":\"$PUB2\",\"since\":1},{\"x\":\"$PUB3\",\"since\":1,\"revoked\":true}]"
+          REG=$(node tools/fedkey/signregistry.mjs "[{\"instance\":\"oe.pub\",\"url\":\"http://127.0.0.1:8801\",\"key\":\"$PUBPUB\",\"operator\":\"OE8APR\"}]" --raw)
+          FED_REGISTRY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$REG")
+          FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
+          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
+            FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
+            FED_ENDPOINTS='[{"transport":"https","address":"http://127.0.0.1:8801","priority":10}]' \
+            pnpm --filter @aprscaching/node-gateway start &
+          DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PEERS=http://127.0.0.1:8801 \
+            FED_SUBMIT_SECRET=submitsecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
+            pnpm --filter @aprscaching/node-gateway start &
+          PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 RELAY_SECRET=relaysecret node tools/smoke/federation.mjs
+
+  conformance-bun:
+    name: conformance (Bun + bun:sqlite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version: latest }
+      - run: pnpm install --frozen-lockfile
+      - name: start bun-gateway + smoke
+        env:
+          INGEST_SECRET: ci-conformance-ingest-secret
+          ALLOW_DEV_TOKENS: "1"
+          # Tier A is default-deny — name the smoke suite's gating IGate (OE8XXX) as an attested site.
+          FIRST_PARTY_SITES: OE8XXX
+        run: |
+          KEY=$(node tools/fedkey/genkey.mjs --raw)
+          DB_PATH="$RUNNER_TEMP/bun.db" PORT=8787 INSTANCE=ci.bun FED_PRIVATE_KEY="$KEY" \
+            bun run servers/bun/server.ts &
+          BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
+          BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+
+  e2e-audio:
+    name: e2e (live mic decode — Chromium fake-audio)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # playwright-core drives an existing browser; fetch a matching Chromium into ~/.cache/ms-playwright
+      # so audio-mic.mjs (which resolves via chromium.executablePath()) finds it. Version pinned to match.
+      - run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - run: node tools/e2e/audio-mic.mjs

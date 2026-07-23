@@ -1,0 +1,25 @@
+{
+  "name": "@aprscaching/ingest",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aprscaching/aprs": "workspace:*",
+    "@aprscaching/ax25": "workspace:*",
+    "@aprscaching/shared": "workspace:*",
+    "@aprscaching/packet": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "@types/node": "^26.1.1",
+    "vitest": "^4.1.10"
+  },
+  "private": true
+}

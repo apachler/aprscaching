@@ -1,0 +1,1227 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "./styles.css";
+import {
+  listCaches,
+  getCache,
+  getStations,
+  getSpots,
+  resolveView,
+  API_BASE,
+  flushLogQueue,
+  queuedLogCount,
+  getProfile,
+  adminWhoami,
+  type CacheSummary,
+  type CacheDetail,
+  type MapCache,
+  type BBox,
+  type StationSummary,
+  type Spot,
+  type MapViewState,
+  type SearchHitCache,
+  type SearchHitStation,
+} from "./api.js";
+import { TopBar } from "./TopBar.js";
+import { Tour, Ico, useToast, type TourStep } from "./ui/index.js";
+import type { GeofencePrompt } from "@aprscaching/shared";
+import { surfaceByView } from "@aprscaching/shared";
+import { typeMeta } from "./cacheTypes.js";
+import { roleMeta } from "./stationRoles.js";
+import { aprsGlyph } from "./aprsGlyph.js";
+import { ASSET, MAP_MARKER } from "./brand.js";
+import { buildGraticuleStyle, buildPhosphorStyle } from "./offlineBasemap.js";
+import {
+  FormatContext,
+  makeFormatters,
+  loadSettings,
+  saveSettings,
+  resolveTheme,
+  resolveCrt,
+  type LocaleSettings,
+} from "./format.js";
+import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
+import { setToolTxVerified, feedHeard } from "./tools/host.js";
+import { ToolMapLayers } from "./tools/ToolMapLayers.js";
+import type { CacheType } from "@aprscaching/shared";
+import type { StyleSpecification } from "maplibre-gl";
+import type { SessionState } from "./identity/useSession.js";
+import { SignIn } from "./identity/SignIn.js";
+import { maidenhead, gridCenter, haversine } from "./map/geo.js";
+import { toMgrs } from "@aprscaching/aprs";
+import { MapTools } from "./map/MapTools.js";
+import { BasemapSwitcher } from "./map/BasemapSwitcher.js";
+import { NavRail } from "./NavRail.js";
+import { SettingsPanel } from "./identity/SettingsPanel.js";
+import { AdminPanel } from "./identity/AdminPanel.js";
+import { NearbyPanel } from "./caches/NearbyPanel.js";
+import { FilterPanel } from "./caches/FilterPanel.js";
+import { HidePanel } from "./caches/HidePanel.js";
+import { DetailPanel } from "./caches/DetailPanel.js";
+import { SpotCard } from "./live/SpotCard.js";
+import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
+import { ActivityPanel } from "./activity/ActivityPanel.js";
+import { CommunityPanel } from "./activity/CommunityPanel.js";
+import { ProfilePanel } from "./profile/ProfilePanel.js";
+import { ShackPanel } from "./shack/ShackPanel.js";
+import { ShackAppSurface } from "./shack/ShackAppSurface.js";
+import { MessagesPanel } from "./messages/MessagesPanel.js";
+import { StationPanel } from "./stations/StationPanel.js";
+import { SHACK_APPS, usePinnedApps, appById, type ShackAppId, type ShackApp } from "./shack/apps.js";
+import { useOverlays } from "./useOverlays.js";
+// The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
+const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
+
+const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
+// Keyless online basemap by default: OpenFreeMap's OSM vector tiles (free, no key, no usage caps —
+// a volunteer-run service, so the offline graticule and the VITE_BASEMAP_STYLE override are the
+// fallbacks). `VITE_BASEMAP=offline` uses the self-contained grid; `VITE_BASEMAP_STYLE` points an
+// instance at any MapLibre style URL (self-hosted tiles, a commercial provider).
+const STYLE: string | StyleSpecification =
+  import.meta.env.VITE_BASEMAP === "offline"
+    ? buildGraticuleStyle()
+    : ((import.meta.env.VITE_BASEMAP_STYLE as string | undefined) ?? "https://tiles.openfreemap.org/styles/liberty");
+
+/** The base map style for the active theme: Phosphor always uses its keyless phosphor graticule so the
+ *  map matches the terminal chrome; Modern uses the configured basemap. */
+const baseStyle = (): string | StyleSpecification =>
+  document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
+
+type Mode = "view" | "hide";
+
+// Quick-tour steps are config-driven — one welcome step keeps the framework live and testable.
+const TOUR_STEPS: TourStep[] = [
+  {
+    title: "Welcome",
+    body: "You're browsing in read-only mode — explore the map and caches freely. Sign in to log finds, hide caches, and unlock the Shack.",
+  },
+];
+
+/**
+ * Platform — the signed-in / explore shack: the MapLibre map plus every panel. Lazily imported by
+ * `App` so the signed-out marketing landing never downloads maplibre-gl (~800 KB) or this map code.
+ * It mounts only when `active` (signed in or exploring), so `active` is constant-true within.
+ */
+export default function Platform({ session, startTour }: { session: SessionState; startTour: boolean }) {
+  // Callback-ref node (not a plain ref): the map must initialise exactly when its container mounts.
+  // An effect keyed only on a boolean would run once while the container is still absent and never
+  // re-run — leaving a blank map — so we key the map-init effect on the container node itself.
+  const [mapNode, setMapNode] = useState<HTMLDivElement | null>(null);
+  const toast = useToast();
+  const map = useRef<maplibregl.Map | null>(null);
+  const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const draftMarker = useRef<maplibregl.Marker | null>(null);
+  const modeRef = useRef<Mode>("view");
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const callsign = session.callsign;
+  const verified = session.verified;
+  // Keep the shared Tool host's TX gate in sync with the session so a tool's beacon/TX stays
+  // gated on callsign control-verification.
+  useEffect(() => {
+    setToolTxVerified(verified);
+  }, [verified]);
+  // Single-overlay model: at most one top-level surface is open — one value, not a boolean per panel.
+  const ov = useOverlays();
+  const [tourOpen, setTourOpen] = useState(startTour);
+  const [caches, setCaches] = useState<MapCache[]>([]);
+  const [mode, setMode] = useState<Mode>("view");
+  const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<CacheDetail | null>(null);
+  const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
+  const [ready, setReady] = useState(false);
+  const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
+  const [shackApp, setShackApp] = useState<ShackAppId | null>(null); // the launched shack app surface (its own workspace)
+  const { pins, toggle: togglePin } = usePinnedApps();
+  const [filters, setFilters] = useState<{ types: CacheType[]; q: string }>({ types: [], q: "" });
+  // include caches mirrored from UNVETTED (auto-discovered) peers — off by default (ui-ux §2)
+  const [includeUnvetted, setIncludeUnvetted] = useState(false);
+  const includeUnvettedRef = useRef(includeUnvetted);
+  includeUnvettedRef.current = includeUnvetted;
+  const [stationsOn, setStationsOn] = useState(false);
+  const [stations, setStations] = useState<StationSummary[]>([]);
+  const [pickedStation, setPickedStation] = useState<string | null>(null);
+  // live activity spots — opt-in overlay, off by default like raster layers
+  const [spotsOn, setSpotsOn] = useState(false);
+  const [spots, setSpots] = useState<Spot[]>([]);
+  const [pickedSpot, setPickedSpot] = useState<Spot | null>(null);
+  const spotsOnRef = useRef(spotsOn);
+  useEffect(() => {
+    spotsOnRef.current = spotsOn;
+  }, [spotsOn]);
+  const [spotFilters, setSpotFilters] = useState<{ bands: string[]; modes: string[]; sources: string[] }>({
+    bands: [],
+    modes: [],
+    sources: [],
+  });
+  const spotFiltersRef = useRef(spotFilters);
+  useEffect(() => {
+    spotFiltersRef.current = spotFilters;
+  }, [spotFilters]);
+  const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
+  const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
+  const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
+  const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
+  const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
+  const applySettings = useCallback((s: LocaleSettings) => {
+    setLocSettings(s);
+    saveSettings(s);
+    notePrefChange();
+  }, []);
+
+  // Account UI-prefs sync: on sign-in, pull the account's theme/units/pins/basemap and
+  // apply them locally; PREFS_EVENT fires if anything changed so live settings re-read. Guests are
+  // untouched (the endpoint is session-gated). localStorage stays the source of truth.
+  useEffect(() => {
+    if (session.signedIn) void pullPrefs();
+  }, [session.signedIn]);
+  // Instance-operator (sysop) check — reveals the admin surface only for the ham who deployed this instance.
+  useEffect(() => {
+    if (!session.signedIn) {
+      setSysop(false);
+      return;
+    }
+    adminWhoami()
+      .then((r) => setSysop(!!r.sysop))
+      .catch(() => setSysop(false));
+  }, [session.signedIn]);
+  useEffect(() => {
+    const onSync = () => setLocSettings(loadSettings());
+    window.addEventListener(PREFS_EVENT, onSync);
+    return () => window.removeEventListener(PREFS_EVENT, onSync);
+  }, []);
+
+  // operator 3-pane mode (≥1024px): side panels dock and the cache detail coexists with a left panel
+  const [op, setOp] = useState(() => window.matchMedia?.("(min-width: 1024px)").matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(min-width: 1024px)");
+    if (!mq) return;
+    const h = () => setOp(mq.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+
+  // apply the theme to the document root — modern → "dark" tokens, phosphor → the phosphor flip.
+  // data-crt gates the opt-in scanline/glow overlay (Phosphor only; off in Modern — see resolveCrt).
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
+    document.documentElement.dataset.crt = resolveCrt(locSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveCrt reads only .theme/.crt, both listed
+  }, [locSettings.theme, locSettings.crt]);
+
+  // swap the MapLibre base style when the theme changes (init already picks the right one). DOM
+  // markers are overlays, not style layers, so they survive setStyle. But the style-LAYER overlays
+  // (grid/rings/terminator/arc, the raster basemap, tracks) ARE wiped by setStyle, so we bump
+  // `styleEpoch` once the new style settles — the overlay owners key their setup on it and
+  // re-add. Skips the mount run so we don't redundantly re-parse the style the map just initialised with.
+  const themeAtMount = useRef(locSettings.theme);
+  const [styleEpoch, setStyleEpoch] = useState(0);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || themeAtMount.current === locSettings.theme) {
+      themeAtMount.current = locSettings.theme;
+      return;
+    }
+    themeAtMount.current = locSettings.theme;
+    m.setStyle(baseStyle());
+    m.once("idle", () => setStyleEpoch((e) => e + 1)); // idle (not styledata) → no setData feedback loop
+  }, [locSettings.theme]);
+
+  // single-overlay model: close everything, then a nav handler opens exactly one surface
+  const closeAll = useCallback(() => {
+    ov.close();
+    setShackApp(null);
+    // Also leave "hide a cache" mode — navigating anywhere (rail/tab/map) must dismiss the hide form
+    // and its draft marker, not leave it stuck on top of the destination panel.
+    setMode("view");
+    setDraft(null);
+    draftMarker.current?.remove();
+    draftMarker.current = null;
+    setSelectedId(null);
+    setRemote(null);
+    setPickedStation(null);
+  }, [ov]);
+  const openOnly = useCallback(
+    (open: () => void) => {
+      closeAll();
+      open();
+    },
+    [closeAll],
+  );
+  // Launch a shack app: EVERY app opens its own dedicated surface (ShackAppSurface). Used by
+  // the shack launcher and the pinned rail items.
+  // Operator-only apps (NET/ROM node, remote box) drive the instance's server RF box — refuse to open them
+  // for non-operators even by deep link. Field-station apps (terminal/BBS/decoder/tools/rig) are open to all.
+  const launchApp = useCallback(
+    (id: ShackAppId) => {
+      if (appById(id)?.sysop && !sysop) return;
+      openOnly(() => setShackApp(id));
+    },
+    [openOnly, sysop],
+  );
+  const visibleApps = useMemo(() => SHACK_APPS.filter((a) => sysop || !a.sysop), [sysop]);
+
+  // Navigate to a surface by its manifest key (Site map rows + ?view= deep-links share this).
+  const navigate = useCallback(
+    (key: string) => {
+      const opener: Record<string, () => void> = {
+        map: () => {},
+        nearby: () => ov.open("nearby"),
+        filter: () => ov.open("filter"),
+        hide: () => startHide(),
+        activity: () => ov.open("activity"),
+        ranks: () => ov.open("board"),
+        messages: () => ov.open("messages"),
+        shack: () => ov.open("shack"),
+        bbs: () => setShackApp("bbs"),
+        terminal: () => setShackApp("terminal"),
+        profile: () => ov.open("profile"),
+        settings: () => ov.open("settings"),
+        docs: () => ov.open("docs"),
+      };
+      openOnly(() => opener[key]?.());
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startHide is a hoisted declaration reading refs only
+    [openOnly, ov],
+  );
+
+  // One-shot ?view= deep-link, used by the Site map and sitemap.xml/api consumers. The map position
+  // stays in MapLibre's #z/lat/lon hash, so this query param never collides with it.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current) return;
+    deepLinked.current = true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get("view");
+      const s = view ? surfaceByView(view) : null;
+      if (s) {
+        if (s.key === "docs") setDocSlug(params.get("doc") || "index"); // ?view=docs&doc=<slug> deep-link
+        navigate(s.key);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [navigate]);
+
+  // capture / restore a shareable map view
+  const getViewState = useCallback((): MapViewState => {
+    const c = map.current?.getCenter();
+    return {
+      center: c ? [c.lng, c.lat] : undefined,
+      zoom: map.current?.getZoom(),
+      layers: { spots: spotsOn, stations: stationsOn },
+      filters,
+      spotFilters,
+      selected: selectedId,
+    };
+  }, [spotsOn, stationsOn, filters, spotFilters, selectedId]);
+  const applyView = useCallback(
+    (s: MapViewState) => {
+      if (s.center && s.zoom != null) map.current?.flyTo({ center: s.center, zoom: s.zoom });
+      if (s.layers) {
+        setSpotsOn(!!s.layers.spots);
+        setStationsOn(!!s.layers.stations);
+      }
+      if (s.filters) setFilters(s.filters as typeof filters);
+      if (s.spotFilters) setSpotFilters(s.spotFilters);
+      if (s.selected != null) openOnly(() => setSelectedId(s.selected!));
+    },
+    [openOnly],
+  );
+  const viewLinked = useRef(false);
+  useEffect(() => {
+    if (viewLinked.current || !ready) return;
+    viewLinked.current = true;
+    try {
+      const slug = new URLSearchParams(window.location.search).get("v");
+      if (slug)
+        resolveView(slug)
+          .then((r) => applyView(r.state))
+          .catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  }, [ready, applyView]);
+
+  // Explore → drop into the read-only platform for this session; run the tour once (first time).
+  // caches that pass the active filters (type + text) — drives the markers, Nearby and the count
+  const shown = useMemo(
+    () =>
+      caches.filter(
+        (c) =>
+          (filters.types.length === 0 || filters.types.includes(c.type)) &&
+          (!filters.q || `${c.code} ${c.title ?? ""}`.toLowerCase().includes(filters.q.toLowerCase())),
+      ),
+    [caches, filters],
+  );
+
+  const ws = useRef<WebSocket | null>(null);
+  const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const spotMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const stationsOnRef = useRef(stationsOn);
+  useEffect(() => {
+    stationsOnRef.current = stationsOn;
+  }, [stationsOn]);
+  const callsignRef = useRef(callsign);
+  useEffect(() => {
+    callsignRef.current = callsign;
+  }, [callsign]);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  // (re)subscribe the live socket to the current viewport + callsign
+  const subscribeLive = useCallback((bbox: BBox) => {
+    const s = ws.current;
+    if (s && s.readyState === WebSocket.OPEN) {
+      s.send(JSON.stringify({ type: "subscribe", bbox, maxAgeSec: 3600, callsign: callsignRef.current || undefined }));
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const m = map.current;
+    if (!m) return;
+    const b = m.getBounds();
+    const bbox: BBox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    subscribeLive(bbox);
+    try {
+      setCaches((await listCaches(bbox, includeUnvettedRef.current)).caches);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setReady(true);
+    }
+    if (stationsOnRef.current) {
+      try {
+        setStations((await getStations(bbox)).stations);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (spotsOnRef.current) {
+      try {
+        setSpots((await getSpots(bbox, spotFiltersRef.current)).spots);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [subscribeLive]);
+
+  // re-fetch the map when the unvetted-network toggle flips
+  useEffect(() => {
+    refresh();
+  }, [includeUnvetted, refresh]);
+
+  // flush any finds queued while offline — on load and whenever connectivity returns
+  const [queued, setQueued] = useState(queuedLogCount());
+  useEffect(() => {
+    const sync = async () => {
+      if (await flushLogQueue()) {
+        setQueued(queuedLogCount());
+        refresh();
+      }
+    };
+    sync();
+    const onq = () => setQueued(queuedLogCount());
+    window.addEventListener("online", sync);
+    window.addEventListener("acs-queued", onq);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("acs-queued", onq);
+    };
+  }, [refresh]);
+
+  // live WebSocket: geofence prompts ("you're near a cache") + live station deltas.
+  // Reconnect on close/error with exponential backoff + jitter — a server restart or a
+  // network blip must not silently kill live features until the page is reloaded. The retry timer is
+  // effect-local and cleared on cleanup; `stopped` prevents a reconnect racing the unmount.
+  useEffect(() => {
+    let stopped = false;
+    let retryMs = 1000;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      if (stopped) return;
+      const s = new WebSocket(API_BASE.replace(/^http/, "ws") + "/ws?region=global");
+      ws.current = s;
+      s.addEventListener("open", () => {
+        retryMs = 1000; // reachable again → reset the backoff
+        const m = map.current;
+        if (m) {
+          const b = m.getBounds();
+          subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+        }
+      });
+      s.addEventListener("message", (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "near_cache") setNearPrompt(msg);
+          else if (msg.type === "station" && stationsOnRef.current) {
+            setStations((prev) => {
+              const next = prev.filter((p) => p.callsign !== msg.callsign);
+              next.unshift({
+                callsign: msg.callsign,
+                lat: msg.lat,
+                lon: msg.lon,
+                symbol: msg.symbol ?? null,
+                course: msg.course ?? null,
+                speedKn: null,
+                altitudeM: null,
+                comment: null,
+                lastSeen: msg.lastSeen,
+              });
+              return next.slice(0, 500);
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+      s.addEventListener("error", () => {
+        try {
+          s.close();
+        } catch {
+          /* close → schedules the reconnect */
+        }
+      });
+      s.addEventListener("close", () => {
+        if (stopped || ws.current !== s) return;
+        ws.current = null;
+        const delay = Math.min(retryMs, 30_000) * (0.5 + Math.random());
+        retryMs = Math.min(retryMs * 2, 30_000);
+        reconnectTimer = setTimeout(connect, delay);
+      });
+    };
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      try {
+        ws.current?.close();
+      } catch {
+        /* */
+      }
+      ws.current = null;
+    };
+  }, [subscribeLive]);
+
+  // re-subscribe when the callsign changes so prompts are addressed to you
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const b = m.getBounds();
+    subscribeLive([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  }, [callsign, subscribeLive]);
+
+  // ---- init map once ----
+  useEffect(() => {
+    if (!mapNode || map.current) return;
+    const m = new maplibregl.Map({
+      container: mapNode,
+      style: baseStyle(),
+      center: DEFAULT_CENTER,
+      zoom: 9,
+      hash: true,
+    });
+    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+    m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
+    map.current = m;
+
+    const trackCenter = () => setCenter([m.getCenter().lat, m.getCenter().lng]);
+    m.on("load", () => {
+      trackCenter();
+      refresh();
+    });
+    m.on("moveend", () => {
+      trackCenter();
+      clearTimeout(debounce.current);
+      debounce.current = setTimeout(refresh, 250);
+    });
+    m.on("click", (e) => {
+      if (modeRef.current !== "hide") return;
+      const lat = +e.lngLat.lat.toFixed(6),
+        lon = +e.lngLat.wrap().lng.toFixed(6);
+      setDraft({ lat, lon });
+      draftMarker.current?.remove();
+      draftMarker.current = new maplibregl.Marker({ color: MAP_MARKER.draft, draggable: true })
+        .setLngLat([lon, lat])
+        .addTo(m);
+      draftMarker.current.on("dragend", () => {
+        const ll = draftMarker.current!.getLngLat();
+        setDraft({ lat: +ll.lat.toFixed(6), lon: +ll.wrap().lng.toFixed(6) });
+      });
+    });
+    return () => {
+      m.remove();
+      map.current = null;
+    };
+  }, [refresh, mapNode]);
+
+  // ---- render cache markers (diffed against the live map) ----
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const phosphor = locSettings.theme === "phosphor";
+    const seen = new Set<string>();
+    for (const c of shown) {
+      if (c.lat == null || c.lon == null) continue;
+      seen.add(c.globalId);
+      const meta = typeMeta(c.type);
+      let el: HTMLElement;
+      const existing = markers.current.get(c.globalId);
+      if (existing) {
+        el = existing.getElement();
+        // keep the class + glyph in sync if a cache flips mirrored↔native or the theme flips
+        if (c.type !== "aprs_living") {
+          el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
+          const span = el.querySelector("span");
+          if (span) span.textContent = phosphor ? meta.cog : meta.glyph;
+        }
+      } else {
+        let anchor: maplibregl.PositionAnchor = "bottom";
+        if (c.type === "aprs_living") {
+          // living caches ARE a beaconing station — use the brand beacon icon
+          const img = document.createElement("img");
+          img.className = "beacon-pin";
+          img.src = ASSET.beaconBlue;
+          anchor = "center";
+          el = img;
+        } else {
+          const btn = document.createElement("button");
+          btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
+          btn.style.background = meta.color;
+          btn.innerHTML = `<span>${phosphor ? meta.cog : meta.glyph}</span>`;
+          el = btn;
+        }
+        markers.current.set(
+          c.globalId,
+          new maplibregl.Marker({ element: el, anchor }).setLngLat([c.lon, c.lat]).addTo(m),
+        );
+      }
+      // rebind title + click each pass so a cache whose title/mirrored/id changed doesn't keep a stale
+      // tooltip or route clicks the wrong way (mirrored→setRemote vs native→setSelectedId).
+      el.title = `${c.code} — ${c.title}${c.mirrored ? ` · via ${c.origin}` : ""}`;
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        if (c.mirrored) {
+          setSelectedId(null);
+          setRemote(c);
+        } else if (c.id != null) {
+          setRemote(null);
+          setSelectedId(c.id);
+        }
+      };
+    }
+    for (const [gid, mk] of markers.current) {
+      if (!seen.has(gid)) {
+        mk.remove();
+        markers.current.delete(gid);
+      }
+    }
+  }, [shown, locSettings.theme]);
+
+  // ---- live APRS stations layer (toggled from Search & filter) ----
+  useEffect(() => {
+    if (stationsOn) {
+      refresh();
+    } else {
+      for (const [, mk] of stationMarkers.current) mk.remove();
+      stationMarkers.current.clear();
+      setStations([]);
+      setPickedStation(null);
+    }
+  }, [stationsOn, refresh]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!stationsOn) return;
+    const phosphor = locSettings.theme === "phosphor";
+    const seen = new Set<string>();
+    for (const s of stations) {
+      if (s.lat == null || s.lon == null) continue;
+      seen.add(s.callsign);
+      let mk = stationMarkers.current.get(s.callsign);
+      if (!mk) {
+        const btn = document.createElement("button");
+        btn.className = "station-pin";
+        btn.innerHTML = "<span></span>";
+        btn.onclick = (ev) => {
+          ev.stopPropagation();
+          openOnly(() => setPickedStation(s.callsign));
+        };
+        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
+        stationMarkers.current.set(s.callsign, mk);
+      } else {
+        mk.setLngLat([s.lon, s.lat]);
+      }
+      const el = mk.getElement();
+      const role = roleMeta(s.roles);
+      // Glyph precedence: station role → the station's own APRS symbol → moving/idle dot.
+      const aprs = role ? null : aprsGlyph(s.symbol);
+      const label = role ? role.label : aprs?.label;
+      el.title = `${s.callsign}${label ? ` · ${label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
+      el.classList.toggle("role", !!role);
+      el.style.background = role ? role.color : "";
+      el.style.color = role ? "var(--ink-tier)" : "";
+      const moving = s.course != null && !!s.speedKn;
+      const span = el.querySelector("span") as HTMLElement;
+      span.textContent = role
+        ? phosphor
+          ? role.cog
+          : role.glyph
+        : aprs
+          ? phosphor
+            ? aprs.cog
+            : aprs.glyph
+          : moving
+            ? phosphor
+              ? "→"
+              : "➤"
+            : "•";
+      // only the bare directional dot rotates with course; a concrete symbol glyph stays upright
+      span.style.transform = !role && !aprs && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
+    }
+    for (const [cs, mk] of stationMarkers.current) {
+      if (!seen.has(cs)) {
+        mk.remove();
+        stationMarkers.current.delete(cs);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openOnly is stable; listing it would rebuild all markers
+  }, [stations, stationsOn, locSettings.theme]);
+
+  // ---- feed heard callsigns from the live APRS layer into the tool host ----
+  // mheard/watch-alert are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
+  // per-callsign lastSeen cursor avoids re-dispatching the same beacon on every refresh.
+  const fedStations = useRef(new Map<string, number>());
+  useEffect(() => {
+    for (const s of stations) {
+      const prev = fedStations.current.get(s.callsign) ?? 0;
+      if (s.lastSeen > prev) {
+        fedStations.current.set(s.callsign, s.lastSeen);
+        feedHeard(s.callsign, "APRS");
+      }
+    }
+  }, [stations]);
+
+  // ---- live activity-spots layer: opt-in overlay, distinct marker class ----
+  useEffect(() => {
+    if (spotsOn) {
+      refresh();
+    } else {
+      for (const [, mk] of spotMarkers.current) mk.remove();
+      spotMarkers.current.clear();
+      setSpots([]);
+      setPickedSpot(null);
+    }
+  }, [spotsOn, refresh]);
+
+  // re-query spots when the band/mode/source filters change (while the layer is on)
+  useEffect(() => {
+    if (spotsOn) refresh();
+  }, [spotFilters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!spotsOn) return;
+    const seen = new Set<string>();
+    for (const s of spots) {
+      seen.add(s.id);
+      let mk = spotMarkers.current.get(s.id);
+      if (!mk) {
+        const btn = document.createElement("button");
+        btn.className = "spot-pin";
+        btn.innerHTML = "<span>◎</span>";
+        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
+        spotMarkers.current.set(s.id, mk);
+      } else {
+        mk.setLngLat([s.lon, s.lat]);
+      }
+      // rebind onclick + title every refresh: an existing marker's `s` would otherwise be the stale
+      // object captured at creation, so a spot that changed band/mode/ref would open the old card.
+      const el = mk.getElement();
+      el.onclick = (ev) => {
+        ev.stopPropagation();
+        setPickedSpot(s);
+      };
+      el.title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
+    }
+    for (const [id, mk] of spotMarkers.current) {
+      if (!seen.has(id)) {
+        mk.remove();
+        spotMarkers.current.delete(id);
+      }
+    }
+  }, [spots, spotsOn]);
+
+  // ---- load detail when a cache is selected ----
+  useEffect(() => {
+    if (selectedId == null) {
+      setDetail(null);
+      return;
+    }
+    let live = true;
+    getCache(selectedId, callsignRef.current)
+      .then((r) => {
+        if (live) setDetail(r.cache);
+      })
+      .catch(() => {
+        // the core cacher action must never fail silently: say so and close the empty selection
+        if (!live) return;
+        toast("Couldn't load that cache — check your connection and tap it again.");
+        setSelectedId(null);
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast identity is stable (context push)
+  }, [selectedId]);
+
+  const reloadDetail = useCallback(async () => {
+    if (selectedId == null) return;
+    try {
+      setDetail((await getCache(selectedId, callsignRef.current)).cache);
+    } catch {
+      toast("Couldn't refresh the cache — check your connection.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast identity is stable (context push)
+  }, [selectedId]);
+
+  // home QTH (from your profile locator) — feeds the MapTools bearing arc to the selected cache
+  const [home, setHome] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    if (!callsign) {
+      setHome(null);
+      return;
+    }
+    let live = true;
+    getProfile(callsign)
+      .then((p) => {
+        if (live) setHome(p.profile?.homeGrid ? gridCenter(p.profile.homeGrid) : null);
+      })
+      .catch(() => {
+        if (live) setHome(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [callsign]);
+  const target: [number, number] | null =
+    detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
+
+  // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
+  const leftOpen =
+    ov.is("nearby") ||
+    ov.is("activity") ||
+    ov.is("messages") ||
+    ov.is("profile") ||
+    ov.is("filter") ||
+    ov.is("board") ||
+    ov.is("shack") ||
+    shackApp != null ||
+    pickedStation != null ||
+    ov.is("settings") ||
+    ov.is("docs") ||
+    mode === "hide";
+  const rightOpen = (detail != null && !remote) || remote != null;
+  useEffect(() => {
+    const t = setTimeout(() => map.current?.resize(), 60);
+    return () => clearTimeout(t);
+  }, [op, leftOpen, rightOpen]);
+
+  // global search: a Maidenhead locator or "lat, lon" flies the map there; otherwise filter by text
+  function runSearch(raw: string) {
+    const q = raw.trim();
+    const g = gridCenter(q);
+    if (g) {
+      map.current?.flyTo({ center: [g[1], g[0]], zoom: Math.max(map.current.getZoom(), 10) });
+      return;
+    }
+    const ll = q.match(/^(-?\d+(?:\.\d+)?)\s*[ ,]\s*(-?\d+(?:\.\d+)?)$/);
+    if (ll) {
+      const lat = +ll[1]!,
+        lon = +ll[2]!;
+      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180)
+        map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) });
+    }
+  }
+
+  // enriched-search picks: a cache opens its detail + flies there; a station just flies to it
+  function pickCacheHit(hit: SearchHitCache) {
+    setFilters((f) => ({ ...f, q: "" }));
+    setRemote(null);
+    openOnly(() => setSelectedId(hit.id));
+    if (hit.lat != null && hit.lon != null)
+      map.current?.flyTo({ center: [hit.lon, hit.lat], zoom: Math.max(map.current.getZoom(), 14) });
+  }
+  function pickStationHit(hit: SearchHitStation) {
+    setFilters((f) => ({ ...f, q: "" }));
+    if (hit.lat != null && hit.lon != null)
+      map.current?.flyTo({ center: [hit.lon, hit.lat], zoom: Math.max(map.current.getZoom(), 12) });
+  }
+
+  function startHide() {
+    // gate up front — a signed-out visitor must not fill the whole form only to fail at submit
+    // (reads the callsign ref so memoized callers never capture a stale session)
+    if (callsignRef.current.length < 3) {
+      toast("Sign in to hide a cache.");
+      openOnly(() => ov.open("signin"));
+      return;
+    }
+    setSelectedId(null);
+    setRemote(null);
+    setMode("hide");
+  }
+  function cancelHide() {
+    setMode("view");
+    setDraft(null);
+    draftMarker.current?.remove();
+    draftMarker.current = null;
+  }
+  async function onCreated(c: CacheSummary) {
+    cancelHide();
+    await refresh();
+    setSelectedId(c.id);
+    if (c.lat != null && c.lon != null) map.current?.flyTo({ center: [c.lon, c.lat], zoom: 14 });
+  }
+
+  return (
+    <FormatContext.Provider value={fmt}>
+      <div className="app">
+        <TopBar
+          callsign={callsign}
+          verified={verified}
+          onAccount={() => openOnly(() => (session.signedIn ? ov.open("settings") : ov.open("signin")))}
+          onHide={startHide}
+          count={shown.length}
+          queued={queued}
+          onFilters={() => openOnly(() => ov.open("filter"))}
+          filtered={filters.types.length > 0 || filters.q.length > 0}
+          q={filters.q}
+          onSearch={(v) => setFilters({ ...filters, q: v })}
+          onSearchSubmit={runSearch}
+          onPickCache={pickCacheHit}
+          onPickStation={pickStationHit}
+          onNearby={() => openOnly(() => ov.open("nearby"))}
+          onActivity={() => openOnly(() => ov.open("activity"))}
+          onProfile={() => openOnly(() => ov.open("profile"))}
+          onDocs={() => openOnly(() => ov.open("docs"))}
+          sysop={sysop}
+          onAdmin={() => openOnly(() => ov.open("admin"))}
+        />
+        <div className="shell">
+          <NavRail
+            active={
+              ov.is("admin")
+                ? "admin"
+                : ov.is("nearby")
+                  ? "nearby"
+                  : ov.is("activity")
+                    ? "activity"
+                    : ov.is("messages")
+                      ? "messages"
+                      : ov.is("board")
+                        ? "ranks"
+                        : shackApp
+                          ? shackApp
+                          : ov.is("shack")
+                            ? "shack"
+                            : ov.is("profile")
+                              ? "profile"
+                              : ov.is("settings")
+                                ? "settings"
+                                : "map"
+            }
+            onMap={closeAll}
+            onNearby={() => openOnly(() => ov.open("nearby"))}
+            onActivity={() => openOnly(() => ov.open("activity"))}
+            onMessages={() => openOnly(() => ov.open("messages"))}
+            onRanks={() => openOnly(() => ov.open("board"))}
+            onShack={() => openOnly(() => ov.open("shack"))}
+            onProfile={() => openOnly(() => ov.open("profile"))}
+            onSettings={() => openOnly(() => ov.open("settings"))}
+            pinnedApps={pins.map(appById).filter((a): a is ShackApp => !!a && (sysop || !a.sysop))}
+            onLaunchApp={launchApp}
+            sysop={sysop}
+            onAdmin={() => openOnly(() => ov.open("admin"))}
+          />
+
+          {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
+          {mode === "hide" && (
+            <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
+          )}
+          {ov.is("nearby") && mode === "view" && (
+            <NearbyPanel
+              caches={shown}
+              stations={stations}
+              map={map.current}
+              selectedId={selectedId}
+              onPick={(id) => {
+                if (op) {
+                  setRemote(null);
+                  setSelectedId(id);
+                } else openOnly(() => setSelectedId(id));
+              }}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("activity") && mode === "view" && (
+            <ActivityPanel
+              map={map.current}
+              onBoard={() => openOnly(() => ov.open("board"))}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("messages") && mode === "view" && <MessagesPanel callsign={callsign} onClose={() => ov.close()} />}
+          {ov.is("filter") && mode === "view" && (
+            <FilterPanel
+              filters={filters}
+              setFilters={setFilters}
+              count={shown.length}
+              includeUnvetted={includeUnvetted}
+              setIncludeUnvetted={setIncludeUnvetted}
+              spotsOn={spotsOn}
+              setSpotsOn={setSpotsOn}
+              stationsOn={stationsOn}
+              setStationsOn={setStationsOn}
+              spotFilters={spotFilters}
+              setSpotFilters={setSpotFilters}
+              getViewState={getViewState}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("profile") && mode === "view" && (
+            <ProfilePanel
+              callsign={callsign}
+              verified={verified}
+              map={map.current}
+              onShack={() => openOnly(() => ov.open("shack"))}
+              onMail={() => launchApp("bbs")}
+              onSettings={() => openOnly(() => ov.open("settings"))}
+              onSignIn={() => openOnly(() => ov.open("signin"))}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("board") && mode === "view" && <CommunityPanel map={map.current} onClose={() => ov.close()} />}
+          {ov.is("shack") && mode === "view" && (
+            <ShackPanel
+              onClose={() => ov.close()}
+              apps={visibleApps}
+              pinned={pins}
+              onLaunchApp={launchApp}
+              onTogglePin={togglePin}
+            />
+          )}
+          {shackApp && mode === "view" && (
+            <ShackAppSurface
+              app={shackApp}
+              callsign={callsign}
+              verified={verified}
+              map={map.current}
+              onClose={() => setShackApp(null)}
+            />
+          )}
+          {pickedStation && mode === "view" && (
+            <StationPanel
+              callsign={callsign}
+              picked={pickedStation}
+              map={map.current}
+              onFly={(lat, lon) =>
+                map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })
+              }
+              onClose={() => setPickedStation(null)}
+            />
+          )}
+          {ov.is("signin") && (
+            <SignIn
+              onDone={() => {
+                session.refresh();
+                ov.close();
+              }}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("settings") && (
+            <SettingsPanel
+              settings={locSettings}
+              onApply={applySettings}
+              callsign={callsign}
+              verified={verified}
+              map={map.current}
+              onFly={(lat, lon) =>
+                map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })
+              }
+              session={session}
+              onSignIn={() => openOnly(() => ov.open("signin"))}
+              onDocs={() => openOnly(() => ov.open("docs"))}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("admin") && sysop && mode === "view" && (
+            <AdminPanel
+              callsign={callsign}
+              map={map.current}
+              onDocs={(slug) => {
+                setDocSlug(slug);
+                openOnly(() => ov.open("docs"));
+              }}
+              onClose={() => ov.close()}
+            />
+          )}
+          {ov.is("docs") && (
+            <Suspense fallback={null}>
+              <DocsPanel initialSlug={docSlug} onClose={() => ov.close()} />
+            </Suspense>
+          )}
+
+          <div className="mapwrap">
+            <div ref={setMapNode} className="map" />
+            <ToolMapLayers map={map.current} />
+            {/* §6 — `map`-capability tools render markers here */}
+            {ready && center && (
+              <div className="coordreadout">
+                <div>
+                  <div className="crl">Lat / Lon</div>
+                  <div className="crv">
+                    {center[0].toFixed(4)}° {center[1].toFixed(4)}°
+                  </div>
+                </div>
+                <div>
+                  <div className="crl">Grid</div>
+                  <div className="crv">{maidenhead(center[0], center[1], 10)}</div>
+                </div>
+                <div>
+                  <div className="crl">MGRS</div>
+                  <div className="crv">{toMgrs(center[0], center[1], 4) || "—"}</div>
+                </div>
+              </div>
+            )}
+            {ready && <BasemapSwitcher map={map.current} styleEpoch={styleEpoch} />}
+            {ready && <MapTools map={map.current} home={home} target={target} styleEpoch={styleEpoch} />}
+            {!ready && (
+              <div className="splash">
+                <img src={ASSET.wordmark} alt="APRScaching" />
+              </div>
+            )}
+            {nearPrompt && mode === "view" && (
+              <div className="geo-banner">
+                <span>
+                  <Ico e="📍 " />
+                  You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
+                  <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span>
+                </span>
+                <span className="spacer" />
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setRemote(null);
+                    setSelectedId(nearPrompt.cacheId);
+                    setNearPrompt(null);
+                    map.current?.flyTo({ center: map.current.getCenter(), zoom: Math.max(map.current.getZoom(), 14) });
+                  }}
+                >
+                  Log it
+                </button>
+                <button className="icon" aria-label="Dismiss" onClick={() => setNearPrompt(null)}>
+                  ✕
+                </button>
+              </div>
+            )}
+            {pickedSpot && mode === "view" && (
+              <SpotCard
+                spot={pickedSpot}
+                onClose={() => setPickedSpot(null)}
+                onViewCache={(() => {
+                  const c = caches.find(
+                    (c) =>
+                      c.id != null &&
+                      c.lat != null &&
+                      c.lon != null &&
+                      haversine(pickedSpot.lat, pickedSpot.lon, c.lat, c.lon) <= 300,
+                  );
+                  return c
+                    ? () => {
+                        setRemote(null);
+                        setSelectedId(c.id!);
+                        setPickedSpot(null);
+                      }
+                    : undefined;
+                })()}
+              />
+            )}
+          </div>
+
+          {/* right-dock: cache detail / mirrored cache — docked right at ≥1024px (coexists with a left panel) */}
+          {detail && mode === "view" && !remote && !ov.is("board") && (
+            <DetailPanel
+              detail={detail}
+              callsign={callsign}
+              activating={
+                detail.lat != null && detail.lon != null
+                  ? (spots.find((s) => haversine(s.lat, s.lon, detail.lat!, detail.lon!) <= 300) ?? null)
+                  : null
+              }
+              onClose={() => setSelectedId(null)}
+              onLogged={reloadDetail}
+              onSignIn={() => openOnly(() => ov.open("signin"))}
+            />
+          )}
+          {remote && mode === "view" && !ov.is("board") && (
+            <RemoteCachePanel cache={remote} onClose={() => setRemote(null)} />
+          )}
+        </div>
+
+        {mode === "view" && (
+          <TabBar
+            active={ov.is("nearby") ? "nearby" : ov.is("activity") ? "activity" : ov.is("profile") ? "profile" : "map"}
+            onMap={closeAll}
+            onNearby={() => openOnly(() => ov.open("nearby"))}
+            onActivity={() => openOnly(() => ov.open("activity"))}
+            onProfile={() => openOnly(() => ov.open("profile"))}
+            fabLabel={selectedId != null || nearPrompt ? "Log" : "Hide"}
+            onFab={() => {
+              if (nearPrompt) openOnly(() => setSelectedId(nearPrompt.cacheId));
+              else if (selectedId == null) startHide();
+            }}
+          />
+        )}
+        {tourOpen && <Tour steps={TOUR_STEPS} onDone={() => setTourOpen(false)} />}
+      </div>
+    </FormatContext.Provider>
+  );
+}
+
+// ----------------------------------------------------------------- mobile bottom tab bar
+function TabBar(props: {
+  onMap: () => void;
+  onNearby: () => void;
+  onActivity: () => void;
+  onProfile: () => void;
+  onFab: () => void;
+  fabLabel: string;
+  active: string;
+}) {
+  const tab = (key: string, ic: React.ReactNode, label: string, onClick: () => void) => (
+    <button className={props.active === key ? "on" : ""} onClick={onClick}>
+      <span className="ic">{ic}</span>
+      <span>{label}</span>
+    </button>
+  );
+  return (
+    <nav className="tabbar">
+      {tab("map", <Ico e="🗺" c="▦" />, "Map", props.onMap)}
+      {tab("nearby", <Ico e="📍" c="@" />, "Nearby", props.onNearby)}
+      <button className="fab" onClick={props.onFab}>
+        <span className="ic">{props.fabLabel === "Log" ? "✓" : "＋"}</span>
+        <span>{props.fabLabel}</span>
+      </button>
+      {tab("activity", <Ico e="⚡" c="↯" />, "Activity", props.onActivity)}
+      {tab("profile", <Ico e="👤" c="☺" />, "You", props.onProfile)}
+    </nav>
+  );
+}

@@ -1,0 +1,24 @@
+packages:
+  - "packages/*"
+  - "workers/*"
+  - "servers/*"
+  - "apps/*"
+
+# pnpm >= 10 refuses to run dependency lifecycle scripts unless explicitly allowlisted
+# (supply-chain hardening). These four need their install/postinstall to function:
+# better-sqlite3 (node-gyp native build), esbuild + workerd (platform binary fetch), sharp (libvips).
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - sharp
+  - workerd
+
+# Supply-chain: refuse freshly-published packages (malware is usually yanked within hours).
+# pnpm 11 defaults to 24 h; 12 h keeps real protection without blocking day-old routine bumps.
+minimumReleaseAge: 720
+
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
+  workerd: true

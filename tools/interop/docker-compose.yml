@@ -1,0 +1,105 @@
+# Interop test environment: our full stack (gateway + ingest) against real packet software over
+# AXUDP on the compose network. Phase peers: linbpq (userspace, no privileges), fbb (real F6FBB —
+# needs kernel AX.25: privileged + `modprobe ax25` on the host), tnn and jnos (userspace, built
+# from source). Run the drivers in tools/interop/tests/ against the published ports.
+#
+#   docker compose up -d acs linbpq        # phase 1
+#   docker compose --profile fbb up -d     # phase 2 (host: sudo modprobe ax25)
+#   docker compose --profile extra up -d   # phase 3 (tnn + jnos)
+services:
+  acs:
+    build:
+      context: ../..
+      dockerfile: tools/interop/acs/Dockerfile
+    networks:
+      packet:
+        ipv4_address: 172.31.93.10
+    environment:
+      INGEST_SECRET: interop-ci-secret-0001
+      INSTANCE: oe.interop
+      # AXUDP port peering with every packet peer on the compose network
+      AXUDP_PORT: "10093"
+      # each CI job narrows this to the peers that actually exist on its network — dialing
+      # absent service names just fills the log with DNS errors
+      AXUDP_PEERS: ${ACS_AXUDP_PEERS:-linbpq:10093,fbb:10093,tnn:10093,jnos:10093}
+      NETROM_CALL: OE1ACS-7
+      NETROM_ALIAS: ACS
+      NETROM_BROADCAST_MS: "10000"
+      BBS_NODE_CALL: OE1ACS-1
+      BBS_FORWARD: "1"
+      BBS_FORWARD_CALL: OE1ACS-1
+      BBS_FORWARD_POLL_MS: "5000"
+      # APRS-IS defaults to disabled (no public network from CI); the aprsis profile overrides
+      # these to dial the real aprsc container instead.
+      APRSIS_HOST: ${ACS_APRSIS_HOST:-127.0.0.1}
+      APRSIS_PORT: ${ACS_APRSIS_PORT:-1}
+      APRSIS_CALLSIGN: ${ACS_APRSIS_CALLSIGN:-N0CALL}
+      APRSIS_PASSCODE: ${ACS_APRSIS_PASSCODE:--1}
+      APRSIS_FILTER: ${ACS_APRSIS_FILTER:-r/47.07/15.42/300}
+    ports:
+      - "8787:8787" # gateway API for the test driver
+
+  linbpq:
+    build: ./linbpq
+    hostname: linbpq
+    ports:
+      - "8010:8010" # BPQ telnet (driver console)
+      - "8008:8008" # BPQ web mgmt (debugging)
+      - "10093:10093/udp" # AXUDP — the host-side dial probe connects L2 straight to BPQ
+    networks: [packet]
+
+  fbb:
+    profiles: [fbb]
+    build: ./fbb
+    hostname: fbb
+    # LinFBB attaches to KERNEL AX.25 ports; ax25ipd bridges them to AXUDP on the compose
+    # network. Needs the ax25 module loaded on the HOST (sudo modprobe ax25) + privileges here.
+    privileged: true
+    ports:
+      - "6300:6300" # FBB telnet console (driver + debugging)
+    networks: [packet]
+
+  tnn:
+    profiles: [extra]
+    build: ./tnn
+    hostname: tnn
+    tty: true # the node runs its operator console on the controlling terminal
+    stdin_open: true
+    ports:
+      - "4711:4711" # TNN telnet console
+    networks:
+      packet:
+        ipv4_address: 172.31.93.11
+
+  jnos:
+    profiles: [extra]
+    build: ./jnos
+    hostname: jnos
+    tty: true # JNOS exits without its curses console terminal
+    stdin_open: true
+    ports:
+      - "2323:23" # JNOS telnet (BBS + console)
+    # JNOS runs its OWN TCP/IP stack: hostnames resolve through the NOS resolver (never
+    # Docker's DNS) so acs is addressed by the static address below, and its AXUDP frames
+    # egress through a NOS tun device — which needs the tun char device + NET_ADMIN
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      packet:
+        ipv4_address: 172.31.93.12
+
+  aprsc:
+    profiles: [aprsis]
+    build: ./aprsc
+    hostname: aprsc
+    ports:
+      - "14580:14580" # APRS-IS client port (filter-capable) — test driver + debugging
+      - "10152:10152" # full feed
+    networks: [packet]
+
+networks:
+  packet:
+    ipam:
+      config:
+        - subnet: 172.31.93.0/24

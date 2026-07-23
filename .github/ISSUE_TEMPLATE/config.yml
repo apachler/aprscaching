@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Support
+    url: https://github.com/apachler/aprscaching/discussions
+    about: Ask usage questions or start a discussion. For how-to help see SUPPORT.md.
+  - name: Security vulnerability (private)
+    url: https://github.com/apachler/aprscaching/security/advisories/new
+    about: Report a security issue privately — never in a public issue. See SECURITY.md.
+  - name: Product manual
+    url: https://github.com/apachler/aprscaching/tree/main/docs
+    about: Getting started, operating an instance, RF ingest, federation, API & config reference.

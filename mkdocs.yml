@@ -1,0 +1,79 @@
+# Serve the manual locally with:  pip install mkdocs-material && mkdocs serve
+# Build the static site with:     mkdocs build --strict
+site_name: aprscaching
+site_description: >-
+  The manual for aprscaching — an APRS geocaching game and a full ham-radio Shack.
+copyright: >-
+  Documentation is CC-BY-SA-4.0. aprscaching is built by OE8APR from open specifications and is not
+  affiliated with, sponsored by, or endorsed by the APRS trademark holder.
+
+docs_dir: docs
+
+# The docs LICENSE file lives beside the pages but is not itself a manual page.
+exclude_docs: |
+  LICENSE
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Core concepts: concepts.md
+  - Guides:
+      - Caching: guides/caching.md
+      - The Shack: guides/shack.md
+      - Federation: guides/federation.md
+  - Operating an instance:
+      - Deployment: operate/deployment.md
+      - Your first hour as sysop: operate/first-hour.md
+      - Running in Docker: operate/docker.md
+      - RF ingest & transports: operate/rf-ingest.md
+      - Packet BBS & node: operate/packet.md
+      - Rig control & weather: operate/rig-weather.md
+      - Amateur-radio compliance: operate/rf-regulatory.md
+      - Administration: operate/administration.md
+  - Reference:
+      - HTTP API: reference/api.md
+      - Federation wire format: reference/federation-wire.md
+      - Configuration: reference/configuration.md
+      - Command-line tools: reference/cli.md
+      - Testing & verification: reference/testing.md
+      - Specification registry: reference/specs.md
+      - Data model: reference/data-model.md
+  - About: about.md

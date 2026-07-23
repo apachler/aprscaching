@@ -1,0 +1,14 @@
+# Home/Pi override: expose via Cloudflare Tunnel (no port-forwarding / CGNAT-friendly).
+# Up:  docker compose -f docker-compose.yml -f compose.home.yml up -d --build
+services:
+  caddy:
+    ports: [] # no public ports; the tunnel reaches caddy on the internal network
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN} # from a named tunnel created in the Cloudflare dashboard
+    depends_on: [caddy]
+    restart: unless-stopped
+    # Cap logs (compose anchors don't cross files, so this one is inline)
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }

@@ -1,0 +1,292 @@
+// SPDX-License-Identifier: MIT
+import { describe, it, expect } from "vitest";
+import { SessionServer } from "../src/session-server.js";
+import { CachedBbsStore, type CachedBbsBackend } from "../src/cached-bbs-store.js";
+import { BbsSession, type MessageStore, type BbsMsgFull, type BbsMsgMeta } from "../src/bbs.js";
+import { NodeSession, type NodeStore } from "../src/netrom.js";
+import { ConnectedLink, type Ax25Address, type Ax25Frame } from "@aprscaching/ax25";
+
+const A = (call: string, ssid = 0): Ax25Address => ({ call, ssid });
+const enc = (s: string) => new TextEncoder().encode(s);
+const dec = (b: Uint8Array) => new TextDecoder().decode(b);
+
+/** A tiny in-memory BBS store with one bulletin + one personal message for OE1USER. */
+function memStore(): MessageStore {
+  const msgs: BbsMsgFull[] = [
+    {
+      id: 1,
+      type: "B",
+      from: "OE8APR",
+      to: "ALL",
+      subject: "Net Sunday",
+      postedAt: 1000,
+      body: "Net on 144.800 at 19:00.",
+    },
+    { id: 2, type: "P", from: "OE8APR", to: "OE1USR", subject: "hi", postedAt: 1001, body: "welcome to the BBS" },
+  ];
+  const meta = (m: BbsMsgFull): BbsMsgMeta => ({
+    id: m.id,
+    type: m.type,
+    from: m.from,
+    to: m.to,
+    subject: m.subject,
+    postedAt: m.postedAt,
+  });
+  return {
+    listNew: (call) => msgs.filter((m) => m.type === "B" || m.to === call).map(meta),
+    listAll: () => msgs.map(meta),
+    listBulletins: () => msgs.filter((m) => m.type === "B").map(meta),
+    listMine: (call) => msgs.filter((m) => m.from === call || m.to === call).map(meta),
+    read: (id) => msgs.find((m) => m.id === id) ?? null,
+    post: () => 99,
+    kill: () => true,
+  };
+}
+
+const nodeStore: NodeStore = {
+  nodes: () => [{ alias: "GRZ", call: "OE8NOD-2", quality: 200 }],
+  routes: () => [{ neighbor: "OE8NOD-2", port: "kiss-tnc", quality: 200 }],
+  users: () => [{ call: "OE1USR" }],
+  mheard: () => [{ call: "OE3XYZ", port: "kiss-tnc", lastHeard: 1000 }],
+  info: () => "APRScaching NET/ROM node",
+};
+
+/**
+ * Connect a client ConnectedLink INTO a SessionServer over a deferred frame bridge (the re-entrancy-safe
+ * loopback pattern), drive the given command lines, and return everything the server delivered back.
+ */
+function converse(
+  server: SessionServer,
+  service: Ax25Address,
+  me: Ax25Address,
+  lines: string[],
+): { rx: string; client: ConnectedLink } {
+  const q: Array<{ to: "server" | "client"; f: Ax25Frame }> = [];
+  let rx = "";
+  const client = new ConnectedLink(me, service, {
+    send: (f) => q.push({ to: "server", f }),
+    deliver: (b) => {
+      rx += dec(b);
+    },
+    state: () => {},
+  });
+  // the server's outbound frames come back to the client
+  (server as unknown as { o: { send: (f: Ax25Frame) => void } }).o.send = (f) => q.push({ to: "client", f });
+  const pump = (guard = 5000) => {
+    while (q.length && guard-- > 0) {
+      const { to, f } = q.shift()!;
+      if (to === "server") server.onFrame(f);
+      else client.onReceive(f);
+    }
+  };
+
+  client.connect();
+  pump(); // SABM → UA + greeting
+  for (const line of lines) {
+    client.send(enc(line + "\r"));
+    pump();
+  }
+  return { rx, client };
+}
+
+describe("connected-mode session server", () => {
+  it("answers an inbound connect to the BBS and drives L / R / B", () => {
+    const events: string[] = [];
+    const server = new SessionServer({
+      send: () => {}, // replaced by converse()
+      services: [
+        { addr: A("OE8BBS"), name: "BBS", app: (remote) => new BbsSession(remote.call, memStore(), "OE8BBS") },
+      ],
+      onEvent: (e) => events.push(`${e.kind}:${e.remote}`),
+    });
+
+    const { rx } = converse(server, A("OE8BBS"), A("OE1USR"), ["L", "R 1", "B"]);
+
+    expect(rx).toContain("[APRScaching BBS OE8BBS]"); // greeting on connect
+    expect(rx).toContain("Hello OE1USR");
+    expect(rx).toContain("Net Sunday"); // L listed the bulletin
+    expect(rx).toContain("Net on 144.800 at 19:00."); // R 1 read its body
+    expect(rx).toContain("73"); // B said goodbye
+    expect(server.count()).toBe(0); // session cleaned up after disconnect
+    expect(events[0]).toBe("connect:OE1USR");
+    expect(events.at(-1)).toBe("disconnect:OE1USR");
+  });
+
+  it("answers an inbound connect to the NET/ROM node and lists NODES", () => {
+    const server = new SessionServer({
+      send: () => {},
+      services: [
+        { addr: A("OE8NOD", 1), name: "NODE", app: (r) => new NodeSession(r.call, nodeStore, "GRAZ", "OE8NOD-1") },
+      ],
+    });
+    const { rx } = converse(server, A("OE8NOD", 1), A("OE1USR"), ["N", "B"]);
+    expect(rx).toContain("NET/ROM node");
+    expect(rx).toContain("GRZ:OE8NOD-2"); // the node list
+    expect(server.count()).toBe(0);
+  });
+
+  it("ignores frames addressed to a call we do not serve", () => {
+    let sent = 0;
+    const server = new SessionServer({
+      send: () => {
+        sent++;
+      },
+      services: [{ addr: A("OE8BBS"), app: (r) => new BbsSession(r.call, memStore()) }],
+    });
+    // a SABM to some other station → not ours → no session, nothing sent
+    server.onFrame({ dst: A("OE9XXX"), src: A("OE1USR"), command: true, type: "SABM", pf: true });
+    expect(server.count()).toBe(0);
+    expect(sent).toBe(0);
+  });
+
+  it("refuses an extended (SABME) connect with DM, opening no session", () => {
+    const sent: Ax25Frame[] = [];
+    const server = new SessionServer({
+      send: (f) => sent.push(f),
+      services: [{ addr: A("OE8BBS"), app: (r) => new BbsSession(r.call, memStore()) }],
+    });
+    server.onFrame({ dst: A("OE8BBS"), src: A("OE1USR"), command: true, type: "SABME", pf: true });
+    expect(server.count()).toBe(0); // no mod-128 session stood up
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.type).toBe("DM"); // politely refused → peer falls back to SABM
+    expect(sent[0]!.dst).toEqual(A("OE1USR"));
+  });
+
+  it("answers a v2.2 XID probe with DM so the peer falls back to a plain SABM", () => {
+    const sent: Ax25Frame[] = [];
+    const server = new SessionServer({
+      send: (f) => sent.push(f),
+      services: [{ addr: A("OE8BBS"), app: (r) => new BbsSession(r.call, memStore()) }],
+    });
+    // BPQ opens with XID and NEVER falls back on silence — only a DM/FRMR reply makes it
+    // mark the neighbour non-2.2 and dial again with SABM.
+    server.onFrame({ dst: A("OE8BBS"), src: A("GB7BPQ"), command: true, type: "XID", pf: true });
+    expect(server.count()).toBe(0); // no session from the probe itself
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.type).toBe("DM");
+    expect(sent[0]!.dst).toEqual(A("GB7BPQ"));
+    expect(sent[0]!.pf).toBe(true); // F bit mirrors the command's P bit
+    // the follow-up SABM connects normally
+    server.onFrame({ dst: A("OE8BBS"), src: A("GB7BPQ"), command: true, type: "SABM", pf: true });
+    expect(server.count()).toBe(1);
+    expect(sent.some((f) => f.type === "UA")).toBe(true);
+  });
+
+  it("routes PID-0xCF I-frames on a session to onNetrom and answers on the same link", () => {
+    const sent: Ax25Frame[] = [];
+    const got: Uint8Array[] = [];
+    const server = new SessionServer({
+      send: (f) => sent.push(f),
+      services: [
+        {
+          addr: A("OE8NOD", 7),
+          name: "NODE",
+          app: (r) => new NodeSession(r.call, nodeStore),
+          // a neighbour node multiplexes NET/ROM network packets with CLI text on one session
+          onNetrom: (packet, _remote, sendNetrom) => {
+            got.push(packet);
+            sendNetrom(Uint8Array.from([9, 8, 7])); // the L4 reply rides the same link
+          },
+        },
+      ],
+    });
+    server.onFrame({ dst: A("OE8NOD", 7), src: A("GB7BPQ"), command: true, type: "SABM", pf: true });
+    expect(sent.some((f) => f.type === "UA")).toBe(true);
+    // the neighbour sends a network packet INSIDE the session (I-frame, PID 0xCF)
+    server.onFrame({
+      dst: A("OE8NOD", 7),
+      src: A("GB7BPQ"),
+      command: true,
+      type: "I",
+      pf: false,
+      nr: 0,
+      ns: 0,
+      pid: 0xcf,
+      info: Uint8Array.from([1, 2, 3]),
+    });
+    expect(got).toHaveLength(1);
+    expect([...got[0]!]).toEqual([1, 2, 3]);
+    const reply = sent.find((f) => f.type === "I" && f.pid === 0xcf);
+    expect(reply).toBeDefined();
+    expect([...reply!.info!]).toEqual([9, 8, 7]);
+    // plain text on the same session still reaches the line app (greeting already proved the app is live)
+    expect(sent.some((f) => f.type === "I" && f.pid !== 0xcf)).toBe(true);
+  });
+
+  it("awaits an async app factory (BBS mail warm-up) before greeting, then serves from the snapshot", async () => {
+    const rows: BbsMsgFull[] = [
+      {
+        id: 5,
+        type: "P",
+        from: "OE8APR",
+        to: "OE1USR",
+        subject: "welcome",
+        postedAt: 1000,
+        body: "hi there OE1USR",
+        readAt: null,
+      },
+    ];
+    const backend: CachedBbsBackend = { load: async () => rows.map((r) => ({ ...r })), post: async () => 1 };
+    const server = new SessionServer({
+      send: () => {},
+      services: [
+        {
+          addr: A("OE8BBS"),
+          name: "BBS",
+          app: async (r) => {
+            const s = new CachedBbsStore(r.call, backend);
+            await s.refresh();
+            return new BbsSession(r.call, s, "OE8BBS");
+          },
+        },
+      ],
+    });
+
+    // manual bridge so we can re-pump after the async warm-up resolves
+    const q: Array<{ to: "server" | "client"; f: Ax25Frame }> = [];
+    let rx = "";
+    const client = new ConnectedLink(A("OE1USR"), A("OE8BBS"), {
+      send: (f) => q.push({ to: "server", f }),
+      deliver: (b) => {
+        rx += dec(b);
+      },
+      state: () => {},
+    });
+    (server as unknown as { o: { send: (f: Ax25Frame) => void } }).o.send = (f) => q.push({ to: "client", f });
+    const pump = (g = 5000) => {
+      while (q.length && g-- > 0) {
+        const { to, f } = q.shift()!;
+        if (to === "server") server.onFrame(f);
+        else client.onReceive(f);
+      }
+    };
+
+    client.connect();
+    pump(); // SABM → server reserves the slot, kicks the async factory
+    expect(rx).toBe(""); // nothing sent yet — still warming
+    for (let i = 0; i < 10; i++) await Promise.resolve(); // let load()/refresh()/factory settle
+    pump(); // now UA + greeting flow from the warm store
+    client.send(enc("R 5\r"));
+    pump();
+
+    expect(rx).toContain("[APRScaching BBS OE8BBS]");
+    expect(rx).toContain("1 new message"); // greeting read the warmed snapshot
+    expect(rx).toContain("hi there OE1USR"); // R 5 served the body from the cache
+  });
+
+  it("enforces maxSessions (refuses a new caller at capacity)", () => {
+    const refused: string[] = [];
+    const server = new SessionServer({
+      send: () => {},
+      services: [{ addr: A("OE8BBS"), app: (r) => new BbsSession(r.call, memStore()) }],
+      maxSessions: 1,
+      onEvent: (e) => {
+        if (e.kind === "refused") refused.push(e.remote);
+      },
+    });
+    server.onFrame({ dst: A("OE8BBS"), src: A("OE1AAA"), command: true, type: "SABM", pf: true });
+    server.onFrame({ dst: A("OE8BBS"), src: A("OE2BBB"), command: true, type: "SABM", pf: true });
+    expect(server.count()).toBe(1);
+    expect(refused).toEqual(["OE2BBB"]);
+  });
+});

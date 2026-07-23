@@ -1,0 +1,21 @@
+# Normalize line endings: LF in the repo, auto on checkout.
+* text=auto eol=lf
+
+# Scripts and binaries must never get CRLF.
+*.sh   text eol=lf
+*.mjs  text eol=lf
+
+# Generated / vendored — keep diffs quiet and out of language stats.
+pnpm-lock.yaml -diff linguist-generated
+*.min.js       -diff linguist-generated
+
+# Language hints for GitHub's linguist.
+*.sql linguist-language=SQL
+docs/** linguist-documentation
+
+# Binary assets (never try to diff/merge as text).
+*.png  binary
+*.jpg  binary
+*.woff binary
+*.woff2 binary
+*.mpeg binary

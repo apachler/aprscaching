@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Capture the Phosphor (ASCII/CP437) flip on hardware-free demo surfaces.
+import { chromium } from "playwright";
+import fs from "node:fs";
+
+const BASE = process.env.BASE ?? "http://127.0.0.1:4173";
+const OUT = (process.env.OUT ?? new URL("./cog", import.meta.url).pathname).replace(/\/?$/, "/");
+const EXE = process.env.PW_CHROMIUM || undefined;
+fs.mkdirSync(OUT, { recursive: true });
+
+const browser = await chromium.launch({
+  executablePath: EXE,
+  args: ["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+});
+
+async function shoot(demo, theme, file, crt = false, vw = 1280) {
+  const ctx = await browser.newContext({ viewport: { width: vw, height: 860 }, deviceScaleFactor: 2 });
+  await ctx.addInitScript(
+    ([th, c]) => {
+      localStorage.setItem("acs.call", "OE8APR");
+      localStorage.setItem("acs.locale", JSON.stringify({ theme: th, crt: c }));
+    },
+    [theme, crt],
+  );
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/?demo=${demo}`, { waitUntil: "load" });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: OUT + file });
+  console.log(file);
+  await ctx.close();
+}
+
+await shoot("app-packet", "phosphor", "packet-phosphor.png");
+await shoot("app-packet", "modern", "packet-modern.png");
+await shoot("app-bbs", "phosphor", "bbs-phosphor.png");
+await shoot("app-remote", "phosphor", "remote-phosphor.png");
+await shoot("app-packet", "phosphor", "packet-phosphor-crt.png", true);
+await shoot("app-bbs", "phosphor", "bbs-phosphor-narrow.png", false, 560);
+
+await browser.close();

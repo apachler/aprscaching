@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "name": "hello-tool",
+      "title": "Hello tool",
+      "author": "OE8APR",
+      "version": "1.0.0",
+      "pubkey": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
+      "entry": "/tools/hello/tool.json",
+      "description": "Example signed tool: command, colour rule, panel, ROT13 decoder."
+    }
+  ],
+  "authority": "J12Zxjkj1-wbUYMgw9wEMfiNB85u4y6tyiQLfQaCink",
+  "sig": "r6BYLYK/doOytPnyUly48TrtwvThRLhwZsAQKTOA+RNnHlqqY/4ih/ATNHh8XQwsYhivpBJInIPYDqwg5y1BBQ=="
+}

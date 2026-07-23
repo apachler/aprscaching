@@ -1,0 +1,15 @@
+#cloud-config
+# OCI Ampere A1 (Ubuntu) bootstrap: install Docker + start the all-in-one stack (Topology 2).
+package_update: true
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  - git clone ${REPO_URL} /opt/aprscaching || (cd /opt/aprscaching && git pull)
+  - cd /opt/aprscaching/deploy && cp -n .env.example .env
+  # Inject real values from Resource Manager variables (or edit .env, then re-up):
+  - sed -i "s|^APRSIS_CALLSIGN=.*|APRSIS_CALLSIGN=${APRSIS_CALLSIGN}|" /opt/aprscaching/deploy/.env
+  - sed -i "s|^APRSIS_PASSCODE=.*|APRSIS_PASSCODE=${APRSIS_PASSCODE}|" /opt/aprscaching/deploy/.env
+  - sed -i "s|^APRSIS_FILTER=.*|APRSIS_FILTER=${APRSIS_FILTER}|" /opt/aprscaching/deploy/.env
+  - sed -i "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" /opt/aprscaching/deploy/.env
+  - sed -i "s|^INGEST_SECRET=.*|INGEST_SECRET=${INGEST_SECRET}|" /opt/aprscaching/deploy/.env
+  - cd /opt/aprscaching/deploy && docker compose up -d --build

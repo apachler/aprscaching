@@ -1,0 +1,4 @@
+port 0 NAME=axudp on CTEXT=1 MH=1 L4AUTO=1
+port 1 NAME=telnet on CTEXT=1
+PARMS Min-Quality 0
+PARMS Broadcast 2

@@ -1,0 +1,13 @@
+[Unit]
+Description=aprscaching APRS ingest (RF/IS -> gateway)
+After=network-online.target aprscaching-gateway.service
+Wants=network-online.target
+[Service]
+WorkingDirectory=/opt/aprscaching
+EnvironmentFile=/opt/aprscaching/deploy/.env
+ExecStart=/usr/bin/pnpm --filter @aprscaching/ingest start
+Restart=always
+RestartSec=5
+User=aprscaching
+[Install]
+WantedBy=multi-user.target

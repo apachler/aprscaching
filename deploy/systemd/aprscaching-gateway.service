@@ -1,0 +1,17 @@
+[Unit]
+Description=aprscaching gateway (Node + SQLite)
+After=network-online.target
+Wants=network-online.target
+[Service]
+WorkingDirectory=/opt/aprscaching
+# Secrets (INGEST_SECRET at minimum) come from the env file — the gateway refuses to boot without
+# one, and Restart=always would otherwise crash-loop every 5 s.
+EnvironmentFile=/opt/aprscaching/deploy/.env
+Environment=DB_PATH=/opt/aprscaching/data/aprscaching.db
+Environment=PORT=8080
+ExecStart=/usr/bin/pnpm --filter @aprscaching/node-gateway start
+Restart=always
+RestartSec=5
+User=aprscaching
+[Install]
+WantedBy=multi-user.target

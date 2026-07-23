@@ -1,0 +1,85 @@
+# Base stack: gateway + ingest + Caddy. Topology 2 (OCI all-in-one) and any VPS.
+# Up:  docker compose up -d --build          (config comes from ./.env — run ./setup.sh once)
+
+# Bound container logs (the json-file driver is unbounded by default) so an unattended box
+# can't fill its disk. ~30 MB/service retained.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  gateway:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    image: aprscaching:local
+    command: ["pnpm", "--filter", "@aprscaching/node-gateway", "start"]
+    environment:
+      DB_PATH: /data/aprscaching.db
+      PORT: "8080"
+      # The gateway refuses to boot without a real INGEST_SECRET (session keys derive from it) —
+      # without this passthrough the container restart policy would just crash-loop it.
+      INGEST_SECRET: ${INGEST_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      INSTANCE: ${INSTANCE:-}
+      APP_URL: ${APP_URL:-}
+    volumes: ["data:/data"]
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      # /health is the gateway's readiness endpoint; node's built-in fetch avoids needing curl.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
+    image: aprscaching:local
+    command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
+    environment:
+      APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
+      APRSIS_PORT: ${APRSIS_PORT:-14580}
+      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN}
+      APRSIS_PASSCODE: ${APRSIS_PASSCODE}
+      APRSIS_FILTER: ${APRSIS_FILTER}
+      INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
+      INGEST_SECRET: ${INGEST_SECRET}
+      BATCH_MS: ${BATCH_MS:-2000}
+    depends_on:
+      gateway: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *default-logging
+
+  webdist: # one-shot: publish the SPA built inside the image into the volume Caddy serves.
+    # apps/web/dist is gitignored, so a fresh clone has no host build — the image is the source
+    # of truth for the static bundle and this copy step keeps Caddy self-contained.
+    image: aprscaching:local
+    command: ["sh", "-c", "rm -rf /srv/web/* && cp -r /app/apps/web/dist/. /srv/web/"]
+    volumes: ["webdist:/srv/web"]
+    restart: "no"
+    logging: *default-logging
+
+  caddy: # TLS + static SPA + reverse proxy
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - webdist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway: { condition: service_started }
+      webdist: { condition: service_completed_successfully }
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes: { data: {}, caddy_data: {}, caddy_config: {}, webdist: {} }
