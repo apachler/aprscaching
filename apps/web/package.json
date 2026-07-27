@@ -10,8 +10,8 @@
     "test": "node test/no-emoji.mjs"
   },
   "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "maplibre-gl": "^5.24.0",
     "uplot": "^1.6.30",
     "@aprscaching/shared": "workspace:*",
