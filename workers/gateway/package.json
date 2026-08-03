@@ -27,8 +27,8 @@
     "@aprscaching/packet": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
-    "wrangler": "^4.112.0",
+    "@cloudflare/workers-types": "^5.20260731.1",
+    "wrangler": "^4.118.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
