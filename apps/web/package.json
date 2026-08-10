@@ -10,8 +10,8 @@
     "test": "node test/no-emoji.mjs"
   },
   "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "maplibre-gl": "^5.24.0",
     "uplot": "^1.6.30",
     "@aprscaching/shared": "workspace:*",
@@ -24,8 +24,8 @@
     "@vitejs/plugin-react": "^6.0.3",
     "vite": "^8.1.5",
     "typescript": "^6.0.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@types/geojson": "^7946.0.16"
   },
   "private": true
