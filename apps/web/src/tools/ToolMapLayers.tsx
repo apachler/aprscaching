@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useToolHost } from "./host.js";
 
 /**
