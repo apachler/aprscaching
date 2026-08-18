@@ -17,7 +17,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.11",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.2.0",
     "@types/ws": "^8.5.12",
     "tsx": "^4.23.12",
