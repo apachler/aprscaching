@@ -85,7 +85,8 @@ export interface Env {
   COT_STREAM_MAX_MS?: string; // SSE CoT feed max connection lifetime before the client reconnects (default 5min)
   SPOTS_ENABLED?: string; // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)
   SPOTS_SOURCES?: string; // optional comma-separated allowlist of sources (else all built-in: pota…)
-  SPOTS_TTL_SEC?: string; // aggregation cache TTL seconds (default 60; spots are ephemeral)
+  SPOTS_TTL_SEC?: string; // seconds between upstream polls (default 120); never shortens a source's own floor
+  SPOTS_USER_AGENT?: string; // User-Agent sent to spot upstreams (default names APRScaching + the repo)
   SPOTS_POTA_URL?: string; // override the POTA activator-spots endpoint
   SPOTS_SOTA_URL?: string; // override the SOTA spots endpoint
   SPOTS_SOTA_SUMMITS_URL?: string; // SOTA summit-detail base (for coord resolution; default api-db2)
@@ -181,6 +182,7 @@ export const ENV_STRING_KEYS = [
   "SPOTS_ENABLED",
   "SPOTS_SOURCES",
   "SPOTS_TTL_SEC",
+  "SPOTS_USER_AGENT",
   "SPOTS_POTA_URL",
   "SPOTS_SOTA_URL",
   "SPOTS_SOTA_SUMMITS_URL",

@@ -277,7 +277,7 @@ describe("spots — dedupe + filter (S1)", () => {
   });
 });
 
-describe("spots — endpoint disabled by default (S1)", () => {
+describe("spots — endpoint disabled by default", () => {
   it("GET /api/spots returns enabled:false + no spots and makes no outbound call", async () => {
     _resetSpotsCache();
     const res = await handleSpots(new Request("https://api.example/api/spots"), {} as Env);

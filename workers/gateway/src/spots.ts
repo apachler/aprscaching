@@ -4,9 +4,13 @@
  * sources (POTA now; SOTA/WWBOTA/GMA next), normalizes to the shared `Spot` shape, dedupes across
  * sources, and serves `GET /api/spots?bbox=&bands=&modes=&sources=`.
  *
- * Cost: aggregation is lazy + TTL-cached in-process (default 60 s) so we never run a
- * per-client firehose; nothing is persisted. Disabled by default (SPOTS_ENABLED) so CI/offline never
- * makes outbound calls — the pure normalize/dedup/filter logic is unit-tested with fixtures instead.
+ * Cost and courtesy: aggregation is lazy + cached in-process per source, so an upstream sees one
+ * request per instance rather than one per client, and nothing is persisted. Each source carries its
+ * own politeness floor (`minIntervalSec`) that `SPOTS_TTL_SEC` can lengthen but never shorten — these
+ * are volunteer-run APIs, and SOTA's terms make reasonable usage a condition of access. Every request
+ * identifies itself with a User-Agent so an operator can see who is calling and reach us.
+ * Disabled by default (SPOTS_ENABLED) so CI/offline never makes outbound calls — the pure
+ * normalize/dedup/filter logic is unit-tested with fixtures instead.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -27,7 +31,12 @@ interface SourceDef {
   source: SpotSource;
   url: (env: Env) => string;
   normalize: (raw: unknown, env: Env) => Spot[] | Promise<Spot[]>;
+  /** Minimum seconds between calls to this upstream. A floor: SPOTS_TTL_SEC may lengthen it, never shorten it. */
+  minIntervalSec: number;
 }
+
+/** Identifies this client to upstreams; instances may override to name themselves. */
+const spotsUserAgent = (env: Env) => env.SPOTS_USER_AGENT || "APRScaching (+https://github.com/apachler/aprscaching)";
 
 const num = (v: unknown): number | undefined => {
   const n = typeof v === "number" ? v : parseFloat(String(v));
@@ -129,7 +138,7 @@ async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: n
   try {
     const base = env.SPOTS_SOTA_SUMMITS_URL || "https://api-db2.sota.org.uk/api/summits/";
     const res = await fetch(`${base}${encodeURIComponent(code)}`, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", "user-agent": spotsUserAgent(env) },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
@@ -268,17 +277,24 @@ const SOURCES: SourceDef[] = [
     source: "pota",
     url: (env) => env.SPOTS_POTA_URL || "https://api.pota.app/spot/activator",
     normalize: normalizePota,
+    minIntervalSec: 120,
   },
   {
     source: "sota",
     url: (env) => env.SPOTS_SOTA_URL || "https://api2.sota.org.uk/api/spots/50/all",
     normalize: normalizeSota,
+    minIntervalSec: 180, // SOTA asks for reasonable use and blocks heavy clients; stay well inside it
   },
-  { source: "gma", url: (env) => env.SPOTS_GMA_URL || "https://www.cqgma.org/api/spots/25/", normalize: normalizeGma },
+  {
+    source: "gma",
+    url: (env) => env.SPOTS_GMA_URL || "https://www.cqgma.org/api/spots/25/",
+    normalize: normalizeGma,
+    minIntervalSec: 120,
+  },
   // reception networks (mappable only with a grid/coords); enable explicitly via SPOTS_SOURCES.
-  { source: "pskreporter", url: (env) => env.SPOTS_PSK_URL || "", normalize: normalizePsk },
-  { source: "dxcluster", url: (env) => env.SPOTS_DXCLUSTER_URL || "", normalize: normalizeDxCluster },
-  { source: "rbn", url: (env) => env.SPOTS_RBN_URL || "", normalize: normalizeRbn },
+  { source: "pskreporter", url: (env) => env.SPOTS_PSK_URL || "", normalize: normalizePsk, minIntervalSec: 300 },
+  { source: "dxcluster", url: (env) => env.SPOTS_DXCLUSTER_URL || "", normalize: normalizeDxCluster, minIntervalSec: 120 },
+  { source: "rbn", url: (env) => env.SPOTS_RBN_URL || "", normalize: normalizeRbn, minIntervalSec: 120 },
 ];
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */
@@ -292,12 +308,12 @@ function enabledSources(env: Env): SourceDef[] {
   return chosen.filter((s) => s.url(env)); // skip sources with no endpoint configured (e.g. reception nets)
 }
 
-let cache: { at: number; spots: Spot[] } | null = null;
+const cache = new Map<SpotSource, { at: number; spots: Spot[] }>();
 
 async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
   try {
     const res = await fetch(def.url(env), {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", "user-agent": spotsUserAgent(env) },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
@@ -307,22 +323,39 @@ async function fetchSource(def: SourceDef, env: Env): Promise<Spot[]> {
   } // a down source must never break the others
 }
 
-/** Aggregate (lazy, TTL-cached, deduped). Returns [] when spots are disabled. */
+/** Seconds between calls to one upstream: its own floor, or the instance setting when that is longer. */
+function intervalSec(def: SourceDef, env: Env): number {
+  return Math.max(Number(env.SPOTS_TTL_SEC) || 120, def.minIntervalSec);
+}
+
+/** Aggregate (lazy, per-source cached, deduped). Returns [] when spots are disabled. */
 export async function getSpots(env: Env): Promise<Spot[]> {
   const sources = enabledSources(env);
   if (!sources.length) return [];
-  const ttlMs = (Number(env.SPOTS_TTL_SEC) || 60) * 1000;
   const nowMs = Date.now();
-  if (cache && nowMs - cache.at < ttlMs) return cache.spots;
-  const batches = await Promise.all(sources.map((s) => fetchSource(s, env)));
-  const spots = dedupeSpots(batches.flat());
-  cache = { at: nowMs, spots };
-  return spots;
+  const batches = await Promise.all(
+    sources.map(async (def) => {
+      const hit = cache.get(def.source);
+      if (hit && nowMs - hit.at < intervalSec(def, env) * 1000) return hit.spots;
+      const spots = await fetchSource(def, env);
+      cache.set(def.source, { at: nowMs, spots });
+      return spots;
+    }),
+  );
+  return dedupeSpots(batches.flat());
+}
+
+/** When the oldest still-served source was last fetched — the age the client should believe. */
+function oldestFetchAt(env: Env): number | null {
+  const times = enabledSources(env)
+    .map((def) => cache.get(def.source)?.at)
+    .filter((at): at is number => at != null);
+  return times.length ? Math.min(...times) : null;
 }
 
 /** Test seam: reset the in-process cache. */
 export function _resetSpotsCache(): void {
-  cache = null;
+  cache.clear();
 }
 
 const csv = (v: string | null) =>
@@ -349,5 +382,6 @@ export async function handleSpots(req: Request, env: Env): Promise<Response> {
     modes: csv(u.searchParams.get("modes")),
     sources: csv(u.searchParams.get("sources")),
   });
-  return json({ enabled, count: spots.length, fetchedAt: cache?.at ? Math.floor(cache.at / 1000) : null, spots });
+  const at = oldestFetchAt(env);
+  return json({ enabled, count: spots.length, fetchedAt: at ? Math.floor(at / 1000) : null, spots });
 }
