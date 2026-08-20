@@ -1,12 +1,45 @@
-# Deferred / post-1.0
+# Launch list & deferred work
 
 What actually **shipped** is in [`CHANGELOG.md`](CHANGELOG.md) and the product manual under
-[`docs/`](docs/). This file is the short, honest list of what is *intentionally* left for after the
-1.0 tag — and **why** each piece waits. It's a live checklist: boxes get ticked as items land, and
-nothing here is a known defect (the pre-launch hardening pass closed those).
+[`docs/`](docs/). This file holds two lists: the short **launch list** of what remains before the
+1.0.0 tag, and below it the honest list of what is *intentionally* left for after it — and **why**
+each piece waits. It's a live checklist: boxes get ticked as items land, and nothing here is a known
+defect (the pre-launch hardening pass closed those).
 
 Each item carries a rough **priority · size** where useful — `P1`–`P3` (higher = sooner) and
-`S`/`M`/`L` (effort). Grouped by *why* it's deferred, not by area.
+`S`/`M`/`L` (effort). Deferred work is grouped by *why* it waits, not by area.
+
+## Before 1.0.0 — the launch list (target: end of September 2026)
+
+Everything below this section is deliberately post-1.0. These five are in the tag because launch
+timing is what makes them worth doing: copy and onboarding land while first impressions are being
+formed, courtesy contacts go out before the audience finds us, and a release artifact needs a
+release. Listed in start order — the first two have outside dependencies and lead times.
+
+- [ ] **OpenCaching import compliance** *(S plus an external legal answer — start first)* — enabling
+  OC import on a public instance carries conditions: the OKAPI-appended attribution stays intact, OC
+  content renders verbatim with clickable links, and OC-derived data is never re-exported through
+  federation. opencaching.de content is CC BY-NC-ND 3.0 DE, so the NC clause against a
+  donation-accepting instance needs a lawyer's answer — the only launch item gated on someone
+  outside the project. Import stays off unless `OKAPI_BASE` + `OKAPI_KEY` are set
+  (`workers/gateway/src/env.ts`), so if the answer does not arrive in time the tag ships with them
+  unset and import follows later. That fallback is what keeps this off the critical path for the
+  date.
+- [ ] **Trademark courtesy contacts** *(S)* — a courtesy heads-up to POTA
+  (help@parksontheair.com) and to the SOTA Reflector third-party-software category about the spots
+  integration, sent before the public launch rather than after it. The non-affiliation lines they
+  concern are already live on the landing and about pages.
+- [ ] **Privacy-first APRS-map positioning** *(S)* — landing + docs copy stating the invariants that
+  already ship as the differentiator vs incumbent APRS maps: TTL'd positions, no ads or tracking,
+  the source link, self-hostable. Copy only — every claim in it is already built and true.
+- [ ] **Coach-mark tour content** *(S)* — real steps for the tour framework: map → cache detail →
+  log a find, element-anchored. `apps/web/src/ui/Tour.tsx` is built (focus-trapped, reduced-motion,
+  config-driven) and renders nothing for empty steps, so this is content, not framework. Launch week
+  is the largest first-time audience the app will ever have at once.
+- [ ] **Hosted OCI one-click stack** *(S)* — publish the `deploy/oci/` Resource-Manager stack as a
+  zip release artifact so the "Deploy to Oracle Cloud" button resolves a hosted URL instead of
+  asking for a manual upload. It hangs off the release-please release, so it lands with the tag
+  rather than before it.
 
 ## Needs hardware or a live partner (can't be validated headlessly)
 
@@ -164,9 +197,6 @@ Next release:
   over the free read API, in the retro identity. Fills the shack-display gap HamClock's shutdown left
   open. Built on the tool widget model, so the full program — surface, widgets, feeds, kiosk — is in
   *Tool ecosystem: marketplace & dashboard widgets* below.
-- [ ] **Privacy-first APRS-map positioning** *(next release · P2 · S)* — landing + docs copy that
-  states the existing invariants as the differentiator vs incumbent APRS maps: TTL'd positions, no
-  ads/tracking, AGPL source link, self-hostable.
 
 Backlog (P3 unless noted):
 
@@ -366,9 +396,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **One-click POI overlay** *(P3 · S)* — a map-side toggle that live-queries a curated OSM/Wikidata set
   (peaks, castles, lighthouses) for the current viewport as a switchable layer, respecting each source's
   attribution.
-- [ ] **Coach-mark tour content** *(P2 · S)* — real steps for the quick-tour framework: a map → cache
-  detail → log-find walk with element-anchored coach-marks. The framework (accessible, focus-trapped,
-  reduced-motion, config-driven steps) ships live with a single welcome step.
 - [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — native MQTT, BLE, and serial with
   protobuf decode, alongside the newline-JSON TCP bridge the box speaks today (the browser path already
   does Meshtastic over Web Serial).
@@ -401,15 +428,9 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   `@mapbox/jsonlint-lines-primitives` (an MIT-fork with a missing license field — the upstream
   jsonlint notice applies), linked from About & credits; minified bundles strip headers, the
   notices file is the durable surface.
-- [ ] **Trademark courtesy contacts** *(S)* — the landing/about non-affiliation lines are live
-  (Groundspeak/Geocaching HQ, APRS Foundation, Meshtastic LLC, POTA/SOTA, TAK Product Center);
-  still open: courtesy heads-up to POTA (help@parksontheair.com) and the SOTA Reflector
-  third-party-software category about the spots integration; re-check USPTO reg. 2058846 (APRS)
-  after the 2027 renewal window.
-- [ ] **OKAPI import compliance** *(S, when enabling OC import on a public instance)* — keep the
-  OKAPI-appended attribution intact, render OC content verbatim with clickable links, never
-  re-export OC-derived data through federation; opencaching.de content is CC BY-NC-ND 3.0 DE —
-  have the NC clause vs. donation-accepting instances checked by a lawyer.
+- [ ] **APRS mark re-check** *(S)* — re-check USPTO reg. 2058846 (APRS) after the 2027 renewal
+  window. The landing/about non-affiliation lines covering it are live (Groundspeak/Geocaching HQ,
+  APRS Foundation, Meshtastic LLC, POTA/SOTA, TAK Product Center).
 - [ ] **Vendor the third-party test partners (interop peer registry)** *(M)* — every partner the
   conformance suite runs is bundled where its licence allows, so the suite is reproducible and
   offline-capable instead of depending on upstream mirrors at build time. **Vehicle:** prebuilt
@@ -542,6 +563,3 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   forwarding in the nightly interop loop — register the partner user through the F6FBB sysop console
   (`xfbbC -c -r`) in the container so the telnet driver forwards end-to-end (the kernel-AX.25 leg
   already auto-creates users and exercises forwarding over the air).
-- [ ] **Hosted OCI one-click stack** (next release) — publish the `deploy/oci/` Resource-Manager
-  stack as a zip release artifact so the "Deploy to Oracle Cloud" button resolves a hosted URL
-  instead of requiring a manual zip upload.
