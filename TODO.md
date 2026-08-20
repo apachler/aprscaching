@@ -159,20 +159,22 @@ Next release:
 - [ ] **Cache-centric watchlist triggers** *(next release · P1 · S/M)* — HamAlert-pattern triggers on
   the existing watchlist + push/email-digest plumbing: new cache within X km / in grid Y, FTF still
   open, living cache activated nearby, your hide was found.
-- [ ] **SWL / receive-only mode** *(next release · P2 · M)* — an unlicensed account class that
-  participates by reception (RTL-SDR / WebSDR / browser bridge in RX): reception-report logs, an own
-  SWL ladder + leaderboard, never touching the licensed A/B/C find tiers. The license-conversion
-  funnel — receive-only participation is an explicit invariant already.
-- [ ] **Shack dashboard** *(next release · P2 · M)* — a kiosk-able full-screen shack surface:
-  greyline world map, propagation (SFI/K-index), live cache + POTA/SOTA spots, award progress — Pi-
-  friendly over the free read API, in the retro identity. Fills the shack-display gap HamClock's
-  shutdown left open.
+- [ ] **Shack dashboard** *(next release · P1 · M)* — a kiosk-able full-screen shack surface: greyline
+  world map, propagation (SFI/K-index), live cache + POTA/SOTA spots, award progress — Pi-friendly
+  over the free read API, in the retro identity. Fills the shack-display gap HamClock's shutdown left
+  open. Built on the tool widget model, so the full program — surface, widgets, feeds, kiosk — is in
+  *Tool ecosystem: marketplace & dashboard widgets* below.
 - [ ] **Privacy-first APRS-map positioning** *(next release · P2 · S)* — landing + docs copy that
   states the existing invariants as the differentiator vs incumbent APRS maps: TTL'd positions, no
   ads/tracking, AGPL source link, self-hostable.
 
-Backlog (all P3):
+Backlog (P3 unless noted):
 
+- [ ] **SWL / receive-only mode** *(P2 · M)* — an unlicensed account class that participates by
+  reception (RTL-SDR / WebSDR / browser bridge in RX): reception-report logs, an own SWL ladder +
+  leaderboard, never touching the licensed A/B/C find tiers. The license-conversion funnel —
+  receive-only participation is an explicit invariant already, so nothing about the trust model waits
+  on this. The first promotion candidate out of this list.
 - [ ] **Seasonal "Support Your Caches" weekends** *(S)* — quarterly themed event weekends with a
   participation certificate for everyone and plaque-style top recognition (the POTA
   support-your-parks pattern); federation peers can honor the same calendar.
@@ -198,6 +200,156 @@ Backlog (all P3):
   coach-mark tour.
 - [ ] **Youth/event cache kits** *(M)* — a packaged off-grid event-instance recipe (desktop single
   binary + printable/NFC cache kit + temporary scoreboard) for camps, school demos, and hamfests.
+
+## Tool ecosystem: marketplace & dashboard widgets
+
+The signed **Tools** plugin platform already carries what both programs build on: per-author Ed25519
+manifest signatures, an authority-signed registry with a client-pinned key and a
+`verified / known / self-signed / unsigned / invalid / key-changed` trust ladder, declarative panels
+and map layers a sandboxed tool contributes without touching the DOM, and capability grants gated at
+the host. Two programs extend it — a **dashboard surface** so a tool can contribute a widget, and a
+**public tool bucket** so anyone can publish one. Breadth belongs in the bucket, not the core: the
+first-party widget set stays small and excellent, and the long tail (satellites, cluster feeds,
+aircraft layers) is what the marketplace is *for*.
+
+The dashboard is the app release and it is scoped to one thing: a ham puts it on a screen in their
+shack, with no account and no first-party server. The bucket is a separate repo on its own timeline —
+only its in-package prerequisites touch a shipped build. Ordering that matters: the `ToolSurface`
+rename lands before any new surface work and before the package becomes a contract third parties
+compile against; `entryHash` lands before anyone lists, because it changes what a signature covers;
+the dashboard surface lands before built-ins can declare it.
+
+A bucket repo rather than a code monorepo or a publish service, because the binding constraints are
+liability, bus factor, and running cost: entries are metadata pointing at author-hosted artifacts, so
+listing never makes the maintainer the host of third-party code; the signed registry is a static file
+any CDN serves, with no always-on authenticated infrastructure to die with its operator; and the
+whole thing is forkable, so a community can clone and re-key it. It maps 1:1 onto the `RegistryEntry`
+format that already exists.
+
+Next release:
+
+- [ ] **`ToolSurface` rename (prerequisite)** *(next release · P1 · S)* — the tools package exports
+  `Surface` (a tool's host surface) while `packages/shared/src/surfaces.ts` exports an unrelated
+  `Surface` (the app's page sitemap), and `apps/web/src/shack/apps.ts` sits between the two. Rename
+  the tools-package type to `ToolSurface` before the package becomes a public contract. Six files,
+  mechanical, tests green.
+- [ ] **Dashboard surface, widget nodes + kiosk workspace** *(next release · P1 · M)* — add
+  `dashboard` to the tool surfaces; a widget is a `PanelSpec` rendered on that surface, so the
+  sanitizer, the sandbox, and the blind-router host apply unchanged. Three new panel node kinds
+  (`clock`, `gauge`, `sparkline`) plus an optional `size` hint the host may ignore — the host owns
+  layout, tools only hint; no images, iframes, or raw HTML. A shack workspace app arranges installed
+  widgets in a grid, persisted like the nav pins. Kiosk mode (`?kiosk=1`, 800×480 up) is public and
+  signed-out with a first-party default layout, so a shack Pi shows something with no account;
+  personalised layouts need one. The source link stays in the kiosk footer.
+- [ ] **First-party widget set v1 (feed-free)** *(next release · P1 · S each, four of them)* — the
+  widgets that need no backend at all: UTC/local clocks with sun and moon rise-set, the greyline
+  terminator (deterministic solar math, host-side, and the emotional anchor of the whole surface),
+  live cache spots, award progress. Two existing built-ins join for the cost of a manifest line by
+  declaring the new surface rather than being rewritten: `mheard` (recently-heard sparkline) and
+  `watch-alert` (watchlist). The caching widgets are the differentiator — clocks and greyline are
+  table stakes. Four times S is the real cost here; adding a fifth widget is a release decision, not
+  a free one.
+- [ ] **Pi / thin-client kiosk one-liner** *(next release · P1 · S)* — an install script that puts a
+  box into boot-to-dashboard kiosk, plus a recipes doc covering repurposed HamClock hardware, Android
+  TV, Fire TV (browser, or a kiosk launcher for boot-to-app), and old tablets. One install command is
+  the pattern those users already know, and it is how the migration actually happens.
+- [ ] **HamClock-migration guide + positioning page** *(next release · P2 · S)* — the displaced-user
+  window is open now: the original backend sunset in June 2026 and migration write-ups are still
+  circulating. "Run it on the Pi your HamClock used — or on the TV you already own, free." Honest
+  about OpenHamClock being complementary with a different centre of gravity. Ships with the dashboard
+  or it misses the window.
+
+Marketplace track (a separate repo on its own timeline; only the first two items touch a shipped
+build, and neither gates the release):
+
+- [ ] **`entryHash` content pinning (prerequisite)** *(P1 · S)* — a manifest signature covers the
+  manifest fields including the `entry` URL, but not the script bytes that URL serves, so whoever
+  controls the hosting can swap the payload while the signature still verifies. Add `entryHash`
+  (SHA-256 of the script) to `ToolManifest` *inside* the signed bytes; the sandbox hashes what it
+  fetched and refuses to evaluate on mismatch; `tools/toolkey` computes it on sign; bucket CI fetches
+  and verifies it independently. A new signed field changes `manifestSigningBytes`, so the shipped
+  `hello` tool and `apps/web/public/tools/registry.json` are re-signed in the same change. Must land
+  before anyone lists — a required signed field cannot be retrofitted afterwards. Side effect worth
+  having: a script change now forces a version bump and a re-signed manifest.
+- [ ] **Multi-pin registry authority** *(P1 · S)* — `verifyRegistry` accepts a small allowlist of
+  authority keys instead of a single pinned one, so a rotation ships the new key alongside the old and
+  older builds keep verifying through the overlap window. Keep the list at three or fewer and cover
+  the forged-authority rejection path — the whole registry trust model rests on this function.
+- [ ] **Tool bucket repo + signed publish** *(P1 · M)* — a public `aprscaching-tools` repo, one JSON
+  file per tool under `bucket/`, so a pull request is single-purpose and pubkey continuity is a
+  one-file diff. Validation reuses `@aprscaching/tools` (MIT and dependency-free precisely so it can):
+  schema, live manifest fetch, a `valid` signature required for listing, independent `entryHash`
+  verification, HTTPS-only immutable `entry`, no pubkey change for an existing name outside a
+  maintainer-approved rotation, and an automatic review label for the gated capabilities (`network`,
+  `tx`, `beacon`, `geo`). Listed tools ship a readable, non-minified entry script so review audits the
+  exact bytes the hash then freezes — human review is the enforcement, CI only flags obvious
+  minification. Merge builds and signs `registry.json` from the bucket and deploys it to Pages from a
+  reviewer-protected environment; an offline root key designates the online CI signing key, and its
+  custody and rotation ship documented with the repo. Listings state a license. Decide the custom
+  domain before shipping: `VITE_TOOL_REGISTRY` points at that URL permanently.
+- [ ] **Built-in extraction to the bucket** *(P2 · S/M)* — dogfood the marketplace and produce the
+  authoring walkthrough by moving the self-contained built-ins out as first-party signed listings: the
+  SSID reference, CTEXT macros, auto-responder, 7plus, the beacon scheduler (which also exercises a
+  gated capability end to end), then unit convert, CW encode, grid/bearing, block art, and map
+  waypoints. Staying in-process, deliberately: the monitor colouriser and the PSK31/CW decoders (the
+  sandbox decode bridge is an async request/response, the wrong shape for a continuous audio loop, and
+  a field station must decode on first run with no network to fetch an import); the station database
+  and link ping, which feed the inter-tool bus other tools read; and the peer-facing session tools —
+  auto-status, scheduled query, info responder, away note, connect bell. Needs the `dashboard` surface
+  and the bucket both live, so it is the last domino, never a release blocker.
+
+Backlog (P3 unless noted) — the first three are what a second dashboard release picks up:
+
+- [ ] **Feed proxy v1 + feed-backed widgets** *(P2 · M)* — widgets must not each hit upstreams from
+  every browser. A scheduled server-side fetch and cache exposes versioned `/api/feeds/*` under the
+  free read API (Workers cron, Node/Bun interval, D1/SQLite cache table), and a first-party feed tool
+  re-exposes it over the host IPC bus, so a third-party widget needs no `network` grant for curated
+  data — which is what keeps that grant meaningful. Every response carries source and fetched-at so a
+  widget labels stale data by age; every feed gets a circuit breaker and stale-while-revalidate,
+  because the POTA API is unofficial and can break without notice — a widget shows old data with its
+  age, never a blank panel. First feeds: NOAA space weather (US public domain, no key), POTA/SOTA
+  spots, contest calendar, on polite TTLs. Unlocks the solar gauges and the spot widgets. Held out of
+  the first dashboard release on purpose: it is the only tri-runtime piece in the program and the only
+  one with a standing upstream-maintenance cost, and the dashboard is worth running with no
+  first-party server at all — that property is the answer to how HamClock died, so it ships proven
+  first.
+- [ ] **PWA offline app shell** *(P2 · S)* — the web manifest ships and installs today; the service
+  worker is push-only by design (`apps/web/public/sw.js`). Add an app-shell precache and an offline
+  fallback without disturbing the push registration path in `apps/web/src/push.ts`. The field station
+  is the point: the app opens with no network.
+- [ ] **10-foot TV mode** *(P2 · S)* — a kiosk variant for a TV across the room: large type,
+  overscan-safe margins, no pointer or hover dependency, and a burn-in guard (slow pixel shift plus a
+  dim schedule). One mode covers Fire TV, Android TV, and the Samsung/LG browsers. A free web route is
+  the deliberate answer to the paid TV app the community backend sells.
+- [ ] **Kiosk pairing code** *(P2 · M)* — a headless display opens `/tv` and shows a six-character
+  code; an operator claims it from a signed-in device and the display loads their layout. Account
+  prefs are the transport, no new protocol. Kills D-pad URL typing, the single biggest smart-TV
+  usability barrier — pairs with TV mode, not before it.
+- [ ] **Tool update flow** *(P2 · S)* — the Tools console diffs the installed version against the
+  registry entry and offers a one-click re-import; a scheduled bucket workflow opens an auto-pull-
+  request when an author's hosted manifest is ahead of their entry.
+- [ ] **Community buckets (multi-registry)** *(M)* — user-added registry URLs, each with its own
+  pinned or trust-on-first-use authority key, bucket name shown in the trust label. First-party
+  entries stay `verified`. Keeps the main bucket's review bar high without gatekeeping the ecosystem.
+- [ ] **Satellite passes widget** *(M)* — TLE-based; a marketplace candidate first. If it lands
+  first-party, the TLE feed is signed and provenance-labelled: a cache-poisoning incident in a
+  comparable project is exactly why data gets signed, not only code.
+- [ ] **Band conditions v2 (VOACAP-class)** *(L)* — real propagation prediction; v1 is a simple
+  index-derived band table off the solar feed.
+- [ ] **RSS/news widget** *(S)* — server-side title extraction on a curated ham-news list, plain
+  titles to the client.
+- [ ] **Box telemetry widget** *(M)* — ingest-box temperature, voltage, and GPIO over the existing
+  remote relay, onto the dashboard.
+- [ ] **Big Clock mode** *(S)* — a single-widget-maximised kiosk state.
+- [ ] **Feed API as a published contract** *(S, doc)* — a versioned public spec so other shack
+  displays can consume our feeds. An open contract is the opposite of the closed-backend failure that
+  killed HamClock.
+- [ ] **Native TV apps (Fire TV / Android TV)** *(M, demand-conditional)* — a thin WebView wrapper on
+  the Amazon and Google stores, only if the web kiosk demonstrably falls short for TV users. Never
+  paid — the recognition-only invariant holds here too.
+- [ ] **Legacy HamClock backend compatibility** *(L, parked)* — speaking the community
+  client↔backend protocol so an orphaned HamClock can point `-b` at an instance. Parked: revisit only
+  if the community backends falter and the feed proxy already covers most of the data products.
 
 ## Future ideas (not yet built, still wanted)
 
