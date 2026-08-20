@@ -345,12 +345,26 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   data — which is what keeps that grant meaningful. Every response carries source and fetched-at so a
   widget labels stale data by age; every feed gets a circuit breaker and stale-while-revalidate,
   because the POTA API is unofficial and can break without notice — a widget shows old data with its
-  age, never a blank panel. First feeds: NOAA space weather (US public domain, no key), POTA/SOTA
-  spots, contest calendar, on polite TTLs. Unlocks the solar gauges and the spot widgets. Held out of
-  the first dashboard release on purpose: it is the only tri-runtime piece in the program and the only
-  one with a standing upstream-maintenance cost, and the dashboard is worth running with no
-  first-party server at all — that property is the answer to how HamClock died, so it ships proven
-  first.
+  age, never a blank panel.
+
+  **Shared feed by default, direct polling as an opt-in.** Self-hosting means every instance would
+  otherwise become another client at an upstream that never agreed to serve a network. So an instance
+  defaults to consuming a shared feed origin and MAY opt into polling upstream itself — which an
+  off-grid or fully autonomous instance needs. The origin is a *role, not a service we own*: the
+  serving code ships in every instance, the feed contract is published, and any instance can be the
+  origin for a group, so the arrangement has no operator to outlive. Federation is deliberately NOT
+  the carrier for this — relaying upstream data over signed frames that peers forward unchanged is
+  redistribution that cannot be recalled, and it is precisely what the OpenCaching conditions forbid
+  and what the courtesy contacts promise not to do.
+
+  **A feed is shared only if its upstream permits redistribution**; otherwise every instance polls it
+  directly, keeping its own politeness floor, and it stays off by default. NOAA space weather is US
+  public domain and shareable; the contest calendar is published for reuse; POTA and SOTA spots are
+  direct-poll-only unless those programmes say otherwise in writing — the courtesy contacts ask them
+  exactly that, and SOTA's data additionally sits under the UK database right. Held out of the first
+  dashboard release on purpose: it is the only tri-runtime piece in the program and the only one with
+  a standing upstream-maintenance cost, and the dashboard is worth running with no first-party server
+  at all — that property is the answer to how HamClock died, so it ships proven first.
 - [ ] **PWA offline app shell** *(P2 · S)* — the web manifest ships and installs today; the service
   worker is push-only by design (`apps/web/public/sw.js`). Add an app-shell precache and an offline
   fallback without disturbing the push registration path in `apps/web/src/push.ts`. The field station
