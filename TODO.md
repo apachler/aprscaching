@@ -16,15 +16,23 @@ timing is what makes them worth doing: copy and onboarding land while first impr
 formed, courtesy contacts go out before the audience finds us, and a release artifact needs a
 release. Listed in start order — the first two have outside dependencies and lead times.
 
-- [ ] **OpenCaching import compliance** *(S plus an external legal answer — start first)* — enabling
-  OC import on a public instance carries conditions: the OKAPI-appended attribution stays intact, OC
-  content renders verbatim with clickable links, and OC-derived data is never re-exported through
-  federation. opencaching.de content is CC BY-NC-ND 3.0 DE, so the NC clause against a
-  donation-accepting instance needs a lawyer's answer — the only launch item gated on someone
-  outside the project. Import stays off unless `OKAPI_BASE` + `OKAPI_KEY` are set
-  (`workers/gateway/src/env.ts`), so if the answer does not arrive in time the tag ships with them
-  unset and import follows later. That fallback is what keeps this off the critical path for the
-  date.
+- [ ] **OpenCaching import compliance** *(S — start first, it needs a contact round)* — opencaching.de
+  content is CC BY-NC-ND 3.0 DE, and the German legal code is what the conditions below follow from.
+  Its non-commercial test covers acts "nicht **vorrangig** auf einen geschäftlichen Vorteil oder eine
+  geldwerte Vergütung gerichtet" — the direction of the act, not the identity or funding of the user
+  — so recognition-only donations that never gate a feature do not make the import commercial. Its
+  derivative clause puts collections outside the ND restriction outright: "Nicht als Abwandlung des
+  Schutzgegenstandes gelten seine Aufnahme in eine Sammlung oder ein Sammelwerk." An unmodified
+  import rendered as a collection therefore sits inside the licence; a transformed one does not.
+  Conditions: keep the OKAPI-appended attribution (`© <user>, www.opencaching.de, CC-BY-NC-ND, as of
+  <date>`) intact and visible; render OC content verbatim with clickable links, never truncated,
+  reformatted, translated, or merged into a first-party cache record; never re-export OC-derived data
+  through federation; and honour a per-listing removal request, because the licensor of each listing
+  is its individual owner and not the platform. Ask Opencaching Deutschland e.V.
+  (kontakt@opencaching.de) to confirm the reading in writing when requesting the OKAPI consumer key —
+  the same contact round as the courtesy contacts above. Import stays off unless `OKAPI_BASE` +
+  `OKAPI_KEY` are set (`workers/gateway/src/env.ts`), so the tag ships without it if the reply is
+  slow.
 - [ ] **Trademark courtesy contacts** *(S)* — a courtesy heads-up to POTA
   (help@parksontheair.com) and to the SOTA Reflector third-party-software category about the spots
   integration, sent before the public launch rather than after it. The non-affiliation lines they
