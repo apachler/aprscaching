@@ -293,7 +293,12 @@ const SOURCES: SourceDef[] = [
   },
   // reception networks (mappable only with a grid/coords); enable explicitly via SPOTS_SOURCES.
   { source: "pskreporter", url: (env) => env.SPOTS_PSK_URL || "", normalize: normalizePsk, minIntervalSec: 300 },
-  { source: "dxcluster", url: (env) => env.SPOTS_DXCLUSTER_URL || "", normalize: normalizeDxCluster, minIntervalSec: 120 },
+  {
+    source: "dxcluster",
+    url: (env) => env.SPOTS_DXCLUSTER_URL || "",
+    normalize: normalizeDxCluster,
+    minIntervalSec: 120,
+  },
   { source: "rbn", url: (env) => env.SPOTS_RBN_URL || "", normalize: normalizeRbn, minIntervalSec: 120 },
 ];
 
