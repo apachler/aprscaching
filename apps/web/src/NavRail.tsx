@@ -28,6 +28,7 @@ export function NavRail(props: {
       onClick={onClick}
       title={label}
       aria-current={props.active === key ? "page" : undefined}
+      data-tour={key === "nearby" ? "nearby" : undefined}
     >
       <Icon name={icon} size={21} />
       <span>{label}</span>

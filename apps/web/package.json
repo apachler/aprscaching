@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node test/no-emoji.mjs"
+    "test": "node test/no-emoji.mjs && node test/tour-anchors.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

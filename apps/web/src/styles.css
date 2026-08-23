@@ -4161,7 +4161,9 @@ button.danger:hover {
   color: var(--muted);
 }
 
-/* quick-tour framework (mechanics; placeholder steps). Bottom-anchored accessible dialog. */
+/* Quick-tour coach marks. Two presentations of one accessible dialog: a step naming an on-screen
+   element rings it and anchors the card beside it; a step without one keeps the bottom-anchored
+   dialog, which is also the fallback wherever CSS anchor positioning is missing. */
 .tour-scrim {
   position: fixed;
   inset: 0;
@@ -4207,6 +4209,29 @@ button.danger:hover {
 @media (prefers-reduced-motion: reduce) {
   .tour-scrim {
     animation: none;
+  }
+}
+/* The ring is the coach mark. It carries the anchor name too, so moving the card is a class toggle
+   in JS and nothing more — the placement itself stays declarative. */
+.tour-target {
+  anchor-name: --tour-target;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+@supports (anchor-name: --x) {
+  /* An anchored step must show what it points at, so the scrim stops dimming and only keeps its
+     click-to-dismiss job. */
+  .tour-scrim[data-anchored="true"] {
+    background: transparent;
+  }
+  .tour-scrim[data-anchored="true"] .tour-card {
+    position: fixed;
+    position-anchor: --tour-target;
+    position-area: block-end;
+    position-try-fallbacks: flip-block, flip-inline;
+    max-width: min(460px, calc(100vw - 32px));
+    margin: 10px;
   }
 }
 

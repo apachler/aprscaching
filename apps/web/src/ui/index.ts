@@ -14,6 +14,7 @@ export { ToastProvider, useToast } from "./Toast.js";
 export { Icon, type IconName } from "./Icon.js";
 export { Ico } from "./Ico.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";
+export { TOUR_STEPS } from "./tourSteps.js";
 export { useModalDialog } from "./useModalDialog.js";
 export { ConfirmProvider, useConfirm, useChoice } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";

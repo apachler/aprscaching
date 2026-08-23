@@ -40,10 +40,13 @@ release. Listed in start order — the first two have outside dependencies and l
 - [ ] **Privacy-first APRS-map positioning** *(S)* — landing + docs copy stating the invariants that
   already ship as the differentiator vs incumbent APRS maps: TTL'd positions, no ads or tracking,
   the source link, self-hostable. Copy only — every claim in it is already built and true.
-- [ ] **Coach-mark tour content** *(S)* — real steps for the tour framework: map → cache detail →
-  log a find, element-anchored. `apps/web/src/ui/Tour.tsx` is built (focus-trapped, reduced-motion,
-  config-driven) and renders nothing for empty steps, so this is content, not framework. Launch week
-  is the largest first-time audience the app will ever have at once.
+- [x] **Coach-mark tour content** — the find flow, map → cache detail → log a find, in
+  `apps/web/src/ui/tourSteps.ts`, with a closing step that differs for a visitor and a signed-in cacher.
+  Steps anchor on `data-tour` hooks rather than style classes, so restyling the chrome cannot silently
+  unanchor the tour, and `apps/web/test/tour-anchors.mjs` fails the build if a step and its hook part
+  company. `Tour.tsx` rings the anchored element and places the card against it with CSS anchor
+  positioning, falling back to its centred dialog wherever the element is absent (a first run has no cache
+  open) or anchor positioning is unsupported.
 - [ ] **Hosted OCI one-click stack** *(S)* — publish the `deploy/oci/` Resource-Manager stack as a
   zip release artifact so the "Deploy to Oracle Cloud" button resolves a hosted URL instead of
   asking for a manual upload. It hangs off the release-please release, so it lands with the tag

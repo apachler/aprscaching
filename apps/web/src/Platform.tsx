@@ -25,7 +25,7 @@ import {
   type SearchHitStation,
 } from "./api.js";
 import { TopBar } from "./TopBar.js";
-import { Tour, Ico, useToast, type TourStep } from "./ui/index.js";
+import { Tour, TOUR_STEPS, Ico, useToast } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { surfaceByView } from "@aprscaching/shared";
 import { typeMeta } from "./cacheTypes.js";
@@ -90,14 +90,6 @@ const baseStyle = (): string | StyleSpecification =>
   document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
 
 type Mode = "view" | "hide";
-
-// Quick-tour steps are config-driven — one welcome step keeps the framework live and testable.
-const TOUR_STEPS: TourStep[] = [
-  {
-    title: "Welcome",
-    body: "You're browsing in read-only mode — explore the map and caches freely. Sign in to log finds, hide caches, and unlock the Shack.",
-  },
-];
 
 /**
  * Platform — the signed-in / explore shack: the MapLibre map plus every panel. Lazily imported by
@@ -1080,7 +1072,7 @@ export default function Platform({ session, startTour }: { session: SessionState
           )}
 
           <div className="mapwrap">
-            <div ref={setMapNode} className="map" />
+            <div ref={setMapNode} className="map" data-tour="map" />
             <ToolMapLayers map={map.current} />
             {/* §6 — `map`-capability tools render markers here */}
             {ready && center && (
@@ -1190,7 +1182,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             }}
           />
         )}
-        {tourOpen && <Tour steps={TOUR_STEPS} onDone={() => setTourOpen(false)} />}
+        {tourOpen && <Tour steps={TOUR_STEPS} signedIn={!!callsign} onDone={() => setTourOpen(false)} />}
       </div>
     </FormatContext.Provider>
   );
@@ -1207,7 +1199,11 @@ function TabBar(props: {
   active: string;
 }) {
   const tab = (key: string, ic: React.ReactNode, label: string, onClick: () => void) => (
-    <button className={props.active === key ? "on" : ""} onClick={onClick}>
+    <button
+      className={props.active === key ? "on" : ""}
+      onClick={onClick}
+      data-tour={key === "nearby" ? "nearby" : undefined}
+    >
       <span className="ic">{ic}</span>
       <span>{label}</span>
     </button>

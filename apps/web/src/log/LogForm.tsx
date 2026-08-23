@@ -135,7 +135,7 @@ export function LogForm(props: {
 
   return (
     <div className="logform">
-      <button className="primary log-primary" disabled={!!busy} onClick={() => doLog("found")}>
+      <button className="primary log-primary" data-tour="log" disabled={!!busy} onClick={() => doLog("found")}>
         {busy === "found" ? "Logging…" : "✓ Log a find"}
       </button>
       <div className="row between mt-3">

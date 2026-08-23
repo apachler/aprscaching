@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export type TourStep = { title: string; body: string; when?: "signed-out" | "signed-in" };
+export type TourStep = {
+  title: string;
+  body: string;
+  when?: "signed-out" | "signed-in";
+  /** Selector for the element this step points at — a `[data-tour="…"]` hook, never a style class. */
+  anchor?: string;
+};
 
 const SEEN_KEY = "acs.tour.seen";
 export const tourSeen = (): boolean => {
@@ -20,26 +26,65 @@ const markSeen = () => {
 };
 
 /**
- * Quick-tour framework. Step content/targets are config-driven; an accessible (focus-trapped,
- * keyboard-operable, reduced-motion) bottom-anchored dialog. Renders nothing for empty steps.
+ * The element a step points at: the first match that is actually rendered. A hook appears more than
+ * once by design — Nearby is a rail item on desktop and a tab on mobile — and the breakpoint decides
+ * which one exists, so the first laid-out match is the one on screen. `getClientRects()` is empty for
+ * anything a `display: none` ancestor hides, which is exactly how the responsive chrome hides.
  */
-export function Tour(props: { steps: TourStep[]; onDone: () => void }) {
-  const { steps } = props;
+function visibleTarget(selector: string): HTMLElement | null {
+  for (const el of document.querySelectorAll<HTMLElement>(selector)) if (el.getClientRects().length) return el;
+  return null;
+}
+
+/**
+ * Quick-tour coach marks. Steps are config-driven (`tourSteps.ts`) and filtered by session, so the
+ * closing step differs for a visitor and a signed-in cacher. A step naming an on-screen element gets
+ * a ring and an anchored card; one whose element is absent falls back to the centred dialog rather
+ * than pointing at nothing. Either way the dialog is focus-trapped, keyboard-operable and
+ * reduced-motion aware. Renders nothing when no step applies.
+ */
+export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () => void }) {
+  const { steps, signedIn, onDone } = props;
+  const shown = useMemo(
+    () => steps.filter((s) => !s.when || s.when === (signedIn ? "signed-in" : "signed-out")),
+    [steps, signedIn],
+  );
   const [i, setI] = useState(0);
+  const [anchored, setAnchored] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const finish = useCallback(() => {
     markSeen();
-    props.onDone();
-  }, [props]);
+    onDone();
+  }, [onDone]);
+
+  const idx = Math.min(i, Math.max(shown.length - 1, 0));
+  const step = shown[idx];
+  const anchor = step?.anchor;
 
   // restore focus to whatever opened the tour when it closes (ui-ux.md §7)
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     return () => prev?.focus?.();
   }, []);
+
+  // Ring the step's element and let CSS anchor the card to it. The class is the only thing set from
+  // JS — `anchor-name`, the ring and the placement all live in the stylesheet (css.md).
+  useEffect(() => {
+    const target = anchor ? visibleTarget(anchor) : null;
+    setAnchored(!!target);
+    if (!target) return;
+    target.classList.add("tour-target");
+    target.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    return () => target.classList.remove("tour-target");
+  }, [anchor]);
+
   useEffect(() => {
     cardRef.current?.querySelector<HTMLElement>("button.primary")?.focus();
-  }, [i]);
+  }, [idx]);
   useEffect(() => {
     const card = cardRef.current;
     if (!card) return;
@@ -66,24 +111,23 @@ export function Tour(props: { steps: TourStep[]; onDone: () => void }) {
     return () => card.removeEventListener("keydown", onKey);
   }, [finish]);
 
-  if (!steps.length) return null;
-  const idx = Math.min(i, steps.length - 1);
-  const step = steps[idx]!;
-  const last = idx >= steps.length - 1;
+  if (!step) return null;
+  const last = idx >= shown.length - 1;
+  const titleId = "tour-step-title";
   return (
-    <div className="tour-scrim" onClick={finish}>
+    <div className="tour-scrim" data-anchored={anchored ? "true" : undefined} onClick={finish}>
       <div
         className="tour-card"
         role="dialog"
         aria-modal="true"
-        aria-label="Quick tour"
+        aria-labelledby={titleId}
         ref={cardRef}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="tour-stepn">
-          Step {idx + 1} of {steps.length}
+          Step {idx + 1} of {shown.length}
         </div>
-        <h3>{step.title}</h3>
+        <h3 id={titleId}>{step.title}</h3>
         <p className="muted">{step.body}</p>
         <div className="row end tour-actions">
           <button className="link" onClick={finish}>
