@@ -1,6 +1,8 @@
 name: docs
 
-# Cheap guard: the MkDocs manual must build with --strict (no broken links / bad nav).
+# Builds the MkDocs manual with --strict (no broken links / bad nav) on every change, and publishes
+# it to GitHub Pages from the default branch. The manual is the support surface SUPPORT.md and the
+# issue templates point people at, so it has to be reachable without a git checkout.
 on:
   push:
     paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
@@ -27,3 +29,21 @@ jobs:
           # and the single mkdocs-material install below is too cheap to be worth a lockfile.
       - run: pip install mkdocs-material
       - run: mkdocs build --strict
+      - if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with: { path: site }
+
+  deploy:
+    name: publish to Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # publish the built site
+      id-token: write # OIDC token deploy-pages exchanges for the deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

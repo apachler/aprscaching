@@ -3,6 +3,7 @@
 [![CI](https://github.com/apachler/aprscaching/actions/workflows/ci.yml/badge.svg)](https://github.com/apachler/aprscaching/actions/workflows/ci.yml)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/apachler/aprscaching?sort=semver)](https://github.com/apachler/aprscaching/releases)
+[![Manual](https://img.shields.io/badge/manual-apachler.github.io-14b8a6)](https://apachler.github.io/aprscaching/)
 
 **Find real places on the air.** aprscaching is an APRS geocaching game and ham-radio **Shack** — hide a
 cache, go find it, and log the find *verified by radio*, not just by tapping a button. Hide, hunt, operate.
@@ -115,7 +116,8 @@ shapes, proven byte-for-byte identical by one conformance suite that runs agains
 | **Bun + bun:sqlite** (`servers/bun`) | a single-file desktop build | `bun:sqlite` |
 
 Deployment recipes (Pi-at-home with a Cloudflare Tunnel, an all-in-one OCI VM with Caddy, a desktop
-single-binary, …) live in [`docs/operate/deployment.md`](docs/operate/deployment.md) and `deploy/`.
+single-binary, …) live in [Deployment](https://apachler.github.io/aprscaching/operate/deployment/) and
+`deploy/`.
 
 For the all-in-one VM there is a one-click path — it creates its own network, resolves the image, and
 boots the Docker stack from cloud-init, so you supply a callsign and an SSH key and nothing else:

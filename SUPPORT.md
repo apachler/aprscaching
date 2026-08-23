@@ -5,11 +5,12 @@ community-driven, and that's on purpose.
 
 ## Where to go
 
-1. **Read the manual.** The product manual (served with MkDocs, source in `docs/`) covers getting
-   started, operating an instance, RF ingest, federation, and the API/config reference.
+1. **Read the manual.** The product manual is published at
+   <https://apachler.github.io/aprscaching/> (source in `docs/`) and covers getting started, operating
+   an instance, RF ingest, federation, and the API/config reference.
 2. **Search existing issues** — your question may already be answered.
-3. **Ask a question** — open an issue using the **Question / Support** template, or start a GitHub
-   Discussion if the repo has them enabled. For anything RF-hardware-specific (a TNC, rig, Web-Serial,
+3. **Ask a question** — start a [GitHub Discussion](https://github.com/apachler/aprscaching/discussions),
+   or open an issue using the **Question / Support** template. For anything RF-hardware-specific (a TNC, rig, Web-Serial,
    Meshtastic, or KISS problem), use the **RF hardware report** template so we get rig/TNC/connection
    details up front.
 4. **Report a bug** with the bug template, or a **security issue privately** per

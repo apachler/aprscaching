@@ -3,6 +3,11 @@
 site_name: aprscaching
 site_description: >-
   The manual for aprscaching — an APRS geocaching game and a full ham-radio Shack.
+# Where the manual is published. Set so page metadata, the sitemap and canonical links resolve;
+# .github/workflows/docs.yml deploys here from the default branch.
+site_url: https://apachler.github.io/aprscaching/
+repo_url: https://github.com/apachler/aprscaching
+edit_uri: edit/dev/docs/
 copyright: >-
   Documentation is CC-BY-SA-4.0. aprscaching is built by OE8APR from open specifications and is not
   affiliated with, sponsored by, or endorsed by the APRS trademark holder.
