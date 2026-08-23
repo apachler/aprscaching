@@ -76,6 +76,13 @@ ok("descriptor addresses is an array", Array.isArray(pubWk.data?.addresses), JSO
   );
 }
 
+// Quiesce before seeding: the subscriber kicks a federation sync at boot (the node/bun servers run
+// `runScheduled` once on listen), so a pull can already be in flight here. The counts an explicit
+// /federation/sync reports describe ITS OWN pull, and a pull that started before the seed below
+// cannot contain it — awaiting one sync now leaves nothing in flight, and the periodic interval is
+// five minutes away. Without this the assertions below race the boot sync.
+await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+
 // seed the publisher: a cache + a verified find
 const TITLE = "Federated Schlossberg " + now();
 const created = await call(PUB, "POST", "/api/caches", {

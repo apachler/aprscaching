@@ -146,10 +146,15 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
 }
 
 // Node/Bun drive a periodic federation-sync interval AND the nightly `runScheduled` (which
-// also calls this) — near boot they can overlap and double-pull every peer. Coalesce per-env: a caller
-// arriving while a run is in flight *joins* it and gets the same real result rather than starting a
-// second concurrent pull. An explicit /federation/sync therefore still returns real counts even if it
-// races a background run. Sequential (awaited) calls are unaffected.
+// also calls this) — near boot they can overlap and double-pull every peer. Coalesce per-env so a
+// burst collapses instead of starting N concurrent pulls.
+//
+// A caller must NOT simply join the run already in flight: that run took its snapshot of every peer
+// before the caller asked, so it cannot contain anything written since. An explicit
+// /federation/sync right after a federated write would then report 0 mirrored — the record only
+// lands on the *next* pull. So a caller arriving mid-run waits for it and gets a fresh run instead;
+// everyone who arrives during the same run shares that one follow-up, bounding a burst at one extra
+// pull. Sequential (awaited) calls are unaffected.
 type SyncResult = {
   peers: number;
   caches: number;
@@ -160,14 +165,38 @@ type SyncResult = {
   bulletins: number;
   errors: string[];
 };
-const inFlightSync = new WeakMap<object, Promise<SyncResult>>();
+
+/** Per-key coalescing state: the pull in flight, plus the single follow-up owed to mid-run callers. */
+export type Coalescer<T> = { inFlight: WeakMap<object, Promise<T>>; queued: WeakMap<object, Promise<T>> };
+export const newCoalescer = <T>(): Coalescer<T> => ({ inFlight: new WeakMap(), queued: new WeakMap() });
+
+/** Trailing-edge coalescing: never hand back a run that started before the caller asked. Pure + exported for test. */
+export function coalesceRun<T>(key: object, run: () => Promise<T>, state: Coalescer<T>): Promise<T> {
+  const start = (): Promise<T> => {
+    const p: Promise<T> = run().finally(() => {
+      if (state.inFlight.get(key) === p) state.inFlight.delete(key);
+    });
+    state.inFlight.set(key, p);
+    return p;
+  };
+  const running = state.inFlight.get(key);
+  if (!running) return start();
+  const queued = state.queued.get(key);
+  if (queued) return queued; // a follow-up is already promised to this wave of callers
+  const next = running
+    .catch(() => {}) // a failed run must not poison the callers waiting behind it
+    .then(() => {
+      state.queued.delete(key);
+      return start();
+    });
+  state.queued.set(key, next);
+  return next;
+}
+
+const syncCoalescer = newCoalescer<SyncResult>();
 
 export async function syncAllPeers(env: Env): Promise<SyncResult> {
-  const existing = inFlightSync.get(env);
-  if (existing) return existing;
-  const p = syncAllPeersInner(env).finally(() => inFlightSync.delete(env));
-  inFlightSync.set(env, p);
-  return p;
+  return coalesceRun(env, () => syncAllPeersInner(env), syncCoalescer);
 }
 
 async function syncAllPeersInner(env: Env): Promise<{
