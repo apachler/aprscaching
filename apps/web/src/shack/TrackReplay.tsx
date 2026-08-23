@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// maplibre-gl v5 no longer leaks the ambient GeoJSON namespace; import it explicitly.
+// maplibre-gl does not declare the ambient GeoJSON namespace; import it explicitly.
 import type * as GeoJSON from "geojson";
 import { useEffect, useRef, useState } from "react";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
 

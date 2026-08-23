@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { Panel, Ico } from "../ui/index.js";
 import { appById, type ShackAppId } from "./apps.js";
 import { TerminalPanel } from "../packet/TerminalPanel.js";

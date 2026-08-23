@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type CSSProperties } from "react";
-import maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { useFmt, useTheme } from "../format.js";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";

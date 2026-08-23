@@ -20,11 +20,7 @@ if [[ "$mode" == "all" || "$mode" == "--test" ]]; then
   run pnpm -r test
 fi
 
-# web has no vitest suite — typecheck + production build are its gate
-if [[ "$mode" == "all" || "$mode" == "--build" ]]; then
-  echo "== web typecheck + build =="
-  run pnpm --filter @aprscaching/web typecheck
-  run pnpm --filter @aprscaching/web build
-fi
+# apps/web is in `pnpm -r` like every other unit: its build typechecks before vite, and its guards
+# (no raw emoji in rendered UI, tour anchors resolve) run as its test script.
 
 echo "✓ check passed"

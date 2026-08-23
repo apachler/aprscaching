@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { getStation, createStation, type StationDetail } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";

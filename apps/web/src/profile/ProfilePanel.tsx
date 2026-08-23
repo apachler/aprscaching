@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import { getProfile, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Group, Badge, ErrorState, Ico } from "../ui/index.js";
