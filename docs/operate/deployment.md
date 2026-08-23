@@ -31,7 +31,7 @@ vs in-process intervals, D1/R2 vs SQLite/filesystem). See the
 |---|-------|-----|-------------|
 | **0** | Desktop single binary | `bun --compile` bundles the SPA + migrations into one executable. | `deploy/desktop/README.md` |
 | **1** | Pi at home | Docker stack on a Pi, exposed with a free Cloudflare Tunnel — no port-forward, no static IP. | [Running in Docker](docker.md) + `deploy/README.md` |
-| **2** | All-in-one VM | Docker stack (gateway + ingest + Caddy TLS) on a single OCI/VPS host; `deploy/setup.sh` is the first-run wizard. | [Running in Docker](docker.md) · one-click: `deploy/oci/README-stack.md` |
+| **2** | All-in-one VM | Docker stack (gateway + ingest + Caddy TLS) on a single OCI/VPS host; `deploy/setup.sh` is the first-run wizard. | [Running in Docker](docker.md) · [one-click stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip) |
 | **3** | OCI core + CDN | Topology 2 plus Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`). | [Running in Docker](docker.md) |
 | **4** | Split | Managed Cloudflare core (Worker + D1 + R2 + Pages) via `deploy/cloudflare/deploy-cf.sh`; the operator RF box runs the ingest-only stack. | [Running in Docker](docker.md) + `deploy/README.md` |
 

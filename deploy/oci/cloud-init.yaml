@@ -1,10 +1,14 @@
 #cloud-config
 # OCI Ampere A1 (Ubuntu) bootstrap: install Docker + start the all-in-one stack (Topology 2).
+# Rendered by main.tf through templatefile(): each dollar-brace placeholder below is substituted by
+# Terraform from the vars map, so a literal shell one would have to double its dollar to survive.
 package_update: true
 runcmd:
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
-  - git clone ${REPO_URL} /opt/aprscaching || (cd /opt/aprscaching && git pull)
+  # Clone the exact ref this stack was published for (a release zip pins its tag), or fast-forward
+  # an existing checkout to it if the instance is re-provisioned.
+  - git clone --branch ${REPO_REF} --depth 1 ${REPO_URL} /opt/aprscaching || (cd /opt/aprscaching && git fetch --depth 1 origin ${REPO_REF} && git checkout -f FETCH_HEAD)
   - cd /opt/aprscaching/deploy && cp -n .env.example .env
   # Inject real values from Resource Manager variables (or edit .env, then re-up):
   - sed -i "s|^APRSIS_CALLSIGN=.*|APRSIS_CALLSIGN=${APRSIS_CALLSIGN}|" /opt/aprscaching/deploy/.env
@@ -12,4 +16,6 @@ runcmd:
   - sed -i "s|^APRSIS_FILTER=.*|APRSIS_FILTER=${APRSIS_FILTER}|" /opt/aprscaching/deploy/.env
   - sed -i "s|^DOMAIN=.*|DOMAIN=${DOMAIN}|" /opt/aprscaching/deploy/.env
   - sed -i "s|^INGEST_SECRET=.*|INGEST_SECRET=${INGEST_SECRET}|" /opt/aprscaching/deploy/.env
+  # The AGPL §13 source link must resolve to the code this instance actually runs.
+  - sed -i "s|^# *SOURCE_REPO=.*|SOURCE_REPO=${REPO_URL}|" /opt/aprscaching/deploy/.env
   - cd /opt/aprscaching/deploy && docker compose up -d --build

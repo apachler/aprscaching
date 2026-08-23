@@ -16,7 +16,7 @@ the **RF ingest always runs on the operator's own equipment** — a local proces
 | `Caddyfile` | TLS + SPA + reverse proxy |
 | `cloudflared/config.yml` | named-tunnel ingress (alternative to `TUNNEL_TOKEN`) |
 | `systemd/*.service` | bare-metal alternative to Docker |
-| `oci/cloud-init.yaml`, `oci/main.tf`, `oci/README-stack.md` | OCI one-click stack |
+| `oci/main.tf`, `oci/schema.yaml`, `oci/cloud-init.yaml`, `oci/README-stack.md` | OCI one-click stack (published per release by `scripts/build-oci-stack.sh`) |
 | `cloudflare/deploy-cf.sh` | Topology 4 one-shot (D1/R2/Worker/Pages) |
 | `cloudflare/cache-rules.sh` | Topology 3 CDN cache/bypass rules |
 | `setup.sh` | first-run wizard (writes `.env`, validates) |

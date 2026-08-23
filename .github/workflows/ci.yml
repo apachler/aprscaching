@@ -50,6 +50,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r test
       - run: pnpm -r build
+      # Repo-level guards over files no package owns: the OCI stack ships as a release zip that a
+      # one-click button feeds to Resource Manager, so its internal consistency is checked here.
+      - run: node tools/checks/oci-stack.mjs
 
   conformance-node:
     name: conformance (Node + SQLite)

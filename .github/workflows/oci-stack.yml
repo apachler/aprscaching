@@ -1,0 +1,27 @@
+name: oci-stack
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+
+# Default read-only; the build job elevates to contents:write only to attach the stack to the release.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the stack zip to the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The "Deploy to Oracle Cloud" button hands Resource Manager a zip URL sight unseen, so the
+      # consistency guard runs here too rather than trusting that CI saw this commit.
+      - run: node tools/checks/oci-stack.mjs
+      - run: bash scripts/build-oci-stack.sh "${GITHUB_REF_NAME:-main}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with: { name: aprscaching-oci-stack, path: dist/oci/* }
+      # releases/latest/download/aprscaching-oci-stack.zip is the button's stable target, so every
+      # release must carry the asset under exactly that name.
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with: { files: dist/oci/aprscaching-oci-stack.zip }

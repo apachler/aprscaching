@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Resource Manager stack UI. Every variable in main.tf appears here exactly once, so the console
+# prompts for real inputs instead of raw OCIDs; tools/checks/oci-stack.mjs enforces that pairing.
+title: APRScaching
+description: >-
+  An APRS geocaching game and a full ham-radio Shack, on one Always-Free Ampere A1 VM. The stack
+  builds its own network, resolves the Ubuntu image itself, and boots the Docker stack via
+  cloud-init — you supply your callsign and an SSH key.
+schemaVersion: 1.1.0
+version: "1"
+locale: en
+
+variableGroups:
+  - title: Resource Manager
+    visible: false
+    variables:
+      - tenancy_ocid
+      - compartment_ocid
+      - region
+  - title: Your station
+    variables:
+      - aprsis_callsign
+      - aprsis_passcode
+      - aprsis_filter
+  - title: Public site
+    variables:
+      - domain
+      - ingest_secret
+  - title: Host
+    variables:
+      - ssh_public_key
+      - availability_domain_number
+  - title: Sizing and source
+    visible: false
+    variables:
+      - ocpus
+      - memory_in_gbs
+      - boot_volume_size_in_gbs
+      - repo_url
+      - repo_ref
+
+variables:
+  tenancy_ocid:
+    type: string
+    title: Tenancy OCID
+    required: true
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: Compartment
+    description: The compartment the VM and its network are created in.
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: Region
+    required: true
+
+  aprsis_callsign:
+    type: string
+    title: Callsign
+    description: Your amateur-radio callsign. It logs the instance in to APRS-IS.
+    required: true
+    pattern: "^[A-Za-z0-9]{1,6}(-[0-9]{1,2})?$"
+  aprsis_passcode:
+    type: string
+    title: APRS-IS passcode
+    description: The passcode issued for that callsign. It authenticates the feed; it verifies nothing about your licence.
+    required: true
+    pattern: "^[0-9]{1,6}$"
+  aprsis_filter:
+    type: string
+    title: Feed filter
+    description: An APRS-IS server-side filter. r/<lat>/<lon>/<km> keeps the feed local to your area and the running costs down.
+    required: true
+    default: r/47.07/15.42/300
+
+  domain:
+    type: string
+    title: Hostname
+    description: A hostname you point at the VM, for automatic TLS. Leave it as :80 to serve plain HTTP over the IP address.
+    required: true
+    default: ":80"
+  ingest_secret:
+    type: password
+    title: Ingest secret
+    description: A long random string authorising the ingest worker's writes to the gateway. Generate one with openssl rand -hex 24.
+    required: true
+    minLength: 16
+
+  ssh_public_key:
+    type: oci:core:ssh:publickey
+    title: SSH public key
+    description: Grants console access to the ubuntu user on the VM.
+    required: true
+  availability_domain_number:
+    type: number
+    title: Availability domain
+    description: Which availability domain to place the VM in. Raise it and re-apply if OCI reports that it is out of host capacity.
+    required: true
+    default: 1
+    minimum: 1
+    maximum: 3
+
+  ocpus:
+    type: number
+    title: Cores
+    description: Ampere A1 cores. The Always-Free allowance is 4 in total across all instances.
+    required: true
+    default: 2
+    minimum: 1
+    maximum: 4
+  memory_in_gbs:
+    type: number
+    title: Memory (GB)
+    description: The Always-Free allowance is 24 GB in total across all instances.
+    required: true
+    default: 12
+    minimum: 6
+    maximum: 24
+  boot_volume_size_in_gbs:
+    type: number
+    title: Boot volume (GB)
+    description: The Always-Free allowance is 200 GB in total.
+    required: true
+    default: 50
+    minimum: 50
+    maximum: 200
+  repo_url:
+    type: string
+    title: Repository
+    required: true
+    default: https://github.com/apachler/aprscaching
+  repo_ref:
+    type: string
+    title: Branch or tag
+    description: A stack downloaded from a release pins that release's tag.
+    required: true
+    default: main
+
+outputs:
+  public_ip:
+    type: string
+    title: Public IP
+    visible: true
+  url:
+    type: link
+    title: Open the instance
+    visible: true
+
+outputGroups:
+  - title: Your instance
+    outputs:
+      - url
+      - public_ip
+
+primaryOutputButton: url

@@ -117,6 +117,11 @@ shapes, proven byte-for-byte identical by one conformance suite that runs agains
 Deployment recipes (Pi-at-home with a Cloudflare Tunnel, an all-in-one OCI VM with Caddy, a desktop
 single-binary, …) live in [`docs/operate/deployment.md`](docs/operate/deployment.md) and `deploy/`.
 
+For the all-in-one VM there is a one-click path — it creates its own network, resolves the image, and
+boots the Docker stack from cloud-init, so you supply a callsign and an SSH key and nothing else:
+
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
+
 ### Source link (AGPL §13)
 
 Because the hosted app is AGPL, **every public instance must expose its own source** — a visible "Source"
