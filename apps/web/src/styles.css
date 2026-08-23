@@ -4029,6 +4029,16 @@ button.danger:hover {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+/* The privacy invariants are four short promises, so they read as a 2x2 set rather than spilling
+   into the three-across feature grid. */
+.landing-features.landing-invariants {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 620px) {
+  .landing-features.landing-invariants {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 .landing-feature {
   background: var(--surface);
   border: 1px solid var(--line);

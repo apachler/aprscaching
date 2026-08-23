@@ -36,6 +36,14 @@ Every find earns one of three honest tiers ([Core concepts](concepts.md#verifica
 | **B** | App-corroborated | Your device's first-party geolocation matches the cache at log time |
 | **C** | IS-only | A bare APRS-IS beacon — logged, but unverified |
 
+## A map that forgets
+
+Everything an amateur transmits is public, so the honest question is not whether a map can see your beacons —
+it is what the map does with them afterwards. Here: firehose positions are pruned on a retention schedule
+rather than archived, there is no analytics, advertising or third-party tracking of any kind, every instance
+links the exact source commit it runs, and you can self-host the whole thing on your own hardware. Those four
+invariants are spelled out, with the code behind each, under [About](about.md#privacy-by-default).
+
 ## Architecture at a glance
 
 | Piece | What it is |

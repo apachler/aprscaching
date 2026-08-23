@@ -37,9 +37,12 @@ release. Listed in start order — the first two have outside dependencies and l
   (help@parksontheair.com) and to the SOTA Reflector third-party-software category about the spots
   integration, sent before the public launch rather than after it. The non-affiliation lines they
   concern are already live on the landing and about pages.
-- [ ] **Privacy-first APRS-map positioning** *(S)* — landing + docs copy stating the invariants that
-  already ship as the differentiator vs incumbent APRS maps: TTL'd positions, no ads or tracking,
-  the source link, self-hostable. Copy only — every claim in it is already built and true.
+- [x] **Privacy-first APRS-map positioning** — the four invariants that differentiate us from incumbent
+  APRS maps are stated where a visitor and an operator each meet them: a *What we do with your beacons*
+  section on the landing (`apps/web/src/Landing.tsx`), and *Privacy by default* in
+  [`docs/about.md`](docs/about.md), which names the code behind each claim. TTL'd positions (firehose and
+  browser-RF pruned nightly, corroborating fixes kept as a find's evidence), no analytics/advertising/
+  third-party trackers, the AGPL §13 source link, and self-hosting on your own hardware.
 - [x] **Coach-mark tour content** — the find flow, map → cache detail → log a find, in
   `apps/web/src/ui/tourSteps.ts`, with a closing step that differs for a visitor and a signed-in cacher.
   Steps anchor on `data-tour` hooks rather than style classes, so restyling the chrome cannot silently

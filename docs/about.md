@@ -1,5 +1,38 @@
 # About
 
+## Privacy by default
+
+Amateur radio is public by construction: every packet you transmit is heard by anyone with a receiver, and
+aprscaching cannot and does not change that. What it *can* decide is what happens to those packets once they
+reach an instance. Four invariants hold, and each one is code you can read rather than a promise in a policy.
+
+**Positions expire.** The nightly job in `workers/gateway/src/app.ts` prunes firehose and browser-RF positions
+older than seven days, in bounded batches so a backlog never stalls a small box. The raw packet ring is a
+short-lived shack diagnostic and goes after 24 hours (`PACKETS_TTL_HOURS`); the message log, sensor readings,
+port counters and node mheard rows carry their own TTLs (see the
+[Configuration reference](reference/configuration.md)). The one deliberate exception is evidence: a position
+that corroborates a find is kept as long as the find it verifies, because a Tier A find without its
+corroborating fix is just a claim.
+
+**No analytics, no advertising, no third-party trackers.** There is no measurement script, no ad network and
+no external beacon anywhere in the app. The complete list of what an instance stores about you as a *visitor*
+is one session cookie when you sign in, and short-lived per-IP counters for rate limiting. Every instance
+serves that list at `GET /privacy`.
+
+**The source is the receipt.** Because the app is AGPL-3.0, every public instance must expose the source it is
+actually running — a visible link plus `GET /.well-known/source`, which returns the repository, the exact
+commit, the tag and the licence. `GET /source` redirects to that commit's tree. A privacy claim you cannot
+verify is marketing; this one you can diff.
+
+**Or self-host and trust no one.** The same code runs as a desktop single binary, on a Raspberry Pi at home, on
+your own VM, or on Cloudflare's edge — see [Deployment](operate/deployment.md). The RF ingest is *always*
+runnable on your own equipment and is never cloud-only. Run your own instance and the retention schedule, the
+data and the hardware are all yours.
+
+Your own account data is yours to take or destroy: export and erase live under *Settings -> Data*, erasure
+propagates to federation peers as signed tombstones, and owner contact fields are redacted from federated
+records. Profiles are thin and opt-in — there is no name or address directory.
+
 ## Licensing
 
 The monorepo is licensed **by unit** so the reusable parts stay broadly usable while the hosted service stays

@@ -20,6 +20,7 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
             <a href="#how">How it works</a>
             <a href="#tiers">Trust</a>
             <a href="#shack">Shack</a>
+            <a href="#privacy">Privacy</a>
             <a href="#selfhost">Self-host</a>
           </span>
           <button className="primary" onClick={props.onRegister}>
@@ -184,6 +185,49 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
             />
             <figcaption>Decode any frame, field by field</figcaption>
           </figure>
+        </div>
+      </section>
+
+      <section className="landing-section" id="privacy">
+        <p className="landing-eyebrow">What we do with your beacons</p>
+        <h2>An APRS map that forgets</h2>
+        <p className="landing-lede">
+          Your packets are public the moment you key up — that is amateur radio, and no map changes it. What a map does
+          with them <em>afterwards</em> is a choice. Here are ours, in writing.
+        </p>
+        <div className="landing-features landing-invariants">
+          <div className="landing-feature">
+            <span className="landing-glyph">TTL</span>
+            <h3>Positions expire</h3>
+            <p>
+              Firehose tracks are pruned on a retention schedule, not archived forever. The only fixes kept longer are
+              the ones corroborating a find — they are that find&rsquo;s evidence.
+            </p>
+          </div>
+          <div className="landing-feature">
+            <span className="landing-glyph">NO ADS</span>
+            <h3>Nothing is watching you</h3>
+            <p>
+              No analytics, no advertising, no third-party scripts. One session cookie when you sign in, and short-lived
+              per-IP counters for rate limits. That is the entire list.
+            </p>
+          </div>
+          <div className="landing-feature">
+            <span className="landing-glyph">AGPL</span>
+            <h3>The source is the receipt</h3>
+            <p>
+              Every instance links the exact commit it is running, this one included. You never have to take a privacy
+              promise on faith — go and read the code that makes it.
+            </p>
+          </div>
+          <div className="landing-feature">
+            <span className="landing-glyph">SELF</span>
+            <h3>Or trust no one</h3>
+            <p>
+              Run the whole thing yourself: a desktop binary, a Pi at home, your own VM. Your radio, your database, your
+              rules — and the RF side always runs on your equipment anyway.
+            </p>
+          </div>
         </div>
       </section>
 
