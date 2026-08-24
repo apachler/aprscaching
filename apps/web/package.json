@@ -12,7 +12,7 @@
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "maplibre-gl": "^6.3.0",
+    "maplibre-gl": "^6.5.0",
     "uplot": "^1.6.30",
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/aprs": "workspace:*",
