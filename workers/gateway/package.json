@@ -27,10 +27,10 @@
     "@aprscaching/packet": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260814.1",
-    "wrangler": "^4.123.0",
+    "@cloudflare/workers-types": "^5.20260821.1",
+    "wrangler": "^4.125.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "private": true
 }
