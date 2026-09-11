@@ -30,7 +30,7 @@
     "@cloudflare/workers-types": "^5.20260814.1",
     "wrangler": "^4.123.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "private": true
 }
