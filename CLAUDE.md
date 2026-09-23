@@ -51,11 +51,51 @@ Filter APRS-IS server-side; persist selectively; batch ingest POSTs; DO Hibernat
 positions longer for verification); TX off by default + gated.
 
 ## Commands
+Node ≥ 22 (CI uses 24); pnpm is pinned via `packageManager` (use `corepack pnpm` if it isn't on PATH).
+```
 pnpm install
-pnpm --filter @aprscaching/aprs test
-pnpm --filter @aprscaching/gateway dev      # wrangler dev (after d1 create + migrate)
-pnpm --filter @aprscaching/ingest dev       # needs .env (copy .env.example)
-pnpm --filter @aprscaching/web dev
+pnpm run check        # every unit's tsc build + all vitest suites + web typecheck/build — the inner loop
+pnpm run smoke        # boots a throwaway Node/SQLite gateway and runs tools/smoke/{smoke,geofence}.mjs
+pnpm run verify       # check + smoke — the full gate before committing
+pnpm lint && pnpm format:check      # CI also runs `pnpm lint:types` (type-aware, slow)
+
+pnpm --filter @aprscaching/aprs test                          # one package
+pnpm --filter @aprscaching/aprs exec vitest run test/foo.test.ts -t "name"   # one file / one test
+tools/dev/smoke.sh geofence                                   # one smoke suite
+
+pnpm --filter @aprscaching/gateway migrate && pnpm dev:gateway   # wrangler dev on a local D1
+pnpm --filter @aprscaching/node-gateway dev                      # same app on Node + SQLite
+pnpm dev:ingest       # needs .env (copy .env.example)
+pnpm dev:web
+```
+`apps/web` has no vitest suite; its `test` is two guard scripts (no emoji, tour anchors resolve) and
+its real check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
+instances and runs only in CI — see `.github/workflows/ci.yml` for the exact env it wants.
+
+## Architecture: one gateway, three runtimes
+- `workers/gateway/src/app.ts` exports a runtime-neutral `handle()` (plus `runScheduled` /
+  `runFrequentSync`); routing is the `p === "/…"` table plus regex segment routes in that file. Each
+  feature is one module beside it (`verify.ts`, `federation*.ts`, `webauthn.ts`, `ingest.ts`, …).
+- `servers/node` and `servers/bun` import that same app and supply the Cloudflare bindings
+  themselves: a D1-compatible shim over better-sqlite3 / `bun:sqlite` (`d1.ts`), an in-process
+  `Rooms` for the `RegionRoom` Durable Object (live WebSocket fan-out), filesystem media for R2, and
+  their own `migrate`. Fix behaviour in `workers/gateway`, never in one runtime's shim.
+- The schema lives once in `db/migrations/*.sql`; wrangler applies it to D1
+  (`migrations_dir = "../../db/migrations"`) and the Node/Bun servers apply it at boot.
+- CI proves parity by running the same `tools/smoke/*` suites against all three runtimes.
+- Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested IGate,
+  and writes need a shared `INGEST_SECRET` on both gateway and client.
+
+## Git & dependencies
+- Develop on `dev`; `main` is the release branch (release-please runs on pushes to `main`, and
+  `v*` tags drive the desktop and OCI-stack release workflows).
+- Commits are Conventional Commits (they feed release-please and `CHANGELOG.md`) and DCO signed-off
+  (`git commit -s`); the DCO check runs on every PR.
+- `pnpm-workspace.yaml` sets `minimumReleaseAge: 720`: a package version younger than 12 h fails
+  `pnpm install --frozen-lockfile`. A fresh Dependabot PR failing only at install just needs a re-run.
+- Dependency PRs that each touch `pnpm-lock.yaml` must be merged one at a time, each rebased onto the
+  current `dev` first — GitHub merges the lockfile textually and can emit duplicate keys
+  (`ERR_PNPM_BROKEN_LOCKFILE`) even while reporting the PR as clean.
 
 ## Cross-cutting invariants (hold these everywhere)
 - **Identity, not call strings.** Leaderboards rank by callsign with profile aggregates per person;
