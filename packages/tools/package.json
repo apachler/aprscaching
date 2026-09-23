@@ -13,7 +13,7 @@
     "@aprscaching/packet": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   },
   "repository": {
     "type": "git",
