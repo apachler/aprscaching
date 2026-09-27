@@ -23,9 +23,16 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 | **AGWPE** | `AGWPE_HOST` (+ port, radio-port) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO); raw monitor in, keying out. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers become APRS lines. |
 | **Meshtastic** | `MESH_HOST` (+ `MESH_PORT`, 1884) | Reads newline-delimited JSON over TCP — a node's MQTT JSON output served on a TCP port, e.g. `socat TCP-LISTEN:1884,reuseaddr,fork EXEC:"mosquitto_sub -h <broker> -t 'msh/+/2/json/#' -F '%p'"` — and maps mesh positions to APRS. The native Meshtastic protobuf decoder (`FromRadio` → position / text / node-info) drives the browser-direct Web Serial path. |
+| **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_PORT`, 1799; `MESHCOM_BIND`) | Listens for a MeshCom node's external UDP JSON (enable it on the node with `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Datagrams from any address other than `MESHCOM_NODE` are dropped, and a frame the node hears both over LoRa and from the MeshCom server is forwarded once. RX-only. Keep the node and the box on the same LAN — the interface has no authentication, so never point `--extudpip` across the internet. |
 | **TAK / CoT in** | `TAK_COT_PORT` | A UDP listener that parses inbound Cursor-on-Target events into APRS positions. |
 | **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it's an RX-only listener; with `AXUDP_PEERS` it's a bidirectional port carrying NET/ROM crosslinks and FBB forwarding over the internet leg. |
 | **AXIP** | `AXIP_ENABLE` or `AXIP_PEERS` | AX.25 in raw IP protocol 93 (JNOS/BPQ AXIP). Needs the optional `raw-socket` package and `CAP_NET_RAW`; absent, it logs and stays inert. RX-only with `AXIP_ENABLE`; bidirectional (RX + TX) with `AXIP_PEERS`. |
+
+!!! warning "MeshCom frames are always Tier C"
+    A MeshCom node's external interface is unauthenticated, and a frame it reports may have reached it from
+    the MeshCom server over the internet (`src_type: udp`) rather than over the air. The listener forwards
+    every frame as `heardVia: aprs_is` on the `meshcom` port, so none can reach Tier A. The reasoning is in
+    [MeshCom integration](../design/meshcom.md).
 
 !!! warning "Tunnelled frames are always Tier C"
     AXUDP and AXIP frames are forwarded as `heardVia: aprs_is` on their own port, so the gateway's provenance

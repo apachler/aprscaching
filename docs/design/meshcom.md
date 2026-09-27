@@ -1,10 +1,11 @@
 # MeshCom integration (design)
 
-!!! note "Design proposal"
-    This page is a design for a transport that is not built. Nothing on it is configurable today; the
-    work is tracked in [`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md). Once a
-    piece lands, its operator-facing description moves to [RF ingest & transports](../operate/rf-ingest.md)
-    and this page shrinks to the reasoning behind it.
+!!! note "Built and planned"
+    The receive-only listener is built: `packages/aprs/src/meshcom.ts` decodes the datagrams,
+    `apps/ingest/src/meshcom.ts` listens for them, and its configuration is under
+    [RF ingest & transports](../operate/rf-ingest.md). Telemetry, find logging over the mesh, transmit and a
+    browser-direct path are design only, tracked in
+    [`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
 
 ## What MeshCom is
 
@@ -34,12 +35,15 @@ is the integration point. A node joined to Wi-Fi and configured with `--extudpip
 
 ```json
 {"src_type":"lora","type":"msg","src":"DH1FR-1","dst":"DH1FR-2","msg":"Hello{034","msg_id":"5DFC7187","rssi":-95,"snr":12}
-{"src_type":"lora","type":"pos","src":"OE1KBC-12","lat":48.2,"lat_dir":"N","long":16.37,"long_dir":"E","aprs_symbol":"#","alt":180,"batt":87,"hw_id":3}
-{"src_type":"node","type":"tele","src":"OE1KBC-12","temp1":9.9,"hum":61.0}
+{"src_type":"lora","type":"pos","src":"9V1LH-1,OE1KBC-12","msg":"","lat":1.3773,"lat_dir":"N","long":103.942,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":4,"msg_id":"AE48D54D","alt":161,"batt":5,"firmware":17,"fw_sub":"p","rssi":-95,"snr":12}
+{"src_type":"lora","type":"tele","src":"9V1LH-1,OE1KBC-12","batt":5,"temp1":28.9,"temp2":0,"hum":40.2,"qfe":1004.9,"qnh":1005.4}
 ```
 
 - A client registers with `{"type":"info","src":"<CALL-SSID>"}` and sends with
   `{"type":"msg","dst":"<call | group | *>","msg":"<text>"}` (UTF-8, at most 150 characters).
+- `lat`/`long` are unsigned degrees (truncated to four decimals) with the hemisphere in
+  `lat_dir`/`long_dir`. `alt` holds the raw `/A=` digits, which are feet or metres depending on a
+  per-node setting, so the listener does not forward it.
 - `src_type` names where the node got the datagram: `lora` (heard on air), `node` (the node itself),
   `udp` (relayed from the MeshCom server over the internet).
 - The trailing `{034` on a message is the APRS message number, used for acknowledgement.
@@ -62,22 +66,23 @@ LAN, not through a TNC.
 
 ### Where each piece lands
 
-| MeshCom piece | Home in the repo |
-|---|---|
-| JSON → `Packet` decode | `packages/aprs/src/meshcom.ts` — a pure `parseMeshcomUdp()` beside `meshtastic.ts`, with unit tests from captured datagrams |
-| UDP listener | `apps/ingest/src/meshcom.ts` — a `dgram` listener shaped like `cotlisten.ts` (rebind on `EADDRINUSE`), registered env-gated in `apps/ingest/src/index.ts` |
-| Configuration | `MESHCOM_PORT` (default 1799), `MESHCOM_BIND`, `MESHCOM_NODE` (the node's IP; datagrams from any other source are dropped), `MESHCOM_CALL` (the `info` registration call) in `.env.example` and `docs/reference/configuration.md` |
-| Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`), mapped in `transportOf()` (`workers/gateway/src/provenance.ts`) |
-| Positions | `pos` → `kind:"position"` with `parsed.lat/lon`, which `fixOf()` in `workers/gateway/src/ingest.ts` already consumes → live map, MHeard, `GET /api/ports` |
-| Messages | `msg` addressed to the instance callsign → the Messages surface; `msg` to a group or `*` → the port monitor only |
-| Telemetry | `tele` → the observational weather path; never touches the A/B/C find tiers |
-| Operator docs | A **MeshCom** row in the transports table of [RF ingest & transports](../operate/rf-ingest.md), a row in the [specification registry](../reference/specs.md) |
+| MeshCom piece | Home in the repo | State |
+|---|---|---|
+| JSON → APRS frame | `parseMeshcomUdp()` in `packages/aprs/src/meshcom.ts`: a position becomes an uncompressed `!` position; a direct message an APRS `:ADDRESSEE:text{nnn` message; group and `*` text an APRS user-defined `{MG` packet, which the decoder classifies as `other` so it stays out of the message log | built |
+| UDP listener | `MeshcomListener` in `apps/ingest/src/meshcom.ts`: pins the source address to `MESHCOM_NODE`, forwards one copy per frame id within ten minutes (a node reports the same frame from LoRa and from the server), registered in `apps/ingest/src/index.ts` | built |
+| Configuration | `MESHCOM_NODE` (enables the listener), `MESHCOM_PORT` (1799), `MESHCOM_BIND` | built |
+| Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`). Stored positions carry no port, so `transportOf()` in `workers/gateway/src/provenance.ts` does not distinguish it; trust does not depend on it either way | built |
+| Positions | `kind:"position"` with `parsed.lat/lon` → live map, MHeard, `GET /api/ports` | built |
+| Messages | a direct message → the messages log (`shack.ts`); the Messages surface shows it | built |
+| Telemetry | `tele` → the observational weather path (`sensor_readings`); never touches the A/B/C find tiers. The firmware reports an absent sensor as `0`, so the mapping needs a per-field presence rule | planned |
 
 ### Callsigns and paths
 
 `src` is a source path. The origin is its first element; later elements are the relaying nodes and go
-into `Packet.path`. The callsign parser accepts SSIDs outside the AX.25 0–15 range, as APRS-IS already
-does for TNC2 text.
+into `Packet.path` (the firmware builds it that way: the source call ends at the first comma). The
+callsign check accepts SSIDs outside the AX.25 0–15 range, as APRS-IS does for TNC2 text, and requires
+both a letter and a digit in the base call, which separates calls from group numbers and from the
+firmware's internal non-call sources.
 
 ## Trust
 
@@ -101,8 +106,10 @@ standing rule that transport is not trust:
 - Port 1799 is never exposed to the internet. Pointing `--extudpip` at a cloud gateway would couple RF
   ingest to a cloud host and send unauthenticated traffic across the internet; the operator docs say so
   explicitly.
-- Every field is length-bounded and validated with zod before it becomes a `Packet`; a malformed
-  datagram is dropped and counted, never thrown.
+- Datagrams over 1 KiB are refused before parsing; every field is type- and range-checked, text is
+  collapsed to one line and length-bounded, and a malformed datagram is dropped, never thrown.
+- The listener never transmits and never registers with the node, so it cannot change the node's
+  state.
 
 ## Locality
 
@@ -141,10 +148,8 @@ nodes, messages, telemetry, and signal reports from the operator's own node.
 - **Serial and BLE protocols.** Whether the node's serial console emits machine-readable frames, and
   what the BLE service the phone apps use looks like. Both are answered from the MIT firmware source
   before a browser-direct path is designed.
-- **`src` path order.** Confirm against captured traffic that the origin is the first element and
-  relays follow.
-- **Acknowledgements.** How the node reports an ACK for a message sent over UDP (a `type` value, or an
-  ack `msg`), so the Messages surface can show delivery.
+- **Acknowledgements.** How the node reports an ACK for a message sent over UDP, so the Messages
+  surface can show delivery once transmit exists.
 - **Gateway server protocol.** Whether an instance should ever talk to the MeshCom servers directly;
   the default answer is no — the local node is the integration point.
 - **Reference clients.** [MeshcomWebDesk](https://github.com/DH1FR/MeshcomWebDesk) and
