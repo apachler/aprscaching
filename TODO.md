@@ -431,6 +431,17 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — native MQTT, BLE, and serial with
   protobuf decode, alongside the newline-JSON TCP bridge the box speaks today (the browser path already
   does Meshtastic over Web Serial).
+- [ ] **MeshCom transport** *(P2 · M)* — the LoRa ham mesh (433.175 MHz, APRS-framed, real
+  callsigns) through a node's external UDP JSON interface (port 1799); design and trust reasoning in
+  [`docs/design/meshcom.md`](docs/design/meshcom.md). In order: a pure `parseMeshcomUdp()` in
+  `packages/aprs` with captured-datagram tests; an RX-only `dgram` listener in `apps/ingest` (LAN-bound,
+  source-IP-pinned to `MESHCOM_NODE`) forwarding `heardVia: aprs_is` on port `meshcom` so every packet
+  stays Tier C; `"meshcom"` in the `Transport` enum and `transportOf()`; the transports-table and
+  spec-registry rows. Then direct messages to the instance call into Messages, find logging by
+  `FOUND <cache-id>` message, and replies / opt-in rate-limited group announcements gated on callsign
+  control-verification. A browser-direct Web Serial/BLE path waits on reading the node's serial and
+  BLE protocols from the MIT firmware; Tier A for on-air (`src_type: lora`) frames at an attested site
+  is a separate decision taken with real traffic.
 - [ ] **Bring-your-own-ingest** *(P2 · M)* — a user binds their local ingest box to a cloud instance
   they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
   signed-batch path already authenticates one operator, own-traffic-only), extended with per-user
