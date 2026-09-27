@@ -3,6 +3,7 @@ import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
 import { CotListener } from "./cotlisten.js";
 import { MeshtasticReader } from "./mesh.js";
+import { MeshcomListener } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
@@ -163,6 +164,14 @@ if (env.TAK_COT_PORT) {
 if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();
   console.log("[mesh] enabled");
+}
+// MeshCom — RX-only listener for a node's external UDP interface; MESHCOM_NODE pins the source IP.
+if (env.MESHCOM_NODE) {
+  new MeshcomListener(
+    { node: env.MESHCOM_NODE, port: portEnv("MESHCOM_PORT", 1799), bind: env.MESHCOM_BIND },
+    enqueue,
+  ).start();
+  console.log("[meshcom] enabled");
 }
 // AGWPE TNC — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
 if (env.AGWPE_HOST) {
