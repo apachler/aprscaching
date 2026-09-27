@@ -81,4 +81,6 @@ nav:
       - Testing & verification: reference/testing.md
       - Specification registry: reference/specs.md
       - Data model: reference/data-model.md
+  - Design notes:
+      - MeshCom integration: design/meshcom.md
   - About: about.md
