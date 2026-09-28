@@ -15,10 +15,13 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
     command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
-    # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESH_*, …).
+    # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESHCOM_*, …).
     env_file:
       - path: .env
         required: false
+    # MeshCom nodes send UDP 1799 to this host. Publish it on the host's LAN address only, and set
+    # MESHCOM_BIND=0.0.0.0 in .env (inside the container that is the container's own interface).
+    # ports: ["192.168.1.10:1799:1799/udp"]
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}

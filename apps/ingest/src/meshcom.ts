@@ -276,7 +276,7 @@ export class MeshcomListener {
     }
     if (bind === "0.0.0.0")
       this.log.warn(
-        "[meshcom] bound to all interfaces — the ExtUDP interface is unauthenticated; bind to the LAN address on any host reachable from the internet",
+        "[meshcom] bound to all interfaces — the ExtUDP interface is unauthenticated: on a host reachable from the internet bind the LAN address instead; in a container publish 1799/udp on the host's LAN address only",
       );
 
     const s = dgram.createSocket("udp4");
