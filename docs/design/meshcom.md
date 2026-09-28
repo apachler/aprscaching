@@ -3,8 +3,8 @@
 !!! note "Built and planned"
     The receive side is built: the pure core in `packages/aprs/src/meshcom/` decodes the datagrams,
     `apps/ingest/src/meshcom.ts` listens for them, and its configuration is under
-    [RF ingest & transports](../operate/rf-ingest.md). Telemetry, find logging over the mesh, transmit and a
-    browser-direct path are design only, tracked in
+    [RF ingest & transports](../operate/rf-ingest.md). Telemetry, find logging over the mesh, the features that
+    transmit, and a browser-direct path are design only, tracked in
     [`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
 
 ## What MeshCom is
@@ -126,17 +126,25 @@ protocols, which are listed under open questions.
 
 ## Transmit
 
-Sending is off by default and gated on callsign control-verification, like every other transmit path.
-On top of that gate:
+`MeshcomSender` (`apps/ingest/src/meshcom-send.ts`) is the one transmit path. It is off unless enabled
+with the operator's callsign, and that call must match the call the target node transmits under — the
+node sends every message as itself, so software can only transmit under the licensed operator's call.
+It sends direct messages to a callsign only (the encoder refuses groups and `*`), only to configured
+node addresses, through a token bucket (one per minute, burst three, by default) because an SF11 /
+250 kHz frame is long on air and the channel is shared. Every attempt is audited — time, node,
+destination, byte length, requesting feature and outcome, never the text. ExtUDP has no
+acknowledgement, so the best outcome is *handed to node*; the node reports its own refusals
+(`QRS`/`QRT`) back through the listener.
 
-- **Replies** — the Messages surface answers a direct message through `{"type":"msg","dst":…}` on the
-  same socket.
-- **Group announcements** (a new cache near the group's region) are opt-in per group and rate-limited.
-  An SF11 / 250 kHz frame is long on air and the channel is shared, so the default is no group traffic.
-- **Logging a find over the mesh** — a direct message such as `FOUND <cache-id>` to the instance
-  callsign logs a find without a web session, the MeshCom counterpart of the over-APRS logging path. A
-  standalone T-Deck makes this a phone-free field workflow. The find is attributed through the account
-  that owns the verified callsign, never the bare call string.
+No feature calls the sender yet: the gateway has no channel to ask an ingest box to transmit. The
+features that will use it:
+
+- **Replies** — the Messages surface answering a direct message.
+- **Find confirmations** — acknowledging a find logged over the mesh (a `FOUND <cache-id>` direct message
+  to the instance call, the MeshCom counterpart of the over-APRS logging path; attributed through the
+  account that owns the verified callsign, never the bare call string).
+
+Group announcements stay out of scope: software never originates group or broadcast traffic.
 
 ## Positions that already arrive
 

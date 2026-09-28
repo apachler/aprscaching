@@ -431,15 +431,21 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — native MQTT, BLE, and serial with
   protobuf decode, alongside the newline-JSON TCP bridge the box speaks today (the browser path already
   does Meshtastic over Web Serial).
-- [ ] **MeshCom transport** *(P2 · M)* — the LoRa ham mesh (433.175 MHz, APRS-framed, real
-  callsigns) through a node's external UDP JSON interface (port 1799); design and trust reasoning in
-  [`docs/design/meshcom.md`](docs/design/meshcom.md). The RX-only listener is in (`MESHCOM_NODE`;
-  positions, direct messages, group text to the port monitor; every frame Tier C). Remaining, in order:
-  `tele` → the observational weather path with a per-field presence rule (the firmware reports an absent
-  sensor as `0`); find logging by a `FOUND <cache-id>` direct message to the instance call; replies and
-  opt-in, rate-limited group announcements gated on callsign control-verification. A browser-direct Web
-  Serial/BLE path waits on reading the node's serial and BLE protocols from the MIT firmware; Tier A for
-  on-air (`src_type: lora`) frames at an attested site is a separate decision taken with real traffic.
+- [ ] **MeshCom transport** *(P2 · M)* — the LoRa ham mesh through a node's ExtUDP JSON interface
+  ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md)). In: the pure core
+  (`packages/aprs/src/meshcom/`, conformance on Node/Bun/workerd), the RX listener (allowlist, rate cap,
+  dedup with RF upgrade, fan-out, direct LoRa hearings attestable via `FIRST_PARTY_SITES`), and the
+  opt-in `MeshcomSender`. Remaining, in order:
+  - a gateway → ingest transmit channel so features can request a send (the sender has no caller);
+  - find logging by a `FOUND <cache-id>` direct message to the instance call, with a confirmation reply;
+  - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
+    absent sensor as `0`);
+  - a MeshCom bot command set (e.g. `NEAR` → nearest caches) on the same channel;
+  - group messages, opt-in per group and rate-limited, if operators ask for them;
+  - `rssi`/`snr` as a presence-plausibility signal alongside a direct hearing;
+  - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
+  - a browser-direct Web Serial/BLE path, after reading the node's serial and BLE protocols from the
+    MIT firmware.
 - [ ] **Bring-your-own-ingest** *(P2 · M)* — a user binds their local ingest box to a cloud instance
   they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
   signed-batch path already authenticates one operator, own-traffic-only), extended with per-user
