@@ -99,7 +99,7 @@ only when its variable is present.
 |---|---|---|
 | `INGEST_URL` | Gateway ingest endpoint to POST batches to | `http://127.0.0.1:8787/ingest` |
 | `INGEST_SECRET` | Sent as `x-ingest-secret` | `change-me` |
-| `BATCH_MS` | Batch flush interval | `1500` |
+| `BATCH_MS` | Batch flush interval | `1500` (`2000` in the Docker stack) |
 | `INGEST_SPOOL_MAX` | Undelivered-packet spool bound (drop-oldest) during a gateway outage | `5000` |
 | `APRSIS_HOST` / `APRSIS_PORT` | APRS-IS server | `rotate.aprs2.net` / `14580` |
 | `APRSIS_CALLSIGN` / `APRSIS_PASSCODE` / `APRSIS_FILTER` | IS login + server-side filter | `N0CALL` / `-1` / `r/47.07/15.42/300` |
@@ -121,6 +121,21 @@ only when its variable is present.
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
+
+Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the
+top of the checkout. Under Docker, `deploy/.env` reaches the container through the compose file; under
+systemd, through `EnvironmentFile`. Put comments on their own lines — systemd does not strip a trailing
+`# comment` from a value.
+
+## Desktop app
+
+The single-file desktop build (`deploy/desktop/`) runs the gateway and the web app together.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `PORT` | Local port for the app | `8787` |
+| `DATA_DIR` | Where the database and media live | `%APPDATA%\aprscaching` · `~/Library/Application Support/aprscaching` · `$XDG_DATA_HOME/aprscaching` (`~/.local/share/aprscaching`) |
+| `WEB_DIST` / `MIGRATIONS_DIR` | Serve the web app / apply migrations from disk instead of the copies built into the binary | built in |
 
 ## Web build
 

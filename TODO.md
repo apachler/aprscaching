@@ -189,7 +189,7 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 - [ ] **Capacitor mobile shell** *(P3 · L)* — reuse the web app in a native iOS/Android wrapper for
   USB-serial / BLE-KISS and background operation. A build/sign/store pipeline, not a headless code core.
-  See [`docs/operate/deployment.md`](docs/operate/deployment.md).
+  The deployment topologies it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).
 
 ## Growth & community (owner-decided slate; keeps the game-first orientation and the open/recognition-only style)
 
@@ -431,11 +431,12 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — native MQTT, BLE, and serial with
   protobuf decode, alongside the newline-JSON TCP bridge the box speaks today (the browser path already
   does Meshtastic over Web Serial).
-- [ ] **MeshCom transport** *(P2 · M)* — the LoRa ham mesh through a node's ExtUDP JSON interface
-  ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md)). In: the pure core
-  (`packages/aprs/src/meshcom/`, conformance on Node/Bun/workerd), the RX listener (allowlist, rate cap,
-  dedup with RF upgrade, fan-out, direct LoRa hearings attestable via `FIRST_PARTY_SITES`), and the
-  opt-in `MeshcomSender`. Remaining, in order:
+- [x] **MeshCom transport** — the LoRa ham mesh through a node's ExtUDP JSON interface
+  ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
+  [operator guide](docs/operate/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on
+  Node/Bun/workerd), the RX listener (allowlist, rate cap, dedup with RF upgrade, fan-out, direct LoRa
+  hearings attestable via `FIRST_PARTY_SITES`), and the opt-in `MeshcomSender`.
+- [ ] **MeshCom follow-ups** *(P2 · M)*, in order:
   - a gateway → ingest transmit channel so features can request a send (the sender has no caller);
   - find logging by a `FOUND <cache-id>` direct message to the instance call, with a confirmation reply;
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
