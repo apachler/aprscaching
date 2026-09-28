@@ -10,6 +10,8 @@ instance's always-on station and are shown only to its operator.
 
 ## The apps
 
+![The Shack app launcher](../assets/shots/shack-launcher-desktop.webp){ width="720" loading=lazy }
+
 | App | What it does | Who |
 |---|---|---|
 | **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over your TNC (USB or Bluetooth). | everyone |

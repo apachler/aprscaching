@@ -15,6 +15,8 @@ Your account is your callsign. There is no username and, if you use a passkey, n
 
 **← different callsign** takes you back to step 2.
 
+![The sign-in panel](../assets/shots/signin-desktop.webp){ width="720" loading=lazy }
+
 ## Verify your callsign
 
 Signing in claims a callsign; **verifying** proves you actually control it. Verification unlocks your place
@@ -48,7 +50,10 @@ even if you later move to another instance.
 ## Settings at a glance
 
 **Settings** (left rail on a computer, **You → Advanced → Settings** on a phone) is grouped; the search box at
-the top filters it.
+the top filters it. Signed out you see only the general groups; after signing in, the account, profile,
+station, radio and notification groups appear as well.
+
+![Settings while signed out](../assets/shots/set-account-desktop.webp){ width="720" loading=lazy }
 
 | Group | What's in it |
 |---|---|

@@ -27,6 +27,8 @@ Everything below happens in your web browser — on your phone or your computer.
 1. **Sign in.** Tap **Sign in** (top right), type your callsign, tap **Continue**. On first visit, tap
    **Create account with a passkey** — your phone or computer stores the key; there is no password. You can
    add an email address for recovery, or use **Email me a link** instead of a passkey.
+
+    ![Sign in with your callsign](assets/shots/signin-mobile.webp){ width="280" loading=lazy }
 2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The
    instance sends an APRS message to your callsign with a six-digit code (`aprscaching code 123456`, from
    `APRSCG`). Read it on your radio — or, if no IGate near you passes messages to RF, on
@@ -35,6 +37,8 @@ Everything below happens in your web browser — on your phone or your computer.
 3. **Find a cache.** Browse the map, or tap **Nearby** for the closest caches. Tap one to open it: you see
    its description, difficulty and terrain, the hint, and **Navigate** to hand the coordinates to your maps
    app.
+
+    ![A cache sheet on a phone](assets/shots/detail-mobile.webp){ width="280" loading=lazy }
 4. **Log it.** At the spot, tap **✓ Log a find**. Allow location access when your browser asks — that is
    how the app confirms you were there. The result shows how well the find is verified (see below).
 5. **Hide your own.** Tap **+ Hide a cache** (or **Hide** on a phone), click the map where it is, give it a

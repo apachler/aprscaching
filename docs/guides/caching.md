@@ -15,11 +15,14 @@ walks through the app. New here? Start with [Start here](../start-here.md) and [
 
 The **Manual** icon in the top bar opens this manual.
 
+![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }
+
 ## The map
 
 - **Search & filter** (the funnel icon): search by code or title, filter by **Cache type**, include
   **unvetted network data** from other instances, and turn on **Live layers** — live APRS stations and
   POTA/SOTA activations.
+  ![Search & filter](../assets/shots/filter-desktop.webp){ width="720" loading=lazy }
 - **Basemap**: **Map**, **Topo** or **Sat**.
 - **Map tools**: grid-square overlay, range rings, a ruler (distance and bearing), the day/night line, and
   the bearing from your home locator to the selected cache.
@@ -49,6 +52,8 @@ Tap a marker on the map, a row in **Nearby**, or a search result. The cache shee
   (Google, Apple or OpenStreetMap);
 - **Copy link** and **▦ QR** to share it;
 - the **Logbook** of everyone's finds, DNFs and notes.
+
+![A cache sheet on a computer](../assets/shots/detail-desktop.webp){ width="720" loading=lazy }
 
 ## Log a find
 

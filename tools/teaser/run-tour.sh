@@ -67,8 +67,12 @@ done
 
 echo "==> tour frames in $OUT: $(ls "$OUT"/[123]-*.png 2>/dev/null | wc -l)"
 
-echo "==> assemble the captioned teaser video"
-bash "$HERE/build-video.sh" || { echo "   (compose hiccup — retrying once)"; sleep 2; bash "$HERE/build-video.sh"; }
+if [ "${SKIP_VIDEO:-0}" = "1" ]; then
+  echo "==> SKIP_VIDEO=1 — frames only"
+else
+  echo "==> assemble the captioned teaser video"
+  bash "$HERE/build-video.sh" || { echo "   (compose hiccup — retrying once)"; sleep 2; bash "$HERE/build-video.sh"; }
+fi
 
 # ---- problem summary: aggregate the per-viewport problems-*.json into one findable report ----
 # A full run must end with an unmissable list of what (if anything) failed, plus per-viewport exit
@@ -91,7 +95,7 @@ for entry in "${VIEW_RC[@]}"; do
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 4 ]; then echo "   ✗ viewport '$v' crashed (exit $rc) — its tour did not finish"; CRASHED=1; fi
 done
 
-echo "==> teaser complete: $OUT/aprscaching-ui-teaser.webm"
+[ "${SKIP_VIDEO:-0}" = "1" ] || echo "==> teaser complete: $OUT/aprscaching-ui-teaser.webm"
 if [ "$PROBLEMS" -ne 0 ] || [ "$CRASHED" -ne 0 ]; then
   echo "==> FINISHED WITH PROBLEMS (video built, but some steps were skipped — see summary above)"
   exit 1

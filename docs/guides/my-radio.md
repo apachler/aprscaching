@@ -70,6 +70,8 @@ transmit.
    *Yaesu classic (FT-817/857/897)* — and the **Baud** rate your radio's menu is set to.
 2. **Connect rig**, then tap **144.800 (EU APRS)** / **144.390 (NA APRS)**, or type a frequency and **Tune**.
 
+![Rig control after Connect rig](../assets/shots/rig-desktop.webp){ width="720" loading=lazy }
+
 Rig control only sets the frequency; it never keys the transmitter.
 
 ## Troubleshooting
