@@ -91,6 +91,8 @@ instances and runs only in CI — see `.github/workflows/ci.yml` for the exact e
   → releases go **`dev` → `main` by PR** (a merge, not a squash). Never push to `dev` or `main` directly,
   and never base a feature branch on another feature branch: when work depends on an unmerged PR, wait
   for it to land, then rebase onto the new `dev` (`git rebase --onto origin/dev <old-base> <branch>`).
+- A merged feature branch is deleted, on GitHub and locally; the repository deletes head branches on
+  merge by default. Follow-up work starts a new branch from `dev`.
 - The squash commit takes the **PR title**, so PR titles are Conventional Commits too. `main` is the
   release branch: release-please runs on pushes to `main`, and `v*` tags drive the desktop and
   OCI-stack release workflows.

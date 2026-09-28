@@ -93,6 +93,8 @@ docs: document the AGPL source-link obligation for self-hosters
    write it as a Conventional Commit (`feat(ingest): …`, `fix(web): …`).
 3. Releases: a pull request from `dev` into `main`, merged (not squashed). release-please then opens the
    release PR on `main`.
+4. After a pull request merges, its feature branch is deleted (GitHub does this on merge); delete your
+   local copy too, and start follow-up work on a fresh branch from `dev`.
 
 Keep one concern per PR. If your change needs another PR that hasn't merged, wait for it, then rebase your
 branch onto the updated `dev` rather than basing it on the other branch.
