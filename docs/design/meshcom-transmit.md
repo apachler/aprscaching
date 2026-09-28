@@ -1,8 +1,8 @@
 # MeshCom transmit channel (design)
 
-!!! note "Proposal for review"
-    Nothing on this page is built. It proposes how features on the gateway ask an operator's ingest box to
-    send a MeshCom message through `MeshcomSender`, and lists the decisions it needs.
+!!! note "Agreed design"
+    Nothing on this page is built. It is the agreed design for how features on the gateway ask an operator's
+    ingest box to send a MeshCom message through `MeshcomSender`.
 
 ## The problem
 
@@ -61,15 +61,15 @@ Queuing MeshCom messages in `aprs_outbox` with `target = 'meshcom'` would let an
 any box with the secret transmit under that box's node call — the node owner would not have authorised the
 individual message. It would also route to "a" box rather than the box whose node heard the conversation.
 
-## Decisions needed
+## Decisions
 
-| # | Question | Recommendation |
+| # | Question | Decision |
 |---|---|---|
-| 1 | Build the `box_commands` poller on the box (also completing Remote box), or a MeshCom-only endpoint? | Build the poller — one channel for every owner→box command. |
-| 2 | Find confirmations over MeshCom: off by default, per-owner opt-in? | Yes, off by default. |
-| 3 | Confirmation text fixed, or owner-editable? | Fixed; fewer ways to put unexpected text on air. |
-| 4 | Rate limits: box-side token bucket only, or also per destination on the gateway? | Both: the box bucket (1/min, burst 3) and at most one confirmation per destination per 10 minutes. |
-| 5 | Should the Remote box docs say the box side is missing until this lands? | Yes — today the docs describe Remote box as working. |
+| 1 | Build the `box_commands` poller on the box (also completing Remote box), or a MeshCom-only endpoint? | The general poller — one channel for every owner→box command. |
+| 2 | Find confirmations over MeshCom? | Off by default; the node owner opts in. |
+| 3 | Confirmation text? | Fixed, not editable. |
+| 4 | Rate limits? | Both: the box's token bucket (1/min, burst 3) and, on the gateway, at most one confirmation per destination per 10 minutes. |
+| 5 | Remote box docs? | The poller is built next, which makes the documented Remote box surface work. |
 
 ## Tests the implementation needs
 
