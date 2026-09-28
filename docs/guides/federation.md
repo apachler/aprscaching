@@ -63,7 +63,9 @@ reachability-only amateur-network endpoint).
 
 The network effect: when a find can't reach Tier A locally, the instance asks its **trusted** peers whether
 they independently heard the callsign on RF near the cache, gated by an IGate that isn't theirs. A
-configurable **quorum** of distinct instances must agree before the find is promoted to Tier A. Queries and
+configurable **quorum** of distinct instances must agree before the find is promoted to Tier A. A peer answers
+only from positions heard through a receiving site it attests itself (its own `FIRST_PARTY_SITES`), the same
+rule as its local Tier A; an instance that attests no site never vouches for anyone. Queries and
 responses are grid-snapped, time-bucketed, and distance-bucketed so corroboration is never a location oracle,
 and the exact IGate is revealed only if both peers opt in (`FED_REVEAL_IGATE`).
 

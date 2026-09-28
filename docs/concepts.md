@@ -25,7 +25,9 @@ Tier A requires independent *RF* evidence. Each instance sets a **minimum accept
 
 When a find can't reach Tier A locally, the instance can ask its federation peers: *"did you independently
 hear this callsign on RF near here, gated by an IGate that isn't ours?"* A configurable **quorum** of
-*distinct* instances must agree before the find is promoted. A peer that denies a corroboration another peer
+*distinct* instances must agree before the find is promoted. Each peer answers only from positions heard
+through a receiving site it attests itself, so a peer vouches no more widely than its own Tier A reaches. A
+peer that denies a corroboration another peer
 confirmed feeds a **contradiction signal** that lowers its reputation and blocks auto-promotion. Requests and
 responses are coarsened (grid-snapped, time-bucketed, distance-bucketed) so corroboration is never a
 location oracle.
