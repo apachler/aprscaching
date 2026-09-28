@@ -100,6 +100,11 @@ env vars at it. From inside the container the host is not `localhost`: use the h
 For AXUDP no special privileges are needed. The AXIP transport (raw IP protocol 93) needs
 `CAP_NET_RAW`; add `cap_add: [NET_RAW]` to the ingest service if you use it.
 
+**MeshCom** nodes send UDP to port 1799 on the box, so the ingest container has to receive it. In
+`docker-compose.yml` (or `compose.ingest-only.yml`) un-comment the `ports:` line on the ingest service and
+put your host's LAN address in it, then set `MESHCOM_BIND=0.0.0.0` in `.env` — inside the container that
+is only the container's own interface, and the published port exposes it on your LAN address alone. See
+[MeshCom](meshcom.md).
 
 ## Upgrades, backups, logs
 

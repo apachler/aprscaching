@@ -3,6 +3,7 @@ import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
 import { CotListener } from "./cotlisten.js";
 import { MeshtasticReader } from "./mesh.js";
+import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
@@ -42,9 +43,11 @@ const MAX_SPOOL = numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }); // bounded (drop
 // host shutdown loses as few heard packets as possible, then exit. Registered after the buffers
 // exist so a signal during the async transport setup below can never hit an undeclared binding.
 let shuttingDown = false;
+const onShutdown: (() => void)[] = []; // transports that release a socket before exit
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  for (const stop of onShutdown) stop();
   console.log(`[ingest] ${signal} — flushing pending packets…`);
   const packets = spool.concat(batch);
   batch = [];
@@ -163,6 +166,23 @@ if (env.TAK_COT_PORT) {
 if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();
   console.log("[mesh] enabled");
+}
+// MeshCom — RX-only listener for nodes' ExtUDP interface. MESHCOM_NODE lists the allowed node
+// addresses, each optionally with the node's callsign (`192.168.1.50=OE8APR-12`).
+if (env.MESHCOM_NODE) {
+  const meshcom = new MeshcomListener(
+    {
+      nodes: parseMeshcomNodes(env.MESHCOM_NODE),
+      port: portEnv("MESHCOM_PORT", 1799),
+      bind: env.MESHCOM_BIND || undefined,
+      fanout: parseMeshcomFanout(env.MESHCOM_FANOUT),
+      ratePerSec: numEnv("MESHCOM_RATE", 20, { min: 1 }),
+      staleMs: numEnv("MESHCOM_STALE_MIN", 30, { min: 1 }) * 60_000,
+    },
+    enqueue,
+  );
+  meshcom.start();
+  onShutdown.push(() => meshcom.stop());
 }
 // AGWPE TNC — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
 if (env.AGWPE_HOST) {

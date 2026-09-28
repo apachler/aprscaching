@@ -1,0 +1,8 @@
+{
+  "description": "The firmware-internal HOME source is not a callsign.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"HOME\",\"dst\":\"OE8APR-12\",\"msg\":\"Hello{034\",\"msg_id\":\"5DFC7187\",\"firmware\":35,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": false,
+    "reason": "bad-src"
+  }
+}

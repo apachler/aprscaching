@@ -69,6 +69,7 @@ nav:
       - Your first hour as sysop: operate/first-hour.md
       - Running in Docker: operate/docker.md
       - RF ingest & transports: operate/rf-ingest.md
+      - MeshCom: operate/meshcom.md
       - Packet BBS & node: operate/packet.md
       - Rig control & weather: operate/rig-weather.md
       - Amateur-radio compliance: operate/rf-regulatory.md
@@ -80,5 +81,8 @@ nav:
       - Command-line tools: reference/cli.md
       - Testing & verification: reference/testing.md
       - Specification registry: reference/specs.md
+      - MeshCom ExtUDP protocol: reference/meshcom-extudp.md
       - Data model: reference/data-model.md
+  - Design notes:
+      - MeshCom integration: design/meshcom.md
   - About: about.md

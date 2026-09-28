@@ -1,0 +1,8 @@
+{
+  "description": "A JSON array is not a datagram.",
+  "datagram": "[1,2,3]",
+  "expect": {
+    "ok": false,
+    "reason": "not-object"
+  }
+}

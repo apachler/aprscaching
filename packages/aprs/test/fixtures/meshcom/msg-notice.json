@@ -1,0 +1,12 @@
+{
+  "description": "A back-pressure notice: the node reports it as src_type lora from its own call with rssi/snr 0, although it was never on air.",
+  "receiver": "OE8APR-12",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE8APR-12\",\"dst\":\"DH1FR-1\",\"msg\":\"QRT NOT SENT - hello\",\"msg_id\":\"00000A01\",\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":0,\"snr\":0}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "srcType": "lora",
+    "rf": false,
+    "direct": false
+  }
+}
