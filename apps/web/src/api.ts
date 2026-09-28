@@ -255,7 +255,7 @@ export interface RadioCommandRow {
   cacheCode?: string | null;
   body?: string | null;
   trusted: boolean;
-  status: "logged" | "pending" | "rejected" | "help" | "discarded" | "expired";
+  status: "logged" | "pending" | "confirming" | "rejected" | "help" | "discarded" | "expired";
   reason?: string | null;
   sentAt: number;
   decidedAt?: number | null;

@@ -10,8 +10,12 @@ import {
   decideRadioCommand,
   expireRadioCommands,
   RADIO_COMMANDS_PER_HOUR,
+  RADIO_ANSWERS_PER_HOUR,
+  HELP_TEXT,
   type RadioMessage,
 } from "@aprscaching/gateway/radiolog";
+import { handleAccountExport, handleAccountDelete } from "@aprscaching/gateway/account";
+import { issueSessionCookie } from "@aprscaching/gateway/auth";
 import type { Env } from "@aprscaching/gateway/env";
 import { handleBoxPoll } from "@aprscaching/gateway/box";
 import path from "node:path";
@@ -204,18 +208,34 @@ describe("retries, limits and replies", () => {
     expect(outbox()).toEqual(["APRSCG :OE8APR-7 :ack12", "APRSCG :OE8APR-7 :ack12"]);
   });
 
-  it(`more than ${RADIO_COMMANDS_PER_HOUR} commands an hour are rejected`, async () => {
-    for (let i = 0; i <= RADIO_COMMANDS_PER_HOUR; i++)
+  it(`more than ${RADIO_COMMANDS_PER_HOUR} commands an hour are dropped without a record or an ack`, async () => {
+    for (let i = 0; i <= RADIO_COMMANDS_PER_HOUR + 2; i++)
       await handleRadioMessage(env, onAir({ text: "DNF AC-0001", msgNo: String(i) }));
     expect(logs()).toHaveLength(RADIO_COMMANDS_PER_HOUR);
-    expect(commands().at(-1)).toMatchObject({ status: "rejected", reason: "rate limited" });
+    expect(commands()).toHaveLength(RADIO_COMMANDS_PER_HOUR);
+    expect(outbox()).toHaveLength(RADIO_COMMANDS_PER_HOUR);
+  });
+
+  it("the hourly limit is per person: every SSID of a base call shares it", async () => {
+    for (let i = 0; i <= RADIO_COMMANDS_PER_HOUR; i++)
+      await handleRadioMessage(
+        env,
+        onAir({ src: i % 2 ? "OE8APR-9" : "OE8APR-7", text: "DNF AC-0001", msgNo: String(i) }),
+      );
+    expect(logs()).toHaveLength(RADIO_COMMANDS_PER_HOUR);
+  });
+
+  it(`the service queues at most ${RADIO_ANSWERS_PER_HOUR} acks and replies an hour in total`, async () => {
+    for (let i = 0; i < RADIO_ANSWERS_PER_HOUR + 5; i++)
+      await handleRadioMessage(env, onAir({ src: `DL${i}XX`, text: "HELLO", msgNo: "1" }));
+    expect(outbox()).toHaveLength(RADIO_ANSWERS_PER_HOUR);
   });
 
   it("text replies are off by default, but HELP is always answered", async () => {
     await handleRadioMessage(env, onAir({ msgNo: undefined }));
     expect(outbox()).toEqual([]);
     await handleRadioMessage(env, onAir({ text: "HELP", msgNo: undefined }));
-    expect(outbox()).toEqual(["APRSCG :OE8APR-7 :FOUND <code> [log] | DNF <code> [log] | NOTE <code> <text>"]);
+    expect(outbox()).toEqual([`APRSCG :OE8APR-7 :${HELP_TEXT}`]);
   });
 
   it("with RADIO_REPLIES=1 a logged find is answered, at most once per destination per 10 minutes", async () => {
@@ -311,8 +331,129 @@ describe("answers go back the way the message came", () => {
         kind: "aprs_msg",
         from: "APRSCG",
         to: "OE8APR-7",
-        text: "FOUND <code> [log] | DNF <code> [log] | NOTE <code> <text>",
+        text: HELP_TEXT,
       },
     ]);
+  });
+});
+
+describe("hardening", () => {
+  it("a same-number message with different text is a new command, not a retry of the first", async () => {
+    await handleRadioMessage(env, overIs({ text: "FOUND AC-0001 spoofed", msgNo: "12" }));
+    await handleRadioMessage(env, onAir({ text: "DNF AC-0001 real", msgNo: "12" }));
+    expect(logs().map((l) => [l.log_type, l.comment])).toEqual([["dnf", "real"]]);
+    expect(commands().map((c) => c.status)).toEqual(["pending", "logged"]);
+  });
+
+  it("a forged qAR path naming an attested site over APRS-IS stays pending", async () => {
+    await handleRadioMessage(
+      env,
+      overIs({ heardVia: "rf", igateCall: "OE8XXX-10", path: ["WIDE1-1", "qAR", "OE8XXX-10"] }),
+    );
+    expect(logs()).toHaveLength(0);
+    expect(commands()[0]).toMatchObject({ status: "pending", trusted: 0 });
+  });
+
+  it("a message number outside APRS101 is treated as unnumbered and never echoed", async () => {
+    await handleRadioMessage(env, onAir({ msgNo: "visit evil.example | now" }));
+    expect(outbox().some((o) => o.includes("evil"))).toBe(false);
+    expect(commands()[0]).toMatchObject({ msg_no: null });
+  });
+
+  it("every answer is APRS101-clean ASCII with a nine-character addressee", async () => {
+    freshEnv({ RADIO_REPLIES: "1" });
+    await handleRadioMessage(env, onAir({ text: "HELLO", msgNo: "1" }));
+    await handleRadioMessage(env, onAir({ src: "OE8APRLONG-12", text: "HELP", msgNo: "2" }));
+    const payloads = (sqlite.prepare("SELECT payload FROM aprs_outbox").all() as { payload: string }[]).map(
+      (r) => r.payload,
+    );
+    expect(payloads.length).toBeGreaterThanOrEqual(3);
+    for (const p of payloads) {
+      expect(p).toMatch(/^:[\x20-\x7e]{9}:[\x20-\x7e]*$/);
+      expect(p.slice(11)).not.toMatch(/[|~{]/);
+    }
+    expect(payloads).toContain(":OE8APRLON:ack2");
+  });
+
+  it("two concurrent confirmations of one command log it once", async () => {
+    await handleRadioMessage(env, overIs({ text: "NOTE AC-0001 log is full" }));
+    const id = Number(commands()[0]!.id);
+    const rs = await Promise.all([
+      decideRadioCommand(env, "acct-apr", id, "confirm"),
+      decideRadioCommand(env, "acct-apr", id, "confirm"),
+    ]);
+    expect(logs()).toHaveLength(1);
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(commands()[0]).toMatchObject({ status: "logged" });
+  });
+
+  it("FOUND counts once per person, whichever SSID sends it", async () => {
+    await handleRadioMessage(env, onAir({ src: "OE8APR-7", msgNo: "1" }));
+    await handleRadioMessage(env, onAir({ src: "OE8APR-9", msgNo: "2" }));
+    expect(logs().filter((l) => l.log_type === "found")).toHaveLength(1);
+    expect(commands()[1]).toMatchObject({ status: "rejected", reason: "AC-0001 is already logged as found" });
+  });
+
+  it("a pending FOUND from another SSID is refused on confirmation once the person has found the cache", async () => {
+    await handleRadioMessage(env, overIs({ src: "OE8APR-9", msgNo: "1" }));
+    await handleRadioMessage(env, onAir({ src: "OE8APR-7", msgNo: "2" }));
+    const r = await decideRadioCommand(env, "acct-apr", Number(commands()[0]!.id), "confirm");
+    expect(r.status).toBe(409);
+    expect(logs()).toHaveLength(1);
+  });
+
+  it("GDPR export and erase cover logs written under an SSID of the callsign", async () => {
+    freshEnv({ INGEST_SECRET: "a-strong-test-secret", INSTANCE: "gw.test" });
+    sqlite
+      .prepare("INSERT INTO accounts (account_id, callsign, verified, created_at) VALUES ('acct-apr','OE8APR',1,?)")
+      .run(t);
+    await handleRadioMessage(env, onAir());
+    const cookie = (await issueSessionCookie("OE8APR", env)).split(";")[0]!;
+    const req = () => new Request("http://gw.test/x", { method: "POST", headers: { cookie } });
+    const exp = (await (await handleAccountExport(req(), env, "OE8APR")).json()) as { logs: unknown[] };
+    expect(exp.logs).toHaveLength(1);
+    const del = (await (await handleAccountDelete(req(), env, "OE8APR")).json()) as { tombstones: number };
+    expect(del.tombstones).toBe(1);
+    expect(logs()[0]).toMatchObject({ logger_call: "WITHDRAWN", comment: null });
+  });
+
+  it("erase succeeds when the base call and an SSID both hold a found for the same cache", async () => {
+    freshEnv({ INGEST_SECRET: "a-strong-test-secret", INSTANCE: "gw.test" });
+    sqlite
+      .prepare("INSERT INTO accounts (account_id, callsign, verified, created_at) VALUES ('acct-apr','OE8APR',1,?)")
+      .run(t);
+    sqlite
+      .prepare(
+        "INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier) VALUES (1,'OE8APR',?,'found',0,'C'), (1,'OE8APR-7',?,'found',0,'C')",
+      )
+      .run(t - 10, t);
+    const cookie = (await issueSessionCookie("OE8APR", env)).split(";")[0]!;
+    const res = await handleAccountDelete(
+      new Request("http://gw.test/x", { method: "POST", headers: { cookie } }),
+      env,
+      "OE8APR",
+    );
+    expect(res.status).toBe(200);
+    expect(logs().map((l) => l.logger_call)).toEqual(["WITHDRAWN"]);
+  });
+
+  it("uppercase ACK and REJ to the service call are acks, not commands", async () => {
+    freshEnv({ RADIO_REPLIES: "1" });
+    await handleRadioMessage(env, onAir({ text: "ACK12", msgNo: undefined }));
+    await handleRadioMessage(env, onAir({ text: "REJ3", msgNo: undefined }));
+    expect(commands()).toHaveLength(0);
+    expect(outbox()).toEqual([]);
+  });
+
+  it("decided commands are purged after 30 days; pending ones are kept until they expire", async () => {
+    await handleRadioMessage(env, onAir({ text: "DNF AC-0001", msgNo: "1" }));
+    await handleRadioMessage(env, overIs({ text: "NOTE AC-0001 x", msgNo: "2" }));
+    await handleRadioMessage(env, onAir({ text: "DNF AC-0001 recent", msgNo: "3" }));
+    sqlite
+      .prepare("UPDATE radio_commands SET created_at = ?, decided_at = ? WHERE msg_no = '1'")
+      .run(t - 31 * 24 * 3600, t - 31 * 24 * 3600);
+    sqlite.prepare("UPDATE radio_commands SET created_at = ? WHERE msg_no = '2'").run(t - 31 * 24 * 3600);
+    await expireRadioCommands(env);
+    expect(commands().map((c) => c.msg_no)).toEqual(["2", "3"]);
   });
 });

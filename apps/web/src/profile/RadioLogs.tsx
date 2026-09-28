@@ -7,6 +7,7 @@ import { Group, Badge, TierBadge, EmptyState, ErrorState, useConfirm, useToast }
 const STATUS_LABEL: Record<RadioCommandRow["status"], string> = {
   logged: "logged",
   pending: "to confirm",
+  confirming: "logging",
   rejected: "not logged",
   help: "help sent",
   discarded: "discarded",

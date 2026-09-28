@@ -11,9 +11,11 @@
  * handler serves APRS over RF, APRS-IS and MeshCom alike. The transport decides two things only:
  *
  *  - Whether the message is accepted as the sender's own. Anyone can inject a message with any source
- *    call into APRS-IS, so a command logs immediately only when it was heard at an attested RF site
- *    (the same provenance rule as Tier A) or came in a batch signed by the sender's registered device
- *    key. Anything else is recorded as `pending` until the signed-in player confirms it in the app.
+ *    call — and any path, a forged `qAR` included — into APRS-IS, so a command logs immediately only
+ *    when the ingest box heard it on its own radio at an attested site (the same provenance rule as
+ *    Tier A) or it came in a batch signed by the sender's registered device key. Anything else, and
+ *    everything that arrived over APRS-IS, is recorded as `pending` until the signed-in player confirms
+ *    it in the app.
  *  - Where the answer goes. Acks and replies travel back the way the message came: a message the ingest
  *    box heard on its own radio is answered by that box — on RF as third-party traffic from the service
  *    call under the box's licensed call, or through the MeshCom node that heard it — so off-grid works
@@ -30,20 +32,29 @@ import { sessionAccountId } from "./auth.js";
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
+import { encodeAprsMessage } from "@aprscaching/aprs";
 
-/** Commands a sender may run per rolling hour; beyond that they are acked and rejected. */
+/**
+ * Commands one person (a base call, whatever SSID) may run per hour. Beyond that a message is dropped
+ * unrecorded and unanswered, so a flood neither grows `radio_commands` nor keys a transmitter.
+ */
 export const RADIO_COMMANDS_PER_HOUR = 10;
+/** Acks and replies the service queues per hour across all senders — the ceiling on what a flood makes it send. */
+export const RADIO_ANSWERS_PER_HOUR = 200;
+/** Decided commands (logged, rejected, discarded, expired, help) are purged this long after the decision. */
+export const RADIO_COMMAND_RETENTION_SEC = 30 * 24 * 3600;
 /** A pending command the player has not confirmed expires after this long. */
 export const RADIO_PENDING_TTL_SEC = 7 * 24 * 3600;
 /** At most one text reply per destination in this window. */
 export const RADIO_REPLY_INTERVAL_SEC = 10 * 60;
-/** A retry of the same message (same number, or same text when unnumbered) within this window runs once. */
+/** A retry of the same message (same number and text, or same text when unnumbered) within this window runs once. */
 const DUPLICATE_WINDOW_SEC = 30 * 60;
 /** APRS message text limit. */
 const APRS_TEXT_MAX = 67;
 
-export const HELP_TEXT = "FOUND <code> [log] | DNF <code> [log] | NOTE <code> <text>";
+export const HELP_TEXT = "FOUND <code> [log]; DNF <code> [log]; NOTE <code> <text>";
 
 export type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
@@ -64,11 +75,11 @@ export function normalizeCacheCode(raw: string): string | null {
 /** Parse a command message. Pure: the whole grammar lives here. */
 export function parseRadioCommand(text: string): RadioCommand | { error: string } {
   const t = text.trim();
-  if (!t) return { error: "empty message — send HELP" };
+  if (!t) return { error: "empty message - send HELP" };
   const [head = "", ...rest] = t.split(/\s+/);
   const word = head.toUpperCase();
   if (word === "HELP" || word === "?") return { command: "help" };
-  if (word !== "FOUND" && word !== "DNF" && word !== "NOTE") return { error: "unknown command — send HELP" };
+  if (word !== "FOUND" && word !== "DNF" && word !== "NOTE") return { error: "unknown command - send HELP" };
   const code = rest[0] ? normalizeCacheCode(rest[0]) : null;
   if (!code) return { error: `${word} needs a cache code, e.g. ${word} AC-1234` };
   const body = rest.slice(1).join(" ").trim();
@@ -76,12 +87,36 @@ export function parseRadioCommand(text: string): RadioCommand | { error: string 
   return { command: word === "FOUND" ? "found" : "dnf", code, ...(body ? { body } : {}) };
 }
 
+/** An APRS101 message number: one to five letters or digits. Anything else is not a number to ack. */
+const MSG_NO = /^[A-Za-z0-9]{1,5}$/;
+
+/** The message number when it is a valid APRS101 one, else none (the message is treated as unnumbered). */
+const validMsgNo = (n?: string): string | undefined => (n && MSG_NO.test(n) ? n : undefined);
+
 /** Split an APRS message text into its body and message number, tolerating the reply-ack form `{MM}AA`. */
 export function splitMessageNumber(text: string, msgNo?: string): { text: string; msgNo?: string } {
   const m = /\{([A-Za-z0-9]{1,5})(\}[A-Za-z0-9]{0,2})?$/.exec(text);
   if (m) return { text: text.slice(0, m.index), msgNo: m[1] };
-  const n = msgNo?.split("}")[0]?.trim();
+  const n = validMsgNo(msgNo?.split("}")[0]?.trim());
   return { text, ...(n ? { msgNo: n } : {}) };
+}
+
+/**
+ * An ack or rej addressed to the service call. The decoder recognises only the lower-case APRS101 form;
+ * some radios send `ACK12` / `REJ12`, which must not run as a command (or draw an "unknown command" reply).
+ */
+const isAckOrRej = (text: string) => /^(ack|rej)[A-Za-z0-9]{1,5}$/i.test(text.trim());
+
+/**
+ * Text as an APRS101 message body: printable ASCII only, without the reserved `|`, `~` and `{`, within the
+ * 67-character limit. Dashes that are not ASCII become `-`; any other non-ASCII character is dropped.
+ */
+export function aprsText(text: string): string {
+  return text
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/[|~{]/g, "")
+    .slice(0, APRS_TEXT_MAX);
 }
 
 /** One command message as the ingest saw it. */
@@ -101,9 +136,16 @@ export interface RadioMessage {
   rxCall?: string;
 }
 
+/**
+ * Ports on which the ingest box itself hears the air: its TNCs and its MeshCom nodes. APRS-IS and the
+ * internet-tunnelled ports (AXUDP, AXIP) never count as heard at a site, whatever path the frame carries.
+ */
+const ON_AIR_PORTS = new Set(["kiss-tnc", "agwpe", "hostmode", "meshcom"]);
+
 /** Is this message accepted as the sender's own without a confirmation in the app? */
 export function isTrustedMessage(m: RadioMessage, attestedSites: Set<string>): boolean {
   if (m.signed) return true;
+  if (!ON_AIR_PORTS.has(m.port)) return false;
   return provenanceOf({ heard_via: m.heardVia, igate_call: m.igateCall ?? null, path: m.path.join(",") }, attestedSites)
     .firstPartyAttested;
 }
@@ -115,6 +157,7 @@ type CacheForLog = CacheRow & { id: number; code: string; title: string };
 interface CommandRow {
   id: number;
   from_call: string;
+  raw_text: string;
   account_id: string | null;
   command: string;
   cache_id: number | null;
@@ -130,7 +173,7 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?, ?, 'APZACG', 'message', ?)",
   )
-    .bind(now(), serviceCall(env), `:${to.toUpperCase().padEnd(9)}:${text.slice(0, APRS_TEXT_MAX)}`)
+    .bind(now(), serviceCall(env), encodeAprsMessage(to, text))
     .run();
 }
 
@@ -139,25 +182,29 @@ const repliesEnabled = (env: Env) => env.RADIO_REPLIES === "1";
 /** Ports on which the ingest box itself received the frame over a radio it can also transmit on. */
 const RF_PORTS = new Set(["kiss-tnc"]);
 
+/** An APRS addressee field: exactly nine characters, space-padded or truncated. */
+const addressee = (call: string) => call.toUpperCase().slice(0, 9).padEnd(9);
+
 /**
  * Send `text` to the sender the way the message came: through the box that heard it when that box is
- * polling and can transmit on the same radio, else — for APRS — through the APRS-IS outbox.
+ * polling and can transmit on the same radio, else — for APRS — through the APRS-IS outbox. Every answer
+ * counts against {@link RADIO_ANSWERS_PER_HOUR}; over it nothing is sent. Returns whether it was queued.
  */
-async function answer(env: Env, m: RadioMessage, text: string): Promise<void> {
+async function answer(env: Env, m: RadioMessage, raw: string): Promise<boolean> {
+  const text = aprsText(raw);
   const caps = m.box ? await freshBoxCaps(env, m.box) : null;
-  if (m.port === "meshcom") {
-    const node = m.rxCall?.toUpperCase();
-    if (caps?.tx && node && caps.meshcom.includes(node))
-      await enqueueSystemBoxCommand(env, m.box!, "meshcom_msg", { node, dst: m.src.toUpperCase(), text });
-    return;
+  const meshNode = m.port === "meshcom" ? m.rxCall?.toUpperCase() : undefined;
+  const viaMesh = !!(caps?.tx && meshNode && caps.meshcom.includes(meshNode));
+  if (m.port === "meshcom" && !viaMesh) return false;
+  if (await rateLimitedDurable(env, "radio:answers", Date.now(), RADIO_ANSWERS_PER_HOUR, 3600_000)) return false;
+  if (viaMesh) {
+    await enqueueSystemBoxCommand(env, m.box!, "meshcom_msg", { node: meshNode, dst: m.src.toUpperCase(), text });
+  } else if (caps?.tx && caps.rf && RF_PORTS.has(m.port)) {
+    await enqueueSystemBoxCommand(env, m.box!, "aprs_msg", { from: serviceCall(env), to: m.src.toUpperCase(), text });
+  } else {
+    await queueAprs(env, m.src, text);
   }
-  if (caps?.tx && caps.rf && RF_PORTS.has(m.port))
-    return enqueueSystemBoxCommand(env, m.box!, "aprs_msg", {
-      from: serviceCall(env),
-      to: m.src.toUpperCase(),
-      text: text.slice(0, APRS_TEXT_MAX),
-    });
-  await queueAprs(env, m.src, text);
+  return true;
 }
 
 /**
@@ -166,7 +213,7 @@ async function answer(env: Env, m: RadioMessage, text: string): Promise<void> {
  * message nnn and matches it by number alone, so the node that heard the message can ack it that way.
  */
 export function ackText(port: string, src: string, msgNo: string): string {
-  return port === "meshcom" ? `${src.toUpperCase().padEnd(9)}:ack${msgNo}` : `ack${msgNo}`;
+  return port === "meshcom" ? `${addressee(src)}:ack${msgNo}` : `ack${msgNo}`;
 }
 
 async function ack(env: Env, m: RadioMessage): Promise<void> {
@@ -185,7 +232,7 @@ async function reply(env: Env, m: RadioMessage, rowId: number, text: string, ask
     .bind(m.src.toUpperCase(), now() - RADIO_REPLY_INTERVAL_SEC)
     .first();
   if (recent) return;
-  await answer(env, m, text);
+  if (!(await answer(env, m, text))) return;
   await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(now(), rowId).run();
 }
 
@@ -244,11 +291,12 @@ const foundText = (code: string, s: FindScore) =>
 /** Commit a command's log. Returns the new log id, or `duplicate` when the player already found the cache. */
 async function commitCommand(
   env: Env,
-  row: Pick<CommandRow, "from_call" | "command" | "body" | "sent_at">,
+  row: Pick<CommandRow, "from_call" | "account_id" | "command" | "body" | "sent_at">,
   cache: CacheForLog,
   score: FindScore | null,
 ): Promise<{ logId?: number; duplicate?: boolean }> {
   if (row.command === "found") {
+    if (await alreadyFound(env, cache.id, row.from_call, row.account_id)) return { duplicate: true };
     const c = await commitFind(env, cache, row.from_call, row.sent_at, row.body, score!);
     return c.duplicate ? { duplicate: true } : { logId: c.logId };
   }
@@ -260,33 +308,48 @@ async function loadCache(env: Env, id: number): Promise<CacheForLog | null> {
   return env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheForLog>();
 }
 
-/** Has this sender already logged a found for the cache (under any SSID of the same call string)? */
-async function alreadyFound(env: Env, cacheId: number, loggerCall: string): Promise<boolean> {
+/**
+ * Has this person already logged a found for the cache? A find counts once per person, so any SSID of the
+ * sender's base call, or of any callsign on their account, holds it.
+ */
+async function alreadyFound(env: Env, cacheId: number, loggerCall: string, accountId: string | null): Promise<boolean> {
   const r = await env.DB.prepare(
-    "SELECT 1 AS x FROM cache_logs WHERE cache_id = ? AND logger_call = ? AND log_type = 'found' LIMIT 1",
+    `SELECT 1 AS x FROM cache_logs l WHERE l.cache_id = ? AND l.log_type = 'found' AND (
+       l.logger_call = ? OR l.logger_call LIKE ? || '-%'
+       OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                  AND (l.logger_call = ac.callsign OR l.logger_call LIKE ac.callsign || '-%'))
+     ) LIMIT 1`,
   )
-    .bind(cacheId, loggerCall)
+    .bind(cacheId, baseCall(loggerCall), baseCall(loggerCall), accountId)
     .first();
   return !!r;
 }
 
 /**
- * Handle one command message. Every outcome is recorded in `radio_commands`; a numbered APRS message is
- * always acknowledged so the sender's radio stops retrying.
+ * Handle one command message. Every accepted outcome is recorded in `radio_commands`, and a numbered APRS
+ * message is acknowledged so the sender's radio stops retrying — except over the hourly limit, where the
+ * message is dropped without a record or an answer.
  */
-export async function handleRadioMessage(env: Env, m: RadioMessage): Promise<void> {
+export async function handleRadioMessage(env: Env, input: RadioMessage): Promise<void> {
+  const m: RadioMessage = { ...input };
+  const msgNo = validMsgNo(input.msgNo);
+  if (msgNo) m.msgNo = msgNo;
+  else delete m.msgNo;
   const src = m.src.toUpperCase();
   if (src === serviceCall(env)) return; // never answer ourselves
+  if (isAckOrRej(m.text)) return;
 
-  // A retry of a message already handled: re-ack only. A copy heard at an attested site upgrades a
-  // pending command to logged.
+  // A retry of a message already handled — same number and the same text, or the same text when
+  // unnumbered: re-ack only. A copy heard at an attested site upgrades a pending command to logged. A
+  // message that reuses a number with different text is a new command: matching on the number alone
+  // would let a later message confirm an earlier, possibly forged, one.
   const trusted = isTrustedMessage(m, parseAttestedSites(env.FIRST_PARTY_SITES));
   const prior = await env.DB.prepare(
-    `SELECT * FROM radio_commands WHERE from_call = ? AND sent_at >= ?
-       AND ((? IS NOT NULL AND msg_no = ?) OR (? IS NULL AND msg_no IS NULL AND raw_text = ?))
+    `SELECT * FROM radio_commands WHERE from_call = ? AND sent_at >= ? AND raw_text = ?
+       AND ((? IS NOT NULL AND msg_no = ?) OR (? IS NULL AND msg_no IS NULL))
      ORDER BY id DESC LIMIT 1`,
   )
-    .bind(src, m.ts - DUPLICATE_WINDOW_SEC, m.msgNo ?? null, m.msgNo ?? null, m.msgNo ?? null, m.text)
+    .bind(src, m.ts - DUPLICATE_WINDOW_SEC, m.text, m.msgNo ?? null, m.msgNo ?? null, m.msgNo ?? null)
     .first<CommandRow>();
   if (prior) {
     await ack(env, m);
@@ -294,16 +357,9 @@ export async function handleRadioMessage(env: Env, m: RadioMessage): Promise<voi
     return;
   }
 
-  const recent = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM radio_commands WHERE from_call = ? AND created_at >= ?",
-  )
-    .bind(src, now() - 3600)
-    .first<{ n: number }>();
-  if ((recent?.n ?? 0) >= RADIO_COMMANDS_PER_HOUR) {
-    await insertRow(env, m, { command: "invalid", trusted, status: "rejected", reason: "rate limited" });
-    await ack(env, m);
-    return; // no reply: a sender over the limit gets nothing but the protocol ack
-  }
+  // Keyed on the base call, so switching SSIDs does not multiply the budget. Over the limit nothing is
+  // recorded or sent, but the message still counts.
+  if (await rateLimitedDurable(env, `radio:${baseCall(src)}`, Date.now(), RADIO_COMMANDS_PER_HOUR, 3600_000)) return;
 
   const parsed = parseRadioCommand(m.text);
   if ("error" in parsed) {
@@ -340,7 +396,7 @@ export async function handleRadioMessage(env: Env, m: RadioMessage): Promise<voi
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ?").bind(parsed.code).first<CacheForLog>();
   if (!cache) return reject(`unknown cache ${parsed.code}`, { accountId: acct.account_id });
-  if (parsed.command === "found" && (await alreadyFound(env, cache.id, src)))
+  if (parsed.command === "found" && (await alreadyFound(env, cache.id, src, acct.account_id)))
     return reject(`${cache.code} is already logged as found`, { accountId: acct.account_id, cache });
 
   const score = parsed.command === "found" ? await scoreFind(env, cache, src, m.ts) : null;
@@ -362,7 +418,7 @@ export async function handleRadioMessage(env: Env, m: RadioMessage): Promise<voi
 
   const c = await commitCommand(
     env,
-    { from_call: src, command: parsed.command, body: parsed.body ?? null, sent_at: m.ts },
+    { from_call: src, account_id: acct.account_id, command: parsed.command, body: parsed.body ?? null, sent_at: m.ts },
     cache,
     score,
   );
@@ -377,39 +433,65 @@ export async function handleRadioMessage(env: Env, m: RadioMessage): Promise<voi
   );
 }
 
-/** Turn a pending command into a log. `onAir` marks a confirmation by a later attested copy of the message. */
+/**
+ * Turn a pending command into a log. `onAir` marks a confirmation by a later attested copy of the message.
+ * The row is claimed (`pending` → `confirming`) before anything is written, so two confirmations racing
+ * each other — two taps, or a tap and an attested copy — commit the log once; the loser reports the
+ * command as already decided. A failure mid-commit hands the row back as `pending`.
+ */
 async function confirmRow(
   env: Env,
   row: CommandRow,
   onAir: boolean,
-): Promise<{ ok: boolean; reason?: string; logId?: number }> {
+): Promise<{ ok: boolean; reason?: string; logId?: number; taken?: boolean }> {
+  const claim = await env.DB.prepare(
+    "UPDATE radio_commands SET status = 'confirming' WHERE id = ? AND status = 'pending'",
+  )
+    .bind(row.id)
+    .run();
+  if ((claim.meta?.changes ?? 0) !== 1) return { ok: false, taken: true, reason: "already decided" };
   const done = async (status: string, reason: string | null, logId: number | null) =>
     env.DB.prepare(
-      "UPDATE radio_commands SET status = ?, reason = ?, log_id = ?, decided_at = ?, trusted = MAX(trusted, ?) WHERE id = ? AND status = 'pending'",
+      "UPDATE radio_commands SET status = ?, reason = ?, log_id = ?, decided_at = ?, trusted = MAX(trusted, ?) WHERE id = ? AND status = 'confirming'",
     )
       .bind(status, reason, logId, now(), onAir ? 1 : 0, row.id)
       .run();
-  const cache = row.cache_id != null ? await loadCache(env, row.cache_id) : null;
-  if (!cache) {
-    await done("rejected", "the cache no longer exists", null);
-    return { ok: false, reason: "the cache no longer exists" };
+  try {
+    const cache = row.cache_id != null ? await loadCache(env, row.cache_id) : null;
+    if (!cache) {
+      await done("rejected", "the cache no longer exists", null);
+      return { ok: false, reason: "the cache no longer exists" };
+    }
+    const score = row.score ? (JSON.parse(row.score) as FindScore) : null;
+    const c = await commitCommand(env, row, cache, score);
+    if (c.duplicate) {
+      await done("rejected", `${cache.code} is already logged as found`, null);
+      return { ok: false, reason: `${cache.code} is already logged as found` };
+    }
+    await done("logged", null, c.logId ?? null);
+    return { ok: true, logId: c.logId };
+  } catch (e) {
+    await env.DB.prepare("UPDATE radio_commands SET status = 'pending' WHERE id = ? AND status = 'confirming'")
+      .bind(row.id)
+      .run();
+    throw e;
   }
-  const score = row.score ? (JSON.parse(row.score) as FindScore) : null;
-  const c = await commitCommand(env, row, cache, score);
-  if (c.duplicate) {
-    await done("rejected", `${cache.code} is already logged as found`, null);
-    return { ok: false, reason: `${cache.code} is already logged as found` };
-  }
-  await done("logged", null, c.logId ?? null);
-  return { ok: true, logId: c.logId };
 }
 
-/** Expire pending commands nobody confirmed. Called from the nightly job. */
+/**
+ * The nightly job: expire pending commands nobody confirmed, and purge decided ones after
+ * {@link RADIO_COMMAND_RETENTION_SEC} — the log itself lives on in `cache_logs`.
+ */
 export async function expireRadioCommands(env: Env): Promise<void> {
   await env.DB.prepare(
     "UPDATE radio_commands SET status = 'expired', decided_at = ? WHERE status = 'pending' AND sent_at < ?",
   )
     .bind(now(), now() - RADIO_PENDING_TTL_SEC)
+    .run();
+  await env.DB.prepare(
+    "DELETE FROM radio_commands WHERE status NOT IN ('pending', 'confirming') AND COALESCE(decided_at, created_at) < ?",
+  )
+    .bind(now() - RADIO_COMMAND_RETENTION_SEC)
     .run();
 }
 
@@ -456,6 +538,7 @@ export async function decideRadioCommand(
     return { status: 200, body: { ok: true, status: "discarded" } };
   }
   const r = await confirmRow(env, row, false);
+  if (r.taken) return { status: 409, body: { error: "already decided" } };
   return r.ok
     ? { status: 200, body: { ok: true, status: "logged", logId: r.logId } }
     : { status: 409, body: { ok: false, status: "rejected", error: r.reason } };
