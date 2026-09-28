@@ -2,9 +2,8 @@
 
 The gateway's schema lives as ordered SQL migrations under `db/migrations/`, applied identically on every
 runtime (D1's `wrangler d1 migrations apply`, or the Node/Bun migration runner, which tracks applied files by
-name). The schema is **`0001_baseline.sql`** plus **`0002_federation_transports.sql`** (typed peer
-transport endpoints — see the [federation wire reference](federation-wire.md)). To add schema, add the
-next-numbered `NNNN_name.sql` file — never edit an applied migration.
+name). The schema is **`0001_baseline.sql`** plus the numbered migrations listed below. To add schema, add
+the next-numbered `NNNN_name.sql` file — never edit an applied migration.
 
 Spatial lookups use a plain lat/lon index (D1 does not support rtree virtual tables). Firehose positions are
 TTL'd; the durable record is caches, finds, accounts, and keys — back those up.
@@ -28,8 +27,14 @@ The baseline groups into a handful of domains:
 - `0001_baseline` establishes the whole 1.0 schema — caches, logs, positions, accounts, the Shack tables,
   federation, BBS/node, and engagement — with internal section headers grouping it by domain.
 - Post-1.0 schema changes land as new `NNNN_name.sql` files applied on top of the baseline:
-  `0002_federation_transports` (typed peer endpoints) and `0003_radio_commands` (logs sent as radio
-  messages, including those waiting for the player's confirmation).
+  - `0002_federation_transports` — typed peer transport endpoints (see the
+    [federation wire reference](federation-wire.md));
+  - `0003_radio_commands` — logs sent as radio messages, including those waiting for the player's
+    confirmation;
+  - `0004_box_status` — what each ingest box can transmit, as it reports on its command poll;
+  - `0005_positions_transport` — how each stored position reached the gateway (`aprs-is`, `tnc`,
+    `browser-rf`, `axudp`, `axip`, `meshcom`, `meshtastic`), derived from the ingest port. Display and
+    statistics only: the verify engine never branches on it; rows stored earlier read `NULL`.
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —
 live in `@aprscaching/shared` (Zod schemas) and are the source of truth for request/response shapes.

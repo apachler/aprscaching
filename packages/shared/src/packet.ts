@@ -40,13 +40,16 @@ export type IngestBatch = z.infer<typeof IngestBatch>;
  * RF / AXIP / HAMNET transports pluggable without re-touching the trust engine.
  */
 export const Transport = z.enum([
-  "aprs-is", // APRS-IS firehose (the only wired transport in service)
+  "aprs-is", // the APRS-IS feed
   "app", // first-party in-app device geolocation (the Tier-B path)
-  "axudp", // AX.25 over UDP (BPQ node mesh) — ingest listener/port built, feature-flagged off
-  "axip", // AX.25 over raw IP proto 93 — ingest listener built (raw socket), feature-flagged off
-  "meshcom", // MeshCom LoRa mesh via a node's ExtUDP interface — attestable only as a direct hearing at an attested node
-  "hamnet-kiss", // KISS-over-IP from a HAMNET site — reserved
-  "first-party-rf", // a receiver we operate + attest — the only Tier-A origin
+  "tnc", // a local TNC on the ingest box: KISS, AGWPE or WA8DED host mode
+  "browser-rf", // the browser RF bridge (Web Serial / Web Bluetooth), a signed batch
+  "axudp", // AX.25 over UDP (BPQ node mesh)
+  "axip", // AX.25 over raw IP proto 93
+  "meshcom", // MeshCom LoRa mesh via a node's ExtUDP interface
+  "meshtastic", // Meshtastic via the MQTT bridge or the browser
+  "hamnet-kiss", // KISS-over-IP from a HAMNET site — reserved, no listener sets it
+  "first-party-rf", // reserved, no listener sets it; attestation is the firstPartyAttested flag, never a transport
 ]);
 export type Transport = z.infer<typeof Transport>;
 
