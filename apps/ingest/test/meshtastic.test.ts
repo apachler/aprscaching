@@ -112,6 +112,25 @@ describe("MeshtasticTcp (node TCP API)", () => {
     expect(got.map((p) => p.src)).toEqual(["OE8APR"]);
   });
 
+  it("sends a heartbeat while connected so the node keeps the API session open", async () => {
+    const received: number[] = [];
+    const server = net.createServer((sock) => sock.on("data", (d) => received.push(...d)));
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const t = new MeshtasticTcp(
+      { host: "127.0.0.1", port: (server.address() as net.AddressInfo).port, heartbeatMs: 50 },
+      new MeshtasticIngest(
+        () => {},
+        () => {},
+      ),
+    );
+    cleanups.push(() => (t.stop(), server.close()));
+    t.start();
+    const heartbeat = [0x94, 0xc3, 0x00, 0x02, 0x3a, 0x00];
+    const count = () => received.filter((_, i) => heartbeat.every((b, k) => received[i + k] === b)).length;
+    await until(() => count() >= 2);
+    expect(count()).toBeGreaterThanOrEqual(2);
+  });
+
   it("keeps its receive buffer bounded", () => {
     const t = new MeshtasticTcp(
       { host: "127.0.0.1", port: 1 },

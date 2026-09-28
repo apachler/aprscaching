@@ -17,6 +17,7 @@ import {
   parseFromRadio,
   parseMeshServiceEnvelope,
   wantConfigFrame,
+  heartbeatFrame,
   formatPosition,
   MeshtasticLicensedNodes,
   type MeshEvent,
@@ -69,16 +70,20 @@ export class MeshtasticIngest {
   }
 }
 
-/** The node's protobuf TCP API (port 4403) — the serial stream over TCP. */
+/**
+ * The node's protobuf TCP API (port 4403) — the serial stream over TCP. A heartbeat every
+ * `heartbeatMs` (default 5 minutes) keeps the node from closing a connection that only listens.
+ */
 export class MeshtasticTcp {
   private sock?: net.Socket;
   private buf: Uint8Array = new Uint8Array(0);
   private backoff: Backoff;
   private stopped = false;
   private timer?: ReturnType<typeof setTimeout>;
+  private heartbeat?: ReturnType<typeof setInterval>;
 
   constructor(
-    private o: { host: string; port: number; retryMs?: number },
+    private o: { host: string; port: number; retryMs?: number; heartbeatMs?: number },
     private ingest: MeshtasticIngest,
   ) {
     this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
@@ -91,6 +96,7 @@ export class MeshtasticTcp {
   stop(): void {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
+    if (this.heartbeat) clearInterval(this.heartbeat);
     this.sock?.destroy();
   }
 
@@ -112,11 +118,16 @@ export class MeshtasticTcp {
     s.on("connect", () => {
       this.backoff.reset();
       s.write(wantConfigFrame()); // node database (licence flags) first, then the live packet stream
+      if (this.heartbeat) clearInterval(this.heartbeat);
+      this.heartbeat = setInterval(() => s.write(heartbeatFrame()), this.o.heartbeatMs ?? 5 * 60_000);
+      this.heartbeat.unref?.();
       console.log(`[meshtastic] connected ${this.o.host}:${this.o.port}`);
     });
     s.on("data", (chunk: Buffer) => this.receive(Uint8Array.from(chunk)));
     s.on("error", () => console.log("[meshtastic] disconnected, retrying…"));
     s.on("close", () => {
+      if (this.heartbeat) clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
       if (this.stopped || this.timer) return;
       this.timer = setTimeout(() => {
         this.timer = undefined;

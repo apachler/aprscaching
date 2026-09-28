@@ -1,10 +1,47 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { decodeAx25, encodeAx25 } from "@aprscaching/aprs";
-import { parseAgwpe, encodeAgwpe } from "@aprscaching/packet";
+import { parseAgwpe, encodeAgwpe, type AgwpeFrame } from "@aprscaching/packet";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import { Backoff } from "./backoff.js";
 import { tncPacket } from "./link.js";
+
+/** The largest frame payload accepted. A monitored AX.25 frame is a few hundred bytes; a header declaring
+ *  more than this is not an AGW Packet Engine talking, and waiting for its data would buffer without end. */
+export const AGWPE_MAX_DATA = 64 * 1024;
+const AGWPE_HEADER = 36;
+
+/**
+ * The AGWPE receive buffer: reassembles frames split across TCP chunks and stays bounded — it never holds
+ * more than one partial frame, and a frame declaring more than {@link AGWPE_MAX_DATA} is refused.
+ */
+export class AgwpeRx {
+  private buf = new Uint8Array(0);
+
+  /** Complete frames in `chunk` (plus what was held back), or null when the stream is not AGWPE. */
+  push(chunk: Uint8Array): AgwpeFrame[] | null {
+    const merged = new Uint8Array(this.buf.length + chunk.length);
+    merged.set(this.buf);
+    merged.set(chunk, this.buf.length);
+    const { frames, rest } = parseAgwpe(merged);
+    const declared = rest.length >= AGWPE_HEADER ? new DataView(rest.buffer, rest.byteOffset).getUint32(28, true) : 0;
+    if (declared > AGWPE_MAX_DATA || rest.length > AGWPE_HEADER + AGWPE_MAX_DATA) {
+      this.reset();
+      return null;
+    }
+    this.buf = new Uint8Array(rest); // copy into a fresh ArrayBuffer-backed view
+    return frames;
+  }
+
+  reset(): void {
+    this.buf = new Uint8Array(0);
+  }
+
+  get buffered(): number {
+    return this.buf.length;
+  }
+}
 
 export interface AgwpeOpts {
   /** This box's receiving-site callsign; stamped on frames heard directly (see `directSiteCall`). */
@@ -12,6 +49,8 @@ export interface AgwpeOpts {
   host: string;
   port: number;
   radioPort?: number;
+  /** Base reconnect delay (default 3000 ms); grows with backoff while the engine stays unreachable. */
+  retryMs?: number;
 }
 export interface AgwpeHandlers {
   onPacket: (p: Packet) => void;
@@ -27,14 +66,25 @@ export interface AgwpeHandlers {
 export class AgwpeTnc {
   private sock?: net.Socket;
   private connected = false;
-  private buf = new Uint8Array(0);
+  private rx = new AgwpeRx();
+  private backoff: Backoff;
+  private stopped = false;
+  private timer?: ReturnType<typeof setTimeout>;
   constructor(
     private o: AgwpeOpts,
     private h: AgwpeHandlers,
-  ) {}
+  ) {
+    this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
+  }
 
   start() {
     this.connect();
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.sock?.destroy();
   }
 
   /** Transmit a raw AX.25 frame via AGWPE 'K' (RawAX25). Best-effort. */
@@ -56,21 +106,25 @@ export class AgwpeTnc {
   }
 
   private connect() {
+    if (this.stopped) return;
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
+    this.rx.reset(); // never carry a partial frame across a reconnect
     s.on("connect", () => {
       this.connected = true;
+      this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       // register the app ('X'), enable raw-frame monitor ('k') on our radio port
       s.write(Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "X" })));
       s.write(Buffer.from(encodeAgwpe({ port: this.o.radioPort ?? 0, kind: "k" })));
       console.log(`[agwpe] connected ${this.o.host}:${this.o.port}`);
     });
     s.on("data", (chunk: Buffer) => {
-      const merged = new Uint8Array(this.buf.length + chunk.length);
-      merged.set(this.buf);
-      merged.set(chunk, this.buf.length);
-      const { frames, rest } = parseAgwpe(merged);
-      this.buf = new Uint8Array(rest); // copy into a fresh ArrayBuffer-backed view
+      const frames = this.rx.push(chunk);
+      if (!frames) {
+        console.warn(`[agwpe] frame over ${AGWPE_MAX_DATA} bytes — not an AGW Packet Engine? reconnecting`);
+        s.destroy();
+        return;
+      }
       for (const fr of frames) {
         if (fr.kind !== "K") continue; // raw AX.25 monitor frames only
         const ax = fr.data.length > 1 ? fr.data.slice(1) : fr.data; // strip the leading radio-port byte
@@ -89,7 +143,11 @@ export class AgwpeTnc {
     });
     s.on("close", () => {
       down();
-      setTimeout(() => this.connect(), 3000);
+      if (this.stopped || this.timer) return;
+      this.timer = setTimeout(() => {
+        this.timer = undefined;
+        this.connect();
+      }, this.backoff.next()); // backoff + jitter
     });
   }
 }

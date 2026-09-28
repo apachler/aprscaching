@@ -40,15 +40,21 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 
 !!! warning "Tunnelled frames are always Tier C"
     AXUDP and AXIP frames are forwarded as `heardVia: aprs_is` on their own port, so the gateway's provenance
-    derivation stamps `firstPartyAttested = false`. A tunnelled frame can **never** reach Tier A — transport
-    is not trust. AXUDP/AXIP transmit is operator-config-gated node transport (you set `*_PEERS`), which is
+    derivation stamps `firstPartyAttested = false` — and it refuses attestation to any position recorded
+    on the AXUDP, AXIP or Meshtastic transport, even one that names an attested site. A tunnelled frame can
+    **never** reach Tier A — transport is not trust. AXUDP/AXIP transmit is operator-config-gated node transport (you set `*_PEERS`), which is
     distinct from on-air keying (that is the separate, verified-callsign gate).
 
 ## Receiving site and Tier A
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its
-local TNCs — KISS, AGWPE or WA8DED host mode — hears **directly** (no digipeater has repeated it) carries
-that callsign to the gateway. A gateway that lists
+local TNCs — KISS, AGWPE or WA8DED host mode — hears **directly** carries that callsign to the gateway.
+A frame counts as heard directly only when no path hop shows a relay: no hop carries the has-been-repeated
+`*`, and the first hop is not a decremented `WIDEn-N` / `TRACEn-N` (N below n — `WIDE2-1`, `WIDE2`), which is
+how an untraced digipeater consumes a hop without marking it. Digipeaters consume hops in order, so the hops
+after an untouched first hop are exactly as the originator set them: `WIDE1-1,WIDE2-1` (the standard mobile
+path) and `WIDE1-1,WIDE2-2` count as direct. The rule is conservative: a station whose first hop is `WIDE2-1`
+looks the same as a decremented `WIDE2-2`, so its frames name no site. A gateway that lists
 the call in `FIRST_PARTY_SITES` then counts those frames as RF-corroborated evidence for Tier A, with no
 APRS-IS round trip, so it works off-grid too. Digipeated frames name no site: they show the originator was
 near the digipeater, not near your receiver. The gateway's independence rule still keeps your own

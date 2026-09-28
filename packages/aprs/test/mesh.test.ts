@@ -7,6 +7,10 @@ import {
   parseMeshServiceEnvelope,
   parseFromRadio,
   wantConfigFrame,
+  heartbeatFrame,
+  formatPosition,
+  decodeAprs,
+  parseTNC2,
   licensedCallsign,
   MeshtasticLicensedNodes,
 } from "../src/index.js";
@@ -159,6 +163,44 @@ describe("meshtastic — licensed-only acceptance", () => {
   it("frames the want_config handshake", () => {
     const f = wantConfigFrame(1);
     expect(Array.from(f)).toEqual([0x94, 0xc3, 0x00, 0x02, 0x18, 0x01]);
+  });
+
+  it("frames the keepalive heartbeat (ToRadio.heartbeat, an empty message)", () => {
+    expect(Array.from(heartbeatFrame())).toEqual([0x94, 0xc3, 0x00, 0x02, 0x3a, 0x00]);
+  });
+
+  // A negative int32 is sign-extended to 64 bits on the wire: a 10-byte varint.
+  const negAlt = (n: number): number[] => {
+    let v = BigInt.asUintN(64, BigInt(n));
+    const o: number[] = [];
+    while (v > 0x7fn) {
+      o.push(Number(v & 0x7fn) | 0x80);
+      v >>= 7n;
+    }
+    o.push(Number(v));
+    return [...tag(3, 0), ...o];
+  };
+  const posWith = (alt: number[]) =>
+    u8(...meshPacket(1, 3, [...fixed32(1, Math.round(47.05 * 1e7)), ...fixed32(2, Math.round(15.44 * 1e7)), ...alt]));
+
+  it("reads a negative altitude (a sign-extended 10-byte varint)", () => {
+    expect(negAlt(-5)).toHaveLength(11);
+    const ev = parseMeshPacket(posWith(negAlt(-5)));
+    expect(ev?.kind === "position" && ev.fix.altitudeM).toBe(-5);
+  });
+
+  it("clamps an implausible altitude", () => {
+    const high = parseMeshPacket(posWith(vfield(3, 2_000_000)));
+    expect(high?.kind === "position" && high.fix.altitudeM).toBe(100_000);
+    const low = parseMeshPacket(posWith(negAlt(-2_000_000)));
+    expect(low?.kind === "position" && low.fix.altitudeM).toBe(-500);
+  });
+
+  it("writes and reads a negative altitude as a six-character /A= field", () => {
+    const payload = formatPosition(47.05, 15.44, { altitudeM: -5 });
+    expect(payload).toContain("/A=-00016");
+    const frame = parseTNC2(`OE8APR>APRS:${payload}`)!;
+    expect((decodeAprs(frame) as { altitudeM?: number }).altitudeM).toBe(-5);
   });
 
   it.each([

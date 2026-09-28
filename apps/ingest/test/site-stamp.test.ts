@@ -11,7 +11,7 @@ import { KissTnc } from "../src/kiss.js";
 import { AgwpeTnc } from "../src/agwpe.js";
 import { monitorHeaderToTnc2, hostmodeMonitorPacket } from "../src/hostmode.js";
 
-const DIRECT = { src: "OE3PLY-7", dst: "APRS", path: ["WIDE1-1", "WIDE2-1"], payload: "!4704.41N/01526.27E>direct" };
+const DIRECT = { src: "OE3PLY-7", dst: "APRS", path: ["WIDE1-1", "WIDE2-2"], payload: "!4704.41N/01526.27E>direct" };
 const RELAYED = {
   src: "OE3PLY-7",
   dst: "APRS",
@@ -22,7 +22,18 @@ const RELAYED = {
 describe("directSiteCall", () => {
   it("names the site on a frame heard directly (an unused WIDE hop is not a relay)", () => {
     expect(directSiteCall([], "oe8apr-10")).toBe("OE8APR-10");
+    expect(directSiteCall(["WIDE1-1", "WIDE2-2"], "OE8APR-10")).toBe("OE8APR-10");
+    expect(directSiteCall(["WIDE1-1"], "OE8APR-10")).toBe("OE8APR-10");
+    // the standard mobile path: hops are consumed in order, so an untouched WIDE1-1 means WIDE2-1 is
+    // exactly as the originator set it
     expect(directSiteCall(["WIDE1-1", "WIDE2-1"], "OE8APR-10")).toBe("OE8APR-10");
+    expect(directSiteCall(["TRACE3-3"], "OE8APR-10")).toBe("OE8APR-10");
+  });
+  it("names no site when a flood digipeater decremented a WIDEn-N / TRACEn-N hop without marking it", () => {
+    expect(directSiteCall(["WIDE2-1"], "OE8APR-10")).toBeUndefined();
+    expect(directSiteCall(["WIDE2"], "OE8APR-10")).toBeUndefined();
+    expect(directSiteCall(["TRACE3-1"], "OE8APR-10")).toBeUndefined();
+    expect(directSiteCall(["WIDE1", "WIDE2-2"], "OE8APR-10")).toBeUndefined();
   });
   it("names no site on a digipeated frame", () => {
     expect(directSiteCall(["OE8XBM-10*", "WIDE2-1"], "OE8APR-10")).toBeUndefined();

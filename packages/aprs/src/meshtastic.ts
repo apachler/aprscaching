@@ -46,8 +46,13 @@ export function deframeMeshtastic(buf: Uint8Array): { frames: Uint8Array[]; rest
   return { frames, rest: buf.subarray(i) };
 }
 
-/** Read a base-128 varint at `p`; returns the value and the next offset. */
+/**
+ * Read a base-128 varint at `p`; returns the value and the next offset. A value past 2^53 cannot be held
+ * exactly in a double, so a long varint is decoded as 64 bits and folded to two's complement — a negative
+ * int32/int64 (an altitude below sea level) is sign-extended on the wire to a 10-byte varint.
+ */
 function varint(b: Uint8Array, p: number): [number, number] {
+  const start = p;
   let v = 0,
     shift = 0;
   while (p < b.length) {
@@ -56,7 +61,10 @@ function varint(b: Uint8Array, p: number): [number, number] {
     if (!(c & 0x80)) break;
     shift += 7;
   }
-  return [v, p];
+  if (shift < 49) return [v, p];
+  let big = 0n;
+  for (let i = start, s = 0n; i < p && s < 64n; i++, s += 7n) big |= BigInt(b[i]! & 0x7f) << s;
+  return [Number(BigInt.asIntN(64, big)), p];
 }
 const i32le = (b: Uint8Array, p: number): number => new DataView(b.buffer, b.byteOffset + p, 4).getInt32(0, true);
 
@@ -83,7 +91,7 @@ function* walk(b: Uint8Array): Generator<[number, number, number | Uint8Array]> 
     else if (wire === 2) {
       let len: number;
       [len, p] = varint(b, p);
-      if (p + len > b.length) break;
+      if (len < 0 || p + len > b.length) break;
       yield [field, wire, b.subarray(p, p + len)];
       p += len;
     } else break; // groups/unknown — stop
@@ -113,7 +121,15 @@ function userFrom(payload: Uint8Array): { longName?: string; shortName?: string;
   return out;
 }
 
-/** Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3) } → a fix (×1e-7 deg), or null. */
+/** The altitude range passed on (metres): a Dead Sea shore to a high balloon. A value outside is a
+ *  firmware or GPS glitch, clamped so it never produces an absurd `/A=` field. */
+const MIN_ALT_M = -500,
+  MAX_ALT_M = 100_000;
+
+/**
+ * Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3,int32) } → a fix (×1e-7 deg), or
+ * null.
+ */
 function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
   let latI: number | null = null,
     lonI: number | null = null,
@@ -129,7 +145,7 @@ function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   const fix: MeshFix = { node, lat, lon };
-  if (alt) fix.altitudeM = Math.round(alt);
+  if (alt) fix.altitudeM = Math.round(Math.min(MAX_ALT_M, Math.max(MIN_ALT_M, alt)));
   return fix;
 }
 
@@ -188,6 +204,14 @@ export function parseFromRadio(frame: Uint8Array): MeshEvent | null {
 /** `ToRadio{ want_config_id }`, framed — asks a node for its database and then its live packet stream. */
 export function wantConfigFrame(id = 0x5eed): Uint8Array {
   const body = [0x18, ...varintBytes(id)]; // ToRadio.want_config_id = field 3, varint
+  return Uint8Array.from([START1, START2, (body.length >> 8) & 0xff, body.length & 0xff, ...body]);
+}
+/**
+ * `ToRadio{ heartbeat }`, framed — an empty Heartbeat (field 7) a client sends periodically so the node
+ * keeps its API connection open.
+ */
+export function heartbeatFrame(): Uint8Array {
+  const body = [0x3a, 0x00]; // ToRadio.heartbeat = field 7, length-delimited, empty
   return Uint8Array.from([START1, START2, (body.length >> 8) & 0xff, body.length & 0xff, ...body]);
 }
 function varintBytes(n: number): number[] {
