@@ -437,8 +437,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   Node/Bun/workerd), the RX listener (allowlist, rate cap, dedup with RF upgrade, fan-out, direct LoRa
   hearings attestable via `FIRST_PARTY_SITES`), and the opt-in `MeshcomSender`.
 - [ ] **MeshCom follow-ups** *(P2 · M)*, in order:
-  - a gateway → ingest transmit channel so features can request a send (the sender has no caller);
-  - find logging by a `FOUND <cache-id>` direct message to the instance call, with a confirmation reply;
+  - a `meshcom_msg` box command so gateway features can request a send through the node owner's box
+    (the sender has no caller);
+  - find logging by radio message, shared with APRS
+    ([design](docs/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
   - a MeshCom bot command set (e.g. `NEAR` → nearest caches) on the same channel;
