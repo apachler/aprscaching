@@ -14,7 +14,8 @@
     "./federation_sync": "./src/federation_sync.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
     "./radiolog": "./src/radiolog.ts",
-    "./box": "./src/box.ts"
+    "./box": "./src/box.ts",
+    "./ingest": "./src/ingest.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

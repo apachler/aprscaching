@@ -16,7 +16,7 @@
  *   - Everything else (bare APRS-IS injection qAC/qAX, app geo, any tunnelled transport) → not
  *     attested → cannot reach Tier A.
  */
-import type { Transport, Provenance } from "@aprscaching/shared";
+import { Transport as TransportEnum, type Transport, type Provenance } from "@aprscaching/shared";
 
 export interface RawProvenance {
   // The `& {}` keeps the known-value suggestions without the union collapsing to bare `string`.
@@ -24,6 +24,7 @@ export interface RawProvenance {
   igate_call?: string | null;
   path?: string | null; // stored APRS path incl. the q-construct
   ts?: number;
+  transport?: string | null; // how the position reached the gateway (positions.transport); NULL on legacy rows
 }
 
 /** RF-originated q-constructs: the IGate is asserting it heard this frame on-air. */
@@ -48,11 +49,38 @@ export function parseAttestedSites(raw?: string | null): Set<string> {
   );
 }
 
-/** Map how a stored position reached us onto the reserved transport enum. */
+/** Ingest port → transport. One table for every port a driver emits; an unknown port records nothing. */
+const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
+  "aprs-is": "aprs-is",
+  "kiss-tnc": "tnc",
+  agwpe: "tnc",
+  hostmode: "tnc",
+  "webserial-kiss": "browser-rf",
+  "browser-rf": "browser-rf",
+  axudp: "axudp",
+  axip: "axip",
+  meshcom: "meshcom",
+  meshtastic: "meshtastic",
+};
+
+/**
+ * The transport to record for an ingested packet. A batch signed by an operator's device key came from
+ * the browser RF bridge, whatever port it names. Recorded for display and statistics only: the verify
+ * engine never branches on it.
+ */
+export function transportForPort(port: string, signed: boolean): Transport | null {
+  if (signed) return "browser-rf";
+  return PORT_TRANSPORT[port] ?? null;
+}
+
+/**
+ * How a stored position reached us: the recorded transport, else (legacy rows with no transport) the
+ * app-geolocation marker or the APRS-IS feed. Never an input to `firstPartyAttested`.
+ */
 function transportOf(p: RawProvenance): Transport {
+  const stored = TransportEnum.safeParse(p.transport);
+  if (stored.success) return stored.data;
   if (p.heard_via === "app") return "app";
-  // RF and IS positions both arrive over the APRS-IS firehose today; the reserved transports
-  // (axudp/axip/hamnet-kiss/first-party-rf) are set by their own listeners when those land.
   return "aprs-is";
 }
 

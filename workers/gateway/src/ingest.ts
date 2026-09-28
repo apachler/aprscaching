@@ -13,6 +13,7 @@ import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, serviceCall, splitMessageNumber, type RadioMessage } from "./radiolog.js";
+import { transportForPort } from "./provenance.js";
 
 /** Base call (no SSID, no digipeat `*`), uppercased — the licence identity behind a callsign. */
 const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
@@ -162,8 +163,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const src = trusted ? "firehose" : "browser-rf";
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course, transport)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(
         p.src,
         p.ts,
@@ -176,6 +177,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
         fix.course ?? null,
+        transportForPort(p.port, signer != null),
       ),
     );
     stmts.push(

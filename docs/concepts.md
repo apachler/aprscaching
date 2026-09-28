@@ -48,7 +48,9 @@ The verification engine consumes a normalized **provenance** object, never a raw
 
 `firstPartyAttested` is the *only* gate on Tier A, and it is set solely by a receiving site the operator lists
 as their own (`FIRST_PARTY_SITES`). The transport type never appears in trust branching — so adding a new
-transport can raise data *volume* but never *trust*.
+transport can raise data *volume* but never *trust*. Each stored position records its transport (a local
+TNC, the browser RF bridge, APRS-IS, AXUDP/AXIP, MeshCom, Meshtastic) for display and statistics; a test
+proves no transport value changes attestation or a find's tier.
 
 ## Identity
 
