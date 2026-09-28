@@ -71,6 +71,7 @@ export interface Env {
 
   // ---- BBS store-and-forward — the relay callsign personal mail is delivered from ----
   BBS_CALL?: string; // e.g. "OE8APR-5"; defaults to "APRSCG"
+  RADIO_REPLIES?: string; // "1": text replies to FOUND/DNF/NOTE radio commands (HELP is always answered)
 
   // ---- public read API — free, per-IP rate-limited; free keys raise the cap ----
   API_RATE_WINDOW_SEC?: string; // rate-limit window seconds (default 60)
@@ -148,6 +149,7 @@ export const ENV_STRING_KEYS = [
   "FED_OPERATOR",
   "FED_APRS_CALL",
   "FIRST_PARTY_SITES",
+  "RADIO_REPLIES",
   "FED_PEERS",
   "FED_DISCOVER",
   "FED_CORROBORATION_QUORUM",

@@ -38,6 +38,8 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/api/caches` | Hide a cache | actor |
 | GET · PATCH | `/api/caches/:id` | Detail · update (owner) | public · actor |
 | GET · POST | `/api/caches/:id/logs` | Logbook · log a find/DNF/note | public · actor |
+| GET | `/api/radio/commands` | Your radio commands (FOUND / DNF / NOTE / HELP messages) and the service call to send them to | session |
+| POST | `/api/radio/commands/:id/confirm` · `/discard` | Log or drop a command that arrived only over the internet | session |
 | POST | `/api/caches/:id/favorite` · `/watch` · `/rate` | Favorite · watch · rate 1–5 (finders) | public/session |
 | GET | `/api/search?q=` · `/api/leaderboard` · `/api/activity` | Search · rankings · activity feed | public |
 | GET | `/api/corroborators` · `/api/profile/:call` | Top corroborating IGates · public profile | public |
