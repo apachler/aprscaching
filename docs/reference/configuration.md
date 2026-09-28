@@ -64,9 +64,10 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 | Variable | Purpose | Default |
 |---|---|---|
 | `FED_PRIVATE_KEY` | Ed25519 signing key (base64 JSON) — if set, feeds are signed | — |
-| `FED_KEY_HISTORY` / `FED_ROTATIONS` | Previous keys + signed rotations for key rollover | — |
-| `FED_REGISTRY` / `FED_REGISTRY_KEY` | Signed instance registry + the authority key that verifies it | — |
-| `FED_REGISTRY_DNS` | Alternative registry source: a DNS-TXT record name | — |
+| `FED_KEY_HISTORY` / `FED_ROTATIONS` | Previous keys (each with an `until`) + signed rotations for key rollover | — |
+| `FED_ROTATION_GRACE_DAYS` | Days a rotated-away key keeps verifying when its history entry names no `until`; also the grace `rotatekey.mjs` writes | 7 |
+| `FED_REGISTRY` / `FED_REGISTRY_KEY` | Signed instance registry + the pinned authority key that verifies it (required whenever a registry is configured) | — |
+| `FED_REGISTRY_DNS` | Alternative registry source: a DNS `TXT` record name whose `url=` locates the document; verified under `FED_REGISTRY_KEY` (without it the server refuses to start) | — |
 | `FED_OPERATOR` / `FED_APRS_CALL` | Operator label + APRS service callsign, self-published in `/.well-known` | — |
 | `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
 | `FED_DISCOVER` | Auto-adopt peers advertised by peers (transitive discovery) | off |

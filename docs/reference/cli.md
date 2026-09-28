@@ -24,7 +24,9 @@ Prints `FED_PRIVATE_KEY` (set it as a secret) and the public key it will publish
 machine-readable output. Related:
 
 - `node tools/fedkey/rotatekey.mjs` — produce a signed rotation record (a new key vouched for by the old
-  one) for `FED_ROTATIONS`, so peers accept the new key without interruption.
+  one) for `FED_ROTATIONS`, so peers accept the new key without interruption, and the old key for
+  `FED_KEY_HISTORY` with an `until` of the rotation time plus `FED_ROTATION_GRACE_DAYS` (default 7): peers
+  stop accepting the old key after that.
 - `node tools/fedkey/signregistry.mjs '<entries-json>'` — sign an instance-registry document with an
   authority key, producing `FED_REGISTRY` + `FED_REGISTRY_KEY`.
 

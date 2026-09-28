@@ -24,15 +24,33 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 |---|---|
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid** |
-| `origin` (3) | Originating instance id (namespace authority: a peer only serves its own prefix) |
+| `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
 | `v` (4) | Per-gid monotonic version — duplicated / re-ordered / multi-path delivery converges |
 | `at` (5) | Signing time, unix seconds |
-| `signer` (6) | Callsign or instance id |
+| `signer` (6) | The signing instance id; a mirrored record is accepted only when it equals `origin` |
 | `body` (7) | Type-specific fields, text-keyed, integer-scaled numbers only |
 
 A receiver verifies the signature **over the received payload bytes verbatim** (never a re-encode)
-against the origin's published key set, then applies by `(type, gid, v)`. Cursors are per-transport
+against the origin's accept set (below), then applies by `(type, gid, v)`. Cursors are per-transport
 delivery hints, not the source of truth — the content address is.
+
+### Accept sets
+
+The keys a peer's frames verify under are decided by the receiver, never by the peer's descriptor alone,
+and stored on its peer row (`fed_peers.accept_keys`) so every carrier uses the same set:
+
+- **The pin.** The first key seen for a peer, bound together with its instance id. The pin moves only to a
+  key the old pin reaches through verified rotation records (`{key, prevKey, at}` signed by `prevKey`).
+- **Proven predecessors.** Another published key counts only if a verified rotation chain leads from it to
+  the current key, and only until its cutoff: its published `until`, else the rotation time plus the grace
+  (`FED_ROTATION_GRACE_DAYS`, 7 by default). A cutoff never moves later once recorded, so a later
+  descriptor cannot revive a rotated-away key, and a rotated-away key never becomes the pin again.
+- **The registry binding.** When the signed registry binds the instance to a key, the peer's current key
+  must be that key; it is also accepted for frames from that origin.
+
+A key merely listed in the descriptor's `publicKeys`, without a rotation chain, is never accepted. An
+instance id is bound to one live peer row: a second URL claiming it, or a descriptor renaming it, is
+refused.
 
 ## The sync surface
 
@@ -127,8 +145,8 @@ Both halves ride the existing BBS machinery:
   the content BID lands in `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
 - **Receive** — an inbound forwarded message addressed to `ACSFED` triggers the trust-gated apply on
   first sight (a re-flooded copy dedups on its BID before the apply). The claimed origin only selects
-  which key set to verify against — the key pinned for that peer plus its signed-registry binding; an
-  unknown or operator-blocked origin is quarantined, never applied.
+  which key set to verify against — the accept set last verified for that peer plus its signed-registry
+  binding; an unknown or operator-blocked origin is quarantined, never applied.
 
 `ACSFED` bulletins are machine carrier traffic: the human bulletin listing hides them unless the
 category is asked for explicitly.
@@ -137,7 +155,10 @@ category is asked for explicitly.
 
 Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed frames to
 `/federation/submit` (`application/cbor` only — any other content type is answered 415; one
-submission is one key — a second key smuggled into the batch is rejected). Relay feed answers carry
+submission is one key — a second key smuggled into the batch is rejected; the body is capped at 4 MiB).
+The submitted key must be one the hub already verified for that instance under any peer row (and the
+registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
+`unvetted`. Relay feed answers carry
 a CBOR page (`pageB64`, a base64 fedwire page). Every mirrored record travels as a signed fedwire
 frame; the stableStringify signing base exists only for standalone signed documents (the registry,
 key-rotation records, account operations), never for feed records.

@@ -13,10 +13,13 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import {
   FED_PROTOCOL_VERSION,
-  activeFedKeys,
   type FedPublicKey,
+  isInstanceId,
   loadRegistry,
+  parseAcceptKeys,
   registryKeyAllowed,
+  resolvePeerKeys,
+  usableKeys,
   CACHE_FEED,
   FIND_FEED,
   KEY_FEED,
@@ -60,6 +63,7 @@ interface PeerRow {
   trust: TrustLevel;
   added_via?: string;
   endpoints?: string | null; // typed endpoint set (JSON) — see fedtransport.ts
+  accept_keys?: string | null; // verified key set (JSON [{x, until?}]) — see resolvePeerKeys
   verified_via?: string | null; // identity attestation, e.g. 'ardc-lot' (never a data-trust input)
 }
 
@@ -100,9 +104,15 @@ async function seedPeers(env: Env): Promise<void> {
   // registry discovery: seed peers from the verified signed registry as `unvetted` (operator
   // promotes). Carries the registry-bound key + instance so the anti-spoof check has them. No-op
   // unless FED_REGISTRY is configured + valid. INSERT OR IGNORE never downgrades a known peer.
-  for (const e of (await loadRegistry(env)).values()) {
+  let registry: Map<string, RegistryEntry>;
+  try {
+    registry = await loadRegistry(env);
+  } catch {
+    return; // an untrustworthy registry seeds nothing; each peer's sync reports the error
+  }
+  for (const e of registry.values()) {
     const u = e.url?.trim().replace(/\/+$/, "");
-    if (u && e.instance !== ours(env))
+    if (u && isInstanceId(e.instance) && e.instance !== ours(env))
       await env.DB.prepare(
         "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')",
       )
@@ -257,21 +267,54 @@ async function syncPeer(
     protocolVersions?: string[];
   }>("/.well-known/aprscaching");
   const pub = wk.signed ? wk.publicKey : null;
-  const pinned = p.public_key; // the key we last trusted for this peer (null on first sight)
-  const newActive = activeFedKeys(wk.publicKeys ?? (pub ? [{ x: pub }] : []), now());
 
-  // never blindly re-pin. Once a peer is signed we refuse to drop to unsigned, and we only
-  // accept a *changed* key if the peer proves continuity with a rotation-record chain from the pinned
-  // key (each new key signed by its predecessor). A hijacked domain that simply swaps keys is rejected.
-  if (pinned) {
-    if (!pub)
-      throw new Error(`peer ${wk.instance} regressed to unsigned — refusing (was pinned ${pinned.slice(0, 12)}…)`);
-    if (!newActive.includes(pinned) && !(await rotationChainReaches(pinned, newActive, wk.rotations)))
-      throw new Error(`peer ${wk.instance} key changed without a valid rotation proof — refusing (possible hijack)`);
+  // Identity first, and nothing is written until every check below has passed. The instance id
+  // must be a plain hostname (a `:` would let it claim a slice of another namespace), and once a
+  // row is bound to an instance the binding never moves: a descriptor naming another instance is a
+  // different server answering on this URL.
+  if (!isInstanceId(wk.instance)) throw new Error(`descriptor names an invalid instance id — refusing`);
+  if (p.instance && p.instance !== wk.instance)
+    throw new Error(`descriptor names instance ${wk.instance} but this peer is bound to ${p.instance} — refusing`);
+  // never mirror ourselves
+  if (wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
+  // one live row per instance id: a second URL claiming a bound instance is an impostor or a stale
+  // address, and the operator decides which (block or delete the other row)
+  const holder = await env.DB.prepare(
+    "SELECT url FROM fed_peers WHERE instance = ? AND url != ? AND trust != 'blocked'",
+  )
+    .bind(wk.instance, p.url)
+    .first<{ url: string }>();
+  if (holder) throw new Error(`instance ${wk.instance} is already bound to ${holder.url} — refusing`);
+
+  // anti-spoof: if a signed registry binds this instance to a key, the peer's CURRENT key must be
+  // that key. Unregistered peers fall back to trust-on-first-use.
+  const registryEntry = (await loadRegistry(env)).get(wk.instance);
+  if (!registryKeyAllowed(registryEntry, pub))
+    throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
+
+  // never blindly re-pin: the pin moves only along a verified rotation chain, other published keys
+  // count only as proven predecessors inside their grace, and a rotated-away key stays revoked
+  const keys = await resolvePeerKeys({
+    pinned: p.public_key,
+    current: pub,
+    published: wk.publicKeys ?? (pub ? [{ x: pub }] : []),
+    rotations: wk.rotations,
+    prior: parseAcceptKeys(p.accept_keys),
+    nowS: now(),
+    graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
+  });
+  if (!keys.ok) throw new Error(`peer ${wk.instance}: ${keys.reason} — refusing (possible hijack)`);
+  const acceptJson = JSON.stringify(keys.accept);
+  try {
+    await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=?, accept_keys=? WHERE url=?")
+      .bind(wk.instance, keys.pin, acceptJson, p.url)
+      .run();
+  } catch (e) {
+    if (/UNIQUE/i.test((e as Error).message))
+      throw new Error(`instance ${wk.instance} is already bound to another peer — refusing`, { cause: e });
+    throw e;
   }
-  await env.DB.prepare("UPDATE fed_peers SET instance=?, public_key=? WHERE url=?")
-    .bind(wk.instance ?? null, pub, p.url)
-    .run();
+  const newActive = usableKeys(keys.accept, now());
 
   // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
   // Discovered peers start `unvetted` — mirrored-but-flagged, excluded from corroboration until an
@@ -287,16 +330,6 @@ async function syncPeer(
           .run();
     }
   }
-
-  // never mirror ourselves
-  if (wk.instance && wk.instance === ours(env))
-    return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
-
-  // anti-spoof: if a signed registry binds this instance to a key, the peer's published keys MUST
-  // include it — else someone is impersonating a known instance id. Unregistered peers fall back to TOFU.
-  const registryEntry = (await loadRegistry(env)).get(wk.instance);
-  if (!registryKeyAllowed(registryEntry, newActive))
-    throw new Error(`registry key mismatch for ${wk.instance} — refusing to mirror (possible spoof)`);
 
   // capability negotiation: a peer that speaks our protocol version has an authoritative
   // capability list → skip feeds it doesn't advertise; otherwise every known feed is tried and a 404
@@ -475,10 +508,11 @@ export async function rotationChainReaches(
   return false;
 }
 
-/** A peer already tombstoned this global id — don't re-mirror it. */
-async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
-  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ?")
-    .bind(globalId)
+/** The record's own origin already tombstoned this global id — don't re-mirror it. Only the origin
+ *  that owns a namespace can delete in it, so a tombstone row from any other origin is ignored. */
+async function isTombstoned(env: Env, globalId: string, origin: string): Promise<boolean> {
+  return !!(await env.DB.prepare("SELECT 1 AS x FROM remote_tombstones WHERE target_id = ? AND origin = ?")
+    .bind(globalId, origin)
     .first<{ x: number }>());
 }
 
@@ -489,9 +523,9 @@ async function isTombstoned(env: Env, globalId: string): Promise<boolean> {
  */
 async function acceptUnsigned(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
   if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
-  if (rec.signer && rec.signer !== instance) return false; // and self-attested as that peer
-  if (rec.signer && rec.signer === ours(env)) return false; // never mirror our own
-  if (await isTombstoned(env, rec.id)) return false; // purged by a peer tombstone
+  if (rec.signer !== instance) return false; // and self-attested as that peer (an empty signer attests nothing)
+  if (instance === ours(env)) return false; // never mirror our own
+  if (await isTombstoned(env, rec.id, instance)) return false; // purged by its origin's tombstone
   return true;
 }
 
@@ -593,7 +627,12 @@ export interface FedFramesResult {
  * than once (multi-path flood, replays) converge.
  */
 export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<FedFramesResult> {
-  const registry = await loadRegistry(env);
+  let registry: Map<string, RegistryEntry>;
+  try {
+    registry = await loadRegistry(env);
+  } catch {
+    return { applied: 0, quarantined: frames.length, rejected: 0 }; // no trustworthy registry → apply nothing
+  }
   const keyCache = new Map<string, string[] | "blocked">();
   let applied = 0,
     quarantined = 0,
@@ -671,7 +710,7 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
 async function applyPeerAnnounce(env: Env, rec: FedRecord, origin: string): Promise<boolean> {
   const addresses = parseEndpoints(rec.body.addresses);
   if (!addresses.length) return false;
-  const res = await env.DB.prepare("UPDATE fed_peers SET endpoints=? WHERE instance=?")
+  const res = await env.DB.prepare("UPDATE fed_peers SET endpoints=? WHERE instance=? AND trust != 'blocked'")
     .bind(JSON.stringify(addresses), origin)
     .run();
   return !!res.meta.changes;
@@ -746,9 +785,11 @@ async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "
 }
 
 /**
- * The keys a claimed origin's frames may be signed under: the key we last pinned for that peer plus
- * any the signed registry binds to its instance id. `"blocked"` when an operator has quarantined the
- * peer; an empty set when the origin is entirely unknown — either way its frames never apply.
+ * The keys a claimed origin's frames may be signed under: the key set last verified for its live
+ * peer row (the pin plus predecessors inside their rotation grace, see resolvePeerKeys) plus the key
+ * the signed registry binds to its instance id. An instance has at most one live (non-blocked) row;
+ * `"blocked"` when only blocked rows name it, an empty set when the origin is unknown — either way
+ * its frames never apply. A disabled row contributes no keys.
  */
 async function originKeys(
   env: Env,
@@ -758,15 +799,22 @@ async function originKeys(
 ): Promise<string[] | "blocked"> {
   const hit = cache.get(origin);
   if (hit !== undefined) return hit;
-  const row = await env.DB.prepare("SELECT public_key, trust FROM fed_peers WHERE instance = ? AND enabled = 1 LIMIT 1")
+  const row = await env.DB.prepare(
+    `SELECT public_key, accept_keys, trust, enabled FROM fed_peers WHERE instance = ?
+      ORDER BY trust = 'blocked', url LIMIT 1`,
+  )
     .bind(origin)
-    .first<{ public_key: string | null; trust: TrustLevel }>();
+    .first<{ public_key: string | null; accept_keys: string | null; trust: TrustLevel; enabled: number }>();
   if (row?.trust === "blocked") {
     cache.set(origin, "blocked");
     return "blocked";
   }
   const keys = new Set<string>();
-  if (row?.public_key) keys.add(row.public_key);
+  if (row && row.enabled !== 0) {
+    const accept = parseAcceptKeys(row.accept_keys);
+    if (accept.length) for (const k of usableKeys(accept, now())) keys.add(k);
+    else if (row.public_key) keys.add(row.public_key);
+  }
   const regKey = registry.get(origin)?.key;
   if (regKey) keys.add(regKey);
   const arr = [...keys];
@@ -903,11 +951,21 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   const url = b.url.trim().replace(/\/+$/, "");
   const exists = await env.DB.prepare("SELECT url FROM fed_peers WHERE url = ?").bind(url).first<{ url: string }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
-  await env.DB.prepare(
-    "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
-  )
-    .bind(trust, trust, now(), url)
-    .run();
+  try {
+    await env.DB.prepare(
+      "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
+    )
+      .bind(trust, trust, now(), url)
+      .run();
+  } catch (e) {
+    // unblocking a row whose instance id another live row already holds
+    if (/UNIQUE/i.test((e as Error).message))
+      return json(
+        { ok: false, error: "another peer holds this instance id — block or remove it first" },
+        { status: 409 },
+      );
+    throw e;
+  }
   return json({ ok: true, url, trust });
 }
 
@@ -920,7 +978,36 @@ const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Pr
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
-const PUSH_CURSORS = new Map<string, number>(); // "hub|type" -> last pushed cursor (in-memory; re-push on restart is idempotent)
+const PUSH_CURSORS = new Map<string, number>();
+/** Largest submission body the hub reads: a full page of frames fits well inside it. */
+const MAX_SUBMIT_BYTES = 4 * 1024 * 1024;
+
+/** Read a request body up to `max` bytes; null when it is larger. Never buffers past the cap. */
+async function readCapped(req: Request, max: number): Promise<Uint8Array | null> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) return null;
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
+} // "hub|type" -> last pushed cursor (in-memory; re-push on restart is idempotent)
 
 /**
  * HUB endpoint: accept a spoke's signed records and mirror them as if we had pulled them
@@ -940,12 +1027,16 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   // submission is one spoke), verified over the frame bytes verbatim.
   if (!(req.headers.get("content-type") ?? "").includes("application/cbor"))
     return json({ ok: false, error: "submit is application/cbor (a fedwire sync page)" }, { status: 415 });
+  const body = await readCapped(req, MAX_SUBMIT_BYTES);
+  if (!body) return json({ ok: false, error: "submission too large" }, { status: 413 });
   let page: ReturnType<typeof decodeFedSyncPage>;
   try {
-    page = decodeFedSyncPage(new Uint8Array(await req.arrayBuffer()));
+    page = decodeFedSyncPage(body);
   } catch {
     return json({ ok: false, error: "not a CBOR sync page" }, { status: 400 });
   }
+  if (!isInstanceId(page.instance))
+    return json({ ok: false, error: "submitter instance id is not a hostname" }, { status: 400 });
   const records: FeedRecord[] = [];
   let rejected = 0;
   let submitKey: string | null = null;
@@ -999,27 +1090,46 @@ async function submitRecords(
   if (allow.length && !allow.includes(instance))
     return json({ ok: false, error: "instance not allowed" }, { status: 403 });
 
-  // a secret-holder must not be able to impersonate a KNOWN instance. If the signed registry
-  // binds this instance to a key, the submitted key MUST match it.
-  const regEntry = (await loadRegistry(env)).get(instance);
+  // A secret-holder must not be able to impersonate a KNOWN instance. The signed registry binding
+  // wins; otherwise the submitted key must be one the hub already verified for this instance, under
+  // ANY row — a pulled peer, a 44net or registry entry, or an earlier submission. A shared secret is
+  // not an identity, so a blocked instance stays out and a new spoke enters unvetted until the
+  // operator promotes it.
+  let registry: Map<string, RegistryEntry>;
+  try {
+    registry = await loadRegistry(env);
+  } catch {
+    return json({ ok: false, error: "federation registry is misconfigured on this hub" }, { status: 503 });
+  }
+  const regEntry = registry.get(instance);
   if (regEntry?.key && regEntry.key !== publicKey)
     return json({ ok: false, error: "submitted key does not match the registry for this instance" }, { status: 403 });
-  // TOFU: once we've pinned a key for this submit-instance, it can't silently change (the same
-  // no-silent-swap rule as the pull path). A rotated spoke re-registers under a new instance id or the operator clears the row.
-  const pinnedRow = await env.DB.prepare("SELECT public_key FROM fed_peers WHERE url = ?")
-    .bind(`submit:${instance}`)
-    .first<{ public_key: string | null }>();
-  if (pinnedRow?.public_key && pinnedRow.public_key !== publicKey)
-    return json({ ok: false, error: "submitted key changed for a known instance — refusing" }, { status: 403 });
+  const known = (
+    await env.DB.prepare("SELECT url, public_key, accept_keys, trust FROM fed_peers WHERE instance = ?")
+      .bind(instance)
+      .all<{ url: string; public_key: string | null; accept_keys: string | null; trust: TrustLevel }>()
+  ).results;
+  if (known.some((r) => r.trust === "blocked"))
+    return json({ ok: false, error: "instance is blocked on this hub" }, { status: 403 });
+  for (const r of known) {
+    const accept = parseAcceptKeys(r.accept_keys);
+    const keys = accept.length ? usableKeys(accept, now()) : r.public_key ? [r.public_key] : [];
+    if (keys.length && !keys.includes(publicKey))
+      return json(
+        { ok: false, error: "submitted key does not match the key known for this instance" },
+        { status: 403 },
+      );
+  }
 
-  // Register the operator-authorised spoke (it holds FED_SUBMIT_SECRET) as a never-pulled peer so its
-  // mirrored records carry a uniform trust binding. enabled=0 → never fetched; the synthetic
-  // `submit:<instance>` url keeps it out of the pull set. INSERT OR IGNORE respects a later block.
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via, approved_at, enabled) VALUES (?, ?, ?, 'trusted', 'submitted', ?, 0)",
-  )
-    .bind(`submit:${instance}`, instance, publicKey, now())
-    .run();
+  // Register a new spoke as a never-pulled peer so its mirrored records carry a uniform trust
+  // binding: enabled=0 keeps it out of the pull set, and the synthetic `submit:<instance>` url
+  // marks how it arrived.
+  if (!known.length)
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via, enabled) VALUES (?, ?, ?, ?, 'unvetted', 'submitted', 0)",
+    )
+      .bind(`submit:${instance}`, instance, publicKey, JSON.stringify([{ x: publicKey }]))
+      .run();
 
   let applied = 0,
     rejected = preRejected;
@@ -1033,7 +1143,7 @@ async function submitRecords(
       rejected++;
       continue;
     } // only the submitter's own namespace
-    if (await isTombstoned(env, rec.id)) {
+    if (await isTombstoned(env, rec.id, instance)) {
       rejected++;
       continue;
     } // already purged by a tombstone

@@ -33,10 +33,11 @@ export interface Env {
   FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed
   FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations
   FED_ROTATIONS?: string; // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old
+  FED_ROTATION_GRACE_DAYS?: string; // days a peer's rotated-away key keeps verifying when its history entry has no `until` (default 7)
   // ---- signed instance registry / namespace authority — all optional ----
   FED_REGISTRY?: string; // signed registry doc {entries:[{instance,url?,key?,operator?,aprsCall?}],at,sig,signer}
   FED_REGISTRY_KEY?: string; // the registry authority's Ed25519 public key (base64url) used to verify FED_REGISTRY
-  FED_REGISTRY_DNS?: string; // alt source: a DNS TXT record name carrying `url=…;key=…` to the signed registry
+  FED_REGISTRY_DNS?: string; // alt source: a DNS TXT record name carrying `url=…` of the signed registry (verified under FED_REGISTRY_KEY)
   FED_OPERATOR?: string; // this instance's operator label, self-published in /.well-known
   FED_APRS_CALL?: string; // this instance's APRS service callsign (<licensedCall>-<SERVICE_SSID>), self-published
   FIRST_PARTY_SITES?: string; // provenance seam: allowlist of IGate/site calls we operate + attest → Tier-A origin
@@ -143,6 +144,7 @@ export const ENV_STRING_KEYS = [
   "FED_PRIVATE_KEY",
   "FED_KEY_HISTORY",
   "FED_ROTATIONS",
+  "FED_ROTATION_GRACE_DAYS",
   "FED_REGISTRY",
   "FED_REGISTRY_KEY",
   "FED_REGISTRY_DNS",
