@@ -1,0 +1,8 @@
+{
+  "description": "Invalid UTF-8 bytes.",
+  "datagramHex": "7b2274797065223a22ff227d",
+  "expect": {
+    "ok": false,
+    "reason": "bad-utf8"
+  }
+}

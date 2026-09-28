@@ -112,6 +112,7 @@ only when its variable is present.
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` |
 | Meshtastic | `MESH_HOST`, `MESH_PORT` (`1884`) |
+| MeshCom (RX-only) | `MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`) |
 | TAK / CoT in | `TAK_COT_PORT`, `TAK_COT_BIND` |
 | AXUDP | `AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS` |
 | AXIP | `AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND` |

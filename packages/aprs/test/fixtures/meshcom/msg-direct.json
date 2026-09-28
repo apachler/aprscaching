@@ -1,0 +1,15 @@
+{
+  "description": "Direct message with an APRS message number suffix.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"DH1FR-1\",\"dst\":\"OE8APR-12\",\"msg\":\"Hello{034\",\"msg_id\":\"5DFC7187\",\"firmware\":35,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "srcType": "lora",
+    "src": "DH1FR-1",
+    "dst": "OE8APR-12",
+    "dstKind": "call",
+    "text": "Hello{034",
+    "rf": true,
+    "direct": true
+  }
+}

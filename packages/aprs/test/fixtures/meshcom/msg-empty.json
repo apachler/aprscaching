@@ -1,0 +1,8 @@
+{
+  "description": "A message without text is rejected.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"DH1FR-1\",\"dst\":\"OE8APR-12\",\"msg\":\"\",\"msg_id\":\"5DFC718C\",\"firmware\":35,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": false,
+    "reason": "empty-text"
+  }
+}

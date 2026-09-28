@@ -1,0 +1,8 @@
+{
+  "description": "A known src_type with an unknown type.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"ack\",\"src\":\"OE8APR-12\",\"msg\":\"\",\"lat\":46.6247,\"lat_dir\":\"N\",\"long\":14.3053,\"long_dir\":\"E\",\"aprs_symbol\":\"#\",\"aprs_symbol_group\":\"/\",\"hw_id\":4,\"msg_id\":\"0A1B2C3D\",\"alt\":560,\"batt\":87,\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": false,
+    "reason": "unknown-type"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "description": "The firmware's test heartbeat and other types are not ingested.",
+  "datagram": "{\"type\":\"hb\",\"seq\":1,\"ms\":500}",
+  "expect": {
+    "ok": false,
+    "reason": "unknown-src-type"
+  }
+}

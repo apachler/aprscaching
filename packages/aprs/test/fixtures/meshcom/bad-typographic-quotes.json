@@ -1,0 +1,8 @@
+{
+  "description": "The ICSSW page's typographic quotes are not JSON.",
+  "datagram": "{“type”:“msg”,“dst”:“*”,“msg”:“x”}",
+  "expect": {
+    "ok": false,
+    "reason": "not-json"
+  }
+}
