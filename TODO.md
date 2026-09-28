@@ -108,6 +108,16 @@ nightly budget):**
   (`snd-aloop`): a real Bell-202 AFSK modem path. Our KISS TCP client on one side and the AGWPE
   client against Direwolf's AGW port (:8000) on the same instance; the same environment chains the
   igate path (Direwolf RF side → our igate → aprsc) end-to-end.
+
+Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom: the KISS and AGWPE legs above,
+APRS-IS against aprsc (running), and MeshCom's golden-fixture conformance on Node, Bun and workerd
+(`pnpm conformance:meshcom`, running; a live node stays validate-at-deploy). The legs already running
+in `interop.yml` — the local AXUDP loop, LinBPQ, F6FBB, aprsc, TNN/JNOS — stay: they guard the shipped
+NET/ROM node and FBB/BBS code.
+
+**Parked conformance legs** — planned, not scheduled before launch; each is picked up when its
+transport becomes core:
+
 - [ ] **WA8DED hostmode vs tfkiss** *(P2 · M)* — `tfkiss` (the TheFirmware emulator, the living
   Linux lineage of TFPCX) built from source, bridged onto the KISS leg; our hostmode driver runs
   its real TNC handshake, monitor headers, and channel polling against it.
@@ -121,8 +131,13 @@ nightly budget):**
   (hostmode/AGWPE/Multiport) is byte-stream-agnostic; run it headless in Node against the same
   Direwolf/tfkiss partners so ONE conformance suite covers the box drivers and the shack
   drivers alike.
+- [ ] **Client-side conformance legs** — the Station hub's southbound servers dialled by real
+  third-party clients (listed under the hub, which is parked).
 
-## Station hub: the box as protocol driver + universal hardware interface (owner-decided design)
+## Station hub — parked until after launch
+
+*The box as protocol driver + universal hardware interface (owner-decided design).* Parked: it is a
+separate product scope that carries transmit liability, and it does not advance the caching game.
 
 The inversion of the transport work above: today the box *consumes* protocols; this program makes
 it also *serve* them, so third-party packet software uses our box as its TNC/driver (the TFPCX

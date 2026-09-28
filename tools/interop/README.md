@@ -24,10 +24,12 @@ a hardware TNC, AXIP over raw IP proto 93 (needs CAP_NET_RAW both ends; the wire
 unit-tested and identical to AXUDP's), and TAK/CoT output consumers. Weather (CWOP) rides the
 same APRS-IS protocol asserted above.
 
-The remaining headless-coverable paths — KISS TCP vs kernel AX.25, WA8DED hostmode vs tfkiss,
-AGWPE + AFSK vs Direwolf, AXIP vs ax25ipd, Meshtastic vs meshtasticd, the
-full FBB mail exchange, and the browser GPLSL drivers under Node — are the transport-conformance
-program in [`TODO.md`](../../TODO.md); each leg landing updates this matrix.
+The remaining headless-coverable paths are the transport-conformance program in
+[`TODO.md`](../../TODO.md); each leg landing updates this matrix. Active — the core transports:
+KISS TCP vs kernel AX.25, AGWPE + AFSK vs Direwolf, and the full FBB mail exchange (APRS-IS vs aprsc
+and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
+AXIP vs ax25ipd, Meshtastic vs meshtasticd, the browser GPLSL drivers under Node, and the client-side
+legs against the Station hub's servers. Every leg that already runs here stays.
 
 ## 1. Local loop — no Docker (`run-local-loop.sh`)
 
