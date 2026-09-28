@@ -4,12 +4,46 @@ import { parseTNC2 } from "@aprscaching/aprs";
 import { hostmodeCommand, parseHostmode, type HostmodeEvent } from "@aprscaching/packet";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import { tncPacket } from "./link.js";
 
 export interface HostmodeOpts {
   host: string;
   port: number;
   mycall?: string;
   radioPort?: number;
+  /** This box's receiving-site callsign; stamped on frames heard directly (see `directSiteCall`). */
+  siteCall?: string;
+}
+
+/**
+ * A monitor header as a TNC2 address field (`SRC>DST,DIGI*,…`). TheFirmware / WA8DED TNCs print
+ * `fm SRC to DST via DIGI* DIGI ctl UI^ pid F0`; a header already in TNC2 form passes through. The
+ * has-been-repeated `*` on a digipeater hop is kept, which is what the direct-hearing site stamp reads.
+ * Returns null for anything that is neither form.
+ */
+export function monitorHeaderToTnc2(header: string): string | null {
+  const h = header.trim();
+  if (h.includes(">")) return h;
+  const m = /^fm\s+(\S+)\s+to\s+(\S+)(?:\s+via\s+(.+?))?(?:\s+(?:ctl|pid)\b.*)?$/i.exec(h);
+  if (!m) return null;
+  const via = m[3] ? m[3].trim().split(/\s+/) : [];
+  return [`${m[1]}>${m[2]}`, ...via].join(",");
+}
+
+/** The ingest packet for one monitored frame (header + info), or null when the header is not parseable. */
+export function hostmodeMonitorPacket(
+  header: string,
+  info: Uint8Array,
+  siteCall: string | undefined,
+  ts: number,
+): { frame: ParsedFrame; packet: Packet } | null {
+  const addr = monitorHeaderToTnc2(header);
+  if (!addr) return null;
+  let body = "";
+  for (const b of info) body += String.fromCharCode(b);
+  const frame = parseTNC2(`${addr}:${body}`);
+  if (!frame) return null;
+  return { frame, packet: tncPacket(frame, "hostmode", siteCall, ts) };
 }
 export interface HostmodeHandlers {
   onPacket: (p: Packet) => void;
@@ -97,22 +131,9 @@ export class HostmodeTnc {
   }
 
   private emitMonitor(header: string, info: Uint8Array): void {
-    if (!header.includes(">")) return; // not a parseable addr header
-    let body = "";
-    for (const b of info) body += String.fromCharCode(b);
-    const f = parseTNC2(`${header.trim()}:${body}`);
-    if (!f) return;
-    this.h.onFrame?.(f);
-    this.h.onPacket({
-      src: f.src,
-      dst: f.dst,
-      path: f.path,
-      payload: f.payload,
-      kind: "other",
-      heardVia: "rf",
-      port: "hostmode",
-      ts: Math.floor(Date.now() / 1000),
-      raw: f.raw,
-    });
+    const r = hostmodeMonitorPacket(header, info, this.o.siteCall, Math.floor(Date.now() / 1000));
+    if (!r) return;
+    this.h.onFrame?.(r.frame);
+    this.h.onPacket(r.packet);
   }
 }
