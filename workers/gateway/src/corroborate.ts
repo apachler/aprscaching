@@ -16,6 +16,7 @@ import { json } from "./app.js";
 import { haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers } from "./federation_sync.js";
+import { parseAttestedSites } from "./provenance.js";
 import {
   coarsenConfig,
   snapToGrid,
@@ -71,14 +72,49 @@ export function corroboratorIgate(opts: {
   return baseCall(ig) === baseCall(opts.loggerCall) ? null : ig.toUpperCase();
 }
 
+export interface RfPositionRow {
+  lat: number;
+  lon: number;
+  ts: number;
+  igate_call: string | null;
+}
+
+/**
+ * Pick the evidence a set of this instance's RF positions offers for a corroboration query, or null.
+ *
+ * Only a receiving site this instance attests (FIRST_PARTY_SITES) can vouch for a position — the same
+ * default-deny rule as local Tier A, so an empty list vouches for nothing. A peer's corroboration can lift
+ * a find to Tier A there, so answering from a site nobody here stands behind would let transport
+ * masquerade as trust. A site the logger controls, or one the asker excludes, never counts.
+ */
+export function pickLocalEvidence(
+  rows: RfPositionRow[],
+  q: Pick<CorroborationQuery, "callsign" | "lat" | "lon" | "radiusM">,
+  excludeIgates: Set<string>,
+  attested: Set<string>,
+): Omit<Evidence, "instance"> | null {
+  if (attested.size === 0) return null;
+  const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
+  const callBase = baseCall(q.callsign);
+  for (const r of rows) {
+    const ig = r.igate_call ?? "";
+    if (!ig || !attested.has(ig.toUpperCase())) continue; // no site, or one this instance doesn't attest
+    const igBase = baseCall(ig);
+    if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
+    const d = haversineMeters(r.lat, r.lon, q.lat, q.lon);
+    if (d <= radius) return { igateCall: ig, distanceM: d, ts: r.ts };
+  }
+  return null;
+}
+
 /** Search THIS instance's RF positions for an independent corroboration. Returns evidence or null. */
 async function localCorroboration(
   env: Env,
   q: CorroborationQuery,
   excludeIgates: Set<string>,
 ): Promise<Omit<Evidence, "instance"> | null> {
-  const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
-  const callBase = baseCall(q.callsign);
+  const attested = parseAttestedSites(env.FIRST_PARTY_SITES);
+  if (attested.size === 0) return null;
   const rows = (
     await env.DB.prepare(
       `SELECT lat, lon, ts, igate_call FROM positions
@@ -86,18 +122,9 @@ async function localCorroboration(
       ORDER BY ts DESC LIMIT 500`,
     )
       .bind(q.callsign.toUpperCase(), q.since, q.until)
-      .all<{ lat: number; lon: number; ts: number; igate_call: string | null }>()
+      .all<RfPositionRow>()
   ).results;
-
-  for (const r of rows) {
-    const ig = r.igate_call ?? "";
-    if (!ig) continue;
-    const igBase = baseCall(ig);
-    if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
-    const d = haversineMeters(r.lat, r.lon, q.lat, q.lon);
-    if (d <= radius) return { igateCall: ig, distanceM: d, ts: r.ts };
-  }
-  return null;
+  return pickLocalEvidence(rows, q, excludeIgates, attested);
 }
 
 /** A stable key for rate-limit / negative memoization: callsign + the coarsened cell + time bucket. */

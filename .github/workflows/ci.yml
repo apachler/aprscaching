@@ -127,7 +127,8 @@ jobs:
           REG=$(node tools/fedkey/signregistry.mjs "[{\"instance\":\"oe.pub\",\"url\":\"http://127.0.0.1:8801\",\"key\":\"$PUBPUB\",\"operator\":\"OE8APR\"}]" --raw)
           FED_REGISTRY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY)" "$REG")
           FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
-          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" \
+          # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers.
+          DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" FIRST_PARTY_SITES=OE8XXX \
             FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
             FED_ENDPOINTS='[{"transport":"https","address":"http://127.0.0.1:8801","priority":10}]' \
             pnpm --filter @aprscaching/node-gateway start &
