@@ -48,7 +48,7 @@ MESHCOM_NODE=192.168.1.50=OE8APR-12
 Restart the box. Its log shows:
 
 ```
-[meshcom] listening udp/1799 on 192.168.1.10 for 192.168.1.50 (OE8APR-12) — RX only
+[meshcom] listening udp/1799 on 192.168.1.10 for 192.168.1.50 (OE8APR-12)
 ```
 
 ### Optional settings
@@ -60,6 +60,24 @@ Restart the box. Its log shows:
 | `MESHCOM_RATE` | `20` | Maximum datagrams per second accepted from one node. |
 | `MESHCOM_STALE_MIN` | `30` | Minutes of silence after which the box warns that a node has gone quiet. |
 | `MESHCOM_PORT` | `1799` | The local port. The node always sends to 1799; change this only behind your own relay. |
+
+### Answering radio commands (optional)
+
+Players can log a find by sending a MeshCom direct message such as `FOUND AC-1234` to `APRSCG`
+([Log from your radio](../guides/caching.md#log-from-your-radio)). To let the box acknowledge those
+messages — and send the instance's text replies — through the node that heard them, set on the box:
+
+```
+BOX_ID=pi-home
+BOX_TX=1
+MESHCOM_TX=1
+MESHCOM_TX_CALL=OE8APR
+```
+
+The node transmits every message under its own call, so `MESHCOM_TX_CALL` must be your call — the base call
+of the node's (`OE8APR-12` above). The box then logs `[meshcom] transmit enabled as OE8APR` and records each
+send in its log (time, node, destination, size and outcome — never the text). Sends share a rate limit of
+one per minute, three in a burst.
 
 ## 3. Firewall
 

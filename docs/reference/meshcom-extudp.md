@@ -92,7 +92,7 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
 {"type":"msg","dst":"OE1KBC-12","msg":"Test 1 2 3"}
 ```
 
-- `dst`: 1–9 **bytes**; `*`, a group number, or a callsign.
+- `dst`: 1–9 **bytes**; `*`, a group number, or any other address — a callsign, or a service address such as `APRSCG`. The firmware does not check the destination against a callsign pattern.
 - `msg`: 1–150 **bytes** of UTF-8 (the firmware checks `strlen`, so an umlaut costs two bytes and an
   emoji four). A `NUL` in either field rejects the datagram.
 - Invalid JSON, a missing field, or a length outside the limits is dropped silently.

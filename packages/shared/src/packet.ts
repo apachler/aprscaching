@@ -14,6 +14,10 @@ export const Packet = z.object({
   heardVia: z.enum(["rf", "aprs_is", "app"]).default("aprs_is"),
   igateCall: z.string().optional(),
   port: z.string().default("aprs-is"),
+  // The ingest box (its BOX_ID) and the station on it that received this frame over its own radio —
+  // where an answer to the sender can be transmitted from. Routing only: never a trust input.
+  box: z.string().max(64).optional(),
+  rxCall: z.string().max(16).optional(),
   ts: z.number(),
   raw: z.string().optional(),
 });

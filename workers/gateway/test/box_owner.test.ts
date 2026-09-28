@@ -67,3 +67,15 @@ describe("box control is owner-bound", () => {
     expect((await handleBoxEnqueue(req, env, "b1")).status).toBe(401);
   });
 });
+
+describe("answers to radio commands are gateway-only", () => {
+  it.each(["aprs_msg", "meshcom_msg"])("the enqueue API refuses %s, even with the box secret", async (kind) => {
+    const env = makeEnv({});
+    const req = new Request("http://gw/api/box/b1/command", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ingest-secret": "box-secret" },
+      body: JSON.stringify({ kind, payload: { from: "APRSCG", to: "OE3ABC", text: "hi" } }),
+    });
+    expect((await handleBoxEnqueue(req, env, "b1")).status).toBe(400);
+  });
+});

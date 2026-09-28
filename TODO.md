@@ -439,8 +439,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **MeshCom follow-ups** *(P2 · M)*, in order:
   - a `meshcom_msg` box command so gateway features can request a send through the node owner's box
     (the sender has no caller);
-  - acks and opt-in replies for MeshCom radio commands through the node owner's box — the command engine,
-    APRS acks and pending confirmation are built ([design](docs/design/radio-find-logging.md));
+  - bench-test the MeshCom ack for radio commands (`SENDER   :ack<nnn>` handed to the hearing node) on a
+    real node ([design](docs/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
   - group messages, opt-in per group and rate-limited, if operators ask for them;

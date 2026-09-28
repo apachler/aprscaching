@@ -13,7 +13,8 @@
     "./import": "./src/import/engine.ts",
     "./federation_sync": "./src/federation_sync.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
-    "./radiolog": "./src/radiolog.ts"
+    "./radiolog": "./src/radiolog.ts",
+    "./box": "./src/box.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

@@ -136,6 +136,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           igateCall: p.igateCall ?? null,
           path: p.path,
           signed: signer != null,
+          // routing hints come only from the trusted ingest box, never from a signed browser batch
+          ...(trusted && p.box ? { box: p.box } : {}),
+          ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
         });
       }
     } else if (data.kind === "message" && data.ack && data.msgNo) {

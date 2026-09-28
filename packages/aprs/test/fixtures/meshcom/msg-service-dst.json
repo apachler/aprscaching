@@ -1,0 +1,15 @@
+{
+  "description": "A direct message to a service address that is not a callsign (the firmware accepts any destination of up to nine characters).",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3PLY-7\",\"dst\":\"APRSCG\",\"msg\":\"FOUND AC-0001{034\",\"msg_id\":\"5DFC7022\",\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":-95,\"snr\":10}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "srcType": "lora",
+    "src": "OE3PLY-7",
+    "dst": "APRSCG",
+    "dstKind": "call",
+    "text": "FOUND AC-0001{034",
+    "rf": true,
+    "direct": true
+  }
+}

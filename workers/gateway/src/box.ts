@@ -5,7 +5,8 @@
  * and acks. The ECHOCAT pattern with the gateway as the rendezvous.
  *
  *   POST /api/box/:id/command         enqueue (session or box secret; TX kinds are control-verified)
- *   GET  /api/box/:id/commands        the box leases queued commands (x-ingest-secret) → marks them sent
+ *   GET  /api/box/:id/commands        the box leases queued commands (x-ingest-secret) → marks them sent;
+ *                                     `?tx=1&rf=1&meshcom=CALL,…` reports what it can transmit (box_status)
  *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
  *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
  *
@@ -94,9 +95,68 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   );
 }
 
+/** What a box reported it can transmit on its last poll. */
+export interface BoxCaps {
+  tx: boolean;
+  rf: boolean;
+  meshcom: string[];
+}
+
+/** Parse the capability report a box sends with its poll (`?tx=1&rf=1&meshcom=CALL,…`). */
+export function parseBoxCaps(url: URL): BoxCaps {
+  const meshcom = (url.searchParams.get("meshcom") ?? "")
+    .split(",")
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/.test(c))
+    .slice(0, 8);
+  return { tx: url.searchParams.get("tx") === "1", rf: url.searchParams.get("rf") === "1", meshcom };
+}
+
+/** A box that polled within this many seconds is considered reachable for a reply. */
+export const BOX_FRESH_SEC = 120;
+
+/** The box's last capability report, or null when it has not polled recently. */
+export async function freshBoxCaps(env: Env, boxId: string): Promise<BoxCaps | null> {
+  const r = await env.DB.prepare("SELECT caps, last_seen FROM box_status WHERE box_id = ?")
+    .bind(boxId)
+    .first<{ caps: string; last_seen: number }>();
+  if (!r || now() - r.last_seen > BOX_FRESH_SEC) return null;
+  try {
+    return JSON.parse(r.caps) as BoxCaps;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Queue a command the gateway itself originates (an answer to a radio command) for a box. These kinds
+ * are never accepted from the enqueue API: only the gateway may ask a box to transmit on the service
+ * call's behalf, and the box still applies its own transmit gates.
+ */
+export async function enqueueSystemBoxCommand(
+  env: Env,
+  boxId: string,
+  kind: "aprs_msg" | "meshcom_msg",
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO box_commands (box_id, callsign, kind, payload, status, created_at) VALUES (?, NULL, ?, ?, 'queued', ?)",
+  )
+    .bind(boxId, kind, JSON.stringify(payload), now())
+    .run();
+}
+
 /** GET /api/box/:id/commands — the box leases its queued commands (and they're marked sent). */
 export async function handleBoxPoll(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
+  const url = new URL(req.url);
+  if (url.searchParams.has("tx"))
+    await env.DB.prepare(
+      `INSERT INTO box_status (box_id, caps, last_seen) VALUES (?,?,?)
+       ON CONFLICT(box_id) DO UPDATE SET caps = excluded.caps, last_seen = excluded.last_seen`,
+    )
+      .bind(boxId, JSON.stringify(parseBoxCaps(url)), now())
+      .run();
   const rows = (
     await env.DB.prepare(
       "SELECT id, callsign, kind, payload, sig, created_at AS createdAt FROM box_commands WHERE box_id = ? AND status = 'queued' ORDER BY created_at LIMIT 50",
