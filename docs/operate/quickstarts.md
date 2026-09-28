@@ -87,7 +87,8 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
    your radio hears **directly** (not through a digipeater) then count as radio-verified evidence
    (**tier A**) for other people's finds, even with no internet. Your own finds never do: your own receiver
    is not an independent witness. With an IGate configured, `IGATE_CALL` is used when `RF_SITE_CALL` is
-   not set.
+   not set. The same works for an AGWPE or host-mode TNC. Set it only for a TNC you operate — not when
+   `KISS_TNC_HOST` points at someone else's station.
 
 Receiving alone never transmits. The box transmits over KISS only when you enable a digipeater, IGate,
 node or BBS forwarding below.

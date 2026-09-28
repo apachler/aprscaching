@@ -25,7 +25,7 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 |-----------|-------------|--------------|
 | **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (e.g. Direwolf). Decodes AX.25, emits RF-heard packets, and exposes TX for the digipeater / IGate / node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. |
 | **AGWPE** | `AGWPE_HOST` (+ port, radio-port) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO); raw monitor in, keying out. |
-| **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers become APRS lines. |
+| **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. |
 | **Meshtastic** | `MESH_HOST` (+ `MESH_PORT`, 1884) | Reads newline-delimited JSON over TCP — a node's MQTT JSON output served on a TCP port, e.g. `mosquitto_sub -t 'msh/+/2/json/#' -F '%p'` behind `socat` ([quick start](quickstarts.md#meshtastic)) — and maps mesh positions to APRS. The native Meshtastic protobuf decoder (`FromRadio` → position / text / node-info) drives the browser-direct Web Serial path. |
 | **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Only configured node addresses are accepted, per-node rate-capped; a frame the node reports twice (LoRa and server) is forwarded once. Transmits only answers to radio commands, and only with `MESHCOM_TX=1`. Setup, firewall and troubleshooting: [MeshCom](meshcom.md). |
 | **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it's an RX-only listener; with `AXUDP_PEERS` it's a bidirectional port carrying NET/ROM crosslinks and FBB forwarding over the internet leg, and accepts frames only from the peers' addresses (host names are re-resolved every five minutes, so dynamic DNS works); anything else is dropped and counted. The RX-only listener accepts from any host and says so at startup — bind it to a LAN address with `AXUDP_BIND`. |
@@ -46,12 +46,19 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 
 ## Receiving site and Tier A
 
-Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every KISS frame it hears
-**directly** — no digipeater has repeated it — carries that callsign to the gateway. A gateway that lists
+Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its
+local TNCs — KISS, AGWPE or WA8DED host mode — hears **directly** (no digipeater has repeated it) carries
+that callsign to the gateway. A gateway that lists
 the call in `FIRST_PARTY_SITES` then counts those frames as RF-corroborated evidence for Tier A, with no
 APRS-IS round trip, so it works off-grid too. Digipeated frames name no site: they show the originator was
 near the digipeater, not near your receiver. The gateway's independence rule still keeps your own
 receiver from corroborating your own finds.
+
+!!! warning "Only a TNC you operate"
+    `RF_SITE_CALL` vouches that **your** receiver heard the frame. If `KISS_TNC_HOST` (or `AGWPE_HOST`,
+    `HOSTMODE_HOST`) points at a station you don't operate — a club digipeater, a remote HAMNET node —
+    leave `RF_SITE_CALL` unset: the frames still arrive, but naming someone else's receiver as your site
+    would attest hearings you cannot vouch for.
 
 ## IGate
 
