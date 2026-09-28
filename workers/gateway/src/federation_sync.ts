@@ -59,6 +59,8 @@ interface PeerRow {
   tombstones_cursor: number;
   moves_cursor: number;
   bulletins_cursor: number;
+  caches_cursor_id?: number | null;
+  bulletins_cursor_id?: number | null;
   enabled: number;
   trust: TrustLevel;
   added_via?: string;
@@ -390,6 +392,8 @@ interface SyncDef {
   capability: string;
   cursorCol:
     "caches_cursor" | "finds_cursor" | "keys_cursor" | "tombstones_cursor" | "moves_cursor" | "bulletins_cursor";
+  /** The id half of a composite cursor, for feeds whose cursor (a timestamp) can repeat. */
+  cursorIdCol?: "caches_cursor_id" | "bulletins_cursor_id";
   apply(env: Env, rec: FeedRecord, origin: string): Promise<void>;
 }
 const SYNC_DEFS: SyncDef[] = [
@@ -405,6 +409,7 @@ const SYNC_DEFS: SyncDef[] = [
     path: "/federation/caches",
     capability: "caches",
     cursorCol: "caches_cursor",
+    cursorIdCol: "caches_cursor_id",
     apply: upsertRemoteCache,
   },
   { type: "find", path: "/federation/finds", capability: "finds", cursorCol: "finds_cursor", apply: upsertRemoteFind },
@@ -421,6 +426,7 @@ const SYNC_DEFS: SyncDef[] = [
     path: "/federation/bulletins",
     capability: "bulletins",
     cursorCol: "bulletins_cursor",
+    cursorIdCol: "bulletins_cursor_id",
     apply: (env, rec, origin) => upsertRemoteBulletin(env, rec, origin),
   },
 ];
@@ -441,31 +447,48 @@ async function syncFeed(
   def: SyncDef,
 ): Promise<number> {
   let cursor = (p[def.cursorCol] as number) ?? 0,
+    cursorId = def.cursorIdCol ? (p[def.cursorIdCol] ?? null) : null,
     applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}&limit=500`);
+    const idParam = cursorId != null ? `&sinceId=${cursorId}` : "";
+    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=500`);
     if (res.status === 404) return applied; // feed not served here → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
     const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
     for (const fb of pg.frames) {
-      const f = await verifyFedFrame(fb, activeKeys);
-      if (!f) continue; // malformed / key outside the peer's set / bad signature
-      if (f.record.origin !== instance) continue; // origin must be the verified serving peer
-      const rec: FeedRecord = {
-        type: def.type,
-        id: f.record.gid,
-        cursor: f.record.v,
-        data: bodyFromWire(f.record.body),
-        signer: f.record.signer,
-      };
-      if (!(await acceptUnsigned(env, rec, instance))) continue;
-      await def.apply(env, rec, instance);
-      applied++;
+      // each frame stands alone: a malformed or unappliable record is skipped, never a reason to
+      // hold the cursor and replay the page forever
+      try {
+        const f = await verifyFedFrame(fb, activeKeys);
+        if (!f) continue; // malformed / key outside the peer's set / bad signature
+        if (f.record.origin !== instance) continue; // origin must be the verified serving peer
+        const rec: FeedRecord = {
+          type: def.type,
+          id: f.record.gid,
+          cursor: f.record.v,
+          data: bodyFromWire(f.record.body),
+          signer: f.record.signer,
+        };
+        if (!(await acceptUnsigned(env, rec, instance))) continue;
+        await def.apply(env, rec, instance);
+        applied++;
+      } catch (e) {
+        console.warn(`federation: skipped a ${def.type} record from ${instance}: ${(e as Error).message}`);
+      }
     }
     const next = pg.nextCursor ?? cursor;
-    await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
-    if (pg.complete || next === cursor) break;
+    // The id tie-breaker only carries a pass across full pages that share one timestamp. Once a page
+    // is complete it is dropped, so the next pull re-reads the boundary second (idempotent) and still
+    // sees a record updated again within that second.
+    const nextId = def.cursorIdCol && !pg.complete && pg.nextId !== undefined ? pg.nextId : null;
+    if (def.cursorIdCol)
+      await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=?, ${def.cursorIdCol}=? WHERE url=?`)
+        .bind(next, nextId, p.url)
+        .run();
+    else await env.DB.prepare(`UPDATE fed_peers SET ${def.cursorCol}=? WHERE url=?`).bind(next, p.url).run();
+    if (pg.complete || (next === cursor && (nextId == null || nextId === cursorId))) break;
     cursor = next;
+    cursorId = nextId;
   }
   return applied;
 }
@@ -477,6 +500,12 @@ async function syncFeed(
  */
 export function idInNamespace(globalId: string | undefined | null, instance: string): boolean {
   return typeof globalId === "string" && globalId.startsWith(instance + ":");
+}
+
+/** A bulletin gid in the older `<local id>_<instance>` form, which names its instance as a suffix. */
+function legacyBulletinGid(gid: string, instance: string): boolean {
+  const i = gid.indexOf("_");
+  return i > 0 && /^[0-9]+$/.test(gid.slice(0, i)) && gid.slice(i + 1) === instance;
 }
 
 /**
@@ -522,7 +551,9 @@ async function isTombstoned(env: Env, globalId: string, origin: string): Promise
  * it could overwrite another instance's genuine mirror (inheriting its trust).
  */
 async function acceptUnsigned(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
-  if (!idInNamespace(rec.id, instance)) return false; // id must be the serving peer's namespace
+  // id must be the serving peer's namespace (bulletins also accept their older `<id>_<instance>` gid)
+  if (!idInNamespace(rec.id, instance) && !(rec.type === "bulletin" && legacyBulletinGid(rec.id, instance)))
+    return false;
   if (rec.signer !== instance) return false; // and self-attested as that peer (an empty signer attests nothing)
   if (instance === ours(env)) return false; // never mirror our own
   if (await isTombstoned(env, rec.id, instance)) return false; // purged by its origin's tombstone
@@ -573,6 +604,8 @@ async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string
 
 async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {
   const d = rec.data;
+  if (typeof d.callsign !== "string" || !d.callsign || typeof d.publicKey !== "string" || !d.publicKey)
+    throw new Error("key record without callsign or publicKey");
   await env.DB.prepare(
     `INSERT OR REPLACE INTO remote_keys (global_id, origin, callsign, public_key, verified, created_at, mirrored_at)
      VALUES (?,?,?,?,?,?,?)`,
@@ -697,8 +730,12 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
       rejected++;
       continue; // gid outside origin's namespace / not self-attested / tombstoned
     }
-    await def.apply(env, rec, origin);
-    applied++;
+    try {
+      await def.apply(env, rec, origin);
+      applied++;
+    } catch {
+      rejected++; // a malformed record never aborts the frames after it
+    }
   }
   return { applied, quarantined, rejected };
 }
@@ -994,7 +1031,7 @@ const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Pr
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
-const PUSH_CURSORS = new Map<string, number>();
+const PUSH_CURSORS = new Map<string, { cursor: number; id?: number }>();
 /** Largest submission body the hub reads: a full page of frames fits well inside it. */
 const MAX_SUBMIT_BYTES = 4 * 1024 * 1024;
 
@@ -1163,8 +1200,12 @@ async function submitRecords(
       rejected++;
       continue;
     } // already purged by a tombstone
-    await apply(env, rec, instance);
-    applied++;
+    try {
+      await apply(env, rec, instance);
+      applied++;
+    } catch {
+      rejected++; // a malformed record never aborts the rest of the submission
+    }
   }
   return json({ ok: true, applied, rejected });
 }
@@ -1182,23 +1223,25 @@ export async function pushToHub(env: Env, fetchFn: typeof fetch = fetch): Promis
   let pushed = 0;
   for (const def of PUSH_FEEDS) {
     const ckey = `${hub}|${def.type}`;
-    let cursor = PUSH_CURSORS.get(ckey) ?? 0;
+    let { cursor, id } = PUSH_CURSORS.get(ckey) ?? { cursor: 0 };
     for (let page = 0; page < MAX_PAGES; page++) {
-      const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500);
+      const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500, id);
       if (!built) return null; // no signing key — nothing verifiable to push
       if (!built.frames.length) break;
       const complete = built.frames.length < 500;
       const res = await fetchFn(`${hub}/federation/submit`, {
         method: "POST",
         headers: { "content-type": "application/cbor", "x-fed-secret": secret },
-        body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames) as BodyInit,
+        body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames, built.nextId) as BodyInit,
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return { pushed }; // stop; retry next cycle from the same cursor
-      PUSH_CURSORS.set(ckey, built.nextCursor);
+      // as on the pull side, the id tie-breaker is kept only while more pages of this pass remain
+      PUSH_CURSORS.set(ckey, { cursor: built.nextCursor, id: complete ? undefined : built.nextId });
       pushed += built.frames.length;
-      if (complete || built.nextCursor === cursor) break;
+      if (complete || (built.nextCursor === cursor && built.nextId === id)) break;
       cursor = built.nextCursor;
+      id = built.nextId;
     }
   }
   return { pushed };

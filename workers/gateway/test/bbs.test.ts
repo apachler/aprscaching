@@ -17,21 +17,27 @@ describe("BBS bulletin federation (#1)", () => {
     };
     const rec = BULLETIN_FEED.recordOf(row, "a.example");
     expect(BULLETIN_FEED.type).toBe("bulletin");
-    expect(rec.id).toBe("7_a.example"); // BID = dedup key across instances
+    expect(rec.id).toBe("a.example:bulletin:7"); // the gid lives in the instance's namespace
     expect(rec.cursor).toBe(1000); // posted_at drives the incremental cursor
-    expect(rec.data).toMatchObject({ fromCall: "OE8APR", toCall: "ALL", subject: "net", body: "Sunday net" });
+    expect(rec.data).toMatchObject({
+      bid: "7_a.example", // BID = the dedup key across the FBB mesh, carried in the body
+      fromCall: "OE8APR",
+      toCall: "ALL",
+      subject: "net",
+      body: "Sunday net",
+    });
   });
 
-  it("falls back to <id>_<instance> when a row has no BID yet", () => {
+  it("falls back to an <id>_<instance> BID when a row has none yet", () => {
     expect(
       BULLETIN_FEED.recordOf(
         { id: 9, bid: null, from_call: "X", to_call: "ALL", subject: null, body: "hi", posted_at: 5, expires_at: null },
         "b.example",
-      ).id,
-    ).toBe("9_b.example");
+      ).data,
+    ).toMatchObject({ bid: "9_b.example" });
   });
 
-  it("a capability-advertising peer must list 'bulletins' for it to be pulled (T2.2)", () => {
+  it("a capability-advertising peer must list 'bulletins' for it to be pulled", () => {
     const defs = [{ capability: "caches" }, { capability: "bulletins" }];
     // legacy peer (no protocol match) → try everything
     expect(negotiateFeeds({}, defs, "0.2").map((d) => d.capability)).toEqual(["caches", "bulletins"]);

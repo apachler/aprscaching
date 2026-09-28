@@ -165,13 +165,20 @@ export function decodeFedFrame(bytes: Uint8Array): FedFrame {
 const P_INSTANCE = 1,
   P_NEXT = 2,
   P_COMPLETE = 3,
-  P_FRAMES = 4;
+  P_FRAMES = 4,
+  P_NEXT_ID = 5;
 
+/**
+ * Encode a sync page. `nextId` is the tie-breaker of a composite `(cursor, id)` position, sent by
+ * feeds whose cursor (a timestamp) can repeat; a consumer that knows it resumes strictly after that
+ * pair, one that doesn't ignores the field.
+ */
 export function encodeFedSyncPage(
   instance: string,
   nextCursor: number,
   complete: boolean,
   frames: Uint8Array[],
+  nextId?: number,
 ): Uint8Array<ArrayBuffer> {
   const m: CborMap = new Map<number, CborValue>([
     [P_INSTANCE, instance],
@@ -179,6 +186,7 @@ export function encodeFedSyncPage(
     [P_COMPLETE, complete],
     [P_FRAMES, frames as CborValue[]],
   ]);
+  if (nextId !== undefined) m.set(P_NEXT_ID, nextId);
   return cborEncode(m);
 }
 
@@ -187,6 +195,7 @@ export interface FedSyncPage {
   nextCursor: number;
   complete: boolean;
   frames: Uint8Array[];
+  nextId?: number;
 }
 
 export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
@@ -200,7 +209,9 @@ export function decodeFedSyncPage(bytes: Uint8Array): FedSyncPage {
     throw new Error("fedsync: malformed page envelope");
   if (!Array.isArray(frames) || frames.some((f) => !(f instanceof Uint8Array)))
     throw new Error("fedsync: frames must be byte strings");
-  return { instance, nextCursor, complete, frames: frames as Uint8Array[] };
+  const nextId = m.get(P_NEXT_ID);
+  if (nextId !== undefined && typeof nextId !== "number") throw new Error("fedsync: nextId must be an integer");
+  return { instance, nextCursor, complete, frames: frames as Uint8Array[], ...(nextId !== undefined && { nextId }) };
 }
 
 // ---- coordinates: 1e-7-degree integers (~1 cm), byte-deterministic across every encoder ----

@@ -648,7 +648,13 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
  */
 export interface FeedServeDef<Row = any> {
   type: string;
-  selectRows(env: Env, since: number, limit: number): Promise<Row[]>;
+  /**
+   * Rows after a cursor. A feed whose cursor can repeat (a timestamp) is `composite`: it also takes
+   * `sinceId` and returns rows strictly after `(since, sinceId)`, ordered by `(cursor, id)`; without
+   * `sinceId` it returns rows with a cursor `>= since`.
+   */
+  selectRows(env: Env, since: number, limit: number, sinceId?: number): Promise<Row[]>;
+  composite?: boolean;
   recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown };
 }
 
@@ -689,12 +695,14 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 // only NATIVE caches are federated; imported third-party data stays local
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
-  selectRows: async (env, since, limit) =>
+  composite: true,
+  selectRows: async (env, since, limit, sinceId = -1) =>
     (
       await env.DB.prepare(
-        "SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only' AND updated_at >= ? ORDER BY updated_at, id LIMIT ?",
+        `SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only'
+           AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at, id LIMIT ?`,
       )
-        .bind(since, limit)
+        .bind(since, since, sinceId, limit)
         .all<CacheRow>()
     ).results,
   recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
@@ -704,9 +712,10 @@ export const FIND_FEED: FeedServeDef<FindRow> = {
   selectRows: async (env, since, limit) =>
     (
       await env.DB.prepare(
+        // finds federate only with their cache: never on a local-only or imported cache
         `SELECT l.*, c.code AS cache_code FROM cache_logs l
-       LEFT JOIN caches c ON c.id = l.cache_id
-      WHERE l.id > ? ORDER BY l.id LIMIT ?`,
+       JOIN caches c ON c.id = l.cache_id
+      WHERE l.id > ? AND c.source = 'native' AND c.fed_scope != 'local-only' ORDER BY l.id LIMIT ?`,
       )
         .bind(since, limit)
         .all<FindRow>()
