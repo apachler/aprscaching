@@ -11,6 +11,18 @@ Cloudflare, no live data). Two outputs:
 
 ---
 
+## Manual screenshots — `run-docs.sh`
+
+```bash
+bash tools/teaser/run-docs.sh
+```
+
+Runs the tour on the desktop and mobile viewports (no video) and converts the frames the manual embeds
+into WebP under `docs/assets/shots/` (`docs-shots.mjs` lists them). Re-run after UI changes and commit
+the images. The tour runs signed out, so only screens that look the same signed out are used.
+
+---
+
 ## 1. UI/UX tour video — `run-tour.sh`  ← "build a new website teaser"
 
 ```bash

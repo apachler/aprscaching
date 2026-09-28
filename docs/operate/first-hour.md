@@ -77,7 +77,8 @@ them. Then add peers under **Instance admin → Federation** — by URL or, veri
 
 The Setup checklist shows packets heard in the last hour. Silent? Check the ingest box
 (`INGEST_URL` points at this gateway, `INGEST_SECRET` matches) or use the browser RF bridge.
-[RF ingest & transports](rf-ingest.md) covers every transport.
+[Connect a radio: quick starts](quickstarts.md) walks through each link;
+[RF ingest & transports](rf-ingest.md) lists every setting.
 
 ## 10. Back up the database
 

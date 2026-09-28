@@ -1,7 +1,11 @@
-# Getting started
+# Run from source
 
-This page runs a full aprscaching stack on your own machine: the gateway (API + data), the web app, and
-optionally the RF ingest box. It assumes **Node 20+** and **pnpm**.
+This page is for developers and for operators who want to run aprscaching from a checkout of the code: the
+gateway (API + data), the web app, and optionally the RF ingest box. To just use aprscaching, see
+[Start here](start-here.md); to install an instance, [Running in Docker](operate/docker.md) is the usual
+route.
+
+You need **Node 22 or newer** and **pnpm** (`corepack enable` provides the pinned version).
 
 ## Install
 
@@ -57,13 +61,17 @@ The **ingest box** feeds real radio into your instance. It runs on your own hard
 browser bridging a USB/BLE radio. Copy the example config and point it at your gateway:
 
 ```bash
-cp .env.example .env         # set APRSIS_FILTER + INGEST_SECRET; add KISS_TNC_HOST, MESH_HOST, … as needed
+cp .env.example .env
 pnpm --filter @aprscaching/ingest dev
 ```
 
+Edit `.env` at the top of the checkout first: set `APRSIS_FILTER` and `INGEST_SECRET`, and add
+`KISS_TNC_HOST`, `MESH_HOST`, … as needed.
+
 With just `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
 node, an AXUDP/AXIP link, or a TAK/CoT feed and each forwards to the gateway on its own port. See
-[RF ingest & transports](operate/rf-ingest.md) for every transport and its configuration.
+[Connect a radio: quick starts](operate/quickstarts.md) for each link step by step, and
+[RF ingest & transports](operate/rf-ingest.md) for every setting.
 
 !!! note "Off-grid works"
     Point `INGEST_URL` at a gateway on the same box (`http://localhost:8787/ingest`) and the whole
@@ -72,9 +80,9 @@ node, an AXUDP/AXIP link, or a TAK/CoT feed and each forwards to the gateway on 
 ## Verify your checkout
 
 ```bash
-pnpm -r test                 # all unit suites
-node apps/web/test/no-emoji.mjs   # web asset guard
-tools/dev/smoke.sh           # spin a throwaway gateway and run the conformance smoke suites
+pnpm run check               # build + every unit suite (includes the web guards)
+pnpm run smoke               # spin a throwaway gateway and run the conformance smoke suites
+pnpm run verify              # both — the full gate before committing
 ```
 
 ## Where to next
