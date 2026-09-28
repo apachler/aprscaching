@@ -121,6 +121,7 @@ only when its variable is present.
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
 | Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of directly heard KISS frames (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway |
+| Remote control (Shack → Remote control) | `BOX_ID`, `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`) |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the

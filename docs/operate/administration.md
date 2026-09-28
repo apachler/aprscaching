@@ -64,8 +64,26 @@ Respect each source's licence; OpenCaching content in particular carries conditi
 ## Remote control of your box
 
 You can drive your own ingest box from the web app without opening any inbound port: the app enqueues
-commands and the box pulls them over its existing outbound connection (`/api/box/:id/*`). Read-only commands
-need only a session; any transmit command requires a **verified callsign**.
+commands and the box pulls them over its existing outbound connection (`/api/box/:id/*`), runs them, and
+reports each result back to the command log in **Shack → Remote control**.
+
+1. On the box, set `BOX_ID` to a name of your choice (for example `pi-home`) and restart the ingest.
+2. In the app, enter the same name as the **Box ID**. The first signed-in account to control a box owns it.
+3. Press **Status**: within a few seconds the log shows the box's uptime and which functions are on.
+
+Status and switching the digipeater, IGate or transmit **off** work with `BOX_ID` alone. Anything that keys
+the radio — a beacon, a message, or switching a function **on** — is gated twice:
+
+- the gateway accepts it only for a **verified callsign** your account holds;
+- the box runs it only when you set `BOX_TX=1` on the box, the command's callsign has the same base call
+  as the box's station call (`BOX_CALL`, else `IGATE_CALL`, else `DIGI_CALL`), and it was queued within the
+  last `BOX_CMD_MAX_AGE` seconds (15 minutes by default). Remote transmits are also rate-limited on the box
+  (three in a burst, then one per minute).
+
+**TX off** is the box's master switch: it silences the APRS digipeater, IGate transmit to RF and remote
+transmits until switched on again or the ingest restarts. The switches live in memory, so a restart
+returns the box to its configured state. See [Configuration](../reference/configuration.md) for every
+variable.
 
 ## Data protection (GDPR / DSGVO)
 
