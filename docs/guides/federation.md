@@ -108,12 +108,24 @@ optional reachability-only amateur-network endpoint).
 ## Cross-instance corroboration
 
 The network effect: when a find can't reach Tier A locally, the instance asks its **trusted** peers whether
-they independently heard the callsign on RF near the cache, gated by an IGate that isn't theirs. A
-configurable **quorum** of distinct instances must agree before the find is promoted to Tier A. A peer answers
-only from positions heard through a receiving site it attests itself (its own `FIRST_PARTY_SITES`), the same
-rule as its local Tier A; an instance that attests no site never vouches for anyone. Queries and
-responses are grid-snapped, time-bucketed, and distance-bucketed so corroboration is never a location oracle,
-and the exact IGate is revealed only if both peers opt in (`FED_REVEAL_IGATE`).
+they independently heard the callsign on RF near the cache, through an IGate the logger doesn't control —
+the logger's own calls and stations travel with the question as exclusions. A **quorum** of distinct
+identities must agree before the find is promoted to Tier A: two by default (`FED_CORROBORATION_QUORUM`),
+counted by registry operator where the registry names one, else by signing key, so one operator running
+several instances is one voice. A peer answers only from positions heard through a receiving site it attests
+itself (its own `FIRST_PARTY_SITES`), the same rule as its local Tier A; an instance that attests no site
+never vouches for anyone.
+
+Questions and answers are signed frames: the question carries a fresh nonce, and the answer is bound to that
+nonce and to the question's hash, so an answer can be neither forged by a middlebox — a plain-http 44net
+peer included — nor replayed against another question. Asking requires a signing key. A peer-corroborated
+find is also checked against the logger's own local track: a local fix that puts the logger somewhere the
+answer's location can't be reached from at a plausible speed keeps the find below Tier A. A living cache is
+asked about where its station last was. The answerer snaps and bounds every question (radius 150–1000 m, a
+bucketed window of at most an hour, no older than seven days) and coarsens every answer, so corroboration is
+never a location oracle; the exact IGate is revealed only if both peers opt in (`FED_REVEAL_IGATE`). The
+shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted https peers; set
+`FED_CORROBORATION_REQUIRE_KNOWN=1` to answer only peers you know.
 
 ## Privacy across the network
 
@@ -123,7 +135,8 @@ way — a signed account-move record re-points attribution when a user migrates 
 
 ## Joining the network
 
-1. Generate a key and set `FED_PRIVATE_KEY` and `INSTANCE` (see [Deployment](../operate/deployment.md#sign-your-feeds)).
+1. Generate a key and set `FED_PRIVATE_KEY` and `INSTANCE` (see [Deployment](../operate/deployment.md#sign-your-feeds)). The
+   key signs your feeds and your corroboration questions.
 2. Add peers: `FED_PEERS=https://a.example,https://b.example`.
 3. Optionally publish your operator identity (`FED_OPERATOR`, `FED_APRS_CALL`) and register in the shared
    instance registry.

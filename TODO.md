@@ -594,16 +594,16 @@ lands with a regression test that fails without it.
 - [x] **Identity binding** — instance ids bound to one live peer row, key pins that move only along
   verified rotations, rotated-away keys that expire on every carrier, a submit path that can't
   impersonate, and a registry pinned to its authority key that fails closed.
-- [ ] **Corroboration as a signed exchange** *(M)* — signed answers bound to a nonce and the query hash,
-  signed requests instead of a broadcast secret, forwarded IGate exclusions, whitelisted evidence, a
-  quorum of distinct verified identities, and the local track check on peer-corroborated finds.
+- [x] **Corroboration as a signed exchange** — signed questions and answers bound to a nonce and the
+  question hash, forwarded IGate exclusions, whitelisted evidence, a quorum of distinct verified
+  identities, the local track check on peer-corroborated finds, and a bounded, per-asker answerer.
 - [ ] **Privacy and data correctness** *(S)* — finds on local-only caches kept home, a composite
-  pagination cursor, per-frame fault isolation, bulletin mirroring, and a clamped corroboration answerer.
+  pagination cursor, per-frame fault isolation, and bulletin mirroring.
 - [ ] **Replay and robustness** *(M)* — monotonic record versions and bounded signing times, per-type
   sync pages, a rate-limited notify endpoint, SSRF-guarded capped discovery, squat-proof ACSFED ids,
   body caps on pull pages, and relay spokes isolated by their own keys.
 - [ ] **Low-severity items and operator guidance** *(S)* — signed-ingest replay cache, erasure of mirrored
-  key bindings and moves, a signed migration proof on account moves, per-asker answerer limits, domain
+  key bindings and moves, a signed migration proof on account moves, domain
   prefixes on standalone JSON signatures, and a "Running federation safely" guide.
 
 ## Federation over RF (the wire contracts are in; the bindings land in this order)

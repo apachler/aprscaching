@@ -53,7 +53,7 @@ export async function rotation(prev: FedKey, next: FedKey, at: number) {
 export async function signedRegistry(
   authority: FedKey,
   at: number,
-  entries: Array<{ instance: string; key?: string; url?: string }>,
+  entries: Array<{ instance: string; key?: string; url?: string; operator?: string }>,
 ) {
   const msg = new TextEncoder().encode(stable({ at, entries }));
   const sig = b64url(await crypto.subtle.sign("Ed25519", authority.priv, msg));

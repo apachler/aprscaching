@@ -140,6 +140,34 @@ function plausibleTrack(match: PositionRow, deps: VerifyDeps, policy: VerifyPoli
   return dist / dt <= maxMps; // reachable at a plausible speed
 }
 
+/**
+ * "plausible presence" for evidence that did not come from the logger's own fixes (a peer's
+ * corroboration): the logger's nearest local fix in time must be able to reach `point` at a sane
+ * ground speed. `slackSec` widens the time gap by the evidence's time resolution (a peer's answer is
+ * bucketed), so coarsening never turns a real presence into a teleport. With no local fix there is
+ * nothing to contradict → allowed.
+ */
+export function plausiblePresence(
+  point: { lat: number; lon: number; ts: number },
+  loggerPositions: PositionRow[],
+  policy: VerifyPolicy = DEFAULT_POLICY,
+  slackSec = 0,
+): boolean {
+  const maxMps = (policy.maxSpeedKmh * 1000) / 3600;
+  let nearest: PositionRow | null = null,
+    bestDt = Infinity;
+  for (const p of loggerPositions) {
+    const dt = Math.abs(p.ts - point.ts);
+    if (dt < bestDt) {
+      bestDt = dt;
+      nearest = p;
+    }
+  }
+  if (!nearest) return true;
+  const dist = haversineMeters(nearest.lat, nearest.lon, point.lat, point.lon);
+  return dist / Math.max(1, bestDt + slackSec) <= maxMps;
+}
+
 /** Tier A: heard at a first-party-attested site, independently gated, near the target. */
 function tryRf(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): VerifyResult | null {
   if (cache.lat == null || cache.lon == null) return null;
