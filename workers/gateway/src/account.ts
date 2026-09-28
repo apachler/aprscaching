@@ -80,8 +80,9 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
     ),
     logs: await rows(
       env,
-      "SELECT cache_id, ts, log_type, verified, tier, comment, signer_key, signed_at FROM cache_logs WHERE logger_call=? ORDER BY ts",
+      "SELECT cache_id, logger_call, ts, log_type, verified, tier, comment, signer_key, signed_at FROM cache_logs WHERE logger_call=? OR logger_call LIKE ? ORDER BY ts",
       cs,
+      `${cs}-%`,
     ),
     positions: await rows(
       env,
@@ -132,9 +133,13 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   // Capture this callsign's federated find ids BEFORE anonymising — once logger_call becomes
   // WITHDRAWN we can't find them, and peers mirrored them with the real call (PII). The finds feed is
   // append-only by id, so an UPDATE never re-serves the anonymised row → a tombstone is the only way
-  // to purge the pre-deletion copies on peers.
-  const findIds = (await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=?").bind(cs).all<{ id: number }>())
-    .results;
+  // to purge the pre-deletion copies on peers. Logs sent from an SSID (a radio find from OE8APR-7) are
+  // the callsign's too.
+  const findIds = (
+    await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?")
+      .bind(cs, `${cs}-%`)
+      .all<{ id: number }>()
+  ).results;
   // the same for the callsign's key bindings and move announcements, which peers mirrored too
   const keyIds = (await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=?").bind(cs).all<{ id: number }>())
     .results;
@@ -143,9 +148,17 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
+    // One found per cache survives anonymisation: a find counts once per person, and two of the
+    // person's founds (base call and an SSID) would collide on the one-found-per-logger index once
+    // both read WITHDRAWN. The dropped copies are tombstoned with the rest.
     env.DB.prepare(
-      "UPDATE cache_logs SET logger_call='WITHDRAWN', comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=?",
-    ).bind(cs),
+      `DELETE FROM cache_logs WHERE log_type='found' AND (logger_call=? OR logger_call LIKE ?)
+         AND id NOT IN (SELECT MIN(id) FROM cache_logs WHERE log_type='found' AND (logger_call=? OR logger_call LIKE ?)
+                        GROUP BY cache_id)`,
+    ).bind(cs, `${cs}-%`, cs, `${cs}-%`),
+    env.DB.prepare(
+      "UPDATE cache_logs SET logger_call='WITHDRAWN', comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=? OR logger_call LIKE ?",
+    ).bind(cs, `${cs}-%`),
     // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
     env.DB.prepare("UPDATE caches SET owner_call='WITHDRAWN', status='archived', updated_at=? WHERE owner_call=?").bind(

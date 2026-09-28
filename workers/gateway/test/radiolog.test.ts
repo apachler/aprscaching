@@ -29,14 +29,20 @@ describe("parseRadioCommand", () => {
 
   it("rejects malformed commands with a reason", () => {
     expect(parseRadioCommand("")).toHaveProperty("error");
-    expect(parseRadioCommand("HELLO")).toEqual({ error: "unknown command — send HELP" });
     expect(parseRadioCommand("FOUND")).toEqual({ error: "FOUND needs a cache code, e.g. FOUND AC-1234" });
     expect(parseRadioCommand("FOUND 1234")).toHaveProperty("error");
     expect(parseRadioCommand("NOTE AC-1")).toEqual({ error: "NOTE needs a text" });
   });
 
-  it("the HELP text fits one APRS message", () => {
+  it("the HELP text fits one APRS message and carries no reserved or non-ASCII character", () => {
     expect(HELP_TEXT.length).toBeLessThanOrEqual(67);
+    expect(HELP_TEXT).not.toMatch(/[|~{]/);
+    expect(HELP_TEXT).toMatch(/^[\x20-\x7e]+$/);
+  });
+
+  it("error texts are plain ASCII", () => {
+    expect(parseRadioCommand("HELLO")).toEqual({ error: "unknown command - send HELP" });
+    expect(parseRadioCommand("")).toEqual({ error: "empty message - send HELP" });
   });
 });
 
@@ -59,6 +65,10 @@ describe("splitMessageNumber", () => {
   });
   it("an unnumbered message has no number", () => {
     expect(splitMessageNumber("HELP")).toEqual({ text: "HELP" });
+  });
+  it("a number outside APRS101 (1-5 letters or digits) makes the message unnumbered", () => {
+    expect(splitMessageNumber("HELP", "visit evil.example | now")).toEqual({ text: "HELP" });
+    expect(splitMessageNumber("HELP", "123456")).toEqual({ text: "HELP" });
   });
 });
 
@@ -84,6 +94,14 @@ describe("isTrustedMessage", () => {
   });
   it("an APRS-IS injection is not, whatever IGate it names", () => {
     expect(isTrustedMessage(msg({ heardVia: "aprs_is", path: ["TCPIP*", "qAC", "T2TEST"] }), sites)).toBe(false);
+  });
+  it("an APRS-IS message is not, even with a qAR path naming an attested site", () => {
+    expect(
+      isTrustedMessage(msg({ port: "aprs-is", path: ["WIDE1-1", "qAR", "OE8XXX-10"], igateCall: "OE8XXX-10" }), sites),
+    ).toBe(false);
+  });
+  it("an internet-tunnelled port is not, whatever it claims", () => {
+    expect(isTrustedMessage(msg({ port: "axudp" }), sites)).toBe(false);
   });
   it("a relayed MeshCom frame (RF, no receiving site) is not", () => {
     expect(isTrustedMessage(msg({ port: "meshcom", igateCall: null }), sites)).toBe(false);
