@@ -23,14 +23,20 @@ Cloudflare Tunnel).
 cd deploy
 cp .env.example .env && ./setup.sh     # wizard: callsign, passcode, filter, domain; generates INGEST_SECRET
 docker compose up -d --build
-curl -fsS http://localhost:8080/health # gateway readiness
+docker compose ps                      # the gateway shows "healthy" once it is ready
+curl -fsS http://localhost/health      # with DOMAIN=:80; otherwise https://<your domain>/health
 ```
+
+Every setting in `deploy/.env` reaches both the gateway and the ingest container, so the whole
+[first-hour checklist](first-hour.md) — `ADMIN_CALLSIGNS`, `FIRST_PARTY_SITES`, `OPERATOR_*`,
+`SOURCE_REPO`, federation keys — and every [radio transport](rf-ingest.md) setting is configured there.
+Restart with `docker compose up -d` after changing it.
 
 What comes up:
 
 | Service | Role | Notes |
 |---|---|---|
-| `gateway` | Node + SQLite gateway on `:8080` | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one) |
+| `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one) |
 | `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env` |
 | `webdist` | one-shot | Copies the SPA built inside the image into the volume Caddy serves (a fresh clone has no host `apps/web/dist` — it is gitignored) |
 | `caddy` | TLS + SPA + reverse proxy | `DOMAIN=:80` = plain HTTP (local/off-grid); `DOMAIN=your.host` = automatic Let's Encrypt |
@@ -90,8 +96,10 @@ internet at all.
 
 A KISS TNC over TCP (`KISS_TNC_HOST`), AGWPE (Direwolf/SoundModem), and hostmode all reach the
 ingest container over the network — run the TNC software on the host (or another box) and point the
-env vars at it. For AXUDP no special privileges are needed. The AXIP transport (raw IP protocol 93)
-needs `CAP_NET_RAW`; add `cap_add: [NET_RAW]` to the ingest service if you use it.
+env vars at it. From inside the container the host is not `localhost`: use the host's LAN address.
+For AXUDP no special privileges are needed. The AXIP transport (raw IP protocol 93) needs
+`CAP_NET_RAW`; add `cap_add: [NET_RAW]` to the ingest service if you use it.
+
 
 ## Upgrades, backups, logs
 
