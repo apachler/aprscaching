@@ -10,8 +10,20 @@ cache, go find it, and log the find *verified by radio*, not just by tapping a b
 It runs in your browser, self-hosts on a Raspberry Pi, and federates with other instances into one
 open network.
 
-Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, TAK/CoT). Independent
-and unofficial — see *Credits & trademarks*.
+Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, MeshCom, TAK/CoT).
+Independent and unofficial — see *Credits & trademarks*.
+
+## Try it
+
+You need an amateur-radio callsign — nothing to install.
+
+1. Open **[aprscaching.net](https://aprscaching.net)** and sign in with your callsign (a passkey or an email link).
+2. Verify your callsign: the site sends you a code as an APRS message.
+3. Find a cache on the map, go there, and tap **Log a find**.
+
+The manual's **[Start here](https://apachler.github.io/aprscaching/start-here/)** page walks through it, and
+also shows how to [connect your radio from the browser](https://apachler.github.io/aprscaching/guides/my-radio/)
+and [run your own instance](https://apachler.github.io/aprscaching/operate/deployment/) for a club or region.
 
 ---
 
@@ -61,7 +73,7 @@ Everything an operator needs, revealed progressively so the cacher never sees th
   store-and-forward **BBS** with FBB forwarding, a **NET/ROM node** (routing table, circuits, connect-through),
   a **digipeater** (new n-N paradigm, viscous cancellation) and a bidirectional **IGate**.
 - **Radios & transports** — KISS/TNC over TCP, browser-direct **Web Serial / Bluetooth** KISS, **CAT** rig
-  control (Web Serial, plus a Hamlib `rigctld` companion for the long tail), **Meshtastic**, **TAK/CoT** in
+  control (Web Serial), **Meshtastic**, **MeshCom**, **TAK/CoT** in
   and out, and internet AX.25 tunnels (**AXUDP** and **AXIP**). Off-air **CW** and **PSK31** decode straight
   from the microphone.
 - **Weather** — APRS weather stations are first-class; originate your own PWS (Ecowitt / WU) into the network.
@@ -74,7 +86,10 @@ Transmit is **off by default and gated** — real on-air keying requires a verif
 
 ---
 
-## Run it
+## Run it from source
+
+For developers. To install an instance, use the Docker stack in `deploy/`
+([Running in Docker](https://apachler.github.io/aprscaching/operate/docker/)). Needs Node 22+ and pnpm.
 
 ```bash
 pnpm install
@@ -99,9 +114,11 @@ pnpm --filter @aprscaching/web dev
 
 **Ingest box (operator-local RF):**
 ```bash
-cp .env.example .env         # set APRSIS_FILTER + INGEST_SECRET; optional KISS_TNC_HOST, MESH_HOST, …
+cp .env.example .env         # then set APRSIS_FILTER + INGEST_SECRET; optional KISS_TNC_HOST, MESH_HOST, …
 pnpm --filter @aprscaching/ingest dev
 ```
+
+Each radio link step by step: [Connect a radio: quick starts](https://apachler.github.io/aprscaching/operate/quickstarts/).
 
 ### Where it runs
 
