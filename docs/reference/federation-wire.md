@@ -23,7 +23,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | Envelope field | Meaning |
 |---|---|
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
-| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`), and a bulletin under the older `localid_origin` gid is still accepted |
+| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`) and is kept only in the origin's own `localid_origin` form, and a bulletin under that older gid is still accepted |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
 | `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. A cache's `v` is its revision counter plus 2³²; a bulletin's is its posting time; the rest count up |
 | `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
@@ -41,9 +41,12 @@ and stored on its peer row (`fed_peers.accept_keys`) so every carrier uses the s
 
 - **The pin.** The first key seen for a peer, bound together with its instance id. The pin moves only to a
   key the old pin reaches through verified rotation records (`{key, prevKey, at}` signed by `prevKey`).
-- **Proven predecessors.** Another published key counts only if a verified rotation chain leads from it to
-  the current key, and only until its cutoff: its published `until`, else the rotation time plus the grace
-  (`FED_ROTATION_GRACE_DAYS`, 7 by default). A cutoff never moves later once recorded, so a later
+- **Proven predecessors.** Another published key counts only if the receiver already trusted it (the old
+  pin, or a key still in the stored accept set) and a verified rotation chain leads from it to the current
+  key — a rotation record is signed by its own `prevKey`, so only prior trust can vouch for one. It counts
+  until its cutoff: its published `until`, else the rotation time plus the grace (`FED_ROTATION_GRACE_DAYS`,
+  7 by default), and never past the rotation time plus the grace. On first contact no predecessor is
+  admitted. A cutoff never moves later once recorded, so a later
   descriptor cannot revive a rotated-away key, and a rotated-away key never becomes the pin again.
 - **The registry binding.** When the signed registry binds the instance to a key, the peer's current key
   must be that key; it is also accepted for frames from that origin.
@@ -195,7 +198,8 @@ Push-to-hub submits the same wire: a spoke POSTs a CBOR sync page of its signed 
 submission is one key — a second key smuggled into the batch is rejected; the body is capped at 4 MiB).
 The submitted key must be one the hub already verified for that instance under any peer row (and the
 registry's binding, when there is one); a blocked instance is refused, and a new spoke is registered
-`unvetted`. Relay feed answers carry
+`unvetted`. A spoke whose key changed sends its rotation records as JSON in `x-fed-rotations`; the hub
+moves the spoke's pin only along them, by the same rules as a pulled peer. Relay feed answers carry
 a CBOR page (`pageB64`, a base64 fedwire page). Every mirrored record travels as a signed fedwire
 frame; the stableStringify signing base exists only for standalone signed documents (the registry,
 key-rotation records, account operations), never for feed records.

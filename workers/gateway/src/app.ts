@@ -70,6 +70,7 @@ import {
   handleRelayResult,
   handleRelayDispatch,
   relayPoll,
+  purgeRelayQueue,
 } from "./relay.js";
 import { handleUserTx } from "./tx.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
@@ -229,9 +230,7 @@ export async function runScheduled(env: Env): Promise<void> {
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
-  await env.DB.prepare("DELETE FROM fed_relay_queue WHERE created_at < ?")
-    .bind(nowS - 3600)
-    .run();
+  await purgeRelayQueue(env);
   await runFrequentSync(env);
   // email each account its un-notified watch alerts (no-op without an email provider)
   try {
