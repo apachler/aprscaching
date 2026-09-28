@@ -61,7 +61,7 @@ describe("instance ids are bound to one peer", () => {
     await hub.DB.prepare("INSERT INTO fed_peers (url, trust, added_via) VALUES (?, 'trusted', 'manual')").bind(B).run();
 
     const r = await syncAllPeers(hub);
-    expect(r.errors.some((e) => e.startsWith(B))).toBe(true);
+    expect(r.errors.some((e) => e.slice(0, e.indexOf(": ")) === B)).toBe(true);
     expect((await peerRow(hub, B))?.instance ?? null).toBeNull();
     const titles = await hub.DB.prepare("SELECT updated_at FROM remote_caches WHERE origin = 'x.example'").all<{
       updated_at: number;
