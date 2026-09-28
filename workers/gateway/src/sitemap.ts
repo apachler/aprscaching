@@ -17,9 +17,25 @@ import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching
 
 const CANONICAL = "https://aprscaching.net";
 
-/** The public app origin (env override → canonical host), no trailing slash. */
+/** The public app origin (env override → canonical host), no trailing slash. Links into the app use it. */
 export function appBase(env: Env): string {
   return (env.APP_URL || CANONICAL).replace(/\/+$/, "");
+}
+
+/**
+ * The public origin of this gateway, no trailing slash. Resources only the gateway serves — feeds, the
+ * sitemap, robots.txt, the read API — link here, because the app may live on another host (a Pages site in
+ * front of an API host) that would answer those paths with the app itself. On the app's own host APP_URL
+ * carries the right scheme; elsewhere the request host is used, with the scheme a TLS-terminating proxy
+ * reports (the Node/Bun servers only ever see plain http).
+ */
+export function gatewayBase(req: Request, env: Env): string {
+  const u = new URL(req.url);
+  const app = appBase(env);
+  if (new URL(app).host === u.host) return app;
+  const fwd = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const scheme = fwd === "https" || fwd === "http" ? fwd : u.protocol.replace(/:$/, "");
+  return `${scheme}://${u.host}`;
 }
 
 export function xmlEscape(s: string): string {
@@ -47,21 +63,24 @@ export function handleSitemapXml(_req: Request, env: Env): Response {
 }
 
 /** GET /api/sitemap — the full manifest + feed catalogue, for dynamic tooling. */
-export function handleSitemapJson(_req: Request, env: Env): Response {
+export function handleSitemapJson(req: Request, env: Env): Response {
   const base = appBase(env);
+  const gw = gatewayBase(req, env);
   return json({
     protocol: "aprscaching-sitemap/1",
     app: base,
+    gateway: gw,
     surfaces: SURFACES.map((s) => ({ ...s, url: surfaceUrl(env, s.view) })),
-    feeds: FEEDS.map((f) => ({ ...f, url: `${base}${f.path}` })),
+    feeds: FEEDS.map((f) => ({ ...f, url: `${gw}${f.path}` })),
     readApi: { version: "v1", path: "/api/v1", access: "free, rate-limited" },
   });
 }
 
 /** GET /sitemap — human-readable site map: a real, crawlable page (not an in-app panel), built from
  *  the same SURFACES manifest. Joins /support + /source as a server-rendered top-level page. */
-export function handleSitemapPage(_req: Request, env: Env): Response {
+export function handleSitemapPage(req: Request, env: Env): Response {
   const base = appBase(env);
+  const gw = gatewayBase(req, env);
   const e = xmlEscape;
   const groupHtml = SURFACE_GROUPS.map((group: SurfaceGroup) => {
     const items = SURFACES.filter((s) => s.group === group);
@@ -75,7 +94,7 @@ export function handleSitemapPage(_req: Request, env: Env): Response {
     return `<section><h2>${e(group)}</h2><ul>${rows}</ul></section>`;
   }).join("");
   const feedHtml = FEEDS.map(
-    (f) => `<li><a href="${e(base + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
+    (f) => `<li><a href="${e(gw + f.path)}">${e(f.title)}</a><div class=m>${e(f.summary)}</div></li>`,
   ).join("");
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Site map · aprscaching</title><style>
@@ -90,16 +109,16 @@ footer{margin-top:2rem;opacity:.7;font-size:.9em}</style>
 ${groupHtml}
 <section><h2>Feeds (RSS)</h2><ul>${feedHtml}</ul></section>
 <section><h2>For machines</h2><ul>
-<li><a href="${e(base)}/sitemap.xml">sitemap.xml</a><div class=m>XML sitemap for crawlers.</div></li>
-<li><a href="${e(base)}/api/sitemap">/api/sitemap</a><div class=m>JSON surface manifest + feed catalogue.</div></li>
-<li><a href="${e(base)}/api/v1">/api/v1</a><div class=m>Public read API — free, rate-limited.</div></li>
+<li><a href="${e(gw)}/sitemap.xml">sitemap.xml</a><div class=m>XML sitemap for crawlers.</div></li>
+<li><a href="${e(gw)}/api/sitemap">/api/sitemap</a><div class=m>JSON surface manifest + feed catalogue.</div></li>
+<li><a href="${e(gw)}/api/v1">/api/v1</a><div class=m>Public read API — free, rate-limited.</div></li>
 </ul></section>
-<footer><a href="${e(base)}/support">Support</a> · <a href="${e(base)}/source">Source (AGPL-3.0)</a></footer>`;
+<footer><a href="${e(gw)}/support">Support</a> · <a href="${e(gw)}/source">Source (AGPL-3.0)</a></footer>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
 /** GET /robots.txt — allow all + advertise the sitemap. */
-export function handleRobots(_req: Request, env: Env): Response {
-  const body = `User-agent: *\nAllow: /\nSitemap: ${appBase(env)}/sitemap.xml\n`;
+export function handleRobots(req: Request, env: Env): Response {
+  const body = `User-agent: *\nAllow: /\nSitemap: ${gatewayBase(req, env)}/sitemap.xml\n`;
   return new Response(body, { headers: { "content-type": "text/plain; charset=utf-8" } });
 }

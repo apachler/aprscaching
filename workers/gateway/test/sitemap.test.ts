@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { handleSitemapXml, handleSitemapJson, handleSitemapPage, handleRobots, surfaceUrl } from "../src/sitemap.js";
+import {
+  handleSitemapXml,
+  handleSitemapJson,
+  handleSitemapPage,
+  handleRobots,
+  surfaceUrl,
+  gatewayBase,
+} from "../src/sitemap.js";
 import { SURFACES, FEEDS } from "@aprscaching/shared";
 import type { Env } from "../src/env.js";
 
@@ -41,11 +48,13 @@ describe("sitemap (manifest-driven)", () => {
     const data = (await handleSitemapJson(req, env).json()) as any;
     expect(data.protocol).toBe("aprscaching-sitemap/1");
     expect(data.app).toBe("https://app.example");
+    expect(data.gateway).toBe("https://api.example");
     expect(data.surfaces).toHaveLength(SURFACES.length);
     expect(data.surfaces.find((s: any) => s.key === "settings").url).toBe("https://app.example/?view=settings");
     expect(data.surfaces.find((s: any) => s.key === "sitemap")).toBeUndefined(); // the site map is a page, not a surface
     expect(data.feeds).toHaveLength(FEEDS.length);
-    for (const f of data.feeds) expect(f.url).toBe(`https://app.example${f.path}`);
+    // feeds are served by the gateway, so they link to its host even when the app lives elsewhere
+    for (const f of data.feeds) expect(f.url).toBe(`https://api.example${f.path}`);
   });
 
   it("/sitemap is a real HTML page listing every surface + feed (not a panel)", async () => {
@@ -57,16 +66,29 @@ describe("sitemap (manifest-driven)", () => {
     const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     for (const s of SURFACES) expect(body).toContain(`>${esc(s.title)}</a>`);
     // links to the machine endpoints + static pages
-    expect(body).toContain("/sitemap.xml");
-    expect(body).toContain("/api/sitemap");
-    expect(body).toContain("/api/v1");
-    expect(body).toContain("/support");
-    expect(body).toContain("/source");
+    expect(body).toContain('href="https://api.example/sitemap.xml"');
+    expect(body).toContain('href="https://api.example/api/sitemap"');
+    expect(body).toContain('href="https://api.example/api/v1"');
+    expect(body).toContain('href="https://api.example/support"');
+    expect(body).toContain('href="https://api.example/source"');
+    expect(body).toContain('href="https://app.example/"'); // "Open the app" stays on the app host
   });
 
   it("/robots.txt advertises the sitemap", async () => {
     const body = await handleRobots(req, env).text();
-    expect(body).toContain("Sitemap: https://app.example/sitemap.xml");
+    expect(body).toContain("Sitemap: https://api.example/sitemap.xml");
     expect(body).toContain("Allow: /");
+  });
+
+  it("gatewayBase: the app host keeps APP_URL; another host uses the request host and the proxy's scheme", () => {
+    // same-host deployment (Caddy / Docker): the gateway answers on the app's host
+    expect(gatewayBase(new Request("http://app.example/robots.txt"), env)).toBe("https://app.example");
+    // split deployment (Pages + API host)
+    expect(gatewayBase(new Request("https://api.example/robots.txt"), env)).toBe("https://api.example");
+    // a TLS-terminating proxy in front of the Node server, which only sees http
+    const proxied = new Request("http://api.example/robots.txt", { headers: { "x-forwarded-proto": "https" } });
+    expect(gatewayBase(proxied, env)).toBe("https://api.example");
+    // no APP_URL: a self-hosted instance links to itself, not to the canonical public host
+    expect(gatewayBase(new Request("http://192.168.1.10:8080/robots.txt"), {} as Env)).toBe("http://192.168.1.10:8080");
   });
 });
