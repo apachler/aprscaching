@@ -15,6 +15,9 @@
  *     stays closed until the operator names their own sites.
  *   - Everything else (bare APRS-IS injection qAC/qAX, app geo, any tunnelled transport) → not
  *     attested → cannot reach Tier A.
+ *   - The transport can only take attestation away, never grant it: a position recorded as arriving over
+ *     an internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
+ *     its `heard_via` and site claim — no receiver the operator runs heard it on amateur RF.
  */
 import { Transport as TransportEnum, type Transport, type Provenance } from "@aprscaching/shared";
 
@@ -49,6 +52,9 @@ export function parseAttestedSites(raw?: string | null): Set<string> {
   );
 }
 
+/** Transports that never carry first-party RF evidence: internet tunnels and licence-free carriers. */
+const NEVER_ATTESTED: ReadonlySet<Transport> = new Set<Transport>(["axudp", "axip", "meshtastic"]);
+
 /** Ingest port → transport. One table for every port a driver emits; an unknown port records nothing. */
 const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   "aprs-is": "aprs-is",
@@ -65,8 +71,8 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
 
 /**
  * The transport to record for an ingested packet. A batch signed by an operator's device key came from
- * the browser RF bridge, whatever port it names. Recorded for display and statistics only: the verify
- * engine never branches on it.
+ * the browser RF bridge, whatever port it names. The verify engine never branches on it; its only effect
+ * on trust is that {@link provenanceOf} refuses attestation to the tunnel and licence-free transports.
  */
 export function transportForPort(port: string, signed: boolean): Transport | null {
   if (signed) return "browser-rf";
@@ -75,7 +81,7 @@ export function transportForPort(port: string, signed: boolean): Transport | nul
 
 /**
  * How a stored position reached us: the recorded transport, else (legacy rows with no transport) the
- * app-geolocation marker or the APRS-IS feed. Never an input to `firstPartyAttested`.
+ * app-geolocation marker or the APRS-IS feed. It feeds `firstPartyAttested` only as a veto.
  */
 function transportOf(p: RawProvenance): Transport {
   const stored = TransportEnum.safeParse(p.transport);
@@ -88,16 +94,18 @@ function transportOf(p: RawProvenance): Transport {
  * Derive provenance for a stored position. `firstPartyAttested` requires a non-empty operator
  * allowlist (`attestedSites`) that names the gating IGate. An empty (or absent) allowlist attests
  * nothing: a bare firehose `qAR` never reaches Tier A (default-deny). Tier A opens only once the
- * operator explicitly names the receiving sites they stand behind.
+ * operator explicitly names the receiving sites they stand behind. A tunnel or licence-free transport
+ * vetoes attestation outright.
  */
 export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Provenance {
   const qConstruct = qConstructOf(p.path);
   const igate = (p.igate_call ?? "").toUpperCase();
   const rfOriginated = p.heard_via === "rf" && (!qConstruct || RF_QCONSTRUCT.test(qConstruct));
   const siteOk = !!attestedSites && attestedSites.size > 0 && !!igate && attestedSites.has(igate);
-  const firstPartyAttested = rfOriginated && siteOk;
+  const transport = transportOf(p);
+  const firstPartyAttested = rfOriginated && siteOk && !NEVER_ATTESTED.has(transport);
   return {
-    transport: transportOf(p),
+    transport,
     ...(qConstruct ? { qConstruct } : {}),
     firstPartyAttested,
     ...(igate ? { siteId: igate } : {}),

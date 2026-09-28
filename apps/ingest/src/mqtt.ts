@@ -4,6 +4,11 @@
  * password), subscribe at QoS 0, deliver PUBLISH payloads, keep the session alive with PINGREQ, and
  * reconnect with backoff. It never publishes. Just enough for reading a broker's feed without a
  * third-party client library on the box.
+ *
+ * A half-open TCP session looks healthy from this end, so liveness is enforced, not assumed: a broker
+ * that does not answer CONNECT within the CONNACK timeout, or sends nothing (not even a PINGRESP) for
+ * 1.5 × the keepalive, is dropped and re-dialled. The backoff resets only once a subscription is granted
+ * — a broker that accepts the connection but refuses the subscription keeps backing off.
  */
 import net from "node:net";
 import tls from "node:tls";
@@ -19,6 +24,8 @@ export interface MqttOpts {
   clientId?: string;
   keepAliveSec?: number;
   retryMs?: number;
+  /** How long to wait for CONNACK before giving up on the connection (default 10 s). */
+  connackTimeoutMs?: number;
   /** Log tag. */
   name?: string;
 }
@@ -127,6 +134,8 @@ export class MqttSubscriber {
   private backoff: Backoff;
   private ping?: ReturnType<typeof setInterval>;
   private timer?: ReturnType<typeof setTimeout>;
+  private connack?: ReturnType<typeof setTimeout>;
+  private watchdog?: ReturnType<typeof setTimeout>;
   private stopped = false;
   private readonly name: string;
 
@@ -144,9 +153,16 @@ export class MqttSubscriber {
 
   stop(): void {
     this.stopped = true;
-    if (this.ping) clearInterval(this.ping);
+    this.clearSessionTimers();
     if (this.timer) clearTimeout(this.timer);
     this.sock?.destroy();
+  }
+
+  private clearSessionTimers(): void {
+    if (this.ping) clearInterval(this.ping);
+    if (this.connack) clearTimeout(this.connack);
+    if (this.watchdog) clearTimeout(this.watchdog);
+    this.ping = this.connack = this.watchdog = undefined;
   }
 
   private connect(): void {
@@ -156,9 +172,15 @@ export class MqttSubscriber {
     const port = Number(u.port) || (secure ? 8883 : 1883);
     const host = u.hostname;
     this.buf = new Uint8Array(0);
+    this.clearSessionTimers();
     const s = secure ? tls.connect({ host, port, servername: host }) : net.connect(port, host);
     this.sock = s;
     const keepAliveSec = this.o.keepAliveSec ?? 60;
+    this.connack = setTimeout(() => {
+      console.log(`[${this.name}] no CONNACK from the broker — reconnecting`);
+      s.destroy();
+    }, this.o.connackTimeoutMs ?? 10_000);
+    this.connack.unref?.();
     s.on(secure ? "secureConnect" : "connect", () => {
       s.write(
         connectPacket({
@@ -169,11 +191,14 @@ export class MqttSubscriber {
         }),
       );
     });
-    s.on("data", (chunk: Buffer) => this.receive(Uint8Array.from(chunk), keepAliveSec));
+    s.on("data", (chunk: Buffer) => {
+      this.watchdog?.refresh(); // any byte from the broker proves the session is alive
+      this.receive(Uint8Array.from(chunk), keepAliveSec);
+    });
     s.on("error", (e: Error) => console.log(`[${this.name}] ${e.message}, retrying…`));
     s.on("close", () => {
-      if (this.ping) clearInterval(this.ping);
-      this.ping = undefined;
+      if (this.sock !== s) return; // a superseded socket's late close must not touch the current session
+      this.clearSessionTimers();
       if (this.stopped || this.timer) return;
       this.timer = setTimeout(() => {
         this.timer = undefined;
@@ -196,15 +221,36 @@ export class MqttSubscriber {
     for (const pkt of split.packets) {
       if (pkt.type === 2) {
         // CONNACK: return code in the second byte
+        if (this.connack) clearTimeout(this.connack);
+        this.connack = undefined;
         if (pkt.body[1] !== 0) {
           console.log(`[${this.name}] broker refused the connection (code ${pkt.body[1]})`);
           this.sock?.destroy();
           return;
         }
-        this.backoff.reset();
         this.sock?.write(subscribePacket(1, this.o.topics));
-        this.ping = setInterval(() => this.sock?.write(Uint8Array.from([0xc0, 0x00])), (keepAliveSec * 1000) / 2);
-        this.ping.unref?.();
+        const sock = this.sock;
+        if (this.ping) clearInterval(this.ping);
+        if (this.watchdog) clearTimeout(this.watchdog);
+        this.ping = this.watchdog = undefined;
+        if (keepAliveSec > 0) {
+          // keepalive 0 disables it on both ends
+          this.ping = setInterval(() => sock?.write(Uint8Array.from([0xc0, 0x00])), (keepAliveSec * 1000) / 2);
+          this.ping.unref?.();
+          this.watchdog = setTimeout(() => {
+            console.log(`[${this.name}] broker silent for ${keepAliveSec * 1.5} s — reconnecting`);
+            sock?.destroy();
+          }, keepAliveSec * 1500);
+          this.watchdog.unref?.();
+        }
+      } else if (pkt.type === 9) {
+        // SUBACK: one return code per topic after the packet id; 0x80 is a refusal
+        if (pkt.body.subarray(2).includes(0x80)) {
+          console.log(`[${this.name}] broker refused the subscription to ${this.o.topics.join(", ")} — reconnecting`);
+          this.sock?.destroy();
+          return;
+        }
+        this.backoff.reset(); // a working subscription → the next reconnect starts from the base interval
         console.log(`[${this.name}] connected, subscribed to ${this.o.topics.join(", ")}`);
       } else if (pkt.type === 3) {
         const pub = parsePublish(pkt);

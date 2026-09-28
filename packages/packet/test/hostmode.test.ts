@@ -25,9 +25,8 @@ describe("WA8DED host-mode codec", () => {
       0, // chan0 success-message "OE8XBM"
       1,
       7,
-      3,
-      0,
-      ...str("abc"), // chan1 connected info, len=3 "abc"
+      2,
+      ...str("abc"), // chan1 connected info, length byte = len-1 = 2, "abc"
     ]);
     const { events, rest } = parseHostmode(frame);
     expect(rest.length).toBe(0);
@@ -38,14 +37,39 @@ describe("WA8DED host-mode codec", () => {
     ]);
   });
 
-  it("decodes a monitor header+info (type 5) with the 2-byte length", () => {
-    const f = new Uint8Array([3, 5, ...str("OE8APR>APRS"), 0, 2, 0, ...str("OK")]);
-    const { events } = parseHostmode(f);
-    expect(events[0]).toEqual({ chan: 3, type: 5, header: "OE8APR>APRS", info: Uint8Array.from(str("OK")) });
+  it("decodes monitor headers (type 4 without info, type 5 with info following) and monitor info (type 6)", () => {
+    const f = new Uint8Array([
+      0,
+      4,
+      ...str("fm OE8APR to APRS ctl SABM+"),
+      0, // header of a frame without info
+      0,
+      5,
+      ...str("fm OE3PLY-7 to APRS ctl UI^ pid F0"),
+      0, // header whose info follows as type 6
+      0,
+      6,
+      1,
+      ...str("OK"), // length byte = len-1 = 1
+    ]);
+    const { events, rest } = parseHostmode(f);
+    expect(rest.length).toBe(0);
+    expect(events).toEqual<HostmodeEvent[]>([
+      { chan: 0, type: 4, text: "fm OE8APR to APRS ctl SABM+" },
+      { chan: 0, type: 5, text: "fm OE3PLY-7 to APRS ctl UI^ pid F0" },
+      { chan: 0, type: 6, info: Uint8Array.from(str("OK")) },
+    ]);
+  });
+
+  it("reads a full 256-byte info block (length byte 255)", () => {
+    const data = new Array(256).fill(0x41);
+    const { events, rest } = parseHostmode(Uint8Array.from([0, 6, 255, ...data]));
+    expect(rest.length).toBe(0);
+    expect(events).toEqual([{ chan: 0, type: 6, info: Uint8Array.from(data) }]);
   });
 
   it("holds back a partial frame until the rest arrives", () => {
-    const full = new Uint8Array([1, 7, 3, 0, ...str("abc")]); // connected info len=3
+    const full = new Uint8Array([1, 7, 2, ...str("abc")]); // connected info, 3 bytes
     const r1 = parseHostmode(full.slice(0, 5)); // missing the last byte
     expect(r1.events).toHaveLength(0);
     expect(r1.rest.length).toBe(5);

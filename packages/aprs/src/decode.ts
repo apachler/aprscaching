@@ -35,7 +35,7 @@ function applyExtensions(fix: DecodedPosition, comment: string): void {
     fix.speedKn = Number(cs[2]);
     comment = comment.slice(7);
   }
-  const alt = /\/A=(-?\d{6})/.exec(comment);
+  const alt = /\/A=(-\d{5,6}|\d{6})/.exec(comment); // six characters, a leading minus below sea level
   if (alt) {
     fix.altitudeM = Math.round(Number(alt[1]) * 0.3048);
     comment = comment.replace(alt[0], "");

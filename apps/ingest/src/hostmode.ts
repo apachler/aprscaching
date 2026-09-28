@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
 import { parseTNC2 } from "@aprscaching/aprs";
-import { hostmodeCommand, parseHostmode, type HostmodeEvent } from "@aprscaching/packet";
+import { hostmodeCommand, parseHostmode } from "@aprscaching/packet";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import { Backoff } from "./backoff.js";
 import { tncPacket } from "./link.js";
+
+/** A stream that holds more than this without completing a host-mode frame is not a WA8DED TNC. */
+export const HOSTMODE_RX_MAX_BYTES = 64 * 1024;
 
 export interface HostmodeOpts {
   host: string;
@@ -13,6 +17,8 @@ export interface HostmodeOpts {
   radioPort?: number;
   /** This box's receiving-site callsign; stamped on frames heard directly (see `directSiteCall`). */
   siteCall?: string;
+  /** Base reconnect delay (default 3000 ms); grows with backoff while the TNC stays unreachable. */
+  retryMs?: number;
 }
 
 /**
@@ -45,6 +51,50 @@ export function hostmodeMonitorPacket(
   if (!frame) return null;
   return { frame, packet: tncPacket(frame, "hostmode", siteCall, ts) };
 }
+/**
+ * The host-mode receive side: reassembles frames split across TCP chunks (bounded by
+ * {@link HOSTMODE_RX_MAX_BYTES}) and pairs each type-5 monitor header with the type-6 info block that
+ * immediately follows it. Any other event in between — a type-4 header of a frame without info, a status
+ * or success response — clears the pending header, so one station's header is never joined to another
+ * station's info, and a type-6 block with no header right before it is dropped. A type-4 frame carries
+ * no APRS payload and yields nothing.
+ */
+export class HostmodeRx {
+  private buf = new Uint8Array(0);
+  private pendingHeader: string | null = null;
+
+  /** Monitored frames completed by `chunk`, or null when the stream is not host mode. */
+  push(chunk: Uint8Array): { header: string; info: Uint8Array }[] | null {
+    const merged = new Uint8Array(this.buf.length + chunk.length);
+    merged.set(this.buf);
+    merged.set(chunk, this.buf.length);
+    const { events, rest } = parseHostmode(merged);
+    if (rest.length > HOSTMODE_RX_MAX_BYTES) {
+      this.reset();
+      return null;
+    }
+    this.buf = new Uint8Array(rest);
+    const out: { header: string; info: Uint8Array }[] = [];
+    for (const ev of events) {
+      const header = this.pendingHeader;
+      this.pendingHeader = null;
+      if (ev.type === 5) this.pendingHeader = ev.text;
+      else if (ev.type === 6 && header !== null) out.push({ header, info: ev.info });
+    }
+    return out;
+  }
+
+  /** Forget buffered bytes and any pending header (a new connection starts clean). */
+  reset(): void {
+    this.buf = new Uint8Array(0);
+    this.pendingHeader = null;
+  }
+
+  get buffered(): number {
+    return this.buf.length;
+  }
+}
+
 export interface HostmodeHandlers {
   onPacket: (p: Packet) => void;
   onFrame?: (f: ParsedFrame) => void;
@@ -60,16 +110,27 @@ export interface HostmodeHandlers {
 export class HostmodeTnc {
   private sock?: net.Socket;
   private connected = false;
-  private buf = new Uint8Array(0);
+  private rx = new HostmodeRx();
   private poll?: ReturnType<typeof setInterval>;
-  private pendingHeader: string | null = null;
+  private backoff: Backoff;
+  private stopped = false;
+  private timer?: ReturnType<typeof setTimeout>;
   constructor(
     private o: HostmodeOpts,
     private h: HostmodeHandlers,
-  ) {}
+  ) {
+    this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
+  }
 
   start() {
     this.connect();
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
+    if (this.poll) clearInterval(this.poll);
+    this.sock?.destroy();
   }
 
   private send(bytes: Uint8Array) {
@@ -81,28 +142,36 @@ export class HostmodeTnc {
   }
 
   private connect() {
+    if (this.stopped) return;
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
+    this.rx.reset(); // never carry a partial frame or a pending header across a reconnect
     s.on("connect", () => {
       this.connected = true;
+      this.backoff.reset(); // reachable again → next reconnect starts from the base interval
       if (this.o.mycall) this.send(hostmodeCommand(0, `I ${this.o.mycall}`)); // set MYCALL (Multiport identity)
       this.send(hostmodeCommand(0, "M UISC")); // monitor UI+I, with callsigns
+      if (this.poll) clearInterval(this.poll);
       this.poll = setInterval(() => {
         if (this.connected) this.send(hostmodeCommand(0, "G"));
       }, 500);
       console.log(`[hostmode] connected ${this.o.host}:${this.o.port}`);
     });
     s.on("data", (chunk: Buffer) => {
-      const merged = new Uint8Array(this.buf.length + chunk.length);
-      merged.set(this.buf);
-      merged.set(chunk, this.buf.length);
-      const { events, rest } = parseHostmode(merged);
-      this.buf = new Uint8Array(rest);
-      for (const ev of events) this.onEvent(ev);
+      const monitored = this.rx.push(chunk);
+      if (!monitored) {
+        console.warn(
+          `[hostmode] RX buffer over ${HOSTMODE_RX_MAX_BYTES} bytes with no frame — not host mode? reconnecting`,
+        );
+        s.destroy();
+        return;
+      }
+      for (const m of monitored) this.emitMonitor(m.header, m.info);
     });
     const down = () => {
       this.connected = false;
       if (this.poll) clearInterval(this.poll);
+      this.poll = undefined;
     };
     s.on("error", () => {
       down();
@@ -110,24 +179,12 @@ export class HostmodeTnc {
     });
     s.on("close", () => {
       down();
-      setTimeout(() => this.connect(), 3000);
+      if (this.stopped || this.timer) return;
+      this.timer = setTimeout(() => {
+        this.timer = undefined;
+        this.connect();
+      }, this.backoff.next()); // backoff + jitter
     });
-  }
-
-  /** Turn a monitor header (type 4/5) + info (type 5) into a TNC2 line and decode it. */
-  private onEvent(ev: HostmodeEvent): void {
-    if (ev.type === 4) {
-      this.pendingHeader = ev.text;
-      return;
-    } // header, info follows separately
-    if (ev.type === 5) {
-      this.emitMonitor(ev.header, ev.info);
-      return;
-    }
-    if (ev.type === 6 && this.pendingHeader) {
-      this.emitMonitor(this.pendingHeader, ev.info);
-      this.pendingHeader = null;
-    }
   }
 
   private emitMonitor(header: string, info: Uint8Array): void {

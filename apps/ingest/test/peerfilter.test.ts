@@ -31,6 +31,14 @@ describe("PeerAllowlist", () => {
     expect(log.mock.calls[0]![0]).toMatch(/dropped a frame from 198\.51\.100\.1 — not a configured peer/);
   });
 
+  it("keeps its per-source log throttle bounded under a flood of distinct sources", async () => {
+    const a = new PeerAllowlist({ name: "axudp", hosts: ["192.0.2.7"], log: () => {} });
+    await a.refresh();
+    for (let i = 0; i < 5000; i++) a.allows(`10.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}`);
+    expect(a.dropped).toBe(5000);
+    expect((a as unknown as { dropLoggedAt: Map<string, number> }).dropLoggedAt.size).toBeLessThanOrEqual(1024);
+  });
+
   it("resolves host names and picks up a changed address on the next refresh", async () => {
     let addr = "203.0.113.5";
     const a = new PeerAllowlist({ name: "t", hosts: ["bpq.example.net"], resolve: async () => [addr], log: quiet });

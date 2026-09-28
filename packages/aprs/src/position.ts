@@ -49,7 +49,11 @@ export function formatPosition(lat: number, lon: number, o: FormatPositionOpts =
   let s = `${o.dataType ?? "="}${dm(lat, 2)}${ns}${table}${dm(lon, 3)}${ew}${code}`;
   if (o.course != null && o.speedKn != null)
     s += `${String(Math.round(o.course)).padStart(3, "0")}/${String(Math.round(o.speedKn)).padStart(3, "0")}`;
-  if (o.altitudeM != null) s += `/A=${String(Math.round(o.altitudeM / 0.3048)).padStart(6, "0")}`;
+  if (o.altitudeM != null) {
+    // six characters, feet: `/A=001234`, or `/A=-00123` below sea level
+    const ft = Math.round(o.altitudeM / 0.3048);
+    s += `/A=${ft < 0 ? `-${String(-ft).padStart(5, "0")}` : String(ft).padStart(6, "0")}`;
+  }
   if (o.comment) s += o.comment;
   return s;
 }
