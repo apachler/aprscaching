@@ -222,11 +222,18 @@ export function activeFedKeys(keys: FedPublicKey[], nowS: number): string[] {
  * claim a slice of another instance's namespace (`b.example:cache` owning `b.example:cache:*`).
  */
 export function isInstanceId(s: unknown): s is string {
-  return (
-    typeof s === "string" &&
-    s.length <= 253 &&
-    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/.test(s)
-  );
+  if (typeof s !== "string" || s.length === 0 || s.length > 253) return false;
+  // label by label, with a single-character class per label, so no input can backtrack
+  return s
+    .split(".")
+    .every(
+      (label) =>
+        label.length >= 1 &&
+        label.length <= 63 &&
+        /^[a-z0-9-]+$/.test(label) &&
+        !label.startsWith("-") &&
+        !label.endsWith("-"),
+    );
 }
 
 /** Days a rotated-away key keeps verifying when its history entry names no `until`. */
