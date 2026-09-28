@@ -59,6 +59,16 @@ describe("loadDotEnv", () => {
     expect(process.env.FILTER).toBe("r/47/15/300"); // quotes stripped
     expect(process.env.PRESET).toBe("fromshell"); // not overwritten
   });
+  it("ends an unquoted value at an inline comment, but keeps # inside quotes", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acfg-"));
+    const file = path.join(dir, ".env");
+    fs.writeFileSync(file, ["T_INLINE=t/m            # a filter", 'T_QUOTED="a # b"', "T_HASH=abc#def"].join("\n"));
+    for (const k of ["T_INLINE", "T_QUOTED", "T_HASH"]) delete process.env[k];
+    loadDotEnv(file);
+    expect(process.env.T_INLINE).toBe("t/m");
+    expect(process.env.T_QUOTED).toBe("a # b");
+    expect(process.env.T_HASH).toBe("abc#def");
+  });
   it("is a no-op when the file is absent", () => {
     expect(() => loadDotEnv("/nonexistent/.env")).not.toThrow();
   });
