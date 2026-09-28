@@ -135,6 +135,12 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   // to purge the pre-deletion copies on peers.
   const findIds = (await env.DB.prepare("SELECT id FROM cache_logs WHERE logger_call=?").bind(cs).all<{ id: number }>())
     .results;
+  // the same for the callsign's key bindings and move announcements, which peers mirrored too
+  const keyIds = (await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=?").bind(cs).all<{ id: number }>())
+    .results;
+  const moveSeqs = (
+    await env.DB.prepare("SELECT seq FROM account_moves WHERE callsign=?").bind(cs).all<{ seq: number }>()
+  ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
     env.DB.prepare(
@@ -149,6 +155,7 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     env.DB.prepare("UPDATE messages SET from_call='WITHDRAWN' WHERE from_call=?").bind(cs),
     env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=?").bind(cs),
+    env.DB.prepare("DELETE FROM account_moves WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM favorites WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM watches WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM achievements WHERE callsign=?").bind(cs),
@@ -167,11 +174,11 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     ).bind(cs, now()),
   ]);
   // emit PII-free find tombstones so the network purges the mirrored copies that still carry the call
-  const tombstones = await emitTombstones(
-    env,
-    instance,
-    findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
-  );
+  const tombstones = await emitTombstones(env, instance, [
+    ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
+    ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
+    ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
+  ]);
   return json({ ok: true, erased: cs, tombstones });
 }
 
@@ -259,12 +266,10 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
     ).bind(cs, `from:${bundle.instance ?? "?"}`, now()),
     // announce the move to the network — the target attests "this callsign now homes here",
     // signed at serve time on the account-move feed so peers can re-point attribution.
-    env.DB.prepare("INSERT INTO account_moves (callsign, from_instance, to_instance, ts) VALUES (?,?,?,?)").bind(
-      cs,
-      bundle.instance ?? null,
-      instanceOf(env, req),
-      now(),
-    ),
+    // with the mover's signed assertion as its proof, so mirrors can check the move for themselves
+    env.DB.prepare(
+      "INSERT INTO account_moves (callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at) VALUES (?,?,?,?,?,?,?)",
+    ).bind(cs, bundle.instance ?? null, instanceOf(env, req), now(), a.key, a.sig, a.at),
   ];
   for (const k of bundle.keys)
     stmts.push(
@@ -283,13 +288,16 @@ interface MoveRow {
   from_instance: string | null;
   to_instance: string;
   ts: number;
+  proof_key: string | null;
+  proof_sig: string | null;
+  proof_at: number | null;
 }
 export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
   type: "account-move",
   selectRows: async (env, since, limit) =>
     (
       await env.DB.prepare(
-        "SELECT seq, callsign, from_instance, to_instance, ts FROM account_moves WHERE seq > ? ORDER BY seq LIMIT ?",
+        "SELECT seq, callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at FROM account_moves WHERE seq > ? ORDER BY seq LIMIT ?",
       )
         .bind(since, limit)
         .all<MoveRow>()
@@ -297,7 +305,15 @@ export const ACCOUNT_MOVE_FEED: FeedServeDef<MoveRow> = {
   recordOf: (r, instance) => ({
     id: `${instance}:move:${r.seq}`,
     cursor: r.seq,
-    data: { callsign: r.callsign, fromInstance: r.from_instance, toInstance: r.to_instance, ts: r.ts },
+    data: {
+      callsign: r.callsign,
+      fromInstance: r.from_instance,
+      toInstance: r.to_instance,
+      ts: r.ts,
+      ...(r.proof_key && r.proof_sig && r.proof_at != null
+        ? { proofKey: r.proof_key, proofSig: r.proof_sig, proofAt: r.proof_at }
+        : {}),
+    },
   }),
 };
 export const handleFederationAccountMoves = (req: Request, env: Env): Promise<Response> =>

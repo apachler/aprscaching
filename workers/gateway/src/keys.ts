@@ -8,8 +8,16 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { RegisterKeyRequest, authorshipMessage, ingestMessage, sha256Hex, stableStringify } from "@aprscaching/shared";
-import { importVerifyKey, fromB64 } from "./federation.js";
+import {
+  RegisterKeyRequest,
+  SIG_DOMAIN,
+  authorshipMessage,
+  ingestMessage,
+  sha256Hex,
+  stableStringify,
+} from "@aprscaching/shared";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { importVerifyKey, fromB64, verifyDomainOrLegacy } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { sessionCallsign, secretOk } from "./auth.js";
 
@@ -109,9 +117,18 @@ export async function verifySignedIngest(
   if (!(await isKeyRegistered(env, callsign, key))) return null; // key must belong to the callsign
   try {
     const digest = await sha256Hex(stableStringify(packets));
-    const msg = new TextEncoder().encode(ingestMessage({ callsign, at, count: packets.length, digest }));
-    const ok = await crypto.subtle.verify("Ed25519", await importVerifyKey(key), fromB64(sig), msg);
-    return ok ? { callsign } : null;
+    const ok = await verifyDomainOrLegacy(
+      await importVerifyKey(key),
+      fromB64(sig),
+      SIG_DOMAIN.ingest,
+      ingestMessage({ callsign, at, count: packets.length, digest }),
+    );
+    if (!ok) return null;
+    // a signed batch is accepted once: the same (key, time, content) inside the freshness window is a
+    // replay, remembered for as long as the window lasts
+    const once = await sha256Hex(`${key}|${at}|${digest}`);
+    if (await rateLimitedDurable(env, `ingest-once:${once}`, Date.now(), 1, 600_000)) return null;
+    return { callsign };
   } catch {
     return null;
   }

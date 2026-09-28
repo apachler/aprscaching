@@ -22,6 +22,18 @@ export interface Authorship {
   logType: string; // "found" | ...
   at: number; // client authorship time (epoch seconds)
 }
+/**
+ * Domain prefixes for standalone signed JSON documents: the signed bytes are the prefix followed by
+ * the canonical message, so a signature made for one purpose can never be presented for another.
+ * Verifiers also accept the unprefixed form for one release, so signatures made before the prefix
+ * existed keep verifying while peers upgrade.
+ */
+export const SIG_DOMAIN = {
+  rotation: "acs-rot/1\n",
+  registry: "acs-reg/1\n",
+  ingest: "acs-ing/1\n",
+} as const;
+
 export function authorshipMessage(a: Authorship): string {
   return stableStringify({
     v: 1,

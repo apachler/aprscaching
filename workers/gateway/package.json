@@ -18,6 +18,7 @@
     "./corroborate": "./src/corroborate.ts",
     "./caches": "./src/caches.ts",
     "./gossip": "./src/gossip.ts",
+    "./keys": "./src/keys.ts",
     "./relay": "./src/relay.ts",
     "./fetchguard": "./src/fetchguard.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",

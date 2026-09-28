@@ -17,7 +17,7 @@
 import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { parseEndpoints, type FedEndpoint } from "@aprscaching/shared";
+import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -388,8 +388,12 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
   if (!doc?.sig || !Array.isArray(doc.entries)) return false;
   try {
     const k = await importVerifyKey(authorityKeyB64url);
-    const msg = new TextEncoder().encode(stableStringify({ at: doc.at ?? 0, entries: doc.entries }));
-    return crypto.subtle.verify("Ed25519", k, fromB64(doc.sig), msg);
+    return verifyDomainOrLegacy(
+      k,
+      fromB64(doc.sig),
+      SIG_DOMAIN.registry,
+      stableStringify({ at: doc.at ?? 0, entries: doc.entries }),
+    );
   } catch {
     return false;
   }
@@ -587,11 +591,30 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
   if (!r?.key || !r.prevKey || !r.at || !r.sig) return false;
   try {
     const pk = await importVerifyKey(r.prevKey);
-    const msg = new TextEncoder().encode(stableStringify({ key: r.key, prevKey: r.prevKey, at: r.at }));
-    return crypto.subtle.verify("Ed25519", pk, fromB64(r.sig), msg);
+    return verifyDomainOrLegacy(
+      pk,
+      fromB64(r.sig),
+      SIG_DOMAIN.rotation,
+      stableStringify({ key: r.key, prevKey: r.prevKey, at: r.at }),
+    );
   } catch {
     return false;
   }
+}
+
+/**
+ * Verify an Ed25519 signature over a domain-prefixed canonical message, or — for one release, while
+ * peers upgrade — over the bare message it was signed as before the prefix existed.
+ */
+export async function verifyDomainOrLegacy(
+  key: CryptoKey,
+  sig: ArrayBuffer | Uint8Array<ArrayBuffer>,
+  domain: string,
+  message: string,
+): Promise<boolean> {
+  const enc = new TextEncoder();
+  if (await crypto.subtle.verify("Ed25519", key, sig, enc.encode(domain + message))) return true;
+  return crypto.subtle.verify("Ed25519", key, sig, enc.encode(message));
 }
 
 /** Import a peer's raw Ed25519 public key (base64url) for verifying its frames. */
