@@ -10,6 +10,20 @@ export interface KissOpts {
   host: string;
   port: number;
   retryMs?: number;
+  /** This box's receiving-site callsign; stamped on frames heard directly (see {@link kissSiteCall}). */
+  siteCall?: string;
+}
+
+/**
+ * The receiving site a KISS frame names, or undefined. Only a frame heard **directly** — no digipeater
+ * in its path has set the has-been-repeated bit (`*`) — is stamped: a digipeated frame proves the
+ * originator was near the digipeater, not near this receiver. The stamp only names the site; the gateway
+ * attests it (and lifts the frame toward Tier A) solely when the call is in FIRST_PARTY_SITES, and its
+ * independence rule keeps an operator's own receiver from corroborating the operator's own finds.
+ */
+export function kissSiteCall(path: string[], siteCall: string | undefined): string | undefined {
+  if (!siteCall) return undefined;
+  return path.some((h) => h.endsWith("*")) ? undefined : siteCall.trim().toUpperCase();
 }
 
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and `buf` would grow
@@ -91,6 +105,7 @@ export class KissTnc {
         const f = decodeAx25(raw);
         if (!f) continue;
         this.h.onFrame?.(f);
+        const site = kissSiteCall(f.path, this.o.siteCall);
         this.h.onPacket({
           src: f.src,
           dst: f.dst,
@@ -98,6 +113,7 @@ export class KissTnc {
           payload: f.payload,
           kind: "other",
           heardVia: "rf",
+          ...(site ? { igateCall: site } : {}),
           port: "kiss-tnc",
           ts: Math.floor(Date.now() / 1000),
           raw: f.raw,
