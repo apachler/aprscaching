@@ -13,6 +13,7 @@
  * Endpoint selection: a peer row carries an ordered typed endpoint set (`endpoints` JSON); the
  * lowest-priority sync-capable endpoint wins, with the legacy `url` column as the https fallback.
  */
+import { trimTrailingSlashes } from "./fetchguard.js";
 import { parseEndpoints, type FedEndpoint, type FedTransportKind } from "@aprscaching/shared";
 
 export const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
@@ -61,7 +62,7 @@ export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
  * public-CA TLS, and record authenticity comes from signatures, not the channel.
  */
 export function endpointBaseUrl(e: FedEndpoint): string | null {
-  if (e.transport === "https") return e.address.replace(/\/+$/, "");
+  if (e.transport === "https") return trimTrailingSlashes(e.address);
   if (e.transport === "44net") return `http://${e.address}`;
   return null;
 }

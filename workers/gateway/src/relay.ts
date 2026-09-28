@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
@@ -354,7 +354,7 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
  * a firewalled peer's feed reachable through the hub.
  */
 export async function relayPoll(env: Env): Promise<void> {
-  const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
+  const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
   if (!hub || !env.FED_RELAY_SECRET) return;
   const instance = (env.INSTANCE ?? "").toLowerCase();
   // every lease and answer is signed with our federation key; the hub scopes both to our own queue

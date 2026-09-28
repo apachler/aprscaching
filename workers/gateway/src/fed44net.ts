@@ -15,7 +15,7 @@
  * What this attests is IDENTITY only: the peer enters `unvetted` like any discovered peer, and the
  * operator-set trust tier still governs whether its records count — transport is never trust.
  */
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
@@ -62,7 +62,7 @@ export async function resolve44net(env: Env, callsign: string): Promise<Resolved
   if (!BASE_CALL_RE.test(cs)) throw new Error("a base callsign is required (letters/digits, no SSID)");
   const host = `${cs.toLowerCase()}.ampr.org`;
   const name = `_aprscaching.${host}`;
-  const doh = (env.DOH_URL || DEFAULT_DOH).replace(/\/+$/, "");
+  const doh = trimTrailingSlashes(env.DOH_URL || DEFAULT_DOH);
   const res = await fetch(`${doh}?name=${encodeURIComponent(name)}&type=TXT`, {
     headers: { accept: "application/dns-json" },
     signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),

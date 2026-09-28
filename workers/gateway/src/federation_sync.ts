@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * federation_sync.ts — the consumer side. Pull peers' /federation feeds, verify each record's
@@ -168,7 +168,7 @@ function ours(env: Env): string | null {
 async function seedPeers(env: Env): Promise<void> {
   const urls = (env.FED_PEERS ?? "")
     .split(",")
-    .map((s) => s.trim().replace(/\/+$/, ""))
+    .map((s) => trimTrailingSlashes(s.trim()))
     .filter(Boolean);
   for (const url of urls) {
     await env.DB.prepare(
@@ -191,7 +191,7 @@ async function seedPeers(env: Env): Promise<void> {
     return; // an untrustworthy registry seeds nothing; each peer's sync reports the error
   }
   for (const e of registry.values()) {
-    const u = e.url?.trim().replace(/\/+$/, "");
+    const u = e.url ? trimTrailingSlashes(e.url.trim()) : undefined;
     if (u && isInstanceId(e.instance) && e.instance !== ours(env))
       await env.DB.prepare(
         "INSERT OR IGNORE INTO fed_peers (url, instance, public_key, trust, added_via) VALUES (?,?,?, 'unvetted', 'registry')",
@@ -427,7 +427,7 @@ async function syncPeer(
     let room = Math.max(0, MAX_DISCOVERED - have);
     for (const url of (Array.isArray(wk.peers) ? wk.peers : []).slice(0, 50)) {
       if (room <= 0) break;
-      const u = String(url).trim().replace(/\/+$/, "");
+      const u = trimTrailingSlashes(String(url).trim());
       if (!u || u === base || !validEndpointAddress("https", u)) continue;
       const r = await env.DB.prepare(
         "INSERT OR IGNORE INTO fed_peers (url, trust, added_via, enabled) VALUES (?, 'unvetted', 'discovered', 0)",
@@ -1129,7 +1129,7 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   const trust = b?.trust as TrustLevel | undefined;
   if (!b?.url || !trust || !TRUST_LEVELS.includes(trust))
     return json({ ok: false, error: "url + trust (trusted|unvetted|blocked) required" }, { status: 400 });
-  const url = b.url.trim().replace(/\/+$/, "");
+  const url = trimTrailingSlashes(b.url.trim());
   const exists = await env.DB.prepare("SELECT url FROM fed_peers WHERE url = ?").bind(url).first<{ url: string }>();
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
   try {
@@ -1357,7 +1357,7 @@ export async function pushToHub(
   env: Env,
   fetchFn: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fedFetch(env, u, i),
 ): Promise<{ pushed: number } | null> {
-  const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
+  const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
   const secret = env.FED_SUBMIT_SECRET;
   if (!hub || !secret || !env.INSTANCE) return null;
   let pushed = 0;

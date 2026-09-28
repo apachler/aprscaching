@@ -108,3 +108,10 @@ export async function fedFetch(
   if (env.FED_FETCH_GUARD) await env.FED_FETCH_GUARD(url);
   return fetch(url, init);
 }
+
+/** A URL without its trailing slashes (a plain loop: linear on any input, unlike a `/+$` regex). */
+export function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}

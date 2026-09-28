@@ -13,7 +13,7 @@
  * known peers once per cooldown (a burst of writes coalesces into one round). Both directions share
  * one bounded cooldown map.
  */
-import { fedFetch } from "./fetchguard.js";
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { json } from "./app.js";
@@ -83,7 +83,7 @@ export async function notifyPeers(env: Env): Promise<void> {
   const peers = await listEnabledPeers(env);
   await Promise.all(
     peers.map(async (p) => {
-      const base = p.url.replace(/\/+$/, "");
+      const base = trimTrailingSlashes(p.url);
       try {
         await fedFetch(env, `${base}/federation/notify`, {
           method: "POST",
