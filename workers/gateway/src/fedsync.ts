@@ -95,13 +95,16 @@ export async function buildFedFrames(
   feedType: string,
   since: number,
   limit: number,
-): Promise<{ frames: Uint8Array[]; nextCursor: number } | null> {
+  sinceId?: number,
+): Promise<{ frames: Uint8Array[]; nextCursor: number; nextId?: number } | null> {
   const def = FEED_FOR_TYPE[feedType];
   const kind = KIND_FOR_TYPE[feedType];
   if (!def || !kind) return { frames: [], nextCursor: since };
   const at = Math.floor(Date.now() / 1000);
-  const rows = await def.selectRows(env, since, limit);
+  const rows = await def.selectRows(env, since, limit, def.composite ? sinceId : undefined);
   let nextCursor = since;
+  // a composite feed resumes after (cursor, id) of the last row; rows come ordered by that pair
+  let nextId = def.composite ? (sinceId ?? -1) : undefined;
   const frames: Uint8Array[] = [];
   for (const r of rows) {
     const { id, cursor, data } = def.recordOf(r, instance);
@@ -119,8 +122,12 @@ export async function buildFedFrames(
     if (!signed) return null;
     frames.push(encodeFedFrame(payload, signed.publicX, signed.sig));
     if (cursor > nextCursor) nextCursor = cursor;
+    if (def.composite) {
+      nextCursor = cursor;
+      nextId = Number((r as { id?: number }).id ?? -1);
+    }
   }
-  return { frames, nextCursor };
+  return { frames, nextCursor, ...(nextId !== undefined && { nextId }) };
 }
 
 /**
@@ -132,12 +139,14 @@ export async function handleFedSync(req: Request, env: Env, feedType: string): P
   if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
   const u = new URL(req.url);
   const since = Math.max(0, Number(u.searchParams.get("since") ?? 0) || 0);
+  const sinceIdRaw = u.searchParams.get("sinceId");
+  const sinceId = sinceIdRaw != null && Number.isSafeInteger(Number(sinceIdRaw)) ? Number(sinceIdRaw) : undefined;
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
   const instance = instanceOf(req, env);
-  const built = await buildFedFrames(env, instance, feedType, since, limit);
+  const built = await buildFedFrames(env, instance, feedType, since, limit, sinceId);
   if (!built) return json({ error: "instance is unsigned" }, { status: 404 });
   return new Response(
-    encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames) as BodyInit,
+    encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames, built.nextId) as BodyInit,
     { headers: { "content-type": "application/cbor" } },
   );
 }

@@ -243,20 +243,25 @@ interface BulletinRow {
  */
 export const BULLETIN_FEED: FeedServeDef<BulletinRow> = {
   type: "bulletin",
-  selectRows: async (env, since, limit) =>
+  composite: true,
+  selectRows: async (env, since, limit, sinceId = -1) =>
     (
       await env.DB.prepare(
         `SELECT id, bid, from_call, to_call, subject, body, posted_at, expires_at FROM bbs_messages
-       WHERE type='B' AND origin='local' AND (expires_at IS NULL OR expires_at > ?) AND posted_at >= ?
+       WHERE type='B' AND origin='local' AND (expires_at IS NULL OR expires_at > ?)
+         AND (posted_at > ? OR (posted_at = ? AND id > ?))
        ORDER BY posted_at, id LIMIT ?`,
       )
-        .bind(now(), since, limit)
+        .bind(now(), since, since, sinceId, limit)
         .all<BulletinRow>()
     ).results,
+  // the gid lives in the instance's namespace like every record; the FBB BID (the cross-mesh dedup
+  // key) rides in the body
   recordOf: (r, instance) => ({
-    id: r.bid ?? `${r.id}_${instance}`,
+    id: `${instance}:bulletin:${r.id}`,
     cursor: r.posted_at,
     data: {
+      bid: r.bid ?? `${r.id}_${instance}`,
       fromCall: r.from_call,
       toCall: r.to_call,
       subject: r.subject,
@@ -274,6 +279,7 @@ export async function upsertRemoteBulletin(
   origin: string,
 ): Promise<void> {
   const d = rec.data as {
+    bid?: string;
     fromCall?: string;
     toCall?: string;
     subject?: string | null;
@@ -281,13 +287,15 @@ export async function upsertRemoteBulletin(
     postedAt?: number;
     expiresAt?: number | null;
   };
-  if (!d.fromCall || !d.toCall || !d.body || !rec.id) return;
+  // the FBB BID from the body; a frame under the older `<id>_<instance>` gid carries it as its gid
+  const bid = typeof d.bid === "string" && d.bid ? d.bid.slice(0, 64) : rec.id;
+  if (!d.fromCall || !d.toCall || !d.body || !bid) return;
   await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
      VALUES (?, 'B', ?,?,?,?,?,?,?)`,
   )
     .bind(
-      rec.id,
+      bid,
       String(d.fromCall).toUpperCase(),
       String(d.toCall).toUpperCase(),
       d.subject ?? null,

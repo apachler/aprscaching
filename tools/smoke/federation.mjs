@@ -65,13 +65,16 @@ ok(
 );
 ok("descriptor addresses is an array", Array.isArray(pubWk.data?.addresses), JSON.stringify(pubWk.data?.addresses));
 
-// the CBOR sync surface serves fedwire frames: application/cbor, page envelope = map(4)
+// the CBOR sync surface serves fedwire frames: application/cbor, page envelope = map(4), or map(5)
+// when the feed's cursor is composite and the page carries its id tie-breaker
 {
   const res = await fetch(PUB + "/federation/sync/cache?since=0");
   const bytes = new Uint8Array(await res.arrayBuffer());
   ok(
     "GET /federation/sync/cache serves a CBOR page",
-    res.status === 200 && (res.headers.get("content-type") ?? "").includes("application/cbor") && bytes[0] === 0xa4,
+    res.status === 200 &&
+      (res.headers.get("content-type") ?? "").includes("application/cbor") &&
+      (bytes[0] === 0xa4 || bytes[0] === 0xa5),
     `status=${res.status} ct=${res.headers.get("content-type")} b0=${bytes[0]?.toString(16)}`,
   );
 }

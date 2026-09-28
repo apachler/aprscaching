@@ -346,7 +346,13 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   // store-and-forward receive, which verifies each against its claimed origin's keys and applies
   // idempotently by gid. The arrival path never lifts trust — quarantine/verification live there.
   let federation: FedBbsApplyResult | undefined;
-  if (isFedBbsCategory(row.to) && res.meta.changes) federation = await applyFedBbsBulletin(env, row.body);
+  if (isFedBbsCategory(row.to) && res.meta.changes) {
+    try {
+      federation = await applyFedBbsBulletin(env, row.body);
+    } catch (e) {
+      console.warn(`federation: ACSFED bulletin ${row.bid} could not be applied: ${(e as Error).message}`);
+    }
+  }
   if (row.type === "P") await learnWhitePages(env, row.from, row.origin); // FBB White Pages: learn HomeBBS from P-mail
   return json({
     ok: true,
