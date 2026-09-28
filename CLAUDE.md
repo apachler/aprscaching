@@ -87,8 +87,15 @@ instances and runs only in CI — see `.github/workflows/ci.yml` for the exact e
   and writes need a shared `INGEST_SECRET` on both gateway and client.
 
 ## Git & dependencies
-- Develop on `dev`; `main` is the release branch (release-please runs on pushes to `main`, and
-  `v*` tags drive the desktop and OCI-stack release workflows).
+- Branch flow: every change is a **feature branch cut from `dev`** → a PR into `dev`, **squash-merged**
+  → releases go **`dev` → `main` by PR** (a merge, not a squash). Never push to `dev` or `main` directly,
+  and never base a feature branch on another feature branch: when work depends on an unmerged PR, wait
+  for it to land, then rebase onto the new `dev` (`git rebase --onto origin/dev <old-base> <branch>`).
+- A merged feature branch is deleted, on GitHub and locally; the repository deletes head branches on
+  merge by default. Follow-up work starts a new branch from `dev`.
+- The squash commit takes the **PR title**, so PR titles are Conventional Commits too. `main` is the
+  release branch: release-please runs on pushes to `main`, and `v*` tags drive the desktop and
+  OCI-stack release workflows.
 - Commits are Conventional Commits (they feed release-please and `CHANGELOG.md`) and DCO signed-off
   (`git commit -s`); the DCO check runs on every PR.
 - `pnpm-workspace.yaml` sets `minimumReleaseAge: 720`: a package version younger than 12 h fails
