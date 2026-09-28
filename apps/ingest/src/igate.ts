@@ -14,6 +14,7 @@ export interface IgateOpts {
   localTtlSec?: number; // how long a station counts as "heard locally"
   retryMs?: number;
   idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
+  canTx?: () => boolean; // runtime RF-transmit switch for the APRS-IS -> RF direction (default always on)
 }
 
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
@@ -113,7 +114,11 @@ export class Igate {
         const f = parseTNC2(line);
         if (!f) continue;
         const addr = txIgateTarget(f, this.o.call, this.heardLocally);
-        if (addr && this.kiss.send({ src: f.src, dst: f.dst, path: [`${this.o.call}*`], payload: f.payload }))
+        if (
+          addr &&
+          (this.o.canTx?.() ?? true) &&
+          this.kiss.send({ src: f.src, dst: f.dst, path: [`${this.o.call}*`], payload: f.payload })
+        )
           console.log(`[igate] TX->RF message for ${addr}`);
       }
     });

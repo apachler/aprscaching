@@ -56,7 +56,9 @@ with other nodes. Setting those up is the operator's job: see [Packet BBS & node
 ## Remote box and spots
 
 - **Remote box** (operator) — the web app queues commands and the ingest box collects them over its own
-  outbound connection, so the box needs no open port. Transmit commands need a verified callsign.
+  outbound connection, so the box needs no open port. Set `BOX_ID` on the box and the same name in the app;
+  each command's result appears in the command log. Transmit commands need a verified callsign and
+  `BOX_TX=1` on the box ([set-up](../operate/administration.md#remote-control-of-your-box)).
 - **Spots** — when the operator enables them, POTA and SOTA activations (and DX-cluster, RBN and
   PSKReporter spots) appear on the map; filter them under **Search & filter → Live layers**.
 
