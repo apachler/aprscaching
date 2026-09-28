@@ -21,8 +21,9 @@ set `FED_ROTATION_GRACE_DAYS` to change it). A consumer:
 
 - pins the first key it sees for a peer and moves the pin only along verified rotation records, so a
   hijacked domain that simply publishes a new key is refused;
-- accepts an older published key only as a proven predecessor of the current one, and only until its
-  `until` (or the rotation time plus the grace when it names none);
+- accepts an older published key only as a proven predecessor of the current one — a key it already
+  trusted (the old pin), from which a signed rotation leads to the current key — and only until its
+  `until`, never later than the rotation time plus the grace;
 - treats a rotated-away key as revoked for good once that cutoff passes — a later descriptor cannot
   revive it — on every carrier: HTTP sync, FBB bulletins, HF beacons and packet circuits alike.
 
@@ -90,7 +91,8 @@ confirmed accrues a contradiction and is penalised.
   peer `unvetted` and **disabled**, and stops at 200 discovered peers. Choosing a trust level for a
   discovered peer in the admin surface enables it.
 - **Private networks.** On Node and Bun every federation fetch resolves its host first and refuses loopback,
-  private, link-local and CGNAT addresses, so a URL from another party can never reach this host's LAN. The
+  private, link-local and CGNAT addresses (IPv4 carried inside IPv6 included), and checks every redirect
+  hop the same way, so a URL from another party can never reach this host's LAN. The
   peers you configured by hand (`FED_PEERS`, `FED_HUB_URL`) are exempt; set `FED_ALLOW_PRIVATE=1` for a
   federation that lives entirely on a LAN. Cloudflare Workers never reach a private network.
 
@@ -101,8 +103,9 @@ A peer that can't be dialled inbound can still contribute:
 - **Push-to-hub.** A spoke pushes its signed records to a reachable hub's `POST /federation/submit`
   (secret-gated by `FED_SUBMIT_SECRET`; the hub verifies each record and requires the submitter to be its
   own signer). A submission for an instance the hub already knows under another key, or for a blocked
-  instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A submission
-  body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
+  instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A spoke that
+  rotated its key sends its rotation records with each push (`FED_ROTATIONS`), so the hub follows the
+  rotation from the key it pinned. A submission body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
 - **Rendezvous relay.** A poll-based relay lets a firewalled peer's feed be served through a hub with no
   tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). A requester gets a
   ticket with each query and reads only its own results; queries per requester are capped. A spoke leases

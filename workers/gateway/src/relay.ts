@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
@@ -129,6 +129,22 @@ async function spokeAuth(req: Request, env: Env, instance: string, body: Uint8Ar
     }
   }
   return false;
+}
+
+/** Largest answer a spoke may post: a full relayed feed page, base64, with room to spare. */
+const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Nightly housekeeping of the relay queue: an HTTP query older than an hour is stale, but a query
+ * dispatched over the FBB mesh may take days to come back, so it is kept for a week.
+ */
+export async function purgeRelayQueue(env: Env): Promise<void> {
+  const t = now();
+  await env.DB.prepare(
+    "DELETE FROM fed_relay_queue WHERE (status != 'dispatched' AND created_at < ?) OR created_at < ?",
+  )
+    .bind(t - 3600, t - 7 * 86400)
+    .run();
 }
 
 /** Return leases older than the TTL to the queue, so a spoke that vanished mid-lease loses nothing. */
@@ -261,7 +277,8 @@ export async function handleRelayLease(req: Request, env: Env): Promise<Response
 
 /** POST /federation/relay/answer — the spoke posts a result for a leased query. */
 export async function handleRelayAnswer(req: Request, env: Env): Promise<Response> {
-  const raw = new Uint8Array(await req.arrayBuffer());
+  const raw = await readCappedBody(req, MAX_ANSWER_BYTES);
+  if (!raw) return json({ error: "answer too large" }, { status: 413 });
   let parsed: { id?: number; result?: RelayResult; instance?: string } = {};
   try {
     parsed = JSON.parse(new TextDecoder().decode(raw)) as typeof parsed;

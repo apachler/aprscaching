@@ -10,8 +10,8 @@
  * whatever it resolves to, and FED_ALLOW_PRIVATE=1 lifts the check for an all-LAN network. Cloudflare
  * Workers need no guard — their egress never reaches a private network.
  *
- * The check runs before the fetch; a resolver that answers differently the second time (DNS
- * rebinding) is outside what a pre-flight check can see.
+ * The check runs before the fetch and again before every redirect hop; a resolver that answers
+ * differently the second time (DNS rebinding) is outside what a pre-flight check can see.
  */
 
 /** Resolve a hostname to its addresses (Node's dns.lookup with `all: true`, Bun's equivalent). */
@@ -36,8 +36,22 @@ export function blockedAddress(ip: string): string | null {
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
   if (v4) return v4Private(v4.slice(1).map(Number));
   if (!s.includes(":")) return null;
-  const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s);
-  if (mapped) return blockedAddress(mapped[1]!);
+  // IPv4 carried in IPv6 — mapped (::ffff:), compatible (::) and NAT64 (64:ff9b::), in dotted or in the
+  // hex form the URL parser normalises to — is judged by the IPv4 address it carries
+  const embedded =
+    /^(?:::ffff:|::|64:ff9b::)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s) ??
+    /^(?:::ffff:|::|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(s);
+  if (embedded) {
+    const v4 =
+      embedded[2] === undefined
+        ? embedded[1]!
+        : (() => {
+            const hi = parseInt(embedded[1]!, 16),
+              lo = parseInt(embedded[2]!, 16);
+            return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+          })();
+    return blockedAddress(v4) ?? (s.startsWith("64:ff9b:") ? "NAT64" : null);
+  }
   if (s === "::1") return "loopback";
   if (s === "::") return "unspecified";
   if (/^f[cd][0-9a-f]{2}:/.test(s)) return "private";
@@ -105,13 +119,58 @@ export async function fedFetch(
   url: string,
   init?: RequestInit,
 ): Promise<Response> {
-  if (env.FED_FETCH_GUARD) await env.FED_FETCH_GUARD(url);
-  return fetch(url, init);
+  const guard = env.FED_FETCH_GUARD;
+  if (!guard) return fetch(url, init);
+  // follow redirects by hand, so every hop is checked — an automatic redirect would let a public peer
+  // bounce the request onto this host's LAN
+  let target = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await guard(target);
+    const res = await fetch(target, { ...init, redirect: "manual" });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) return res;
+    target = new URL(location, target).toString();
+  }
+  throw new Error("refused: too many redirects");
 }
+const MAX_REDIRECTS = 3;
 
 /** A URL without its trailing slashes (a plain loop: linear on any input, unlike a `/+$` regex). */
 export function trimTrailingSlashes(s: string): string {
   let end = s.length;
   while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
   return s.slice(0, end);
+}
+
+/**
+ * Read a request or response body up to `max` bytes; null when it is larger. Checks a declared
+ * content-length first and never buffers past the cap, so an oversized body costs at most `max`.
+ */
+export async function readCappedBody(
+  src: { headers: Headers; body: ReadableStream<Uint8Array> | null },
+  max: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  const declared = Number(src.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) return null;
+  if (!src.body) return new Uint8Array(0);
+  const reader = src.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
 }
