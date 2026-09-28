@@ -86,6 +86,17 @@ docs: document the AGPL source-link obligation for self-hosters
 
 `feat` → minor bump, `fix` → patch, breaking → major. `docs`/`chore`/`test`/`ci` don't cut a release.
 
+## Branches and pull requests
+
+1. Cut a feature branch from `dev` (`git switch -c feat/my-change origin/dev`).
+2. Open a pull request into `dev`. It is **squash-merged**, so the PR title becomes the commit on `dev`:
+   write it as a Conventional Commit (`feat(ingest): …`, `fix(web): …`).
+3. Releases: a pull request from `dev` into `main`, merged (not squashed). release-please then opens the
+   release PR on `main`.
+
+Keep one concern per PR. If your change needs another PR that hasn't merged, wait for it, then rebase your
+branch onto the updated `dev` rather than basing it on the other branch.
+
 ## Sign your work (DCO)
 
 We use the [Developer Certificate of Origin](https://developercertificate.org/) — a one-line
