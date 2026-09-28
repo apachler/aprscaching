@@ -103,6 +103,12 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
       cs,
       `${cs}-%`,
     ),
+    radioCommands: await rows(
+      env,
+      "SELECT from_call, command, cache_code, body, raw_text, port, status, reason, sent_at, decided_at FROM radio_commands WHERE from_call=? OR from_call LIKE ? ORDER BY sent_at",
+      cs,
+      `${cs}-%`,
+    ),
     weatherKeys: await rows(
       env,
       "SELECT callsign, station_id, created_at, last_seen FROM wx_keys WHERE callsign=?",
@@ -150,6 +156,7 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
     env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM account_stations WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM wx_keys WHERE callsign=?").bind(cs),
+    env.DB.prepare("DELETE FROM radio_commands WHERE from_call=? OR from_call LIKE ?").bind(cs, `${cs}-%`),
     // account-level UI prefs — delete BEFORE the accounts row (the subselect needs account_id)
     env.DB.prepare(
       "DELETE FROM account_prefs WHERE account_id IN (SELECT account_id FROM accounts WHERE callsign=?)",

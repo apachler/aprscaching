@@ -1,9 +1,12 @@
 # Logging finds over radio messages (design)
 
-!!! note "Agreed design"
-    Nothing on this page is built. It is the agreed design for logging a find — or a DNF or note — by sending
-    a text message from a radio instead of tapping **Log a find** in the app. It replaces the separate
-    MeshCom-transmit proposal: APRS and MeshCom share one engine, and only the reply path differs.
+!!! note "Built and planned"
+    Logging a find — or a DNF or note — by sending a text message from a radio instead of tapping **Log a
+    find** in the app. APRS and MeshCom share one engine, and only the reply path differs. Built: the command
+    engine in the gateway ingest path (`workers/gateway/src/radiolog.ts`), `radio_commands`, APRS acks and
+    opt-in APRS replies, pending confirmation under **Profile → Logs sent over the air**, and export/erase.
+    Planned: MeshCom acks and replies through the node owner's box. Player guide:
+    [Log from your radio](../guides/caching.md#log-from-your-radio).
 
 ## Goal
 
@@ -63,9 +66,15 @@ message is therefore trusted by where it was heard, using the same provenance ru
 
 - **Heard directly at an attested RF site** (the receiving site is in `FIRST_PARTY_SITES`): the log is written
   immediately.
+- **Sent in a batch signed by the sender's own device key** (the browser RF bridge): the signature proves
+  the sender, so the log is written immediately as well.
 - **Arrived only over the internet** (APRS-IS, a MeshCom relay, a tunnel): the log is recorded as
   **pending**. It appears in the player's app under *Logs sent over the air* and becomes a real log only when
-  the signed-in player confirms it with one tap. Unconfirmed requests expire after 7 days.
+  the signed-in player confirms it with one tap. Unconfirmed requests expire after 7 days. If a copy of the
+  same message is later heard at an attested site, the pending command is logged without the tap.
+
+A pending find is scored when the message arrives and the score is stored with the command, so a
+confirmation days later does not depend on positions that have since been pruned.
 
 This decides only whether the message is **accepted as the player's own**. The find's verification tier is
 scored separately and exactly as for an app log, at the time the message was sent:
@@ -79,7 +88,7 @@ scored separately and exactly as for an app log, at the time the message was sen
 | | APRS | MeshCom |
 |---|---|---|
 | **Protocol ack** (always) | `:SENDER   :ack<msgNo>` from the service call, queued in the APRS outbox; the ingest box's APRS-IS uplink publishes it, and an IGate near the player gates it to RF | sent by the MeshCom node whose listener heard the message, as a `meshcom_msg` box command to that node owner's box; it goes out only when that box has MeshCom transmit enabled |
-| **Text reply** (opt-in) | a fixed text such as `AC-1234 found, logged Tier A` or the reason it was not logged; the instance operator turns it on | the same fixed text; the node owner turns on **Confirm finds over MeshCom** |
+| **Text reply** (opt-in) | a fixed text such as `AC-1234 found, logged Tier A` or the reason it was not logged; the instance operator turns it on (`RADIO_REPLIES=1`) | the same fixed text; the node owner turns on **Confirm finds over MeshCom** |
 
 Replies are fixed texts, never user-editable, and rate-limited: at most one reply per destination per
 10 minutes on the gateway, plus the box's own transmit rate limit for MeshCom.
@@ -107,8 +116,9 @@ the player's data: the GDPR export includes it and erase deletes it.
 
 ## Open points
 
-- **HELP with replies off.** `HELP` only makes sense with a reply. Proposal: a `HELP` reply is sent even when
-  text replies are off, because the sender explicitly asked for it; it is still rate-limited.
+`HELP` is always answered, even with text replies off — the sender asked for the reply — and it counts
+against the per-destination reply limit.
+
 - **MeshCom addressee.** `APRSCG` contains no digit. The MeshCom firmware must be checked for whether it
   carries a direct message to such an address; if not, MeshCom users address the instance's licensed
   service call (`FED_APRS_CALL`) instead.

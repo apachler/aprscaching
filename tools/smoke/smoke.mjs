@@ -1859,5 +1859,69 @@ ok(
   supPage.status === 200 && /text\/html/.test(supPage.ct) && /Support aprscaching/.test(supPage.body),
 );
 
+// ---- logging finds by radio message: FOUND / DNF to the service call ----
+{
+  const rc = "OE7RAD";
+  const st = await call("POST", "/auth/email/start", { email: `radio+${now()}@example.test`, callsign: rc });
+  const vr = await fetch(BASE + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: st.data?.devToken }),
+  });
+  const rcookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  ok("radio: the sender's callsign verifies over APRS", await verifyCallsign(rc));
+  const code = created.data?.cache?.code;
+  const msg = (text, extra) => ({
+    src: `${rc}-7`,
+    dst: "APRS",
+    payload: `:APRSCG   :${text}`,
+    kind: "message",
+    ts: now(),
+    ...extra,
+  });
+  // heard directly at the attested site OE8XXX → logged at once
+  await call(
+    "POST",
+    "/ingest",
+    {
+      packets: [
+        msg(`FOUND ${code} from the radio{7`, {
+          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          heardVia: "rf",
+          igateCall: "OE8XXX",
+          port: "kiss-tnc",
+        }),
+      ],
+    },
+    { "x-ingest-secret": SECRET },
+  );
+  // arrived over APRS-IS only → pending until confirmed in the app
+  await call(
+    "POST",
+    "/ingest",
+    { packets: [msg(`DNF ${code}{8`, { path: ["TCPIP*", "qAC", "T2TEST"], heardVia: "aprs_is", port: "aprs-is" })] },
+    { "x-ingest-secret": SECRET },
+  );
+  const list = await call("GET", "/api/radio/commands", undefined, { cookie: rcookie });
+  const cmds = list.data?.commands ?? [];
+  const found = cmds.find((c) => c.command === "found");
+  const dnf = cmds.find((c) => c.command === "dnf");
+  ok("radio: FOUND heard at an attested site is logged", found?.status === "logged", JSON.stringify(list.data));
+  ok("radio: DNF over APRS-IS waits for confirmation", dnf?.status === "pending", JSON.stringify(list.data));
+  ok("radio: the list names the service call", list.data?.serviceCall === "APRSCG");
+  const conf = await call("POST", `/api/radio/commands/${dnf?.id}/confirm`, {}, { cookie: rcookie });
+  ok("radio: confirming the pending DNF logs it", conf.data?.status === "logged", JSON.stringify(conf.data));
+  ok("radio: another session cannot see the commands", (await call("GET", "/api/radio/commands")).status === 401);
+  const ob = await call("GET", "/outbox");
+  const acks = (ob.data?.items ?? []).map((it) => it.payload);
+  ok(
+    "radio: both numbered messages are acked from the service call",
+    acks.includes(`:${rc}-7 :ack7`) && acks.includes(`:${rc}-7 :ack8`),
+    JSON.stringify(acks.slice(-5)),
+  );
+  const logsOf = await call("GET", `/api/caches/${id}`);
+  ok("radio: the logbook carries the radio find", JSON.stringify(logsOf.data ?? {}).includes(`${rc}-7`));
+}
+
 console.log(failures ? `\nFAILED (${failures})` : "\nALL CONFORMANCE CHECKS PASSED");
 process.exit(failures ? 1 : 0);

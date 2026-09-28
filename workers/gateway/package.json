@@ -12,7 +12,8 @@
     "./live": "./src/live.ts",
     "./import": "./src/import/engine.ts",
     "./federation_sync": "./src/federation_sync.ts",
-    "./corroborate_privacy": "./src/corroborate_privacy.ts"
+    "./corroborate_privacy": "./src/corroborate_privacy.ts",
+    "./radiolog": "./src/radiolog.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

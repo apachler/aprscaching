@@ -77,6 +77,35 @@ No signal at the cache? The find is **Saved — offline, will sync when you're b
 
 **Couldn't find it** records a DNF; **Add a note** posts a note to the logbook.
 
+### Log from your radio
+
+No phone with you? Send an APRS text message from your radio to the instance's service call — `APRSCG`
+unless the instance names another:
+
+| Message | Logs |
+|---|---|
+| `FOUND AC-1234 nice spot` | a find, with optional log text |
+| `DNF AC-1234 muggles` | a did-not-find |
+| `NOTE AC-1234 log is full` | a note |
+| `HELP` | replies with the command list |
+
+The dash in the code is optional. Your callsign must be verified on your account (**Settings → Account**);
+the log goes to the account that holds it.
+
+- **Heard by one of the instance's own receiving stations** (its attested sites), the message is logged at
+  once.
+- **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message), it waits under **Profile →
+  Logs sent over the air** until you tap **Confirm** — anyone can put your callsign on an internet message,
+  so the app asks you first. Unconfirmed messages expire after seven days.
+
+The find is verified the usual way, at the time you sent the message: beacon your position near the cache
+first, and a find heard by an independent receiving station reaches **Tier A**. A radio message carries no
+phone location, so without such a beacon it is recorded at **Tier C**.
+
+Your radio gets a normal APRS acknowledgement for a numbered message. A text reply ("AC-1234 found, logged
+Tier A") comes only if the operator has turned replies on; `HELP` is always answered. At most ten commands
+per hour are accepted from one callsign.
+
 ### The "you're near" prompt
 
 When you walk into a cache's area with the app open, a banner appears: **📍 You're near AC-1234 — …** with

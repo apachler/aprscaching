@@ -4,6 +4,7 @@ import type * as maplibregl from "maplibre-gl";
 import { getProfile, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Group, Badge, ErrorState, Ico } from "../ui/index.js";
+import { RadioLogs } from "./RadioLogs.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
@@ -128,6 +129,8 @@ export function ProfilePanel(props: {
           )}
         </>
       )}
+
+      {props.callsign.length >= 3 && <RadioLogs />}
 
       <Group title="Advanced — the Shack" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>

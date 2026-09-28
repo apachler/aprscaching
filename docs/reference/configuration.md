@@ -36,7 +36,8 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning | — |
-| `BBS_CALL` | Relay callsign personal mail is delivered from | `APRSCG` |
+| `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) are addressed to | `APRSCG` |
+| `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Acks and replies reach the air through the ingest box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
 
 Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
 (`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;

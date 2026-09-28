@@ -247,6 +247,31 @@ export function getMessages(
   return call(`/api/messages?${q.toString()}`);
 }
 
+// ---- logs sent over the air (FOUND / DNF / NOTE radio messages) ----
+export interface RadioCommandRow {
+  id: number;
+  fromCall: string;
+  command: "found" | "dnf" | "note" | "help" | "invalid";
+  cacheCode?: string | null;
+  body?: string | null;
+  trusted: boolean;
+  status: "logged" | "pending" | "rejected" | "help" | "discarded" | "expired";
+  reason?: string | null;
+  sentAt: number;
+  decidedAt?: number | null;
+  tier?: "A" | "B" | "C";
+  verified?: boolean;
+}
+export function getRadioCommands(): Promise<{ serviceCall: string; commands: RadioCommandRow[] }> {
+  return call("/api/radio/commands");
+}
+export function decideRadioCommand(
+  id: number,
+  decision: "confirm" | "discard",
+): Promise<{ ok: boolean; status: string; error?: string }> {
+  return call(`/api/radio/commands/${id}/${decision}`, { method: "POST", body: "{}" });
+}
+
 // ---- remote control of your own ingest box ----
 export interface BoxCommand {
   id: number;
