@@ -22,3 +22,10 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+
+# Security floors for transitive dev-tooling dependencies (lint and local Workers tooling), raised
+# past published advisories until their parents pick the fixes up.
+overrides:
+  browserslist: "^4.28.7"
+  baseline-browser-mapping: "^2.11.0"
+  undici@>=7.28.0 <7.29.1: "^7.29.1"
