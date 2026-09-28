@@ -40,7 +40,7 @@ export const Transport = z.enum([
   "app", // first-party in-app device geolocation (the Tier-B path)
   "axudp", // AX.25 over UDP (BPQ node mesh) — ingest listener/port built, feature-flagged off
   "axip", // AX.25 over raw IP proto 93 — ingest listener built (raw socket), feature-flagged off
-  "meshcom", // MeshCom LoRa mesh via a node's external UDP interface — unauthenticated, never attested
+  "meshcom", // MeshCom LoRa mesh via a node's ExtUDP interface — attestable only as a direct hearing at an attested node
   "hamnet-kiss", // KISS-over-IP from a HAMNET site — reserved
   "first-party-rf", // a receiver we operate + attest — the only Tier-A origin
 ]);
