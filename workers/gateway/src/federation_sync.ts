@@ -594,6 +594,8 @@ const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
   peer: null, // peer-announce carries no mirror record
   relayQuery: null, // relay traffic is dispatched to the relay handler, not a mirror applier
   relayAnswer: null,
+  corroborationQuery: null, // a live request/response exchange, never carried as a mirror record
+  corroboration: null,
 };
 const SYNC_DEF_BY_TYPE = new Map(SYNC_DEFS.map((d) => [d.type, d]));
 
@@ -820,6 +822,20 @@ async function originKeys(
   const arr = [...keys];
   cache.set(origin, arr);
   return arr;
+}
+
+/**
+ * The keys an origin's live exchanges (corroboration) verify under — the same accept set every
+ * carrier uses. Empty when the origin is unknown, blocked, or the registry is misconfigured.
+ */
+export async function keysForOrigin(env: Env, origin: string): Promise<string[] | "blocked"> {
+  let registry: Map<string, RegistryEntry>;
+  try {
+    registry = await loadRegistry(env);
+  } catch {
+    return [];
+  }
+  return originKeys(env, origin, registry, new Map());
 }
 
 export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: string): Promise<void> {

@@ -614,6 +614,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       "notify",
       fk ? "sync-cbor" : null, // the CBOR sync surface exists only where frames can carry signatures
       env.FED_SUBMIT_SECRET ? "submit" : null,
+      fk ? "corroborate-signed/1" : null, // signed corroboration questions and answers
     ].filter(Boolean),
     endpoints: {
       caches: "/federation/caches",

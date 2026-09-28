@@ -37,6 +37,11 @@ export const FED_RECORD_TYPE = {
   // body: relayed feed pages carry floats, which the deterministic CBOR codec refuses by design.
   relayQuery: 8,
   relayAnswer: 9,
+  // Cross-instance corroboration, a live request/response exchange: the asker's signed question
+  // (carrying a fresh nonce) and the answerer's signed reply, bound to that nonce and to the hash of
+  // the question's payload bytes. Neither is mirrored or forwarded.
+  corroborationQuery: 10,
+  corroboration: 11,
 } as const;
 export type FedRecordKind = keyof typeof FED_RECORD_TYPE;
 

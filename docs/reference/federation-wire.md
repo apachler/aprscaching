@@ -22,7 +22,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 
 | Envelope field | Meaning |
 |---|---|
-| `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor |
+| `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid** |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
 | `v` (4) | Per-gid monotonic version — duplicated / re-ordered / multi-path delivery converges |
@@ -77,6 +77,34 @@ integer twins and map back on receipt:
 | `lat` / `lon` | `latE7` / `lonE7` | ×10⁷ (1e-7°, ~1 cm) |
 | `difficulty` / `terrain` | `difficultyX10` / `terrainX10` | ×10 (half-steps exact) |
 | `distanceM` | `distanceCm` | ×100 (centimetres) |
+
+## Corroboration exchange
+
+Cross-instance corroboration is a live request/response exchange, the only one that can lift a find
+to Tier A, so both halves are signed fedwire frames and neither is ever mirrored or forwarded. The
+asker `POST`s a `corroborationQuery` frame (type 10) to `/federation/corroborate` as
+`application/cbor`; any other content type is answered 415. Its body carries `callsign`,
+`latE7`/`lonE7`, `radiusM`, `since`, `until`, `excludeIgates` (the base calls the logger controls),
+a fresh random `nonce`, and `target` (the answerer's instance id). The answerer replies with a
+`corroboration` frame (type 11) whose body is `{nonce, queryHash, corroborated, distanceCm?, ts?,
+igateCall?}`, where `queryHash` is the hex SHA-256 of the question's payload bytes.
+
+- **The answerer** verifies the question under the asker's accept set when the asker is a known
+  peer, and otherwise as an anonymous key (refused under `FED_CORROBORATION_REQUIRE_KNOWN=1`); a
+  blocked asker is refused. `at` must be within ±120 s. It bounds the question — centre snapped to the
+  grid, radius clamped to 150–1000 m, window bucketed and capped at one hour, and a window that ended
+  more than seven days ago refused — and coarsens the answer to a distance bucket and a bucketed time.
+  Rate limits apply per host, per asker, and per asker and callsign; a "no" is memoised per asker,
+  question, radius and exclusion set.
+- **The asker** counts an answer only if it verifies under the peer's accept set, names the peer as
+  origin and signer, is within ±120 s, and echoes its nonce and question hash. Evidence is rebuilt from
+  range-checked fields: the instance is the verified peer, the distance must lie within the asked
+  radius and the time within the asked window, and an `igateCall` is kept only when the asker also sets
+  `FED_REVEAL_IGATE` and it is not one of the logger's own calls. The quorum counts distinct identities:
+  the registry operator when there is one, else the signing key.
+
+An instance advertises the exchange as the `corroborate-signed/1` capability; asking requires a
+signing key (`FED_PRIVATE_KEY`).
 
 ## Peer endpoints
 
