@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import dgram from "node:dgram";
-import { parseMeshcomUdp, MESHCOM_MAX_DATAGRAM } from "@aprscaching/aprs";
+import { decodeMeshcom, meshcomToAprs, MESHCOM_MAX_DATAGRAM } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 
 export interface MeshcomOpts {
@@ -19,15 +19,16 @@ export interface MeshcomOpts {
  * Emitting `rf` here would let an attested-IGate path lift a mesh frame toward Tier A.
  */
 export function meshcomToPacket(datagram: string | Uint8Array, ts = Math.floor(Date.now() / 1000)): Packet | null {
-  const f = parseMeshcomUdp(datagram);
+  const d = decodeMeshcom(datagram);
+  const f = d.ok ? meshcomToAprs(d.event) : null;
   if (!f) return null;
   return {
     src: f.src,
     dst: "APRS",
-    path: f.relays,
+    path: f.path,
     payload: f.payload,
-    kind: f.kind === "position" ? "position" : f.kind === "message" ? "message" : "other",
-    ...(f.kind === "position" ? { parsed: { lat: f.lat, lon: f.lon } as Record<string, unknown> } : {}),
+    kind: f.kind,
+    ...(f.lat !== undefined ? { parsed: { lat: f.lat, lon: f.lon } as Record<string, unknown> } : {}),
     heardVia: "aprs_is",
     port: "meshcom",
     ts,
@@ -55,8 +56,9 @@ export class MeshcomListener {
   receive(msg: Uint8Array, from: string, now = Date.now()): Packet | null {
     if (from !== this.o.node) return null;
     if (msg.length > MESHCOM_MAX_DATAGRAM) return null;
-    const f = parseMeshcomUdp(msg);
-    if (!f) return null;
+    const d = decodeMeshcom(msg);
+    if (!d.ok) return null;
+    const f = { kind: d.event.type, src: d.event.src, msgId: d.event.provenance.msgId };
     if (f.msgId) {
       const key = `${f.kind}:${f.src}:${f.msgId}`;
       const at = this.seen.get(key);

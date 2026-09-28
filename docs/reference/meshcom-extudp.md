@@ -53,7 +53,8 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
 `src_type`, `type`, `src`, `dst`, `msg`, `msg_id`, `firmware`, `fw_sub`, `rssi`, `snr`.
 
-- `dst` is `*` (everyone), a group number (`10`–`99999`), or a callsign with optional SSID.
+- `dst` is `*` (everyone), a group number (`1`–`99999`; group 9 carries emergency traffic), or a callsign
+  with optional SSID.
 - `msg` is UTF-8. A direct message may end in an APRS message number (`Hello{034`).
 - A direct message neither to nor from the node is suppressed when the node runs `--nopmother on`.
 - Telemetry frames addressed to `100001` are never forwarded as text.
@@ -133,3 +134,4 @@ approximate. Against the firmware:
 | Telemetry keys `temp1`, `hum` | Full key set above, including `qfe`/`qnh`, `pressure_alt` and `din` |
 | — | Clients may send `type: "tele"` to set the node's sensor values |
 | — | The symbol table arrives as `aprs_symbol_group`, with a doubled backslash |
+| Groups `10`–`99999` | Groups `1`–`99999` (`CheckGroup`); `100001` is reserved for telemetry |
