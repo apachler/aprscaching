@@ -14,8 +14,11 @@
  *    call into APRS-IS, so a command logs immediately only when it was heard at an attested RF site
  *    (the same provenance rule as Tier A) or came in a batch signed by the sender's registered device
  *    key. Anything else is recorded as `pending` until the signed-in player confirms it in the app.
- *  - Where the acknowledgement goes. APRS messages are acked from the service call through the APRS
- *    outbox. MeshCom messages are acked through the node owner's box, which this module does not do.
+ *  - Where the answer goes. Acks and replies travel back the way the message came: a message the ingest
+ *    box heard on its own radio is answered by that box — on RF as third-party traffic from the service
+ *    call under the box's licensed call, or through the MeshCom node that heard it — so off-grid works
+ *    without APRS-IS. When that box is not polling or cannot transmit, APRS answers go through the
+ *    APRS-IS outbox; a MeshCom message then gets no answer.
  *
  * The log belongs to the account that holds the sender's control-verified base call — never to the bare
  * call string. A find is scored by the normal verification engine at the time the message was sent; a
@@ -26,6 +29,7 @@ import { json } from "./app.js";
 import { sessionAccountId } from "./auth.js";
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
+import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import type { CacheRow } from "./verify.js";
 
 /** Commands a sender may run per rolling hour; beyond that they are acked and rejected. */
@@ -92,6 +96,9 @@ export interface RadioMessage {
   path: string[];
   /** The batch was signed by the sender's own registered device key. */
   signed: boolean;
+  /** The ingest box, and the station on it, that received the message over its own radio (routing only). */
+  box?: string;
+  rxCall?: string;
 }
 
 /** Is this message accepted as the sender's own without a confirmation in the app? */
@@ -127,27 +134,58 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
     .run();
 }
 
-const isAprsPort = (port: string) => port !== "meshcom";
 const repliesEnabled = (env: Env) => env.RADIO_REPLIES === "1";
 
-/** Acknowledge a numbered APRS message. MeshCom acks go through the node owner's box, not the outbox. */
-async function ack(env: Env, m: RadioMessage): Promise<void> {
-  if (m.msgNo && isAprsPort(m.port)) await queueAprs(env, m.src, `ack${m.msgNo}`);
+/** Ports on which the ingest box itself received the frame over a radio it can also transmit on. */
+const RF_PORTS = new Set(["kiss-tnc"]);
+
+/**
+ * Send `text` to the sender the way the message came: through the box that heard it when that box is
+ * polling and can transmit on the same radio, else — for APRS — through the APRS-IS outbox.
+ */
+async function answer(env: Env, m: RadioMessage, text: string): Promise<void> {
+  const caps = m.box ? await freshBoxCaps(env, m.box) : null;
+  if (m.port === "meshcom") {
+    const node = m.rxCall?.toUpperCase();
+    if (caps?.tx && node && caps.meshcom.includes(node))
+      await enqueueSystemBoxCommand(env, m.box!, "meshcom_msg", { node, dst: m.src.toUpperCase(), text });
+    return;
+  }
+  if (caps?.tx && caps.rf && RF_PORTS.has(m.port))
+    return enqueueSystemBoxCommand(env, m.box!, "aprs_msg", {
+      from: serviceCall(env),
+      to: m.src.toUpperCase(),
+      text: text.slice(0, APRS_TEXT_MAX),
+    });
+  await queueAprs(env, m.src, text);
 }
 
 /**
- * Queue a fixed text reply when allowed: APRS only, operator opt-in (`RADIO_REPLIES=1`) unless the
- * sender asked for HELP, and at most one reply per destination per {@link RADIO_REPLY_INTERVAL_SEC}.
+ * Acknowledge a numbered message so the sender's radio stops retrying. MeshCom offers an external client
+ * no ack frame; its receive path recognises a text message `SENDER   :ack<nnn>` as the acknowledgement of
+ * message nnn and matches it by number alone, so the node that heard the message can ack it that way.
+ */
+export function ackText(port: string, src: string, msgNo: string): string {
+  return port === "meshcom" ? `${src.toUpperCase().padEnd(9)}:ack${msgNo}` : `ack${msgNo}`;
+}
+
+async function ack(env: Env, m: RadioMessage): Promise<void> {
+  if (m.msgNo) await answer(env, m, ackText(m.port, m.src, m.msgNo));
+}
+
+/**
+ * Send a fixed text reply when allowed: operator opt-in (`RADIO_REPLIES=1`) unless the sender asked for
+ * HELP, and at most one reply per destination per {@link RADIO_REPLY_INTERVAL_SEC}.
  */
 async function reply(env: Env, m: RadioMessage, rowId: number, text: string, asked = false): Promise<void> {
-  if (!isAprsPort(m.port) || !(asked || repliesEnabled(env))) return;
+  if (!(asked || repliesEnabled(env))) return;
   const recent = await env.DB.prepare(
     "SELECT 1 AS x FROM radio_commands WHERE from_call = ? AND replied_at >= ? LIMIT 1",
   )
     .bind(m.src.toUpperCase(), now() - RADIO_REPLY_INTERVAL_SEC)
     .first();
   if (recent) return;
-  await queueAprs(env, m.src, text);
+  await answer(env, m, text);
   await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(now(), rowId).run();
 }
 

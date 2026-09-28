@@ -37,9 +37,9 @@ function setup(over: Partial<BoxPollerOpts> = {}) {
 const cmd = (c: Partial<BoxCommand>): BoxCommand => ({ id: 1, kind: "status", callsign: "OE8APR", ...c });
 
 describe("remote transmit", () => {
-  it("beacons a position as the command's callsign through the radio", () => {
+  it("beacons a position as the command's callsign through the radio", async () => {
     const { poller, sent, nowSec } = setup();
-    const r = poller.execute(
+    const r = await poller.execute(
       cmd({
         kind: "beacon",
         callsign: "OE8APR-7",
@@ -53,24 +53,26 @@ describe("remote transmit", () => {
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
   });
 
-  it("sends an APRS message to the addressee", () => {
+  it("sends an APRS message to the addressee", async () => {
     const { poller, sent, nowSec } = setup();
-    const r = poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "oe3abc", text: "QSL" } }));
+    const r = await poller.execute(
+      cmd({ kind: "message", createdAt: nowSec(), payload: { to: "oe3abc", text: "QSL" } }),
+    );
     expect(r.status).toBe("done");
     expect(sent[0]!.payload).toBe(":OE3ABC   :QSL");
   });
 
-  it("refuses when the operator has not opted in on the box", () => {
+  it("refuses when the operator has not opted in on the box", async () => {
     const { poller, sent, nowSec } = setup({ remoteTx: false });
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
     expect(r).toMatchObject({ status: "failed" });
     expect(r.result).toMatch(/BOX_TX=1/);
     expect(sent).toHaveLength(0);
   });
 
-  it("refuses a callsign that is not the box's own station call", () => {
+  it("refuses a callsign that is not the box's own station call", async () => {
     const { poller, sent, nowSec } = setup();
-    const r = poller.execute(
+    const r = await poller.execute(
       cmd({ kind: "beacon", callsign: "OE3ABC", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }),
     );
     expect(r.status).toBe("failed");
@@ -78,111 +80,116 @@ describe("remote transmit", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("refuses when no station call is configured", () => {
+  it("refuses when no station call is configured", async () => {
     const { poller, nowSec } = setup({ boxCall: undefined });
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
     expect(r.result).toMatch(/BOX_CALL/);
   });
 
-  it("refuses a command queued longer ago than the maximum age", () => {
+  it("refuses a command queued longer ago than the maximum age", async () => {
     const { poller, sent, nowSec } = setup({ maxAgeSec: 600 });
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec() - 601, payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec() - 601, payload: { lat: 1, lon: 2 } }));
     expect(r.result).toMatch(/expired/);
     expect(sent).toHaveLength(0);
   });
 
-  it("refuses without a radio", () => {
+  it("refuses without a radio", async () => {
     const { poller, nowSec } = setup({ radio: null });
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
     expect(r.result).toMatch(/no RF transmitter/);
   });
 
-  it("refuses while the master transmit switch is off", () => {
+  it("refuses while the master transmit switch is off", async () => {
     const { poller, state, sent, nowSec } = setup();
     state.tx = false;
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
     expect(r.result).toMatch(/switched off/);
     expect(sent).toHaveLength(0);
   });
 
-  it("rate-limits a burst, then refills one token per interval", () => {
+  it("rate-limits a burst, then refills one token per interval", async () => {
     const { poller, sent, nowSec, advance } = setup({ burst: 2, refillSec: 60 });
-    const beacon = () => poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
-    expect(beacon().status).toBe("done");
-    expect(beacon().status).toBe("done");
-    expect(beacon().result).toMatch(/rate limited/);
+    const beacon = async () =>
+      poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    expect((await beacon()).status).toBe("done");
+    expect((await beacon()).status).toBe("done");
+    expect((await beacon()).result).toMatch(/rate limited/);
     advance(60_000);
-    expect(beacon().status).toBe("done");
-    expect(beacon().result).toMatch(/rate limited/);
+    expect((await beacon()).status).toBe("done");
+    expect((await beacon()).result).toMatch(/rate limited/);
     expect(sent).toHaveLength(3);
   });
 
-  it("does not spend a rate-limit token on a refused command", () => {
+  it("does not spend a rate-limit token on a refused command", async () => {
     const { poller, nowSec } = setup({ burst: 1 });
-    poller.execute(cmd({ kind: "beacon", callsign: "OE3ABC", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
-    const r = poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    await poller.execute(cmd({ kind: "beacon", callsign: "OE3ABC", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
+    const r = await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 1, lon: 2 } }));
     expect(r.status).toBe("done");
   });
 
-  it("rejects malformed payloads", () => {
+  it("rejects malformed payloads", async () => {
     const { poller, nowSec } = setup();
-    expect(poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 91, lon: 0 } })).status).toBe(
-      "failed",
-    );
     expect(
-      poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "OE3ABC", text: " " } })).status,
+      (await poller.execute(cmd({ kind: "beacon", createdAt: nowSec(), payload: { lat: 91, lon: 0 } }))).status,
     ).toBe("failed");
     expect(
-      poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "BAD CALL!", text: "x" } })).status,
+      (await poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "OE3ABC", text: " " } })))
+        .status,
+    ).toBe("failed");
+    expect(
+      (await poller.execute(cmd({ kind: "message", createdAt: nowSec(), payload: { to: "BAD CALL!", text: "x" } })))
+        .status,
     ).toBe("failed");
   });
 });
 
 describe("switches", () => {
-  it("switching transmit off is always honoured, even with remote transmit disabled", () => {
+  it("switching transmit off is always honoured, even with remote transmit disabled", async () => {
     const { poller, state } = setup({ remoteTx: false });
-    const r = poller.execute(cmd({ kind: "tx", callsign: "OE3ABC", payload: { on: false } }));
+    const r = await poller.execute(cmd({ kind: "tx", callsign: "OE3ABC", payload: { on: false } }));
     expect(r.status).toBe("done");
     expect(state.tx).toBe(false);
   });
 
-  it("switching a function on needs the opt-in and the station call", () => {
+  it("switching a function on needs the opt-in and the station call", async () => {
     const { poller, state } = setup();
-    expect(poller.execute(cmd({ kind: "igate", callsign: "OE3ABC", payload: { on: true } })).status).toBe("failed");
+    expect((await poller.execute(cmd({ kind: "igate", callsign: "OE3ABC", payload: { on: true } }))).status).toBe(
+      "failed",
+    );
     expect(state.igate).toBe(false);
-    expect(poller.execute(cmd({ kind: "igate", payload: { on: true } })).status).toBe("done");
+    expect((await poller.execute(cmd({ kind: "igate", payload: { on: true } }))).status).toBe("done");
     expect(state.igate).toBe(true);
 
     const off = setup({ remoteTx: false });
-    expect(off.poller.execute(cmd({ kind: "digi", payload: { on: true } })).result).toMatch(/BOX_TX=1/);
+    expect((await off.poller.execute(cmd({ kind: "digi", payload: { on: true } }))).result).toMatch(/BOX_TX=1/);
   });
 
-  it("reports a function that is not configured", () => {
+  it("reports a function that is not configured", async () => {
     const { poller, state } = setup();
     state.digi = null;
-    expect(poller.execute(cmd({ kind: "digi", payload: { on: false } })).result).toMatch(/no digipeater/);
+    expect((await poller.execute(cmd({ kind: "digi", payload: { on: false } }))).result).toMatch(/no digipeater/);
   });
 
-  it("needs an explicit on flag", () => {
+  it("needs an explicit on flag", async () => {
     const { poller } = setup();
-    expect(poller.execute(cmd({ kind: "tx", payload: {} })).status).toBe("failed");
+    expect((await poller.execute(cmd({ kind: "tx", payload: {} }))).status).toBe("failed");
   });
 });
 
 describe("status and unknown kinds", () => {
-  it("summarises the box state", () => {
+  it("summarises the box state", async () => {
     const { poller, advance } = setup();
     advance(3_720_000);
-    const r = poller.execute(cmd({ kind: "status" }));
+    const r = await poller.execute(cmd({ kind: "status" }));
     expect(r).toEqual({
       status: "done",
       result: "up 1h02m · rf kiss · tx on · digi on · igate off · remote tx allowed",
     });
   });
 
-  it("fails a kind the box cannot run", () => {
+  it("fails a kind the box cannot run", async () => {
     const { poller } = setup();
-    expect(poller.execute(cmd({ kind: "wx_beacon" }))).toEqual({
+    expect(await poller.execute(cmd({ kind: "wx_beacon" }))).toEqual({
       status: "failed",
       result: "wx_beacon is not supported by this box",
     });
@@ -195,7 +202,7 @@ describe("poll loop", () => {
     const calls: string[] = [];
     const f = (async (url: string, init?: RequestInit) => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
-      if (url.endsWith("/commands")) {
+      if (url.includes("/commands?") || url.endsWith("/commands")) {
         const out = commands.splice(0);
         return new Response(JSON.stringify({ commands: out }), { status: 200 });
       }
@@ -210,7 +217,7 @@ describe("poll loop", () => {
     const gw = fakeGateway([cmd({ id: 7, kind: "status" }), cmd({ id: 8, kind: "tx", payload: { on: false } })]);
     const { poller, state } = setup({ fetch: gw.f });
     await poller.tick();
-    expect(gw.calls[0]).toBe("GET http://gw/api/box/pi-home/commands");
+    expect(gw.calls[0]).toBe("GET http://gw/api/box/pi-home/commands?tx=1&rf=1&meshcom=");
     expect(gw.acks).toEqual([
       expect.objectContaining({ id: 7, status: "done" }),
       { id: 8, status: "done", result: "transmit off" },
@@ -243,5 +250,95 @@ describe("parseBoxPath", () => {
     expect(parseBoxPath(undefined)).toEqual(["WIDE1-1", "WIDE2-1"]);
     expect(parseBoxPath("")).toEqual([]);
     expect(parseBoxPath(" wide2-2 ")).toEqual(["WIDE2-2"]);
+  });
+});
+
+describe("answers to radio commands", () => {
+  const answer = (o: Partial<BoxCommand> = {}): BoxCommand => ({
+    id: 5,
+    kind: "aprs_msg",
+    callsign: null,
+    payload: { from: "APRSCG", to: "OE8APR-7", text: "ack12" },
+    ...o,
+  });
+
+  it("sends an APRS answer on RF as third-party traffic from the service call, under the box's call", async () => {
+    const { poller, sent, nowSec } = setup();
+    const r = await poller.execute(answer({ createdAt: nowSec() }));
+    expect(r).toEqual({ status: "done", result: "answer to OE8APR-7 sent as OE8APR-10" });
+    expect(sent).toEqual([
+      {
+        src: "OE8APR-10",
+        dst: "APZACG",
+        path: ["WIDE1-1", "WIDE2-1"],
+        payload: "}APRSCG>APZACG,TCPIP,OE8APR-10*::OE8APR-7 :ack12",
+      },
+    ]);
+  });
+
+  it("only speaks for the configured service call", async () => {
+    const { poller, sent } = setup({ serviceCall: "OE8APR-5" });
+    expect((await poller.execute(answer())).result).toMatch(/only answers from OE8APR-5/);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("passes the opt-in, transmit switch and age gates", async () => {
+    expect((await setup({ remoteTx: false }).poller.execute(answer())).result).toMatch(/BOX_TX=1/);
+    const off = setup();
+    off.state.tx = false;
+    expect((await off.poller.execute(answer())).result).toMatch(/switched off/);
+    const old = setup({ maxAgeSec: 60 });
+    expect((await old.poller.execute(answer({ createdAt: old.nowSec() - 61 }))).result).toMatch(/expired/);
+    expect((await setup({ radio: null }).poller.execute(answer())).result).toMatch(/no RF transmitter/);
+  });
+
+  it("hands a MeshCom answer to the node that heard the message", async () => {
+    const calls: unknown[] = [];
+    const { poller } = setup({
+      meshcom: {
+        nodes: [{ ip: "192.168.1.50", call: "OE8APR-12" }],
+        send: async (req) => {
+          calls.push(req);
+          return { ok: true };
+        },
+      },
+    });
+    const r = await poller.execute(
+      answer({ kind: "meshcom_msg", payload: { node: "OE8APR-12", dst: "OE8APR-7", text: "OE8APR-7 :ack034" } }),
+    );
+    expect(r.status).toBe("done");
+    expect(calls).toEqual([
+      { dst: "OE8APR-7", text: "OE8APR-7 :ack034", feature: "radio-answer", node: "192.168.1.50" },
+    ]);
+  });
+
+  it("reports why a MeshCom answer was not sent", async () => {
+    const off = setup();
+    expect(
+      (
+        await off.poller.execute(
+          answer({ kind: "meshcom_msg", payload: { node: "OE8APR-12", dst: "OE8APR-7", text: "x" } }),
+        )
+      ).result,
+    ).toMatch(/MESHCOM_TX=1/);
+    const { poller } = setup({
+      meshcom: {
+        nodes: [{ ip: "192.168.1.50", call: "OE8APR-12" }],
+        send: async () => ({ ok: false, reason: "rate-limited" }),
+      },
+    });
+    const node = (n: string) => answer({ kind: "meshcom_msg", payload: { node: n, dst: "OE8APR-7", text: "x" } });
+    expect((await poller.execute(node("OE8APR-99"))).result).toMatch(/no MeshCom node OE8APR-99/);
+    expect((await poller.execute(node("OE8APR-12"))).result).toBe("MeshCom node refused: rate-limited");
+  });
+
+  it("reports what it can transmit with every poll", () => {
+    const { poller, state } = setup({
+      meshcom: { nodes: [{ ip: "1", call: "oe8apr-12" }, { ip: "2" }], send: async () => ({ ok: true }) },
+    });
+    expect(poller.capsQuery()).toBe("tx=1&rf=1&meshcom=OE8APR-12");
+    state.tx = false;
+    expect(poller.capsQuery()).toBe("tx=0&rf=1&meshcom=OE8APR-12");
+    expect(setup({ remoteTx: false, radio: null }).poller.capsQuery()).toBe("tx=0&rf=0&meshcom=");
   });
 });
