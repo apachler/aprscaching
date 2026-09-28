@@ -43,7 +43,7 @@ export interface Env {
   FIRST_PARTY_SITES?: string; // provenance seam: allowlist of IGate/site calls we operate + attest → Tier-A origin
   FED_PEERS?: string; // comma-separated peer base URLs, advertised in the descriptor
   FED_DISCOVER?: string; // if set, auto-add peers advertised by peers (transitive discovery)
-  FED_CORROBORATION_QUORUM?: string; // distinct instances required to upgrade a find to Tier A (default 1)
+  FED_CORROBORATION_QUORUM?: string; // distinct corroborating identities (registry operator, else signing key) required for Tier A (default 2)
   FED_AUTO_PROMOTE?: string; // confirmed-corroboration count to auto-promote an unvetted peer to trusted (0=off)
   TOMBSTONE_TTL_DAYS?: string; // retention for delete tombstones before GC (default 180)
   PACKETS_TTL_HOURS?: string; // retention for the shack raw-packet ring (default 24)
@@ -54,7 +54,8 @@ export interface Env {
   ALERTS_TTL_DAYS?: string; // seen watch-alerts (default 30)
   MHEARD_TTL_DAYS?: string; // NET/ROM node mheard rows (default 7)
   // ---- corroboration hardening + privacy coarsening — all optional ----
-  FED_CORROBORATION_SECRET?: string; // if set, /federation/corroborate requires x-fed-secret (peer allowlist)
+  FED_CORROBORATION_SECRET?: string; // if set, /federation/corroborate also requires x-fed-secret; askers send it only to trusted https peers
+  FED_CORROBORATION_REQUIRE_KNOWN?: string; // "1": answer only askers that are known, non-blocked peers (by their verified key)
   FED_REVEAL_IGATE?: string; // if set, corroboration responses include the exact IGate (both peers opt in)
   FED_CORROBORATION_GRID_DEG?: string; // request center grid-snap size in degrees (default 0.005 ≈ 550 m)
   FED_CORROBORATION_TIME_BUCKET_SEC?: string; // request/response time bucket (default 600)
@@ -164,6 +165,7 @@ export const ENV_STRING_KEYS = [
   "ALERTS_TTL_DAYS",
   "MHEARD_TTL_DAYS",
   "FED_CORROBORATION_SECRET",
+  "FED_CORROBORATION_REQUIRE_KNOWN",
   "FED_REVEAL_IGATE",
   "FED_CORROBORATION_GRID_DEG",
   "FED_CORROBORATION_TIME_BUCKET_SEC",

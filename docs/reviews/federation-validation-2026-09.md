@@ -26,12 +26,12 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 
 | Finding | Where | Status |
 |---|---|---|
-| Corroboration answers are plain unsigned JSON, unbound to the question, and the default quorum is 1 | `corroborate.ts` | Open |
-| The network-wide corroboration secret is sent to every peer, including unvetted and plain-http ones | `corroborate.ts` | Open |
-| The logger's own IGates are not forwarded as exclusions, so a peer can corroborate through them | `caches.ts`, `corroborate.ts` | Open |
-| Peer-supplied evidence can set the corroborating instance, the IGate (which triggers alerts) and unchecked distances and times | `corroborate.ts`, `caches.ts` | Open |
-| The quorum counts self-reported instance names rather than distinct verified identities | `corroborate.ts` `selectCorroboration` | Open |
-| Peer-corroborated finds skip the local track-plausibility check, and living caches are queried at their static coordinates | `caches.ts`, `verify.ts` | Open |
+| Corroboration answers are plain unsigned JSON, unbound to the question, and the default quorum is 1 | `corroborate.ts` | Fixed — signed question and answer frames (types 10 and 11) bound to a nonce and the question hash; unsigned answers ignored; default quorum 2 |
+| The network-wide corroboration secret is sent to every peer, including unvetted and plain-http ones | `corroborate.ts` | Fixed — questions are signed; the secret is an optional extra gate sent only to trusted https peers; `FED_CORROBORATION_REQUIRE_KNOWN` limits answers to known peers |
+| The logger's own IGates are not forwarded as exclusions, so a peer can corroborate through them | `caches.ts`, `corroborate.ts` | Fixed — forwarded with every question and re-checked on any revealed IGate |
+| Peer-supplied evidence can set the corroborating instance, the IGate (which triggers alerts) and unchecked distances and times | `corroborate.ts`, `caches.ts` | Fixed — evidence rebuilt from range-checked fields; instance from the verified peer; IGate only with the asker's own opt-in |
+| The quorum counts self-reported instance names rather than distinct verified identities | `corroborate.ts` `selectCorroboration` | Fixed — counts registry operators, else signing keys |
+| Peer-corroborated finds skip the local track-plausibility check, and living caches are queried at their static coordinates | `caches.ts`, `verify.ts` | Fixed — `plausiblePresence` checks the local track; living caches are asked about the station's last fix |
 
 ## Privacy and data correctness
 
@@ -41,7 +41,7 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 | Pagination stalls when a page's worth of rows share one timestamp | `federation.ts`, `bbs.ts`, `federation_sync.ts` | Open |
 | One malformed record stalls a peer's feed or drops the rest of an FBB bulletin | `federation_sync.ts`, `forward.ts` | Open |
 | Bulletin ids fail the namespace check, so mirrored bulletins never apply | `bbs.ts` | Open |
-| The corroboration answerer does not snap the queried centre, bound the radius from below, or bucket and cap the time window | `corroborate.ts` | Open (distances and times in answers are already bucketed; the radius is capped at 1000 m) |
+| The corroboration answerer does not snap the queried centre, bound the radius from below, or bucket and cap the time window | `corroborate.ts` | Fixed — snapped centre, radius 150–1000 m, bucketed window capped at an hour, no older than seven days |
 
 ## Replay and robustness
 
@@ -62,7 +62,7 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 | A captured signed ingest batch replays within its freshness window | `keys.ts` | Open |
 | Erasing an account does not tombstone mirrored callsign-key bindings or account moves | `account.ts`, `federation_sync.ts` | Open |
 | Account moves carry no signed device-key migration proof (nothing reads them yet) | `account.ts` | Open |
-| The answerer's per-callsign rate limit is shared by all askers, and its negative cache ignores radius and exclusions | `corroborate.ts` | Open |
+| The answerer's per-callsign rate limit is shared by all askers, and its negative cache ignores radius and exclusions | `corroborate.ts` | Fixed — limits and the negative memo are per asker and include radius and exclusions |
 | Standalone JSON signatures (rotation, registry, ingest) carry no domain prefix | `federation.ts`, `packages/shared` `canon.ts`, `tools/fedkey` | Open |
 | 44net auto-admission relies on the DoH resolver's DNSSEC flag without saying so | `docs/reference/federation-wire.md` | Open |
 | No "running federation safely" guidance for operators | `docs/guides/federation.md` | Open |

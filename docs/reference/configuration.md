@@ -48,12 +48,13 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 | Variable | Purpose | Default |
 |---|---|---|
 | `FIRST_PARTY_SITES` | Allowlist of IGate/site callsigns you operate and attest — the only Tier-A origin. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions heard through these sites | — |
-| `FED_CORROBORATION_QUORUM` | Distinct instances required to promote a find to Tier A | `1` |
+| `FED_CORROBORATION_QUORUM` | Distinct corroborating identities (registry operator, else signing key) required to promote a find to Tier A | `2` |
 | `DOH_URL` | DNS-over-HTTPS resolver for 44net peer onboarding (must return the DNSSEC AD flag) | Cloudflare |
 | `FED_ENDPOINTS` | This instance's typed transport endpoints (JSON array of `{transport,address,priority}`), published as `addresses` in both the descriptor and the registry self-entry | — |
 | `FED_AUTO_PROMOTE` | Confirmed-corroboration count to auto-promote an unvetted peer (`0` = off) | `0` |
-| `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` requires `x-fed-secret` | — |
-| `FED_REVEAL_IGATE` | Include the exact IGate in corroboration responses (both peers opt in) | off |
+| `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` also requires `x-fed-secret`; an asker sends it only to trusted `https` peers | — |
+| `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
+| `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
 | `FED_CORROBORATION_GRID_DEG` / `_TIME_BUCKET_SEC` / `_DIST_BUCKET_M` | Location/time coarsening of corroboration queries | `0.005` / `600` / `100` |
 | `TOMBSTONE_TTL_DAYS` | Retention of GDPR delete tombstones | `180` |
 | `PACKETS_TTL_HOURS` | Retention of the Shack raw-packet ring | `24` |

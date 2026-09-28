@@ -944,49 +944,82 @@ if (RELAY_SECRET) {
   );
 }
 
-// ---- corroboration privacy coarsening + endpoint hardening ----
-// (must run LAST — the rate-limit probe trips the shared in-memory IP bucket on the publisher)
-// Isolate this probe from the shared in-memory rate-limit bucket. corroborate.ts keys on
-// `ip:${clientIp}` OR `call:${baseCall}`; over localhost clientIp is "unknown", so EVERY earlier
-// Tier-A-via-peer find in this run (from both gateway processes) has been incrementing the one
-// `ip:unknown` bucket (RL_MAX=60/60 s). Give the probe a distinct x-forwarded-for → a fresh ip:
-// bucket that can't 429 on accumulated state. The callsign stays LO3RF so the corroboration is real.
-const probe = await call(
-  PUB,
-  "POST",
-  "/federation/corroborate",
-  { callsign: "LO3RF", lat: LAT, lon: LON, radiusM: 200, since: t - 3600, until: t + 3600 },
-  { "x-forwarded-for": "203.0.113.7" },
-);
-ok("a direct corroboration probe is answered", probe.data?.corroborated === true, JSON.stringify(probe.data));
+// ---- corroboration: a signed exchange, coarsened answers, rate limits ----
+// (must run LAST — the rate-limit probe exhausts this asker's budget on the publisher)
+// A corroboration question is a signed fedwire frame (type 10) with a fresh nonce; the answer is a
+// signed frame (type 11) bound to that nonce. This probe asks as an anonymous key — the publisher
+// does not require known askers — so the whole exchange is exercised end to end.
+const akp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const apub = b64u(await crypto.subtle.exportKey("raw", akp.publicKey));
+const ask = (callsign, nonce, win) =>
+  buildFrame(
+    {
+      kind: 10,
+      gid: `smoke.asker:corroborationQuery:${nonce}`,
+      origin: "smoke.asker",
+      v: now(),
+      at: now(),
+      signer: "smoke.asker",
+      body: {
+        callsign,
+        latE7: Math.round(LAT * 1e7),
+        lonE7: Math.round(LON * 1e7),
+        radiusM: 200,
+        since: win.since,
+        until: win.until,
+        nonce,
+        target: pubInstance,
+      },
+    },
+    akp.privateKey,
+    apub,
+  );
+const postQuestion = (frame) =>
+  fetch(PUB + "/federation/corroborate", {
+    method: "POST",
+    headers: { "content-type": "application/cbor" },
+    body: frame,
+  });
+
+const unsignedProbe = await call(PUB, "POST", "/federation/corroborate", {
+  callsign: "LO3RF",
+  lat: LAT,
+  lon: LON,
+  radiusM: 200,
+  since: t - 1800,
+  until: now(),
+});
+ok("an unsigned JSON question is refused (415)", unsignedProbe.status === 415, `status=${unsignedProbe.status}`);
+
+const probeRes = await postQuestion(await ask("LO3RF", "5a0e", { since: t - 1800, until: now() }));
+let answer = null;
+try {
+  const parts = frameParts(new Uint8Array(await probeRes.arrayBuffer()));
+  const rec = miniDecode(parts.payload);
+  answer = { type: rec.get(1), origin: rec.get(3), body: Object.fromEntries(rec.get(7)) };
+} catch {}
 ok(
-  "the response distance is bucketed (no exact metres)",
-  Number.isInteger((probe.data?.evidence?.distanceM ?? 1) / 100),
-  JSON.stringify(probe.data?.evidence),
+  "a signed question gets a signed corroboration answer",
+  probeRes.status === 200 && answer?.type === 11 && answer?.body?.corroborated === true,
+  `status=${probeRes.status} ${JSON.stringify(answer)}`,
 );
+ok("the answer echoes the question's nonce", answer?.body?.nonce === "5a0e", JSON.stringify(answer?.body));
 ok(
-  "the response hides the exact IGate by default",
-  probe.data?.evidence?.igateCall === undefined,
-  JSON.stringify(probe.data?.evidence),
+  "the answer distance is bucketed (no exact metres)",
+  Number.isInteger((answer?.body?.distanceCm ?? 1) / 10000),
+  JSON.stringify(answer?.body),
 );
+ok("the answer hides the exact IGate by default", answer?.body?.igateCall === undefined, JSON.stringify(answer?.body));
 ok(
   "no IGate callsign leaks on the wire (not a location oracle)",
-  !/OE8XXX/.test(JSON.stringify(probe.data)),
-  JSON.stringify(probe.data),
+  !/OE8XXX/.test(JSON.stringify(answer)),
+  JSON.stringify(answer),
 );
 
-// Hermetic flood: a dedicated client IP + a dedicated callsign, so this proves "one source over
-// RL_MAX in a window → 429" against a FRESH bucket rather than depending on accumulated shared
-// state. RL_MAX is 60/60 s, so 80 rapid requests trip it deterministically with margin.
+// Flood from one asker: RL_MAX is 60/60 s, so 80 rapid signed questions trip it deterministically.
 let got429 = false;
 for (let i = 0; i < 80 && !got429; i++) {
-  const r = await call(
-    PUB,
-    "POST",
-    "/federation/corroborate",
-    { callsign: "FLOOD1", lat: 0, lon: 0, radiusM: 10, since: 0, until: 1 },
-    { "x-forwarded-for": "203.0.113.8" },
-  );
+  const r = await postQuestion(await ask("FLOOD1", `f${i}`, { since: now() - 600, until: now() }));
   if (r.status === 429) got429 = true;
 }
 ok("the corroboration endpoint rate-limits abusive probing (429)", got429);

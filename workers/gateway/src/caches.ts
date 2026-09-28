@@ -13,6 +13,7 @@ import {
 import {
   verifyFind,
   DEFAULT_POLICY,
+  plausiblePresence,
   type CacheRow,
   type PositionRow,
   type VerifyResult,
@@ -24,6 +25,7 @@ import { pushAlert } from "./notify.js";
 import { sessionCallsign, secretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
+import { coarsenConfig } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
@@ -646,19 +648,34 @@ export async function scoreFind(
       ? (lp.results.find((p) => p.id === result.matchedPositionId)?.igate_call ?? null)
       : null;
 
-  // if we couldn't reach Tier A locally, ask peers whether the logger was independently
-  // heard on RF near the cache (cross-instance corroboration). A hit upgrades the find to Tier A.
+  // if we couldn't reach Tier A locally, ask peers whether the logger was independently heard on RF
+  // near the cache (cross-instance corroboration), excluding every IGate the logger controls. A living
+  // cache is asked about where its station last was, not where it started. A hit upgrades the find
+  // to Tier A only if the logger's own local track could have been there.
   let corroboratedBy: string | null = null;
-  if (result.tier !== "A" && cache.lat != null && cache.lon != null) {
+  const lastStation = cacheStationPositions?.find((p) => p.ts <= at + 60);
+  const point =
+    cache.type === "aprs_living"
+      ? lastStation
+        ? { lat: lastStation.lat, lon: lastStation.lon }
+        : null
+      : cache.lat != null && cache.lon != null
+        ? { lat: cache.lat, lon: cache.lon }
+        : null;
+  if (result.tier !== "A" && point) {
     const ev = await queryPeerCorroboration(env, {
       callsign: loggerCall,
-      lat: cache.lat,
-      lon: cache.lon,
+      lat: point.lat,
+      lon: point.lon,
       radiusM: DEFAULT_POLICY.radiusM,
       since,
       until: at,
+      excludeIgates: [...loggerOwnIgates],
     });
-    if (ev) {
+    if (
+      ev &&
+      plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, coarsenConfig(env).timeBucketSec)
+    ) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
@@ -666,7 +683,7 @@ export async function scoreFind(
       result.distanceM = ev.distanceM;
       result.matchedPositionId = undefined;
       result.reason = undefined;
-      peerIgate = ev.igateCall ?? null; // present only when the peer opted into FED_REVEAL_IGATE
+      peerIgate = ev.igateCall ?? null; // present only when both instances opted into FED_REVEAL_IGATE
     }
   }
 
