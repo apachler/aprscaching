@@ -1,88 +1,134 @@
 # Caching
 
-The cache game is the product. This chapter covers hiding caches, logging finds, and everything on the map.
+The cache game is the heart of aprscaching: someone hides a cache, you go there and log the find. This page
+walks through the app. New here? Start with [Start here](../start-here.md) and [Your account](account.md).
+
+## Finding your way around
+
+| On a phone (bottom bar) | On a computer (left rail) | What it is |
+|---|---|---|
+| **Map** | **Map** | The map with caches and live stations |
+| **Nearby** | **Nearby** | The closest caches and stations, nearest first |
+| **Hide** / **Log** (centre button) | **+ Hide a cache** (top bar) | Hide a cache — or, when a cache is selected, log it |
+| **Activity** | **Activity** | Recent finds, top finders, top corroborators |
+| **You** | **You**, **Ranks**, **Messages**, **Shack**, **Settings** | Your profile; on a phone the Shack and Settings are under **You → Advanced** |
+
+The **Manual** icon in the top bar opens this manual.
+
+![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }
+
+## The map
+
+- **Search & filter** (the funnel icon): search by code or title, filter by **Cache type**, include
+  **unvetted network data** from other instances, and turn on **Live layers** — live APRS stations and
+  POTA/SOTA activations.
+  ![Search & filter](../assets/shots/filter-desktop.webp){ width="720" loading=lazy }
+- **Basemap**: **Map**, **Topo** or **Sat**.
+- **Map tools**: grid-square overlay, range rings, a ruler (distance and bearing), the day/night line, and
+  the bearing from your home locator to the selected cache.
+- The corner readout shows the cursor position as **Lat / Lon**, **Grid** (Maidenhead) and **MGRS**.
+- **Nearby → Download this area** keeps the caches of the current area for use without mobile coverage.
 
 ## Cache types
 
 | Type | What it is |
-|------|------------|
-| **Traditional** | A fixed location to find. |
-| **Virtual** | A place to confirm you visited, with no physical container. |
-| **Multi / staged** | Several stages; each stage's coordinates are revealed only after you unlock the previous one. |
-| **Living (`aprs_living`)** | A moving cache tied to an APRS station's beacon — found by being co-located with it. |
-| **Heritage** | Summits, parks, and landmarks imported from other programs (SOTA, POTA, WWFF, castles, islands). |
+|---|---|
+| **Traditional / Single** | One fixed spot to find. |
+| **Two-stage / Multi** | Several stages; each stage's position is revealed when you unlock the previous one. |
+| **Virtual** | A place to visit, with no container. |
+| **Audio** | A stage unlocked by an audio clue. |
+| **Living (APRS)** | Moves with an APRS station — you find it by meeting the station. |
+| **SOTA summit · POTA park · WWFF reserve · Bunker · Castle** | Places from the ham-radio award programs and landmarks, often imported by the instance. |
 
-Each cache carries difficulty and terrain, an optional per-cache **minimum trust tier** (`min_trust`), a
-**federation scope** (`public` / `unlisted` / `local-only`), a rating policy, and tags.
+## Open a cache
 
-## Hide a cache
+Tap a marker on the map, a row in **Nearby**, or a search result. The cache sheet shows:
 
-`POST /api/caches` creates a cache and mints a short code (`AC-####`). You own it: you can edit it, set
-staged coordinates, attach media, and choose whether it federates. Turning a cache `local-only` retracts any
-mirrored copies from peers via a signed tombstone.
+- the title, type, source (**APRScaching** or **imported · …**), code (`AC-1234`) and **by** the owner;
+- **Difficulty** and **Terrain** (1–5);
+- **Min. verification · Tier B** — the lowest tier a find needs to count as verified here;
+- **Rating**, the **Hint** (tap to reveal), photos under **Media**;
+- **Coordinates** with a copy button, the grid square, and **Navigate** to open your maps app
+  (Google, Apple or OpenStreetMap);
+- **Copy link** and **▦ QR** to share it;
+- the **Logbook** of everyone's finds, DNFs and notes.
+
+![A cache sheet on a computer](../assets/shots/detail-desktop.webp){ width="720" loading=lazy }
 
 ## Log a find
 
-`POST /api/caches/:id/logs` records a find, DNF, note, or maintenance entry. A **found** log is scored into a
-verification tier — see [Core concepts](../concepts.md#verification-tiers):
+At the cache, tap **✓ Log a find** (or **Log** in the bottom bar). Allow location access when the browser
+asks — that reading is what verifies your find. If you refuse, the find is still logged, just not verified by
+your phone.
 
-- **Tier A** when your position was heard on RF at a first-party-attested site, gated by an IGate that isn't
-  yours, within the cache radius (default 150 m) on a plausible track — or when federation peers corroborate
-  that independently.
-- **Tier B** when your device's in-app geolocation matches the cache at log time (tolerance = the cache
-  radius plus your reported accuracy, capped).
-- **Tier C** for a bare APRS-IS beacon near the cache.
+The result shows how well your find is verified:
 
-A cache owner can require a stricter tier with `min_trust`; a find that doesn't meet a cache's floor is
-recorded but marked unverified.
+| Badge | Tier | Meaning |
+|---|---|---|
+| **Verified · RF** | A | Your APRS position was heard on the air near the cache, by a receiving station that isn't yours, on a believable track. Peer instances can also confirm this. |
+| **Verified · App** | B | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy). |
+| **Verified · C** · **Logged · unverified** | C | Only an internet (APRS-IS) position was available. The find is recorded but not confirmed. |
 
-## Staged & multi caches
+If a cache requires a higher tier than your find reached, the find is recorded but shown as unverified.
+Your find is signed with your device key (**signed with your device key ✍**); if you verified your
+callsign, it can also be **announced to APRS-IS**.
 
-`cache_stages` defines an ordered sequence. Stage 0 is public; later stages' coordinates stay hidden until
-you unlock the prior stage. Unlock modes:
+No signal at the cache? The find is **Saved — offline, will sync when you're back online**.
 
-- **geo** — be within the previous stage's radius (in-app geolocation);
-- **nfc** — read a physical tag's secret (WebNFC, with a typed fallback);
-- **audio / open** — an advisory clue.
+**Couldn't find it** records a DNF; **Add a note** posts a note to the logbook.
 
-Owners set stages with `POST /api/caches/:id/stages` and may attach an audio clue per stage.
+### The "you're near" prompt
 
-## Living-cache rendezvous
+When you walk into a cache's area with the app open, a banner appears: **📍 You're near AC-1234 — …** with
+**Log it** and **Dismiss**.
 
-When two opted-in living caches beacon within 150 m of each other in a 15-minute window, the platform records
-a mutual **rendezvous**. This is a social record only — it earns no points and no leaderboard credit, so
-stations parking together cannot farm finds.
+## Staged caches
 
-## The map & exports
+A multi-stage cache shows **Stages · 1/3 unlocked**. Unlock the next stage by:
 
-The map aggregates your native caches and trust-filtered federated mirrors (native always shown, `trusted`
-mirrors on by default, `unvetted` behind an "include network data" toggle). Client features include layer
-switching, save/share of the current view by URL, range rings and MGRS, per-station track replay, and
-navigate-to. The public read API (`/api/v1`, rate-limited) exports:
+- **geo** — standing at the current stage and tapping **I'm here — reveal**;
+- **nfc** — tapping **Scan NFC tag** on the tag at the stage, or typing the code printed on it;
+- **audio / open** — following the clue, then **Reveal next stage**.
 
-- caches as **GPX** and **KML**;
-- station tracks as JSON and KML;
-- a callsign's finds as **ADIF 3.1** (mapped to QSOs with `SIG=APRSCACHING`).
+## Hide a cache
+
+1. Tap **+ Hide a cache** (phone: **Hide**). You need to be signed in.
+2. Click the map where the cache is; drag the pin to adjust.
+3. Fill in **Title** and **Type**; set **Difficulty & terrain** with the sliders.
+4. Optional **Details**: **Hint**, **Description**, **Drive-in**, **Country**, **Tags**.
+5. **Rating & federation**: who may rate it, and the scope —
+   - **Public** — shared with linked instances;
+   - **Unlisted** — shared, but not listed;
+   - **Local only** — stays on this instance. The hint is never shared.
+6. Tap **Hide cache**. It gets a code like `AC-1234`.
+
+Add photos afterwards from the cache's **Media** section. A **Living (APRS)** cache asks for the station
+callsign it follows; you can also create one from **Settings → My stations**. The minimum tier for a cache and
+its stages are set through the [HTTP API](../reference/api.md).
 
 ## Community
 
-Favorites, ratings (finders-only, everyone, or off, per the cache's policy), badges and achievements for both
-hiding and finding, and cache health signals (needs-maintenance, DNF streaks). Leaderboards rank finders by
-metric, period, and area; a public profile aggregates a callsign's finds, hides, and points. A corroborator
-board credits the IGates that make other people's finds verifiable, and an operator's standing is exportable
-as an embeddable SVG badge (`/badge/:call.svg`).
+- **Activity** — recent finds, **Top finders**, and **Top corroborators**: the receiving stations whose
+  radios verify other people's finds.
+- **Ranks** — the **🏆 Leaderboard** by points or finds, for everyone or **this area**. Tap a callsign to see
+  their profile: finds, points, hides, badges.
+- **You** — your own profile, badges, and how many finds your stations helped verify.
+- **Favorite** (♡) and rate caches you found; the owner sees **needs maintenance** flags.
 
-## Heritage imports
+When two living caches meet (within 150 m inside 15 minutes), both record a **rendezvous** — a social
+record only, it earns no points.
 
-Operators can pull third-party location programs onto the map with `POST /api/import/:source`:
+## Sharing and exporting
 
-| Source | Notes |
-|--------|-------|
-| SOTA, POTA, WWFF, WWBOTA/UKBOTA, IOTA | Amateur activity programs (region or bbox scoped). |
-| Geocaching Australia, OpenCaching nodes | Geocache catalogs (OpenCaching needs a per-node key). |
-| OSM, Wikidata | Peaks, castles, lighthouses (ODbL / CC0). |
-| Generic GeoJSON | Any catalog, incl. WCA castles via CQGMA. |
+- **Search & filter → Share this view** copies a link to the current map view.
+- Each cache has **Copy link** and a printable **QR** code.
+- Caches as **GPX/KML**, station tracks, and your finds as **ADIF** (for your logbook program) are available
+  from the public [read API](../reference/api.md#public-read-api).
 
-Each imported cache carries a source disclaimer and a deep link back to the origin, re-importing updates it
-in place, and imports are de-duplicated across sources with **ham-radio priority** (a SOTA summit suppresses
-a coincident OSM peak). Imported caches stay **local** — they are never re-published to the federation.
+## Heritage places on the map
+
+Instance operators can import places from other programs so they appear as caches: SOTA, POTA, WWFF,
+WWBOTA/UKBOTA, IOTA, Geocaching Australia, OpenCaching, and peaks, castles and lighthouses from
+OpenStreetMap and Wikidata. Each shows where it came from with a link back, and the same place from two
+sources appears once — the ham-radio program wins (a SOTA summit hides the matching OSM peak). Imported
+places stay on the importing instance. How to import: [Administration](../operate/administration.md).

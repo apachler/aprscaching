@@ -4,6 +4,10 @@ The **ingest box** is how real radio enters an instance. It is a Node process (`
 the operator's own machine, next to the radio or TNC — never in the cloud gateway. Only the box that
 physically touched RF can attest first-party reception, which is why ingest is always local.
 
+!!! tip "Step by step"
+    [Connect a radio: quick starts](quickstarts.md) walks through each link below — APRS-IS, a KISS TNC with
+    Direwolf, your own IGate, Meshtastic, MeshCom, AXUDP — with the log line that shows it works.
+
 ## How the box works
 
 Every transport decodes into a normalized packet and pushes it into one batch. Every `BATCH_MS` (default
@@ -19,10 +23,10 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 
 | Transport | Enable with | What it does |
 |-----------|-------------|--------------|
-| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (e.g. Direwolf). Decodes AX.25, emits RF-heard packets, and exposes TX for the digipeater / IGate / node. This transport gates the digipeater, NET/ROM node, BBS, IGate, and forwarder blocks. |
+| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (e.g. Direwolf). Decodes AX.25, emits RF-heard packets, and exposes TX for the digipeater / IGate / node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. |
 | **AGWPE** | `AGWPE_HOST` (+ port, radio-port) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO); raw monitor in, keying out. |
 | **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers become APRS lines. |
-| **Meshtastic** | `MESH_HOST` (+ `MESH_PORT`, 1884) | Reads newline-delimited JSON over TCP — a node's MQTT JSON output served on a TCP port, e.g. `socat TCP-LISTEN:1884,reuseaddr,fork EXEC:"mosquitto_sub -h <broker> -t 'msh/+/2/json/#' -F '%p'"` — and maps mesh positions to APRS. The native Meshtastic protobuf decoder (`FromRadio` → position / text / node-info) drives the browser-direct Web Serial path. |
+| **Meshtastic** | `MESH_HOST` (+ `MESH_PORT`, 1884) | Reads newline-delimited JSON over TCP — a node's MQTT JSON output served on a TCP port, e.g. `mosquitto_sub -t 'msh/+/2/json/#' -F '%p'` behind `socat` ([quick start](quickstarts.md#meshtastic)) — and maps mesh positions to APRS. The native Meshtastic protobuf decoder (`FromRadio` → position / text / node-info) drives the browser-direct Web Serial path. |
 | **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Only configured node addresses are accepted, per-node rate-capped; a frame the node reports twice (LoRa and server) is forwarded once. RX-only. Setup, firewall and troubleshooting: [MeshCom](meshcom.md). |
 | **TAK / CoT in** | `TAK_COT_PORT` | A UDP listener that parses inbound Cursor-on-Target events into APRS positions. |
 | **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it's an RX-only listener; with `AXUDP_PEERS` it's a bidirectional port carrying NET/ROM crosslinks and FBB forwarding over the internet leg. |

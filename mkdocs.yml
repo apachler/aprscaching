@@ -58,16 +58,19 @@ markdown_extensions:
 
 nav:
   - Overview: index.md
-  - Getting started: getting-started.md
-  - Core concepts: concepts.md
+  - Start here: start-here.md
   - Guides:
+      - Your account: guides/account.md
       - Caching: guides/caching.md
+      - Your radio in the browser: guides/my-radio.md
       - The Shack: guides/shack.md
       - Federation: guides/federation.md
+  - Core concepts: concepts.md
   - Operating an instance:
       - Deployment: operate/deployment.md
       - Your first hour as sysop: operate/first-hour.md
       - Running in Docker: operate/docker.md
+      - "Connect a radio: quick starts": operate/quickstarts.md
       - RF ingest & transports: operate/rf-ingest.md
       - MeshCom: operate/meshcom.md
       - Packet BBS & node: operate/packet.md
@@ -75,6 +78,7 @@ nav:
       - Amateur-radio compliance: operate/rf-regulatory.md
       - Administration: operate/administration.md
   - Reference:
+      - Run from source: getting-started.md
       - HTTP API: reference/api.md
       - Federation wire format: reference/federation-wire.md
       - Configuration: reference/configuration.md

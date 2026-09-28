@@ -4,10 +4,18 @@
 tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
 with other instances into one open network.
 
+!!! tip "New here? [Start here](start-here.md)"
+    Sign in at **[aprscaching.net](https://aprscaching.net)** with your callsign, verify it over APRS, and log
+    your first find — no installation needed. [Start here](start-here.md) walks you through it in five
+    minutes.
+
 This manual describes the platform as it is. It has three audiences:
 
-- **Cachers** play the game — see [Caching](guides/caching.md).
-- **Operators** run an instance and bridge it to real radio — see [Operating an instance](operate/deployment.md).
+- **Cachers** play the game — see [Start here](start-here.md), [Your account](guides/account.md) and
+  [Caching](guides/caching.md).
+- **Operators** connect radios and run an instance — see
+  [Your radio in the browser](guides/my-radio.md), [Connect a radio: quick starts](operate/quickstarts.md)
+  and [Deployment](operate/deployment.md).
 - **Integrators** talk to the platform's open, signed feeds and read API — see [Reference](reference/api.md)
   and [Federation](guides/federation.md).
 

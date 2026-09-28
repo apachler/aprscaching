@@ -2,8 +2,9 @@
 
 ## CAT rig control
 
-aprscaching drives a transceiver through one rig-control API with two backends. Frequency and mode changes
-are receive-side tuning and are **not** gated; **PTT / keying is gated on a verified callsign**.
+The **Shack → Rig control** app tunes a transceiver from the browser (step by step:
+[Rig control](../guides/my-radio.md#rig-control)). Frequency and mode changes are receive-side tuning and are
+**not** gated; **PTT / keying is gated on a verified callsign**.
 
 ### Backend A — browser Web Serial
 
@@ -17,13 +18,13 @@ Chromium browser can tune a radio with no companion software:
 `catSetFrequency` / `catSetMode` produce the bytes; the browser owns the serial port. One-click tune uses the
 APRS calling frequencies (144.800 EU / 144.390 NA).
 
-### Backend B — Hamlib `rigctld` companion
+### Library: Hamlib `rigctld` client
 
-For the 200+ rig long tail, iOS, and headless setups, a **Hamlib `rigctld` companion** covers everything
-Hamlib supports. The `RigctldClient` (`@aprscaching/aprs`) speaks the `rigctld` TCP text protocol — set/get
-frequency (`F`/`f`), mode (`M`/`m`), PTT (`T`/`t`), and `\dump_state` capability negotiation — over a
-transport the companion provides. We shell out to `rigctld` as a **separate process over TCP** and never link
-Hamlib, so the library stays MIT-clean.
+The **Rig control** app uses Backend A only; radios it does not cover need a Hamlib-based program of their
+own. For integrators, the library ships `RigctldClient` (`@aprscaching/aprs`), which speaks the `rigctld`
+TCP text protocol — set/get frequency (`F`/`f`), mode (`M`/`m`), PTT (`T`/`t`), and `\dump_state`
+capability negotiation — to a separate `rigctld` process, so Hamlib is never linked and the library stays
+MIT-clean. No app or ingest box connects to `rigctld`; that companion is listed in `TODO.md`.
 
 ## Weather stations
 

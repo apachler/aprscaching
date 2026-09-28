@@ -21,8 +21,14 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/v1`, `/api/v1/*` | Versioned free read API — caches, finds, stations, leaderboard, exports (GPX/KML/ADIF). Rate-limited; higher limits with a free key. |
-| POST | `/api/v1` (key path) | Issue a free API key. |
+| GET | `/api/v1` | Self-describing index of the read API. |
+| GET | `/api/v1/caches` · `/caches/:code` · `/caches.gpx` · `/caches.kml` · `/caches/:code.gpx` | Caches in a box (`bbox`), one cache, and GPX/KML exports. |
+| GET | `/api/v1/stations` · `/station/:call` · `/station/:call/track` · `/station/:call.kml` | Live stations, one station, its track (JSON/KML). |
+| GET | `/api/v1/profile/:call` · `/profile/:call.adif` | A callsign's public profile · its finds as ADIF 3.1 (`SIG=APRSCACHING`). |
+| GET | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots` | Activity feed, rankings, top corroborating IGates, live spots. |
+| POST · GET | `/api/v1/keys` · `/api/v1/keys/:id` | Issue a free API key · look one up. |
+
+Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys never gate a feature.
 
 ## Caching & finds
 
@@ -35,7 +41,9 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | POST | `/api/caches/:id/favorite` · `/watch` · `/rate` | Favorite · watch · rate 1–5 (finders) | public/session |
 | GET | `/api/search?q=` · `/api/leaderboard` · `/api/activity` | Search · rankings · activity feed | public |
 | GET | `/api/corroborators` · `/api/profile/:call` | Top corroborating IGates · public profile | public |
-| GET · POST | `/api/caches/:id/media`, `/stages`, `/stages/:n/unlock` | Media gallery & audio-cache staged unlock | public/actor |
+| GET · POST | `/api/caches/:id/media`, `/stages`, `/stages/:n/unlock` | Media gallery; stages (owner sets them with POST `/stages`) & staged unlock | public/actor |
+| DELETE · PUT | `/api/caches/:id/media/:mid` · `/api/caches/:id/stages/:n/media` | Remove a photo · set a stage's audio clue | actor (owner) |
+| GET | `/api/media/*` | Serve an uploaded photo or audio file | public |
 
 ## Stations & the Shack
 
@@ -90,6 +98,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/admin/whoami` | Whether the caller is an operator |
+| GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
 | GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table · MHeard |
 | GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners |
 
@@ -101,8 +110,9 @@ All admin writes are **sysop**-gated server-side.
 |--------|------|---------|
 | POST | `/ingest` | Ingest positions/finds/packets (`x-ingest-secret` or on-device signed) |
 | GET · POST | `/outbox` · `/outbox/ack` | Box pulls / acks queued APRS-IS messages |
-| GET/POST | `/api/bbs/forward/pool`, `/inbound`, `/sent`, `/session`, `/kill` | Forwarding + connected-mode BBS session backend (x-ingest-secret) |
-| POST | `/api/import/:source` | Import an external catalog | 
+| GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box (x-ingest-secret) |
+| GET · POST | `/api/bbs/session` · `/api/bbs/kill` | Connected-mode BBS session state · end a session (x-ingest-secret) |
+| POST | `/api/import/:source` | Import an external catalog — see [Administration](../operate/administration.md#import-heritage-places) (x-ingest-secret) |
 
 ## Accounts, identity & GDPR
 
@@ -113,18 +123,23 @@ All admin writes are **sysop**-gated server-side.
 | POST/GET | `/verify/aprs/start`, `/confirm`, `/status` | Callsign control-verification (APRS challenge) | session |
 | POST · GET | `/keys/register` · `/keys/:call` | Register a device key · list a callsign's keys | session · public |
 | POST | `/api/account/:call/export`, `/delete`, `/bundle`, `/move`, `/api/account/import` | GDPR export/erase + account portability | signed-body |
-| GET/PUT | `/api/prefs`, `/api/watch*`, `/api/notify/prefs`, `/api/push/*`, `/api/views`, `/v/:id` | Preferences, watchlist + alerts, push, saved map views | session |
+| GET/PUT | `/api/prefs` · `/api/notify/prefs` | Preferences · notification settings | session |
+| GET · POST · DELETE | `/api/watch/alerts` · `/api/watch/seen` · `/api/watch/:id` | Watchlist alerts · mark seen · stop watching | session |
+| GET · POST | `/api/push/key` · `/api/push/subscribe` · `/api/push/unsubscribe` | Web-push public key · (un)subscribe this browser | session |
+| GET/POST · GET | `/api/views` · `/v/:id` | Saved map views · resolve a shared view | session · public |
 
 ## BBS (public)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST · GET | `/api/bbs/messages`, `?to=`, `/sent?from=`, `/bulletins`, `/thread/:id` | Store-and-forward mail + bulletins |
+| POST · GET | `/api/bbs/messages`, `?to=`, `/api/bbs/sent?from=`, `/api/bbs/bulletins`, `/api/bbs/thread/:id` | Store-and-forward mail + bulletins |
+| POST | `/api/bbs/messages/:id/read` | Mark a message read |
 | GET | `/api/bbs/route` · `/api/bbs/wp` | Hierarchical routing lookup · White Pages directory |
 
 ## Misc
 
 `GET /health` (readiness; `?live` for liveness) · `/source` + `/.well-known/source` (running source) ·
+`/imprint` + `/privacy` (legal pages from `OPERATOR_*`) · `/sitemap` (human-readable site map) ·
 `/support` + `/api/support` · `GET/POST /api/support/prefs` + `POST /api/support/confirm`
 (supporter recognition; prefs are session-gated, confirm is ingest-secret) · `/sitemap.xml` +
 `/api/sitemap` (JSON) + `/robots.txt` · `/feeds/*.xml` (RSS: activity, caches, bulletins, leaderboard,

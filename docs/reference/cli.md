@@ -1,6 +1,18 @@
 # Command-line tools
 
-Helper scripts under `tools/` support key management, signing, and verification.
+Helper scripts under `deploy/` install and maintain an instance; those under `tools/` support key
+management, signing, and verification.
+
+## Instance operation — `deploy/`
+
+```bash
+cd deploy && ./setup.sh                  # first-run wizard: callsign, passcode, filter, domain; writes .env with a fresh INGEST_SECRET
+deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
+deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
+deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
+```
+
+See [Deployment](../operate/deployment.md) and [Running in Docker](../operate/docker.md).
 
 ## Federation keys — `tools/fedkey/`
 
@@ -19,7 +31,7 @@ machine-readable output. Related:
 ## Tool signing — `tools/toolkey/` {#toolkey}
 
 Sign tool plugins and the tool registry so the app can verify them (see
-[the tools platform](../guides/shack.md#trust-for-imported-tools)):
+[the tools platform](../guides/shack.md#tools-and-plugins)):
 
 ```bash
 node tools/toolkey/genkey.mjs                                   # a tool-author keypair
@@ -33,10 +45,15 @@ signed.
 ## Development & conformance — `tools/dev/`
 
 ```bash
-tools/dev/check.sh      # build (typecheck) every unit + run every unit test suite
-tools/dev/smoke.sh      # spin a throwaway Node/SQLite gateway and run the runtime conformance suites
-tools/dev/verify.sh     # check.sh + smoke.sh — the full pre-commit gate
+pnpm run check          # tools/dev/check.sh — build (typecheck) every unit + run every unit test suite
+pnpm run smoke          # tools/dev/smoke.sh — a throwaway Node/SQLite gateway + the runtime conformance suites
+pnpm run verify         # tools/dev/verify.sh — check + smoke, the full pre-commit gate
+pnpm run conformance:meshcom   # the MeshCom core on Node, Bun and workerd (tools/conformance/meshcom.mjs)
 ```
+
+CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent, and
+`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code. `tools/interop/` runs
+interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc); see its README.
 
 The smoke suites themselves live in `tools/smoke/` (`smoke.mjs`, `geofence.mjs`, and the two-instance
 `federation.mjs`) and run against any running gateway via `BASE=…`. `tools/e2e/audio-mic.mjs` drives the live

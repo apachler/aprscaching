@@ -2,7 +2,7 @@
 
 Beyond APRS, aprscaching is a connected-mode packet station: an AX.25 data-link stack, a NET/ROM node, and
 a store-and-forward BBS that forwards mail with the wider packet network. These run on the operator-local
-ingest box over a KISS TNC.
+ingest box over a KISS TNC, or over an AXUDP link to other nodes when the box has no radio.
 
 ## Connected-mode AX.25
 
@@ -22,7 +22,8 @@ deploy step.
 
 ## NET/ROM node
 
-Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over KISS. It:
+Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over
+a bidirectional AXUDP port (`AXUDP_PEERS`). It:
 
 - broadcasts its **NODES** table on an interval (`NETROM_BROADCAST_MS`, default 5 min) and learns routes from
   inbound NODES broadcasts, decaying obsolescence;
