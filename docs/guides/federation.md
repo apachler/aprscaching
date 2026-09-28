@@ -27,8 +27,9 @@ set `FED_ROTATION_GRACE_DAYS` to change it). A consumer:
   revive it — on every carrier: HTTP sync, FBB bulletins, HF beacons and packet circuits alike.
 
 Feed scoping is deliberate — only `source='native'` caches with a federating scope are published (imported
-heritage data and `local-only` caches never leave the instance), and a cache marked `unlisted` withholds its
-description on the wire.
+heritage data and `local-only` caches never leave the instance), finds federate only with their cache (a find
+on a `local-only` or imported cache stays home too), and a cache marked `unlisted` withholds its description
+on the wire.
 
 ## Peers and trust
 

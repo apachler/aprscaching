@@ -37,10 +37,10 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 
 | Finding | Where | Status |
 |---|---|---|
-| The finds feed federates finds on `local-only` and imported caches | `federation.ts` finds feed | Open |
-| Pagination stalls when a page's worth of rows share one timestamp | `federation.ts`, `bbs.ts`, `federation_sync.ts` | Open |
-| One malformed record stalls a peer's feed or drops the rest of an FBB bulletin | `federation_sync.ts`, `forward.ts` | Open |
-| Bulletin ids fail the namespace check, so mirrored bulletins never apply | `bbs.ts` | Open |
+| The finds feed federates finds on `local-only` and imported caches | `federation.ts` finds feed | Fixed — finds are served only with a native, federating cache |
+| Pagination stalls when a page's worth of rows share one timestamp | `federation.ts`, `bbs.ts`, `federation_sync.ts` | Fixed — composite `(timestamp, id)` cursor for caches and bulletins, on pull and push |
+| One malformed record stalls a peer's feed or drops the rest of an FBB bulletin | `federation_sync.ts`, `forward.ts` | Fixed — each frame is applied on its own, required fields are validated, the cursor always advances |
+| Bulletin ids fail the namespace check, so mirrored bulletins never apply | `bbs.ts` | Fixed — gid `instance:bulletin:id` with the BID in the body; the older gid is still read |
 | The corroboration answerer does not snap the queried centre, bound the radius from below, or bucket and cap the time window | `corroborate.ts` | Fixed — snapped centre, radius 150–1000 m, bucketed window capped at an hour, no older than seven days |
 
 ## Replay and robustness

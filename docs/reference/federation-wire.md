@@ -23,7 +23,7 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | Envelope field | Meaning |
 |---|---|
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
-| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid** |
+| `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`), and a bulletin under the older `localid_origin` gid is still accepted |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
 | `v` (4) | Per-gid monotonic version — duplicated / re-ordered / multi-path delivery converges |
 | `at` (5) | Signing time, unix seconds |
@@ -58,8 +58,17 @@ refused.
 bulletin`) serves a CBOR page of frames:
 
 ```
-page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …] }   (application/cbor)
+page = CBOR { 1 instance, 2 nextCursor, 3 complete, 4 [frame bytes …], 5 nextId? }   (application/cbor)
 ```
+
+The cache and bulletin feeds page by a timestamp, which many records can share, so their cursor is
+composite: the page's `nextId` is the local id of its last record, and the consumer asks for the next
+page with `?since=<nextCursor>&sinceId=<nextId>` to resume strictly after that pair. A consumer keeps the
+tie-breaker only while a pass still has pages to read; once a page is complete it resumes from the
+timestamp alone, re-reading that second (idempotent) so a record updated again within it is not missed.
+Without `sinceId` a feed returns records at or after `since`; a consumer that doesn't know field 5
+ignores it. Each frame on a page is applied on its own: a malformed or unappliable record is skipped
+and counted, and the cursor still moves past it.
 
 The page envelope is unsigned — each record carries its own signature. This is the **only wire
 mirroring consumes**: a consumer pulls frames, verifies each under the peer's active keys, then runs
