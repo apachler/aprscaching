@@ -2,8 +2,8 @@
 
 !!! note "Built and planned"
     The receive side is built: the pure core in `packages/aprs/src/meshcom/` decodes the datagrams,
-    `apps/ingest/src/meshcom.ts` listens for them, and its configuration is under
-    [RF ingest & transports](../operate/rf-ingest.md). Telemetry, find logging over the mesh, the features that
+    `apps/ingest/src/meshcom.ts` listens for them, and operator setup is under
+    [MeshCom](../operate/meshcom.md). Telemetry, find logging over the mesh, the features that
     transmit, and a browser-direct path are design only, tracked in
     [`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
 
