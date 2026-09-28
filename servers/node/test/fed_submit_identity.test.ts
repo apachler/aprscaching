@@ -71,6 +71,7 @@ describe("submit identity", () => {
     await addCache(spoke, 2000);
     const res = await submitPage(h, spoke);
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { applied: number }).applied).toBe(2);
+    // the new cache applies; the first one, re-sent at the version already applied, is skipped
+    expect(await res.json()).toMatchObject({ applied: 1, rejected: 1 });
   });
 });

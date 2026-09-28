@@ -71,11 +71,12 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 | `FED_REGISTRY_DNS` | Alternative registry source: a DNS `TXT` record name whose `url=` locates the document; verified under `FED_REGISTRY_KEY` (without it the server refuses to start) | — |
 | `FED_OPERATOR` / `FED_APRS_CALL` | Operator label + APRS service callsign, self-published in `/.well-known` | — |
 | `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
-| `FED_DISCOVER` | Auto-adopt peers advertised by peers (transitive discovery) | off |
+| `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |
+| `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |
 | `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret | — |
 | `FED_SUBMIT_INSTANCES` | Hub allowlist of submitter instances | any non-self |
 | `FED_HUB_URL` | Spoke: a reachable hub to push signed records to | — |
-| `FED_RELAY_SECRET` | Shared secret for the rendezvous relay (hub + spoke) | — |
+| `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results; spokes lease and answer by signing with their own key | — |
 
 ## Gateway — read API, spots, email/push
 

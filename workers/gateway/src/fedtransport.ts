@@ -49,7 +49,9 @@ export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
       /* malformed stored endpoints → fall back to the url column */
     }
   }
-  return p.url ? parseEndpoints([{ transport: "https", address: p.url, priority: 50 }]) : [];
+  // The url column is written by the operator (FED_PEERS, the admin surface) or by a path that already
+  // validated it, and may be plain http on a LAN or HAMNET peer, so it is taken as given.
+  return p.url && /^https?:\/\//.test(p.url) ? [{ transport: "https", address: p.url, priority: 50 }] : [];
 }
 
 /**
@@ -64,12 +66,16 @@ export function endpointBaseUrl(e: FedEndpoint): string | null {
   return null;
 }
 
-function httpSyncTransport(kind: FedTransportKind, baseUrl: string): FedSyncTransport {
+function httpSyncTransport(
+  kind: FedTransportKind,
+  baseUrl: string,
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response>,
+): FedSyncTransport {
   return {
     kind,
     baseUrl,
     get(path: string): Promise<Response> {
-      return fetch(`${baseUrl}${path}`, {
+      return fetchFn(`${baseUrl}${path}`, {
         headers: { accept: "application/json" },
         signal: AbortSignal.timeout(PEER_FETCH_TIMEOUT_MS),
       });
@@ -83,10 +89,13 @@ function httpSyncTransport(kind: FedTransportKind, baseUrl: string): FedSyncTran
 }
 
 /** Pick the peer's best sync transport: the first (lowest-priority) endpoint that resolves to a URL. */
-export function syncTransportFor(p: PeerAddressing): FedSyncTransport | null {
+export function syncTransportFor(
+  p: PeerAddressing,
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
+): FedSyncTransport | null {
   for (const e of peerEndpoints(p)) {
     const base = endpointBaseUrl(e);
-    if (base) return httpSyncTransport(e.transport, base);
+    if (base) return httpSyncTransport(e.transport, base, fetchFn);
   }
   return null;
 }

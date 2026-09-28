@@ -11,6 +11,7 @@
  * iNaturalist "more observers ⇒ better data" dynamic. Mirrors are display-only; corroboration is
  * the trust-bearing exchange.
  */
+import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { haversineMeters } from "@aprscaching/aprs";
@@ -485,7 +486,7 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
       if (env.FED_CORROBORATION_SECRET && peer.trust === "trusted" && base.startsWith("https://"))
         headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
       try {
-        const r = await fetch(`${base}/federation/corroborate`, {
+        const r = await fedFetch(env, `${base}/federation/corroborate`, {
           method: "POST",
           headers,
           body: question as BodyInit,

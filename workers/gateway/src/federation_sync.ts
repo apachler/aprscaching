@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { fedFetch } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * federation_sync.ts — the consumer side. Pull peers' /federation feeds, verify each record's
@@ -36,6 +37,7 @@ import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames, bodyFromWire } fr
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import {
+  validEndpointAddress,
   decodeFedFrame,
   decodeFedBbsBatch,
   parseEndpoints,
@@ -76,6 +78,82 @@ interface FeedRecord {
   cursor: number;
   data: Record<string, unknown>;
   signer?: string;
+  /** The frame's signing time. */
+  at?: number;
+}
+
+/** How far a frame's signing time, or a timestamp version, may run ahead of this clock. */
+const MAX_FUTURE_S = 300;
+/** Record types whose version is a timestamp (a cache's is a revision counter; the rest count up). */
+const TIME_VERSIONED = new Set(["bulletin"]);
+/** Largest pull page the consumer reads, and the most frames it accepts per requested page. */
+const MAX_PAGE_BYTES = 4 * 1024 * 1024;
+const PAGE_LIMIT = 500;
+/** Discovered peers, across all sources: the table never grows past this through discovery. */
+const MAX_DISCOVERED = 200;
+
+/**
+ * Replay gate: a record applies only if its version is strictly greater than the last one applied
+ * for its gid, it was not signed in the future, and — for a timestamp-versioned type — its version is
+ * not in the future (a far-future version would freeze the mirror). Equal versions never overwrite,
+ * so a replayed or forged record at a version already applied changes nothing.
+ */
+async function versionAdmits(env: Env, rec: FeedRecord): Promise<boolean> {
+  const t = now();
+  if (rec.at != null && rec.at > t + MAX_FUTURE_S) return false;
+  if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return false;
+  const row = await env.DB.prepare("SELECT v FROM fed_versions WHERE gid = ?").bind(rec.id).first<{ v: number }>();
+  return !row || rec.cursor > row.v;
+}
+
+/** Record the version just applied for a gid (never moving it backwards). */
+async function noteVersion(env: Env, gid: string, origin: string, v: number): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO fed_versions (gid, origin, v, applied_at) VALUES (?,?,?,?)
+     ON CONFLICT(gid) DO UPDATE SET v = excluded.v, origin = excluded.origin, applied_at = excluded.applied_at
+     WHERE excluded.v > fed_versions.v`,
+  )
+    .bind(gid, origin, v, now())
+    .run();
+}
+
+/** A peer-supplied timestamp, never later than this clock allows (a far-future value would pin a row). */
+function clampFuture(v: unknown): number | null {
+  const n = Number(v);
+  return v == null || !Number.isFinite(n) ? null : Math.min(n, now() + MAX_FUTURE_S);
+}
+
+/** Apply one admitted record and remember its version. */
+async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: FeedRecord, origin: string) {
+  await def.apply(env, rec, origin);
+  await noteVersion(env, rec.id, origin, rec.cursor);
+}
+
+/** Read a response body up to `max` bytes; null when it is larger. Never buffers past the cap. */
+async function readCappedResponse(res: Response, max: number): Promise<Uint8Array | null> {
+  const declared = Number(res.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > max) return null;
+  if (!res.body) return new Uint8Array(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
 }
 
 function ours(env: Env): string | null {
@@ -146,6 +224,12 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
     .bind(instance)
     .first<PeerRow>();
   if (!p) return false;
+  // one pull per peer at a time, however many notifies ask for it (the same trailing-edge coalescing
+  // as the scheduled sync)
+  return coalesceRun(peerKey(env, p.url), () => syncOnePeer(env, p), peerCoalescer);
+}
+
+async function syncOnePeer(env: Env, p: PeerRow): Promise<boolean> {
   try {
     await syncPeer(env, p);
     return true;
@@ -207,6 +291,17 @@ export function coalesceRun<T>(key: object, run: () => Promise<T>, state: Coales
 
 const syncCoalescer = newCoalescer<SyncResult>();
 
+const peerCoalescer = newCoalescer<boolean>();
+const peerKeys = new WeakMap<object, Map<string, object>>();
+/** A stable coalescing key per (env, peer url). */
+function peerKey(env: Env, url: string): object {
+  let m = peerKeys.get(env);
+  if (!m) peerKeys.set(env, (m = new Map()));
+  let k = m.get(url);
+  if (!k) m.set(url, (k = {}));
+  return k;
+}
+
 export async function syncAllPeers(env: Env): Promise<SyncResult> {
   return coalesceRun(env, () => syncAllPeersInner(env), syncCoalescer);
 }
@@ -255,7 +350,7 @@ async function syncPeer(
 ): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
   // endpoint selection: the peer's typed endpoint set picks the sync transport (https, or plain
   // http on a 44net/HAMNET name); packet endpoints are forward-mode and never pulled from here
-  const transport = syncTransportFor(p);
+  const transport = syncTransportFor(p, (u, i) => fedFetch(env, u, i));
   if (!transport) throw new Error("peer has no sync-capable endpoint");
   const base = transport.baseUrl;
   const wk = await transport.fetchJson<{
@@ -318,18 +413,28 @@ async function syncPeer(
   }
   const newActive = usableKeys(keys.accept, now());
 
-  // opt-in transitive discovery: adopt the peers this peer advertises (capped, deduped by INSERT OR IGNORE).
-  // Discovered peers start `unvetted` — mirrored-but-flagged, excluded from corroboration until an
-  // operator promotes them. INSERT OR IGNORE never downgrades a peer already known/trusted.
-  if (env.FED_DISCOVER) {
-    for (const url of (wk.peers ?? []).slice(0, 50)) {
+  // Opt-in transitive discovery: learn the peers a TRUSTED peer advertises. Only https URLs are
+  // taken, a learned peer starts `unvetted` and disabled (never fetched until an operator enables
+  // it), and discovery stops adding once MAX_DISCOVERED discovered rows exist. INSERT OR IGNORE never
+  // downgrades a peer already known.
+  if (env.FED_DISCOVER && p.trust === "trusted") {
+    const have =
+      (
+        await env.DB.prepare("SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'discovered'").first<{
+          n: number;
+        }>()
+      )?.n ?? 0;
+    let room = Math.max(0, MAX_DISCOVERED - have);
+    for (const url of (Array.isArray(wk.peers) ? wk.peers : []).slice(0, 50)) {
+      if (room <= 0) break;
       const u = String(url).trim().replace(/\/+$/, "");
-      if (u && u !== base)
-        await env.DB.prepare(
-          "INSERT OR IGNORE INTO fed_peers (url, trust, added_via) VALUES (?, 'unvetted', 'discovered')",
-        )
-          .bind(u)
-          .run();
+      if (!u || u === base || !validEndpointAddress("https", u)) continue;
+      const r = await env.DB.prepare(
+        "INSERT OR IGNORE INTO fed_peers (url, trust, added_via, enabled) VALUES (?, 'unvetted', 'discovered', 0)",
+      )
+        .bind(u)
+        .run();
+      if (r.meta.changes) room--;
     }
   }
 
@@ -451,10 +556,14 @@ async function syncFeed(
     applied = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
     const idParam = cursorId != null ? `&sinceId=${cursorId}` : "";
-    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=500`);
+    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=${PAGE_LIMIT}`);
     if (res.status === 404) return applied; // feed not served here → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
-    const pg = decodeFedSyncPage(new Uint8Array(await res.arrayBuffer()));
+    const body = await readCappedResponse(res, MAX_PAGE_BYTES);
+    if (!body) throw new Error(`/federation/sync/${def.type} page too large (over ${MAX_PAGE_BYTES} bytes)`);
+    const pg = decodeFedSyncPage(body);
+    if (pg.frames.length > PAGE_LIMIT)
+      throw new Error(`/federation/sync/${def.type} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
     for (const fb of pg.frames) {
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to
       // hold the cursor and replay the page forever
@@ -462,15 +571,18 @@ async function syncFeed(
         const f = await verifyFedFrame(fb, activeKeys);
         if (!f) continue; // malformed / key outside the peer's set / bad signature
         if (f.record.origin !== instance) continue; // origin must be the verified serving peer
+        if (SYNC_TYPE_BY_KIND[f.record.kind] !== def.type) continue; // a page carries only its own type
         const rec: FeedRecord = {
           type: def.type,
           id: f.record.gid,
           cursor: f.record.v,
           data: bodyFromWire(f.record.body),
           signer: f.record.signer,
+          at: f.record.at,
         };
         if (!(await acceptUnsigned(env, rec, instance))) continue;
-        await def.apply(env, rec, instance);
+        if (!(await versionAdmits(env, rec))) continue; // replay, stale, or future-dated
+        await applyVersioned(env, def, rec, instance);
         applied++;
       } catch (e) {
         console.warn(`federation: skipped a ${def.type} record from ${instance}: ${(e as Error).message}`);
@@ -725,13 +837,18 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
       cursor: f.record.v,
       data: bodyFromWire(f.record.body),
       signer: f.record.signer,
+      at: f.record.at,
     };
     if (!(await acceptUnsigned(env, rec, origin))) {
       rejected++;
       continue; // gid outside origin's namespace / not self-attested / tombstoned
     }
+    if (!(await versionAdmits(env, rec))) {
+      rejected++;
+      continue; // a replay, a record at a version already applied, or future-dated
+    }
     try {
-      await def.apply(env, rec, origin);
+      await applyVersioned(env, def, rec, origin);
       applied++;
     } catch {
       rejected++; // a malformed record never aborts the frames after it
@@ -775,12 +892,22 @@ export async function applyFedBbsBulletin(env: Env, body: string): Promise<FedBb
  * leg enforces with the per-spoke token. Frames addressed to other instances ride the same flood
  * legitimately; they are simply not ours.
  */
+/** How long a relay frame stays answerable: store-and-forward is slow, but not this slow. */
+const RELAY_FRAME_MAX_AGE_S = 3 * 86400;
+
 async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "rejected" | "elsewhere"> {
   const us = (ours(env) ?? "").toLowerCase();
   const target = typeof rec.body.target === "string" ? rec.body.target.toLowerCase() : "";
   if (!us || target !== us) return "elsewhere";
   const id = Number(rec.body.id);
   if (!Number.isInteger(id) || id <= 0) return "rejected";
+  // each relay frame is acted on once and only while fresh: a replayed query would otherwise
+  // trigger a new answer bulletin every time it is re-flooded
+  const t = now();
+  if (rec.at > t + MAX_FUTURE_S || rec.at < t - RELAY_FRAME_MAX_AGE_S) return "rejected";
+  const seen = await env.DB.prepare("SELECT 1 AS x FROM fed_versions WHERE gid = ?").bind(rec.gid).first();
+  if (seen) return "rejected";
+  await noteVersion(env, rec.gid, rec.origin, rec.v);
 
   if (rec.kind === "relayQuery") {
     const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
@@ -816,7 +943,7 @@ async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "
     return "rejected";
   }
   const res = await env.DB.prepare(
-    "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND instance=? AND status IN ('queued','leased')",
+    "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND instance=? AND status IN ('queued','leased','dispatched')",
   )
     .bind(JSON.stringify(result), now(), id, rec.origin.toLowerCase())
     .run();
@@ -828,7 +955,8 @@ async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "
  * peer row (the pin plus predecessors inside their rotation grace, see resolvePeerKeys) plus the key
  * the signed registry binds to its instance id. An instance has at most one live (non-blocked) row;
  * `"blocked"` when only blocked rows name it, an empty set when the origin is unknown — either way
- * its frames never apply. A disabled row contributes no keys.
+ * its frames never apply. A disabled row (never pulled, such as a push-to-hub spoke) still names its
+ * keys: `enabled` decides whether we fetch from a peer, not who it is.
  */
 async function originKeys(
   env: Env,
@@ -839,17 +967,17 @@ async function originKeys(
   const hit = cache.get(origin);
   if (hit !== undefined) return hit;
   const row = await env.DB.prepare(
-    `SELECT public_key, accept_keys, trust, enabled FROM fed_peers WHERE instance = ?
+    `SELECT public_key, accept_keys, trust FROM fed_peers WHERE instance = ?
       ORDER BY trust = 'blocked', url LIMIT 1`,
   )
     .bind(origin)
-    .first<{ public_key: string | null; accept_keys: string | null; trust: TrustLevel; enabled: number }>();
+    .first<{ public_key: string | null; accept_keys: string | null; trust: TrustLevel }>();
   if (row?.trust === "blocked") {
     cache.set(origin, "blocked");
     return "blocked";
   }
   const keys = new Set<string>();
-  if (row && row.enabled !== 0) {
+  if (row) {
     const accept = parseAcceptKeys(row.accept_keys);
     if (accept.length) for (const k of usableKeys(accept, now())) keys.add(k);
     else if (row.public_key) keys.add(row.public_key);
@@ -913,7 +1041,7 @@ export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: strin
       d.description ?? null,
       d.minTrust ?? null,
       d.createdAt ?? null,
-      d.updatedAt ?? null,
+      clampFuture(d.updatedAt),
       now(),
     )
     .run();
@@ -941,7 +1069,7 @@ export async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string
       d.cacheId ?? null,
       d.cacheCode ?? null,
       d.loggerCall ?? null,
-      d.ts ?? null,
+      clampFuture(d.ts),
       d.logType ?? null,
       d.verified ? 1 : 0,
       d.tier ?? null,
@@ -1006,9 +1134,13 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
   if (!exists) return json({ ok: false, error: "unknown peer" }, { status: 404 });
   try {
     await env.DB.prepare(
-      "UPDATE fed_peers SET trust = ?, approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END WHERE url = ?",
+      // choosing a level for a discovered peer (which starts disabled) is the operator enabling it
+      `UPDATE fed_peers SET trust = ?,
+         approved_at = CASE WHEN ? = 'trusted' THEN COALESCE(approved_at, ?) ELSE approved_at END,
+         enabled = CASE WHEN added_via = 'discovered' AND ? != 'blocked' THEN 1 ELSE enabled END
+       WHERE url = ?`,
     )
-      .bind(trust, trust, now(), url)
+      .bind(trust, trust, now(), trust, url)
       .run();
   } catch (e) {
     // unblocking a row whose instance id another live row already holds
@@ -1118,6 +1250,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
       cursor: f.record.v,
       data: bodyFromWire(f.record.body),
       signer: f.record.signer,
+      at: f.record.at,
     });
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
@@ -1200,8 +1333,12 @@ async function submitRecords(
       rejected++;
       continue;
     } // already purged by a tombstone
+    if (!(await versionAdmits(env, rec))) {
+      rejected++;
+      continue; // a replay, a record at a version already applied, or future-dated
+    }
     try {
-      await apply(env, rec, instance);
+      await applyVersioned(env, { apply }, rec, instance);
       applied++;
     } catch {
       rejected++; // a malformed record never aborts the rest of the submission
@@ -1216,7 +1353,10 @@ async function submitRecords(
  * via in-memory cursors; idempotent (the hub upserts by global id), so a restart that re-pushes
  * from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
  */
-export async function pushToHub(env: Env, fetchFn: typeof fetch = fetch): Promise<{ pushed: number } | null> {
+export async function pushToHub(
+  env: Env,
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fedFetch(env, u, i),
+): Promise<{ pushed: number } | null> {
   const hub = env.FED_HUB_URL?.replace(/\/+$/, "");
   const secret = env.FED_SUBMIT_SECRET;
   if (!hub || !secret || !env.INSTANCE) return null;

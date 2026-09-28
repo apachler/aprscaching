@@ -47,13 +47,13 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 
 | Finding | Where | Status |
 |---|---|---|
-| Record versions and signing times are not enforced; key records have no version guard; far-future timestamps freeze a mirror; relay queries are not deduplicated | `federation_sync.ts`, `fedcbor.ts` | Open |
-| A sync page can carry frames of another record type, which are applied through that page's applier | `federation_sync.ts` `syncFeed` | Open |
-| The unauthenticated notify endpoint can force syncs, and its cooldown map grows without bound | `gossip.ts` | Open |
-| Peer discovery accepts any URL (private and loopback addresses included), follows untrusted peers, has no global cap, and enables discovered peers at once | `federation_sync.ts`, `fedtransport.ts`, `packages/shared` endpoint validator | Open |
-| FBB bulletin ids for federation batches can be pre-posted and squatted, and can exceed the 12-character limit | `forward.ts`, `packages/shared` `fedbbs.ts` | Open |
-| Pull pages have no byte or frame-count cap | `federation_sync.ts`, `fedtransport.ts` | Open |
-| Relay spokes can derive each other's tokens; enqueue is uncapped, leases never expire, and results are readable by any spoke | `relay.ts` | Open (per-spoke tokens exist but derive from the shared secret) |
+| Record versions and signing times are not enforced; key records have no version guard; far-future timestamps freeze a mirror; relay queries are not deduplicated | `federation_sync.ts`, `fedcbor.ts` | Fixed — strictly increasing per-gid versions (a cache counts revisions), future-signed frames refused, far-future timestamps clamped, relay frames acted on once while fresh |
+| A sync page can carry frames of another record type, which are applied through that page's applier | `federation_sync.ts` `syncFeed` | Fixed — a page applies only its own record type |
+| The unauthenticated notify endpoint can force syncs, and its cooldown map grows without bound | `gossip.ts` | Fixed — unknown instances ignored, per-host and per-instance limits, coalesced pulls, bounded map |
+| Peer discovery accepts any URL (private and loopback addresses included), follows untrusted peers, has no global cap, and enables discovered peers at once | `federation_sync.ts`, `fedtransport.ts`, `packages/shared` endpoint validator | Fixed — https-only from trusted peers, disabled until enabled, capped at 200; a resolving fetch guard on Node/Bun |
+| FBB bulletin ids for federation batches can be pre-posted and squatted, and can exceed the 12-character limit | `forward.ts`, `packages/shared` `fedbbs.ts` | Fixed — a batch BID must match its content before it is stored; BIDs are 12 characters |
+| Pull pages have no byte or frame-count cap | `federation_sync.ts`, `fedtransport.ts` | Fixed — 4 MiB and the requested frame count |
+| Relay spokes can derive each other's tokens; enqueue is uncapped, leases never expire, and results are readable by any spoke | `relay.ts` | Fixed — spokes sign lease and answer with their federation key; per-requester caps; leases expire; results need the requester's ticket |
 
 ## Low severity and operator safety
 

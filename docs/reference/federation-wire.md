@@ -25,8 +25,8 @@ frame   = CBOR { 1 payload (bytes), 2 signerKey (b64url raw Ed25519), 3 sig (byt
 | `type` (1) | 1 cache · 2 find · 3 key · 4 bulletin · 5 tombstone · 6 account-move · 7 peer descriptor · 8 relay query · 9 relay answer · 10 corroboration question · 11 corroboration answer |
 | `gid` (2) | The content address, `origin:kind:localid` — apply is **idempotent by gid**. A bulletin's gid is `origin:bulletin:localid`; its FBB BID travels in the body (`bid`), and a bulletin under the older `localid_origin` gid is still accepted |
 | `origin` (3) | Originating instance id — a lowercase hostname, never containing `:` (namespace authority: a peer only serves its own `origin:` prefix) |
-| `v` (4) | Per-gid monotonic version — duplicated / re-ordered / multi-path delivery converges |
-| `at` (5) | Signing time, unix seconds |
+| `v` (4) | Per-gid version, strictly increasing: a receiver applies a record only above the last version it applied for that gid. A cache's `v` is its revision counter plus 2³²; a bulletin's is its posting time; the rest count up |
+| `at` (5) | Signing time, unix seconds; a frame signed more than 300 s in the future is refused |
 | `signer` (6) | The signing instance id; a mirrored record is accepted only when it equals `origin` |
 | `body` (7) | Type-specific fields, text-keyed, integer-scaled numbers only |
 
@@ -240,8 +240,12 @@ The rendezvous relay rides the same carrier for a packet-only spoke. `POST
 `relayQuery` frames and marks them leased; the spoke's receive path answers each from its own DB and
 sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
 scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.
-The frame signatures bind both directions to their instances; the per-spoke HMAC token exists only on
-the HTTP lease/answer legs, so no secret material ever rides the air. Relay cargo (query params, the
+The frame signatures bind both directions to their instances, so no secret material ever rides the air.
+Each relay frame is acted on once (by gid) and only within three days of its signing time. On the HTTP
+legs, the spoke signs each lease and answer request with its federation key over
+`"acs-relay/1\n" || METHOD " " path?query "\n" at "\n" hex(SHA-256(body))`, sent as `x-relay-instance`,
+`x-relay-at` (±120 s) and `x-relay-sig`; the hub verifies it against the accept set it holds for that
+instance. Relay cargo (query params, the
 answered feed page) travels as JSON text inside the CBOR bodies — feed pages carry floats, which the
 deterministic codec refuses by design.
 
