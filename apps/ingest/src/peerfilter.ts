@@ -10,6 +10,10 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+/** Most refused sources whose last log time is remembered; a flood of spoofed sources cannot grow it further. */
+const DROP_LOG_MAX = 1024;
+const DROP_LOG_MS = 60_000;
+
 export type Resolver = (host: string) => Promise<string[]>;
 
 const defaultResolver: Resolver = async (host) => (await lookup(host, { all: true, family: 4 })).map((a) => a.address);
@@ -77,11 +81,25 @@ export class PeerAllowlist {
     for (const set of this.addrs.values()) if (set.has(a)) return true;
     this.dropped++;
     const now = Date.now();
-    if (now - (this.dropLoggedAt.get(a) ?? 0) > 60_000) {
-      this.dropLoggedAt.set(a, now);
+    if (now - (this.dropLoggedAt.get(a) ?? 0) > DROP_LOG_MS) {
+      this.rememberDropLog(a, now);
       this.log(`[${this.o.name}] dropped a frame from ${a || "an unknown source"} — not a configured peer`);
     }
     return false;
+  }
+
+  /**
+   * Record when `a` was last logged. Entries are kept in logging order (re-logging moves one to the
+   * end), so expired entries sit at the front; past the cap the oldest is evicted — at worst that
+   * source is logged again a little sooner.
+   */
+  private rememberDropLog(a: string, now: number): void {
+    this.dropLoggedAt.delete(a);
+    for (const [k, at] of this.dropLoggedAt) {
+      if (now - at <= DROP_LOG_MS && this.dropLoggedAt.size < DROP_LOG_MAX) break;
+      this.dropLoggedAt.delete(k);
+    }
+    this.dropLoggedAt.set(a, now);
   }
 }
 
