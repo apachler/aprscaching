@@ -120,6 +120,7 @@ only when its variable is present.
 | NET/ROM node | `NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`300000`), `NETROM_PATH_QUALITY`, `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \| `flexnet` \| `tnn` \| `baycom` command surface) |
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
+| Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of directly heard KISS frames (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the
