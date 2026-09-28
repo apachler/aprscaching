@@ -152,28 +152,38 @@ waits and skips a repeat when a better-placed digipeater was heard doing it firs
 
 ## Meshtastic
 
-The box reads Meshtastic positions as JSON from a TCP port. Meshtastic nodes publish JSON through their
-**MQTT** module, so you need an MQTT broker and a small bridge.
+Only **licensed** Meshtastic nodes appear: a node must run Meshtastic's licensed (ham) mode, which sets its
+licence flag and makes its long name your callsign (e.g. `OE8APR-7`). Positions show under that callsign.
+Licence-free nodes are ignored — they have no callsign to show. Turn on licensed mode in the Meshtastic app
+(**Settings → User → Licensed amateur radio**, callsign as the long name); note that it switches off
+channel encryption, as amateur rules require.
 
-1. On an ESP32-based node (nRF52 nodes cannot publish JSON): enable the **MQTT** module, set your broker,
-   and turn on **JSON output**.
-2. Serve the JSON stream on a TCP port with `socat` and `mosquitto_sub` (packages `socat` and
-   `mosquitto-clients`):
+The box reads the node's protobuf stream in one of two ways (or both):
 
-    ```bash
-    socat TCP-LISTEN:1884,reuseaddr,fork \
-      EXEC:"mosquitto_sub -h <broker> -t 'msh/+/2/json/#' -F '%p'"
-    ```
+=== "Node on your network (TCP)"
 
-3. Point the box at it:
+    A Meshtastic node on WiFi or Ethernet serves its data on TCP port 4403.
 
     ```
-    MESH_HOST=127.0.0.1
-    MESH_PORT=1884
+    MESHTASTIC_HOST=192.168.1.60
     ```
 
-4. It logs `[mesh] connected 127.0.0.1:1884`; positions count on the `meshtastic` port and appear as
-   `MSH…` stations. Meshtastic is licence-free ISM radio, so these stations are always tier C.
+    It logs `[meshtastic] connected 192.168.1.60:4403`.
+
+=== "MQTT broker"
+
+    Nodes with the **MQTT** module uplink to a broker. The box subscribes to the protobuf topics:
+
+    ```
+    MESHTASTIC_MQTT_URL=mqtt://user:password@broker.example.net
+    # MESHTASTIC_MQTT_TOPIC=msh/#
+    ```
+
+    It logs `[meshtastic-mqtt] connected, subscribed to msh/#`. Use `mqtts://` for a TLS broker.
+
+A licensed node's positions start appearing once its node info has been heard — it announces every ten
+minutes. Until then the box logs once that it is dropping positions from nodes not known to be licensed.
+Positions count on the `meshtastic` port and are always tier C.
 
 A Meshtastic node on USB can also be read straight from the browser: [Your radio in the
 browser](../guides/my-radio.md).

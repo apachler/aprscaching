@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
-import { MeshtasticReader } from "./mesh.js";
 import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
@@ -186,9 +185,20 @@ if (env.KISS_TNC_HOST) {
     console.log(`[igate] enabled as ${env.IGATE_CALL}`);
   }
 }
-if (env.MESH_HOST) {
-  new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();
-  console.log("[mesh] enabled");
+// Meshtastic — licensed nodes only, from the node's protobuf TCP API (MESHTASTIC_HOST, port 4403) and/or
+// the protobuf feed of an MQTT broker (MESHTASTIC_MQTT_URL). Both feeds share one licence registry, so a
+// NodeInfo heard on either unlocks the node's positions on both.
+if (env.MESHTASTIC_HOST || env.MESHTASTIC_MQTT_URL) {
+  const { MeshtasticIngest, MeshtasticTcp, MeshtasticMqtt } = await import("./meshtastic.js");
+  const mesh = new MeshtasticIngest(enqueue);
+  if (env.MESHTASTIC_HOST) {
+    new MeshtasticTcp({ host: env.MESHTASTIC_HOST, port: portEnv("MESHTASTIC_PORT", 4403) }, mesh).start();
+    console.log(`[meshtastic] node TCP API ${env.MESHTASTIC_HOST}`);
+  }
+  if (env.MESHTASTIC_MQTT_URL) {
+    new MeshtasticMqtt({ url: env.MESHTASTIC_MQTT_URL, topic: env.MESHTASTIC_MQTT_TOPIC || "msh/#" }, mesh).start();
+    console.log("[meshtastic] MQTT protobuf feed enabled");
+  }
 }
 // MeshCom — listener for nodes' ExtUDP interface. MESHCOM_NODE lists the allowed node addresses, each
 // optionally with the node's callsign (`192.168.1.50=OE8APR-12`). MESHCOM_TX=1 additionally lets the box
