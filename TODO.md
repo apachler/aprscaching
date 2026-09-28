@@ -443,12 +443,48 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
     ([design](docs/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
-  - a MeshCom bot command set (e.g. `NEAR` → nearest caches) on the same channel;
   - group messages, opt-in per group and rate-limited, if operators ask for them;
   - `rssi`/`snr` as a presence-plausibility signal alongside a direct hearing;
   - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
   - a browser-direct Web Serial/BLE path, after reading the node's serial and BLE protocols from the
     MIT firmware.
+  - **Caches on the MeshCom map** ([research](docs/design/meshcom-tdeck-map.md)) — display only, never
+    find evidence. Watch: T-Deck Plus screen-rendering stall, MeshCom-Firmware #1131.
+    - [ ] **`CACHES` bot command** *(P2 · M)* — a MeshCom operator sends `CACHES [grid]` to the bot call
+      and gets the nearest caches in one ≤150-byte reply (sender's last beacon when no grid). *Why:* works
+      on every MeshCom node today, no firmware change. *Notes:* same command engine and reply path as
+      [radio find logging](docs/design/radio-find-logging.md); rate-limited per sender. *Impact:* first
+      way to discover caches from a handheld without a phone. *Depends on:* the gateway → box transmit
+      channel and the MeshCom node registry.
+    - [ ] **GPX/CSV cache export per region or grid square** *(P2 · S)* — `/api/v1` export of caches
+      within a Maidenhead square or region in the waypoint format the SD-card overlay reads. *Why:* feeds
+      the overlay and any GPS/mapping tool. *Notes:* `/api/v1/caches.gpx?bbox=` exists; add `grid=` (a
+      Maidenhead square resolved to its bbox) and a CSV variant (`lat,lon,label,symbol`, label = cache
+      code). *Impact:* offline cache sets for the
+      field. *Depends on:* —
+    - [ ] **Upstream proposal: SD-card waypoint overlay** *(P2 · S proposal / L firmware)* — agree with
+      ICSSW, then file the drafted issue. *Why:* offline, zero airtime, generic (repeaters, SOTA,
+      shelters). *Notes:* draft in the research page. *Impact:* caches on the device map without any
+      transmission. *Depends on:* the grid export; the firmware's map implementation (open question).
+    - [ ] **Upstream proposal: show received APRS objects on the map** *(P3 · L)* — expiry and kill-frame
+      support. *Why:* the dynamic half of the overlay. *Notes:* draft in the research page. *Impact:*
+      events and new caches appear live. *Depends on:* confirming whether the map shows objects today.
+    - [ ] **Upstream proposal: KISS object frames from the client's own call** *(P3 · M)* — *Why:* lets a
+      client announce objects under the operator's callsign. *Notes:* draft in the research page; keep
+      the own-callsign check and rate limit. *Impact:* enables the on-demand object bot. *Depends on:*
+      object display on the map.
+    - [ ] **On-demand cache-object bot** *(P3 · M)* — on request, the nearest 3–5 caches as APRS objects
+      (name = cache code, originator = bot call); never beaconed; per-sender rate limit and per-area
+      cooldown. *Why:* map pins instead of a text list. *Impact:* caches on every nearby node's map.
+      *Airtime:* every node repeats objects, so on-request only. *Depends on:* the `CACHES` bot command and
+      both upstream firmware changes.
+    - [ ] **T-Deck Plus test device** *(P2 · S)* — buy the 433 MHz variant with external antenna, flash
+      MeshCom via the ICSSW web flasher, document the setup in the operator guide. *Why:* a reference
+      handheld for every item above. *Depends on:* —
+    - [ ] **Settle the open firmware questions** *(P2 · S)* — whether the map shows APRS objects, and how
+      the map is implemented (tiles, SD storage, renderer, memory headroom). *Why:* gates both upstream
+      proposals. *Notes:* firmware source (T-Deck variant), then an on-air test. The message limit is
+      settled: 150 bytes. *Depends on:* —
 - [ ] **Bring-your-own-ingest** *(P2 · M)* — a user binds their local ingest box to a cloud instance
   they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
   signed-batch path already authenticates one operator, own-traffic-only), extended with per-user

@@ -90,4 +90,5 @@ nav:
   - Design notes:
       - MeshCom integration: design/meshcom.md
       - Logging finds over radio messages: design/radio-find-logging.md
+      - Caches on the MeshCom map: design/meshcom-tdeck-map.md
   - About: about.md
