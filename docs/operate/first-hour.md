@@ -53,9 +53,10 @@ verifies nothing.
 
 ## 6. Attest your RF sites (the Tier-A gate)
 
-Set `FIRST_PARTY_SITES` to the IGate/site callsigns **you operate** (e.g. `OE8XBM-10`). Transport
-never equals trust: only packets arriving through a first-party attested site can originate a
-Tier-A find. Without this, no find on your instance reaches Tier A.
+Set `FIRST_PARTY_SITES` to the IGate/site callsigns **you operate** (e.g. `OE8XBM-10`), and give
+each of your ingest boxes the matching `RF_SITE_CALL` (or `IGATE_CALL`). Transport never equals
+trust: only packets arriving through a first-party attested site can originate a Tier-A find.
+Without this, no find on your instance reaches Tier A.
 
 ## 7. Publish the legal pages
 

@@ -67,3 +67,26 @@ describe("provenance — derive firstPartyAttested", () => {
     expect(pv.firstPartyAttested).toBe(false);
   });
 });
+
+describe("provenance — a local receiving site stamped by the ingest box", () => {
+  // A KISS or MeshCom frame heard directly carries the box's site call as igate_call and no q-construct.
+  it("attests a direct hearing whose site is in FIRST_PARTY_SITES", () => {
+    const pv = provenanceOf(
+      { heard_via: "rf", igate_call: "OE8APR-10", path: "WIDE1-1,WIDE2-1" },
+      parseAttestedSites("OE8APR-10"),
+    );
+    expect(pv.firstPartyAttested).toBe(true);
+    expect(pv.siteId).toBe("OE8APR-10");
+  });
+  it("does not attest a digipeated frame, which the box stores without a site", () => {
+    const pv = provenanceOf(
+      { heard_via: "rf", igate_call: null, path: "OE8XBM-10*,WIDE2-1" },
+      parseAttestedSites("OE8APR-10"),
+    );
+    expect(pv.firstPartyAttested).toBe(false);
+  });
+  it("does not attest a site the operator has not listed", () => {
+    const pv = provenanceOf({ heard_via: "rf", igate_call: "OE8APR-10", path: "" }, parseAttestedSites("OE8XXX"));
+    expect(pv.firstPartyAttested).toBe(false);
+  });
+});

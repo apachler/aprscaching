@@ -13,7 +13,7 @@ A find is only as trustworthy as the evidence behind it. Every find carries exac
 
 | Tier | Name | Requirement |
 |------|------|-------------|
-| **A** | RF-corroborated | The station was heard on the air (an `qAR` q-construct), gated by an IGate that the finder does **not** operate, on a plausible track. |
+| **A** | RF-corroborated | The station was heard on the air by a receiving site the operator attests — the box's own radio for a direct hearing, or an IGate via its `qAR` q-construct — that the finder does **not** operate, on a plausible track. |
 | **B** | App-corroborated | The finder's own device reported a first-party geolocation that matches the cache at log time. |
 | **C** | IS-only | A bare APRS-IS beacon reached the instance — recorded, but not independently corroborated. |
 

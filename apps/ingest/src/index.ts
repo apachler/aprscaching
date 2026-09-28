@@ -97,8 +97,11 @@ if (env.AXUDP_PORT) {
 if (env.KISS_TNC_HOST) {
   const frameSubs: ((f: ParsedFrame) => void)[] = [];
   const rawSubs: ((b: Uint8Array) => void)[] = [];
+  // RF_SITE_CALL (default: IGATE_CALL) names this box as the receiving site of what it hears directly,
+  // so a gateway that lists it in FIRST_PARTY_SITES can attest those frames without an APRS-IS round trip.
+  const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
   const kiss = new KissTnc(
-    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) },
+    { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall },
     {
       onPacket: enqueue,
       onFrame: (f) => {
@@ -110,7 +113,7 @@ if (env.KISS_TNC_HOST) {
     },
   );
   kiss.start();
-  console.log("[kiss] enabled");
+  console.log(`[kiss] enabled${siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : ""}`);
   serviceLink = {
     sendFrame: (f) => kiss.sendFrame(f),
     onRaw: (cb) => rawSubs.push(cb),

@@ -45,13 +45,22 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
     is not trust. AXUDP/AXIP transmit is operator-config-gated node transport (you set `*_PEERS`), which is
     distinct from on-air keying (that is the separate, verified-callsign gate).
 
+## Receiving site and Tier A
+
+Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every KISS frame it hears
+**directly** — no digipeater has repeated it — carries that callsign to the gateway. A gateway that lists
+the call in `FIRST_PARTY_SITES` then counts those frames as RF-corroborated evidence for Tier A, with no
+APRS-IS round trip, so it works off-grid too. Digipeated frames name no site: they show the originator was
+near the digipeater, not near your receiver. The gateway's independence rule still keeps your own
+receiver from corroborating your own finds.
+
 ## IGate
 
 An IGate bridges RF and APRS-IS in both directions. It needs a KISS TNC and both `IGATE_CALL` and
 `IGATE_PASS`:
 
-- **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct — this is what makes a
-  find you personally gated eligible for **Tier A** corroboration by others.
+- **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct, so other instances
+  see your IGate as the receiving site.
 - **TX-IGate** gates APRS-IS messages down to RF, but only to stations heard locally within `IGATE_LOCAL_TTL`
   (default 30 min), honouring the standard do-not-gate tokens (`TCPIP`, `TCPXX`, `NOGATE`, `RFONLY`),
   skipping third-party frames, own beacons, and bare acks.

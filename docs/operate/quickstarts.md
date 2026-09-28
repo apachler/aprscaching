@@ -82,6 +82,12 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
 
 4. Start the box. It logs `[kiss] connected 127.0.0.1:8001`.
 5. Check: the `kiss-tnc` port counts packets.
+6. **Make it count for find verification** (optional): set `RF_SITE_CALL=OE8APR-10` on the box — the
+   callsign that names this receiver — and add the same call to `FIRST_PARTY_SITES` on the gateway. Frames
+   your radio hears **directly** (not through a digipeater) then count as radio-verified evidence
+   (**tier A**) for other people's finds, even with no internet. Your own finds never do: your own receiver
+   is not an independent witness. With an IGate configured, `IGATE_CALL` is used when `RF_SITE_CALL` is
+   not set.
 
 Receiving alone never transmits. The box transmits over KISS only when you enable a digipeater, IGate,
 node or BBS forwarding below.
@@ -123,11 +129,11 @@ also needs PTT.
 
 2. Start the box: `[igate] enabled as OE8APR-10`, then `[igate] APRS-IS connected`. Messages it sends to RF
    log `[igate] TX->RF message for …`.
-3. **Make it count for find verification**: on the gateway, set `FIRST_PARTY_SITES=OE8APR-10`. Your IGate
-   tags what it heard as `qAR,OE8APR-10` on APRS-IS; the box's [APRS-IS feed](#aprs-is-internet-feed) brings
-   those packets back with that tag, so keep the feed running with a filter that covers your IGate's area.
-   From then on, finds heard on the air by this IGate can reach **tier A** — except your own finds, because
-   your own receiver is not an independent witness.
+3. **Make it count for find verification**: on the gateway, set `FIRST_PARTY_SITES=OE8APR-10`. The box
+   names `IGATE_CALL` as the receiving site of every frame it hears directly, so those frames can reach
+   **tier A** right away — except for your own finds, because your own receiver is not an independent
+   witness. Frames the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) are attested the same way when they
+   come back through the box's [APRS-IS feed](#aprs-is-internet-feed).
 
 The IGate only sends messages to RF for stations heard locally in the last 30 minutes
 (`IGATE_LOCAL_TTL`) and honours `NOGATE`/`RFONLY`. Read [Amateur-radio compliance](rf-regulatory.md) first:
