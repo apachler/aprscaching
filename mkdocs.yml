@@ -85,4 +85,5 @@ nav:
       - Data model: reference/data-model.md
   - Design notes:
       - MeshCom integration: design/meshcom.md
+      - MeshCom transmit channel: design/meshcom-transmit.md
   - About: about.md
