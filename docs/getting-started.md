@@ -69,7 +69,7 @@ Edit `.env` at the top of the checkout first: set `APRSIS_FILTER` and `INGEST_SE
 `KISS_TNC_HOST`, `MESH_HOST`, … as needed.
 
 With just `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
-node, an AXUDP/AXIP link, or a TAK/CoT feed and each forwards to the gateway on its own port. See
+node, or an AXUDP/AXIP link and each forwards to the gateway on its own port. See
 [Connect a radio: quick starts](operate/quickstarts.md) for each link step by step, and
 [RF ingest & transports](operate/rf-ingest.md) for every setting.
 
