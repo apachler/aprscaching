@@ -2,15 +2,29 @@
 /**
  * config.ts — startup config helpers for the ingest daemon.
  *  - loadDotEnv: the `pnpm dev` / `start` paths run plain `tsx`/`node` with no dotenv, so without this
- *    the box silently starts as N0CALL/change-me. Load a `.env` from cwd if present; a real process-env
- *    value always wins.
+ *    the box silently starts as N0CALL/change-me. pnpm runs the script inside apps/ingest while the
+ *    documented `.env` sits at the repo root, so both are read (the package's own first); a real
+ *    process-env value always wins.
  *  - numEnv: parse a numeric env var with validation + a floor. A blank/NaN value (e.g. `BATCH_MS=`)
  *    must NOT silently become 0 — that's a ~1 ms flush loop, or a socket dialling port 0.
  */
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
+/** The repo root's `.env` (this file lives at apps/ingest/src/config.ts). */
+const ROOT_ENV = fileURLToPath(new URL("../../../.env", import.meta.url));
 
 /** Load KEY=VALUE lines from a dotenv file into process.env (existing keys are never overwritten). */
-export function loadDotEnv(file = ".env"): void {
+export function loadDotEnv(file?: string): void {
+  if (file === undefined) {
+    readDotEnv(".env");
+    readDotEnv(ROOT_ENV);
+    return;
+  }
+  readDotEnv(file);
+}
+
+function readDotEnv(file: string): void {
   let text: string;
   try {
     text = fs.readFileSync(file, "utf8");
@@ -27,6 +41,7 @@ export function loadDotEnv(file = ".env"): void {
     let val = line.slice(eq + 1).trim();
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))
       val = val.slice(1, -1);
+    else val = val.replace(/\s+#.*$/, ""); // an unquoted value ends at an inline ` # comment`
     process.env[key] = val;
   }
 }

@@ -92,4 +92,11 @@ describe("Meshtastic JSON", () => {
   it("ignores non-position envelopes", () => {
     expect(parseMeshtasticJson(`{"type":"nodeinfo","payload":{}}`)).toBeNull();
   });
+  it("parses the envelope inside mosquitto_sub -F %j output", () => {
+    const f = parseMeshtasticJson(
+      `{"tst":"2026-09-28T18:00:00Z","topic":"msh/EU_868/2/json/LongFast/!1234abcd","qos":0,"retain":0,"payloadlen":120,"payload":{"from":305419896,"sender":"!1234abcd","type":"position","payload":{"latitude_i":470735000,"longitude_i":154378000}}}`,
+    )!;
+    expect(f.node).toBe("!1234abcd");
+    expect(f.lat).toBeCloseTo(47.0735, 4);
+  });
 });

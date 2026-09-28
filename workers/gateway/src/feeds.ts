@@ -13,7 +13,7 @@
 import type { Env } from "./env.js";
 import { xml } from "./app.js";
 import { userFeedPath } from "@aprscaching/shared";
-import { appBase, surfaceUrl, xmlEscape } from "./sitemap.js";
+import { appBase, gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const rfc822 = (unixSec: number) => new Date(unixSec * 1000).toUTCString();
@@ -32,10 +32,11 @@ function rss(opts: {
   link: string;
   description: string;
   selfPath: string;
-  env: Env;
+  /** This gateway's public origin — the feed's own URL lives here, not on the app host. */
+  gateway: string;
   items: Item[];
 }): Response {
-  const self = `${appBase(opts.env)}${opts.selfPath}`;
+  const self = `${opts.gateway}${opts.selfPath}`;
   const items = opts.items
     .map(
       (it) =>
@@ -67,7 +68,7 @@ function rss(opts: {
 const verb = (t: string) => (t === "found" ? "found" : t === "dnf" ? "couldn't find" : t === "note" ? "noted" : t);
 
 /** GET /feeds/activity.xml */
-export async function handleActivityFeed(_req: Request, env: Env): Promise<Response> {
+export async function handleActivityFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
       `SELECT l.id, l.logger_call AS loggerCall, l.ts, l.log_type AS logType, l.verified, l.tier,
@@ -91,13 +92,13 @@ export async function handleActivityFeed(_req: Request, env: Env): Promise<Respo
     link: surfaceUrl(env, "activity"),
     description: "Recent finds, hides and DNFs across the network.",
     selfPath: "/feeds/activity.xml",
-    env,
+    gateway: gatewayBase(req, env),
     items,
   });
 }
 
 /** GET /feeds/caches.xml */
-export async function handleCachesFeed(_req: Request, env: Env): Promise<Response> {
+export async function handleCachesFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
       `SELECT code, title, type, owner_call AS ownerCall, difficulty, terrain, created_at AS createdAt
@@ -118,13 +119,13 @@ export async function handleCachesFeed(_req: Request, env: Env): Promise<Respons
     link: surfaceUrl(env, null),
     description: "Recently published public caches.",
     selfPath: "/feeds/caches.xml",
-    env,
+    gateway: gatewayBase(req, env),
     items,
   });
 }
 
 /** GET /feeds/bulletins.xml */
-export async function handleBulletinsFeed(_req: Request, env: Env): Promise<Response> {
+export async function handleBulletinsFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
       `SELECT id, from_call AS fromCall, to_call AS toCall, subject, body, posted_at AS postedAt
@@ -147,13 +148,13 @@ export async function handleBulletinsFeed(_req: Request, env: Env): Promise<Resp
     link: surfaceUrl(env, "bbs"),
     description: "Public APRS bulletins.",
     selfPath: "/feeds/bulletins.xml",
-    env,
+    gateway: gatewayBase(req, env),
     items,
   });
 }
 
 /** GET /feeds/leaderboard.xml — a snapshot; all items share the build time. */
-export async function handleLeaderboardFeed(_req: Request, env: Env): Promise<Response> {
+export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Response> {
   const rows = (
     await env.DB.prepare(
       `SELECT logger_call AS loggerCall, COUNT(DISTINCT cache_id) AS finds
@@ -164,7 +165,7 @@ export async function handleLeaderboardFeed(_req: Request, env: Env): Promise<Re
   const t = now();
   const items: Item[] = rows.map((r, i) => ({
     title: `#${i + 1} ${r.loggerCall} — ${r.finds} verified finds`,
-    link: `${appBase(env)}${userFeedPath(r.loggerCall)}`,
+    link: `${gatewayBase(req, env)}${userFeedPath(r.loggerCall)}`,
     description: `${r.loggerCall} ranks #${i + 1} with ${r.finds} verified finds.`,
     guid: `rank:${r.loggerCall}:${t}`,
     pubDate: t,
@@ -175,13 +176,13 @@ export async function handleLeaderboardFeed(_req: Request, env: Env): Promise<Re
     link: surfaceUrl(env, "ranks"),
     description: "Top finders, ranked by verified finds.",
     selfPath: "/feeds/leaderboard.xml",
-    env,
+    gateway: gatewayBase(req, env),
     items,
   });
 }
 
 /** GET /feeds/u/<callsign>.xml — a callsign's finds, badge awards and scoring. */
-export async function handleUserFeed(_req: Request, env: Env, callsign: string): Promise<Response> {
+export async function handleUserFeed(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
   const finds = (
     await env.DB.prepare(
@@ -228,7 +229,7 @@ export async function handleUserFeed(_req: Request, env: Env, callsign: string):
     })),
     ...badges.map((b) => ({
       title: `Earned badge: ${b.badge}`,
-      link: `${appBase(env)}${userFeedPath(cs)}`,
+      link: `${gatewayBase(req, env)}${userFeedPath(cs)}`,
       description: `${cs} earned the “${b.badge}” badge.`,
       guid: `badge:${cs}:${b.badge}`,
       pubDate: b.earnedAt,
@@ -243,7 +244,7 @@ export async function handleUserFeed(_req: Request, env: Env, callsign: string):
     link: `${appBase(env)}/?view=profile&call=${encodeURIComponent(cs)}`,
     description: `${cs} — ${findCount} verified finds · ${hides} hides · ${badges.length} badges.`,
     selfPath: userFeedPath(cs),
-    env,
+    gateway: gatewayBase(req, env),
     items,
   });
 }

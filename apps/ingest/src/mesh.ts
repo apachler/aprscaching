@@ -9,9 +9,9 @@ export interface MeshOpts {
 }
 
 /**
- * Meshtastic ingest via newline-delimited JSON over TCP — point this at an MQTT→TCP bridge or a
- * `mosquitto_sub -t 'msh/#' -F '%j'` feed of the gateway's JSON output. Forwards on the
- * `meshtastic` port.
+ * Meshtastic ingest via newline-delimited JSON over TCP — point this at an MQTT→TCP bridge, e.g. a
+ * `mosquitto_sub -t 'msh/+/2/json/#' -F '%p'` feed of a node's JSON MQTT output served on a TCP port
+ * (e.g. behind `socat TCP-LISTEN:1884,fork`). Forwards on the `meshtastic` port.
  */
 export class MeshtasticReader {
   private sock?: net.Socket;

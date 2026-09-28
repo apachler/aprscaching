@@ -111,7 +111,7 @@ only when its variable is present.
 | KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`) |
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` |
-| Meshtastic | `MESH_HOST`, `MESH_PORT` (`1883`) |
+| Meshtastic | `MESH_HOST`, `MESH_PORT` (`1884`) |
 | TAK / CoT in | `TAK_COT_PORT`, `TAK_COT_BIND` |
 | AXUDP | `AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS` |
 | AXIP | `AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND` |

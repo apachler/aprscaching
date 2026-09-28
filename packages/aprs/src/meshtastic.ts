@@ -23,6 +23,10 @@ export function parseMeshtasticJson(input: string | Record<string, unknown>): Me
     return null;
   }
   if (!o || typeof o !== "object") return null;
+  // `mosquitto_sub -F %j` wraps each message as { tst, topic, qos, retain, payloadlen, payload: <envelope> };
+  // unwrap it so both that and the bare `-F %p` envelope parse.
+  if (typeof o.topic === "string" && o.payload && typeof o.payload === "object" && "payload" in o.payload)
+    o = o.payload;
   if (o.type && o.type !== "position") return null;
   const p = o.payload ?? o;
   const lat = typeof p.latitude_i === "number" ? p.latitude_i / 1e7 : Number(p.latitude);

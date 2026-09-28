@@ -14,6 +14,11 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
     command: ["pnpm", "--filter", "@aprscaching/node-gateway", "start"]
+    # Every setting in .env reaches the gateway (ADMIN_CALLSIGNS, RP_ID, FIRST_PARTY_SITES, OPERATOR_*,
+    # SOURCE_REPO, FED_*, …); the `environment:` entries below take precedence over it.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DB_PATH: /data/aprscaching.db
       PORT: "8080"
@@ -43,6 +48,10 @@ services:
   ingest: # RF/IS ingest. For RF, run this on the OPERATOR'S box (see rule).
     image: aprscaching:local
     command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
+    # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESH_*, …).
+    env_file:
+      - path: .env
+        required: false
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}

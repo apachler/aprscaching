@@ -161,7 +161,7 @@ if (env.TAK_COT_PORT) {
   console.log("[cot] enabled");
 }
 if (env.MESH_HOST) {
-  new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1883) }, enqueue).start();
+  new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();
   console.log("[mesh] enabled");
 }
 // AGWPE TNC — opt-in; any AGWPE modem (Direwolf/SoundModem/UZ7HO) feeds us over TCP.
