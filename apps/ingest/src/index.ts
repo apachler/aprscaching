@@ -10,6 +10,7 @@ import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
+import type { BoxRadio, BoxState } from "./boxpoll.js";
 
 loadDotEnv(); // `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
 const env = process.env;
@@ -76,6 +77,11 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 import type { FrameLink } from "./link.js";
 let serviceLink: FrameLink | null = null;
 
+// Runtime switches the remote-control poller flips. `tx` is the master RF transmit switch; digi/igate
+// stay null unless that function is configured. The KISS TNC (when present) is the remote-TX radio.
+const station: BoxState = { tx: true, digi: null, igate: null };
+let boxRadio: BoxRadio | null = null;
+
 // AXUDP tunnel — opt-in; tunnelled frames stay Tier C, never first-party RF. With AXUDP_PEERS it's
 // a bidirectional KISS-equivalent port (carries NET/ROM crosslinks + FBB); without, RX-only.
 let axudpPort: import("./axudp.js").AxudpPort | null = null;
@@ -114,6 +120,7 @@ if (env.KISS_TNC_HOST) {
   );
   kiss.start();
   console.log(`[kiss] enabled${siteCall ? ` — direct hearings name site ${siteCall.toUpperCase()}` : ""}`);
+  boxRadio = kiss;
   serviceLink = {
     sendFrame: (f) => kiss.sendFrame(f),
     onRaw: (cb) => rawSubs.push(cb),
@@ -132,7 +139,10 @@ if (env.KISS_TNC_HOST) {
         .filter(Boolean),
     );
     const digi = new Digipeater(kiss, { mycall: env.DIGI_CALL, aliases });
-    frameSubs.push((f) => digi.onFrame(f));
+    station.digi = true;
+    frameSubs.push((f) => {
+      if (station.tx && station.digi) digi.onFrame(f);
+    });
     console.log(`[digi] enabled as ${env.DIGI_CALL} (${[...aliases].join(",")})`);
 
     // connected-mode digipeater — repeat SABM/I/… for NET/ROM + FBB relay through us
@@ -142,7 +152,9 @@ if (env.KISS_TNC_HOST) {
         aliases: [...aliases],
         viscousMs: env.DIGI_VISCOUS_MS ? Number(env.DIGI_VISCOUS_MS) : undefined,
       });
-      rawSubs.push((b) => cdigi.onRaw(b));
+      rawSubs.push((b) => {
+        if (station.tx && station.digi) cdigi.onRaw(b);
+      });
       console.log(`[digi-c] connected-mode digipeater enabled as ${env.DIGI_CALL}`);
     }
   }
@@ -156,8 +168,12 @@ if (env.KISS_TNC_HOST) {
       pass: env.IGATE_PASS,
       filter: env.IGATE_FILTER,
       localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
+      canTx: () => station.tx && station.igate === true,
     });
-    frameSubs.push((f) => igate.onRf(f));
+    station.igate = true;
+    frameSubs.push((f) => {
+      if (station.igate) igate.onRf(f);
+    });
     igate.start();
     console.log(`[igate] enabled as ${env.IGATE_CALL}`);
   }
@@ -311,6 +327,29 @@ if (env.BBS_FORWARD === "1" && env.BBS_FORWARD_CALL && (env.KISS_TNC_HOST || axu
     compress: env.BBS_FORWARD_COMPRESS === "1",
   });
   console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
+}
+
+// ---- Remote control: lease commands the operator queued in the web app and execute them.
+// Opt-in with BOX_ID; remote transmit additionally needs BOX_TX=1 and a command callsign that is this
+// box's own station call (BOX_CALL, default IGATE_CALL or DIGI_CALL).
+if (env.BOX_ID) {
+  const { BoxPoller, parseBoxPath } = await import("./boxpoll.js");
+  const boxCall = env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
+  new BoxPoller({
+    base: INGEST_URL.replace(/\/ingest$/, ""),
+    secret: SECRET,
+    boxId: env.BOX_ID,
+    boxCall,
+    remoteTx: env.BOX_TX === "1",
+    radio: boxRadio,
+    state: station,
+    path: parseBoxPath(env.BOX_TX_PATH),
+    maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),
+    pollMs: numEnv("BOX_POLL_MS", 5000, { min: 1000 }),
+  }).start();
+  console.log(
+    `[box] remote control active as ${env.BOX_ID} (remote transmit ${env.BOX_TX === "1" ? `allowed as ${boxCall ?? "?"}` : "disabled"})`,
+  );
 }
 
 // ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
