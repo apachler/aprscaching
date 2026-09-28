@@ -1,0 +1,8 @@
+{
+  "description": "Latitude above 90 is rejected.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"pos\",\"src\":\"OE8APR-12\",\"msg\":\"\",\"lat\":91.5,\"lat_dir\":\"N\",\"long\":14.3053,\"long_dir\":\"E\",\"aprs_symbol\":\"#\",\"aprs_symbol_group\":\"/\",\"hw_id\":4,\"msg_id\":\"00000004\",\"alt\":560,\"batt\":87,\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": false,
+    "reason": "bad-position"
+  }
+}

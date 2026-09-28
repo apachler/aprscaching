@@ -1,0 +1,10 @@
+{
+  "description": "Group message to group 262.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"DH1FR-1\",\"dst\":\"262\",\"msg\":\"CQ Gruppe 262\",\"msg_id\":\"5DFC7188\",\"firmware\":35,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "dst": "262",
+    "dstKind": "group"
+  }
+}

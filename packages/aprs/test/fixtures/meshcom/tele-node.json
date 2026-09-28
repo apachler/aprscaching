@@ -1,0 +1,10 @@
+{
+  "description": "The node's own sensor values.",
+  "datagram": "{\"src_type\":\"node\",\"type\":\"tele\",\"src\":\"OE8APR-12\",\"temp1\":12.5,\"temp2\":0,\"hum\":71,\"qfe\":951.2,\"qnh\":1016.8,\"gas\":0,\"co2\":0}",
+  "expect": {
+    "ok": true,
+    "type": "tele",
+    "srcType": "node",
+    "rf": false
+  }
+}

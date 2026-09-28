@@ -1,0 +1,16 @@
+{
+  "description": "Position relayed by OE1KBC-12: the origin is first, relays follow (firmware sendExtern example).",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"pos\",\"src\":\"9V1LH-1,OE1KBC-12\",\"msg\":\"\",\"lat\":1.3773,\"lat_dir\":\"N\",\"long\":103.942,\"long_dir\":\"E\",\"aprs_symbol\":\"#\",\"aprs_symbol_group\":\"/\",\"hw_id\":4,\"msg_id\":\"AE48D54D\",\"alt\":161,\"batt\":5,\"firmware\":17,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": true,
+    "type": "pos",
+    "srcType": "lora",
+    "src": "9V1LH-1",
+    "path": ["9V1LH-1", "OE1KBC-12"],
+    "rf": true,
+    "direct": false,
+    "lat": 1.3773,
+    "lon": 103.942,
+    "msgId": "AE48D54D"
+  }
+}

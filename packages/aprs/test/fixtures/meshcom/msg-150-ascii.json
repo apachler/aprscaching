@@ -1,0 +1,9 @@
+{
+  "description": "150 ASCII characters (150 bytes), the firmware maximum.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"DH1FR-1\",\"dst\":\"OE8APR-12\",\"msg\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"msg_id\":\"5DFC718A\",\"firmware\":35,\"fw_sub\":\"p\",\"rssi\":-95,\"snr\":12}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "textBytes": 150
+  }
+}
