@@ -238,9 +238,9 @@ Backlog (P3 unless noted):
   self-hosted logbook tools consume (they handle LoTW/eQSL/QRZ onward).
 - [ ] **Winlink/SMS gateway UI** *(M)* — friendly compose surfaces over the open APRSLink
   (Winlink↔APRS email) and APRS-SMS gateways from the messages surface.
-- [ ] **Meshtastic cache mode** *(M/L)* — caches discoverable and loggable over Meshtastic with a
-  distinct mesh provenance chip (always Tier C — ISM transport is never attested ham RF) and an
-  optional mesh leaderboard.
+- [ ] **Meshtastic cache mode** *(M/L)* — caches discoverable and loggable over Meshtastic by licensed
+  nodes only (licensed mode, callsign long name), with a distinct mesh provenance chip (always Tier C —
+  a Meshtastic hearing is never attested RF) and an optional mesh leaderboard.
 - [ ] **Post-ticket onboarding quest** *(S/M)* — a guided achievement track for freshly-licensed
   hams: hear a packet → decode a frame → first gated beacon → first Tier-C/B/A find; pairs with the
   coach-mark tour.
@@ -426,9 +426,9 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [ ] **One-click POI overlay** *(P3 · S)* — a map-side toggle that live-queries a curated OSM/Wikidata set
   (peaks, castles, lighthouses) for the current viewport as a switchable layer, respecting each source's
   attribution.
-- [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — native MQTT, BLE, and serial with
-  protobuf decode, alongside the newline-JSON TCP bridge the box speaks today (the browser path already
-  does Meshtastic over Web Serial).
+- [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — BLE and USB serial at the box, with
+  the same licensed-only rule as the node TCP API and MQTT protobuf feeds it reads today (the browser path
+  already does Meshtastic over Web Serial).
 - [x] **MeshCom transport** — the LoRa ham mesh through a node's ExtUDP JSON interface
   ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
   [operator guide](docs/operate/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on

@@ -3,7 +3,9 @@ import {
   decodeAx25,
   decodeAprs,
   deframeMeshtastic,
-  parseMeshtasticProto,
+  parseFromRadio,
+  wantConfigFrame,
+  MeshtasticLicensedNodes,
   type ParsedFrame,
   type AprsData,
   type MeshFix,
@@ -16,7 +18,8 @@ import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.j
  * extralinks.ts — two more browser-direct RF ingests behind the same RfLink contract as the KISS
  * reader:
  *   WebAudioAfsk        — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
- *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → POSITION_APP → fix.
+ *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → FromRadio → positions of
+ *                         licensed nodes only, under their callsigns.
  * Both stay RX-only and Tier C (no independent IGate); send() is gated on callsign
  * control-verification. Chromium-only.
  */
@@ -109,18 +112,22 @@ export class WebAudioAfsk implements RfLink {
 }
 
 // ---------------------------------------------------------------- Meshtastic over Web Serial
-/** Synthesize an RfFrame from a Meshtastic position fix so it flows through the same ingest path. */
-function meshFixToRfFrame(fix: MeshFix): RfFrame {
-  const frame: ParsedFrame = { src: fix.node, dst: "MESH", path: [], payload: "", raw: "" };
+/**
+ * Synthesize an RfFrame from a licensed Meshtastic node's position, under its callsign, so it flows
+ * through the same ingest path. Trust-neutral like every Meshtastic path (`aprs_is`): a Meshtastic
+ * hearing is never attestable RF evidence.
+ */
+function meshFixToRfFrame(fix: MeshFix, call: string): RfFrame {
+  const frame: ParsedFrame = { src: call, dst: "MESH", path: [], payload: "", raw: "" };
   const data = { kind: "position", lat: fix.lat, lon: fix.lon } as unknown as AprsData;
   const packet: Packet = {
-    src: fix.node,
+    src: call,
     dst: "MESH",
     path: [],
     payload: "",
     kind: "position",
     parsed: { lat: fix.lat, lon: fix.lon, ...(fix.altitudeM != null ? { altitude: fix.altitudeM } : {}) },
-    heardVia: "rf",
+    heardVia: "aprs_is",
     port: "meshtastic",
     ts: Math.floor(Date.now() / 1000),
     raw: "",
@@ -133,6 +140,8 @@ export class WebSerialMeshtastic implements RfLink {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private closed = false;
   private buf = new Uint8Array(0);
+  /** Only licensed nodes enter the map; their callsigns are learned from NodeInfo. */
+  private licensed = new MeshtasticLicensedNodes();
 
   constructor(
     private onFrame: (f: RfFrame) => void,
@@ -148,10 +157,9 @@ export class WebSerialMeshtastic implements RfLink {
     this.readLoop();
   }
 
-  /** ToRadio{ want_config_id = 3 } framed — triggers the node DB + live packet stream. */
+  /** ToRadio{ want_config_id } — triggers the node database (with licence flags) + the live packet stream. */
   private async wantConfig(): Promise<void> {
-    const body = Uint8Array.from([0x18, 0x01]); // field 3 (varint) = 1
-    const frame = Uint8Array.from([0x94, 0xc3, (body.length >> 8) & 0xff, body.length & 0xff, ...body]);
+    const frame = wantConfigFrame();
     const w = this.port?.writable?.getWriter();
     if (w) {
       try {
@@ -178,8 +186,11 @@ export class WebSerialMeshtastic implements RfLink {
           this.buf = rest.slice();
           if (this.buf.length > 8192) this.buf = new Uint8Array(0);
           for (const fr of frames) {
-            const fix = parseMeshtasticProto(fr);
-            if (fix) this.onFrame(meshFixToRfFrame(fix));
+            const ev = parseFromRadio(fr);
+            this.licensed.observe(ev);
+            if (ev?.kind !== "position") continue;
+            const call = this.licensed.callsignFor(ev.fix.node);
+            if (call) this.onFrame(meshFixToRfFrame(ev.fix, call)); // unlicensed or not yet known → dropped
           }
         }
       } catch (e) {

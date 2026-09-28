@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 /**
- * meshtastic.ts — parse a Meshtastic MQTT JSON envelope (the gateway's "JSON output" mode) into a
- * position fix. Pure; the connector (apps/ingest) handles the MQTT transport. Native protobuf
- * (MQTT ServiceEnvelope and browser-direct serial/BLE FromRadio) parsing lives further down.
+ * meshtastic.ts — decode Meshtastic's protobuf stream (the node's serial / BLE / TCP API framing and the
+ * MQTT ServiceEnvelope) and decide which nodes are licensed amateur stations. Pure and runtime-neutral;
+ * the connectors (the ingest box, the browser) own the transport.
  *
- * Envelope shape (position): { from, sender:"!hex", type:"position",
- *   payload:{ latitude_i, longitude_i, altitude } }
+ * Only a node that runs Meshtastic's licensed (ham) mode enters the map: its NodeInfo carries
+ * `User.is_licensed` and its long name is the operator's callsign. A licence-free ISM node has no callsign
+ * to show, so it is never given an invented one — its traffic is dropped.
  */
 export interface MeshFix {
   node: string;
@@ -13,31 +14,6 @@ export interface MeshFix {
   lon: number;
   altitudeM?: number;
   longName?: string;
-}
-
-export function parseMeshtasticJson(input: string | Record<string, unknown>): MeshFix | null {
-  let o: any;
-  try {
-    o = typeof input === "string" ? JSON.parse(input) : input;
-  } catch {
-    return null;
-  }
-  if (!o || typeof o !== "object") return null;
-  // `mosquitto_sub -F %j` wraps each message as { tst, topic, qos, retain, payloadlen, payload: <envelope> };
-  // unwrap it so both that and the bare `-F %p` envelope parse.
-  if (typeof o.topic === "string" && o.payload && typeof o.payload === "object" && "payload" in o.payload)
-    o = o.payload;
-  if (o.type && o.type !== "position") return null;
-  const p = o.payload ?? o;
-  const lat = typeof p.latitude_i === "number" ? p.latitude_i / 1e7 : Number(p.latitude);
-  const lon = typeof p.longitude_i === "number" ? p.longitude_i / 1e7 : Number(p.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
-  const node = String(o.sender ?? o.from ?? "MESH");
-  const fix: MeshFix = { node, lat, lon };
-  const alt = Number(p.altitude);
-  if (Number.isFinite(alt) && alt !== 0) fix.altitudeM = Math.round(alt);
-  if (typeof o.longname === "string") fix.longName = o.longname;
-  return fix;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -124,7 +100,18 @@ const nodeId = (from: number): string => `!${(from >>> 0).toString(16).padStart(
 export type MeshEvent =
   | { kind: "position"; fix: MeshFix }
   | { kind: "text"; node: string; text: string }
-  | { kind: "nodeinfo"; node: string; longName?: string; shortName?: string };
+  | { kind: "nodeinfo"; node: string; longName?: string; shortName?: string; isLicensed?: boolean };
+
+/** User{ long_name(2), short_name(3), is_licensed(6) }. */
+function userFrom(payload: Uint8Array): { longName?: string; shortName?: string; isLicensed?: boolean } {
+  const out: { longName?: string; shortName?: string; isLicensed?: boolean } = {};
+  for (const [f, w, v] of walk(payload)) {
+    if (f === 2 && w === 2 && v instanceof Uint8Array) out.longName = new TextDecoder().decode(v);
+    else if (f === 3 && w === 2 && v instanceof Uint8Array) out.shortName = new TextDecoder().decode(v);
+    else if (f === 6 && w === 0) out.isLicensed = v !== 0;
+  }
+  return out;
+}
 
 /** Position{ latitude_i(1,sfixed32), longitude_i(2,sfixed32), altitude(3) } → a fix (×1e-7 deg), or null. */
 function positionFrom(payload: Uint8Array, node: string): MeshFix | null {
@@ -173,16 +160,100 @@ export function parseMeshPacket(packet: Uint8Array): MeshEvent | null {
     const text = new TextDecoder().decode(payload).replace(/\0+$/, "");
     return text ? { kind: "text", node, text } : null;
   }
-  if (portnum === 4) {
-    // NODEINFO_APP → User{ long_name(2), short_name(3) }
-    let longName: string | undefined, shortName: string | undefined;
-    for (const [f, w, v] of walk(payload)) {
-      if (f === 2 && w === 2 && v instanceof Uint8Array) longName = new TextDecoder().decode(v);
-      else if (f === 3 && w === 2 && v instanceof Uint8Array) shortName = new TextDecoder().decode(v);
+  if (portnum === 4) return { kind: "nodeinfo", node, ...userFrom(payload) }; // NODEINFO_APP → User
+  return null;
+}
+
+/**
+ * Decode one FromRadio frame (the node's serial / BLE / TCP API stream) into an event. FromRadio carries a
+ * live MeshPacket(2), or — while the client's `want_config` handshake dumps the node database —
+ * NodeInfo(4){ num(1), user(2) }, which is where the licence flags of already-known nodes arrive.
+ */
+export function parseFromRadio(frame: Uint8Array): MeshEvent | null {
+  for (const [f, w, v] of walk(frame)) {
+    if (f === 2 && w === 2 && v instanceof Uint8Array) return parseMeshPacket(v);
+    if (f === 4 && w === 2 && v instanceof Uint8Array) {
+      let num: number | null = null;
+      let user: Uint8Array | null = null;
+      for (const [nf, nw, nv] of walk(v)) {
+        if (nf === 1 && nw === 0) num = nv as number;
+        else if (nf === 2 && nw === 2 && nv instanceof Uint8Array) user = nv;
+      }
+      return num != null && user ? { kind: "nodeinfo", node: nodeId(num), ...userFrom(user) } : null;
     }
-    return { kind: "nodeinfo", node, longName, shortName };
   }
   return null;
+}
+
+/** `ToRadio{ want_config_id }`, framed — asks a node for its database and then its live packet stream. */
+export function wantConfigFrame(id = 0x5eed): Uint8Array {
+  const body = [0x18, ...varintBytes(id)]; // ToRadio.want_config_id = field 3, varint
+  return Uint8Array.from([START1, START2, (body.length >> 8) & 0xff, body.length & 0xff, ...body]);
+}
+function varintBytes(n: number): number[] {
+  const out: number[] = [];
+  let v = n >>> 0;
+  while (v > 0x7f) {
+    out.push((v & 0x7f) | 0x80);
+    v >>>= 7;
+  }
+  out.push(v);
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Licensed-only acceptance
+
+/** An amateur callsign (prefix, digit, suffix ending in a letter) with an optional SSID 0–15. */
+const HAM_CALL = /^[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z](?:-(?:[0-9]|1[0-5]))?$/;
+
+/**
+ * The callsign a node proves by its NodeInfo, or null. Licensed mode sets `is_licensed` and makes the
+ * long name the callsign (`CALL` or `CALL//name`); anything short of both — the flag unset or unknown, or
+ * a long name that is not a callsign — proves nothing. The flag is self-asserted, like any callsign on
+ * the air: it gates what enters the map, never trust (Meshtastic traffic stays trust-neutral).
+ */
+export function licensedCallsign(user: { longName?: string; isLicensed?: boolean }): string | null {
+  if (user.isLicensed !== true || !user.longName) return null;
+  const call = user.longName.split("//")[0]!.trim().toUpperCase().replace(/-0$/, "");
+  // N0CALL is the placeholder the firmware accepts in licensed mode (with transmit off): not a station
+  return HAM_CALL.test(call) && call.split("-")[0] !== "N0CALL" ? call : null;
+}
+
+/**
+ * Which Meshtastic nodes are licensed, by node id — learned from NodeInfo, which a licensed node sends
+ * every ten minutes and which often arrives after its first positions. Bounded (oldest entry evicted) and
+ * time-limited, so a node that stops announcing, or turns licensed mode off, is forgotten.
+ */
+export class MeshtasticLicensedNodes {
+  private nodes = new Map<string, { call: string; at: number }>();
+  constructor(private o: { max?: number; ttlMs?: number } = {}) {}
+
+  /** Learn from a decoded event; only NodeInfo changes anything. */
+  observe(ev: MeshEvent | null, now = Date.now()): void {
+    if (ev?.kind !== "nodeinfo") return;
+    const call = licensedCallsign(ev);
+    this.nodes.delete(ev.node);
+    if (!call) return;
+    this.nodes.set(ev.node, { call, at: now });
+    const max = this.o.max ?? 2000;
+    while (this.nodes.size > max) this.nodes.delete(this.nodes.keys().next().value!);
+  }
+
+  /** The node's callsign while its licence is known and fresh, else null. */
+  callsignFor(node: string, now = Date.now()): string | null {
+    const e = this.nodes.get(node);
+    if (!e) return null;
+    if (now - e.at > (this.o.ttlMs ?? 6 * 3600_000)) {
+      this.nodes.delete(node);
+      return null;
+    }
+    return e.call;
+  }
+
+  get size(): number {
+    return this.nodes.size;
+  }
 }
 
 /**
@@ -200,7 +271,7 @@ export function parseMeshtasticProto(frame: Uint8Array): MeshFix | null {
 /**
  * Parse a Meshtastic **MQTT ServiceEnvelope** (native protobuf, ingest-box path) into a typed event, or null.
  * ServiceEnvelope{ packet(1,MeshPacket), channel_id(2), gateway_id(3) } → `parseMeshPacket`. This is the
- * native protobuf MQTT path (many brokers publish protobuf, not the JSON `parseMeshtasticJson` handles).
+ * native protobuf MQTT path.
  */
 export function parseMeshServiceEnvelope(bytes: Uint8Array): MeshEvent | null {
   const packet = sub(bytes, 1);

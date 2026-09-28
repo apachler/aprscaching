@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from "vitest";
-import { deframeMeshtastic, parseMeshtasticProto, parseMeshPacket, parseMeshServiceEnvelope } from "../src/index.js";
+import {
+  deframeMeshtastic,
+  parseMeshtasticProto,
+  parseMeshPacket,
+  parseMeshServiceEnvelope,
+  parseFromRadio,
+  wantConfigFrame,
+  licensedCallsign,
+  MeshtasticLicensedNodes,
+} from "../src/index.js";
 
 // --- tiny protobuf builder (mirrors the canonical Meshtastic field numbers) ---
 const u8 = (...a: number[]) => Uint8Array.from(a);
@@ -113,5 +122,83 @@ describe("meshtastic — native MQTT ServiceEnvelope + typed events", () => {
     const parent = u8(0x0d, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff);
     const frameA = parent.subarray(0, 3); // truncated inside its own frame
     expect(parseMeshPacket(frameA)).toBeNull(); // must not decode 0xffffff00 from the neighbour
+  });
+});
+
+describe("meshtastic — licensed-only acceptance", () => {
+  const user = (longName: string, licensed?: boolean) => [
+    ...lenDelim(1, str("!0000abcd")),
+    ...lenDelim(2, str(longName)),
+    ...lenDelim(3, str("X")),
+    ...(licensed != null ? vfield(6, licensed ? 1 : 0) : []),
+  ];
+
+  it("reads the licensed flag from NODEINFO_APP", () => {
+    expect(parseMeshPacket(u8(...meshPacket(0x0000abcd, 4, user("OE8APR-7", true))))).toMatchObject({
+      kind: "nodeinfo",
+      node: "!0000abcd",
+      longName: "OE8APR-7",
+      isLicensed: true,
+    });
+    expect(parseMeshPacket(u8(...meshPacket(0x0000abcd, 4, user("Base Camp"))))).not.toHaveProperty("isLicensed");
+  });
+
+  it("decodes FromRadio.node_info (the TCP API / serial node database) and FromRadio.packet", () => {
+    const nodeInfo = [...vfield(1, 0x0000abcd), ...lenDelim(2, user("OE8APR", true))];
+    expect(parseFromRadio(u8(...lenDelim(4, nodeInfo)))).toMatchObject({
+      kind: "nodeinfo",
+      node: "!0000abcd",
+      longName: "OE8APR",
+      isLicensed: true,
+    });
+    const pos = frame(fromRadioPosition(47, 15, 0, 0x0000abcd));
+    const { frames } = deframeMeshtastic(pos);
+    expect(parseFromRadio(frames[0]!)?.kind).toBe("position");
+  });
+
+  it("frames the want_config handshake", () => {
+    const f = wantConfigFrame(1);
+    expect(Array.from(f)).toEqual([0x94, 0xc3, 0x00, 0x02, 0x18, 0x01]);
+  });
+
+  it.each([
+    [{ longName: "OE8APR", isLicensed: true }, "OE8APR"],
+    [{ longName: "oe8apr-7", isLicensed: true }, "OE8APR-7"],
+    [{ longName: "OE8APR-0", isLicensed: true }, "OE8APR"],
+    [{ longName: "OE8APR//Andi", isLicensed: true }, "OE8APR"],
+    [{ longName: "W1AW", isLicensed: true }, "W1AW"],
+    [{ longName: "9A1A", isLicensed: true }, "9A1A"],
+  ])("accepts a licensed node with a callsign long name: %o", (u, call) => {
+    expect(licensedCallsign(u)).toBe(call);
+  });
+
+  it.each([
+    [{ longName: "OE8APR" }],
+    [{ longName: "OE8APR", isLicensed: false }],
+    [{ longName: "Base Camp", isLicensed: true }],
+    [{ longName: "OE8APR-16", isLicensed: true }],
+    [{ longName: "N0CALL", isLicensed: true }],
+    [{ isLicensed: true }],
+  ])("drops anything short of both: %o", (u) => {
+    expect(licensedCallsign(u)).toBeNull();
+  });
+
+  it("learns callsigns from NodeInfo, forgets a node that turns licensed mode off", () => {
+    const reg = new MeshtasticLicensedNodes();
+    reg.observe({ kind: "nodeinfo", node: "!1", longName: "OE8APR", isLicensed: true }, 0);
+    expect(reg.callsignFor("!1", 1)).toBe("OE8APR");
+    expect(reg.callsignFor("!2", 1)).toBeNull();
+    reg.observe({ kind: "nodeinfo", node: "!1", longName: "OE8APR", isLicensed: false }, 2);
+    expect(reg.callsignFor("!1", 3)).toBeNull();
+  });
+
+  it("is bounded and forgets a node whose NodeInfo is too old", () => {
+    const reg = new MeshtasticLicensedNodes({ max: 2, ttlMs: 1000 });
+    for (const n of ["!1", "!2", "!3"])
+      reg.observe({ kind: "nodeinfo", node: n, longName: "OE8APR", isLicensed: true }, 0);
+    expect(reg.size).toBe(2);
+    expect(reg.callsignFor("!1", 1)).toBeNull(); // the oldest entry was evicted
+    expect(reg.callsignFor("!3", 999)).toBe("OE8APR");
+    expect(reg.callsignFor("!3", 1001)).toBeNull(); // expired
   });
 });

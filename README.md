@@ -113,7 +113,7 @@ pnpm --filter @aprscaching/web dev
 
 **Ingest box (operator-local RF):**
 ```bash
-cp .env.example .env         # then set APRSIS_FILTER + INGEST_SECRET; optional KISS_TNC_HOST, MESH_HOST, …
+cp .env.example .env         # then set APRSIS_FILTER + INGEST_SECRET; optional KISS_TNC_HOST, MESHTASTIC_HOST, …
 pnpm --filter @aprscaching/ingest dev
 ```
 

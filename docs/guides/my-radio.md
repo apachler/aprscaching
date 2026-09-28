@@ -15,7 +15,7 @@ install. The browser decodes what your radio hears, shows it live, and can pass 
 | A USB KISS TNC, or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
 | A Bluetooth Low Energy KISS TNC (e.g. a Mobilinkd) | **Connect Bluetooth** | |
 | Just an audio cable from the radio's speaker/data jack to the computer's soundcard | **Soundcard AFSK** | Decodes 1200 baud APRS audio — no TNC needed |
-| A Meshtastic node on USB | **Meshtastic node** | Reads node positions; stations appear under their node ID (e.g. `!a1b2c3d4`) |
+| A Meshtastic node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed/ham mode on, callsign as long name), shown under their callsign; licence-free nodes are ignored |
 
 Only the buttons your browser supports are shown.
 
