@@ -100,7 +100,7 @@ describe("the fetch guard", () => {
 
   it("re-checks every redirect hop", async () => {
     vi.stubGlobal("fetch", async (u: RequestInfo | URL) =>
-      String(u).startsWith("https://peer.example")
+      new URL(String(u)).hostname === "peer.example"
         ? new Response(null, { status: 302, headers: { location: "http://127.0.0.1:9/admin" } })
         : new Response("internal"),
     );
@@ -109,7 +109,7 @@ describe("the fetch guard", () => {
 
   it("follows a redirect to another public address", async () => {
     vi.stubGlobal("fetch", async (u: RequestInfo | URL) =>
-      String(u).startsWith("https://peer.example")
+      new URL(String(u)).hostname === "peer.example"
         ? new Response(null, { status: 301, headers: { location: "https://mirror.example/x" } })
         : new Response("ok"),
     );
