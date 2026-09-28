@@ -89,4 +89,5 @@ nav:
       - Data model: reference/data-model.md
   - Design notes:
       - MeshCom integration: design/meshcom.md
+      - Logging finds over radio messages: design/radio-find-logging.md
   - About: about.md
