@@ -2,6 +2,7 @@
 import { decodeAx25 } from "@aprscaching/aprs";
 import { encodeFrame, decodeFrame, appendAxipCrc, stripAxipCrc, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
+import { PeerAllowlist, openListenerWarning, type Resolver } from "./peerfilter.js";
 
 /**
  * axip.ts — AXIP listener: AX.25 frames encapsulated directly in **IP protocol 93** (the JNOS/BPQ AXIP
@@ -26,6 +27,12 @@ export function stripIpv4Header(datagram: Uint8Array): Uint8Array | null {
   const ihl = (datagram[0]! & 0x0f) * 4; // header length (32-bit words → bytes)
   if (ihl < 20 || ihl > datagram.length) return null;
   return datagram.subarray(ihl);
+}
+
+/** PURE: the source address of a raw IPv4 datagram (its header's bytes 12–15), or null without a header. */
+export function ipv4Source(datagram: Uint8Array): string | null {
+  if (!stripIpv4Header(datagram)) return null;
+  return `${datagram[12]}.${datagram[13]}.${datagram[14]}.${datagram[15]}`;
 }
 
 /**
@@ -103,6 +110,7 @@ export class AxipListener {
   async start(): Promise<void> {
     const s = await openRawSocket();
     if (!s) return;
+    console.warn(openListenerWarning("axip", "AXIP_BIND", "AXIP_PEERS"));
     this.sock = s;
     s.on("message", (buf: unknown) => {
       const p = axipToPacket(Uint8Array.from(buf as Buffer));
@@ -127,23 +135,46 @@ export class AxipPort {
   private sock?: RawSocket;
   private rawCbs: ((b: Uint8Array) => void)[] = [];
   private frameCbs: ((f: Ax25Frame) => void)[] = [];
+  /** Only the configured peers' addresses may feed the node, BBS and ingest. */
+  readonly allowlist: PeerAllowlist;
   constructor(
-    private o: AxipOpts & { peers: AxipPeer[] },
+    private o: AxipOpts & { peers: AxipPeer[]; resolve?: Resolver; refreshMs?: number },
     private onPacket?: (p: Packet) => void,
-  ) {}
+  ) {
+    this.allowlist = new PeerAllowlist({
+      name: "axip",
+      hosts: o.peers.map((p) => p.host),
+      resolve: o.resolve,
+      refreshMs: o.refreshMs,
+    });
+  }
+
+  /** Datagrams refused because they came from a host that is not a configured peer. */
+  get dropped(): number {
+    return this.allowlist.dropped;
+  }
+
+  /**
+   * Handle one received raw datagram. The sender is read from the IPv4 header (raw proto-93 sockets
+   * include it), else from the address the socket reports.
+   */
+  receive(bytes: Uint8Array, source?: string): void {
+    if (!this.allowlist.allows(ipv4Source(bytes) ?? source)) return;
+    const body = stripAxipCrc(stripIpv4Header(bytes) ?? bytes); // connected-mode consumers want the bare frame
+    for (const cb of this.rawCbs) cb(body);
+    const f = decodeFrame(body);
+    if (f) for (const cb of this.frameCbs) cb(f);
+    const p = axipToPacket(bytes);
+    if (p && this.onPacket) this.onPacket(p);
+  }
 
   async start(): Promise<void> {
     const s = await openRawSocket();
     if (!s) return;
+    await this.allowlist.start();
     this.sock = s;
-    s.on("message", (buf: unknown) => {
-      const bytes = Uint8Array.from(buf as Buffer);
-      const body = stripAxipCrc(stripIpv4Header(bytes) ?? bytes); // connected-mode consumers want the bare frame
-      for (const cb of this.rawCbs) cb(body);
-      const f = decodeFrame(body);
-      if (f) for (const cb of this.frameCbs) cb(f);
-      const p = axipToPacket(bytes);
-      if (p && this.onPacket) this.onPacket(p);
+    s.on("message", (buf: unknown, source?: unknown) => {
+      this.receive(Uint8Array.from(buf as Buffer), typeof source === "string" ? source : undefined);
     });
     s.on("error", (e: unknown) => console.error("[axip] socket error:", (e as Error).message));
     console.log(

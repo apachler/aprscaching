@@ -25,7 +25,7 @@ unit-tested and identical to AXUDP's), and TAK/CoT output consumers. Weather (CW
 same APRS-IS protocol asserted above.
 
 The remaining headless-coverable paths — KISS TCP vs kernel AX.25, WA8DED hostmode vs tfkiss,
-AGWPE + AFSK vs Direwolf, AXIP vs ax25ipd, CoT vs FreeTAKServer, Meshtastic vs meshtasticd, the
+AGWPE + AFSK vs Direwolf, AXIP vs ax25ipd, Meshtastic vs meshtasticd, the
 full FBB mail exchange, and the browser GPLSL drivers under Node — are the transport-conformance
 program in [`TODO.md`](../../TODO.md); each leg landing updates this matrix.
 

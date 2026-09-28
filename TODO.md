@@ -114,8 +114,6 @@ nightly budget):**
 - [ ] **AXIP raw IP proto 93 vs ax25ipd** *(P2 · M)* — `ax25ipd` in `ip` mode as the partner, our
   `AxipPort` with the optional `raw-socket` dependency, CAP_NET_RAW on both containers. Completes
   the AXIP/AXUDP encapsulation pair against the reference bridge.
-- [ ] **TAK/CoT vs FreeTAKServer** *(P2 · M)* — the open TAK server feeds real CoT events at our
-  listener; asserts parse → normalise → `tak`-port ingest end-to-end.
 - [ ] **Meshtastic vs meshtasticd** *(P3 · L, experiment)* — the official Linux-native/simulated
   node as partner for the serial protobuf framing; accepted-risk attempt, falls back to the
   hardware validate-at-deploy entry if the simulated radio path proves unstable in CI.
@@ -537,7 +535,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   - **Permission required** — LinBPQ is proprietary freeware for amateur use with no
     redistribution grant: email John Wiseman G8BPQ for the binary-mirror OK; until then the image
     keeps download-at-build with the `LINBPQ_SHA256` pin.
-  - **Verify at leg time** — FreeTAKServer's licence, before its CoT leg lands.
   - **Package-registry tier** — a peer installable from an apt repository changes the calculus:
     `apt-get install` at CI image-build time makes the REPOSITORY the distributor, so no
     redistribution by us happens at all (LinBPQ via the community Hibbian repo,
@@ -548,7 +545,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
     (LinBPQ via Hibbian — native builds, which also retire the i386 multiarch shim in the
     Dockerfile; aprsc via aprsc-dist.he.fi; meshtasticd via the official Meshtastic repo) →
     source-bake only where nothing is packaged (TNN from the GitHub mirror with `-fcommon`,
-    JNOS, FreeTAKServer via pip). The linbpq image already prefers the Hibbian repo with the
+    JNOS). The linbpq image already prefers the Hibbian repo with the
     download-at-build as fallback, and the TNN/JNOS source fetches pin immutable commit
     archives (the commit hash is the version pin; the `*_SHA256` args stay operator
     overrides) — the remaining work is the GHCR image registry itself.
