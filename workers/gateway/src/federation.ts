@@ -136,14 +136,18 @@ interface FedKey {
   publicX: string;
   jwk: { kty: string; crv: string; x: string };
 }
-let keyCache: Promise<FedKey | null> | undefined;
+// Imported keys by their FED_PRIVATE_KEY value, so a key changed in config takes effect without a
+// restart and instances sharing one process (tests, a multi-instance host) each sign with their own.
+const keyCache = new Map<string, Promise<FedKey | null>>();
 /**
  * FED_PRIVATE_KEY is base64(JSON({ pkcs8, pub })) — see tools/fedkey/genkey.mjs. We import the
  * private key as PKCS8 (supported on both workerd and Node; the Ed25519 *private JWK* import is
  * not portable) and publish the raw public key (base64url) for consumers to verify.
  */
 function loadKey(env: Env): Promise<FedKey | null> {
-  if (keyCache) return keyCache;
+  const cacheKey = env.FED_PRIVATE_KEY ?? "";
+  const hit = keyCache.get(cacheKey);
+  if (hit) return hit;
   const p: Promise<FedKey | null> = (async () => {
     if (!env.FED_PRIVATE_KEY) return null; // legitimately unconfigured → a cacheable null
     const { pkcs8, pub } = JSON.parse(new TextDecoder().decode(fromB64(env.FED_PRIVATE_KEY)));
@@ -154,10 +158,10 @@ function loadKey(env: Env): Promise<FedKey | null> {
     // would make the instance silently serve unsigned feeds for its whole life. Log it and clear the
     // cache so the next call retries instead of sticking on the failure.
     console.error("federation signing key load failed (will retry):", (e as Error).message);
-    if (keyCache === p) keyCache = undefined;
+    if (keyCache.get(cacheKey) === p) keyCache.delete(cacheKey);
     return null;
   });
-  keyCache = p;
+  keyCache.set(cacheKey, p);
   return p;
 }
 /**
@@ -210,6 +214,120 @@ export function activeFedKeys(keys: FedPublicKey[], nowS: number): string[] {
       (k) => k && k.x && !k.revoked && (k.since == null || k.since <= nowS) && (k.until == null || k.until > nowS),
     )
     .map((k) => k.x);
+}
+
+/**
+ * An instance id is a lowercase hostname: dot-separated labels of letters, digits and inner
+ * hyphens, never a `:`. Global ids are namespaced `<instance>:…`, so an id containing a colon could
+ * claim a slice of another instance's namespace (`b.example:cache` owning `b.example:cache:*`).
+ */
+export function isInstanceId(s: unknown): s is string {
+  if (typeof s !== "string" || s.length === 0 || s.length > 253) return false;
+  // label by label, with a single-character class per label, so no input can backtrack
+  return s
+    .split(".")
+    .every(
+      (label) =>
+        label.length >= 1 &&
+        label.length <= 63 &&
+        /^[a-z0-9-]+$/.test(label) &&
+        !label.startsWith("-") &&
+        !label.endsWith("-"),
+    );
+}
+
+/** Days a rotated-away key keeps verifying when its history entry names no `until`. */
+export const DEFAULT_ROTATION_GRACE_DAYS = 7;
+const MAX_CLOCK_SKEW_S = 300;
+
+/** One key a peer's frames may verify under: the pin (no `until`), or a predecessor until its cutoff. */
+export interface AcceptKey {
+  x: string;
+  until?: number;
+}
+
+/** The accept-set keys usable at `nowS`: the pin, plus predecessors whose cutoff has not passed. */
+export function usableKeys(accept: AcceptKey[], nowS: number): string[] {
+  return accept.filter((k) => k.until == null || k.until > nowS).map((k) => k.x);
+}
+
+/** Parse a stored accept set (fed_peers.accept_keys), tolerating a missing or malformed column. */
+export function parseAcceptKeys(s: string | null | undefined): AcceptKey[] {
+  return parseJsonArray<AcceptKey>(s ?? undefined).filter((k) => k && typeof k.x === "string" && k.x);
+}
+
+export type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKey[] } | { ok: false; reason: string };
+
+/**
+ * Decide which keys a peer's frames verify under, from its descriptor and what we stored before.
+ *
+ * - The pin moves only to a key the old pin reaches through verified rotation records (each new key
+ *   signed by its predecessor). Being merely listed in `publicKeys` proves nothing: anyone who can
+ *   edit the descriptor can list a key.
+ * - A published key other than the current one is accepted only as a proven predecessor: a
+ *   verified rotation chain leads from it to the current key. Its cutoff is its published `until`,
+ *   else the rotation time plus the grace.
+ * - Revocation is successor-only and sticky: once a key has been rotated away from, its cutoff never
+ *   moves later, so a later descriptor cannot revive it, and a rotated-away key never becomes the pin.
+ */
+export async function resolvePeerKeys(opts: {
+  pinned: string | null;
+  current: string | null;
+  published: FedPublicKey[];
+  rotations: RotationRecord[] | undefined;
+  prior: AcceptKey[];
+  nowS: number;
+  graceDays?: number;
+}): Promise<PeerKeyResolution> {
+  const { pinned, current, nowS } = opts;
+  if (!current) return pinned ? { ok: false, reason: "regressed to unsigned" } : { ok: true, pin: null, accept: [] };
+  const grace = (opts.graceDays ?? DEFAULT_ROTATION_GRACE_DAYS) * 86400;
+
+  const edges: RotationRecord[] = [];
+  for (const r of opts.rotations ?? [])
+    if (Number.isInteger(r?.at) && r.at <= nowS + MAX_CLOCK_SKEW_S && (await verifyRotationRecord(r))) edges.push(r);
+  const reach = (from: string): Set<string> => {
+    const seen = new Set([from]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const e of edges)
+        if (seen.has(e.prevKey) && !seen.has(e.key)) {
+          seen.add(e.key);
+          grew = true;
+        }
+    }
+    return seen;
+  };
+  const rotatedAwayAt = (x: string): number | null => {
+    const ats = edges.filter((e) => e.prevKey === x && e.key !== x).map((e) => e.at);
+    return ats.length ? Math.min(...ats) : null;
+  };
+
+  const priorUntil = new Map<string, number>();
+  for (const k of opts.prior) if (k.until != null) priorUntil.set(k.x, k.until);
+  if (priorUntil.has(current) || rotatedAwayAt(current) != null)
+    return { ok: false, reason: "current key has been rotated away from" };
+  if (pinned && pinned !== current && !reach(pinned).has(current))
+    return { ok: false, reason: "key changed without a valid rotation proof" };
+
+  const accept: AcceptKey[] = [{ x: current }];
+  const listed = new Set([current]);
+  for (const k of opts.published) {
+    if (!k?.x || listed.has(k.x) || k.revoked) continue;
+    const away = rotatedAwayAt(k.x);
+    if (away == null || !reach(k.x).has(current)) continue; // not a proven predecessor of the current key
+    let until = typeof k.until === "number" ? k.until : away + grace;
+    const was = priorUntil.get(k.x);
+    if (was != null) until = Math.min(until, was);
+    accept.push({ x: k.x, until });
+    listed.add(k.x);
+  }
+  // keep every past cutoff, including expired ones, so the revocation outlives the descriptor
+  for (const [x, until] of priorUntil) if (!listed.has(x)) accept.push({ x, until: Math.min(until, nowS) });
+  // the old pin, if rotated away and no longer published, is revoked from now on
+  if (pinned && pinned !== current && !listed.has(pinned) && !priorUntil.has(pinned))
+    accept.push({ x: pinned, until: nowS });
+  return { ok: true, pin: current, accept };
 }
 
 /** Import a peer's ACTIVE published keys (falling back to a legacy single `publicKey`) for verifying its feed. */
@@ -278,9 +396,11 @@ async function registryToMap(doc: SignedRegistry, key: string): Promise<Map<stri
 }
 
 /**
- * Parse a federation-registry DNS `TXT` record (pure) — a `k=v;k=v` string that anchors the signed
- * registry off DNS instead of an env var: `url=<https URL to the signed registry JSON>; key=<authority
- * base64url>`. Later keys win; unknown tokens ignored. Returns `{}` when neither field is present.
+ * Parse a federation-registry DNS `TXT` record (pure) — a `k=v;k=v` string that says where the
+ * signed registry lives: `url=<https URL to the signed registry JSON>`. A `key=` token is parsed but
+ * never trusted: the authority key is pinned in FED_REGISTRY_KEY, because whoever can change a TXT
+ * record must not be able to choose the key that signs the registry. Later keys win; unknown tokens
+ * are ignored. Returns `{}` when neither field is present.
  */
 export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
   const out: { url?: string; key?: string } = {};
@@ -295,49 +415,126 @@ export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
   return out;
 }
 
-/** Fetch the registry via a DNS `TXT` anchor: DoH-resolve FED_REGISTRY_DNS, follow its url+key. */
-async function registryFromDns(env: Env): Promise<Map<string, RegistryEntry>> {
-  const name = env.FED_REGISTRY_DNS;
-  if (!name) return new Map();
+/** A registry that cannot be trusted as configured: federation refuses to guess instead. */
+export class RegistryConfigError extends Error {}
+
+/**
+ * Registry settings that would make the registry unverifiable, or null when they are sound. A
+ * registry is only as strong as its authority key, so the key is always pinned in config: DNS
+ * (FED_REGISTRY_DNS) locates the document, it never supplies the key. Node and Bun refuse to start
+ * with such a setting; on Workers every registry lookup fails closed.
+ */
+export function federationConfigError(env: Env): string | null {
+  if (env.FED_REGISTRY_DNS && !env.FED_REGISTRY_KEY)
+    return "FED_REGISTRY_DNS is set without FED_REGISTRY_KEY: DNS only locates the registry, its authority key must be pinned in FED_REGISTRY_KEY";
+  if (env.FED_REGISTRY && !env.FED_REGISTRY_KEY)
+    return "FED_REGISTRY is set without FED_REGISTRY_KEY: the registry cannot be verified";
+  return null;
+}
+
+const REGISTRY_TTL_MS = 5 * 60_000;
+const registryCache = new WeakMap<object, { exp: number; map: Map<string, RegistryEntry> }>();
+
+interface RegistryState {
+  max_at: number;
+  doc: string;
+}
+
+async function registryState(env: Env, authority: string): Promise<RegistryState | null> {
+  try {
+    return await env.DB.prepare("SELECT max_at, doc FROM fed_registry_state WHERE authority_key = ?")
+      .bind(authority)
+      .first<RegistryState>();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the registry located by the FED_REGISTRY_DNS `TXT` record and verify it under the pinned
+ * FED_REGISTRY_KEY. A document older than the newest one already accepted is a replay and is
+ * refused. When no fresh document can be had (DoH, fetch, parse, signature or age failure), the last
+ * good document keeps binding the instances it registered, so an outage never drops a registered
+ * instance back to trust-on-first-use.
+ */
+async function registryFromDns(env: Env, name: string, authority: string): Promise<Map<string, RegistryEntry>> {
+  const stored = await registryState(env, authority);
   try {
     const doh = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=TXT`, {
       headers: { accept: "application/dns-json" },
       signal: AbortSignal.timeout(3000),
     });
-    if (!doh.ok) return new Map();
-    const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
-    for (const a of answers) {
-      const { url, key } = parseRegistryTxt(a.data);
-      if (!url || !key) continue;
-      const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (!r.ok) continue;
-      const map = await registryToMap((await r.json()) as SignedRegistry, key);
-      if (map.size) return map;
+    if (doh.ok) {
+      const answers = ((await doh.json()) as { Answer?: { data: string }[] }).Answer ?? [];
+      for (const a of answers) {
+        const { url } = parseRegistryTxt(a.data);
+        if (!url) continue;
+        const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+        if (!r.ok) continue;
+        const doc = (await r.json()) as SignedRegistry;
+        const at = Number.isInteger(doc?.at) ? (doc.at as number) : 0;
+        if (stored && at < stored.max_at) continue; // a replayed older registry
+        const map = await registryToMap(doc, authority);
+        if (!map.size) continue;
+        await env.DB.prepare(
+          `INSERT INTO fed_registry_state (authority_key, max_at, doc, fetched_at) VALUES (?,?,?,?)
+           ON CONFLICT(authority_key) DO UPDATE SET max_at = excluded.max_at, doc = excluded.doc,
+             fetched_at = excluded.fetched_at WHERE excluded.max_at >= fed_registry_state.max_at`,
+        )
+          .bind(authority, at, JSON.stringify(doc), Math.floor(Date.now() / 1000))
+          .run()
+          .catch(() => {});
+        return map;
+      }
     }
   } catch {
-    /* DoH / fetch / parse failure → no registry */
+    /* unreachable or malformed: fall back to the last good document below */
+  }
+  if (stored) {
+    try {
+      return await registryToMap(JSON.parse(stored.doc) as SignedRegistry, authority);
+    } catch {
+      /* a corrupt stored document binds nothing */
+    }
   }
   return new Map();
 }
 
-/** Load + verify the federation registry → instance→entry map. Source: FED_REGISTRY env, else a DNS TXT
- *  anchor (FED_REGISTRY_DNS). Empty when absent/invalid/forged. */
+/**
+ * Load + verify the federation registry → instance→entry map. Source: FED_REGISTRY (a document in
+ * config) or, failing that, the DNS-located FED_REGISTRY_DNS; both verify under FED_REGISTRY_KEY.
+ * Empty when no registry is configured. Throws {@link RegistryConfigError} when the configuration
+ * cannot be trusted (no pinned key, or a configured document that does not verify).
+ */
 export async function loadRegistry(env: Env): Promise<Map<string, RegistryEntry>> {
-  if (env.FED_REGISTRY && env.FED_REGISTRY_KEY) {
+  const err = federationConfigError(env);
+  if (err) throw new RegistryConfigError(err);
+  const authority = env.FED_REGISTRY_KEY;
+  if (env.FED_REGISTRY && authority) {
+    let doc: SignedRegistry;
     try {
-      return await registryToMap(JSON.parse(env.FED_REGISTRY) as SignedRegistry, env.FED_REGISTRY_KEY);
+      doc = JSON.parse(env.FED_REGISTRY) as SignedRegistry;
     } catch {
-      return new Map();
+      throw new RegistryConfigError("FED_REGISTRY is not valid JSON");
     }
+    if (!(await verifyRegistry(doc, authority)))
+      throw new RegistryConfigError("FED_REGISTRY does not verify under FED_REGISTRY_KEY");
+    return registryToMap(doc, authority);
   }
-  return registryFromDns(env);
+  if (!env.FED_REGISTRY_DNS || !authority) return new Map();
+  const hit = registryCache.get(env);
+  if (hit && hit.exp > Date.now()) return hit.map;
+  const map = await registryFromDns(env, env.FED_REGISTRY_DNS, authority);
+  registryCache.set(env, { exp: Date.now() + REGISTRY_TTL_MS, map });
+  return map;
 }
 
-/** Anti-spoof (pure): if the registry binds this instance to a key, its published keys MUST
- *  include it; an unregistered instance (or one with no bound key) falls back to TOFU. */
-export function registryKeyAllowed(entry: RegistryEntry | undefined, activeKeyStrings: string[]): boolean {
+/** Anti-spoof (pure): when the registry binds this instance to a key, the peer's current key MUST be
+ *  that key — listing it next to another key proves nothing. An unregistered instance (or one with
+ *  no bound key) falls back to trust-on-first-use. */
+export function registryKeyAllowed(entry: RegistryEntry | undefined, currentKey: string | null): boolean {
   if (!entry || !entry.key) return true;
-  return activeKeyStrings.includes(entry.key);
+  return entry.key === currentKey;
 }
 
 /** This instance's own registry self-attestation (what it publishes about itself). */
@@ -356,11 +553,21 @@ export async function selfRegistryEntry(env: Env, instance: string): Promise<Reg
 /** Endpoint: this instance's verified view of the network registry + its own self-entry (transparency). */
 export async function handleFederationRegistry(req: Request, env: Env): Promise<Response> {
   const instance = instanceOf(req, env);
-  const reg = await loadRegistry(env);
+  let reg: Map<string, RegistryEntry>;
+  try {
+    reg = await loadRegistry(env);
+  } catch (e) {
+    return json({
+      self: await selfRegistryEntry(env, instance),
+      entries: [],
+      verified: false,
+      error: (e as Error).message,
+    });
+  }
   return json({
     self: await selfRegistryEntry(env, instance),
     entries: [...reg.values()],
-    verified: reg.size > 0 || !env.FED_REGISTRY,
+    verified: reg.size > 0 || !(env.FED_REGISTRY || env.FED_REGISTRY_DNS),
   });
 }
 

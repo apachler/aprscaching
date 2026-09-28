@@ -34,3 +34,31 @@ describe("id namespace ownership", () => {
     expect(idInNamespace("", "oe.peer.net")).toBe(false);
   });
 });
+
+describe("isInstanceId", () => {
+  it("accepts lowercase hostnames and refuses anything that could claim another namespace", async () => {
+    const { isInstanceId } = await import("../src/federation.js");
+    for (const ok of ["oe.pub", "a.example", "x-1.b2.example", "localhost"]) expect(isInstanceId(ok)).toBe(true);
+    for (const bad of [
+      "b.example:cache",
+      "",
+      "A.example",
+      "-a.example",
+      "a-.example",
+      "a..example",
+      "a.example.",
+      "a b",
+      7,
+    ])
+      expect(isInstanceId(bad)).toBe(false);
+    expect(isInstanceId("a".repeat(64))).toBe(false);
+    expect(isInstanceId(`${"a".repeat(60)}.`.repeat(5))).toBe(false);
+  });
+
+  it("answers in linear time on long adversarial input", async () => {
+    const { isInstanceId } = await import("../src/federation.js");
+    const t = Date.now();
+    for (let i = 0; i < 1000; i++) isInstanceId("a-".repeat(126) + "!");
+    expect(Date.now() - t).toBeLessThan(500);
+  });
+});

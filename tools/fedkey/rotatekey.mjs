@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Rotate an instance's federation signing key (T4.1). Given the CURRENT FED_PRIVATE_KEY, mint a NEW
+// Rotate an instance's federation signing key. Given the CURRENT FED_PRIVATE_KEY, mint a NEW
 // signing key plus the continuity artifacts so peers keep verifying across the rotation:
 //   • FED_PRIVATE_KEY — the NEW signing key (set this; retire the old one)
-//   • FED_KEY_HISTORY — publishes the OLD public key (in-flight consumers still verify old-signed feeds)
+//   • FED_KEY_HISTORY — publishes the OLD public key with an `until`: frames it signed (still in
+//                       flight on store-and-forward carriers) verify until then, never after
 //   • FED_ROTATIONS   — the rotation record: the new key signed by the OLD key (continuity proof)
 //
 //   FED_PRIVATE_KEY="$OLD" node tools/fedkey/rotatekey.mjs
+//   FED_PRIVATE_KEY="$OLD" FED_ROTATION_GRACE_DAYS=2 node tools/fedkey/rotatekey.mjs   (grace, default 7)
 //
-// To REVOKE a leaked key instead, drop it from history with revoked:true, e.g.
+// Peers treat a rotated-away key as revoked once its grace has passed, whatever a later descriptor
+// says. To drop a LEAKED key at once, publish it with revoked:true, e.g.
 //   FED_KEY_HISTORY='[{"x":"<leaked-pub>","revoked":true}]'  — consumers then reject its signatures.
 
 const old = process.env.FED_PRIVATE_KEY;
@@ -45,7 +48,12 @@ const sig = Buffer.from(
   ),
 ).toString("base64url");
 
-const history = [{ x: oldPub, since: at }];
+const graceDays = Number(process.env.FED_ROTATION_GRACE_DAYS ?? 7);
+if (!Number.isFinite(graceDays) || graceDays < 0) {
+  console.error("FED_ROTATION_GRACE_DAYS must be a non-negative number of days");
+  process.exit(1);
+}
+const history = [{ x: oldPub, until: at + Math.round(graceDays * 86400) }];
 const rotations = [{ key: newPub, prevKey: oldPub, at, sig }];
 
 if (process.argv.includes("--raw")) {

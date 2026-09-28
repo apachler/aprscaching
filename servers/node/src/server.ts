@@ -16,6 +16,7 @@ import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { WebSocketServer } from "ws";
 import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
+import { federationConfigError } from "@aprscaching/gateway/federation";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
@@ -37,6 +38,14 @@ if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
       "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
       "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
   );
+  process.exit(1);
+}
+
+// Boot guard: a registry whose authority key is not pinned cannot be verified, and federation
+// would otherwise run on whatever DNS says. Refuse to start instead of failing open.
+const fedConfigError = federationConfigError(process.env as unknown as Env);
+if (fedConfigError) {
+  console.error(`FATAL: ${fedConfigError}`);
   process.exit(1);
 }
 

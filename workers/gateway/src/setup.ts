@@ -13,6 +13,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { sessionCallsign, weakSecret } from "./auth.js";
+import { federationConfigError } from "./federation.js";
 
 export interface SetupItem {
   /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
@@ -131,6 +132,17 @@ function envItems(env: Env): SetupItem[] {
       ? "set — feeds are signed"
       : "unset — feeds serve unsigned and peers won't mirror them (generate: node tools/fedkey/genkey.mjs)",
   });
+  if (env.FED_REGISTRY || env.FED_REGISTRY_DNS) {
+    const err = federationConfigError(env);
+    push({
+      key: "FED_REGISTRY_KEY",
+      label: "Registry authority key",
+      group: "trust",
+      status: err ? "missing" : "ok",
+      source: "env",
+      detail: err ?? "pinned — the registry verifies under it; DNS only locates the document",
+    });
+  }
 
   // ---- legal — the public instance's obligations
   {

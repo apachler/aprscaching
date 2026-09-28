@@ -18,7 +18,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
-import { activeFedKeys, type FedPublicKey } from "./federation.js";
+import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
 
 const DEFAULT_DOH = "https://cloudflare-dns.com/dns-query";
 const RESOLVE_TIMEOUT_MS = 5000;
@@ -140,6 +140,20 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
     return json({ requiresConfirm: true, resolved, descriptorChecked: desc.checked });
   }
 
+  // the instance id binds to one live peer row: never rename a known row, never share an id
+  if (!isInstanceId(resolved.instance))
+    return json({ error: "44net descriptor names an invalid instance id", resolved }, { status: 409 });
+  const bound = await env.DB.prepare(
+    "SELECT url, instance FROM fed_peers WHERE (url = ? AND instance IS NOT NULL AND instance != ?) OR (url != ? AND instance = ? AND trust != 'blocked')",
+  )
+    .bind(url, resolved.instance, url, resolved.instance)
+    .first<{ url: string; instance: string }>();
+  if (bound)
+    return json(
+      { error: `instance binding conflict with ${bound.url} (${bound.instance}) — block or remove it first`, resolved },
+      { status: 409 },
+    );
+
   const endpoints = JSON.stringify([
     { transport: "44net", address: resolved.host, priority: 10, verifiedVia: "ardc-lot" },
   ]);
@@ -147,7 +161,7 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
     `INSERT INTO fed_peers (url, instance, public_key, trust, added_via, verified_via, endpoints, approved_at)
      VALUES (?,?,?, 'unvetted', '44net', 'ardc-lot', ?, ?)
      ON CONFLICT(url) DO UPDATE SET
-       instance     = excluded.instance,
+       instance     = COALESCE(fed_peers.instance, excluded.instance),
        public_key   = COALESCE(fed_peers.public_key, excluded.public_key),
        verified_via = 'ardc-lot',
        endpoints    = excluded.endpoints,

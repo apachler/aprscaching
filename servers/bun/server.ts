@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
+import { federationConfigError } from "@aprscaching/gateway/federation";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
 import { BunDb } from "./d1.ts";
@@ -37,6 +38,14 @@ if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
       "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
       "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
   );
+  process.exit(1);
+}
+
+// Boot guard: a registry whose authority key is not pinned cannot be verified, and federation
+// would otherwise run on whatever DNS says. Refuse to start instead of failing open.
+const fedConfigError = federationConfigError(process.env as unknown as Env);
+if (fedConfigError) {
+  console.error(`FATAL: ${fedConfigError}`);
   process.exit(1);
 }
 function gitHead(): string | undefined {
