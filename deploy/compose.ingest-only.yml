@@ -15,6 +15,10 @@ services:
     build: { context: .., dockerfile: deploy/Dockerfile }
     image: aprscaching:local
     command: ["pnpm", "--filter", "@aprscaching/ingest", "start"]
+    # Every RF transport setting in .env reaches the ingest (KISS_TNC_HOST, IGATE_*, MESH_*, …).
+    env_file:
+      - path: .env
+        required: false
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}
