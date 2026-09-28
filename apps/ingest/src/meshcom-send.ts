@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * Opt-in outbound text to a MeshCom node over ExtUDP, for LoRa transmission.
+ *
+ * Off unless the operator enables it and names their own callsign, which must be the call the target
+ * node transmits under: the node sends every message as itself, so software can only ever transmit under
+ * the licensed operator's call. Direct messages to a callsign only (the encoder refuses groups and `*`),
+ * only to configured node addresses, through a conservative token bucket because LoRa airtime is shared.
+ * Every attempt is audited without its text. ExtUDP has no acknowledgement, so the best outcome is
+ * "handed to node" — never "delivered"; the node reports refusals (QRS/QRT) back on the listener.
+ *
+ * Node and Bun only — never in the Worker bundle (tools/checks/worker-bundle.mjs).
+ */
+import dgram from "node:dgram";
+import { appendFile } from "node:fs/promises";
+import { encodeMeshcomText, type MeshcomEncodeReason } from "@aprscaching/aprs";
+import { MESHCOM_PORT, type MeshcomNode } from "./meshcom.js";
+
+export interface MeshcomSenderOpts {
+  enabled: boolean;
+  /** The licensed operator's callsign; must match the target node's call (base call, any SSID). */
+  operatorCall?: string;
+  nodes: MeshcomNode[];
+  /** Sustained sends per minute (default 1) and burst (default 3). */
+  perMinute?: number;
+  burst?: number;
+  /** JSON-lines audit file; unset = audit to the log only. */
+  auditPath?: string;
+  port?: number;
+}
+
+export interface MeshcomSendRequest {
+  dst: string;
+  text: string;
+  /** The feature asking to transmit, recorded in the audit trail. */
+  feature: string;
+  /** Node address; defaults to the first configured node. */
+  node?: string;
+}
+
+export type MeshcomSendRefusal =
+  | "disabled"
+  | "no-operator-call"
+  | "node-not-allowlisted"
+  | "node-call-unknown"
+  | "call-mismatch"
+  | "rate-limited"
+  | "socket-error"
+  | MeshcomEncodeReason;
+
+export type MeshcomSendOutcome =
+  | { ok: true; status: "handed-to-node"; node: string; dst: string; bytes: number }
+  | { ok: false; reason: MeshcomSendRefusal };
+
+export interface MeshcomAuditEntry {
+  at: string;
+  feature: string;
+  node: string | null;
+  dst: string;
+  bytes: number | null;
+  outcome: string;
+}
+
+type SendFn = (datagram: string, port: number, host: string) => Promise<void>;
+
+const baseCall = (c: string) => c.trim().toUpperCase().split("-")[0]!;
+
+export class MeshcomSender {
+  private tokens: number;
+  private at: number;
+  private sock?: dgram.Socket;
+
+  constructor(
+    private o: MeshcomSenderOpts,
+    private deps: {
+      now?: () => number;
+      send?: SendFn;
+      audit?: (e: MeshcomAuditEntry) => Promise<void> | void;
+    } = {},
+  ) {
+    this.tokens = o.burst ?? 3;
+    this.at = this.now();
+  }
+
+  private now() {
+    return this.deps.now?.() ?? Date.now();
+  }
+
+  private take(): boolean {
+    const burst = this.o.burst ?? 3;
+    const perMs = (this.o.perMinute ?? 1) / 60_000;
+    const now = this.now();
+    this.tokens = Math.min(burst, this.tokens + (now - this.at) * perMs);
+    this.at = now;
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
+
+  private async audit(req: MeshcomSendRequest, node: string | null, bytes: number | null, outcome: string) {
+    const entry: MeshcomAuditEntry = {
+      at: new Date(this.now()).toISOString(),
+      feature: req.feature,
+      node,
+      dst: req.dst,
+      bytes,
+      outcome,
+    };
+    if (this.deps.audit) return this.deps.audit(entry);
+    console.log(`[meshcom] tx ${JSON.stringify(entry)}`);
+    if (this.o.auditPath) await appendFile(this.o.auditPath, JSON.stringify(entry) + "\n").catch(() => {});
+  }
+
+  private sendDatagram: SendFn = (datagram, port, host) => {
+    if (this.deps.send) return this.deps.send(datagram, port, host);
+    this.sock ??= dgram.createSocket("udp4");
+    const sock = this.sock;
+    return new Promise((resolve, reject) => sock.send(datagram, port, host, (e) => (e ? reject(e) : resolve())));
+  };
+
+  async send(req: MeshcomSendRequest): Promise<MeshcomSendOutcome> {
+    const refuse = async (reason: MeshcomSendRefusal, node: string | null = null, bytes: number | null = null) => {
+      await this.audit(req, node, bytes, reason);
+      return { ok: false as const, reason };
+    };
+    if (!this.o.enabled) return refuse("disabled");
+    if (!this.o.operatorCall) return refuse("no-operator-call");
+    const node = req.node ? this.o.nodes.find((n) => n.ip === req.node) : this.o.nodes[0];
+    if (!node) return refuse("node-not-allowlisted", req.node ?? null);
+    if (!node.call) return refuse("node-call-unknown", node.ip);
+    if (baseCall(node.call) !== baseCall(this.o.operatorCall)) return refuse("call-mismatch", node.ip);
+
+    const enc = encodeMeshcomText(req.dst, req.text);
+    if (!enc.ok) return refuse(enc.reason, node.ip);
+    if (!this.take()) return refuse("rate-limited", node.ip, enc.bytes);
+
+    try {
+      await this.sendDatagram(enc.datagram, this.o.port ?? MESHCOM_PORT, node.ip);
+    } catch {
+      return refuse("socket-error", node.ip, enc.bytes);
+    }
+    await this.audit(req, node.ip, enc.bytes, "handed-to-node");
+    return { ok: true, status: "handed-to-node", node: node.ip, dst: enc.dst, bytes: enc.bytes };
+  }
+
+  close(): void {
+    try {
+      this.sock?.close();
+    } catch {
+      // already closed
+    }
+    this.sock = undefined;
+  }
+}
