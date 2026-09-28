@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Per-callsign device key (F0): an Ed25519 keypair held in the browser. The public key is
+// Per-callsign device key: an Ed25519 keypair held in the browser. The public key is
 // registered to the callsign; finds are signed with the private key so authorship is portable and
 // verifiable network-wide. Best-effort: on a browser without Ed25519 WebCrypto, signing is skipped
 // and the find is simply logged unsigned.
@@ -9,6 +9,7 @@ import {
   ingestMessage,
   sha256Hex,
   stableStringify,
+  SIG_DOMAIN,
   type Authorship,
 } from "@aprscaching/shared";
 
@@ -151,7 +152,7 @@ export async function signIngest(callsign: string, packets: unknown[]): Promise<
     const sig = await crypto.subtle.sign(
       "Ed25519",
       priv,
-      new TextEncoder().encode(ingestMessage({ callsign, at, count: packets.length, digest })),
+      new TextEncoder().encode(SIG_DOMAIN.ingest + ingestMessage({ callsign, at, count: packets.length, digest })),
     );
     return {
       "x-acs-callsign": callsign.toUpperCase(),

@@ -55,7 +55,8 @@ const priv = await crypto.subtle.importKey("pkcs8", Buffer.from(pkcs8, "base64")
 
 const at = Math.floor(Date.now() / 1000);
 const sig = Buffer.from(
-  await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(stableStringify({ at, entries }))),
+  // domain-prefixed (acs-reg/1) so the signature can't be presented as any other signed document
+  await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode("acs-reg/1\n" + stableStringify({ at, entries }))),
 ).toString("base64url");
 const doc = { entries, at, sig, signer: pub };
 

@@ -28,6 +28,8 @@ import {
   verifyRotationRecord,
   type RotationRecord,
   type RegistryEntry,
+  importVerifyKey,
+  fromB64,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
@@ -37,6 +39,7 @@ import { decodeFedSyncPage, encodeFedSyncPage, buildFedFrames, bodyFromWire } fr
 import { answerRelayQuery, feedSource, parseRelayQuery } from "./relay.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import {
+  accountActionMessage,
   validEndpointAddress,
   decodeFedFrame,
   decodeFedBbsBatch,
@@ -669,30 +672,80 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
   await env.DB.batch([
     env.DB.prepare("DELETE FROM remote_caches WHERE global_id = ?").bind(target),
     env.DB.prepare("DELETE FROM remote_finds WHERE global_id = ?").bind(target),
+    env.DB.prepare("DELETE FROM remote_keys WHERE global_id = ?").bind(target),
+    env.DB.prepare("DELETE FROM remote_account_moves WHERE global_id = ?").bind(target),
     env.DB.prepare(
       "INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)",
     ).bind(target, origin, d.kind ?? "unknown", d.ts ?? now(), now()),
   ]);
 }
 
-/** Apply a peer's account-move: record the callsign's latest known home, last-writer by ts. */
+/**
+ * Apply a peer's account-move: record the callsign's latest known home. A peer may
+ * only assert a move TO itself, and only with the mover's proof: the device-key assertion the mover
+ * signed for that instance, under a key this instance knows for the callsign independently of the
+ * claimant (its own registrations, or a verified key from a trusted peer). A move without such a proof
+ * is refused, so no instance — alone or with an accomplice — can claim an account. Moves are ordered by
+ * the proof's signing time, so an old proof re-announced later changes nothing.
+ */
 async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string): Promise<void> {
-  const d = rec.data as { callsign?: string; fromInstance?: string | null; toInstance?: string; ts?: number };
-  if (!d.callsign || !d.toInstance) return;
-  // a peer may only assert a move TO itself — otherwise any peer redirects any callsign to
-  // any instance. And a far-future ts (e.g. 2^40) would freeze the pointer forever, so clamp it.
-  if (d.toInstance !== origin) return;
+  const d = rec.data as {
+    callsign?: string;
+    fromInstance?: string | null;
+    toInstance?: string;
+    ts?: number;
+    proofKey?: string;
+    proofSig?: string;
+    proofAt?: number;
+  };
+  if (!d.callsign || !d.toInstance) throw new Error("account move without callsign or target");
+  // a peer may only assert a move TO itself — otherwise any peer redirects any callsign to any
+  // instance. And a far-future ts (e.g. 2^40) would freeze the pointer forever, so clamp it.
+  if (d.toInstance !== origin) throw new Error("account move to another instance");
+  const cs = d.callsign.toUpperCase();
+  if (!(await moveProofValid(env, cs, origin, d))) throw new Error("account move without a verifiable proof");
   const ts = Math.min(Number(d.ts) || 0, now() + 300);
   await env.DB.prepare(
-    `INSERT INTO remote_account_moves (callsign, from_instance, to_instance, ts, origin, mirrored_at)
-     VALUES (?,?,?,?,?,?)
+    // ordered by the proof's signing time, which the announcing instance cannot choose
+    `INSERT INTO remote_account_moves (callsign, from_instance, to_instance, ts, origin, mirrored_at, global_id, proof_at)
+     VALUES (?,?,?,?,?,?,?,?)
      ON CONFLICT(callsign) DO UPDATE SET
-       from_instance = excluded.from_instance, to_instance = excluded.to_instance,
-       ts = excluded.ts, origin = excluded.origin, mirrored_at = excluded.mirrored_at
-     WHERE excluded.ts >= remote_account_moves.ts`,
+       from_instance = excluded.from_instance, to_instance = excluded.to_instance, ts = excluded.ts,
+       origin = excluded.origin, mirrored_at = excluded.mirrored_at, global_id = excluded.global_id,
+       proof_at = excluded.proof_at
+     WHERE excluded.proof_at > COALESCE(remote_account_moves.proof_at, -1)`,
   )
-    .bind(d.callsign.toUpperCase(), d.fromInstance ?? null, d.toInstance, ts, origin, now())
+    .bind(cs, d.fromInstance ?? null, d.toInstance, ts, origin, now(), rec.id, d.proofAt as number)
     .run();
+}
+
+/** Does a move carry the mover's signed assertion, under a key known here independently of `origin`? */
+async function moveProofValid(
+  env: Env,
+  callsign: string,
+  origin: string,
+  d: { proofKey?: string; proofSig?: string; proofAt?: number },
+): Promise<boolean> {
+  if (typeof d.proofKey !== "string" || typeof d.proofSig !== "string" || !Number.isInteger(d.proofAt)) return false;
+  // a key registered here, or a verified key a TRUSTED peer (other than the claimant) published — an
+  // unvetted peer's key record costs nothing to make, so it vouches for nothing
+  const known = await env.DB.prepare(
+    `SELECT 1 AS x FROM callsign_keys WHERE callsign = ? AND public_key = ?
+     UNION ALL SELECT 1 FROM remote_keys rk
+       WHERE rk.callsign = ? AND rk.public_key = ? AND rk.origin != ? AND rk.verified = 1
+         AND EXISTS (SELECT 1 FROM fed_peers fp WHERE fp.instance = rk.origin AND fp.trust = 'trusted')`,
+  )
+    .bind(callsign, d.proofKey, callsign, d.proofKey, origin)
+    .first();
+  if (!known) return false;
+  try {
+    const msg = new TextEncoder().encode(
+      accountActionMessage({ action: "migrate", callsign, instance: origin, at: d.proofAt as number }),
+    );
+    return await crypto.subtle.verify("Ed25519", await importVerifyKey(d.proofKey), fromB64(d.proofSig), msg);
+  } catch {
+    return false;
+  }
 }
 
 async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promise<void> {

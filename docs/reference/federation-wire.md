@@ -266,7 +266,10 @@ _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw 
 `POST /federation/peers/44net { callsign }` (sysop-only) resolves that TXT over DNS-over-HTTPS
 (`DOH_URL`, default Cloudflare) and cross-checks the peer's live descriptor when reachable:
 
-- **DNSSEC-validated** (the resolver's AD flag) → the peer is admitted automatically.
+- **DNSSEC-validated** (the resolver's AD flag) → the peer is admitted automatically. The gateway
+  does not validate DNSSEC itself: it trusts the AD flag of the DoH resolver it asks, which makes that
+  resolver (`DOH_URL`) a trusted party for automatic admission. Point `DOH_URL` only at a validating
+  resolver you trust; the admitted peer still starts `unvetted`.
 - **No DNSSEC** → the response returns the resolved binding and the operator confirms once
   (trust-on-first-use); `confirm: true` pins it.
 - A descriptor that **contradicts** the DNS binding is refused outright.

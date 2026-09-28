@@ -44,7 +44,8 @@ const sig = Buffer.from(
   await crypto.subtle.sign(
     "Ed25519",
     oldPriv,
-    new TextEncoder().encode(stableStringify({ key: newPub, prevKey: oldPub, at })),
+    // domain-prefixed (acs-rot/1) so the signature can't be presented as any other signed document
+    new TextEncoder().encode("acs-rot/1\n" + stableStringify({ key: newPub, prevKey: oldPub, at })),
   ),
 ).toString("base64url");
 
