@@ -208,9 +208,11 @@ describe("rotated-away keys are revoked after their grace, on every carrier", ()
     const { at, a, oldSigner, routes, hub } = await rotatedPeer((k1, at) => [{ x: k1, since: at }]);
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime((at + DAY) * 1000);
+    await addCache(a, at + 100); // a record the hub has not seen yet
     expect((await applyFedFrames(hub, await servedFrames(oldSigner))).applied).toBe(1); // within grace
 
     vi.setSystemTime((at + 8 * DAY) * 1000);
+    await addCache(a, at + 200);
     expect((await applyFedFrames(hub, await servedFrames(oldSigner))).applied).toBe(0); // BBS / beacon / circuit
     await addCache(a, 7777);
     routes[A] = splitServe(serve(a), serve(oldSigner));

@@ -137,7 +137,7 @@ jobs:
             pnpm --filter @aprscaching/node-gateway start &
           # A two-instance network has one corroborating peer, so the subscriber accepts a quorum of one.
           DB_PATH="$RUNNER_TEMP/sub.db" PORT=8802 INSTANCE=oe.sub FED_PRIVATE_KEY="$SUBKEY" FED_PEERS=http://127.0.0.1:8801 FED_CORROBORATION_QUORUM=1 \
-            FED_SUBMIT_SECRET=submitsecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
+            FED_SUBMIT_SECRET=submitsecret FED_RELAY_SECRET=relaysecret FED_REGISTRY="$FED_REGISTRY" FED_REGISTRY_KEY="$FED_REGISTRY_KEY" \
             pnpm --filter @aprscaching/node-gateway start &
           PUB=http://127.0.0.1:8801 SUB=http://127.0.0.1:8802 RELAY_SECRET=relaysecret node tools/smoke/federation.mjs
 

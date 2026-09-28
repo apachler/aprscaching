@@ -239,8 +239,8 @@ export function validEndpointAddress(transport: FedTransportKind, address: strin
   switch (transport) {
     case "https":
       try {
-        const u = new URL(address);
-        return u.protocol === "https:" || u.protocol === "http:"; // plain http exists inside HAMNET/44net space
+        // plain http inside HAMNET/44net space is the `44net` transport, addressed by name
+        return new URL(address).protocol === "https:";
       } catch {
         return false;
       }

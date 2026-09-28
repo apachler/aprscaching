@@ -599,7 +599,7 @@ lands with a regression test that fails without it.
   identities, the local track check on peer-corroborated finds, and a bounded, per-asker answerer.
 - [x] **Privacy and data correctness** — finds on local-only caches kept home, a composite
   pagination cursor, per-frame fault isolation, and bulletin mirroring.
-- [ ] **Replay and robustness** *(M)* — monotonic record versions and bounded signing times, per-type
+- [x] **Replay and robustness** — monotonic record versions and bounded signing times, per-type
   sync pages, a rate-limited notify endpoint, SSRF-guarded capped discovery, squat-proof ACSFED ids,
   body caps on pull pages, and relay spokes isolated by their own keys.
 - [ ] **Low-severity items and operator guidance** *(S)* — signed-ingest replay cache, erasure of mirrored

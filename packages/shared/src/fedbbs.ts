@@ -86,7 +86,8 @@ function contentBid(payload: Uint8Array): string {
   const prime = 0x100000001b3n;
   const mask = 0xffffffffffffffffn;
   for (let i = 0; i < payload.length; i++) h = ((h ^ BigInt(payload[i]!)) * prime) & mask;
-  return "AF" + h.toString(36).toUpperCase();
+  // FBB BIDs are at most 12 characters: "AF" plus ten base-36 digits of the hash
+  return "AF" + h.toString(36).toUpperCase().padStart(13, "0").slice(-10);
 }
 
 export interface FedBbsBatch {

@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
+import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
+import { makeFetchGuard } from "./fetchguard.ts";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
 import { BunDb } from "./d1.ts";
@@ -91,6 +93,12 @@ const env: Env = {
   // AGPL §13 source: commit from env, else git (self-host-from-source) — the resolved value wins
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
 };
+// Federation fetches never reach this host's private networks, except the peers the operator
+// configured by hand (FED_PEERS, FED_HUB_URL) or with FED_ALLOW_PRIVATE=1.
+env.FED_FETCH_GUARD = makeFetchGuard({
+  allowedOrigins: operatorOrigins(env),
+  allowPrivate: env.FED_ALLOW_PRIVATE === "1",
+});
 
 const server = Bun.serve<WsData, undefined>({
   port: PORT,

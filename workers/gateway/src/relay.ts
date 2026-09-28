@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * relay.ts — federation rendezvous relay. Lets a NAT'd / firewalled peer that
@@ -12,9 +13,12 @@ import { secretOk } from "./auth.js";
  *   The requester collects the answer                                     → GET  /federation/relay/result/:id
  *
  * Trust is unchanged: a relayed answer is a signed feed page, verified exactly like a pulled one — the
- * relay is pure transport. The spoke answers `feed`
- * queries (downstream re-serving of a firewalled peer's feed); `corroborate` is a
- * reserved kind (live cross-instance quorum is the deploy-gated extension). Gated by `FED_RELAY_SECRET`.
+ * relay is pure transport. The spoke answers `feed` queries (downstream re-serving of a firewalled
+ * peer's feed); `corroborate` is a reserved kind. The relay is enabled by `FED_RELAY_SECRET`, which
+ * gates enqueueing and reading results; a requester reads only its own results, by the ticket it got
+ * at enqueue time. A spoke leases and answers by signing each request with its own federation key,
+ * which the hub checks against the key it already holds for that instance — a spoke can never act
+ * for another spoke, whatever secrets it knows. A lease that goes unanswered returns to the queue.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -22,6 +26,9 @@ import { requireSysop } from "./admin.js";
 import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
+import { importVerifyKey, signRaw } from "./federation.js";
+import { keysForOrigin } from "./federation_sync.js";
+import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 
 export type RelayKind = "feed" | "corroborate";
 export interface ParsedRelayQuery {
@@ -41,29 +48,96 @@ const relayAuth = (req: Request, env: Env): boolean => {
   return secretOk(req.headers.get("x-relay-secret"), s);
 };
 
-/**
- * A spoke must only be able to lease/answer queries addressed to ITS OWN instance. The flat
- * `x-relay-secret` alone would let any secret-holder pass `?instance=other` and drain another spoke's queue.
- * Bind the credential to the instance with a per-spoke token = HMAC(FED_RELAY_SECRET, "relay-spoke:<instance>").
- * The spoke derives the same token from the shared secret; no extra config or table needed.
- */
-export async function relaySpokeToken(env: Env, instance: string): Promise<string | null> {
-  const secret = env.FED_RELAY_SECRET;
-  if (!secret) return null;
-  const k = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`relay-spoke:${instance.toLowerCase()}`));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+/** A lease not answered within this many seconds returns to the queue. */
+export const RELAY_LEASE_TTL_S = 300;
+/** How far a spoke's signed request time may sit from the hub's clock. */
+const RELAY_SKEW_S = 120;
+/** Queries one requester may have waiting at once, and enqueues it may make per minute. */
+const RELAY_MAX_QUEUED_PER_REQUESTER = 50;
+const RELAY_ENQUEUE_PER_MINUTE = 60;
+const RELAY_DOMAIN = "acs-relay/1\n";
+
+const hex = (buf: ArrayBuffer): string => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+const sha256Hex = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
+  hex(await crypto.subtle.digest("SHA-256", bytes));
+
+/** The bytes a spoke signs for one relay request: method, path with query, time and body hash. */
+async function relaySigningBytes(
+  method: string,
+  pathAndQuery: string,
+  at: number,
+  body: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const text = `${RELAY_DOMAIN}${method.toUpperCase()} ${pathAndQuery}\n${at}\n${await sha256Hex(body)}`;
+  return new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
 }
-async function spokeAuth(req: Request, env: Env, instance: string): Promise<boolean> {
-  if (!instance) return false;
-  const expected = await relaySpokeToken(env, instance);
-  return expected != null && secretOk(req.headers.get("x-relay-token"), expected);
+
+/** Headers that authenticate a relay request as this instance (its federation key signs it). */
+export async function signRelayRequest(
+  env: Env,
+  method: string,
+  url: string,
+  body: string = "",
+): Promise<Record<string, string> | null> {
+  const instance = (env.INSTANCE ?? "").toLowerCase();
+  const at = now();
+  const u = new URL(url);
+  const signed = await signRaw(
+    env,
+    await relaySigningBytes(
+      method,
+      u.pathname + u.search,
+      at,
+      new TextEncoder().encode(body) as Uint8Array<ArrayBuffer>,
+    ),
+  );
+  if (!instance || !signed) return null;
+  return {
+    "x-relay-instance": instance,
+    "x-relay-at": String(at),
+    "x-relay-sig": btoa(String.fromCharCode(...signed.sig))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, ""),
+  };
+}
+
+/**
+ * Is this request signed by `instance`'s federation key? The hub must already hold that key (the
+ * spoke is a known peer: pulled, in the registry, or registered by a push-to-hub submission).
+ */
+async function spokeAuth(req: Request, env: Env, instance: string, body: Uint8Array<ArrayBuffer>): Promise<boolean> {
+  if (!instance || req.headers.get("x-relay-instance")?.toLowerCase() !== instance) return false;
+  const at = Number(req.headers.get("x-relay-at"));
+  const sig = req.headers.get("x-relay-sig") ?? "";
+  if (!Number.isInteger(at) || Math.abs(at - now()) > RELAY_SKEW_S || !sig) return false;
+  const keys = await keysForOrigin(env, instance);
+  if (keys === "blocked" || !keys.length) return false;
+  const u = new URL(req.url);
+  const msg = await relaySigningBytes(req.method, u.pathname + u.search, at, body);
+  let sigBytes: Uint8Array<ArrayBuffer>;
+  try {
+    sigBytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  } catch {
+    return false;
+  }
+  for (const k of keys) {
+    try {
+      if (await crypto.subtle.verify("Ed25519", await importVerifyKey(k), sigBytes, msg)) return true;
+    } catch {
+      /* an unusable key simply doesn't verify */
+    }
+  }
+  return false;
+}
+
+/** Return leases older than the TTL to the queue, so a spoke that vanished mid-lease loses nothing. */
+export async function expireRelayLeases(env: Env): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE fed_relay_queue SET status = 'queued', leased_at = NULL WHERE status = 'leased' AND leased_at < ?",
+  )
+    .bind(now() - RELAY_LEASE_TTL_S)
+    .run();
 }
 
 /** PURE: validate an untrusted relay-query body into a known kind + params, or null. */
@@ -132,22 +206,41 @@ export async function feedSource(env: Env, params: Record<string, unknown>): Pro
 /** POST /federation/relay/:instance/query — a requester enqueues a relay query for a spoke instance. */
 export async function handleRelayEnqueue(req: Request, env: Env, instance: string): Promise<Response> {
   if (!relayAuth(req, env)) return json({ error: "relay disabled or bad secret" }, { status: 401 });
+  const requester = clientIp(req, env);
+  if (await rateLimitedDurable(env, `relay-enqueue:${requester}`, Date.now(), RELAY_ENQUEUE_PER_MINUTE))
+    return json({ error: "rate limited" }, { status: 429 });
+  const waiting = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM fed_relay_queue WHERE requester = ? AND status IN ('queued','leased','dispatched')",
+  )
+    .bind(requester)
+    .first<{ n: number }>();
+  if ((waiting?.n ?? 0) >= RELAY_MAX_QUEUED_PER_REQUESTER)
+    return json({ error: "too many queries waiting" }, { status: 429 });
   const q = parseRelayQuery(await req.json().catch(() => null));
   if (!q) return json({ error: "kind (feed|corroborate) required" }, { status: 400 });
+  const ticket = hex(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
   const ins = await env.DB.prepare(
-    "INSERT INTO fed_relay_queue (instance, kind, params, status, created_at) VALUES (?,?,?, 'queued', ?)",
+    "INSERT INTO fed_relay_queue (instance, kind, params, status, created_at, ticket_hash, requester) VALUES (?,?,?, 'queued', ?, ?, ?)",
   )
-    .bind(instance.toLowerCase(), q.kind, JSON.stringify(q.params), now())
+    .bind(
+      instance.toLowerCase(),
+      q.kind,
+      JSON.stringify(q.params),
+      now(),
+      await sha256Hex(new TextEncoder().encode(ticket) as Uint8Array<ArrayBuffer>),
+      requester,
+    )
     .run();
-  return json({ id: Number(ins.meta.last_row_id), instance, kind: q.kind, status: "queued" }, { status: 201 });
+  return json({ id: Number(ins.meta.last_row_id), ticket, instance, kind: q.kind, status: "queued" }, { status: 201 });
 }
 
 /** GET /federation/relay/lease?instance=SELF — the spoke leases queries addressed to it. */
 export async function handleRelayLease(req: Request, env: Env): Promise<Response> {
-  const instance = (new URL(req.url).searchParams.get("instance") ?? env.INSTANCE ?? "").toLowerCase();
+  const instance = (new URL(req.url).searchParams.get("instance") ?? "").toLowerCase();
   if (!instance) return json({ error: "instance required" }, { status: 400 });
-  // A spoke may only lease queries for its own instance (per-spoke token), not any it names.
-  if (!(await spokeAuth(req, env, instance))) return new Response("unauthorized", { status: 401 });
+  // A spoke leases only its own queue: the request must be signed by that instance's key.
+  if (!(await spokeAuth(req, env, instance, new Uint8Array(0)))) return new Response("unauthorized", { status: 401 });
+  await expireRelayLeases(env);
   const rows = (
     await env.DB.prepare(
       "SELECT id, kind, params FROM fed_relay_queue WHERE instance = ? AND status = 'queued' ORDER BY created_at LIMIT 25",
@@ -168,15 +261,18 @@ export async function handleRelayLease(req: Request, env: Env): Promise<Response
 
 /** POST /federation/relay/answer — the spoke posts a result for a leased query. */
 export async function handleRelayAnswer(req: Request, env: Env): Promise<Response> {
-  const { id, result, instance } = (await req.json().catch(() => ({}))) as {
-    id?: number;
-    result?: RelayResult;
-    instance?: string;
-  };
-  const inst = (instance ?? env.INSTANCE ?? "").toLowerCase();
-  // Authenticate as the spoke, and scope the write to rows addressed to that spoke, so a
-  // secret-holder can't answer (and thereby suppress) another instance's queued queries.
-  if (!(await spokeAuth(req, env, inst))) return new Response("unauthorized", { status: 401 });
+  const raw = new Uint8Array(await req.arrayBuffer());
+  let parsed: { id?: number; result?: RelayResult; instance?: string } = {};
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(raw)) as typeof parsed;
+  } catch {
+    /* validated below */
+  }
+  const { id, result, instance } = parsed;
+  const inst = (instance ?? "").toLowerCase();
+  // Authenticate as the spoke by its key, and scope the write to rows addressed to that spoke, so
+  // no one can answer (and thereby suppress) another instance's queued queries.
+  if (!(await spokeAuth(req, env, inst, raw))) return new Response("unauthorized", { status: 401 });
   if (!id || !result) return json({ error: "id and result required" }, { status: 400 });
   await env.DB.prepare(
     "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND status='leased' AND instance=?",
@@ -189,10 +285,15 @@ export async function handleRelayAnswer(req: Request, env: Env): Promise<Respons
 /** GET /federation/relay/result/:id — the requester polls for the spoke's answer. */
 export async function handleRelayResult(req: Request, env: Env, id: string): Promise<Response> {
   if (!relayAuth(req, env)) return new Response("unauthorized", { status: 401 });
-  const row = await env.DB.prepare("SELECT status, answer FROM fed_relay_queue WHERE id = ?")
+  const row = await env.DB.prepare("SELECT status, answer, ticket_hash FROM fed_relay_queue WHERE id = ?")
     .bind(Number(id))
-    .first<{ status: string; answer: string | null }>();
+    .first<{ status: string; answer: string | null; ticket_hash: string | null }>();
   if (!row) return json({ error: "no such query" }, { status: 404 });
+  // only the requester, holding the ticket it was given, reads the result
+  const ticket = req.headers.get("x-relay-ticket") ?? "";
+  const presented = await sha256Hex(new TextEncoder().encode(ticket) as Uint8Array<ArrayBuffer>);
+  if (!ticket || !row.ticket_hash || !secretOk(presented, row.ticket_hash))
+    return json({ error: "not your query" }, { status: 403 });
   return json({ status: row.status, answer: row.answer ? JSON.parse(row.answer) : null });
 }
 
@@ -238,7 +339,10 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
   const bull = await enqueueAcsfedBulletin(env, frames);
   const t = now();
   await env.DB.batch(
-    rows.map((r) => env.DB.prepare("UPDATE fed_relay_queue SET status='leased', leased_at=? WHERE id=?").bind(t, r.id)),
+    // dispatched, not leased: an FBB round trip takes hours, so these never time back into the queue
+    rows.map((r) =>
+      env.DB.prepare("UPDATE fed_relay_queue SET status='dispatched', leased_at=? WHERE id=?").bind(t, r.id),
+    ),
   );
   return json({ ok: true, dispatched: rows.length, bid: bull.bid, enqueued: bull.enqueued });
 }
@@ -250,17 +354,14 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
  * a firewalled peer's feed reachable through the hub.
  */
 export async function relayPoll(env: Env): Promise<void> {
-  const hub = env.FED_HUB_URL,
-    secret = env.FED_RELAY_SECRET;
-  if (!hub || !secret) return;
+  const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
+  if (!hub || !env.FED_RELAY_SECRET) return;
   const instance = (env.INSTANCE ?? "").toLowerCase();
-  // Present a per-spoke token bound to our own instance (alongside the shared secret for
-  // backward compat) so the hub scopes what we can lease/answer to our own queue.
-  const token = (await relaySpokeToken(env, instance)) ?? "";
-  const h = { "content-type": "application/json", "x-relay-secret": secret, "x-relay-token": token };
-  const leaseRes = await fetch(`${hub}/federation/relay/lease?instance=${encodeURIComponent(instance)}`, {
-    headers: h,
-  });
+  // every lease and answer is signed with our federation key; the hub scopes both to our own queue
+  const leaseUrl = `${hub}/federation/relay/lease?instance=${encodeURIComponent(instance)}`;
+  const leaseAuth = await signRelayRequest(env, "GET", leaseUrl);
+  if (!leaseAuth) return; // no signing key — the hub could not tell us from anyone else
+  const leaseRes = await fedFetch(env, leaseUrl, { headers: leaseAuth });
   if (!leaseRes.ok) return;
   const { queries } = (await leaseRes.json().catch(() => ({ queries: [] }))) as {
     queries: { id: number; kind: RelayKind; params: Record<string, unknown> }[];
@@ -270,10 +371,14 @@ export async function relayPoll(env: Env): Promise<void> {
       { kind: q.kind, params: q.params ?? {} },
       { feed: (p) => feedSource(env, p) },
     );
-    await fetch(`${hub}/federation/relay/answer`, {
+    const answerUrl = `${hub}/federation/relay/answer`;
+    const body = JSON.stringify({ id: q.id, result, instance });
+    const auth = await signRelayRequest(env, "POST", answerUrl, body);
+    if (!auth) return;
+    await fedFetch(env, answerUrl, {
       method: "POST",
-      headers: h,
-      body: JSON.stringify({ id: q.id, result, instance }),
+      headers: { "content-type": "application/json", ...auth },
+      body,
     }).catch(() => {});
   }
 }

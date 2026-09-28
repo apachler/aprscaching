@@ -13,6 +13,17 @@ function head(major, arg) {
   if (arg < 0x10000) return [(major << 5) | 25, arg >> 8, arg & 0xff];
   if (arg < 0x100000000)
     return [(major << 5) | 26, (arg >>> 24) & 0xff, (arg >>> 16) & 0xff, (arg >>> 8) & 0xff, arg & 0xff];
+  if (Number.isSafeInteger(arg)) {
+    // 8-byte argument (cache versions sit above 2^32)
+    const out = [(major << 5) | 27];
+    let big = BigInt(arg);
+    const bytes = [];
+    for (let i = 0; i < 8; i++) {
+      bytes.unshift(Number(big & 0xffn));
+      big >>= 8n;
+    }
+    return out.concat(bytes);
+  }
   throw new Error("mini-cbor: arg too large");
 }
 
@@ -82,6 +93,12 @@ function item(r) {
   } else if (info === 26) {
     arg = r.buf[r.off] * 0x1000000 + ((r.buf[r.off + 1] << 16) | (r.buf[r.off + 2] << 8) | r.buf[r.off + 3]);
     r.off += 4;
+  } else if (info === 27 && major !== 7) {
+    let big = 0n;
+    for (let i = 0; i < 8; i++) big = (big << 8n) | BigInt(r.buf[r.off + i]);
+    r.off += 8;
+    if (big > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("mini-cbor: integer beyond 2^53");
+    arg = Number(big);
   } else if (info >= 27) {
     if (major === 7) {
       if (info === 20) return false;

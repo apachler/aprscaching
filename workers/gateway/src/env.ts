@@ -82,6 +82,9 @@ export interface Env {
   API_MAX_BBOX_DEG?: string; // max bbox side in degrees for /api/v1 reads (default 20)
 
   // ---- live activity spots — read-only aggregation, off unless explicitly enabled ----
+  FED_ALLOW_PRIVATE?: string; // "1": federation may fetch private/loopback addresses (an all-LAN network); see fetchguard.ts
+  /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */
+  FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   FED_ENDPOINTS?: string; // this instance's typed transport endpoints (JSON array of {transport,address,priority}) — published in the descriptor
   DOH_URL?: string; // DNS-over-HTTPS resolver for 44net peer onboarding (default cloudflare-dns.com; must return the DNSSEC AD flag)
   COT_STREAM_INTERVAL_MS?: string; // SSE CoT feed poll cadence (default 15000; clamped 1s–2min)
@@ -182,6 +185,7 @@ export const ENV_STRING_KEYS = [
   "API_RATE_KEYED",
   "API_MAX_BBOX_DEG",
   "FED_ENDPOINTS",
+  "FED_ALLOW_PRIVATE",
   "DOH_URL",
   "COT_STREAM_INTERVAL_MS",
   "COT_STREAM_MAX_MS",
