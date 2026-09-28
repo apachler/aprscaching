@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
  * federation_sync.ts — the consumer side. Pull peers' /federation feeds, verify each record's
@@ -129,33 +129,6 @@ async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: F
   await noteVersion(env, rec.id, origin, rec.cursor);
 }
 
-/** Read a response body up to `max` bytes; null when it is larger. Never buffers past the cap. */
-async function readCappedResponse(res: Response, max: number): Promise<Uint8Array | null> {
-  const declared = Number(res.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > max) return null;
-  if (!res.body) return new Uint8Array(0);
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(size);
-  let off = 0;
-  for (const c of chunks) {
-    out.set(c, off);
-    off += c.byteLength;
-  }
-  return out;
-}
-
 function ours(env: Env): string | null {
   return env.INSTANCE ?? null;
 }
@@ -224,14 +197,22 @@ export async function syncPeerByInstance(env: Env, instance: string): Promise<bo
     .bind(instance)
     .first<PeerRow>();
   if (!p) return false;
-  // one pull per peer at a time, however many notifies ask for it (the same trailing-edge coalescing
-  // as the scheduled sync)
-  return coalesceRun(peerKey(env, p.url), () => syncOnePeer(env, p), peerCoalescer);
+  return syncOnePeer(env, p);
+}
+
+type PeerSyncCounts = Awaited<ReturnType<typeof syncPeer>>;
+/**
+ * One pull per peer at a time, whoever asks — the scheduled sync, a notify, or both at once: a caller
+ * arriving mid-pull gets a fresh pull after it (trailing-edge coalescing), never a concurrent one, so
+ * the version checks and cursor writes of two pulls can't interleave.
+ */
+function syncPeerCoalesced(env: Env, p: PeerRow): Promise<PeerSyncCounts> {
+  return coalesceRun(peerKey(env, p.url), () => syncPeer(env, p), peerCoalescer);
 }
 
 async function syncOnePeer(env: Env, p: PeerRow): Promise<boolean> {
   try {
-    await syncPeer(env, p);
+    await syncPeerCoalesced(env, p);
     return true;
   } catch (e) {
     await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
@@ -291,7 +272,7 @@ export function coalesceRun<T>(key: object, run: () => Promise<T>, state: Coales
 
 const syncCoalescer = newCoalescer<SyncResult>();
 
-const peerCoalescer = newCoalescer<boolean>();
+const peerCoalescer = newCoalescer<PeerSyncCounts>();
 const peerKeys = new WeakMap<object, Map<string, object>>();
 /** A stable coalescing key per (env, peer url). */
 function peerKey(env: Env, url: string): object {
@@ -326,7 +307,7 @@ async function syncAllPeersInner(env: Env): Promise<{
   const errors: string[] = [];
   for (const p of peers) {
     try {
-      const r = await syncPeer(env, p);
+      const r = await syncPeerCoalesced(env, p);
       caches += r.caches;
       finds += r.finds;
       keys += r.keys;
@@ -559,7 +540,7 @@ async function syncFeed(
     const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=${PAGE_LIMIT}`);
     if (res.status === 404) return applied; // feed not served here → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
-    const body = await readCappedResponse(res, MAX_PAGE_BYTES);
+    const body = await readCappedBody(res, MAX_PAGE_BYTES);
     if (!body) throw new Error(`/federation/sync/${def.type} page too large (over ${MAX_PAGE_BYTES} bytes)`);
     const pg = decodeFedSyncPage(body);
     if (pg.frames.length > PAGE_LIMIT)
@@ -907,8 +888,18 @@ async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "
   if (rec.at > t + MAX_FUTURE_S || rec.at < t - RELAY_FRAME_MAX_AGE_S) return "rejected";
   const seen = await env.DB.prepare("SELECT 1 AS x FROM fed_versions WHERE gid = ?").bind(rec.gid).first();
   if (seen) return "rejected";
-  await noteVersion(env, rec.gid, rec.origin, rec.v);
+  const r = await actOnRelayFrame(env, rec, us, id);
+  // remembered only once acted on, so a query whose answer could not be sent can still be answered
+  if (r === "applied") await noteVersion(env, rec.gid, rec.origin, rec.v);
+  return r;
+}
 
+async function actOnRelayFrame(
+  env: Env,
+  rec: FedRecord,
+  us: string,
+  id: number,
+): Promise<"applied" | "rejected" | "elsewhere"> {
   if (rec.kind === "relayQuery") {
     const paramsJson = typeof rec.body.paramsJson === "string" ? rec.body.paramsJson : "{}";
     let params: unknown;
@@ -1163,43 +1154,16 @@ const APPLIERS: Record<string, (env: Env, rec: FeedRecord, origin: string) => Pr
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
-const PUSH_CURSORS = new Map<string, { cursor: number; id?: number }>();
+const PUSH_CURSORS = new Map<string, { cursor: number; id?: number }>(); // "hub|type" -> last pushed position (in-memory; re-push on restart is idempotent)
 /** Largest submission body the hub reads: a full page of frames fits well inside it. */
 const MAX_SUBMIT_BYTES = 4 * 1024 * 1024;
-
-/** Read a request body up to `max` bytes; null when it is larger. Never buffers past the cap. */
-async function readCapped(req: Request, max: number): Promise<Uint8Array | null> {
-  const declared = Number(req.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > max) return null;
-  if (!req.body) return new Uint8Array(0);
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(size);
-  let off = 0;
-  for (const c of chunks) {
-    out.set(c, off);
-    off += c.byteLength;
-  }
-  return out;
-} // "hub|type" -> last pushed cursor (in-memory; re-push on restart is idempotent)
 
 /**
  * HUB endpoint: accept a spoke's signed records and mirror them as if we had pulled them
  * (push-mode mirroring — same remote_* tables, same display-only semantics). Secret-gated; optionally
  * restricted to an instance allowlist. Each record is verified against the supplied key and MUST name
  * the submitter as its signer, so a spoke can only contribute records as ITSELF — never impersonate
- * another instance. Downstream re-serving of submitted records needs the instance-key registry.
+ * another instance. A spoke that rotated its key sends its rotation records in `x-fed-rotations`.
  */
 export async function handleFederationSubmit(req: Request, env: Env): Promise<Response> {
   const secret = env.FED_SUBMIT_SECRET;
@@ -1212,7 +1176,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   // submission is one spoke), verified over the frame bytes verbatim.
   if (!(req.headers.get("content-type") ?? "").includes("application/cbor"))
     return json({ ok: false, error: "submit is application/cbor (a fedwire sync page)" }, { status: 415 });
-  const body = await readCapped(req, MAX_SUBMIT_BYTES);
+  const body = await readCappedBody(req, MAX_SUBMIT_BYTES);
   if (!body) return json({ ok: false, error: "submission too large" }, { status: 413 });
   let page: ReturnType<typeof decodeFedSyncPage>;
   try {
@@ -1222,6 +1186,13 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
   }
   if (!isInstanceId(page.instance))
     return json({ ok: false, error: "submitter instance id is not a hostname" }, { status: 400 });
+  let rotations: RotationRecord[] = [];
+  try {
+    const h = req.headers.get("x-fed-rotations");
+    if (h && h.length <= 16_384) rotations = (JSON.parse(h) as RotationRecord[]).slice(0, 32);
+  } catch {
+    return json({ ok: false, error: "x-fed-rotations is not a JSON array of rotation records" }, { status: 400 });
+  }
   const records: FeedRecord[] = [];
   let rejected = 0;
   let submitKey: string | null = null;
@@ -1254,7 +1225,7 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     });
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
-  return submitRecords(env, page.instance, submitKey, records, rejected);
+  return submitRecords(env, page.instance, submitKey, records, rejected, rotations);
 }
 
 /**
@@ -1267,6 +1238,7 @@ async function submitRecords(
   publicKey: string,
   records: FeedRecord[],
   preRejected: number,
+  rotations: RotationRecord[] = [],
 ): Promise<Response> {
   if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
   const allow = (env.FED_SUBMIT_INSTANCES ?? "")
@@ -1300,11 +1272,27 @@ async function submitRecords(
   for (const r of known) {
     const accept = parseAcceptKeys(r.accept_keys);
     const keys = accept.length ? usableKeys(accept, now()) : r.public_key ? [r.public_key] : [];
-    if (keys.length && !keys.includes(publicKey))
-      return json(
-        { ok: false, error: "submitted key does not match the key known for this instance" },
-        { status: 403 },
-      );
+    if (!keys.length || keys.includes(publicKey)) continue;
+    // A spoke that rotated proves it the same way a pulled peer does: rotation records (sent in
+    // x-fed-rotations) leading from its pinned key to the new one. Only its own submit row moves.
+    if (r.url === `submit:${instance}` && r.public_key) {
+      const moved = await resolvePeerKeys({
+        pinned: r.public_key,
+        current: publicKey,
+        published: [{ x: publicKey }, ...accept.filter((k) => k.x !== publicKey)],
+        rotations,
+        prior: accept,
+        nowS: now(),
+        graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
+      });
+      if (moved.ok) {
+        await env.DB.prepare("UPDATE fed_peers SET public_key = ?, accept_keys = ? WHERE url = ?")
+          .bind(moved.pin, JSON.stringify(moved.accept), r.url)
+          .run();
+        continue;
+      }
+    }
+    return json({ ok: false, error: "submitted key does not match the key known for this instance" }, { status: 403 });
   }
 
   // Register a new spoke as a never-pulled peer so its mirrored records carry a uniform trust
@@ -1371,7 +1359,12 @@ export async function pushToHub(
       const complete = built.frames.length < 500;
       const res = await fetchFn(`${hub}/federation/submit`, {
         method: "POST",
-        headers: { "content-type": "application/cbor", "x-fed-secret": secret },
+        headers: {
+          "content-type": "application/cbor",
+          "x-fed-secret": secret,
+          // our rotation records, so a hub that pinned an earlier key can follow the rotation
+          ...(env.FED_ROTATIONS ? { "x-fed-rotations": env.FED_ROTATIONS } : {}),
+        },
         body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames, built.nextId) as BodyInit,
         signal: AbortSignal.timeout(5000),
       });

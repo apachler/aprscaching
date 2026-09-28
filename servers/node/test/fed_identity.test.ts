@@ -198,8 +198,12 @@ describe("rotated-away keys are revoked after their grace, on every carrier", ()
     });
     await addCache(a);
     const oldSigner = instanceEnv("a.example", k1, {}, a.DB);
-    const routes = stubFetch({ [A]: serve(a) });
+    // the hub first knows the peer under k1, then sees it rotate: only a key it trusted before can
+    // become a predecessor
+    const routes = stubFetch({ [A]: serve(oldSigner) });
     const hub = await hubWithPeers(A);
+    expect((await syncAllPeers(hub)).errors).toEqual([]);
+    routes[A] = serve(a);
     expect((await syncAllPeers(hub)).errors).toEqual([]);
     return { k1, at, a, oldSigner, routes, hub };
   }

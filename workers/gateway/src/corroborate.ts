@@ -11,7 +11,7 @@
  * iNaturalist "more observers ⇒ better data" dynamic. Mirrors are display-only; corroboration is
  * the trust-bearing exchange.
  */
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { haversineMeters } from "@aprscaching/aprs";
@@ -190,13 +190,6 @@ export function boundQuestion(
   return { ...q, lat: c.lat, lon: c.lon, radiusM: radius + gridSlackM(cfg.gridDeg), since: w.since, until: w.until };
 }
 
-async function readBody(req: Request, max: number): Promise<Uint8Array | null> {
-  const declared = Number(req.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > max) return null;
-  const buf = new Uint8Array(await req.arrayBuffer());
-  return buf.byteLength > max ? null : buf;
-}
-
 /**
  * Endpoint: a peer asks whether we independently heard a callsign on RF near a point in a window.
  *
@@ -218,7 +211,7 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
   // the per-host limit comes first, before any decoding or signature work
   if (await rateLimitedDurable(env, `ip:${clientIp(req, env)}`, Date.now()))
     return json({ corroborated: false, error: "rate limited" }, { status: 429 });
-  const bytes = await readBody(req, MAX_QUESTION_BYTES);
+  const bytes = await readCappedBody(req, MAX_QUESTION_BYTES);
   if (!bytes) return json({ corroborated: false, error: "question too large" }, { status: 413 });
 
   let frame: ReturnType<typeof decodeFedFrame>;

@@ -287,8 +287,11 @@ export async function upsertRemoteBulletin(
     postedAt?: number;
     expiresAt?: number | null;
   };
-  // the FBB BID from the body; a frame under the older `<id>_<instance>` gid carries it as its gid
-  const bid = typeof d.bid === "string" && d.bid ? d.bid.slice(0, 64) : rec.id;
+  // The FBB BID from the body, but only in the origin's own `<id>_<origin>` form: BIDs are unique
+  // here, so a BID naming another instance would squat that instance's bulletin (or one of ours).
+  // Anything else is stored under the record's gid; a frame under the older gid carries the BID as it.
+  const own = typeof d.bid === "string" && /^[0-9]+_/.test(d.bid) && d.bid.slice(d.bid.indexOf("_") + 1) === origin;
+  const bid = own ? (d.bid as string) : rec.id;
   if (!d.fromCall || !d.toCall || !d.body || !bid) return;
   await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)

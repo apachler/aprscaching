@@ -266,9 +266,10 @@ export type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKe
  * - The pin moves only to a key the old pin reaches through verified rotation records (each new key
  *   signed by its predecessor). Being merely listed in `publicKeys` proves nothing: anyone who can
  *   edit the descriptor can list a key.
- * - A published key other than the current one is accepted only as a proven predecessor: a
- *   verified rotation chain leads from it to the current key. Its cutoff is its published `until`,
- *   else the rotation time plus the grace.
+ * - A published key other than the current one is accepted only as a proven predecessor: a key
+ *   we already trusted (the old pin, or one still in the stored accept set) from which a verified
+ *   rotation chain leads to the current key. Its cutoff is its published `until`, else the rotation
+ *   time plus the grace, and never later than the rotation time plus the grace.
  * - Revocation is successor-only and sticky: once a key has been rotated away from, its cutoff never
  *   moves later, so a later descriptor cannot revive it, and a rotated-away key never becomes the pin.
  */
@@ -312,13 +313,21 @@ export async function resolvePeerKeys(opts: {
   if (pinned && pinned !== current && !reach(pinned).has(current))
     return { ok: false, reason: "key changed without a valid rotation proof" };
 
+  // A predecessor must be a key we already trusted — the old pin, or a key already in the stored
+  // accept set and not yet past its cutoff. A rotation record is signed by its own `prevKey`, so anyone
+  // can mint one from a fresh key to the current key; only trust we held before can vouch for a key.
+  // On first contact there is nothing to vouch with, so no predecessor is admitted.
+  const trustedBefore = new Set<string>();
+  if (pinned) trustedBefore.add(pinned);
+  for (const k of opts.prior) if (k.until == null || k.until > nowS) trustedBefore.add(k.x);
   const accept: AcceptKey[] = [{ x: current }];
   const listed = new Set([current]);
   for (const k of opts.published) {
-    if (!k?.x || listed.has(k.x) || k.revoked) continue;
+    if (!k?.x || listed.has(k.x) || k.revoked || !trustedBefore.has(k.x)) continue;
     const away = rotatedAwayAt(k.x);
     if (away == null || !reach(k.x).has(current)) continue; // not a proven predecessor of the current key
-    let until = typeof k.until === "number" ? k.until : away + grace;
+    // the grace never runs past the rotation time plus this instance's grace, whatever `until` says
+    let until = Math.min(typeof k.until === "number" ? k.until : away + grace, away + grace);
     const was = priorUntil.get(k.x);
     if (was != null) until = Math.min(until, was);
     accept.push({ x: k.x, until });
