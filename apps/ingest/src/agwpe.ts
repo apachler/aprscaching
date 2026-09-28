@@ -4,8 +4,11 @@ import { decodeAx25, encodeAx25 } from "@aprscaching/aprs";
 import { parseAgwpe, encodeAgwpe } from "@aprscaching/packet";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
+import { tncPacket } from "./link.js";
 
 export interface AgwpeOpts {
+  /** This box's receiving-site callsign; stamped on frames heard directly (see `directSiteCall`). */
+  siteCall?: string;
   host: string;
   port: number;
   radioPort?: number;
@@ -74,17 +77,7 @@ export class AgwpeTnc {
         const f = decodeAx25(ax);
         if (!f) continue;
         this.h.onFrame?.(f);
-        this.h.onPacket({
-          src: f.src,
-          dst: f.dst,
-          path: f.path,
-          payload: f.payload,
-          kind: "other",
-          heardVia: "rf",
-          port: "agwpe",
-          ts: Math.floor(Date.now() / 1000),
-          raw: f.raw,
-        });
+        this.h.onPacket(tncPacket(f, "agwpe", this.o.siteCall, Math.floor(Date.now() / 1000)));
       }
     });
     const down = () => {
