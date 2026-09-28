@@ -66,7 +66,7 @@ pnpm --filter @aprscaching/ingest dev
 ```
 
 Edit `.env` at the top of the checkout first: set `APRSIS_FILTER` and `INGEST_SECRET`, and add
-`KISS_TNC_HOST`, `MESH_HOST`, … as needed.
+`KISS_TNC_HOST`, `MESHTASTIC_HOST`, … as needed.
 
 With just `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
 node, or an AXUDP/AXIP link and each forwards to the gateway on its own port. See

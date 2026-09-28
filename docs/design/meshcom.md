@@ -51,9 +51,9 @@ is the integration point. A node joined to Wi-Fi and configured with `--extudpip
 
 ## How it fits the platform
 
-MeshCom sits between APRS and Meshtastic. Like APRS it carries real callsigns and APRS payloads, so a
-MeshCom position maps onto a station and, later, an account without the synthetic `MSH…` names the
-Meshtastic bridge invents. Like Meshtastic it is a LoRa mesh reached through a node on the operator's
+MeshCom sits between APRS and Meshtastic. Like APRS it carries real callsigns on every frame and APRS
+payloads, so a MeshCom position maps onto a station and, later, an account directly — Meshtastic shows a
+callsign only for nodes in licensed mode, learned from their node info. Like Meshtastic it is a LoRa mesh reached through a node on the operator's
 LAN, not through a TNC.
 
 ```

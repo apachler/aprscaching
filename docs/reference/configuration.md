@@ -112,7 +112,7 @@ only when its variable is present.
 | KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`) |
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` |
-| Meshtastic | `MESH_HOST`, `MESH_PORT` (`1884`) |
+| Meshtastic (licensed nodes only) | `MESHTASTIC_HOST`, `MESHTASTIC_PORT` (`4403`) — the node's TCP API; `MESHTASTIC_MQTT_URL` (`mqtt://` or `mqtts://`, credentials in the URL), `MESHTASTIC_MQTT_TOPIC` (`msh/#`) — a broker's protobuf feed |
 | MeshCom | `MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file) |
 | AXUDP | `AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS` |
 | AXIP | `AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND` |
