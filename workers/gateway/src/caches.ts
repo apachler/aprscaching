@@ -10,7 +10,14 @@ import {
   type CacheLogEntry,
   type MapCache,
 } from "@aprscaching/shared";
-import { verifyFind, DEFAULT_POLICY, type CacheRow, type PositionRow } from "./verify.js";
+import {
+  verifyFind,
+  DEFAULT_POLICY,
+  type CacheRow,
+  type PositionRow,
+  type VerifyResult,
+  type AppGeo,
+} from "./verify.js";
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
@@ -532,12 +539,62 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     return json({ logged: true, logType, accountVerified, verified: false, signerKey });
   }
 
-  const since = now - DEFAULT_POLICY.windowSec;
+  const score = await scoreFind(env, cache, loggerCall, now, appGeo);
+  const committed = await commitFind(env, cache, loggerCall, now, comment ?? null, score, {
+    signerKey,
+    authorSig,
+    signedAt,
+  });
+  const { result, corroboratedBy } = score;
+  if (committed.duplicate)
+    return json({
+      logged: true,
+      logType: "found",
+      duplicate: true,
+      accountVerified,
+      verified: result.verified,
+      tier: result.tier,
+      method: result.method,
+    });
+  return json({
+    logged: true,
+    logType,
+    accountVerified,
+    announced: committed.announced,
+    corroboratedBy,
+    signerKey,
+    ...result,
+  });
+}
+
+/** A found log's verification outcome, computed before anything is written. */
+export interface FindScore {
+  result: VerifyResult;
+  /** Peer instance whose RF evidence lifted the find to Tier A, when local evidence did not. */
+  corroboratedBy: string | null;
+  /** IGate credited on the corroborator board for a Tier-A find. */
+  corrIgate: string | null;
+}
+
+/**
+ * Score a found log for `loggerCall` at time `at`: the logger's positions in the verification window
+ * before `at`, stamped with first-party attestation, the Tier-A independence set, and — when local
+ * evidence falls short of Tier A — federation peers. Writes nothing, so a radio command can be scored
+ * when its message is heard and committed later.
+ */
+export async function scoreFind(
+  env: Env,
+  cache: CacheRow & { code: string },
+  loggerCall: string,
+  at: number,
+  appGeo?: AppGeo,
+): Promise<FindScore> {
+  const since = at - DEFAULT_POLICY.windowSec;
   const lp = await env.DB.prepare(
-    // `ts <= now+60` — without the upper bound a future-dated fix sits inside the window forever
+    // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever
     "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? AND source != 'service' ORDER BY ts DESC LIMIT 500",
   )
-    .bind(loggerCall, since, now + 60)
+    .bind(loggerCall, since, at + 60)
     .all<PositionRow>();
 
   let cacheStationPositions: PositionRow[] | undefined;
@@ -545,7 +602,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     const cs = await env.DB.prepare(
       "SELECT * FROM positions WHERE callsign = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT 500",
     )
-      .bind(cache.station_call, since, now + 60)
+      .bind(cache.station_call, since, at + 60)
       .all<PositionRow>();
     cacheStationPositions = cs.results;
   }
@@ -578,7 +635,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     loggerPositions: attest(lp.results),
     cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
     loggerOwnIgates,
-    now, // app-reading freshness is judged against log time
+    now: at, // app-reading freshness is judged against log time
   });
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the
@@ -599,7 +656,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
       lon: cache.lon,
       radiusM: DEFAULT_POLICY.radiusM,
       since,
-      until: now,
+      until: at,
     });
     if (ev) {
       corroboratedBy = ev.instance;
@@ -618,9 +675,31 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     result.verified && result.tier === "A"
       ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
       : null;
+  return { result, corroboratedBy, corrIgate };
+}
 
-  // INSERT OR IGNORE against the partial unique index (0008). If a concurrent found for
-  // the same (cache, logger) beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
+/**
+ * Write a scored found log and run its consequences: find badges, the cache owner's alert, the
+ * corroborating IGate operator's alert, and the opt-in APRS-IS announce. A second found for the same
+ * (cache, logger) is reported as a duplicate and triggers nothing.
+ */
+export async function commitFind(
+  env: Env,
+  cache: CacheRow & { id: number; code: string; title: string },
+  loggerCall: string,
+  at: number,
+  comment: string | null,
+  score: FindScore,
+  author: { signerKey: string | null; authorSig: string | null; signedAt: number | null } = {
+    signerKey: null,
+    authorSig: null,
+    signedAt: null,
+  },
+): Promise<{ duplicate: boolean; logId?: number; announced?: unknown }> {
+  const { result, corroboratedBy, corrIgate } = score;
+  const cacheId = cache.id;
+  // INSERT OR IGNORE against the partial unique index on (cache, logger) founds. If a concurrent
+  // found for the same pair beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
   const ins = await env.DB.prepare(
     `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
      VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?)`,
@@ -628,30 +707,23 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
     .bind(
       cacheId,
       loggerCall,
-      now,
+      at,
       result.verified ? 1 : 0,
       result.tier,
       result.method,
       result.matchedPositionId ?? null,
       result.distanceM ?? null,
-      comment ?? null,
+      comment,
       corroboratedBy,
       corrIgate,
-      signerKey,
-      authorSig,
-      signedAt,
+      author.signerKey,
+      author.authorSig,
+      author.signedAt,
     )
     .run();
-  if ((ins.meta?.changes ?? 1) === 0)
-    return json({
-      logged: true,
-      logType: "found",
-      duplicate: true,
-      accountVerified,
-      verified: result.verified,
-      tier: result.tier,
-      method: result.method,
-    });
+  if ((ins.meta?.changes ?? 1) === 0) return { duplicate: true };
+  const logId = Number(ins.meta?.last_row_id) || undefined;
+  const now = Math.floor(Date.now() / 1000);
 
   // award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
@@ -702,8 +774,25 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
+  return { duplicate: false, logId, announced };
+}
 
-  return json({ logged: true, logType, accountVerified, announced, corroboratedBy, signerKey, ...result });
+/** A DNF, note or maintenance log: a plain record, never presence-verified. Returns its id. */
+export async function commitPlainLog(
+  env: Env,
+  cacheId: number,
+  loggerCall: string,
+  at: number,
+  logType: "dnf" | "note" | "maintenance",
+  comment: string | null,
+): Promise<number | undefined> {
+  const r = await env.DB.prepare(
+    `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment)
+     VALUES (?,?,?,?, 0, NULL, 'manual', ?)`,
+  )
+    .bind(cacheId, loggerCall, at, logType, comment)
+    .run();
+  return Number(r.meta?.last_row_id) || undefined;
 }
 
 /** Back-compat alias for the original /api/logs/find route. */

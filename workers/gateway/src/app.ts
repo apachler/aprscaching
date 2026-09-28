@@ -156,6 +156,7 @@ import {
   handleForwardSent,
 } from "./forward.js";
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
+import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommands } from "./radiolog.js";
 export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
@@ -223,6 +224,8 @@ export async function runScheduled(env: Env): Promise<void> {
     env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
     env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(nowS * 1000), // expired windows
   ]);
+  // radio commands nobody confirmed within the pending window expire
+  await expireRadioCommands(env);
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
@@ -557,6 +560,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // generalized + back-compat logging (cacheId in body)
   if ((p === "/api/logs" || p === "/api/logs/find") && m === "POST") return handleLog(req, env);
+  // radio commands: the signed-in player's FOUND/DNF/NOTE messages, and confirming a pending one
+  if (p === "/api/radio/commands" && m === "GET") return handleRadioCommandsList(req, env);
+  const radioDecision = /^\/api\/radio\/commands\/(\d+)\/(confirm|discard)$/.exec(p);
+  if (radioDecision && m === "POST")
+    return handleRadioCommandDecision(req, env, Number(radioDecision[1]), radioDecision[2] as "confirm" | "discard");
 
   // import: POST /api/import/:source (admin)
   const importMatch = /^\/api\/import\/([a-z]+)$/.exec(p);

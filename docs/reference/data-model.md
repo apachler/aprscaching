@@ -15,7 +15,7 @@ The baseline groups into a handful of domains:
 
 | Domain | Holds |
 |--------|-------|
-| **Caching** | Caches, logbook, ratings, favorites, staged/NFC unlocks, media, rendezvous, metadata & tags |
+| **Caching** | Caches, logbook, radio commands (logs sent as radio messages), ratings, favorites, staged/NFC unlocks, media, rendezvous, metadata & tags |
 | **Positions & stations** | The live station registry, firehose positions, telemetry & weather readings, the recent-packet ring |
 | **Accounts & identity** | Accounts, base callsigns, passkeys, device keys, callsign control-verification, profiles, preferences |
 | **Verification** | Corroboration state and the corroborating-IGate credit |
@@ -27,7 +27,9 @@ The baseline groups into a handful of domains:
 
 - `0001_baseline` establishes the whole 1.0 schema — caches, logs, positions, accounts, the Shack tables,
   federation, BBS/node, and engagement — with internal section headers grouping it by domain.
-- Post-1.0 schema changes land as new `NNNN_name.sql` files applied on top of the baseline.
+- Post-1.0 schema changes land as new `NNNN_name.sql` files applied on top of the baseline:
+  `0002_federation_transports` (typed peer endpoints) and `0003_radio_commands` (logs sent as radio
+  messages, including those waiting for the player's confirmation).
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —
 live in `@aprscaching/shared` (Zod schemas) and are the source of truth for request/response shapes.

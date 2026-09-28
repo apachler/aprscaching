@@ -12,6 +12,7 @@ import { recordRendezvous } from "./rendezvous.js";
 import { recordMheard } from "./node.js";
 import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { handleRadioMessage, serviceCall, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 
 /** Base call (no SSID, no digipeat `*`), uppercased — the licence identity behind a callsign. */
 const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
@@ -84,6 +85,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
+  const commands: RadioMessage[] = []; // messages to the service call — radio commands
+  const service = serviceCall(env);
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
@@ -121,6 +124,20 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           "INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'rx')",
         ).bind(p.ts, p.src, data.addressee ?? null, data.text ?? "", data.msgNo ?? null),
       );
+      if (String(data.addressee ?? "").toUpperCase() === service) {
+        const { text, msgNo } = splitMessageNumber(String(data.text ?? ""), data.msgNo);
+        commands.push({
+          src: p.src,
+          text,
+          ...(msgNo ? { msgNo } : {}),
+          ts: p.ts,
+          port: p.port,
+          heardVia: p.heardVia,
+          igateCall: p.igateCall ?? null,
+          path: p.path,
+          signed: signer != null,
+        });
+      }
     } else if (data.kind === "message" && data.ack && data.msgNo) {
       ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
@@ -205,6 +222,15 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   for (const a of ackedBy) await bbsOnAck(env, a.from, a.lineNo);
   const heardCalls = new Set(positions.map((p) => p.src.toUpperCase()));
   for (const cs of heardCalls) await deliverHeld(env, cs);
+
+  // radio commands (FOUND / DNF / NOTE / HELP) — best-effort per message; never fails the batch
+  for (const c of commands) {
+    try {
+      await handleRadioMessage(env, c);
+    } catch (e) {
+      console.error("radio command:", (e as Error).message);
+    }
+  }
 
   // raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)
   try {
