@@ -19,7 +19,7 @@ import { serveFeed, type FeedServeDef } from "./federation.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export type TombstoneKind = "account" | "find" | "cache";
+export type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
 export interface TombstoneItem {
   kind: TombstoneKind;
   targetId: string;

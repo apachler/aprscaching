@@ -602,9 +602,11 @@ lands with a regression test that fails without it.
 - [x] **Replay and robustness** — monotonic record versions and bounded signing times, per-type
   sync pages, a rate-limited notify endpoint, SSRF-guarded capped discovery, squat-proof ACSFED ids,
   body caps on pull pages, and relay spokes isolated by their own keys.
-- [ ] **Low-severity items and operator guidance** *(S)* — signed-ingest replay cache, erasure of mirrored
-  key bindings and moves, a signed migration proof on account moves, domain
-  prefixes on standalone JSON signatures, and a "Running federation safely" guide.
+- [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
+  key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
+  signatures, and a "Running federation safely" guide.
+- [ ] **Drop the unprefixed signature forms** *(S)* — after the next release, verify rotation, registry
+  and ingest signatures only in their domain-prefixed form.
 
 ## Federation over RF (the wire contracts are in; the bindings land in this order)
 

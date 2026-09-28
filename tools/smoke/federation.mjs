@@ -817,6 +817,9 @@ if (mframe) {
 }
 ok("the move frame verifies against the publisher key (domain-separated Ed25519)", mvOk);
 
+// a mirror keeps a move only under a key it knows for the callsign independently of the instance
+// claiming the move — here the mover registered the same device key on the subscriber
+await call(SUB, "POST", "/keys/register", { callsign: "OE7MOV", publicKey: mpub, label: "dev" });
 const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
 ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));
 const mpeers = await call(SUB, "GET", "/federation/peers");
