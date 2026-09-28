@@ -1,27 +1,122 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * MeshCom ExtUDP listener — the operator-local socket in front of the pure core in @aprscaching/aprs.
+ *
+ * A MeshCom node streams the frames it handles to one host on its LAN (UDP 1799, JSON). This listener
+ * accepts datagrams only from configured node addresses, bounds their size and rate, forwards one copy
+ * per frame (a stronger RF copy of an already-forwarded frame goes out again as an upgrade), and stamps
+ * each packet with the transport hint that feeds the gateway's provenance derivation: only a direct LoRa
+ * hearing names the receiving node as its gate, and the gateway lifts that toward Tier A only when the
+ * node's call is an attested site. It never transmits; the sender is separate and off by default.
+ *
+ * Node and Bun only — the Workers build never includes this file (tools/checks/worker-bundle.mjs).
+ */
 import dgram from "node:dgram";
-import { decodeMeshcom, meshcomToAprs, MESHCOM_MAX_DATAGRAM } from "@aprscaching/aprs";
+import { networkInterfaces } from "node:os";
+import {
+  decodeMeshcom,
+  meshcomToAprs,
+  meshcomTransportHint,
+  MeshcomDedup,
+  MESHCOM_MAX_DATAGRAM,
+  type MeshcomEvent,
+} from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 
-export interface MeshcomOpts {
-  /** The MeshCom node's IP. Datagrams from any other address are dropped. */
-  node: string;
-  port: number;
-  bind?: string;
+/** The node's fixed ExtUDP port (`EXTERN_PORT` in the firmware). */
+export const MESHCOM_PORT = 1799;
+
+export interface MeshcomNode {
+  ip: string;
+  /** The node's own callsign: names it as the gate of direct hearings and marks its own frames. */
+  call?: string;
 }
 
-/**
- * Normalise one external-UDP datagram into a Packet on the `meshcom` port.
- *
- * Every MeshCom frame is Tier C: the external interface is unauthenticated and a `udp`-sourced frame
- * crossed the internet via the MeshCom server. So the packet is forwarded as `heardVia: "aprs_is"`
- * with no IGate — the gateway's provenance derivation then yields `firstPartyAttested = false`.
- * Emitting `rf` here would let an attested-IGate path lift a mesh frame toward Tier A.
- */
-export function meshcomToPacket(datagram: string | Uint8Array, ts = Math.floor(Date.now() / 1000)): Packet | null {
-  const d = decodeMeshcom(datagram);
-  const f = d.ok ? meshcomToAprs(d.event) : null;
+export interface MeshcomOpts {
+  nodes: MeshcomNode[];
+  port?: number;
+  /** Local address to bind; defaults to this host's address on the first node's subnet. */
+  bind?: string;
+  /** Local tools that also want the raw datagrams (the port can have only one owner). */
+  fanout?: { host: string; port: number }[];
+  /** Per-node datagram rate: sustained per second, and burst. */
+  ratePerSec?: number;
+  rateBurst?: number;
+  /** Warn when no datagram arrived for this long. */
+  staleMs?: number;
+  /** Interval of the counters log line. */
+  statsMs?: number;
+}
+
+/** `192.168.1.50=OE8APR-12, 192.168.1.51` → node list. */
+export function parseMeshcomNodes(spec: string): MeshcomNode[] {
+  return spec
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map((entry) => {
+      const [ip, call] = entry.split("=");
+      return { ip: ip!.trim(), ...(call?.trim() ? { call: call.trim().toUpperCase() } : {}) };
+    });
+}
+
+/** `127.0.0.1:1800, 127.0.0.1:1801` → fan-out targets; a malformed target is skipped with a warning. */
+export function parseMeshcomFanout(spec: string | undefined): { host: string; port: number }[] {
+  const out: { host: string; port: number }[] = [];
+  for (const t of (spec ?? "").split(/[,\s]+/).filter(Boolean)) {
+    const i = t.lastIndexOf(":");
+    const port = Number(t.slice(i + 1));
+    if (i <= 0 || !Number.isInteger(port) || port < 1 || port > 65535) {
+      console.warn(`[meshcom] ignoring MESHCOM_FANOUT target "${t}" — expected host:port`);
+      continue;
+    }
+    out.push({ host: t.slice(0, i), port });
+  }
+  return out;
+}
+
+const ipv4 = (ip: string) => ip.split(".").reduce((a, o) => (a << 8) + Number(o), 0) >>> 0;
+
+/** This host's IPv4 address on the subnet that contains `nodeIp`, or null. */
+export function lanAddressFor(nodeIp: string, ifaces = networkInterfaces()): string | null {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(nodeIp)) return null;
+  const target = ipv4(nodeIp);
+  for (const list of Object.values(ifaces)) {
+    for (const a of list ?? []) {
+      if (a.family !== "IPv4" || a.internal) continue;
+      const mask = ipv4(a.netmask);
+      if ((ipv4(a.address) & mask) === (target & mask)) return a.address;
+    }
+  }
+  return null;
+}
+
+/** MeshCom firmware at or before this build crashes an ESP32 node with ExtUDP on (fixed 2026-09-25). */
+function firmwareRisk(fw: string): "affected" | "unknown-build" | null {
+  const m = /^(\d+)\.(\d+)([a-z]?)$/.exec(fw);
+  if (!m) return null;
+  const [maj, min, sub] = [Number(m[1]), Number(m[2]), m[3] ?? ""];
+  const v = maj * 1000 + min;
+  if (v < 4035 || (v === 4035 && sub < "t")) return "affected";
+  if (v === 4035 && sub === "t") return "unknown-build";
+  return null;
+}
+
+export type MeshcomCounters = {
+  received: number;
+  forwarded: number;
+  deduped: number;
+  upgraded: number;
+  rf: number;
+  udp: number;
+  own: number;
+  tele: number;
+  rejected: Record<string, number>;
+};
+
+export function meshcomToPacket(e: MeshcomEvent, receiverCall: string | undefined, ts: number): Packet | null {
+  const f = meshcomToAprs(e);
   if (!f) return null;
+  const hint = meshcomTransportHint(e.provenance, receiverCall);
   return {
     src: f.src,
     dst: "APRS",
@@ -29,83 +124,208 @@ export function meshcomToPacket(datagram: string | Uint8Array, ts = Math.floor(D
     payload: f.payload,
     kind: f.kind,
     ...(f.lat !== undefined ? { parsed: { lat: f.lat, lon: f.lon } as Record<string, unknown> } : {}),
-    heardVia: "aprs_is",
+    heardVia: hint.heardVia,
+    ...(hint.igateCall ? { igateCall: hint.igateCall } : {}),
     port: "meshcom",
     ts,
   };
 }
 
-/** How long one MeshCom frame id counts as already forwarded. */
-const DEDUPE_MS = 10 * 60_000;
-const DEDUPE_MAX = 4096;
+interface Bucket {
+  tokens: number;
+  at: number;
+}
 
-/**
- * RX-only listener for a MeshCom node's external UDP interface (default :1799). A node hears the
- * same frame over LoRa and again from the MeshCom server, so copies sharing a frame id are
- * forwarded once. It never transmits.
- */
 export class MeshcomListener {
   private sock?: dgram.Socket;
-  private seen = new Map<string, number>();
+  private fanSock?: dgram.Socket;
+  private timer?: ReturnType<typeof setInterval>;
+  private readonly nodes: Map<string, MeshcomNode>;
+  private readonly receiverCalls: string[];
+  private readonly dedup = new MeshcomDedup();
+  private readonly buckets = new Map<string, Bucket>();
+  private readonly fwWarned = new Set<string>();
+  private lastSeen = 0;
+  private startedAt = Date.now();
+  private staleWarned = false;
+  readonly counters: MeshcomCounters = {
+    received: 0,
+    forwarded: 0,
+    deduped: 0,
+    upgraded: 0,
+    rf: 0,
+    udp: 0,
+    own: 0,
+    tele: 0,
+    rejected: {},
+  };
+
   constructor(
     private o: MeshcomOpts,
     private onPacket: (p: Packet) => void,
-  ) {}
+    private log: Pick<Console, "log" | "warn" | "error"> = console,
+  ) {
+    this.nodes = new Map(o.nodes.map((n) => [n.ip, n]));
+    this.receiverCalls = o.nodes.flatMap((n) => (n.call ? [n.call] : []));
+  }
 
-  /** Handle one datagram; exposed so the source-pin and dedupe rules are testable without a socket. */
+  private reject(reason: string): null {
+    this.counters.rejected[reason] = (this.counters.rejected[reason] ?? 0) + 1;
+    return null;
+  }
+
+  private allow(ip: string, now: number): boolean {
+    const rate = this.o.ratePerSec ?? 20,
+      burst = this.o.rateBurst ?? 60;
+    const b = this.buckets.get(ip) ?? { tokens: burst, at: now };
+    b.tokens = Math.min(burst, b.tokens + ((now - b.at) / 1000) * rate);
+    b.at = now;
+    this.buckets.set(ip, b);
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  }
+
+  /** Handle one datagram; the socket calls this, and tests call it directly. */
   receive(msg: Uint8Array, from: string, now = Date.now()): Packet | null {
-    if (from !== this.o.node) return null;
-    if (msg.length > MESHCOM_MAX_DATAGRAM) return null;
-    const d = decodeMeshcom(msg);
-    if (!d.ok) return null;
-    const f = { kind: d.event.type, src: d.event.src, msgId: d.event.provenance.msgId };
-    if (f.msgId) {
-      const key = `${f.kind}:${f.src}:${f.msgId}`;
-      const at = this.seen.get(key);
-      if (at !== undefined && now - at < DEDUPE_MS) return null;
-      this.remember(key, now);
+    this.counters.received++;
+    const node = this.nodes.get(from);
+    if (!node) return this.reject("not-allowlisted");
+    if (msg.byteLength > MESHCOM_MAX_DATAGRAM) return this.reject("too-large");
+    if (!this.allow(from, now)) return this.reject("rate-limited");
+    this.lastSeen = now;
+    this.staleWarned = false;
+    this.fanOut(msg);
+
+    const d = decodeMeshcom(msg, { receiverCalls: this.receiverCalls });
+    if (!d.ok) return this.reject(d.reason);
+    const e = d.event;
+    this.checkFirmware(e, node);
+    if (e.type === "tele") {
+      this.counters.tele++;
+      return null;
     }
-    const p = meshcomToPacket(msg, Math.floor(now / 1000));
-    if (p) this.onPacket(p);
+
+    const verdict = this.dedup.offer(e, now);
+    if (verdict === "duplicate") {
+      this.counters.deduped++;
+      return null;
+    }
+    if (verdict === "upgrade") this.counters.upgraded++;
+    if (e.provenance.rf) this.counters.rf++;
+    else if (e.provenance.srcType === "udp") this.counters.udp++;
+    else this.counters.own++;
+
+    const p = meshcomToPacket(e, node.call, Math.floor(now / 1000));
+    if (!p) return null;
+    this.counters.forwarded++;
+    this.onPacket(p);
     return p;
   }
 
-  private remember(key: string, now: number) {
-    this.seen.delete(key); // re-insert so Map order stays oldest-first
-    this.seen.set(key, now);
-    if (this.seen.size <= DEDUPE_MAX) return;
-    for (const [k, at] of this.seen) {
-      if (this.seen.size <= DEDUPE_MAX && now - at < DEDUPE_MS) break;
-      this.seen.delete(k);
-    }
+  /** Warn once per node when its own frames report firmware with the ExtUDP crash. */
+  private checkFirmware(e: MeshcomEvent, node: MeshcomNode) {
+    if (e.provenance.srcType !== "node" || !e.provenance.firmware || this.fwWarned.has(node.ip)) return;
+    const risk = firmwareRisk(e.provenance.firmware);
+    this.fwWarned.add(node.ip);
+    if (risk === "affected")
+      this.log.warn(
+        `[meshcom] node ${node.ip} runs firmware ${e.provenance.firmware}, which can crash an ESP32 node with --extudp on — update to a 4.35t build from 2026-09-25 or later`,
+      );
+    else if (risk === "unknown-build")
+      this.log.warn(
+        `[meshcom] node ${node.ip} runs firmware 4.35t; builds before 2026-09-25 can crash an ESP32 node with --extudp on — update if the node restarts`,
+      );
+  }
+
+  private fanOut(msg: Uint8Array) {
+    if (!this.fanSock || !this.o.fanout?.length) return;
+    for (const t of this.o.fanout) this.fanSock.send(msg, t.port, t.host);
+  }
+
+  /** One structured counters line; message payloads are never logged. */
+  stats(now = Date.now()) {
+    return {
+      ...this.counters,
+      rejected: { ...this.counters.rejected },
+      lastSeenAgoS: this.lastSeen ? Math.round((now - this.lastSeen) / 1000) : null,
+    };
+  }
+
+  /** Warn once when the node has gone quiet; resets on the next datagram. */
+  checkStale(now = Date.now()): boolean {
+    const staleMs = this.o.staleMs ?? 30 * 60_000;
+    const since = this.lastSeen || this.startedAt;
+    if (now - since < staleMs || this.staleWarned) return false;
+    this.staleWarned = true;
+    this.log.warn(
+      `[meshcom] no datagram from ${[...this.nodes.keys()].join(", ")} for ${Math.round((now - since) / 60_000)} min — check the node's Wi-Fi and --extudpip`,
+    );
+    return true;
   }
 
   start() {
-    const s = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    const port = this.o.port ?? MESHCOM_PORT;
+    const first = this.o.nodes[0]?.ip;
+    const bind = this.o.bind ?? (first ? lanAddressFor(first) : null);
+    if (!bind) {
+      this.log.error(
+        `[meshcom] no local address on the subnet of ${first ?? "(no node)"} — set MESHCOM_BIND to this host's LAN address`,
+      );
+      return;
+    }
+    if (bind === "0.0.0.0")
+      this.log.warn(
+        "[meshcom] bound to all interfaces — the ExtUDP interface is unauthenticated; bind to the LAN address on any host reachable from the internet",
+      );
+
+    const s = dgram.createSocket("udp4");
     this.sock = s;
     s.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
-      this.receive(Uint8Array.from(msg), rinfo.address);
+      this.receive(msg, rinfo.address);
     });
-    // A bind failure (port busy) must not kill the listener permanently: retry once the address frees.
     s.on("error", (e: NodeJS.ErrnoException) => {
-      console.error("[meshcom]", e.message);
       if (e.code === "EADDRINUSE") {
-        setTimeout(() => {
-          try {
-            s.bind(this.o.port, this.o.bind ?? "0.0.0.0");
-          } catch (err) {
-            console.error("[meshcom] rebind failed:", (err as Error).message);
-          }
-        }, 5000).unref?.();
+        this.log.error(
+          `[meshcom] udp/${port} on ${bind} is already in use — another MeshCom client owns it (MeshcomWebDesk, gomeshcomd, Home Assistant, MCProxy?). Stop it, or let this listener own the port and pass datagrams on with MESHCOM_FANOUT. MeshCom ingest is disabled.`,
+        );
+      } else {
+        this.log.error(`[meshcom] socket error: ${e.message} — MeshCom ingest is disabled`);
       }
+      this.stop();
     });
-    s.bind(this.o.port, this.o.bind ?? "0.0.0.0", () =>
-      console.log(`[meshcom] listening udp/${this.o.port} for node ${this.o.node} (RX-only, Tier C)`),
-    );
+    s.bind(port, bind, () => {
+      this.startedAt = Date.now();
+      this.log.log(
+        `[meshcom] listening udp/${port} on ${bind} for ${this.o.nodes.map((n) => (n.call ? `${n.ip} (${n.call})` : n.ip)).join(", ")} — RX only`,
+      );
+    });
+    if (this.o.fanout?.length) this.fanSock = dgram.createSocket("udp4");
+
+    const statsMs = this.o.statsMs ?? 10 * 60_000;
+    this.timer = setInterval(() => {
+      this.log.log(`[meshcom] stats ${JSON.stringify(this.stats())}`);
+      this.checkStale();
+    }, statsMs);
+    this.timer.unref?.();
   }
 
   stop(): void {
-    this.sock?.close();
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+    for (const sock of [this.sock, this.fanSock]) {
+      try {
+        sock?.close();
+      } catch {
+        // already closed
+      }
+    }
     this.sock = undefined;
+    this.fanSock = undefined;
+  }
+
+  /** The bound socket (for tests). */
+  get socket(): dgram.Socket | undefined {
+    return this.sock;
   }
 }

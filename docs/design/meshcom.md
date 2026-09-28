@@ -1,7 +1,7 @@
 # MeshCom integration (design)
 
 !!! note "Built and planned"
-    The receive-only listener is built: `packages/aprs/src/meshcom.ts` decodes the datagrams,
+    The receive side is built: the pure core in `packages/aprs/src/meshcom/` decodes the datagrams,
     `apps/ingest/src/meshcom.ts` listens for them, and its configuration is under
     [RF ingest & transports](../operate/rf-ingest.md). Telemetry, find logging over the mesh, transmit and a
     browser-direct path are design only, tracked in
@@ -68,9 +68,9 @@ LAN, not through a TNC.
 
 | MeshCom piece | Home in the repo | State |
 |---|---|---|
-| JSON → APRS frame | `parseMeshcomUdp()` in `packages/aprs/src/meshcom.ts`: a position becomes an uncompressed `!` position; a direct message an APRS `:ADDRESSEE:text{nnn` message; group and `*` text an APRS user-defined `{MG` packet, which the decoder classifies as `other` so it stays out of the message log | built |
-| UDP listener | `MeshcomListener` in `apps/ingest/src/meshcom.ts`: pins the source address to `MESHCOM_NODE`, forwards one copy per frame id within ten minutes (a node reports the same frame from LoRa and from the server), registered in `apps/ingest/src/index.ts` | built |
-| Configuration | `MESHCOM_NODE` (enables the listener), `MESHCOM_PORT` (1799), `MESHCOM_BIND` | built |
+| Pure core | `packages/aprs/src/meshcom/`: `parse` (total, structured rejection reasons), `normalize` (hemisphere, callsigns, path, locator, provenance), `dedup` (bounded frame-id window, stronger copies upgrade), `encode` (direct-callsign text, 150 UTF-8 bytes), `aprs` (APRS mapping and transport hint). A position becomes an uncompressed `!` position; a direct message an APRS `:ADDRESSEE:text{nnn` message; group and `*` text an APRS user-defined `{MG` packet, which the decoder classifies as `other` so it stays out of the message log. Conformance runs the golden fixtures on Node, Bun and workerd (`pnpm conformance:meshcom`) | built |
+| UDP listener | `MeshcomListener` in `apps/ingest/src/meshcom.ts`: accepts only configured node addresses, bounds size and per-node rate, passes raw datagrams to `MESHCOM_FANOUT` targets, dedups, stamps the transport hint, logs counters and warns on a silent node or crash-prone firmware. Never in the Worker bundle (`tools/checks/worker-bundle.mjs`) | built |
+| Configuration | `MESHCOM_NODE` (`ip[=CALL]` list; enables the listener), `MESHCOM_PORT`, `MESHCOM_BIND`, `MESHCOM_FANOUT`, `MESHCOM_RATE`, `MESHCOM_STALE_MIN` | built |
 | Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`). Stored positions carry no port, so `transportOf()` in `workers/gateway/src/provenance.ts` does not distinguish it; trust does not depend on it either way | built |
 | Positions | `kind:"position"` with `parsed.lat/lon` → live map, MHeard, `GET /api/ports` | built |
 | Messages | a direct message → the messages log (`shack.ts`); the Messages surface shows it | built |
@@ -89,13 +89,15 @@ firmware's internal non-call sources.
 MeshCom frames are unsigned, and a `udp`-sourced datagram crossed the internet. The design follows the
 standing rule that transport is not trust:
 
-- **Every MeshCom packet is Tier C.** The listener forwards with `heardVia: "aprs_is"` on port
-  `meshcom`, the same way AXUDP and the Meshtastic bridge do. That matters: `provenanceOf()` lifts a
-  packet toward Tier A when `heardVia` is `rf` and `igateCall` names an attested site, so emitting
-  `rf` would open Tier A by accident.
-- **Tier A is a separate decision** taken with real on-air data. If it opens, it opens only for
-  `src_type: "lora"` heard at an operator-attested site, through the existing `firstPartyAttested`
-  flag plus an explicit on-air check — never because the transport is MeshCom.
+- **Only a direct LoRa hearing names a receiving site.** A frame is RF only when `src_type` is `lora`
+  and its origin is not the receiving node (the firmware labels the node's own back-pressure notices
+  `lora`). An RF frame whose source path is the originator alone is *direct*. The listener forwards a
+  direct frame as `heardVia: "rf"` with the node's call as `igateCall`; a relayed RF frame as `rf` with no
+  gate; everything else as `aprs_is`. The gateway's existing provenance derivation is then the only
+  Tier-A gate: it attests the frame only when the node's call is in `FIRST_PARTY_SITES`, and the usual
+  independence rule stops an operator's own node from corroborating the operator's own find.
+- **Relayed and server frames never corroborate presence.** A relay proves the originator was near the
+  relay, not near the receiving node, and a server copy proves nothing about the air.
 - **Finds logged over the mesh** (see below) stay Tier C unless corroborated by the usual A or B
   evidence; the message itself proves nothing about presence.
 
@@ -106,7 +108,7 @@ standing rule that transport is not trust:
 - Port 1799 is never exposed to the internet. Pointing `--extudpip` at a cloud gateway would couple RF
   ingest to a cloud host and send unauthenticated traffic across the internet; the operator docs say so
   explicitly.
-- Datagrams over 1 KiB are refused before parsing; every field is type- and range-checked, text is
+- Datagrams over 2 KiB are refused before parsing; every field is type- and range-checked, text is
   collapsed to one line and length-bounded, and a malformed datagram is dropped, never thrown.
 - The listener never transmits and never registers with the node, so it cannot change the node's
   state.
