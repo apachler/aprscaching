@@ -58,12 +58,13 @@ describe("signed instance registry", () => {
     expect(await verifyRegistry({ entries, at } as SignedRegistry, authX)).toBe(false); // unsigned
   });
 
-  it("the anti-spoof binding allows the registered key, rejects an impostor, TOFUs the unregistered", () => {
+  it("the anti-spoof binding requires the registered key as the current key, TOFUs the unregistered", () => {
     const entry = { instance: "oe.net", key: "GOOD" };
-    expect(registryKeyAllowed(entry, ["GOOD", "old"])).toBe(true); // peer presents the bound key
-    expect(registryKeyAllowed(entry, ["EVIL"])).toBe(false); // impersonation — bound key absent
-    expect(registryKeyAllowed(undefined, ["anything"])).toBe(true); // unregistered → TOFU
-    expect(registryKeyAllowed({ instance: "x" }, ["k"])).toBe(true); // registered but no bound key → TOFU
+    expect(registryKeyAllowed(entry, "GOOD")).toBe(true); // peer's current key is the bound key
+    expect(registryKeyAllowed(entry, "EVIL")).toBe(false); // impersonation, even if GOOD is also listed
+    expect(registryKeyAllowed(entry, null)).toBe(false); // an unsigned descriptor can't claim a bound id
+    expect(registryKeyAllowed(undefined, "anything")).toBe(true); // unregistered → TOFU
+    expect(registryKeyAllowed({ instance: "x" }, "k")).toBe(true); // registered but no bound key → TOFU
   });
 
   it("carries typed endpoint sets, re-validating them on load so a malformed address never rides in", async () => {

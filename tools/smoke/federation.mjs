@@ -594,6 +594,24 @@ ok(
   sub1.data?.ok === true && sub1.data?.applied === 1,
   JSON.stringify(sub1.data),
 );
+// a shared submit secret is not an identity: the new spoke enters unvetted (hidden from the default
+// map) until the operator promotes it
+const spokeRow = (await call(SUB, "GET", "/federation/peers")).data?.peers?.find((p) => p.url === "submit:oe.spoke");
+ok("a new spoke is registered unvetted", spokeRow?.trust === "unvetted", JSON.stringify(spokeRow?.trust));
+const hidden = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
+ok(
+  "an unvetted spoke's cache stays off the default map",
+  !(hidden.data?.caches ?? []).some((c) => c.origin === "oe.spoke"),
+  JSON.stringify((hidden.data?.caches ?? []).map((c) => c.origin)),
+);
+const promote = await call(
+  SUB,
+  "POST",
+  "/federation/peers/trust",
+  { url: "submit:oe.spoke", trust: "trusted" },
+  { "x-ingest-secret": SECRET },
+);
+ok("the operator promotes the spoke", promote.status === 200, `status=${promote.status}`);
 const smap = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
 ok(
   "the spoke's cache is mirrored onto the hub map (push-mode mirroring)",
