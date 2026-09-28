@@ -13,7 +13,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | **session** | A passkey or email-verified cookie session. |
 | **actor** | A session **or** `x-ingest-secret` — the "web write behind sign-in / RF write over APRS" dual path. |
 | **x-ingest-secret** | Matches `INGEST_SECRET` — a trusted operator backend (the ingest box). |
-| **sysop** | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS` (or `x-ingest-secret`). Locked if `ADMIN_CALLSIGNS` is unset. |
+| **sysop** | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS`, held by their account and control-verified (or `x-ingest-secret`). Locked if `ADMIN_CALLSIGNS` is unset. |
 | **signed-body** | An Ed25519 assertion (`key`, `sig`, `at`) registered to the callsign, or a matching session. |
 | **x-relay-secret / x-fed-secret / wx-key** | Federation relay / federation submit-corroborate / weather-station keys. |
 

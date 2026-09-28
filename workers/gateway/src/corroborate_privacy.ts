@@ -143,12 +143,24 @@ export function corroborationAuthorized(env: Env, req: Request): boolean {
 }
 
 /**
+ * Stamp the client identity on a request entering a self-host runtime (Node/Bun) from its socket.
+ * `x-real-ip` is always overwritten with the socket address. A `cf-connecting-ip` sent by the client
+ * is dropped unless the operator declares a Cloudflare edge in front (TRUST_CF=1) — a client reaching
+ * the server directly could otherwise pick a fresh rate-limit identity on every request.
+ */
+export function stampClientIp(headers: Headers, socketAddr: string | undefined, env: Env): void {
+  headers.set("x-real-ip", socketAddr || "unknown");
+  if (env.TRUST_CF !== "1") headers.delete("cf-connecting-ip");
+}
+
+/**
  * Client ip for rate-limit keying, from sources the CLIENT cannot choose.
- *  - cf-connecting-ip: stamped by Cloudflare's edge (never client-forwarded).
+ *  - cf-connecting-ip: stamped by Cloudflare's edge. On the Worker the edge always sets it; the
+ *    self-host runtimes keep it only behind a declared Cloudflare edge (TRUST_CF=1, see stampClientIp).
  *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
  *    topology 2/3 behind Caddy/CF) — otherwise any direct client could rotate identities per request.
- *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address, so a client-supplied
- *    value never survives to this point on the self-host runtimes.
+ *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address (stampClientIp), so a
+ *    client-supplied value never survives to this point on the self-host runtimes.
  */
 export function clientIp(req: Request, env?: Env): string {
   const cf = req.headers.get("cf-connecting-ip");

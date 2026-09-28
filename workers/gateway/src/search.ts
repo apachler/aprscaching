@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { displayCall } from "./auth.js";
 import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from "@aprscaching/shared";
 
 /**
@@ -79,7 +80,7 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
     id: r.id,
     code: r.code,
     title: r.title,
-    ownerCall: r.owner_call,
+    ownerCall: displayCall(r.owner_call),
     type: r.type as CacheType,
     lat: r.lat,
     lon: r.lon,

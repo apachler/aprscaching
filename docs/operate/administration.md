@@ -5,8 +5,11 @@ users. This surface is separate from per-user settings and is gated server-side.
 
 ## Operator identity
 
-`ADMIN_CALLSIGNS` (comma-separated licensed calls) names the instance operator(s). A signed-in account whose
-active callsign is in that list is a **sysop**; `GET /api/admin/whoami` tells the web app whether to reveal
+`ADMIN_CALLSIGNS` (comma-separated licensed calls) names the instance operator(s). A signed-in account is a
+**sysop** when its active callsign is in that list, the account holds that call, and the call is
+**control-verified** (the APRS message challenge under Settings → account — the same proof transmit
+needs). Signing up under a listed call grants nothing until that verification succeeds, so the operator
+verifies their call once after first sign-in. `GET /api/admin/whoami` tells the web app whether to reveal
 the operator surface. Every operator write is enforced by `requireSysop` on the server — hiding a control in
 the UI is never the gate. If `ADMIN_CALLSIGNS` is unset, the web operator surface is locked entirely (the
 operator-local ingest box can still act with `INGEST_SECRET`).
@@ -97,8 +100,12 @@ Sensitive account actions are authorised by a passkey session or a signature fro
 the callsign — there is no central password.
 
 - **Export** (`POST /api/account/:call/export`) returns a full machine-readable copy of the account's data.
-- **Erase** (`/delete`) anonymises finds to `WITHDRAWN`, archives owned caches, deletes personal rows, and
-  emits a **PII-free tombstone** so federation peers purge their mirrored copies.
+- **Erase** (`/delete`) covers the whole account: every base call it holds. It anonymises finds, owned
+  caches and messages to a withdrawn marker (served as `WITHDRAWN`; the name can never be registered),
+  archives owned caches and removes their uploaded media, deletes every personal row — passkeys, email
+  links, held calls, watches, alerts, saved views, push subscriptions, boxes, ratings, API keys and
+  personal BBS mail — frees the base calls for a new registration, and emits a **PII-free tombstone** so
+  federation peers purge their mirrored copies.
 - **Portability** (`/bundle`, `/move`, `/api/account/import`) lets a user migrate a callsign to another
   instance; because finds are device-signed, history stays attributable, and an account-move record
   re-points attribution across the network.

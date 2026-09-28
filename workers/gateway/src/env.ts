@@ -22,10 +22,15 @@ export interface Env {
   // "1" when a reverse proxy (Caddy/CF tunnel, topology 2/3) fronts this instance — only then is
   // x-forwarded-for trusted for rate-limit keying.
   TRUST_PROXY?: string;
+  // "1" when a Cloudflare edge (Tunnel or proxied DNS, topology 1/3) fronts a Node/Bun instance — only
+  // then does a `cf-connecting-ip` header survive into rate-limit keying. Set it only when the origin
+  // is reachable solely through Cloudflare.
+  TRUST_CF?: string;
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
   // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin
-  // endpoints locked; the ingest still uses INGEST_SECRET). The operator sets their own signed-in call.
+  // endpoints locked; the ingest still uses INGEST_SECRET). The operator lists their own call, and the
+  // role applies once their account holds that call and has control-verified it.
   ADMIN_CALLSIGNS?: string;
 
   // ---- federation — all optional; absent => feeds served unsigned ----
@@ -143,6 +148,7 @@ export const ENV_STRING_KEYS = [
   "SESSION_TTL_DAYS",
   "SESSION_EPOCH",
   "TRUST_PROXY",
+  "TRUST_CF",
   "ADMIN_CALLSIGNS",
   "INSTANCE",
   "FED_PRIVATE_KEY",

@@ -36,7 +36,8 @@ docker compose -f docker-compose.yml -f compose.home.yml up -d --build
 docker compose up -d --build                # or one-click via oci/README-stack.md
 
 # 3) OCI + Cloudflare CDN:
-#    do (2), then add the domain to Cloudflare and:
+#    do (2), then add the domain to Cloudflare, restrict the VM's 80/443 to Cloudflare's IP ranges,
+#    set TRUST_CF=1 in .env (per-IP rate limits then key on cf-connecting-ip), and:
 CF_API_TOKEN=… CF_ZONE_ID=… ./cloudflare/cache-rules.sh
 
 # 4) OCI ingest + Cloudflare Workers/D1/R2:

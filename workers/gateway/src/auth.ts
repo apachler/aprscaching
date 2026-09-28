@@ -59,6 +59,80 @@ async function takeChallenge(env: Env, cs: string, kind: string): Promise<string
   return row.value;
 }
 
+const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
+
+/** A registrable call: a 3–9 character base of letters and digits with an optional 1–2 character SSID.
+ *  Anything else — including the `#` that marks an erased identity — can never name an account. */
+const REGISTRABLE_CALL = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
+
+/** The owner/logger marker an erased identity is rewritten to. Each erasure gets its own suffix
+ *  (`WITHDRAWN#…`) so two erased people's rows never collide on a per-caller unique index. */
+export const WITHDRAWN = "WITHDRAWN";
+export const isWithdrawnCall = (c: string | null | undefined): boolean => {
+  const u = (c ?? "").toUpperCase();
+  return u === WITHDRAWN || u.startsWith(`${WITHDRAWN}#`);
+};
+
+/** A call as served to readers and peers: any withdrawn marker reads as plain `WITHDRAWN`, so the
+ *  per-erasure suffix never links an erased person's rows outside this instance. */
+export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAWN : c);
+
+/** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
+ *  and the default service call the instance sends verification codes and BBS mail from. */
+const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
+export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseOf(c));
+
+/** The account holding a base call: its `account_callsigns` holder, else an `accounts` row whose
+ *  call is that base or one of its SSIDs (an account that has no held-call rows). */
+export async function baseHolder(env: Env, base: string): Promise<string | null> {
+  const held = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
+    .bind(base)
+    .first<{ account_id: string }>();
+  if (held) return held.account_id;
+  const anchored = await env.DB.prepare(
+    "SELECT callsign, account_id FROM accounts WHERE callsign=? OR substr(callsign, 1, ?)=? LIMIT 1",
+  )
+    .bind(base, base.length + 1, `${base}-`)
+    .first<{ callsign: string; account_id: string | null }>();
+  return anchored ? (anchored.account_id ?? `callsign:${anchored.callsign}`) : null;
+}
+
+/** Why `cs` cannot open a new account, or null when it can: a malformed or reserved call, or a base
+ *  call some account already holds (an SSID never opens a second account on someone else's licence). */
+export async function unclaimableReason(env: Env, cs: string): Promise<string | null> {
+  if (!REGISTRABLE_CALL.test(cs)) return "invalid callsign";
+  const base = baseOf(cs);
+  if (isReservedCall(base)) return "that callsign is reserved";
+  if (await baseHolder(env, base)) return "callsign already claimed — sign in instead";
+  return null;
+}
+
+/** Does this account hold the base call of `cs`? Keys and calls bind only to a licence the account holds. */
+export async function accountHoldsCall(env: Env, accountId: string, cs: string): Promise<boolean> {
+  return (await baseHolder(env, baseOf(cs))) === accountId;
+}
+
+/**
+ * Throttle a sign-in or verification step per client address and per targeted identity (an email or
+ * callsign), so neither one address nor a pool of addresses can hammer one account. Returns the 429 to
+ * send, or null to proceed.
+ */
+export async function authThrottled(
+  env: Env,
+  req: Request,
+  step: string,
+  identity: string,
+  limits: { perIp: number; perIdentity: number; windowMs: number },
+): Promise<Response | null> {
+  const t = Date.now();
+  const ipHit = await rateLimitedDurable(env, `${step}:ip:${clientIp(req, env)}`, t, limits.perIp, limits.windowMs);
+  const idHit =
+    identity !== "" &&
+    (await rateLimitedDurable(env, `${step}:id:${identity}`, t, limits.perIdentity, limits.windowMs));
+  return ipHit || idHit ? json({ error: "rate limited — try again later" }, { status: 429 }) : null;
+}
+const PASSKEY_LOGIN_LIMITS = { perIp: 30, perIdentity: 10, windowMs: 60_000 };
+
 /** POST /auth/claim {callsign} — probe whether a callsign exists / has a passkey (no side effects). */
 export async function handleClaim(req: Request, env: Env): Promise<Response> {
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
@@ -66,6 +140,8 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
     .toUpperCase()
     .trim();
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const limited = await authThrottled(env, req, "claim", cs, { perIp: 30, perIdentity: 20, windowMs: 60_000 });
+  if (limited) return limited;
   const existing = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
   const hasPasskey = existing
     ? await env.DB.prepare("SELECT 1 FROM credentials WHERE callsign=? LIMIT 1").bind(cs).first()
@@ -106,6 +182,8 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
       return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
     accountId = existing.account_id;
   } else {
+    const refused = await unclaimableReason(env, cs);
+    if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
     // Do NOT insert the account here — an unauthenticated begin that pre-claimed the callsign row
     // would let anyone squat W1AW and lock out the real holder. The provisional account id (and
     // email) ride inside the stored challenge and only become a row once the passkey ceremony
@@ -174,19 +252,22 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       // Passkey proven — NOW create the account. If the callsign was claimed through another path
       // during the ceremony window, refuse rather than bind this passkey to someone else's account.
       const now = Math.floor(Date.now() / 1000);
-      const raced = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
-        .bind(cs)
-        .first<{ account_id: string }>();
-      if (raced) return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
-      await env.DB.batch([
-        env.DB.prepare(
-          "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-        ).bind(cs, pending.a, pending.e ?? null, now),
-        // seed the held-callsign set with this call as the account's primary (the passkey binds here)
-        env.DB.prepare(
-          "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-        ).bind(pending.a, cs.split("-")[0], now),
-      ]);
+      const raced = await unclaimableReason(env, cs);
+      if (raced) return json({ error: raced }, { status: 409 });
+      try {
+        // seed the held-callsign set with this call as the account's primary (the passkey binds here);
+        // the unique base-call index makes a concurrent claim fail the whole batch
+        await env.DB.batch([
+          env.DB.prepare(
+            "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
+          ).bind(pending.a, baseOf(cs), now),
+          env.DB.prepare(
+            "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
+          ).bind(cs, pending.a, pending.e ?? null, now),
+        ]);
+      } catch {
+        return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
+      }
     }
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -215,6 +296,8 @@ export async function handlePasskeyLoginBegin(req: Request, env: Env): Promise<R
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
+  const limited = await authThrottled(env, req, "pklogin-begin", cs, PASSKEY_LOGIN_LIMITS);
+  if (limited) return limited;
   const creds = await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(cs).all<{ id: string }>();
   if (!creds.results?.length) return json({ error: "no passkey for this callsign" }, { status: 404 });
   const challenge = randomChallenge();
@@ -237,6 +320,8 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   const cs = String(callsign ?? "")
     .toUpperCase()
     .trim();
+  const limited = await authThrottled(env, req, "pklogin-finish", cs, PASSKEY_LOGIN_LIMITS);
+  if (limited) return limited;
   const challenge = await takeChallenge(env, cs, "webauthn_login");
   if (!challenge || !credential?.id || !credential?.response?.signature)
     return json({ error: "no pending login" }, { status: 400 });
@@ -262,14 +347,15 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   }
 }
 
-const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
-
 /**
  * Resolve the durable account behind the signed-in session — the single canonical resolver used
  * everywhere (`watch.ts` re-exports a bare-string wrapper over it). A person holds one or more BASE
  * calls in `account_callsigns` (the durable multi-call model), so that mapping is authoritative and
  * is consulted first; the `accounts` row (active-call anchor) is the fallback for a single-call
- * account that predates any `account_callsigns` entry. Returns the account id + the active callsign.
+ * account without `account_callsigns` entries. A session whose own `accounts` row belongs to a
+ * different account than the base call's holder resolves to nothing: the session names a call on
+ * someone else's licence and must never land on the holder's account. Returns the account id + the
+ * active callsign.
  */
 export async function sessionAccountId(
   req: Request,
@@ -280,10 +366,13 @@ export async function sessionAccountId(
   const viaBase = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
     .bind(baseOf(cur))
     .first<{ account_id: string }>();
-  if (viaBase) return { accountId: viaBase.account_id, callsign: cur };
   const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
     .bind(cur)
     .first<{ account_id: string }>();
+  if (viaBase) {
+    if (me && me.account_id !== viaBase.account_id) return null;
+    return { accountId: viaBase.account_id, callsign: cur };
+  }
   return me ? { accountId: me.account_id, callsign: cur } : null;
 }
 
@@ -326,12 +415,12 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
   const base = baseOf(String(callsign ?? ""));
   if (base.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const held = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
-    .bind(base)
-    .first<{ account_id: string }>();
-  if (held)
+  if (!REGISTRABLE_CALL.test(base)) return json({ error: "invalid callsign" }, { status: 400 });
+  if (isReservedCall(base)) return json({ error: "that callsign is reserved" }, { status: 409 });
+  const holder = await baseHolder(env, base);
+  if (holder)
     return json(
-      held.account_id === me.accountId
+      holder === me.accountId
         ? { error: "you already hold that callsign" }
         : { error: "callsign already held by another account" },
       { status: 409 },
@@ -359,11 +448,11 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   if (next.length < 3) return json({ error: "callsign required" }, { status: 400 });
   const cur = baseOf(me.callsign);
   if (next === cur) return json({ error: "that is already your active callsign" }, { status: 400 });
+  if (!REGISTRABLE_CALL.test(next)) return json({ error: "invalid callsign" }, { status: 400 });
+  if (isReservedCall(next)) return json({ error: "that callsign is reserved" }, { status: 409 });
   // a base call held by a DIFFERENT account is off-limits
-  const owner = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
-    .bind(next)
-    .first<{ account_id: string }>();
-  if (owner && owner.account_id !== me.accountId)
+  const owner = await baseHolder(env, next);
+  if (owner && owner !== me.accountId)
     return json({ error: "callsign already held by another account" }, { status: 409 });
   const now = Math.floor(Date.now() / 1000);
   const held = await env.DB.prepare(

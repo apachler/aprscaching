@@ -18,6 +18,7 @@ import { WebSocketServer } from "ws";
 import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
+import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { makeFetchGuard } from "./fetchguard.js";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { makeD1 } from "./d1.js";
@@ -119,9 +120,9 @@ const server = http.createServer(async (nreq, nres) => {
       if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
       else if (v != null) headers.set(k, v);
     }
-    // The socket address is the ONLY client identity we mint ourselves — overwrite
-    // any client-supplied x-real-ip so rate-limit keying can trust it.
-    headers.set("x-real-ip", nreq.socket.remoteAddress ?? "unknown");
+    // The socket address is the ONLY client identity we mint ourselves — overwrite any client-supplied
+    // x-real-ip, and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared (TRUST_CF).
+    stampClientIp(headers, nreq.socket.remoteAddress, env);
     const hasBody = method !== "GET" && method !== "HEAD";
     // readBody returns raw bytes — the gateway speaks JSON on most routes but BINARY on the
     // federation wire (CBOR sync pages, beacon datagrams); a utf8 round-trip would corrupt those.

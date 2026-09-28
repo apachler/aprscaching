@@ -16,7 +16,7 @@ import { appDataDir } from "./appdata.ts";
 import { BunDb } from "../../servers/bun/d1.ts";
 import { makeFsMedia } from "../../servers/bun/media.ts";
 import { BunRooms, type WsData } from "../../servers/bun/rooms.ts";
-import { handle, runScheduled, type Env, type LiveEnvelope } from "../../servers/bun/gateway.ts";
+import { handle, runScheduled, stampClientIp, type Env, type LiveEnvelope } from "../../servers/bun/gateway.ts";
 
 declare const BUILD_VERSION: string;
 const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
@@ -143,8 +143,12 @@ const server = Bun.serve<WsData, undefined>({
       if (srv.upgrade(req, { data: { region } })) return undefined;
       return new Response("websocket upgrade failed", { status: 400 });
     }
-    if (DYNAMIC.test(url.pathname))
-      return handle(req, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
+    if (DYNAMIC.test(url.pathname)) {
+      // the socket address is the client identity for rate limits, never a client-sent header
+      const headers = new Headers(req.headers);
+      stampClientIp(headers, srv.requestIP(req)?.address, env);
+      return handle(new Request(req, { headers }), env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
+    }
     return serveSpa(url.pathname);
   },
   websocket: {

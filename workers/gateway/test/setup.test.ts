@@ -10,6 +10,14 @@ import type { Env } from "../src/env.js";
 
 const SECRET = "a-strong-ingest-secret-123";
 
+/** The signed-in operator's identity rows: the account holds its call, control-verified. */
+function operatorRow(sql: string): Record<string, unknown> | null {
+  if (sql.includes("FROM account_callsigns")) return { account_id: "acct-op", verified: 1 };
+  if (sql.startsWith("SELECT account_id FROM accounts")) return { account_id: "acct-op" };
+  if (sql.startsWith("SELECT status FROM callsign_verifications")) return { status: "verified" };
+  return null;
+}
+
 /** Mock DB answering the checklist's COUNT probes (keyed on table name) + the session lookups. */
 const db = (counts: Record<string, number>) => ({
   prepare(sql: string) {
@@ -17,6 +25,8 @@ const db = (counts: Record<string, number>) => ({
       bind() {
         return {
           async first() {
+            const who = operatorRow(sql);
+            if (who) return who;
             for (const [table, n] of Object.entries(counts)) if (sql.includes(table)) return { n };
             return { n: 0 };
           },
@@ -136,7 +146,9 @@ describe("GET /api/admin/setup — DB probes", () => {
   it("a failing probe degrades to a warn, never a 500", async () => {
     const broken = baseEnv({
       DB: {
-        prepare() {
+        prepare(sql: string) {
+          // identity lookups answer; every checklist probe fails
+          if (operatorRow(sql)) return db({}).prepare(sql);
           throw new Error("no such table");
         },
       } as unknown as Env["DB"],
