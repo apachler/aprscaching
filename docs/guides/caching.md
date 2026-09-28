@@ -105,7 +105,8 @@ phone location, so without such a beacon it is recorded at **Tier C**.
 Your radio gets an acknowledgement for a numbered message, sent back the way your message came: from the
 receiving station's own radio when it can transmit (no internet needed), through the MeshCom node that heard
 you, or over APRS-IS. A text reply ("AC-1234 found, logged Tier A") comes only if the operator has turned
-replies on; `HELP` is always answered. At most ten commands per hour are accepted from one callsign.
+replies on; `HELP` is always answered. At most ten commands per hour are accepted from one callsign, all
+its SSIDs together; more are ignored, without an acknowledgement.
 
 ### The "you're near" prompt
 

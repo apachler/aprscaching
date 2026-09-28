@@ -65,12 +65,13 @@ is acknowledged (so the sender's radio stops retrying) and recorded as rejected,
 Anyone can put any source callsign on a message injected into APRS-IS or relayed over the internet. The
 message is therefore trusted by where it was heard, using the same provenance rules as Tier A:
 
-- **Heard directly at an attested RF site** (the receiving site is in `FIRST_PARTY_SITES`): the log is written
-  immediately.
+- **Heard directly at an attested RF site** (the ingest box heard it on its own TNC or MeshCom node, and the
+  receiving site is in `FIRST_PARTY_SITES`): the log is written immediately.
 - **Sent in a batch signed by the sender's own device key** (the browser RF bridge): the signature proves
   the sender, so the log is written immediately as well.
 - **Arrived only over the internet** (APRS-IS, a MeshCom relay, a tunnel): the log is recorded as
-  **pending**. It appears in the player's app under *Logs sent over the air* and becomes a real log only when
+  **pending**. A message that came over APRS-IS is never taken as heard at a site, whatever its path says —
+  anyone can inject a `qAR` path naming an attested site. It appears in the player's app under *Logs sent over the air* and becomes a real log only when
   the signed-in player confirms it with one tap. Unconfirmed requests expire after 7 days. If a copy of the
   same message is later heard at an attested site, the pending command is logged without the tap.
 
@@ -105,23 +106,34 @@ the enqueue API refuses them — and the box applies its own gates: the operator
 switch, the command's age, its transmit rate limit, and for RF that the inner source is the service call.
 
 Replies are fixed texts, never user-editable, and rate-limited: at most one reply per destination per
-10 minutes on the gateway, plus the box's own transmit rate limit.
+10 minutes on the gateway, at most 200 acks and replies per hour from the service in total, plus the box's
+own transmit rate limit. Every answer is a clean APRS101 message: printable ASCII only, without `|`, `~` or
+`{`, at most 67 characters, to an addressee field of exactly nine characters.
 
 ## Duplicates and abuse
 
 - APRS senders retry an unacknowledged message with the same message number: a command is keyed by
-  (sender, message number) and runs once; a retry is only re-acknowledged.
+  (sender, message number, text) and runs once; a retry is only re-acknowledged. A message that reuses a
+  number with different text is a new command, so it can never confirm an earlier, possibly forged, one.
+- A message number is one to five letters or digits (APRS101); anything else makes the message unnumbered,
+  so it is not acknowledged and its number is never echoed back.
+- `ack`/`rej` messages to the service call, in either case (`ACK12` included), are acknowledgements, not
+  commands.
 - MeshCom frames are already de-duplicated by frame id before they reach the gateway.
-- A sender may run at most 10 commands per hour; beyond that commands are acknowledged and rejected.
-- One found log per player per cache, as in the app: a second `FOUND` for the same cache is acknowledged
-  and answered (if replies are on) with *already logged*.
+- A person may run at most 10 commands per hour, counted on the base call across all SSIDs; beyond that
+  a message is dropped without a record, an ack or a reply.
+- One found log per player per cache, as in the app, whichever SSID or callsign on the account sends it: a
+  second `FOUND` for the same cache is acknowledged and answered (if replies are on) with *already logged*.
+- Confirming a pending command claims it first, so two confirmations racing each other log it once.
 
 ## Data
 
 A table `radio_commands` records every command: sender, account (when resolved), command, cache,
 log text, transport, whether it was heard at an attested site, message number, status
-(`logged` · `pending` · `rejected` · `expired`), reason, the resulting log id, and timestamps. It belongs to
-the player's data: the GDPR export includes it and erase deletes it.
+(`logged` · `pending` · `confirming` · `rejected` · `help` · `discarded` · `expired`), reason, the resulting
+log id, and timestamps. Decided commands are purged 30 days after the decision; the log itself stays in
+`cache_logs`. It belongs to the player's data: the GDPR export includes it and erase deletes it, and the
+export and erase of a callsign cover logs written under any of its SSIDs.
 
 ## Open points
 
