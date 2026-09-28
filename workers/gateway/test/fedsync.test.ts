@@ -103,7 +103,8 @@ describe("serve + consume a cache page", () => {
 
     const frame = await verifyFedFrame(page.frames[0]!, [publicX]);
     expect(frame).not.toBeNull();
-    expect(frame!.record).toMatchObject({ kind: "cache", gid: "oe.pub:cache:42", origin: "oe.pub", v: 2000 });
+    // v is the row's revision above 2^32 (the cursor stays updated_at)
+    expect(frame!.record).toMatchObject({ kind: "cache", gid: "oe.pub:cache:42", origin: "oe.pub", v: 2 ** 32 });
     const data = bodyFromWire(frame!.record.body);
     expect(data).toMatchObject({ code: "ACS-042", lat: 47.0832, lon: 15.4232, difficulty: 1.5, terrain: 2 });
     expect(data).not.toHaveProperty("hint"); // the spoiler redaction holds on the CBOR surface too

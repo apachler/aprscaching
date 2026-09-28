@@ -15,6 +15,7 @@
  * What this attests is IDENTITY only: the peer enters `unvetted` like any discovered peer, and the
  * operator-set trust tier still governs whether its records count — transport is never trust.
  */
+import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
@@ -61,7 +62,7 @@ export async function resolve44net(env: Env, callsign: string): Promise<Resolved
   if (!BASE_CALL_RE.test(cs)) throw new Error("a base callsign is required (letters/digits, no SSID)");
   const host = `${cs.toLowerCase()}.ampr.org`;
   const name = `_aprscaching.${host}`;
-  const doh = (env.DOH_URL || DEFAULT_DOH).replace(/\/+$/, "");
+  const doh = trimTrailingSlashes(env.DOH_URL || DEFAULT_DOH);
   const res = await fetch(`${doh}?name=${encodeURIComponent(name)}&type=TXT`, {
     headers: { accept: "application/dns-json" },
     signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
@@ -86,11 +87,12 @@ export async function resolve44net(env: Env, callsign: string): Promise<Resolved
  * pin, and every future sync verifies against exactly that key or a signed rotation from it.
  */
 async function descriptorMatches(
+  env: Env,
   baseUrl: string,
   expected: { instance: string; publicKey: string },
 ): Promise<{ checked: boolean; ok: boolean; detail?: string }> {
   try {
-    const res = await fetch(`${baseUrl}/.well-known/aprscaching`, {
+    const res = await fedFetch(env, `${baseUrl}/.well-known/aprscaching`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
     });
@@ -131,7 +133,7 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
     return json({ error: (e as Error).message }, { status: 400 });
   }
   const url = `http://${resolved.host}`; // amateur IP space: plain http; authenticity is in signatures
-  const desc = await descriptorMatches(url, resolved);
+  const desc = await descriptorMatches(env, url, resolved);
   if (desc.checked && !desc.ok)
     return json({ error: `44net binding mismatch: ${desc.detail}`, resolved }, { status: 409 });
 

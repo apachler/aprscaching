@@ -76,7 +76,23 @@ confirmed accrues a contradiction and is penalised.
 - **Pull sync** runs on a schedule and after a manual `POST /federation/sync`, negotiating which feeds a peer
   supports and applying tombstones first so a delete suppresses a re-mirror.
 - **Gossip ping.** After a federated write an instance sends peers a `POST /federation/notify` "come pull
-  from me," which triggers an incremental sync — freshness without a firehose.
+  from me," which triggers an incremental sync — freshness without a firehose. The endpoint is
+  unauthenticated, so it only ever asks for a pull the instance would make anyway: a notify naming an
+  instance it doesn't follow is ignored, a host and an instance are each rate-limited, and the pull goes
+  through the same coalescer as the scheduled sync.
+- **Records only move forward.** Every mirrored record carries a per-record version, and an instance applies
+  a record only when its version is higher than the last one it applied — a replayed older record, or a
+  different record at the same version, changes nothing. A cache's version counts its revisions, so two
+  edits in one second are still two versions. A frame signed in the future, or a timestamp version in the
+  future, is refused; a pulled page is capped at 4 MiB and at the number of frames asked for, and must carry
+  only its own record type.
+- **Discovery** (`FED_DISCOVER`) learns only from trusted peers, takes only `https` URLs, adds each learned
+  peer `unvetted` and **disabled**, and stops at 200 discovered peers. Choosing a trust level for a
+  discovered peer in the admin surface enables it.
+- **Private networks.** On Node and Bun every federation fetch resolves its host first and refuses loopback,
+  private, link-local and CGNAT addresses, so a URL from another party can never reach this host's LAN. The
+  peers you configured by hand (`FED_PEERS`, `FED_HUB_URL`) are exempt; set `FED_ALLOW_PRIVATE=1` for a
+  federation that lives entirely on a LAN. Cloudflare Workers never reach a private network.
 
 ## Reaching firewalled peers
 
@@ -88,7 +104,12 @@ A peer that can't be dialled inbound can still contribute:
   instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A submission
   body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
 - **Rendezvous relay.** A poll-based relay lets a firewalled peer's feed be served through a hub with no
-  tunnel and no inbound port (`/federation/relay/*`, gated by `FED_RELAY_SECRET`).
+  tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). A requester gets a
+  ticket with each query and reads only its own results; queries per requester are capped. A spoke leases
+  and answers by signing each request with its own federation key, which the hub checks against the key it
+  holds for that instance — so the hub must already know the spoke (as a pulled peer, in the registry, or
+  from a push-to-hub submission), and no spoke can act for another. An unanswered lease returns to the
+  queue after five minutes.
 
 ## The instance registry
 

@@ -632,7 +632,14 @@ const tamperedFrame = await buildFrame(
   spub,
 );
 const forged = frameFromParts(frameParts(tamperedFrame).payload, spub, spokeParts.sig); // stolen sig, new content
-const sub2 = await submitCbor(SUB, encodePage("oe.spoke", now(), true, [spokeFrame, forged]));
+// alongside the forgery, a genuine new record (a second cache): the page applies it and rejects only
+// the forgery (re-sending spokeFrame would itself be refused, as a version already applied)
+const spokeFrame2 = await buildFrame(
+  { kind: 1, gid: "oe.spoke:cache:2", origin: "oe.spoke", v: now(), at: now(), signer: "oe.spoke", body: spokeBody },
+  skp.privateKey,
+  spub,
+);
+const sub2 = await submitCbor(SUB, encodePage("oe.spoke", now(), true, [spokeFrame2, forged]));
 ok(
   "a forged frame (payload/signature mismatch) is rejected",
   sub2.data?.applied === 1 && sub2.data?.rejected === 1,
@@ -881,29 +888,25 @@ ok(
 );
 
 // ---- the rendezvous relay queue (poll-based, box-command seam) ----
-// Only asserted when the instances were started with a relay secret (CI sets it); proves the transport:
-// a requester enqueues a feed query for a spoke instance, the spoke leases + answers, the requester reads it.
+// Only asserted when the hub was started with a relay secret (CI sets it on SUB); proves the transport:
+// a requester enqueues a feed query for a spoke instance, the spoke leases + answers, the requester
+// reads it with its ticket. The spoke is oe.spoke, whose key SUB already holds from the push-to-hub
+// submission above: lease and answer are signed with that key, so a spoke can act only for itself.
 const RELAY_SECRET = process.env.RELAY_SECRET;
 if (RELAY_SECRET) {
   const spoke = "oe.spoke";
-  // lease/answer are bound to a per-spoke token = HMAC(RELAY_SECRET, "relay-spoke:<instance>"),
-  // so a secret-holder can't drain another instance's queue by naming it. The requester side (enqueue,
-  // result) still uses the flat secret.
-  const spokeToken = async (instance) => {
-    const k = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(RELAY_SECRET),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`relay-spoke:${instance.toLowerCase()}`));
-    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hexOf = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  /** Headers signing one relay request as `instance` with `priv`: method, path+query, time, body hash. */
+  const spokeSig = async (instance, priv, method, path, body = "") => {
+    const at = now();
+    const bodyHash = hexOf(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
+    const msg = new TextEncoder().encode(`acs-relay/1\n${method} ${path}\n${at}\n${bodyHash}`);
+    const sig = b64u(await crypto.subtle.sign("Ed25519", priv, msg));
+    return { "x-relay-instance": instance, "x-relay-at": String(at), "x-relay-sig": sig };
   };
   const rh = { "x-relay-secret": RELAY_SECRET };
-  const sh = { "x-relay-secret": RELAY_SECRET, "x-relay-token": await spokeToken(spoke) };
   const enq = await call(
-    PUB,
+    SUB,
     "POST",
     `/federation/relay/${spoke}/query`,
     { kind: "feed", params: { feed: "caches", since: 0 } },
@@ -911,40 +914,48 @@ if (RELAY_SECRET) {
   );
   ok(
     "relay: a feed query is enqueued for a spoke instance",
-    enq.status === 201 && typeof enq.data?.id === "number",
+    enq.status === 201 && typeof enq.data?.id === "number" && typeof enq.data?.ticket === "string",
     JSON.stringify(enq.data),
   );
-  const lease = await call(PUB, "GET", `/federation/relay/lease?instance=${spoke}`, undefined, sh);
+  const leasePath = `/federation/relay/lease?instance=${spoke}`;
+  const lease = await call(SUB, "GET", leasePath, undefined, await spokeSig(spoke, skp.privateKey, "GET", leasePath));
   ok(
     "relay: the spoke leases queries addressed to it",
     (lease.data?.queries ?? []).some((q) => q.id === enq.data.id && q.kind === "feed"),
     JSON.stringify(lease.data),
   );
+  const answerBody = { id: enq.data.id, instance: spoke, result: { ok: true, kind: "feed", data: { items: [] } } };
   const ans = await call(
-    PUB,
+    SUB,
     "POST",
     "/federation/relay/answer",
-    { id: enq.data.id, instance: spoke, result: { ok: true, kind: "feed", data: { items: [] } } },
-    sh,
+    answerBody,
+    await spokeSig(spoke, skp.privateKey, "POST", "/federation/relay/answer", JSON.stringify(answerBody)),
   );
   ok("relay: the spoke posts an answer", ans.data?.ok === true, JSON.stringify(ans.data));
-  const res = await call(PUB, "GET", `/federation/relay/result/${enq.data.id}`, undefined, rh);
+  const others = await call(SUB, "GET", `/federation/relay/result/${enq.data.id}`, undefined, rh);
+  ok("relay: a result is not readable without its ticket", others.status === 403, String(others.status));
+  const res = await call(SUB, "GET", `/federation/relay/result/${enq.data.id}`, undefined, {
+    ...rh,
+    "x-relay-ticket": enq.data.ticket,
+  });
   ok(
     "relay: the requester collects the answered result",
     res.data?.status === "answered" && res.data?.answer?.ok === true,
     JSON.stringify(res.data),
   );
-  const noauth = await call(PUB, "GET", "/federation/relay/lease?instance=oe.spoke", undefined, {
-    "x-relay-secret": "wrong",
-  });
-  ok("relay: a bad secret is rejected", noauth.status === 401, String(noauth.status));
-  // a spoke's token for its OWN instance cannot lease a DIFFERENT instance's queue.
-  const wrongInstance = await call(PUB, "GET", "/federation/relay/lease?instance=oe.other", undefined, sh);
-  ok(
-    "relay: a per-spoke token can't lease another instance",
-    wrongInstance.status === 401,
-    String(wrongInstance.status),
+  const unsigned = await call(SUB, "GET", leasePath, undefined, rh);
+  ok("relay: an unsigned lease is rejected", unsigned.status === 401, String(unsigned.status));
+  // the spoke's own key cannot lease a DIFFERENT instance's queue
+  const otherPath = "/federation/relay/lease?instance=oe.other";
+  const wrongInstance = await call(
+    SUB,
+    "GET",
+    otherPath,
+    undefined,
+    await spokeSig("oe.other", skp.privateKey, "GET", otherPath),
   );
+  ok("relay: a spoke's key can't lease another instance", wrongInstance.status === 401, String(wrongInstance.status));
 }
 
 // ---- corroboration: a signed exchange, coarsened answers, rate limits ----

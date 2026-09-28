@@ -107,12 +107,12 @@ export async function buildFedFrames(
   let nextId = def.composite ? (sinceId ?? -1) : undefined;
   const frames: Uint8Array[] = [];
   for (const r of rows) {
-    const { id, cursor, data } = def.recordOf(r, instance);
+    const { id, cursor, data, version } = def.recordOf(r, instance);
     const record: FedRecord = {
       kind,
       gid: id,
       origin: instance,
-      v: cursor,
+      v: version ?? cursor,
       at,
       signer: instance,
       body: bodyToWire(data as Record<string, unknown>),

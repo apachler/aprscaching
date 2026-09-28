@@ -11,7 +11,7 @@ import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
-import { isFedBbsCategory } from "@aprscaching/shared";
+import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./federation_sync.js";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -335,6 +335,14 @@ export async function handleForwardInbound(req: Request, env: Env): Promise<Resp
   const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
   const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), now());
   if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
+  // A federation batch's BID is the hash of its content, so it is claimed only by that content: a
+  // bulletin whose BID doesn't match what it carries is refused before it can squat the BID and make
+  // the genuine batch look like a duplicate.
+  if (isFedBbsCategory(row.to)) {
+    const batch = decodeFedBbsBatch(row.body);
+    if (!batch || batch.bid !== row.bid)
+      return json({ error: "federation bulletin BID does not match its content" }, { status: 400 });
+  }
   const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
      VALUES (?,?,?,?,?,?,?,?)`,

@@ -14,6 +14,7 @@
  * Cursors are high-water marks; re-fetching the boundary is safe because records are idempotent
  * by `id` (a mirror upserts on the namespaced id).
  */
+import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { parseEndpoints, type FedEndpoint } from "@aprscaching/shared";
@@ -44,6 +45,7 @@ interface CacheRow {
   fed_scope: string;
   created_at: number;
   updated_at: number;
+  fed_rev?: number;
 }
 interface FindRow {
   id: number;
@@ -469,7 +471,7 @@ async function registryFromDns(env: Env, name: string, authority: string): Promi
       for (const a of answers) {
         const { url } = parseRegistryTxt(a.data);
         if (!url) continue;
-        const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+        const r = await fedFetch(env, url, { signal: AbortSignal.timeout(3000) });
         if (!r.ok) continue;
         const doc = (await r.json()) as SignedRegistry;
         const at = Number.isInteger(doc?.at) ? (doc.at as number) : 0;
@@ -655,7 +657,8 @@ export interface FeedServeDef<Row = any> {
    */
   selectRows(env: Env, since: number, limit: number, sinceId?: number): Promise<Row[]>;
   composite?: boolean;
-  recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown };
+  /** A row's wire form. `version` is the record's per-gid version (`v`) when it differs from the cursor. */
+  recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown; version?: number };
 }
 
 function feedParams(req: Request): { since: number; limit: number } {
@@ -693,6 +696,8 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 }
 
 // only NATIVE caches are federated; imported third-party data stays local
+/** Cache versions count revisions from here: above every unix-second timestamp a version could be. */
+export const CACHE_VERSION_BASE = 2 ** 32;
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   composite: true,
@@ -705,7 +710,13 @@ export const CACHE_FEED: FeedServeDef<CacheRow> = {
         .bind(since, since, sinceId, limit)
         .all<CacheRow>()
     ).results,
-  recordOf: (r, instance) => ({ id: `${instance}:cache:${r.id}`, cursor: r.updated_at, data: cacheData(r) }),
+  // the version is the row's revision above 2^32, so it sorts after any timestamp version a mirror holds
+  recordOf: (r, instance) => ({
+    id: `${instance}:cache:${r.id}`,
+    cursor: r.updated_at,
+    version: CACHE_VERSION_BASE + (r.fed_rev ?? 0),
+    data: cacheData(r),
+  }),
 };
 export const FIND_FEED: FeedServeDef<FindRow> = {
   type: "find",
