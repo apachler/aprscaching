@@ -1,0 +1,8 @@
+{
+  "description": "Truncated JSON.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"pos\",\"src\":\"OE8",
+  "expect": {
+    "ok": false,
+    "reason": "not-json"
+  }
+}

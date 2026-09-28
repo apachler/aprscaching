@@ -80,6 +80,7 @@ nav:
       - Command-line tools: reference/cli.md
       - Testing & verification: reference/testing.md
       - Specification registry: reference/specs.md
+      - MeshCom ExtUDP protocol: reference/meshcom-extudp.md
       - Data model: reference/data-model.md
   - Design notes:
       - MeshCom integration: design/meshcom.md

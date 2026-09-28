@@ -1,0 +1,11 @@
+{
+  "description": "Southern and western hemispheres produce negative coordinates.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"pos\",\"src\":\"CE3ABC-1\",\"msg\":\"\",\"lat\":33.4489,\"lat_dir\":\"S\",\"long\":70.6693,\"long_dir\":\"W\",\"aprs_symbol\":\"#\",\"aprs_symbol_group\":\"/\",\"hw_id\":4,\"msg_id\":\"00000001\",\"alt\":560,\"batt\":87,\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "type": "pos",
+    "lat": -33.4489,
+    "lon": -70.6693,
+    "locator": "FF46pn"
+  }
+}

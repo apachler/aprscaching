@@ -1,0 +1,9 @@
+{
+  "description": "The firmware doubles a backslash symbol table before serialising.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"pos\",\"src\":\"OE8APR-12\",\"msg\":\"\",\"lat\":46.6247,\"lat_dir\":\"N\",\"long\":14.3053,\"long_dir\":\"E\",\"aprs_symbol\":\"n\",\"aprs_symbol_group\":\"\\\\\\\\\",\"hw_id\":4,\"msg_id\":\"00000002\",\"alt\":560,\"batt\":87,\"firmware\":35,\"fw_sub\":\"t\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "type": "pos",
+    "symbol": "\\n"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "description": "Telemetry of a relayed node, parsed from its position frame.",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"tele\",\"src\":\"9V1LH-1,OE1KBC-12\",\"batt\":5,\"temp1\":28.9,\"temp2\":0,\"hum\":40.2,\"qfe\":1004.9,\"qnh\":1005.4,\"pressure_alt\":66,\"gas\":0,\"co2\":0,\"din\":\"00000001\"}",
+  "expect": {
+    "ok": true,
+    "type": "tele",
+    "srcType": "lora",
+    "src": "9V1LH-1",
+    "tele": {
+      "batt": 5,
+      "temp1": 28.9,
+      "temp2": 0,
+      "hum": 40.2,
+      "qfe": 1004.9,
+      "qnh": 1005.4,
+      "pressure_alt": 66,
+      "gas": 0,
+      "co2": 0
+    }
+  }
+}
