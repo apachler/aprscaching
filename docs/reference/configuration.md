@@ -37,7 +37,7 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning | — |
 | `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) are addressed to | `APRSCG` |
-| `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Acks and replies reach the air through the ingest box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
+| `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
 
 Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
 (`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;
@@ -113,7 +113,7 @@ only when its variable is present.
 | AGWPE | `AGWPE_HOST`, `AGWPE_PORT` (`8000`), `AGWPE_RADIO_PORT` (`0`) |
 | WA8DED hostmode | `HOSTMODE_HOST`, `HOSTMODE_PORT` (`3694`), `HOSTMODE_MYCALL`, `HOSTMODE_RADIO_PORT` |
 | Meshtastic | `MESH_HOST`, `MESH_PORT` (`1884`) |
-| MeshCom (RX-only) | `MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`) |
+| MeshCom | `MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file) |
 | TAK / CoT in | `TAK_COT_PORT`, `TAK_COT_BIND` |
 | AXUDP | `AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS` |
 | AXIP | `AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND` |
@@ -122,7 +122,7 @@ only when its variable is present.
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
 | Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of directly heard KISS frames (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway |
-| Remote control (Shack → Remote control) | `BOX_ID`, `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`) |
+| Remote control (Shack → Remote control) | `BOX_ID`, `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`) |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the

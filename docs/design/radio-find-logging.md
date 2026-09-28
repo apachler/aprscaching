@@ -3,9 +3,10 @@
 !!! note "Built and planned"
     Logging a find — or a DNF or note — by sending a text message from a radio instead of tapping **Log a
     find** in the app. APRS and MeshCom share one engine, and only the reply path differs. Built: the command
-    engine in the gateway ingest path (`workers/gateway/src/radiolog.ts`), `radio_commands`, APRS acks and
-    opt-in APRS replies, pending confirmation under **Profile → Logs sent over the air**, and export/erase.
-    Planned: MeshCom acks and replies through the node owner's box. Player guide:
+    engine in the gateway ingest path (`workers/gateway/src/radiolog.ts`), `radio_commands`, acks and
+    opt-in replies sent back the way each message came (the hearing box's RF, its MeshCom node, or the
+    APRS-IS outbox), pending confirmation under **Profile → Logs sent over the air**, and export/erase.
+    Player guide:
     [Log from your radio](../guides/caching.md#log-from-your-radio).
 
 ## Goal
@@ -85,18 +86,26 @@ scored separately and exactly as for an app log, at the time the message was sen
 
 ## Acknowledgements and replies
 
-| | APRS | MeshCom |
-|---|---|---|
-| **Protocol ack** (always) | `:SENDER   :ack<msgNo>` from the service call, queued in the APRS outbox; the ingest box's APRS-IS uplink publishes it, and an IGate near the player gates it to RF | sent by the MeshCom node whose listener heard the message, as a `meshcom_msg` box command to that node owner's box; it goes out only when that box has MeshCom transmit enabled |
-| **Text reply** (opt-in) | a fixed text such as `AC-1234 found, logged Tier A` or the reason it was not logged; the instance operator turns it on (`RADIO_REPLIES=1`) | the same fixed text; the node owner turns on **Confirm finds over MeshCom** |
+Every numbered message gets a protocol ack; a text reply (a fixed text such as `AC-1234 found, logged
+Tier A`, or why it was not logged) is sent only when the instance operator turns replies on
+(`RADIO_REPLIES=1`). Both travel back **the way the message came**:
+
+| The message was heard | The answer goes |
+|---|---|
+| on the ingest box's own radio (KISS TNC) | from that box, on RF: third-party traffic whose inner source is the service call, under the box's licensed call — `OE8APR-10>APZACG:}APRSCG>APZACG,TCPIP,OE8APR-10*::OE3PLY-7 :ack12`, the form an IGate uses to gate APRS-IS messages to RF, so the sender's radio sees the answer come from the address it messaged. No internet needed. |
+| by a MeshCom node the box listens to | from that node, handed to it over ExtUDP. The ack is the text `SENDER   :ack<nnn>`: the firmware offers an external client no ack frame, but its receive path treats a text message of that form as the acknowledgement of message `nnn`, matched by number alone. The node sends it under its own call. |
+| only over APRS-IS | through the APRS outbox and the ingest box's APRS-IS uplink (`APRSIS_SERVICE_CALL`); an IGate near the player gates it to RF. |
+
+Each ingest box stamps the frames it receives on a radio it can transmit on with its `BOX_ID`, and
+reports with every command poll whether it may transmit (`BOX_TX=1` and the transmit switch on), whether it
+has a TNC, and which MeshCom nodes it can send through (`MESHCOM_TX=1`). The gateway answers through that
+box only while it polls and can deliver; otherwise an APRS answer falls back to the outbox and a MeshCom
+answer is not sent. Answers are `aprs_msg` / `meshcom_msg` box commands that only the gateway can queue —
+the enqueue API refuses them — and the box applies its own gates: the operator's opt-in, the transmit
+switch, the command's age, its transmit rate limit, and for RF that the inner source is the service call.
 
 Replies are fixed texts, never user-editable, and rate-limited: at most one reply per destination per
-10 minutes on the gateway, plus the box's own transmit rate limit for MeshCom.
-
-A MeshCom node transmits every message under its own callsign, so anything sent over MeshCom — ack or
-reply — goes through the node owner's box command channel, never through the instance-wide outbox. The
-gateway picks the box from the node registry (each box reports the MeshCom nodes it listens to) and gates the
-command like every transmit command: a verified callsign held by the box owner, equal to the node's call.
+10 minutes on the gateway, plus the box's own transmit rate limit.
 
 ## Duplicates and abuse
 
@@ -119,18 +128,22 @@ the player's data: the GDPR export includes it and erase deletes it.
 `HELP` is always answered, even with text replies off — the sender asked for the reply — and it counts
 against the per-destination reply limit.
 
-- **MeshCom addressee.** `APRSCG` contains no digit. The MeshCom firmware must be checked for whether it
-  carries a direct message to such an address; if not, MeshCom users address the instance's licensed
-  service call (`FED_APRS_CALL`) instead.
-- **MeshCom ack format.** The acknowledgement a MeshCom node expects for a numbered direct message must be
-  confirmed against the firmware before the MeshCom ack is built.
+Settled against the MeshCom firmware source (4.35t): no input path checks a direct message's destination
+against a callsign pattern, so `APRSCG` is a valid destination; nodes relay direct messages not addressed to
+them and output them on ExtUDP (unless the node operator turned on `--nopmother`); and a direct message
+carries its number as a `{nnn` suffix, which reaches the gateway as the APRS message number.
+
+- **MeshCom ack on the air.** The `SENDER   :ack<nnn>` text ack follows the firmware's receive path; it
+  still needs a bench test on a real node. The node appends its own `{nnn` to it, so the sender's node may
+  ack the ack back.
 
 ## Build order
 
 1. Gateway: the pure command parser, the handler in the ingest path, `radio_commands`, APRS acks via the
-   outbox, pending confirmation in the app, export/erase.
-2. APRS text replies (operator opt-in).
-3. MeshCom: node registry, `meshcom_msg` box command, ack and opt-in reply through the owner's box.
+   outbox, pending confirmation in the app, export/erase. Built.
+2. APRS text replies (operator opt-in). Built.
+3. Answers back the way the message came: RF acks from the hearing box, MeshCom acks and replies through
+   the hearing node, capability reports on the box poll. Built; the MeshCom ack awaits a bench test.
 
 ## Tests the implementation needs
 

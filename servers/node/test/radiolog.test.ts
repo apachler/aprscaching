@@ -13,6 +13,7 @@ import {
   type RadioMessage,
 } from "@aprscaching/gateway/radiolog";
 import type { Env } from "@aprscaching/gateway/env";
+import { handleBoxPoll } from "@aprscaching/gateway/box";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -235,5 +236,83 @@ describe("retries, limits and replies", () => {
     await handleRadioMessage(env, onAir({ port: "meshcom" }));
     expect(logs()).toHaveLength(1);
     expect(outbox()).toEqual([]);
+  });
+});
+
+describe("answers go back the way the message came", () => {
+  const boxCommands = () =>
+    (
+      sqlite.prepare("SELECT box_id, kind, payload FROM box_commands ORDER BY id").all() as {
+        box_id: string;
+        kind: string;
+        payload: string;
+      }[]
+    ).map((r) => ({ box: r.box_id, kind: r.kind, ...JSON.parse(r.payload) }));
+  const poll = (query: string) =>
+    handleBoxPoll(
+      new Request(`http://gw/api/box/pi-home/commands?${query}`, { headers: { "x-ingest-secret": "s" } }),
+      env,
+      "pi-home",
+    );
+
+  beforeEach(() => freshEnv({ INGEST_SECRET: "s" }));
+
+  it("a message heard on the box's own radio is acked by that box on RF, not over APRS-IS", async () => {
+    await poll("tx=1&rf=1&meshcom=");
+    await handleRadioMessage(env, onAir({ box: "pi-home", rxCall: "OE8XXX-10" }));
+    expect(boxCommands()).toEqual([
+      { box: "pi-home", kind: "aprs_msg", from: "APRSCG", to: "OE8APR-7", text: "ack12" },
+    ]);
+    expect(outbox()).toEqual([]);
+  });
+
+  it("falls back to the outbox when the box cannot transmit or has stopped polling", async () => {
+    await poll("tx=0&rf=1&meshcom=");
+    await handleRadioMessage(env, onAir({ box: "pi-home", msgNo: "1" }));
+    sqlite.prepare("UPDATE box_status SET caps = ?, last_seen = ?").run('{"tx":true,"rf":true,"meshcom":[]}', t - 600);
+    await handleRadioMessage(env, onAir({ box: "pi-home", msgNo: "2", text: "DNF AC-0001" }));
+    expect(boxCommands()).toEqual([]);
+    expect(outbox()).toEqual(["APRSCG :OE8APR-7 :ack1", "APRSCG :OE8APR-7 :ack2"]);
+  });
+
+  it("a message the box only received over APRS-IS is still acked over APRS-IS", async () => {
+    await poll("tx=1&rf=1&meshcom=");
+    await handleRadioMessage(env, overIs({ box: "pi-home" }));
+    expect(boxCommands()).toEqual([]);
+    expect(outbox()).toEqual(["APRSCG :OE8APR-7 :ack12"]);
+  });
+
+  it("a MeshCom message is acked through the node that heard it, in the form the firmware recognises", async () => {
+    await poll("tx=1&rf=0&meshcom=OE8APR-12");
+    await handleRadioMessage(
+      env,
+      onAir({ port: "meshcom", box: "pi-home", rxCall: "OE8APR-12", igateCall: "OE8APR-12", msgNo: "034" }),
+    );
+    expect(boxCommands()).toEqual([
+      { box: "pi-home", kind: "meshcom_msg", node: "OE8APR-12", dst: "OE8APR-7", text: "OE8APR-7 :ack034" },
+    ]);
+    expect(outbox()).toEqual([]);
+  });
+
+  it("a MeshCom message gets no answer when its node's box cannot send", async () => {
+    await poll("tx=1&rf=0&meshcom=OE8APR-99");
+    await handleRadioMessage(env, onAir({ port: "meshcom", box: "pi-home", rxCall: "OE8APR-12", msgNo: "034" }));
+    expect(boxCommands()).toEqual([]);
+    expect(outbox()).toEqual([]);
+    expect(logs()).toHaveLength(1);
+  });
+
+  it("HELP is answered through the box too", async () => {
+    await poll("tx=1&rf=1&meshcom=");
+    await handleRadioMessage(env, onAir({ box: "pi-home", text: "HELP", msgNo: undefined }));
+    expect(boxCommands()).toEqual([
+      {
+        box: "pi-home",
+        kind: "aprs_msg",
+        from: "APRSCG",
+        to: "OE8APR-7",
+        text: "FOUND <code> [log] | DNF <code> [log] | NOTE <code> <text>",
+      },
+    ]);
   });
 });

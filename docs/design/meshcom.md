@@ -136,13 +136,13 @@ destination, byte length, requesting feature and outcome, never the text. ExtUDP
 acknowledgement, so the best outcome is *handed to node*; the node reports its own refusals
 (`QRS`/`QRT`) back through the listener.
 
-No feature calls the sender yet: the gateway has no channel to ask an ingest box to transmit. The
-features that will use it:
+The box enables the sender with `MESHCOM_TX=1`. It is used by:
 
-- **Replies** — the Messages surface answering a direct message.
-- **Find confirmations** — acknowledging a find logged over the mesh (a `FOUND <cache-id>` direct message
-  to the instance call, the MeshCom counterpart of the over-APRS logging path; attributed through the
-  account that owns the verified callsign, never the bare call string).
+- **Answers to radio commands** — the ack and opt-in reply to a `FOUND` / `DNF` / `NOTE` / `HELP` direct
+  message that one of the box's nodes heard, queued by the gateway as a `meshcom_msg` box command
+  ([Logging finds over radio messages](radio-find-logging.md)).
+
+Planned: **replies** from the Messages surface answering a direct message.
 
 Group announcements stay out of scope: software never originates group or broadcast traffic.
 

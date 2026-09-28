@@ -85,6 +85,12 @@ transmits until switched on again or the ingest restarts. The switches live in m
 returns the box to its configured state. See [Configuration](../reference/configuration.md) for every
 variable.
 
+With `BOX_TX=1` the box also answers players' radio commands (`FOUND AC-1234` sent to `APRSCG`,
+[Log from your radio](../guides/caching.md#log-from-your-radio)) that it heard itself: the ack goes out on
+its own radio as third-party traffic from `APRSCG` under `BOX_CALL`, or through its MeshCom node when
+`MESHCOM_TX=1`, so a box with a radio acknowledges finds even without internet. These answers pass the same
+gates — the transmit switch, the command age and the rate limit.
+
 ## Data protection (GDPR / DSGVO)
 
 Sensitive account actions are authorised by a passkey session or a signature from a device key registered to

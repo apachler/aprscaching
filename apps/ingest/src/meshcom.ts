@@ -127,6 +127,8 @@ export function meshcomToPacket(e: MeshcomEvent, receiverCall: string | undefine
     heardVia: hint.heardVia,
     ...(hint.igateCall ? { igateCall: hint.igateCall } : {}),
     port: "meshcom",
+    // the node that heard it — where an answer to the sender is sent from (routing, not trust)
+    ...(receiverCall ? { rxCall: receiverCall.toUpperCase() } : {}),
     ts,
   };
 }
@@ -297,7 +299,7 @@ export class MeshcomListener {
     s.bind(port, bind, () => {
       this.startedAt = Date.now();
       this.log.log(
-        `[meshcom] listening udp/${port} on ${bind} for ${this.o.nodes.map((n) => (n.call ? `${n.ip} (${n.call})` : n.ip)).join(", ")} — RX only`,
+        `[meshcom] listening udp/${port} on ${bind} for ${this.o.nodes.map((n) => (n.call ? `${n.ip} (${n.call})` : n.ip)).join(", ")}`,
       );
     });
     if (this.o.fanout?.length) this.fanSock = dgram.createSocket("udp4");

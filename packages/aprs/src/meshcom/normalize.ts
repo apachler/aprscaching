@@ -83,7 +83,7 @@ export function canonMeshcomCall(s: string): string | null {
   return c.length <= 9 && CALL.test(c) ? c : null;
 }
 
-/** Destination class per the firmware's CheckGroup: `*`, a group 1–99999, or a callsign. */
+/** Destination class per the firmware's CheckGroup: `*`, a group 1–99999, or a direct-message address. */
 export function classifyMeshcomDst(dst: string): { dst: string; kind: MeshcomDstKind } | null {
   const d = dst.trim().toUpperCase();
   if (d === "*") return { dst: d, kind: "all" };
@@ -92,7 +92,10 @@ export function classifyMeshcomDst(dst: string): { dst: string; kind: MeshcomDst
     return g >= 1 && g <= 99999 ? { dst: String(g), kind: "group" } : null;
   }
   const call = canonMeshcomCall(d);
-  return call ? { dst: call, kind: "call" } : null;
+  if (call) return { dst: call, kind: "call" };
+  // The firmware takes any destination of up to nine characters as a direct message, so a service
+  // address such as APRSCG (not a callsign) is a valid direct-message destination too.
+  return /^[A-Z][A-Z0-9-]{0,8}$/.test(d) ? { dst: d, kind: "call" } : null;
 }
 
 /** Collapse control characters (including NUL) to single spaces and trim. */

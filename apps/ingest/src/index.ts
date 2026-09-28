@@ -36,7 +36,13 @@ const aprs = new AprsIs({
 });
 
 let batch: Packet[] = [];
-const enqueue = (p: Packet) => batch.push(p);
+// Frames this box received over a radio it can also transmit on carry its BOX_ID, so the gateway can
+// send an answer (an ack to a radio command) back through this box instead of over APRS-IS.
+const RX_ANSWER_PORTS = new Set(["kiss-tnc", "meshcom"]);
+const enqueue = (p: Packet) => {
+  if (env.BOX_ID && RX_ANSWER_PORTS.has(p.port)) p.box = env.BOX_ID;
+  batch.push(p);
+};
 let spool: Packet[] = []; // undelivered packets, retried next tick
 const MAX_SPOOL = numEnv("INGEST_SPOOL_MAX", 5000, { min: 1 }); // bounded (drop-oldest) so a long outage can't OOM the Pi
 
@@ -186,8 +192,23 @@ if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();
   console.log("[mesh] enabled");
 }
-// MeshCom — RX-only listener for nodes' ExtUDP interface. MESHCOM_NODE lists the allowed node
-// addresses, each optionally with the node's callsign (`192.168.1.50=OE8APR-12`).
+// MeshCom — listener for nodes' ExtUDP interface. MESHCOM_NODE lists the allowed node addresses, each
+// optionally with the node's callsign (`192.168.1.50=OE8APR-12`). MESHCOM_TX=1 additionally lets the box
+// hand answers to radio commands to those nodes, under the operator's call (MESHCOM_TX_CALL).
+let meshcomTx: import("./boxpoll.js").BoxMeshcom | null = null;
+if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
+  const { MeshcomSender } = await import("./meshcom-send.js");
+  const nodes = parseMeshcomNodes(env.MESHCOM_NODE);
+  const operatorCall = env.MESHCOM_TX_CALL || env.BOX_CALL || env.IGATE_CALL || env.DIGI_CALL;
+  const sender = new MeshcomSender({
+    enabled: true,
+    operatorCall,
+    nodes,
+    auditPath: env.MESHCOM_TX_AUDIT || undefined,
+  });
+  meshcomTx = { nodes, send: (req) => sender.send(req) };
+  console.log(`[meshcom] transmit enabled as ${operatorCall ?? "? (set MESHCOM_TX_CALL)"}`);
+}
 if (env.MESHCOM_NODE) {
   const meshcom = new MeshcomListener(
     {
@@ -342,6 +363,8 @@ if (env.BOX_ID) {
     boxCall,
     remoteTx: env.BOX_TX === "1",
     radio: boxRadio,
+    meshcom: meshcomTx,
+    serviceCall: env.BOX_SERVICE_CALL || undefined,
     state: station,
     path: parseBoxPath(env.BOX_TX_PATH),
     maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),

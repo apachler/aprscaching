@@ -14,6 +14,12 @@
  *  - remote transmits share a token bucket, so a flood of queued commands cannot key the radio in a burst.
  * Switching a function OFF is always honoured: a remote "TX off" must work even when remote transmit is
  * disabled, since it is the safety stop.
+ *
+ * The gateway also queues answers to radio commands (acks and replies to FOUND / DNF / NOTE / HELP
+ * messages) for the box that heard them, so they go back the way the message came — on this box's RF as
+ * third-party traffic from the service call under the box's licensed call, or through the MeshCom node
+ * that heard it. They pass the same opt-in, transmit switch and age gates. The poll reports what the box
+ * can send, so the gateway only routes answers here while it can deliver them.
  */
 import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
 
@@ -43,6 +49,18 @@ export interface BoxResult {
   result: string;
 }
 
+/** A MeshCom sender the box can hand answers to (the opt-in `MeshcomSender`). */
+export interface BoxMeshcom {
+  /** Nodes the sender may use; `call` is what each node transmits under. */
+  nodes: { ip: string; call?: string }[];
+  send(req: {
+    dst: string;
+    text: string;
+    feature: string;
+    node?: string;
+  }): Promise<{ ok: true } | { ok: false; reason: string }>;
+}
+
 export interface BoxPollerOpts {
   /** Gateway base URL (the ingest URL without `/ingest`). */
   base: string;
@@ -54,6 +72,10 @@ export interface BoxPollerOpts {
   remoteTx: boolean;
   /** RF transmitter, or null when the box has no TNC. */
   radio: BoxRadio | null;
+  /** MeshCom sender, or null when MeshCom transmit is not enabled on this box. */
+  meshcom?: BoxMeshcom | null;
+  /** The gateway's service call answers are sent from (`BOX_SERVICE_CALL`, default `APRSCG`). */
+  serviceCall?: string;
   state: BoxState;
   /** Digipeater path for remote beacons and messages. */
   path?: string[];
@@ -135,11 +157,13 @@ export class BoxPoller {
     this.inFlight = true;
     try {
       await this.flushAcks();
-      const r = await this.fetch(this.url("/commands"), { headers: { "x-ingest-secret": this.o.secret } });
+      const r = await this.fetch(this.url(`/commands?${this.capsQuery()}`), {
+        headers: { "x-ingest-secret": this.o.secret },
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const { commands } = (await r.json()) as { commands?: BoxCommand[] };
       for (const cmd of commands ?? []) {
-        const res = this.execute(cmd);
+        const res = await this.execute(cmd);
         this.log(`[box] ${cmd.kind} #${cmd.id} ${res.status}: ${res.result}`);
         this.pendingAcks.push({ id: cmd.id, ...res });
       }
@@ -191,6 +215,78 @@ export class BoxPoller {
     if (this.tokens < 1) return false;
     this.tokens -= 1;
     return true;
+  }
+
+  /** What this box can transmit, reported with every poll so the gateway routes answers only here when deliverable. */
+  capsQuery(): string {
+    const tx = this.o.remoteTx && this.o.state.tx;
+    const meshcom = (this.o.meshcom?.nodes ?? []).map((n) => n.call?.toUpperCase()).filter((c): c is string => !!c);
+    return `tx=${tx ? 1 : 0}&rf=${this.o.radio ? 1 : 0}&meshcom=${encodeURIComponent(meshcom.join(","))}`;
+  }
+
+  /** Gates shared by every answer to a radio command: operator opt-in, the transmit switch, command age. */
+  private answerGate(cmd: BoxCommand): BoxResult | null {
+    const fail = (result: string): BoxResult => ({ status: "failed", result });
+    if (!this.o.remoteTx) return fail("remote transmit is disabled on this box (set BOX_TX=1)");
+    if (!this.o.state.tx) return fail("transmit is switched off on this box");
+    const maxAge = this.o.maxAgeSec ?? 900;
+    if (cmd.createdAt != null && this.now() / 1000 - cmd.createdAt > maxAge)
+      return fail(`expired — queued more than ${Math.round(maxAge / 60)} min ago`);
+    return null;
+  }
+
+  /**
+   * An APRS answer on RF: third-party traffic whose inner source is the gateway's service call, sent
+   * under this box's licensed call — the form an IGate uses to gate APRS-IS messages to RF, so the
+   * sender's radio sees the answer come from the address it messaged.
+   */
+  private aprsAnswer(cmd: BoxCommand, p: Record<string, unknown>): BoxResult {
+    const fail = (result: string): BoxResult => ({ status: "failed", result });
+    const service = (this.o.serviceCall ?? "APRSCG").toUpperCase();
+    const from = String(p.from ?? "").toUpperCase();
+    const to = String(p.to ?? "")
+      .trim()
+      .toUpperCase();
+    const text = String(p.text ?? "").trim();
+    if (from !== service) return fail(`only answers from ${service} are sent`);
+    if (!CALL_RE.test(to)) return fail("answer needs a valid addressee");
+    if (!text) return fail("answer text is empty");
+    const gate = this.answerGate(cmd);
+    if (gate) return gate;
+    if (!this.o.boxCall) return fail("no station call configured on this box (set BOX_CALL)");
+    if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC)");
+    if (!this.takeToken()) return fail("rate limited — too many remote transmits, try again in a minute");
+    const tocall = this.o.tocall ?? "APZACG";
+    const call = this.o.boxCall.toUpperCase();
+    const ok = this.o.radio.send({
+      src: call,
+      dst: tocall,
+      path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
+      payload: `}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text)}`,
+    });
+    return ok ? { status: "done", result: `answer to ${to} sent as ${call}` } : fail("the TNC link is down");
+  }
+
+  /** A MeshCom answer, handed to the node that heard the message. The sender applies its own checks. */
+  private async meshcomAnswer(cmd: BoxCommand, p: Record<string, unknown>): Promise<BoxResult> {
+    const fail = (result: string): BoxResult => ({ status: "failed", result });
+    const node = String(p.node ?? "").toUpperCase();
+    const dst = String(p.dst ?? "")
+      .trim()
+      .toUpperCase();
+    const text = String(p.text ?? "").trim();
+    if (!CALL_RE.test(dst)) return fail("answer needs a valid addressee");
+    if (!text) return fail("answer text is empty");
+    const gate = this.answerGate(cmd);
+    if (gate) return gate;
+    const mc = this.o.meshcom;
+    if (!mc) return fail("MeshCom transmit is not enabled on this box (set MESHCOM_TX=1)");
+    const target = mc.nodes.find((n) => n.call?.toUpperCase() === node);
+    if (!target) return fail(`no MeshCom node ${node || "?"} on this box`);
+    const r = await mc.send({ dst, text, feature: "radio-answer", node: target.ip });
+    return r.ok
+      ? { status: "done", result: `answer to ${dst} handed to node ${node}` }
+      : fail(`MeshCom node refused: ${r.reason}`);
   }
 
   /**
@@ -260,9 +356,13 @@ export class BoxPoller {
     return { status: "done", result: parts.join(" · ") };
   }
 
-  execute(cmd: BoxCommand): BoxResult {
+  async execute(cmd: BoxCommand): Promise<BoxResult> {
     const p = (cmd.payload ?? {}) as Record<string, unknown>;
     switch (cmd.kind) {
+      case "aprs_msg":
+        return this.aprsAnswer(cmd, p);
+      case "meshcom_msg":
+        return this.meshcomAnswer(cmd, p);
       case "status":
         return this.status();
       case "beacon": {
