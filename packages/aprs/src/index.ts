@@ -16,7 +16,6 @@ export * from "./mice.js";
 export * from "./decode.js";
 export * from "./ax25.js";
 export * from "./encode.js";
-export * from "./cotin.js";
 export * from "./meshtastic.js";
 export * from "./meshcom/index.js";
 export * from "./digipeat.js";

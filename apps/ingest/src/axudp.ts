@@ -3,6 +3,7 @@ import dgram from "node:dgram";
 import { decodeAx25 } from "@aprscaching/aprs";
 import { encodeFrame, decodeFrame, appendAxipCrc, stripAxipCrc, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
+import { PeerAllowlist, openListenerWarning, type Resolver } from "./peerfilter.js";
 
 export { crc16X25, appendAxipCrc, stripAxipCrc } from "@aprscaching/ax25";
 
@@ -65,6 +66,7 @@ export class AxudpListener {
   ) {}
 
   start() {
+    console.warn(openListenerWarning("axudp", "AXUDP_BIND", "AXUDP_PEERS"));
     const s = dgram.createSocket("udp4");
     this.sock = s;
     s.on("message", (msg: Buffer) => {
@@ -98,15 +100,34 @@ export class AxudpPort {
   private rawCbs: ((b: Uint8Array) => void)[] = [];
   private frameCbs: ((f: Ax25Frame) => void)[] = [];
   private lastErrLog = new Map<string, number>(); // per-message throttle — a dead peer repeats every send
+  /** With peers configured, only their addresses may feed the node, BBS and ingest. */
+  readonly allowlist: PeerAllowlist | null;
   constructor(
-    private o: AxudpOpts & { peers: AxudpPeer[] },
+    private o: AxudpOpts & { peers: AxudpPeer[]; resolve?: Resolver; refreshMs?: number },
     private onPacket?: (p: Packet) => void,
-  ) {}
+  ) {
+    this.allowlist = o.peers.length
+      ? new PeerAllowlist({
+          name: "axudp",
+          hosts: o.peers.map((p) => p.host),
+          resolve: o.resolve,
+          refreshMs: o.refreshMs,
+        })
+      : null;
+  }
+
+  /** Datagrams refused because they came from a host that is not a configured peer. */
+  get dropped(): number {
+    return this.allowlist?.dropped ?? 0;
+  }
 
   start() {
+    if (this.allowlist) void this.allowlist.start();
+    else console.warn(openListenerWarning("axudp", "AXUDP_BIND", "AXUDP_PEERS"));
     const s = dgram.createSocket("udp4");
     this.sock = s;
-    s.on("message", (msg: Buffer) => {
+    s.on("message", (msg: Buffer, rinfo: dgram.RemoteInfo) => {
+      if (this.allowlist && !this.allowlist.allows(rinfo.address)) return;
       const bytes = stripAxipCrc(Uint8Array.from(msg)); // connected-mode consumers want the bare frame
       for (const cb of this.rawCbs) cb(bytes);
       const f = decodeFrame(bytes);
@@ -158,6 +179,7 @@ export class AxudpPort {
   }
 
   stop(): void {
+    this.allowlist?.stop();
     this.sock?.close();
     this.sock = undefined;
   }

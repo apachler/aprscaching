@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { AprsIs } from "./aprsis.js";
 import { KissTnc } from "./kiss.js";
-import { CotListener } from "./cotlisten.js";
 import { MeshtasticReader } from "./mesh.js";
 import { MeshcomListener, parseMeshcomNodes, parseMeshcomFanout } from "./meshcom.js";
 import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
@@ -183,10 +182,6 @@ if (env.KISS_TNC_HOST) {
     igate.start();
     console.log(`[igate] enabled as ${env.IGATE_CALL}`);
   }
-}
-if (env.TAK_COT_PORT) {
-  new CotListener({ port: portEnv("TAK_COT_PORT", 6969), bind: env.TAK_COT_BIND }, enqueue).start();
-  console.log("[cot] enabled");
 }
 if (env.MESH_HOST) {
   new MeshtasticReader({ host: env.MESH_HOST, port: portEnv("MESH_PORT", 1884) }, enqueue).start();

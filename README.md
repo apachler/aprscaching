@@ -73,8 +73,7 @@ Everything an operator needs, revealed progressively so the cacher never sees th
   store-and-forward **BBS** with FBB forwarding, a **NET/ROM node** (routing table, circuits, connect-through),
   a **digipeater** (new n-N paradigm, viscous cancellation) and a bidirectional **IGate**.
 - **Radios & transports** — KISS/TNC over TCP, browser-direct **Web Serial / Bluetooth** KISS, **CAT** rig
-  control (Web Serial), **Meshtastic**, **MeshCom**, **TAK/CoT** in
-  and out, and internet AX.25 tunnels (**AXUDP** and **AXIP**). Off-air **CW** and **PSK31** decode straight
+  control (Web Serial), **Meshtastic**, **MeshCom**, a **TAK/CoT** feed out, and internet AX.25 tunnels (**AXUDP** and **AXIP**). Off-air **CW** and **PSK31** decode straight
   from the microphone.
 - **Weather** — APRS weather stations are first-class; originate your own PWS (Ecowitt / WU) into the network.
 - **Remote & spots** — drive your own always-on ingest box from the web app; overlay live activation spots

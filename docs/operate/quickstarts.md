@@ -32,8 +32,8 @@ shows the stations under **Search & filter → Live layers → Live stations**.
 
 !!! note "Docker and your radio"
     Inside a container, `localhost` is the container itself. Point the settings at your host's LAN address
-    (e.g. `KISS_TNC_HOST=192.168.1.20`), and publish UDP ports for links that receive UDP (MeshCom, AXUDP,
-    TAK) — see [Running in Docker](docker.md#rf-hardware-from-a-container).
+    (e.g. `KISS_TNC_HOST=192.168.1.20`), and publish UDP ports for links that receive UDP (MeshCom and
+    AXUDP) — see [Running in Docker](docker.md#rf-hardware-from-a-container).
 
 ## APRS-IS (internet feed)
 
@@ -191,21 +191,12 @@ AXUDP_PORT=10093
 AXUDP_PEERS=bpq.example.net:10093
 ```
 
-It logs `[axudp] port udp/10093 ↔ bpq.example.net:10093`. Without `AXUDP_PEERS` it only listens. The node, BBS
-and FBB forwarding run over this link even without a radio — see [Packet BBS & node](packet.md).
+It logs `[axudp] port udp/10093 ↔ bpq.example.net:10093`. The box then accepts frames only from the peers'
+addresses and drops the rest. Without `AXUDP_PEERS` it only listens, from any host — it warns about that at
+startup; bind it to your LAN with `AXUDP_BIND`. The node, BBS and FBB forwarding run over this link even
+without a radio — see [Packet BBS & node](packet.md).
 
 AXIP (raw IP protocol 93) is the same with `AXIP_PEERS=host1,host2` (no ports). It needs the optional
 `raw-socket` package and the `CAP_NET_RAW` privilege; without them it logs `[axip] disabled — …`.
 
 Everything that arrives over the internet is tier C.
-
-## TAK / CoT
-
-Receive positions from ATAK, WinTAK or iTAK:
-
-```
-TAK_COT_PORT=6969
-```
-
-The box logs `[cot] listening udp/6969`. Point the TAK client's UDP Cursor-on-Target output at the box's
-address and port 6969; positions count on the `tak` port.

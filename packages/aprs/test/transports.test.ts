@@ -5,8 +5,6 @@ import {
   decodeAx25,
   kissWrap,
   kissFrames,
-  parseCot,
-  splitCotEvents,
   parseMeshtasticJson,
   formatPosition,
   decodeAprs,
@@ -40,27 +38,7 @@ describe("AX.25 + KISS", () => {
   });
 });
 
-describe("CoT inbound", () => {
-  const ev = `<event version="2.0" uid="APRS.OE8APR-9" type="a-f-G-E-V-C"><point lat="47.0735" lon="15.4378" hae="376.0" ce="9999999" le="9999999"/><detail><contact callsign="OE8APR-9"/><track course="88" speed="18.52"/><remarks>APRS /&gt; Mobile</remarks></detail></event>`;
-  it("parses a CoT event into a fix", () => {
-    const f = parseCot(ev)!;
-    expect(f.callsign).toBe("OE8APR-9");
-    expect(f.lat).toBeCloseTo(47.0735, 4);
-    expect(f.lon).toBeCloseTo(15.4378, 4);
-    expect(f.altitudeM).toBe(376);
-    expect(f.course).toBe(88);
-    expect(f.speedKn).toBe(36); // 18.52 m/s -> ~36 kn
-    expect(f.comment).toBe("APRS /> Mobile");
-  });
-  it("splits a multi-event document", () => {
-    expect(splitCotEvents(ev + ev).length).toBe(2);
-  });
-  it("ignores a null-island point", () => {
-    expect(parseCot(`<event><point lat="0" lon="0"/></event>`)).toBeNull();
-  });
-});
-
-describe("formatPosition (CoT/Meshtastic normalisation)", () => {
+describe("formatPosition (Meshtastic normalisation)", () => {
   it("round-trips through the decoder", () => {
     const payload = formatPosition(47.0735, 15.4378, {
       code: ">",
