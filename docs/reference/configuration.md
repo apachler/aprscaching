@@ -93,6 +93,17 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 | `SUPPORT_*` | Donation links surfaced on `/support` (recognition only) | — |
 | `COT_STREAM_INTERVAL_MS` / `COT_STREAM_MAX_MS` | TAK CoT SSE stream: push interval + max connection lifetime | built-in |
 
+## Licence-register import
+
+Read by `tools/licence/import.mjs` on the operator's machine, not by the gateway. See
+[Licence registers](licence-sources.md).
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `LICENCE_SOURCES` | Registers to import when no `--source` is given, comma-separated: `fcc`, `ised`, `acma`, `at`, `de` (or `all`) | — |
+| `BASE` | Gateway to import into | `http://127.0.0.1:8787` |
+| `INGEST_SECRET` | The gateway's ingest secret; authorises the import | — |
+
 ## Ingest box
 
 Core forwarding and the APRS-IS feed are always available; every RF transport below is opt-in and activates

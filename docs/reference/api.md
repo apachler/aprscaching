@@ -26,6 +26,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | GET | `/api/v1/stations` · `/station/:call` · `/station/:call/track` · `/station/:call.kml` | Live stations, one station, its track (JSON/KML). |
 | GET | `/api/v1/profile/:call` · `/profile/:call.adif` | A callsign's public profile · its finds as ADIF 3.1 (`SIG=APRSCACHING`). |
 | GET | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots` | Activity feed, rankings, top corroborating IGates, live spots. |
+| GET | `/api/v1/licence/:call` | Callsign validity from public licence registers (same as `/api/licence/:call`). |
 | POST · GET | `/api/v1/keys` · `/api/v1/keys/:id` | Issue a free API key · look one up. |
 
 Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys never gate a feature.
@@ -129,11 +130,14 @@ All admin writes are **sysop**-gated server-side.
 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
-| POST | `/auth/passkey/*`, `/auth/email/*`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out | public → session |
-| GET/POST | `/auth/session`, `/auth/callsign(s)`, `/auth/profile` | Session + base-callsign management | session |
+| POST | `/auth/passkey/*`, `/auth/email/*`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out. `/auth/claim`, passkey registration and email verification answer with a `licence` result for the call (nothing is stored) | public → session |
+| GET/POST | `/auth/session`, `/auth/callsign(s)`, `/auth/profile` | Session + base-callsign management. `GET/POST /auth/callsigns` carry a `licence` result per call, beside `verified` | session |
 | POST | `/verify/aprs/start` | Start callsign control-verification: returns `{ code, to, text, expiresAt }`, the message to transmit; sends nothing. Completed when an attested site hears `text` on the air | session (holds the call) |
 | GET | `/verify/aprs/status?callsign=` | `{ verified }` for the base call | public |
 | POST | `/verify/operator` | Verify an `ADMIN_CALLSIGNS` call (method `operator`) — the operator CLI | x-ingest-secret |
+| GET | `/api/licence/:call` | Callsign **validity** from imported public licence registers: `{ callsign, status, source?, sourceName?, expiresAt?, checkedAt? }`, `status` one of `licensed`, `expired`, `unconfirmed`. The call is normalised to its home call (`OE/DL1ABC/P` → `DL1ABC`). Never control-verification; see [Licence registers](licence-sources.md) | rate-limited |
+| GET | `/api/licence` | The imported registers: `{ sources: [{ source, sourceName, rows, importedAt }] }` | rate-limited |
+| POST | `/api/licence/import` · `/api/licence/import/finish` | Register import from `tools/licence/import.mjs`: batches of `{ source, importedAt, rows: [[callsign, status, expiresAt]] }` (≤ 1000), then `{ source, importedAt, count }` closes the run and removes calls the register no longer lists (`409` and no pruning when the count differs) | x-ingest-secret |
 | POST · GET | `/keys/register` · `/keys/:call` | Register a device key · list a callsign's keys | session · public |
 | POST | `/api/account/:call/export`, `/delete`, `/bundle`, `/move`, `/api/account/import` | GDPR export/erase + account portability | signed-body |
 | GET/PUT | `/api/prefs` · `/api/notify/prefs` | Preferences · notification settings | session |

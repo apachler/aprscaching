@@ -83,6 +83,7 @@ nav:
       - Federation wire format: reference/federation-wire.md
       - Configuration: reference/configuration.md
       - Command-line tools: reference/cli.md
+      - Licence registers: reference/licence-sources.md
       - Testing & verification: reference/testing.md
       - Specification registry: reference/specs.md
       - MeshCom ExtUDP protocol: reference/meshcom-extudp.md

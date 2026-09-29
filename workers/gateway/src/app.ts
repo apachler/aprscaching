@@ -39,6 +39,12 @@ import {
   handleMeCache,
 } from "./stations_mine.js";
 import { startAprsChallenge, aprsVerifyStatus, handleOperatorVerify } from "./callsign.js";
+import {
+  handleLicenceLookup,
+  handleLicenceSources,
+  handleLicenceImport,
+  handleLicenceImportFinish,
+} from "./licence.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import {
   handleWellKnown,
@@ -467,6 +473,13 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
   if (p === "/verify/operator" && m === "POST") return handleOperatorVerify(req, env);
   if (p === "/verify/aprs/status" && m === "GET") return aprsVerifyStatus(req, env);
+
+  // callsign validity from public licence registers — a flag beside the call, never a gate
+  if (p === "/api/licence" && m === "GET") return handleLicenceSources(req, env);
+  if (p === "/api/licence/import" && m === "POST") return handleLicenceImport(req, env);
+  if (p === "/api/licence/import/finish" && m === "POST") return handleLicenceImportFinish(req, env);
+  const licenceMatch = /^\/api\/licence\/([^/]+)$/.exec(p);
+  if (licenceMatch && m === "GET") return handleLicenceLookup(req, env, licenceMatch[1]!);
 
   // caching REST
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
