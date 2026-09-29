@@ -81,8 +81,9 @@ confirmation days later does not depend on positions that have since been pruned
 This decides only whether the message is **accepted as the player's own**. The find's verification tier is
 scored separately and exactly as for an app log, at the time the message was sent:
 
-- **Tier A** when the player's position beacons near the cache were heard at an attested site through an
-  IGate that is not their own, within the verification window before the message.
+- **Tier A** when the player's position beacons near the cache were heard directly by an attested site that
+  is not their own — delivered by that site's own ingest box, never an APRS-IS copy — within the
+  verification window before the message.
 - **Tier C** otherwise. A radio message carries no in-app device reading, so it never reaches Tier B.
 
 ## Acknowledgements and replies
@@ -165,7 +166,8 @@ carries its number as a `{nnn` suffix, which reaches the gateway as the APRS mes
 - A retry with the same message number is re-acked but logged once.
 - An unverified or unknown callsign is acked and rejected; a callsign held by another account never logs
   for this one.
-- Tier A with an independent attested IGate and a nearby beacon; Tier C without.
+- Tier A with a nearby beacon heard directly by an independent attested site; Tier C without, and Tier C
+  when the only copy of that beacon arrived over APRS-IS naming the attested site.
 - The APRS ack is queued from the service call with the sender's message number.
 - MeshCom: the ack is queued only to the box that owns the hearing node, and refused when that box has
   MeshCom transmit disabled.

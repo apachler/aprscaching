@@ -53,7 +53,7 @@ Every find earns one of three honest tiers
 
 | Tier | Means | Earned by |
 |------|-------|-----------|
-| **A** | RF-corroborated | Heard on the air, gated by an IGate that isn't yours, on a plausible track |
+| **A** | RF-corroborated | Heard directly on the air by an attested receiving site that isn't yours — through that site's own ingest, never an APRS-IS copy — on a plausible track |
 | **B** | App-corroborated | Your device's first-party geolocation matches the cache at log time |
 | **C** | IS-only | A bare APRS-IS beacon — logged, but unverified |
 

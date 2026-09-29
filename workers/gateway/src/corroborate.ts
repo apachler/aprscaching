@@ -17,7 +17,7 @@ import { json } from "./app.js";
 import { haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin } from "./federation_sync.js";
-import { parseAttestedSites } from "./provenance.js";
+import { parseAttestedSites, provenanceOf } from "./provenance.js";
 import { isInstanceId, loadRegistry } from "./federation.js";
 import { signFedRecord, verifyFedFrame } from "./fedcbor.js";
 import { bodyFromWire, bodyToWire } from "./fedsync.js";
@@ -111,14 +111,18 @@ export interface RfPositionRow {
   lat: number;
   lon: number;
   ts: number;
+  heard_via: string;
   igate_call: string | null;
+  path: string | null;
+  transport: string | null;
 }
 
 /**
  * Pick the evidence a set of this instance's RF positions offers for a corroboration query, or null.
  *
- * Only a receiving site this instance attests (FIRST_PARTY_SITES) can vouch for a position — the same
- * default-deny rule as local Tier A, so an empty list vouches for nothing. A peer's corroboration can lift
+ * Only a position first-party attested by the same rule as local Tier A ({@link provenanceOf}) can vouch:
+ * heard by a receiving site this instance attests (FIRST_PARTY_SITES) through that site's own on-air
+ * ingest. An empty list vouches for nothing, and an APRS-IS copy naming an attested site never vouches. A peer's corroboration can lift
  * a find to Tier A there, so answering from a site nobody here stands behind would let transport
  * masquerade as trust. A site the logger controls, or one the asker excludes, never counts.
  */
@@ -132,8 +136,8 @@ export function pickLocalEvidence(
   const radius = Math.min(q.radiusM || DEFAULT_POLICY.radiusM, 1000);
   const callBase = baseCall(q.callsign);
   for (const r of rows) {
+    if (!provenanceOf(r, attested).firstPartyAttested) continue; // not heard by a site this instance attests
     const ig = r.igate_call ?? "";
-    if (!ig || !attested.has(ig.toUpperCase())) continue; // no site, or one this instance doesn't attest
     const igBase = baseCall(ig);
     if (igBase === callBase || excludeIgates.has(igBase)) continue; // self-gated / excluded
     const d = haversineMeters(r.lat, r.lon, q.lat, q.lon);
@@ -152,7 +156,7 @@ async function localCorroboration(
   if (attested.size === 0) return null;
   const rows = (
     await env.DB.prepare(
-      `SELECT lat, lon, ts, igate_call FROM positions
+      `SELECT lat, lon, ts, heard_via, igate_call, path, transport FROM positions
       WHERE callsign = ? AND heard_via = 'rf' AND source != 'service' AND ts BETWEEN ? AND ?
       ORDER BY ts DESC LIMIT 500`,
     )

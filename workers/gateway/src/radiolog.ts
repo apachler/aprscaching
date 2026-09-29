@@ -29,7 +29,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionAccountId } from "./auth.js";
-import { provenanceOf, parseAttestedSites } from "./provenance.js";
+import { provenanceOf, parseAttestedSites, transportForPort } from "./provenance.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
@@ -137,17 +137,22 @@ export interface RadioMessage {
 }
 
 /**
- * Ports on which the ingest box itself hears the air: its TNCs and its MeshCom nodes. APRS-IS and the
- * internet-tunnelled ports (AXUDP, AXIP) never count as heard at a site, whatever path the frame carries.
+ * Is this message accepted as the sender's own without a confirmation in the app? A signed batch is; an
+ * unsigned one only when the provenance rule attests it, which admits the ingest box's own on-air ports
+ * (its TNCs and MeshCom nodes) at an attested site. APRS-IS and the internet-tunnelled ports never count as
+ * heard at a site, whatever path the frame carries.
  */
-const ON_AIR_PORTS = new Set(["kiss-tnc", "agwpe", "hostmode", "meshcom"]);
-
-/** Is this message accepted as the sender's own without a confirmation in the app? */
 export function isTrustedMessage(m: RadioMessage, attestedSites: Set<string>): boolean {
   if (m.signed) return true;
-  if (!ON_AIR_PORTS.has(m.port)) return false;
-  return provenanceOf({ heard_via: m.heardVia, igate_call: m.igateCall ?? null, path: m.path.join(",") }, attestedSites)
-    .firstPartyAttested;
+  return provenanceOf(
+    {
+      heard_via: m.heardVia,
+      igate_call: m.igateCall ?? null,
+      path: m.path.join(","),
+      transport: transportForPort(m.port, false),
+    },
+    attestedSites,
+  ).firstPartyAttested;
 }
 
 const now = () => Math.floor(Date.now() / 1000);

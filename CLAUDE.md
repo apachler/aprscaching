@@ -38,7 +38,9 @@ SPA + migrations embedded (`deploy/desktop/`); the rest of `deploy/` is validate
 
 ## Verification (the core)
 Trust follows corroboration, not transport:
-- A RF-corroborated: qAR + independent IGate + plausible track.
+- A RF-corroborated: heard directly by an attested site's own receiver (a TNC or MeshCom port on its own
+  ingest box, delivered with the ingest secret) that is independent of the logger + plausible track. An
+  APRS-IS line naming the site (`qAR,<site>`) never counts — APRS-IS passcodes are public.
 - B App-corroborated: first-party in-app device geolocation matches the cache (phone-app path).
 - C IS-only: bare APRS-IS beacon — logged but unverified.
 A bare IS packet alone CANNOT reach tier B; corroboration must be the independent app reading.
@@ -83,7 +85,7 @@ instances and runs only in CI — see `.github/workflows/ci.yml` for the exact e
 - The schema lives once in `db/migrations/*.sql`; wrangler applies it to D1
   (`migrations_dir = "../../db/migrations"`) and the Node/Bun servers apply it at boot.
 - CI proves parity by running the same `tools/smoke/*` suites against all three runtimes.
-- Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested IGate,
+- Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested site,
   and writes need a shared `INGEST_SECRET` on both gateway and client.
 
 ## Git & dependencies
@@ -116,9 +118,12 @@ instances and runs only in CI — see `.github/workflows/ci.yml` for the exact e
 - **Donations are recognition-only** — free-in-full, never feature-gating; `entitlements`/`api_keys`
   never gate features.
 - **Transport ≠ trust.** Every internet-sourced packet (APRS-IS, AXIP/AXUDP, HAMNET-tunnelled) stays
-  Tier C unless it arrives via a first-party RF site the operator attests. The `provenance`
-  abstraction (transport enum + `firstPartyAttested` flag) is what the verify engine consumes — Tier A
-  is gated on the flag, never on the transport.
+  Tier C. Only a frame an attested site's own receiver heard, delivered by that site's own ingest (a TNC
+  or MeshCom port), is first-party attested; an APRS-IS line whose q-construct names an attested site
+  (`qAR,<site>`) stays Tier C, since anyone with a public passcode can inject it. A signed browser-bridge
+  batch carries only the signer's own frames and is never attested. The `provenance` abstraction
+  (transport enum + `firstPartyAttested` flag) is what the verify engine consumes — Tier A is gated on
+  the flag, never on the transport.
 - **RX ≠ trust; TX is gated.** Receiving a frame never lifts trust. Browser/RF transmit is off by
   default and gated on callsign control-verification; the APRS-IS passcode verifies nothing — the real
   gate is licensing + control-verification.

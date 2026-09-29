@@ -4,7 +4,15 @@ import { pickLocalEvidence } from "../src/corroborate.js";
 import { parseAttestedSites } from "../src/provenance.js";
 
 const Q = { callsign: "OE3RF-9", lat: 47.2, lon: 15.05, radiusM: 150 };
-const near = (igate: string | null) => ({ lat: 47.2004, lon: 15.05, ts: 100, igate_call: igate });
+const near = (igate: string | null, transport: string | null = "tnc") => ({
+  lat: 47.2004,
+  lon: 15.05,
+  ts: 100,
+  heard_via: "rf",
+  igate_call: igate,
+  path: "WIDE1-1",
+  transport,
+});
 const none = new Set<string>();
 
 describe("federation corroboration vouches only through attested sites", () => {
@@ -12,6 +20,13 @@ describe("federation corroboration vouches only through attested sites", () => {
     const e = pickLocalEvidence([near("OE8XXX")], Q, none, parseAttestedSites("OE8XXX"));
     expect(e?.igateCall).toBe("OE8XXX");
     expect(e!.distanceM).toBeLessThan(150);
+  });
+
+  it("does not answer from an APRS-IS qAR copy naming an attested site", () => {
+    const sites = parseAttestedSites("OE8XXX");
+    const isCopy = { ...near("OE8XXX", "aprs-is"), path: "WIDE1-1,qAR,OE8XXX" };
+    expect(pickLocalEvidence([isCopy], Q, none, sites)).toBeNull();
+    expect(pickLocalEvidence([{ ...isCopy, transport: null }], Q, none, sites)).toBeNull(); // legacy row
   });
 
   it("does not answer from a site this instance does not attest", () => {
@@ -33,7 +48,7 @@ describe("federation corroboration vouches only through attested sites", () => {
   });
 
   it("ignores attested hearings outside the cache radius", () => {
-    const far = { lat: 47.3, lon: 15.05, ts: 100, igate_call: "OE8XXX" };
+    const far = { ...near("OE8XXX"), lat: 47.3 };
     expect(pickLocalEvidence([far], Q, none, parseAttestedSites("OE8XXX"))).toBeNull();
   });
 });

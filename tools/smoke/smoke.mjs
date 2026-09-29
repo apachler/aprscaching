@@ -152,7 +152,39 @@ const tb = await call("POST", `/api/caches/${id}/logs`, {
 });
 ok("Tier B verified (app_geo)", tb.data?.verified === true && tb.data?.tier === "B", JSON.stringify(tb.data));
 
-// Tier A — RF-heard, independently gated position then a found log
+// Tier A is never granted from APRS-IS: a `qAR,OE8XXX` line naming the attested site is something anyone
+// with a (public) passcode can inject, so the find it backs stays below Tier A
+const isQar = await call(
+  "POST",
+  "/ingest",
+  {
+    packets: [
+      {
+        src: "OE3IS",
+        path: ["WIDE1-1", "qAR", "OE8XXX"],
+        payload: "=4704.80N/01526.40E>",
+        kind: "position",
+        parsed: { lat: 47.08, lon: 15.44, symbol: ">" },
+        heardVia: "rf",
+        igateCall: "OE8XXX",
+        port: "aprs-is",
+        ts: now(),
+      },
+    ],
+  },
+  { "x-ingest-secret": SECRET },
+);
+const isQarLog = await call("POST", `/api/caches/${vCache.data?.cache?.id}/logs`, {
+  loggerCall: "OE3IS",
+  logType: "found",
+});
+ok(
+  "an APRS-IS qAR line naming the attested site does not reach Tier A",
+  isQar.data?.stored === 1 && isQarLog.data?.logged === true && isQarLog.data?.tier !== "A",
+  JSON.stringify(isQarLog.data),
+);
+
+// Tier A — heard directly by the attested site's own TNC (the ingest stamps the site call), then a found log
 const ing = await call(
   "POST",
   "/ingest",
@@ -160,13 +192,13 @@ const ing = await call(
     packets: [
       {
         src: "OE3RF",
-        path: ["WIDE1-1", "qAR", "OE8XXX"],
+        path: ["WIDE1-1"],
         payload: "=4704.41N/01526.27E>",
         kind: "position",
         parsed: { lat: 47.0734, lon: 15.4377, symbol: ">" },
         heardVia: "rf",
         igateCall: "OE8XXX",
-        port: "aprs-is",
+        port: "kiss-tnc",
         ts: now(),
       },
     ],
@@ -1887,7 +1919,7 @@ ok(
     {
       packets: [
         msg(`FOUND ${code} from the radio{7`, {
-          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          path: ["WIDE1-1"],
           heardVia: "rf",
           igateCall: "OE8XXX",
           port: "kiss-tnc",

@@ -133,13 +133,14 @@ optional reachability-only amateur-network endpoint).
 ## Cross-instance corroboration
 
 The network effect: when a find can't reach Tier A locally, the instance asks its **trusted** peers whether
-they independently heard the callsign on RF near the cache, through an IGate the logger doesn't control —
+they independently heard the callsign on RF near the cache, at a receiving site the logger doesn't control —
 the logger's own calls and stations travel with the question as exclusions. A **quorum** of distinct
 identities must agree before the find is promoted to Tier A: two by default (`FED_CORROBORATION_QUORUM`),
 counted by registry operator where the registry names one, else by signing key, so one operator running
-several instances is one voice. A peer answers only from positions heard through a receiving site it attests
-itself (its own `FIRST_PARTY_SITES`), the same rule as its local Tier A; an instance that attests no site
-never vouches for anyone.
+several instances is one voice. A peer answers only from positions it attests itself, the same rule as its
+local Tier A: heard directly by one of its own receiving sites (its `FIRST_PARTY_SITES`) and delivered by that
+site's own ingest box. An APRS-IS copy naming such a site (`qAR,<site>`) never vouches, because anyone with a
+public passcode can inject one; an instance that attests no site never vouches for anyone.
 
 Questions and answers are signed frames: the question carries a fresh nonce, and the answer is bound to that
 nonce and to the question's hash, so an answer can be neither forged by a middlebox — a plain-http 44net
