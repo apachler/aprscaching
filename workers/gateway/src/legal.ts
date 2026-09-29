@@ -17,8 +17,7 @@
  * operator cannot ship the placeholders unnoticed.
  */
 import type { Env } from "./env.js";
-
-const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+import { escapeHtml } from "./util/html.js";
 
 const STYLE = `<style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem}
@@ -53,13 +52,13 @@ const page = (title: string, body: string): Response =>
 export function handleImprintPage(env: Env): Response {
   const op = operator(env);
   const who = op.configured
-    ? `<div class=box><p><strong>${esc(op.name)}</strong><br>${op.address.map(esc).join("<br>")}</p>
-<p>Contact: <a href="mailto:${esc(op.email)}">${esc(op.email)}</a></p></div>`
+    ? `<div class=box><p><strong>${escapeHtml(op.name)}</strong><br>${op.address.map(escapeHtml).join("<br>")}</p>
+<p>Contact: <a href="mailto:${escapeHtml(op.email)}">${escapeHtml(op.email)}</a></p></div>`
     : unconfigured;
   return page(
     "Imprint",
     `<h1>Imprint</h1>
-<p>Operator of this aprscaching instance (${esc(env.INSTANCE ?? "unconfigured")}):</p>
+<p>Operator of this aprscaching instance (${escapeHtml(env.INSTANCE ?? "unconfigured")}):</p>
 ${who}
 <p class=m>aprscaching is free software (AGPL-3.0-or-later); every instance is run independently by
 its operator. This page identifies the operator of <em>this</em> instance only — not the authors of
@@ -71,7 +70,7 @@ the software.</p>`,
 export function handlePrivacyPage(env: Env): Response {
   const op = operator(env);
   const contact = op.configured
-    ? `<p>Controller for this instance: <strong>${esc(op.name)}</strong> — <a href="mailto:${esc(op.email)}">${esc(op.email)}</a>
+    ? `<p>Controller for this instance: <strong>${escapeHtml(op.name)}</strong> — <a href="mailto:${escapeHtml(op.email)}">${escapeHtml(op.email)}</a>
 (see the <a href="/imprint">imprint</a>).</p>`
     : unconfigured;
   return page(

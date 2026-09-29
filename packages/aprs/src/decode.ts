@@ -204,20 +204,31 @@ function decodeMessage(p: string): AprsData {
     out.text = "";
     return out;
   }
-  const mn = /\{([^}]+)$/.exec(text);
-  if (mn) {
-    out.msgNo = mn[1];
-    out.text = text.slice(0, mn.index);
+  // The message number follows the first '{' after the last '}' and runs to the end of the text.
+  // An index scan keeps this linear on a crafted body of many braces.
+  const brace = text.indexOf("{", text.lastIndexOf("}") + 1);
+  if (brace >= 0 && brace < text.length - 1) {
+    out.msgNo = text.slice(brace + 1);
+    out.text = text.slice(0, brace);
   }
   if (/^(BLN|NWS|SKY)/.test(addressee)) out.bulletin = addressee;
   return out;
 }
 
+/** Line terminators: a telemetry report is one line, so a body carrying one is not decoded. */
+const LINE_BREAK = /[\n\r\u2028\u2029]/;
+
 function decodeTelemetry(p: string): AprsData {
-  const m = /^#?(\d+)?,?(.*)$/.exec(p.slice(1));
-  if (!m) return { kind: "telemetry", analog: [], digital: [] };
-  const seq = m[1] ? Number(m[1]) : undefined;
-  const parts = (m[2] ?? "").split(",");
+  // T#<seq>,<a1>,…,<a5>,<bits> — an optional '#', an optional sequence number, an optional ',', then
+  // the fields. Scanned by index (not one backtracking pattern) so a long digit run stays linear.
+  const s = p.slice(1);
+  if (LINE_BREAK.test(s)) return { kind: "telemetry", analog: [], digital: [] };
+  let i = s[0] === "#" ? 1 : 0;
+  const seqStart = i;
+  while (i < s.length && s.charCodeAt(i) >= 48 && s.charCodeAt(i) <= 57) i++;
+  const seq = i > seqStart ? Number(s.slice(seqStart, i)) : undefined;
+  if (s[i] === ",") i++;
+  const parts = s.slice(i).split(",");
   const analog = parts
     .slice(0, 5)
     .map(Number)

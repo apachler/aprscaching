@@ -6,6 +6,7 @@
  * mapping is conformance-tested on both runtimes.
  */
 import { nowS } from "./util/time.js";
+import { escapeHtml } from "./util/html.js";
 import type { Env } from "./env.js";
 
 interface CotStation {
@@ -23,8 +24,6 @@ interface CotStation {
 const UNK = 9999999.0; // CoT "unknown" sentinel for hae/ce/le
 const KN_TO_MS = 0.514444;
 const iso = (sec: number) => new Date(sec * 1000).toISOString();
-const xml = (s: string) =>
-  s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]!);
 
 /** Map an APRS symbol (table+code) to a coarse CoT 2525-ish type. Friendly by default. */
 export function cotType(symbol: string | null): string {
@@ -62,12 +61,12 @@ export function cotType(symbol: string | null): string {
 /** Build a single CoT <event> for a station. `now` = current unix seconds. */
 export function stationToCotEvent(s: CotStation, now: number, staleSec = 300): string {
   const hae = s.altitudeM != null ? s.altitudeM.toFixed(1) : UNK.toFixed(1);
-  const detail: string[] = [`<contact callsign="${xml(s.callsign)}"/>`];
+  const detail: string[] = [`<contact callsign="${escapeHtml(s.callsign)}"/>`];
   if (s.course != null || s.speedKn != null)
     detail.push(`<track course="${s.course ?? 0}" speed="${((s.speedKn ?? 0) * KN_TO_MS).toFixed(2)}"/>`);
-  detail.push(`<remarks>${xml(`APRS ${s.symbol ?? ""}${s.comment ? ` ${s.comment}` : ""}`.trim())}</remarks>`);
+  detail.push(`<remarks>${escapeHtml(`APRS ${s.symbol ?? ""}${s.comment ? ` ${s.comment}` : ""}`.trim())}</remarks>`);
   return (
-    `<event version="2.0" uid="APRS.${xml(s.callsign)}" type="${cotType(s.symbol)}"` +
+    `<event version="2.0" uid="APRS.${escapeHtml(s.callsign)}" type="${cotType(s.symbol)}"` +
     ` time="${iso(now)}" start="${iso(s.lastSeen)}" stale="${iso(s.lastSeen + staleSec)}" how="m-g">` +
     `<point lat="${s.lat}" lon="${s.lon}" hae="${hae}" ce="${UNK}" le="${UNK}"/>` +
     `<detail>${detail.join("")}</detail></event>`

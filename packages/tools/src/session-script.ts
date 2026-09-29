@@ -40,6 +40,22 @@ const DEFAULT_CONNECT_TIMEOUT = 30;
 const DEFAULT_WAITFOR_TIMEOUT = 60;
 
 /**
+ * Split `waitfor <text> [<seconds>]`: a trailing whitespace-separated digit run is the timeout. Walked
+ * back from the end so a long whitespace run inside the text stays linear.
+ */
+function splitTimeout(rest: string): { text: string; timeoutSec?: number } {
+  let i = rest.length;
+  while (i > 0 && /\d/.test(rest[i - 1]!)) i--;
+  const digitsStart = i;
+  while (i > 0 && /\s/.test(rest[i - 1]!)) i--;
+  const hasTimeout = digitsStart < rest.length && i < digitsStart;
+  const text = hasTimeout ? rest.slice(0, i) : rest;
+  // The pattern text is a single line; one that spans lines carries no timeout.
+  if (/[\n\r\u2028\u2029]/.test(text)) return { text: rest.trim() };
+  return { text: text.trim(), timeoutSec: hasTimeout ? Number(rest.slice(digitsStart)) : undefined };
+}
+
+/**
  * Parse a compact script: one step per line OR `;`-separated. First token = op.
  *   connect HB9W-8 | send sh/dx | waitfor Cluster [30] | wait 5 | disconnect
  * `#`/`REM`/`***` lines are comments (GPAUTO used `***REM`). Unknown lines are ignored.
@@ -58,8 +74,8 @@ export function parseScript(text: string): SessionStep[] {
     if (op === "connect" && rest) steps.push({ op: "connect", call: rest.toUpperCase() });
     else if (op === "send") steps.push({ op: "send", text: rest });
     else if (op === "waitfor" && rest) {
-      const m = rest.match(/^(.*?)(?:\s+(\d+))?$/);
-      steps.push({ op: "waitfor", text: (m?.[1] ?? rest).trim(), timeoutSec: m?.[2] ? Number(m[2]) : undefined });
+      const { text, timeoutSec } = splitTimeout(rest);
+      steps.push({ op: "waitfor", text, timeoutSec });
     } else if (op === "wait") steps.push({ op: "wait", sec: Math.max(0, Number(rest) || 0) });
     else if (op === "disconnect" || op === "bye") steps.push({ op: "disconnect" });
   }

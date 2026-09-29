@@ -126,9 +126,12 @@ export interface FsVerdict {
  * verdicts (accept · resume@512 · reject). Anything else is treated as reject.
  */
 export function parseFSDetailed(line: string): FsVerdict[] {
-  const m = /^FS\s*(.*)$/i.exec(line.trim());
-  if (!m) return [];
-  const s = (m[1] ?? "").replace(/\s+/g, "");
+  const t = line.trim();
+  if (!/^fs/i.test(t)) return [];
+  // Whitespace after "FS" may span lines; the verdicts themselves are one line.
+  const verdicts = t.slice(2).trimStart();
+  if (/[\n\r\u2028\u2029]/.test(verdicts)) return [];
+  const s = verdicts.replace(/\s+/g, "");
   const out: FsVerdict[] = [];
   for (let i = 0; i < s.length; i++) {
     const c = s[i]!;

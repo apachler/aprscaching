@@ -18,7 +18,7 @@
 import { chromium } from "playwright-core";
 import { build } from "esbuild";
 import { createServer } from "node:http";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -104,7 +104,10 @@ async function main() {
   const bundleJs = bundled.outputFiles[0].text;
 
   // 2. synth WAV (repeat the message so the looping fake device always has a clean copy in the capture window)
-  const wavPath = path.join(tmpdir(), "aprs-psk31-e2e.wav");
+  // A private, unpredictable directory: a fixed name in the shared temp dir could be pre-created or
+  // symlinked by another local user.
+  const wavDir = mkdtempSync(path.join(tmpdir(), "aprs-psk31-e2e-"));
+  const wavPath = path.join(wavDir, "capture.wav");
   const bits = "0".repeat(16) + enc(MESSAGE) + "0".repeat(16); // idle padding round the message
   writeFileSync(wavPath, synthWav(bits, 1006)); // deliberately +6 Hz off-tune, to exercise carrier recovery
 
@@ -155,6 +158,7 @@ async function main() {
   } finally {
     await browser.close();
     srv.close();
+    rmSync(wavDir, { recursive: true, force: true });
   }
 
   console.log(`decoded: ${JSON.stringify(decoded)}`);
