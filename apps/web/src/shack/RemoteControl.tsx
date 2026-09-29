@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, ErrorState, useConfirm, useToast, Ico } from "../ui/index.js";
+import { Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Ico } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
@@ -70,11 +70,9 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       setPairing(false);
     }
   }
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
-  }, [refresh]);
+  // load now and whenever the box id changes, then every 5 s while the page is visible
+  useEffect(refresh, [refresh]);
+  usePoll(refresh, 5000, { immediate: false });
 
   // every remote transmit is a deliberate, confirmed action — same bar as the browser RF bridge
   const TX_KINDS = new Set(["beacon", "message", "igate", "digi", "tx"]);

@@ -144,14 +144,6 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
     };
   }, []);
 
-  // Live panels (mheard, etc.) update their spec from background events, not React state — tick a
-  // gentle re-render so the web console reflects new frames without any per-tool wiring.
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 4_000);
-    return () => clearInterval(id);
-  }, []);
-
   function toggle(name: string, on: boolean) {
     const r = setToolEnabled(name, on);
     if (!r.ok) toast(r.error ?? "couldn't enable");

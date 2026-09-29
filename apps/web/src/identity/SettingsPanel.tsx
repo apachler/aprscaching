@@ -13,7 +13,7 @@ import {
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
-import { Panel, Group, Row, Advanced, Switch, Ico, Button, useConfirm, useToast } from "../ui/index.js";
+import { Panel, Group, Row, Advanced, Switch, Ico, Button, useConfirm, useToast, useLoad } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../shack/Watchlist.js";
@@ -53,15 +53,15 @@ export function SettingsPanel(props: {
   const s = props.settings;
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
-  const [prefs, setPrefs] = useState<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean } | null>(null);
+  const { data: prefs, setData: setPrefs } = useLoad(
+    () => (props.session.signedIn ? getNotifyPrefs() : Promise.resolve(undefined)),
+    [props.session.signedIn],
+  );
   const [pushState, setPushState] = useState<
     "loading" | "unsupported" | "off" | "on" | "denied" | "error" | "unconfigured"
   >("loading");
   useEffect(() => {
     if (!props.session.signedIn) return;
-    getNotifyPrefs()
-      .then(setPrefs)
-      .catch(() => {});
     (async () => {
       setPushState(!pushSupported() ? "unsupported" : (await pushSubscribed()) ? "on" : "off");
     })();
@@ -355,12 +355,7 @@ export function SettingsPanel(props: {
 
 /** AGPL §13: a visible link to the exact source this instance is running. */
 function SourceLink() {
-  const [src, setSrc] = useState<SourceInfo | null>(null);
-  useEffect(() => {
-    getSource()
-      .then(setSrc)
-      .catch(() => {});
-  }, []);
+  const { data: src } = useLoad<SourceInfo>(getSource, []);
   const short = src?.commit ? src.commit.slice(0, 8) : (src?.tag ?? null);
   return (
     <p className="muted fine">

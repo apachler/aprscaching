@@ -12,7 +12,7 @@ import {
   terminatorLatitude,
 } from "@aprscaching/aprs";
 import { useFmt } from "../format.js";
-import { Ico } from "../ui/index.js";
+import { Ico, usePoll } from "../ui/index.js";
 
 /**
  * Map field-navigation tools: a Maidenhead/lat-lon grid overlay, concentric range rings
@@ -279,6 +279,10 @@ export function MapTools(props: {
   }
 
   // terminator: redraw the night polygon now and refresh each minute while it's on
+  const drawNight = () => {
+    const m = props.map;
+    if (m?.isStyleLoaded()) setData(m, SRC.night, nightFC(Date.now() / 1000));
+  };
   useEffect(() => {
     const m = props.map;
     if (!m) return;
@@ -286,13 +290,10 @@ export function MapTools(props: {
       setData(m, SRC.night, EMPTY);
       return;
     }
-    const draw = () => {
-      if (m.isStyleLoaded()) setData(m, SRC.night, nightFC(Date.now() / 1000));
-    };
-    draw();
-    const iv = setInterval(draw, 60_000);
-    return () => clearInterval(iv);
+    drawNight();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawNight reads only props.map, listed
   }, [props.map, term, props.styleEpoch]);
+  usePoll(drawNight, 60_000, { enabled: term, immediate: false });
 
   // bearing arc: great-circle line from your QTH to the selected cache (+ home marker)
   const home = props.home,

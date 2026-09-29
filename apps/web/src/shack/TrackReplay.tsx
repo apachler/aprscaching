@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
+import { usePoll } from "../ui/index.js";
 
 /**
  * Track history + time-replay. Browse a station's / living-cache's past positions by
@@ -192,19 +193,10 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
   }, [idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // playback ticker — discrete steps (reduced-motion safe: no tweening, no CSS animation)
-  useEffect(() => {
-    if (!playing || pts.length < 2) return;
-    const t = window.setInterval(
-      () => {
-        setIdx((i) => {
-          if (i >= pts.length - 1) return i;
-          return i + 1;
-        });
-      },
-      Math.max(1000 / fps, 16),
-    );
-    return () => clearInterval(t);
-  }, [playing, fps, pts.length]);
+  usePoll(() => setIdx((i) => Math.min(i + 1, pts.length - 1)), Math.max(1000 / fps, 16), {
+    enabled: playing && pts.length >= 2,
+    immediate: false,
+  });
 
   // auto-stop at the end
   useEffect(() => {

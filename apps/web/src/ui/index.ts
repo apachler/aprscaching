@@ -10,6 +10,8 @@ export { EmptyState } from "./EmptyState.js";
 export { ErrorState } from "./ErrorState.js";
 export { LoadMore } from "./LoadMore.js";
 export { usePaged, type PageResult } from "./usePaged.js";
+export { useLoad } from "./useLoad.js";
+export { usePoll } from "./usePoll.js";
 export { ToastProvider, useToast, TOAST_EVENT } from "./Toast.js";
 export { Icon, type IconName } from "./Icon.js";
 export { Ico } from "./Ico.js";

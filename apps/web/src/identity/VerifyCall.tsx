@@ -14,7 +14,7 @@ import {
   type AmprChallenge,
   type VerifyMethods,
 } from "../api.js";
-import { Icon, copyText, useToast } from "../ui/index.js";
+import { Icon, copyText, useToast, usePoll } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { signWithP12 } from "./lotw.js";
 
@@ -171,29 +171,27 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
   }
 
   // Poll until the receiving site hears the message or the code expires.
-  useEffect(() => {
-    if (!ch || state !== "waiting") return;
-    let stopped = false;
-    const tick = async () => {
+  usePoll(
+    (signal) => {
+      if (!ch) return;
       if (Date.now() / 1000 > ch.expiresAt) {
         setState("expired");
         return;
       }
-      try {
-        const r = await getVerifyStatus(callsign);
-        if (stopped) return;
-        setPollErr(false);
-        if (r.verified) onVerified();
-      } catch {
-        if (!stopped) setPollErr(true);
-      }
-    };
-    const id = window.setInterval(() => void tick(), POLL_MS);
-    return () => {
-      stopped = true;
-      window.clearInterval(id);
-    };
-  }, [ch, state, callsign, onVerified]);
+      getVerifyStatus(callsign).then(
+        (r) => {
+          if (signal.aborted) return;
+          setPollErr(false);
+          if (r.verified) onVerified();
+        },
+        () => {
+          if (!signal.aborted) setPollErr(true);
+        },
+      );
+    },
+    POLL_MS,
+    { enabled: !!ch && state === "waiting", immediate: false },
+  );
 
   if (!ch || state === "idle")
     return (

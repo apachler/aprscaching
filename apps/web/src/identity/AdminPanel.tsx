@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import {
   listFederationPeers,
@@ -44,6 +44,7 @@ import {
   copyText,
   useConfirm,
   useToast,
+  useLoad,
   Disclosure,
 } from "../ui/index.js";
 
@@ -134,22 +135,13 @@ function VerificationAdmin() {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
-  const [rows, setRows] = useState<ManualVerification[] | null>(null);
-  const [loadErr, setLoadErr] = useState(false);
+  const list = useLoad(() => listManualVerifications().then((r) => r.verifications), []);
+  const rows = list.data;
+  const refresh = list.reload;
   const [call, setCall] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
-
-  const refresh = () => {
-    setLoadErr(false);
-    listManualVerifications()
-      .then((r) => setRows(r.verifications))
-      .catch(() => setLoadErr(true));
-  };
-  useEffect(() => {
-    refresh();
-  }, []);
 
   const cs = call.trim().toUpperCase();
   const callOk = CALL_RE.test(cs);
@@ -236,9 +228,9 @@ function VerificationAdmin() {
         </p>
       )}
       <h4 className="set-subh">Verified by hand</h4>
-      {loadErr ? (
+      {list.error ? (
         <ErrorState onRetry={refresh}>Couldn&apos;t load the manual verifications.</ErrorState>
-      ) : rows === null ? (
+      ) : rows === undefined ? (
         <p className="muted" role="status">
           Loading…
         </p>
@@ -286,23 +278,14 @@ function AdoptionAdmin() {
   const toast = useToast();
   const confirmDialog = useConfirm();
   const fmt = useFmt();
-  const [data, setData] = useState<AdminAdoptions | null>(null);
-  const [loadErr, setLoadErr] = useState(false);
+  const adoptions = useLoad(getAdminAdoptions, []);
+  const data = adoptions.data;
+  const refresh = adoptions.reload;
   const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-
-  const refresh = () => {
-    setLoadErr(false);
-    getAdminAdoptions()
-      .then(setData)
-      .catch(() => setLoadErr(true));
-  };
-  useEffect(() => {
-    refresh();
-  }, []);
 
   const offerByCode = async () => {
     if (!code.trim() || note.trim().length < 3) {
@@ -412,9 +395,9 @@ function AdoptionAdmin() {
         </p>
       )}
 
-      {loadErr ? (
+      {adoptions.error ? (
         <ErrorState onRetry={refresh}>Couldn&apos;t load the adoption list.</ErrorState>
-      ) : data === null ? (
+      ) : data === undefined ? (
         <p className="muted" role="status">
           Loading…
         </p>
@@ -710,20 +693,7 @@ function SetupRow(props: { item: SetupItem }) {
  * partners, trust) lives in the sibling admin groups; each DB row says where it is managed.
  */
 function SetupAdmin(props: { onDocs: (slug: string) => void }) {
-  const [items, setItems] = useState<SetupItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const refresh = () => {
-    setError(null);
-    setLoading(true);
-    getAdminSetup()
-      .then((r) => setItems(r.items))
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => {
-    refresh();
-  }, []);
+  const { data: items, error, loading, reload: refresh } = useLoad(() => getAdminSetup().then((r) => r.items), []);
 
   if (error) return <ErrorState onRetry={refresh}>{error}</ErrorState>;
   if (!items) return <EmptyState>Checking this instance's configuration…</EmptyState>;
@@ -780,22 +750,14 @@ function SetupAdmin(props: { onDocs: (slug: string) => void }) {
 function FederationAdmin() {
   const fmt = useFmt();
   const toast = useToast();
-  const [peers, setPeers] = useState<FedPeer[]>([]);
-  const [loadErr, setLoadErr] = useState(false);
-  const refresh = () => {
-    setLoadErr(false);
-    return listFederationPeers()
-      .then((r) => setPeers(r.peers))
-      .catch(() => setLoadErr(true));
-  };
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const list = useLoad(() => listFederationPeers().then((r) => r.peers), []);
+  const peers: FedPeer[] = list.data ?? [];
+  const refresh = list.reload;
   const trust = async (url: string, t: "trusted" | "unvetted" | "blocked") => {
     try {
       await setPeerTrust(url, t);
       toast(`Peer ${t}`);
-      await refresh();
+      refresh();
     } catch (e) {
       toast((e as Error).message);
     }
@@ -803,7 +765,7 @@ function FederationAdmin() {
   return (
     <>
       <Fed44netWizard onAdmitted={refresh} />
-      {loadErr ? (
+      {list.error ? (
         <ErrorState onRetry={refresh}>Couldn't load the peer list.</ErrorState>
       ) : (
         peers.length === 0 && <EmptyState>No federation peers configured.</EmptyState>
@@ -936,69 +898,60 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
 
 /** The instance's own DNS binding — what an operator pastes into the ARDC portal to be addable. */
 function MyTxtRecord() {
-  const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const [desc, setDesc] = useState<Awaited<ReturnType<typeof getFedDescriptor>> | null>(null);
-  const [descErr, setDescErr] = useState(false);
-  const [call, setCall] = useState("");
-  useEffect(() => {
-    if (!open || desc) return;
-    setDescErr(false);
-    getFedDescriptor()
-      .then((d) => {
-        setDesc(d);
-        if (!call && d.aprsCall) setCall(d.aprsCall.split("-")[0] ?? "");
-      })
-      .catch(() => setDescErr(true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on first open; `call` is only seeded
-  }, [open, desc]);
+  return (
+    <Disclosure label="Be reachable on 44net">
+      <TxtRecordBody />
+    </Disclosure>
+  );
+}
 
+/** The disclosure's body: mounts on open, so a failed descriptor load retries by reopening. */
+function TxtRecordBody() {
+  const toast = useToast();
+  const [call, setCall] = useState("");
+  const { data: desc, error } = useLoad(
+    () =>
+      getFedDescriptor().then((d) => {
+        if (d.aprsCall) setCall((c) => c || (d.aprsCall!.split("-")[0] ?? ""));
+        return d;
+      }),
+    [],
+  );
   const record =
     desc?.signed && desc.publicKey && call.trim()
       ? `_aprscaching.${call.trim().toLowerCase()}.ampr.org  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}"`
       : null;
+  if (error)
+    return <div className="comment error">Couldn't load this instance's descriptor — close and reopen to retry.</div>;
+  if (desc && !desc.signed)
+    return <div className="comment">Configure a federation signing key to publish a verifiable 44net binding.</div>;
   return (
-    <div className="disclosure">
-      <button className="link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        {open ? "▾" : "▸"} Be reachable on 44net
-      </button>
-      {open && (
-        <div className="disclosure-body">
-          {descErr ? (
-            <div className="comment error">Couldn't load this instance's descriptor — close and reopen to retry.</div>
-          ) : desc && !desc.signed ? (
-            <div className="comment">Configure a federation signing key to publish a verifiable 44net binding.</div>
-          ) : (
-            <>
-              <div className="row">
-                <input
-                  placeholder="Your base callsign"
-                  value={call}
-                  onChange={(e) => setCall(e.target.value.toUpperCase())}
-                  aria-label="Your base callsign"
-                />
-                <button
-                  disabled={!record}
-                  onClick={() => {
-                    if (record)
-                      void copyText(record).then((ok) =>
-                        toast(ok ? "TXT record copied" : "Copy failed — select the record text and copy manually"),
-                      );
-                  }}
-                >
-                  Copy
-                </button>
-              </div>
-              {record && <div className="comment mono">{record}</div>}
-              <div className="comment">
-                Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
-                (portal.ampr.org) — other instances can then add you by callsign, verified.
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+    <>
+      <div className="row">
+        <input
+          placeholder="Your base callsign"
+          value={call}
+          onChange={(e) => setCall(e.target.value.toUpperCase())}
+          aria-label="Your base callsign"
+        />
+        <button
+          disabled={!record}
+          onClick={() => {
+            if (record)
+              void copyText(record).then((ok) =>
+                toast(ok ? "TXT record copied" : "Copy failed — select the record text and copy manually"),
+              );
+          }}
+        >
+          Copy
+        </button>
+      </div>
+      {record && <div className="comment mono">{record}</div>}
+      <div className="comment">
+        Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
+        (portal.ampr.org) — other instances can then add you by callsign, verified.
+      </div>
+    </>
   );
 }
 
@@ -1008,25 +961,20 @@ const EMPTY_PARTNER: Partial<ForwardPartner> & { call: string } = { call: "", pr
 function ForwardingAdmin() {
   const toast = useToast();
   const confirmDialog = useConfirm();
-  const [partners, setPartners] = useState<ForwardPartner[]>([]);
-  const [rules, setRules] = useState<ForwardRuleRow[]>([]);
-  const [loadErr, setLoadErr] = useState(false);
+  const lists = useLoad(
+    () =>
+      Promise.all([listForwardPartners(), listForwardRules()]).then(([p, r]) => ({
+        partners: p.partners,
+        rules: r.rules,
+      })),
+    [],
+  );
+  const partners: ForwardPartner[] = lists.data?.partners ?? [];
+  const rules: ForwardRuleRow[] = lists.data?.rules ?? [];
+  const refresh = lists.reload;
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Partial<ForwardPartner> & { call: string }>(EMPTY_PARTNER);
   const [rule, setRule] = useState({ partner: "", route: "" });
-
-  const refresh = () => {
-    setLoadErr(false);
-    listForwardPartners()
-      .then((r) => setPartners(r.partners))
-      .catch(() => setLoadErr(true));
-    listForwardRules()
-      .then((r) => setRules(r.rules))
-      .catch(() => setLoadErr(true));
-  };
-  useEffect(() => {
-    refresh();
-  }, []);
 
   const savePartner = async (p: Partial<ForwardPartner> & { call: string }) => {
     try {
@@ -1099,7 +1047,7 @@ function ForwardingAdmin() {
   return (
     <>
       <h4 className="set-subh">Partners</h4>
-      {loadErr ? (
+      {lists.error ? (
         <ErrorState onRetry={refresh}>Couldn't load partners and rules.</ErrorState>
       ) : partners.length === 0 ? (
         <EmptyState>No forwarding partners. Add a BBS to exchange mail with over RF.</EmptyState>
@@ -1255,15 +1203,8 @@ function ForwardingAdmin() {
 function IngestAdmin(props: { map: maplibregl.Map | null }) {
   const fmt = useFmt();
   const toast = useToast();
-  const [ports, setPorts] = useState<PortStat[]>([]);
-  const [loadErr, setLoadErr] = useState(false);
-  const load = () => {
-    setLoadErr(false);
-    getPorts()
-      .then((r) => setPorts(r.ports))
-      .catch(() => setLoadErr(true));
-  };
-  useEffect(load, []);
+  const list = useLoad(() => getPorts().then((r) => r.ports), []);
+  const ports: PortStat[] = list.data ?? [];
   const feedUrl = (() => {
     const b = props.map?.getBounds();
     return b ? cotUrl([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]) : "";
@@ -1276,8 +1217,8 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
           · {ports.length} port{ports.length === 1 ? "" : "s"} · 24h RX
         </span>
       </h4>
-      {loadErr ? (
-        <ErrorState onRetry={load}>Couldn't load port statistics.</ErrorState>
+      {list.error ? (
+        <ErrorState onRetry={list.reload}>Couldn't load port statistics.</ErrorState>
       ) : ports.length === 0 ? (
         <EmptyState>No traffic yet.</EmptyState>
       ) : (
