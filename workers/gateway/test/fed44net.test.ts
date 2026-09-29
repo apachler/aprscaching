@@ -99,7 +99,7 @@ describe("resolve44net", () => {
 describe("handleFed44netAdd — admission policy", () => {
   it("DNSSEC-validated binding admits automatically as an unvetted peer with a 44net endpoint", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: true, txt: TXT }), { instance: "oe.pub", publicKey: KEY });
+    stubNet(dohAnswer({ ad: true, txt: TXT }), { instance: "oe.pub", publicKey: KEY, publicKeys: [{ x: KEY }] });
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(201);
     const body = await res.json();
@@ -114,7 +114,7 @@ describe("handleFed44netAdd — admission policy", () => {
 
   it("without DNSSEC it returns the binding for operator confirmation instead of admitting", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: false, txt: TXT }), { instance: "oe.pub", publicKey: KEY });
+    stubNet(dohAnswer({ ad: false, txt: TXT }), { instance: "oe.pub", publicKey: KEY, publicKeys: [{ x: KEY }] });
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ requiresConfirm: true, resolved: { instance: "oe.pub" } });
@@ -123,7 +123,7 @@ describe("handleFed44netAdd — admission policy", () => {
 
   it("operator confirm=true pins the non-DNSSEC binding (TOFU)", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: false, txt: TXT }), { instance: "oe.pub", publicKey: KEY });
+    stubNet(dohAnswer({ ad: false, txt: TXT }), { instance: "oe.pub", publicKey: KEY, publicKeys: [{ x: KEY }] });
     const res = await handleFed44netAdd(post({ callsign: "OE8APR", confirm: true }), envWith(db));
     expect(res.status).toBe(201);
     expect((await res.json()).admitted).toBe("operator-confirmed");
@@ -132,10 +132,18 @@ describe("handleFed44netAdd — admission policy", () => {
 
   it("refuses when the live descriptor CONTRADICTS the DNS binding", async () => {
     const { db, rows } = peersDb();
-    stubNet(dohAnswer({ ad: true, txt: TXT }), { instance: "someone.else", publicKey: KEY });
+    stubNet(dohAnswer({ ad: true, txt: TXT }), { instance: "someone.else", publicKey: KEY, publicKeys: [{ x: KEY }] });
     const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/binding mismatch/);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses a descriptor that does not list the DNS key among its published keys", async () => {
+    const { db, rows } = peersDb();
+    stubNet(dohAnswer({ ad: true, txt: TXT }), { instance: "oe.pub", publicKey: KEY });
+    const res = await handleFed44netAdd(post({ callsign: "OE8APR" }), envWith(db));
+    expect(res.status).toBe(409);
     expect(rows).toHaveLength(0);
   });
 

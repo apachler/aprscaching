@@ -289,7 +289,7 @@ export async function upsertRemoteBulletin(
   };
   // The FBB BID from the body, but only in the origin's own `<id>_<origin>` form: BIDs are unique
   // here, so a BID naming another instance would squat that instance's bulletin (or one of ours).
-  // Anything else is stored under the record's gid; a frame under the older gid carries the BID as it.
+  // Anything else is stored under the record's gid.
   const own = typeof d.bid === "string" && /^[0-9]+_/.test(d.bid) && d.bid.slice(d.bid.indexOf("_") + 1) === origin;
   const bid = own ? (d.bid as string) : rec.id;
   if (!d.fromCall || !d.toCall || !d.body || !bid) return;

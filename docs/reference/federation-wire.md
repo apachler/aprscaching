@@ -136,8 +136,8 @@ ordered set of typed endpoints carried on the peer record (`fed_peers.endpoints`
 | `netrom` | node alias | forward | NET/ROM-routed circuit |
 | `bbs` | `CALL@BBS.#REGION.CC.CONT` | forward | Store-and-forward over FBB forwarding |
 
-Sync transports (request/response) pick the lowest-priority endpoint that resolves to a URL; the
-legacy peer `url` is the https fallback. Forward transports are fire-and-forget carriers whose
+Sync transports (request/response) pick the lowest-priority endpoint that resolves to a URL; a peer
+that stores no endpoint set is reached at its `url`, the https address it was added under. Forward transports are fire-and-forget carriers whose
 limits are operator configuration — frames apply idempotently on arrival, whatever path they took.
 
 An instance publishes its own endpoint set from `FED_ENDPOINTS` in two places: its

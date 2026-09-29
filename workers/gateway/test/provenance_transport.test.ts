@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Every ingest port maps to one transport, and legacy rows without one read as APRS-IS. The guard: only a
-// first-party on-air transport — a TNC or a MeshCom node on the operator's own ingest box, whose writes
-// need INGEST_SECRET — can carry first-party attestation. An APRS-IS line (a legacy row included) is never
-// attested, whatever q-construct and site it names, because an APRS-IS passcode is public and anyone can
+// Every ingest port maps to one transport, and a port the gateway does not know records `unknown`. The
+// guard: only a first-party on-air transport — a TNC or a MeshCom node on the operator's own ingest box,
+// whose writes need INGEST_SECRET — can carry first-party attestation. An APRS-IS line or an unknown
+// transport is never attested, whatever q-construct and site it names, because an APRS-IS passcode is public and anyone can
 // inject `qAR,<site>`. A tunnel or licence-free carrier (AXUDP, AXIP, Meshtastic)
 // and the browser bridge are never attested either. Tier A stays gated on attestation alone.
 import { describe, it, expect } from "vitest";
@@ -31,8 +31,9 @@ describe("transportForPort", () => {
     expect(transportForPort("kiss-tnc", true)).toBe("browser-rf");
   });
 
-  it("an unknown port records nothing", () => {
-    expect(transportForPort("something-new", false)).toBeNull();
+  it("an unknown port records `unknown`", () => {
+    expect(transportForPort("something-new", false)).toBe("unknown");
+    expect(transportForPort("", false)).toBe("unknown");
   });
 });
 
@@ -42,10 +43,10 @@ describe("transportOf on stored positions", () => {
     expect(provenanceOf({ heard_via: "aprs_is", transport: "meshcom" }).transport).toBe("meshcom");
   });
 
-  it("legacy rows (NULL) and unrecognised values read as APRS-IS, or app for an app fix", () => {
-    expect(provenanceOf({ heard_via: "rf", transport: null }).transport).toBe("aprs-is");
-    expect(provenanceOf({ heard_via: "app" }).transport).toBe("app");
-    expect(provenanceOf({ heard_via: "rf", transport: "carrier-pigeon" }).transport).toBe("aprs-is");
+  it("an absent or unrecognised value reads as unknown, whatever the row says it heard", () => {
+    expect(provenanceOf({ heard_via: "rf", transport: null }).transport).toBe("unknown");
+    expect(provenanceOf({ heard_via: "app" }).transport).toBe("unknown");
+    expect(provenanceOf({ heard_via: "rf", transport: "carrier-pigeon" }).transport).toBe("unknown");
   });
 });
 
@@ -73,9 +74,9 @@ describe("trust guard: only the site's own on-air ingest is attested", () => {
     );
   });
 
-  it("an APRS-IS line or a legacy row is never attested, whatever q-construct and site it names", () => {
+  it("an APRS-IS line or an unknown transport is never attested, whatever q-construct and site it names", () => {
     const sites = parseAttestedSites("OE8XXX");
-    for (const transport of ["aprs-is", null, undefined])
+    for (const transport of ["aprs-is", "unknown", "carrier-pigeon", null, undefined])
       for (const path of [null, "WIDE1-1", "WIDE1-1,qAR,OE8XXX", "WIDE2-1,qAO,OE8XXX"])
         expect(provenanceOf({ heard_via: "rf", path, igate_call: "OE8XXX", transport }, sites).firstPartyAttested).toBe(
           false,

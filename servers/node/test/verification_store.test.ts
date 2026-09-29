@@ -5,8 +5,6 @@
 // other table can disagree with it.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { authEnv, call, emailSignup, operatorVerify, type Res } from "./helpers/authflow.js";
@@ -163,51 +161,13 @@ describe("verification is read from callsign_verifications everywhere", () => {
   });
 });
 
-describe("migration 0015: every account holds its call, and verification lives in one table", () => {
-  it("backfills a held base call for accounts without one and drops the mirrored columns", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mig15-"));
-    const all = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
-    const target = all.find((f) => f.startsWith("0015_"));
-    expect(target).toBeDefined();
-    for (const f of all) if (f < target!) fs.copyFileSync(path.join(MIGRATIONS, f), path.join(dir, f));
+describe("one holder per base call", () => {
+  it("the schema refuses a second account holding the same base call", () => {
     const db = new Database(":memory:");
-    migrate(db, dir);
-    db.exec(`
-      -- an account that holds its call already, one anchored only by its SSID call, one anchored only by
-      -- its base call, and a stray SSID row naming a base call another account holds
-      INSERT INTO accounts (callsign, account_id, verified, verify_method, verified_at, created_at) VALUES
-        ('OE8HLD', 'a-hld', 1, 'lotw', 5, 1),
-        ('OE8SSI-7', 'a-ssi', 0, NULL, NULL, 2),
-        ('OE8BAS', 'a-bas', 1, 'operator', 5, 3),
-        ('OE8HLD-4', 'a-stray', 0, NULL, NULL, 4);
-      -- a call verified while nobody held it, then claimed: the claim never carried the verification
-      INSERT INTO accounts (callsign, account_id, verified, created_at) VALUES ('OE8PRE', 'a-pre', 0, 5);
-      INSERT INTO account_callsigns (account_id, callsign, verified, method, verified_at, is_primary, added_at)
-        VALUES ('a-hld', 'OE8HLD', 1, 'lotw', 5, 1, 1), ('a-pre', 'OE8PRE', 0, NULL, NULL, 1, 5);
-      INSERT INTO callsign_verifications (callsign, method, status, verified_at) VALUES
-        ('OE8HLD', 'lotw', 'verified', 5), ('OE8PRE', 'operator', 'verified', 4);
-      INSERT INTO callsign_keys (callsign, public_key, verified, created_at) VALUES ('OE8HLD', 'k1', 1, 1);
-    `);
-    fs.copyFileSync(path.join(MIGRATIONS, target!), path.join(dir, target!));
-    expect(migrate(db, dir)).toEqual([target]);
-    expect(
-      db.prepare("SELECT account_id, callsign, is_primary, added_at FROM account_callsigns ORDER BY callsign").all(),
-    ).toEqual([
-      { account_id: "a-bas", callsign: "OE8BAS", is_primary: 1, added_at: 3 },
-      { account_id: "a-hld", callsign: "OE8HLD", is_primary: 1, added_at: 1 },
-      { account_id: "a-pre", callsign: "OE8PRE", is_primary: 1, added_at: 5 },
-      { account_id: "a-ssi", callsign: "OE8SSI", is_primary: 1, added_at: 2 },
-    ]);
-    const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
-    for (const c of ["verified", "verify_method", "verified_at"]) expect(cols("accounts")).not.toContain(c);
-    for (const c of ["verified", "method", "verified_at"]) expect(cols("account_callsigns")).not.toContain(c);
-    expect(cols("callsign_keys")).not.toContain("verified");
-    // a mirror flag without a store row never becomes a verification, and a claim that never carried a
-    // verification leaves the store
-    expect(db.prepare("SELECT callsign, method, status FROM callsign_verifications").all()).toEqual([
-      { callsign: "OE8HLD", method: "lotw", status: "verified" },
-    ]);
-    // one holder per base call still holds
+    migrate(db, MIGRATIONS);
+    db.prepare(
+      "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('a', 'OE8BAS', 1, 1)",
+    ).run();
     expect(() =>
       db
         .prepare(
@@ -215,6 +175,5 @@ describe("migration 0015: every account holds its call, and verification lives i
         )
         .run(),
     ).toThrow(/UNIQUE/);
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

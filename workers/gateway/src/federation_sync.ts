@@ -378,7 +378,7 @@ async function syncPeer(
   const keys = await resolvePeerKeys({
     pinned: p.public_key,
     current: pub,
-    published: wk.publicKeys ?? (pub ? [{ x: pub }] : []),
+    published: Array.isArray(wk.publicKeys) ? wk.publicKeys : [],
     rotations: wk.rotations,
     prior: parseAcceptKeys(p.accept_keys),
     nowS: now(),
@@ -460,7 +460,7 @@ async function syncPeer(
 /**
  * Capability negotiation (pure/testable): which of our feed defs to pull from a peer. A peer that
  * advertises our protocol version has an authoritative capability list → pull only the feeds it offers;
- * a legacy peer (no version match / no list) is tried for every known feed (a 404 is handled gracefully
+ * a peer that does not advertise our protocol version is tried for every known feed (a 404 is handled gracefully
  * by syncFeed). Order is preserved, so the tombstones-first invariant survives.
  */
 export function negotiateFeeds<T extends { capability: string }>(
@@ -564,7 +564,7 @@ async function syncFeed(
           signer: f.record.signer,
           at: f.record.at,
         };
-        if (!(await acceptUnsigned(env, rec, instance))) continue;
+        if (!(await passesNamespaceChecks(env, rec, instance))) continue;
         if (!(await versionAdmits(env, rec))) continue; // replay, stale, or future-dated
         await applyVersioned(env, def, rec, instance);
         applied++;
@@ -596,12 +596,6 @@ async function syncFeed(
  */
 export function idInNamespace(globalId: string | undefined | null, instance: string): boolean {
   return typeof globalId === "string" && globalId.startsWith(instance + ":");
-}
-
-/** A bulletin gid in the older `<local id>_<instance>` form, which names its instance as a suffix. */
-function legacyBulletinGid(gid: string, instance: string): boolean {
-  const i = gid.indexOf("_");
-  return i > 0 && /^[0-9]+$/.test(gid.slice(0, i)) && gid.slice(i + 1) === instance;
 }
 
 /**
@@ -642,14 +636,12 @@ async function isTombstoned(env: Env, globalId: string, origin: string): Promise
 }
 
 /**
- * The non-cryptographic acceptance checks every carrier shares, applied after the fedwire frame's
- * signature verified. A peer may only serve records IN ITS OWN namespace, self-attested — otherwise
- * it could overwrite another instance's genuine mirror (inheriting its trust).
+ * The namespace and self checks every carrier shares, applied to a frame whose signature has already
+ * verified. A peer may only serve records IN ITS OWN namespace, self-attested — otherwise it could
+ * overwrite another instance's genuine mirror (inheriting its trust).
  */
-async function acceptUnsigned(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
-  // id must be the serving peer's namespace (bulletins also accept their older `<id>_<instance>` gid)
-  if (!idInNamespace(rec.id, instance) && !(rec.type === "bulletin" && legacyBulletinGid(rec.id, instance)))
-    return false;
+async function passesNamespaceChecks(env: Env, rec: FeedRecord, instance: string): Promise<boolean> {
+  if (!idInNamespace(rec.id, instance)) return false; // id must be in the serving peer's namespace
   if (rec.signer !== instance) return false; // and self-attested as that peer (an empty signer attests nothing)
   if (instance === ours(env)) return false; // never mirror our own
   if (await isTombstoned(env, rec.id, instance)) return false; // purged by its origin's tombstone
@@ -873,7 +865,7 @@ export async function applyFedFrames(env: Env, frames: Uint8Array[]): Promise<Fe
       signer: f.record.signer,
       at: f.record.at,
     };
-    if (!(await acceptUnsigned(env, rec, origin))) {
+    if (!(await passesNamespaceChecks(env, rec, origin))) {
       rejected++;
       continue; // gid outside origin's namespace / not self-attested / tombstoned
     }

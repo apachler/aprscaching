@@ -28,7 +28,7 @@ describe("provenance — derive firstPartyAttested", () => {
     const sites = parseAttestedSites("OE8XXX");
     const line = { heard_via: "rf", igate_call: "OE8XXX", path: "WIDE1-1,qAR,OE8XXX" } as const;
     expect(provenanceOf({ ...line, transport: "aprs-is" }, sites).firstPartyAttested).toBe(false);
-    expect(provenanceOf({ ...line, transport: null }, sites).firstPartyAttested).toBe(false); // legacy row
+    expect(provenanceOf({ ...line, transport: "unknown" }, sites).firstPartyAttested).toBe(false);
     expect(provenanceOf({ ...line, path: "WIDE2-1,qAO,OE8XXX", transport: "aprs-is" }, sites).firstPartyAttested).toBe(
       false,
     );
@@ -70,7 +70,7 @@ describe("provenance — derive firstPartyAttested", () => {
   });
 
   it("does NOT attest an app-geo fix (that is the Tier-B path, not Tier A)", () => {
-    const pv = provenanceOf({ heard_via: "app", path: "" });
+    const pv = provenanceOf({ heard_via: "app", path: "", transport: "app" });
     expect(pv.firstPartyAttested).toBe(false);
     expect(pv.transport).toBe("app");
   });

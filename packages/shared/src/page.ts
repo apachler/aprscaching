@@ -12,7 +12,7 @@ export interface PageInfo {
   hasMore: boolean;
 }
 
-/** A clean generic page envelope for new endpoints that don't carry a legacy named array. */
+/** A generic page envelope for endpoints whose response has no named array of its own. */
 export interface Page<T> extends PageInfo {
   items: T[];
 }
