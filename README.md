@@ -5,193 +5,103 @@
 [![Release](https://img.shields.io/github/v/release/apachler/aprscaching?sort=semver)](https://github.com/apachler/aprscaching/releases)
 [![Manual](https://img.shields.io/badge/manual-apachler.github.io-14b8a6)](https://apachler.github.io/aprscaching/)
 
-**Find real places on the air.** aprscaching is an APRS geocaching game and ham-radio **Shack** — hide a
-cache, go find it, and log the find *verified by radio*, not just by tapping a button. Hide, hunt, operate.
-It runs in your browser, self-hosts on a Raspberry Pi, and federates with other instances into one
-open network.
+**Find real places on the air.** aprscaching is an APRS geocaching game and ham-radio **Shack**. You hide a
+cache, go find it, and log the find *verified by radio* — not just by tapping a button. Hide, hunt, operate.
+It runs in a browser, self-hosts on a Raspberry Pi, and federates with other instances into one open network.
 
 Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, MeshCom, TAK/CoT).
-Independent and unofficial — see *Credits & trademarks*.
+Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
 
-## Try it
+> **New here? [Start here](https://apachler.github.io/aprscaching/start-here/).**
+> Sign in at **[aprscaching.net](https://aprscaching.net)** with your callsign, verify it over APRS, and log
+> your first find — no installation needed. [Start here](https://apachler.github.io/aprscaching/start-here/)
+> walks you through it in five minutes.
 
-You need an amateur-radio callsign — nothing to install.
+The **[manual](https://apachler.github.io/aprscaching/)** describes the platform as it is. It has three
+audiences:
 
-1. Open **[aprscaching.net](https://aprscaching.net)** and sign in with your callsign (a passkey or an email link).
-2. Verify your callsign: the site sends you a code as an APRS message.
-3. Find a cache on the map, go there, and tap **Log a find**.
+- **Cachers** play the game — see [Start here](https://apachler.github.io/aprscaching/start-here/),
+  [Your account](https://apachler.github.io/aprscaching/guides/account/) and
+  [Caching](https://apachler.github.io/aprscaching/guides/caching/).
+- **Operators** connect radios and run an instance — see
+  [Your radio in the browser](https://apachler.github.io/aprscaching/guides/my-radio/),
+  [Connect a radio: quick starts](https://apachler.github.io/aprscaching/operate/quickstarts/) and
+  [Deployment](https://apachler.github.io/aprscaching/operate/deployment/).
+- **Integrators** talk to the platform's open, signed feeds and read API — see
+  [Reference](https://apachler.github.io/aprscaching/reference/api/) and
+  [Federation](https://apachler.github.io/aprscaching/guides/federation/).
 
-The manual's **[Start here](https://apachler.github.io/aprscaching/start-here/)** page walks through it, and
-also shows how to [connect your radio from the browser](https://apachler.github.io/aprscaching/guides/my-radio/)
-and [run your own instance](https://apachler.github.io/aprscaching/operate/deployment/) for a club or region.
+## Two things in one application
 
----
+**The cache game (for everyone).** A geocaching-style hunt where caches are places tied to amateur radio.
+Browse a map, pick a nearby cache, and log a find when you get there — the app can prompt you the moment you
+walk into a cache's geofence. Leaderboards, profiles, badges, and imported heritage summits and parks
+(SOTA / POTA / WWFF / castles / islands) share the same map.
 
-## What it is
+**The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live
+station map, run a store-and-forward BBS and a NET/ROM node, digipeat and IGate over a KISS TNC, control a
+transceiver over CAT, decode CW and PSK31 off the air, and extend it all with signed tool plugins. The
+caching side is the *product*; the Shack is the *platform* it rides on.
 
-Two things in one app:
+## Trust follows the radio, not the transport
 
-- **The cache game (for everyone).** A geocaching-style hunt where "caches" are places tied to amateur
-  radio. Browse a map, pick a nearby cache, and when you're there, log a find. The app can prompt you the
-  moment you walk into a cache's geofence. Leaderboards, profiles, badges, and heritage summits/parks
-  (SOTA / POTA / WWFF / castles / islands …) imported onto the same map.
+The single idea that shapes the whole platform: **a packet arriving over the internet proves nothing on its
+own.** aprscaching only *believes* a find when independent evidence corroborates it, and that evidence has to
+come from the air or from a first-party device reading — never merely from the wire a packet travelled on.
+Every find earns one of three honest tiers
+([Core concepts](https://apachler.github.io/aprscaching/concepts/#verification-tiers)):
 
-- **The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live
-  station map, run a store-and-forward BBS and a NET/ROM node, digipeat and IGate over a KISS TNC, control a
-  transceiver over CAT, decode CW/PSK31 off the air, and extend it all with signed tool plugins. The caching
-  side is the *product*; the Shack is the *platform* it rides on.
-
-## Why "verified by radio" is the whole point
-
-Anyone can claim they were somewhere. aprscaching only *believes* a find when the evidence corroborates it —
-and **corroboration follows the radio, not the transport.** A packet that merely arrived over the internet
-proves nothing on its own. Every find earns one of three honest tiers:
-
-| Tier | Means | How it's earned |
-|------|-------|-----------------|
+| Tier | Means | Earned by |
+|------|-------|-----------|
 | **A** | RF-corroborated | Heard on the air, gated by an IGate that isn't yours, on a plausible track |
-| **B** | App-corroborated | Your phone's first-party geolocation matches the cache at log time |
+| **B** | App-corroborated | Your device's first-party geolocation matches the cache at log time |
 | **C** | IS-only | A bare APRS-IS beacon — logged, but unverified |
 
-The minimum tier a find must reach is a setting (site default **B**, with a per-cache override). A bare
-internet packet can never reach Tier B by itself — the corroboration has to be an independent reading. This
-rule holds across *every* transport: APRS-IS, an AXUDP/AXIP tunnel, or a HAMNET link are all just wires, and
-none of them launder a packet into a higher tier. Only a receiving site *you* operate and vouch for yields
-Tier A.
+## A map that forgets
 
-> At launch the trust model rests on **Tier B (app geolocation)** plus **honest Tier C** badging. Tier A is
-> designed-for and lights up wherever an operator runs their own attested RF receiver.
+Everything an amateur transmits is public, so the honest question is not whether a map can see your beacons —
+it is what the map does with them afterwards. Here: firehose positions are pruned on a retention schedule
+rather than archived, there is no analytics, advertising or third-party tracking of any kind, every instance
+links the exact source commit it runs, and you can self-host the whole thing on your own hardware. Those four
+invariants are spelled out, with the code behind each, under
+[About](https://apachler.github.io/aprscaching/about/#privacy-by-default).
 
-## The Shack, in brief
+## Architecture at a glance
 
-Everything an operator needs, revealed progressively so the cacher never sees the machinery:
+| Piece | What it is |
+|-------|------------|
+| **Gateway** | The API + data plane. Runs as a Cloudflare Worker + D1, plain Node + SQLite, or Bun — one conformance suite proves all three identical. |
+| **Web app** | A React + MapLibre single-page app: the map, the Shack, and the operator surface. |
+| **Ingest** | The operator-local RF bridge (a Pi/PC process, or the browser over Web Serial/Bluetooth). Always runnable on your own equipment; never cloud-only. |
+| **Libraries** | Pure, reusable codecs (`@aprscaching/aprs`, `@aprscaching/ax25`, `@aprscaching/packet`, `@aprscaching/tools`) and typed contracts (`@aprscaching/shared`). |
 
-- **Decoder & inspector** — turn any raw frame into typed data: uncompressed / base-91 compressed / MIC-E
-  positions (course, speed, altitude, ambiguity), objects & items, messages (acks, bulletins), status,
-  weather, and telemetry. A live **station registry** and map, with heading arrows and per-station tracks.
-- **Packet terminal, BBS & node** — a connected-mode AX.25 stack (mod-8 **and** mod-128 / SREJ), a
-  store-and-forward **BBS** with FBB forwarding, a **NET/ROM node** (routing table, circuits, connect-through),
-  a **digipeater** (new n-N paradigm, viscous cancellation) and a bidirectional **IGate**.
-- **Radios & transports** — KISS/TNC over TCP, browser-direct **Web Serial / Bluetooth** KISS, **CAT** rig
-  control (Web Serial), **Meshtastic**, **MeshCom**, a **TAK/CoT** feed out, and internet AX.25 tunnels (**AXUDP** and **AXIP**). Off-air **CW** and **PSK31** decode straight
-  from the microphone.
-- **Weather** — APRS weather stations are first-class; originate your own PWS (Ecowitt / WU) into the network.
-- **Remote & spots** — drive your own always-on ingest box from the web app; overlay live activation spots
-  (POTA/SOTA/…) on the map.
-- **Tools platform** — a plugin system with signed manifests and a registry: import third-party tools that
-  add commands, decoders, colourisers, panels, and map layers, sandboxed off the main thread.
-
-Transmit is **off by default and gated** — real on-air keying requires a verified callsign.
+Start with [Getting started](https://apachler.github.io/aprscaching/getting-started/) to run it locally, or
+[Core concepts](https://apachler.github.io/aprscaching/concepts/) to understand the trust model before you
+deploy.
 
 ---
 
 ## Run it from source
 
 For developers. To install an instance, use the Docker stack in `deploy/`
-([Running in Docker](https://apachler.github.io/aprscaching/operate/docker/)). Needs Node 22+ and pnpm.
+([Running in Docker](https://apachler.github.io/aprscaching/operate/docker/)) or one of the
+[deployment recipes](https://apachler.github.io/aprscaching/operate/deployment/). Needs Node 22+ and pnpm.
 
 ```bash
 pnpm install
-pnpm -r test                 # every package's unit suite
-pnpm -r build                # typecheck + build all units
+pnpm run check                                    # every unit's build + all unit suites
+pnpm --filter @aprscaching/node-gateway dev       # the gateway on Node + SQLite
+pnpm dev:web                                      # the map UI (talks to http://127.0.0.1:8787)
+pnpm dev:ingest                                   # the operator-local RF ingest (copy .env.example to .env)
 ```
 
-**Web app + gateway (local):**
-```bash
-# gateway on Cloudflare Workers + D1 …
-cd workers/gateway
-npx wrangler d1 create aprscaching                    # paste database_id into wrangler.toml
-npx wrangler d1 migrations apply aprscaching --local  # schema from ../../db/migrations
-npx wrangler dev                                      # /health, /ingest, /api/*, /ws
+[Getting started](https://apachler.github.io/aprscaching/getting-started/) covers the Cloudflare Worker
+gateway, the Bun desktop build and the ingest box, and
+[Testing](https://apachler.github.io/aprscaching/reference/testing/) covers the smoke and conformance suites.
 
-# … or the self-host gateway on plain Node + SQLite (no Cloudflare needed)
-pnpm --filter @aprscaching/node-gateway start             # same API, same conformance suite
-
-# the map UI (VITE_API_BASE defaults to http://127.0.0.1:8787)
-pnpm --filter @aprscaching/web dev
-```
-
-**Ingest box (operator-local RF):**
-```bash
-cp .env.example .env         # then set APRSIS_FILTER + INGEST_SECRET; optional KISS_TNC_HOST, MESHTASTIC_HOST, …
-pnpm --filter @aprscaching/ingest dev
-```
-
-Each radio link step by step: [Connect a radio: quick starts](https://apachler.github.io/aprscaching/operate/quickstarts/).
-
-### Where it runs
-
-The RF ingest is **always runnable on your own equipment** — a local process on a Pi/PC, or the browser
-bridging a USB/BLE radio directly. It's never cloud-only. The rest of the stack has three interchangeable
-shapes, proven byte-for-byte identical by one conformance suite that runs against all three in CI:
-
-| Runtime | For | Storage |
-|---|---|---|
-| **Cloudflare Worker + D1** | edge / serverless | D1 (+ R2 media) |
-| **Node + SQLite** (`servers/node`) | self-host on a Pi / VM | `better-sqlite3` |
-| **Bun + bun:sqlite** (`servers/bun`) | a single-file desktop build | `bun:sqlite` |
-
-Deployment recipes (Pi-at-home with a Cloudflare Tunnel, an all-in-one OCI VM with Caddy, a desktop
-single-binary, …) live in [Deployment](https://apachler.github.io/aprscaching/operate/deployment/) and
-`deploy/`.
-
-For the all-in-one VM there is a one-click path — it creates its own network, resolves the image, and
-boots the Docker stack from cloud-init, so you supply a callsign and an SSH key and nothing else:
+For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key:
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
-
-### Source link (AGPL §13)
-
-Because the hosted app is AGPL, **every public instance must expose its own source** — a visible "Source"
-link in the UI and a `/.well-known/source` endpoint pointing at the exact running commit. This is
-launch-blocking by design: a hosted fork's users can always get its code.
-
----
-
-## The open network
-
-### Federation — signed, mirrorable feeds
-
-Any instance (edge or self-host) publishes read-only, **Ed25519-signed** feeds so peers can mirror it into a
-shared catalog:
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /.well-known/aprscaching` | instance descriptor: protocol, public key, peers, capabilities |
-| `GET /federation/caches` · `/finds` · `/keys` | signed, cursor-paged records (verified on mirror) |
-| `POST /federation/sync` | pull from all peers |
-| `POST /federation/corroborate` | "did you independently hear this callsign on RF near here?" |
-| `POST /federation/submit` · `/federation/relay/*` | push-to-hub + a poll-based relay for firewalled peers |
-
-Generate a key and set it as a secret to enable signing (feeds serve unsigned otherwise):
-
-```bash
-node tools/fedkey/genkey.mjs         # prints FED_PRIVATE_KEY + the public key it publishes
-```
-
-Point an instance at peers with `FED_PEERS=https://a.example,https://b.example`; it pulls and verifies their
-feeds on a schedule and shows their caches on your map (read-only). Peer **trust tiers**, a corroboration
-**quorum**, contradiction signals, and GDPR **tombstone** propagation keep the network honest as it opens up.
-**Cross-instance corroboration is the network effect:** when a find can't reach Tier A locally, peers can
-vouch that they independently heard the callsign on RF — the more instances and IGates, the more finds verify.
-
-### Heritage imports
-
-Pull third-party location programs onto your map — each with a source disclaimer + deep link, re-importing
-updates in place, and de-duplicated across sources with ham-radio priority (a SOTA summit suppresses a
-coincident OSM peak). Imported caches stay local (never published to the federation). Sources include SOTA,
-POTA, WWFF, WWBOTA/UKBOTA, IOTA, Geocaching Australia, OpenCaching nodes, OSM, and Wikidata; licensing varies
-by source and is attributed in-app.
-
-### Per-callsign signing & your data
-
-Each user holds an Ed25519 keypair in their browser and registers the public key to their callsign, so finds
-are **signed on-device** — authorship is cryptographically tied to a callsign and stays attributable even
-after you move instances. Passkeys (WebAuthn) or a device-key signature authorize sensitive account actions;
-there's no central password to leak. Full **export** and **erase** (GDPR / DSGVO) live under *Settings → Your
-data*, and a portable bundle lets you migrate a callsign between instances.
-
----
 
 ## Credits & trademarks
 
@@ -221,13 +131,9 @@ outbound** — opening a pull request licenses your change under the same licenc
 
 Being open under these licences also satisfies **ARDC's** open-access requirement for grant funding.
 
-### Running a public instance? (AGPL §13)
-
-Because the app and gateway are **AGPL-3.0-or-later**, if you host a **modified** instance for others
-you must offer those users your modified source. The app makes this easy and it is **not optional**:
-every instance exposes a machine-readable descriptor at **`GET /.well-known/source`** and a visible
-*Source* link. Set `SOURCE_REPO` (and, if you can, `SOURCE_COMMIT`) to point at your fork before you
-deploy. Unmodified deployments can point at this upstream repository.
+**Running a public instance?** Every instance exposes its source (AGPL §13): a visible *Source* link and a
+machine-readable **`GET /.well-known/source`** pointing at the exact running commit. If you host a
+**modified** instance, set `SOURCE_REPO` (and, if you can, `SOURCE_COMMIT`) to your fork before you deploy.
 
 ## Contributing & community
 
@@ -238,7 +144,7 @@ Contributions from hams, developers, and cachers are welcome.
 - **[SECURITY.md](SECURITY.md)** — how to report a vulnerability privately.
 - **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** · **[SUPPORT.md](SUPPORT.md)** ·
   **[CHANGELOG.md](CHANGELOG.md)**
-- **[TODO.md](TODO.md)** — the short post-1.0 deferred list (what's intentionally left for after 1.0).
+- **[TODO.md](TODO.md)** — the short post-1.0 deferred list.
 
 aprscaching is **free in full** — every feature, forever. Donations (when available) are
 recognition-only and never gate functionality.
