@@ -1,0 +1,64 @@
+/* Touch hit-target extension for small controls. */
+@layer components {
+  /* ---- field-use hit targets (ui-ux.md §7: ≥44px) ----
+   On coarse pointers every small control gets a 44px invisible hit extension; the visual density
+   stays as designed (the pseudo-element enlarges the interactive area, not the control). The
+   position here is the fallback: a surface that places a control itself (the Shack pin, the photo
+   delete button) wins from its later layer, and the extension still anchors to it. Map markers are
+   left out: their ::before/::after draw the found tick and the spot ring, and neighbouring markers
+   would steal each other's taps. */
+  @media (pointer: coarse) {
+    .iconbtn,
+    .link-btn,
+    .sw,
+    .seg button,
+    .basemap-switch button,
+    .maptools-bar button,
+    .chip-btn,
+    button.icon,
+    button.link,
+    button.heart,
+    .rating-stars .star,
+    .group-toggle,
+    .adv-toggle,
+    .docs-nav button,
+    .tr-play,
+    .pt-cbtn,
+    .pt-x,
+    .pt-macro,
+    .idchip,
+    .topbar button,
+    .media-del {
+      position: relative;
+    }
+    .iconbtn::after,
+    .link-btn::after,
+    .sw::after,
+    .seg button::after,
+    .basemap-switch button::after,
+    .maptools-bar button::after,
+    .chip-btn::after,
+    button.icon::after,
+    button.link::after,
+    button.heart::after,
+    .rating-stars .star::after,
+    .group-toggle::after,
+    .adv-toggle::after,
+    .docs-nav button::after,
+    .tr-play::after,
+    .pt-cbtn::after,
+    .pt-x::after,
+    .pt-macro::after,
+    .idchip::after,
+    .topbar button::after,
+    .media-del::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, var(--hit));
+      height: max(100%, var(--hit));
+      transform: translate(-50%, -50%);
+    }
+  }
+}

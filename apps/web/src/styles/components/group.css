@@ -1,0 +1,102 @@
+/* Settings group primitive: collapsible group, setting rows, sub-headings and the Advanced disclosure. */
+@layer components {
+  /* subsection heading inside a settings group (e.g. Transports / RF / TAK under Connections & sources) */
+  .set-subh {
+    margin: var(--subh-mt) 0 var(--sp-2);
+    font-size: var(--fs-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .set-subh:first-child {
+    margin-top: 0;
+  }
+  /* ---- settings/dense-config primitives (ui-ux.md §2) ---- */
+  .group {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    margin: var(--sp-4) 0;
+    background: var(--surface-2);
+  }
+  .group-h {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 7px 11px;
+  }
+  .group-toggle {
+    flex: 1;
+    border: none;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: var(--font-brand);
+    font-weight: 600;
+    font-size: var(--fs-lg);
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: var(--sp-1) 0;
+  }
+  .chev {
+    color: var(--muted);
+    transition: transform 0.15s ease;
+    display: inline-block;
+  }
+  .chev.open {
+    transform: rotate(90deg);
+  }
+  .group-status {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .group-body {
+    padding: var(--sp-0) var(--sp-5) var(--sp-5);
+  }
+  .group-reason {
+    margin: 0;
+    padding: 0 var(--sp-5) var(--sp-5);
+    color: var(--muted);
+    font-size: var(--fs-md);
+  }
+  .setrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-5);
+    padding: var(--row-pad-y) 0;
+    border-top: 1px solid var(--line);
+  }
+  .setrow:first-child {
+    border-top: none;
+  }
+  .setrow-l {
+    min-width: 0;
+  }
+  .setrow-help {
+    font-size: var(--fs-sm);
+    margin-top: 1px;
+  }
+  .setrow-c {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+  .adv-toggle {
+    border: none;
+    background: none;
+    color: var(--heading);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) 0 var(--sp-1);
+  }
+  .adv-body {
+    padding: var(--sp-0) 0 var(--sp-1) var(--sp-2);
+  }
+}

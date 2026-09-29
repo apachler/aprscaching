@@ -1,0 +1,144 @@
+/* Top-bar global search and its suggestion list. */
+@layer surfaces {
+  /* ---- top-bar global search + enriched suggest ---- */
+  .topsearch-wrap {
+    display: none;
+    position: relative;
+    flex: 2 1 0;
+    /* the row must never crush the input into an unusable sliver — below this the bar hides instead */
+    min-width: 160px;
+    max-width: 420px;
+  }
+  /* the 768–959px row already carries nav + Hide + identity; search appears once it has real room
+   (narrower viewports reach search through the Nearby list) */
+  @media (min-width: 960px) {
+    .topsearch-wrap {
+      display: block;
+    }
+  }
+  .topsearch {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    height: 34px;
+    padding: 0 var(--sp-5);
+    background: color-mix(in oklch, var(--chrome-ink) 8%, transparent);
+    border: 1px solid color-mix(in oklch, var(--chrome-ink) 18%, transparent);
+    border-radius: var(--r-6);
+    color: color-mix(in oklch, var(--chrome-ink) 60%, transparent);
+  }
+  .topsearch:focus-within {
+    border-color: color-mix(in oklch, var(--chrome-ink) 40%, transparent);
+  }
+  .topsearch input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    color: var(--chrome-ink);
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-md);
+  }
+  .topsearch input::placeholder {
+    color: color-mix(in oklch, var(--chrome-ink) 50%, transparent);
+    font-family: var(--font-system);
+  }
+  .topsearch input:focus {
+    outline: none;
+  }
+  .search-spin {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid color-mix(in oklch, var(--chrome-ink) 30%, transparent);
+    border-top-color: var(--chrome-ink);
+    animation: search-spin 0.7s linear infinite;
+    flex: none;
+  }
+  @keyframes search-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .search-spin {
+      animation-duration: 2s;
+    }
+  }
+  /* suggestion listbox */
+  .search-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: var(--z-popover);
+    margin: 0;
+    padding: var(--sp-1);
+    list-style: none;
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: var(--r-7);
+    box-shadow: var(--elev-8);
+  }
+  @supports (height: 1dvh) {
+    .search-pop {
+      max-height: min(60dvh, 420px);
+    }
+  }
+
+  .search-opt {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: var(--sp-3) var(--sp-4);
+    min-height: var(--hit);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .search-opt.active,
+  .search-opt:hover {
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+  }
+  .so-kind {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    padding: var(--sp-0) var(--sp-2);
+    border-radius: var(--r-4);
+  }
+  .so-kind.cache {
+    background: color-mix(in oklch, var(--accent) 20%, transparent);
+    color: var(--accent);
+  }
+  .so-kind.stn {
+    background: color-mix(in oklch, var(--tier-a) 22%, transparent);
+    color: var(--tier-a);
+  }
+  .so-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-md-up);
+  }
+  .so-meta {
+    flex: none;
+    color: var(--ink-2);
+    font-size: var(--fs-xs-up);
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .search-empty {
+    padding: var(--sp-5) var(--sp-4);
+    color: var(--ink-2);
+    font-size: var(--fs-sm-up);
+  }
+}

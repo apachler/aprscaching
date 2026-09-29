@@ -1,0 +1,51 @@
+/* Profile card and leaderboard. */
+@layer surfaces {
+  /* opt-in ham profile card */
+  .profile-card {
+    display: flex;
+    gap: var(--sp-5);
+    align-items: flex-start;
+    margin-bottom: var(--sp-4);
+  }
+  .profile-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--r-lg);
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--surface-2);
+  }
+  .profile-card .profile-name {
+    font-weight: 700;
+    color: var(--heading);
+    font-size: var(--fs-xl);
+  }
+  .profile-card .profile-bio {
+    margin: var(--sp-2) 0 var(--sp-1);
+  }
+  .profile-card .profile-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-4);
+    margin-top: var(--sp-0);
+  }
+  /* leaderboard + profile */
+  .board {
+    list-style: none;
+    padding: 0;
+    margin: var(--sp-4) 0 0;
+  }
+  .board li {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 7px 0;
+    border-top: 1px solid var(--line);
+  }
+  .board .rank {
+    width: 24px;
+    text-align: right;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+}

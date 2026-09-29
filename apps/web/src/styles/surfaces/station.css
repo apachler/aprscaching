@@ -1,0 +1,151 @@
+/* Station detail: telemetry graphs and track replay. */
+@layer surfaces {
+  /* station telemetry/weather graphs (shack, lazy uPlot) */
+  .station-graphs {
+    margin-top: var(--sp-3);
+  }
+  .graph-host {
+    display: grid;
+    gap: var(--sp-4);
+    margin-top: var(--sp-3);
+  }
+  .station-graph {
+    min-width: 0;
+  }
+  .station-graph .u-title {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+  }
+  .station-graph .u-legend {
+    font-size: var(--fs-xs);
+  }
+  /* ---- track history + time-replay ---- */
+  .trackreplay {
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .tr-head {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .tr-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    align-items: center;
+  }
+  .tr-controls .seg {
+    display: flex;
+    border: 1px solid var(--hair);
+    border-radius: var(--r-6);
+  }
+  .tr-controls .seg button {
+    min-height: 32px;
+    padding: 0 var(--sp-4);
+    border: none;
+    background: none;
+    color: var(--ink-2);
+    font-weight: 600;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
+     area of each button can reach past the bar */
+  .tr-controls .seg > button:first-child {
+    border-start-start-radius: calc(var(--r-6) - 1px);
+    border-end-start-radius: calc(var(--r-6) - 1px);
+  }
+  .tr-controls .seg > button:last-child {
+    border-start-end-radius: calc(var(--r-6) - 1px);
+    border-end-end-radius: calc(var(--r-6) - 1px);
+  }
+  .tr-controls .seg button + button {
+    border-left: 1px solid var(--hair);
+  }
+  .tr-controls .seg button.on {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--ink);
+  }
+  .tr-controls input[type="date"] {
+    min-height: 32px;
+  }
+  .tr-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--fs-sm);
+    color: var(--ink-2);
+  }
+  .tr-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tr-legend i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: var(--sp-2);
+  }
+  /* RF/app/IS colours ARE the trust tiers — key off the same tokens so they flip with the tier palette */
+  .tr-legend i.rf,
+  .tr-via.rf {
+    color: var(--tier-a);
+  }
+  .tr-legend i.rf {
+    background: var(--tier-a);
+  }
+  .tr-legend i.app,
+  .tr-via.app {
+    color: var(--tier-b);
+  }
+  .tr-legend i.app {
+    background: var(--tier-b);
+  }
+  .tr-legend i.is,
+  .tr-via.is {
+    color: var(--tier-c);
+  }
+  .tr-legend i.is {
+    background: var(--tier-c);
+  }
+  .tr-player {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  .tr-player input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--accent);
+  }
+  .tr-play {
+    min-width: 38px;
+    min-height: 34px;
+    border: 1px solid var(--hair);
+    border-radius: var(--r-6);
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .tr-now {
+    font-size: var(--fs-sm);
+    color: var(--ink-2);
+  }
+  .tr-via {
+    font-weight: 700;
+  }
+  .tr-err {
+    font-size: var(--fs-sm-up);
+    color: var(--bad);
+  }
+  .tr-empty {
+    font-size: var(--fs-sm-up);
+  }
+}

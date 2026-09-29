@@ -1,0 +1,99 @@
+/* Instance admin: adoption requests, 44net onboarding, FBB partners, setup checklist. */
+@layer surfaces {
+  /* pending requests nested under an offered cache (Instance admin → Cache adoption) */
+  .logs.adopt-reqs {
+    margin: var(--sp-2) 0 var(--sp-2) var(--sp-5);
+    padding-left: var(--sp-3);
+    border-left: 1px solid var(--hair);
+  }
+  /* 44net onboarding wizard (Instance admin → Federation): add-a-peer row, the no-DNSSEC confirm
+   card (warn-tinted via color-mix — no hand-maintained hex), and the be-reachable disclosure. */
+  .fed44net {
+    display: grid;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-4);
+  }
+  .fed44net .comment {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .fed44net .confirmbox {
+    display: grid;
+    gap: var(--sp-2);
+    padding: var(--sp-4);
+    border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent);
+    border-radius: var(--r-6);
+    background: color-mix(in oklch, var(--warn) 8%, transparent);
+  }
+  .fed44net .disclosure-body {
+    display: grid;
+    gap: var(--sp-2);
+    padding: var(--sp-3) 0 var(--sp-1) var(--sp-5);
+    border-left: 1px solid var(--hair);
+  }
+  /* FBB forwarding-partner add form (Settings → Network) — a sectioned grid, not one long scroll */
+  .partner-form {
+    display: grid;
+    gap: var(--sp-3);
+    margin: var(--sp-3) 0;
+    padding: var(--sp-4);
+    border: 1px solid var(--hair);
+    border-radius: var(--r-6);
+    background: var(--surface-2);
+  }
+  .partner-form label {
+    display: grid;
+    gap: 3px;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .partner-form input,
+  .partner-form select {
+    font: inherit;
+    padding: 5px 7px;
+  }
+  @container panel (min-width: 26rem) {
+    .partner-form {
+      grid-template-columns: 1fr 1fr;
+    }
+    .partner-form .row {
+      grid-column: 1 / -1;
+    }
+  }
+  /* Setup checklist rows: status + name on one line, the detail beneath; side by side when there is room */
+  .setup-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    container: setup / inline-size;
+  }
+  .setup-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--sp-0) var(--sp-2);
+    align-items: baseline;
+    padding: var(--sp-3) 0;
+    border-top: 1px solid var(--line);
+  }
+  .setup-item:first-child {
+    border-top: none;
+  }
+  .setup-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .setup-detail {
+    grid-column: 1 / -1;
+    font-size: var(--fs-md);
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  @container setup (min-width: 34rem) {
+    .setup-item {
+      grid-template-columns: auto minmax(9rem, 14rem) 1fr;
+    }
+    .setup-detail {
+      grid-column: auto;
+    }
+  }
+}

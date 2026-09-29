@@ -1,0 +1,155 @@
+/* Shack: app launcher, packet decoder, field station, rig control. */
+@layer surfaces {
+  /* shack packet decoder: two field columns once the panel/sheet is wide (tablet) —
+   the slim docked drawer (<30rem) keeps the single-column default unchanged. */
+  @container panel (min-width: 30rem) {
+    .decoded dl.fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: var(--sp-6);
+    }
+  }
+  /* shack packet decoder */
+  .decoded .kind {
+    display: inline-block;
+    margin: var(--sp-2) 0;
+    font-weight: 700;
+    color: var(--heading);
+    text-transform: capitalize;
+    background: var(--chip-bg);
+    border-radius: var(--r-7);
+    padding: 1px 9px;
+    font-size: var(--fs-sm);
+  }
+  .decoded dl.fields {
+    margin: 0;
+  }
+  .decoded dl.fields > div {
+    display: flex;
+    gap: var(--sp-3);
+    padding: 3px 0;
+    border-top: 1px solid var(--line);
+    font-size: var(--fs-md);
+  }
+  .decoded dt {
+    color: var(--muted);
+    min-width: 92px;
+  }
+  .decoded dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+  }
+  .wx {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-md);
+  }
+  /* field station — local RF stations + inbox, two columns on wide, stacked narrow */
+  .field-station {
+    margin: var(--sp-4) 0;
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+  }
+  .field-station .fs-cols {
+    display: grid;
+    gap: var(--sp-5);
+  }
+  @container panel (min-width: 34rem) {
+    .field-station .fs-cols {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  /* shack app launcher — the available apps as launchable + pinnable cards */
+  .shack-apps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--sp-3);
+    margin: var(--sp-4) 0 var(--sp-1);
+  }
+  .shack-app {
+    position: relative;
+  }
+  .shack-app-launch {
+    display: flex;
+    gap: var(--sp-4);
+    align-items: flex-start;
+    width: 100%;
+    text-align: left;
+    padding: var(--sp-4) 34px var(--sp-4) var(--sp-5);
+    border: 1px solid var(--line);
+    border-radius: var(--r-7);
+    background: var(--surface-2);
+    cursor: pointer;
+    color: inherit;
+  }
+  .shack-app-launch:hover {
+    border-color: color-mix(in oklch, var(--accent) 45%, transparent);
+    background: color-mix(in oklch, var(--accent) 8%, var(--surface-2));
+  }
+  .shack-app-launch:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+  }
+  .shack-app-t {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-0);
+    min-width: 0;
+  }
+  .shack-app-label {
+    font-weight: 600;
+  }
+  .shack-app-op {
+    font-weight: 400;
+    font-size: var(--fs-2xs-up);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--warn);
+  }
+  .shack-app-blurb {
+    font-size: var(--fs-xs-up);
+    line-height: 1.25;
+  }
+  .shack-pin {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    opacity: 0.45;
+    padding: 3px;
+  }
+  .shack-pin:hover,
+  .shack-pin.on {
+    opacity: 1;
+  }
+  .shack-pin.on {
+    color: var(--accent);
+  }
+  .rigctl {
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .rigctl .row {
+    align-items: center;
+    gap: var(--sp-4);
+  }
+  .rigctl input,
+  .rigctl select {
+    min-height: 32px;
+  }
+  .spot-tune {
+    margin-top: var(--sp-3);
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--accent);
+    border-radius: var(--r-6);
+    background: color-mix(in oklch, var(--accent) 16%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .spot-tune:hover {
+    background: color-mix(in oklch, var(--accent) 26%, transparent);
+  }
+}

@@ -1,0 +1,24 @@
+/* Text tone and size helpers: mono, muted, fine print, status colours. */
+@layer components {
+  .mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.01em;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .error {
+    color: var(--bad);
+  }
+  .ok {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .warn {
+    color: var(--warn);
+    font-weight: 700;
+  }
+  .fine {
+    font-size: var(--fs-sm);
+  }
+}

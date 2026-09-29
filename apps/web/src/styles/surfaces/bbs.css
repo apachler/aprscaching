@@ -1,0 +1,174 @@
+/* Shack BBS: message list, reader and thread tree. */
+@layer surfaces {
+  /* BBS inbox unread + subject */
+  .bbs-unread {
+    cursor: pointer;
+  }
+  .bbs-unread > strong {
+    font-weight: 700;
+  }
+  .bbs-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: var(--sp-2);
+    vertical-align: middle;
+  }
+  .bbs-subj {
+    color: var(--ink-2);
+    font-style: italic;
+  }
+  /* BBS master–detail: message list | reading pane. Two columns when the panel is wide (container
+   query — the wide workspace surface), stacked master→detail swap when it's a slim drawer/sheet. */
+  .bbs-tabs {
+    flex-wrap: wrap;
+    margin-bottom: var(--sp-3);
+  }
+  .bbs-body {
+    display: grid;
+    gap: var(--sp-6);
+    align-items: start;
+  }
+  .bbs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .bbs-row {
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-6);
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .bbs-row + .bbs-row {
+    margin-top: var(--sp-0);
+  }
+  .bbs-row:hover {
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+  }
+  .bbs-row.on {
+    background: color-mix(in oklch, var(--accent) 14%, transparent);
+    border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+  }
+  .bbs-row-h {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+  }
+  .bbs-row-date {
+    margin-left: auto;
+    white-space: nowrap;
+    font-size: var(--fs-sm);
+  }
+  .bbs-read {
+    max-width: 80ch;
+  } /* keep prose line-length readable on a wide pane */
+  .bbs-read h3 {
+    margin: 0 0 var(--sp-4);
+  }
+  .bbs-hdr {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px var(--sp-5);
+    margin: 0 0 var(--sp-6);
+    font-size: var(--fs-md);
+  }
+  .bbs-hdr > div {
+    display: contents;
+  }
+  .bbs-hdr dt {
+    color: var(--muted);
+  }
+  .bbs-hdr dd {
+    margin: 0;
+  }
+  /* thread reply tree — forum/BBS style: replies nested under their parent, a connector line per level */
+  .bbs-thread-h {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: var(--sp-0) 0 var(--sp-2);
+  }
+  .bbs-node {
+    cursor: pointer;
+  }
+  .bbs-node .bbs-msg {
+    padding: var(--sp-3) 0;
+    border-top: 1px solid var(--line);
+  }
+  .bbs-node.on > .bbs-msg {
+    background: color-mix(in oklch, var(--accent) 8%, transparent);
+    border-radius: var(--r-5);
+    padding: var(--sp-3);
+    border-top-color: transparent;
+  }
+  .bbs-node:not(.depth-0) {
+    border-left: 2px solid var(--hair);
+    padding-left: var(--sp-4);
+  }
+  .bbs-node.depth-1 {
+    margin-left: var(--sp-6);
+  }
+  .bbs-node.depth-2 {
+    margin-left: 30px;
+  }
+  .bbs-node.depth-3 {
+    margin-left: 46px;
+  }
+  .bbs-node.depth-4 {
+    margin-left: 62px;
+  }
+  .bbs-node.depth-5 {
+    margin-left: 78px;
+  }
+  .bbs-node.depth-6 {
+    margin-left: 94px;
+  }
+  .bbs-reply-mark {
+    color: var(--muted);
+  }
+  .bbs-msg-h {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: baseline;
+    margin-bottom: var(--sp-0);
+    flex-wrap: wrap;
+  }
+  .bbs-node-date {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .bbs-reader-empty {
+    padding: var(--sp-10) var(--sp-3);
+  }
+  .bbs-back {
+    display: inline-block;
+    margin-bottom: var(--sp-3);
+  }
+  @container panel (min-width: 40rem) {
+    .bbs-body {
+      grid-template-columns: 320px minmax(0, 1fr);
+    }
+    .bbs-list {
+      border-right: 1px solid var(--hair);
+      padding-right: var(--sp-6);
+    }
+    .bbs-reader {
+      position: sticky;
+      top: 0;
+    }
+    .bbs-back {
+      display: none;
+    } /* both panes visible → no back nav needed */
+  }
+  @container panel (max-width: 40rem) {
+    .bbs-body[data-sel="1"] .bbs-list {
+      display: none;
+    }
+    .bbs-body[data-sel="0"] .bbs-reader {
+      display: none;
+    }
+  }
+}

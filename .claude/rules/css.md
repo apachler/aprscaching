@@ -108,7 +108,7 @@ the real benefit, not novelty.
 - **MUST NOT** compute colors/tints/spacing in JS that `color-mix()`/`clamp()` can derive.
 - **MUST NOT** read layout in render loops (`getBoundingClientRect` on scroll/resize) for styling
   outcomes CSS can declare.
-- **MUST NOT** write inline styles for values that belong in `ui/tokens.css`.
+- **MUST NOT** write inline styles for values that belong in `apps/web/src/styles/tokens.css`.
 
 ---
 

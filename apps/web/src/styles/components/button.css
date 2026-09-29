@@ -1,0 +1,88 @@
+/* Button primitive variants (primary, icon, link, danger), inline text and icon buttons, the big log action and filter chips. */
+@layer components {
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+    font-family: var(--font-brand);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  button.primary:hover {
+    filter: brightness(1.06);
+  }
+  button.primary:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  button.icon {
+    border: none;
+    background: none;
+    font-size: var(--fs-xl);
+    color: var(--ink);
+  }
+  /* big one-tap primary (Log a find) + filter type chips */
+  .log-primary {
+    width: 100%;
+    font-size: var(--fs-xl);
+    padding: 11px;
+  }
+  .chip-btn {
+    border-radius: var(--r-9);
+    font-size: var(--fs-md);
+  }
+  /* inline text-button (e.g. "remove" beside a list row) */
+  .link-btn {
+    background: none;
+    border: 0;
+    padding: 0 var(--sp-0);
+    margin-left: var(--sp-3);
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .link-btn:hover,
+  .link-btn:focus-visible {
+    color: var(--ink);
+  }
+  /* the red hover is reserved for destructive link-buttons (remove/delete rows) */
+  .link-btn.danger:hover,
+  .link-btn.danger:focus-visible {
+    color: var(--bad);
+  }
+  button.link {
+    border: none;
+    background: none;
+    color: var(--heading);
+    font-weight: 700;
+    padding: 0;
+    cursor: pointer;
+  }
+  button.link:hover {
+    text-decoration: underline;
+  }
+  .iconbtn {
+    border: none;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: var(--sp-0);
+    display: inline-flex;
+    border-radius: var(--r-5);
+  }
+  .iconbtn:hover {
+    color: var(--ink);
+  }
+  .iconbtn:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+  }
+  button.danger {
+    color: var(--bad);
+    border-color: color-mix(in oklch, var(--bad) 45%, var(--line));
+  }
+  button.danger:hover {
+    background: color-mix(in oklch, var(--bad) 14%, transparent);
+  }
+}

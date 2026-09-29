@@ -84,7 +84,7 @@ export function StationGraphs(props: { callsign: string }) {
     const disposers: (() => void)[] = [];
     let live = true;
     (async () => {
-      const [mod] = await Promise.all([import("uplot"), import("uplot/dist/uPlot.min.css")]);
+      const [mod] = await Promise.all([import("uplot"), import("../styles/vendor/uplot.css")]);
       const U: UPlot = (mod as { default?: UPlot }).default ?? (mod as unknown as UPlot);
       if (!live || !host.current) return;
       const el = host.current;
