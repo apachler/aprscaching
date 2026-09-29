@@ -60,6 +60,12 @@ APRS-IS round trip, so it works off-grid too. Digipeated frames name no site: th
 near the digipeater, not near your receiver. The gateway's independence rule still keeps your own
 receiver from corroborating your own finds.
 
+Only this path attests. A frame that reaches the gateway over APRS-IS — even one tagged `qAR,<your site>` —
+stays Tier C, because APRS-IS passcodes are public and anyone can inject such a line. An IGate that is visible
+to your gateway only on APRS-IS therefore adds nothing to Tier A: for its hearings to count, run this ingest
+box on that IGate's receiver (its TNC as a KISS, AGWPE or host-mode port, with `RF_SITE_CALL` set), so its
+frames arrive through the ingest secret.
+
 !!! warning "Only a TNC you operate"
     `RF_SITE_CALL` vouches that **your** receiver heard the frame. If `KISS_TNC_HOST` (or `AGWPE_HOST`,
     `HOSTMODE_HOST`) points at a station you don't operate — a club digipeater, a remote HAMNET node —
@@ -71,8 +77,9 @@ receiver from corroborating your own finds.
 An IGate bridges RF and APRS-IS in both directions. It needs a KISS TNC and both `IGATE_CALL` and
 `IGATE_PASS`:
 
-- **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct, so other instances
-  see your IGate as the receiving site.
+- **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct. That copy is for the
+  APRS-IS network: no instance attests it, because anyone with a (public) passcode can send the same line.
+  Your hearings count toward Tier A through the box's own batch to the gateway, as described above.
 - **TX-IGate** gates APRS-IS messages down to RF, but only to stations heard locally within `IGATE_LOCAL_TTL`
   (default 30 min), honouring the standard do-not-gate tokens (`TCPIP`, `TCPXX`, `NOGATE`, `RFONLY`),
   skipping third-party frames, own beacons, and bare acks.

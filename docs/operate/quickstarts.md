@@ -133,8 +133,10 @@ also needs PTT.
 3. **Make it count for find verification**: on the gateway, set `FIRST_PARTY_SITES=OE8APR-10`. The box
    names `IGATE_CALL` as the receiving site of every frame it hears directly, so those frames can reach
    **tier A** right away — except for your own finds, because your own receiver is not an independent
-   witness. Frames the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) are attested the same way when they
-   come back through the box's [APRS-IS feed](#aprs-is-internet-feed).
+   witness. The copies the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) are never attested, not even
+   when they come back through the box's [APRS-IS feed](#aprs-is-internet-feed): anyone with a passcode can
+   send such a line. Only the box's own direct hearings count, so an IGate you want counted must run this
+   box.
 
 The IGate only sends messages to RF for stations heard locally in the last 30 minutes
 (`IGATE_LOCAL_TTL`) and honours `NOGATE`/`RFONLY`. Read [Amateur-radio compliance](rf-regulatory.md) first:

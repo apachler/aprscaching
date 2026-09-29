@@ -122,7 +122,7 @@ if (heroId) {
     comment: "Beautiful spot, TFTC!",
     appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts },
   });
-  // Tier A needs an RF-heard, independently-gated position in the window first.
+  // Tier A needs a position in the window heard directly by the attested site's own TNC.
   await j(
     "POST",
     "/ingest",
@@ -130,13 +130,13 @@ if (heroId) {
       packets: [
         {
           src: "OE3RF",
-          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          path: ["WIDE1-1"],
           payload: "=4704.41N/01526.27E>",
           kind: "position",
           parsed: { lat: 47.0734, lon: 15.4377, symbol: ">" },
           heardVia: "rf",
           igateCall: "OE8XXX",
-          port: "aprs-is",
+          port: "kiss-tnc",
           ts,
         },
       ],

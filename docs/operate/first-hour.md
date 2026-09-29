@@ -57,8 +57,10 @@ verifies nothing.
 
 Set `FIRST_PARTY_SITES` to the IGate/site callsigns **you operate** (e.g. `OE8XBM-10`), and give
 each of your ingest boxes the matching `RF_SITE_CALL` (or `IGATE_CALL`). Transport never equals
-trust: only packets arriving through a first-party attested site can originate a Tier-A find.
-Without this, no find on your instance reaches Tier A.
+trust: only frames that a listed site's own ingest box heard directly on its TNC or MeshCom node can
+originate a Tier-A find. An APRS-IS line naming the site (`qAR,OE8XBM-10`) never does — APRS-IS passcodes
+are public, so anyone can inject one — and an IGate visible to you only on APRS-IS must run the ingest box
+for its hearings to count. Without this, no find on your instance reaches Tier A.
 
 ## 7. Publish the legal pages
 

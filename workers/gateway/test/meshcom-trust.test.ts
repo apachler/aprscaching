@@ -17,7 +17,13 @@ function attested(datagram: object, sites = ATTESTED, receiver = RECEIVER): bool
   const hint = meshcomTransportHint(r.event.provenance, receiver);
   const aprs = meshcomToAprs(r.event)!;
   return provenanceOf(
-    { heard_via: hint.heardVia, igate_call: hint.igateCall ?? null, path: aprs.path.join(","), ts: 1 },
+    {
+      heard_via: hint.heardVia,
+      igate_call: hint.igateCall ?? null,
+      path: aprs.path.join(","),
+      transport: "meshcom",
+      ts: 1,
+    },
     sites,
   ).firstPartyAttested;
 }

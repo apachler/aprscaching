@@ -54,7 +54,7 @@ function freshEnv(extra: Record<string, string> = {}) {
 function beaconAtCache(call = "OE8APR-7", ago = 120) {
   sqlite
     .prepare(
-      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source) VALUES (?,?,?,?, 'rf', 'OE8XXX-10', 'WIDE1-1,qAR,OE8XXX-10', 'firehose')",
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?,?,?,?, 'rf', 'OE8XXX-10', 'WIDE1-1', 'firehose', 'tnc')",
     )
     .run(call, t - ago, CACHE.lat, CACHE.lon);
 }

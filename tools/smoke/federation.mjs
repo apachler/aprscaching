@@ -152,7 +152,8 @@ const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-inges
 ok("sync with an invalid secret -> 401", noauth.status === 401, `status=${noauth.status}`);
 
 // ---- cross-instance verification (the network effect) ----
-// The logger's RF position is heard only by the PUBLISHER's IGate (independent of the logger).
+// The logger's RF position is heard only by the PUBLISHER's attested site OE8XXX, directly on its own
+// TNC (independent of the logger) — an APRS-IS copy naming that site would not count.
 // The cache + the find live on the SUBSCRIBER, which has NO local RF fix — it must reach Tier A
 // by querying the publisher's corroboration pool.
 const LAT = 47.2,
@@ -166,13 +167,13 @@ await call(
     packets: [
       {
         src: "LO3RF",
-        path: ["WIDE1-1", "qAR", "OE8XXX"],
+        path: ["WIDE1-1"],
         payload: "=4712.00N/01503.00E>",
         kind: "position",
         parsed: { lat: LAT + 0.0005, lon: LON, symbol: ">" },
         heardVia: "rf",
         igateCall: "OE8XXX",
-        port: "aprs-is",
+        port: "kiss-tnc",
         ts: t,
       },
     ],
@@ -1031,6 +1032,41 @@ ok(
   "no IGate callsign leaks on the wire (not a location oracle)",
   !/OE8XXX/.test(JSON.stringify(answer)),
   JSON.stringify(answer),
+);
+
+// An APRS-IS line naming the attested site (`qAR,OE8XXX`) is something anyone with a public passcode can
+// inject, so it vouches for nothing.
+await call(
+  PUB,
+  "POST",
+  "/ingest",
+  {
+    packets: [
+      {
+        src: "LO3IS",
+        path: ["WIDE1-1", "qAR", "OE8XXX"],
+        payload: "=4712.00N/01503.00E>",
+        kind: "position",
+        parsed: { lat: LAT + 0.0005, lon: LON, symbol: ">" },
+        heardVia: "rf",
+        igateCall: "OE8XXX",
+        port: "aprs-is",
+        ts: now(),
+      },
+    ],
+  },
+  { "x-ingest-secret": SECRET },
+);
+const isProbe = await postQuestion(await ask("LO3IS", "15c0", { since: now() - 1800, until: now() }));
+let isAnswer = null;
+try {
+  const parts = frameParts(new Uint8Array(await isProbe.arrayBuffer()));
+  isAnswer = Object.fromEntries(miniDecode(parts.payload).get(7));
+} catch {}
+ok(
+  "an APRS-IS qAR copy naming the attested site does not corroborate",
+  isProbe.status === 200 && isAnswer?.corroborated === false,
+  `status=${isProbe.status} ${JSON.stringify(isAnswer)}`,
 );
 
 // Flood from one asker: RL_MAX is 60/60 s, so 80 rapid signed questions trip it deterministically.

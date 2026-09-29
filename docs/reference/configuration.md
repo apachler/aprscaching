@@ -48,7 +48,7 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `FIRST_PARTY_SITES` | Allowlist of IGate/site callsigns you operate and attest — the only Tier-A origin. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions heard through these sites | — |
+| `FIRST_PARTY_SITES` | Allowlist of receiving-site callsigns you operate and attest — the only Tier-A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way | — |
 | `FED_CORROBORATION_QUORUM` | Distinct corroborating identities (registry operator, else signing key) required to promote a find to Tier A | `2` |
 | `DOH_URL` | DNS-over-HTTPS resolver for 44net peer onboarding (must return the DNSSEC AD flag) | Cloudflare |
 | `FED_ENDPOINTS` | This instance's typed transport endpoints (JSON array of `{transport,address,priority}`), published as `addresses` in both the descriptor and the registry self-entry | — |
