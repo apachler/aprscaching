@@ -8,6 +8,26 @@ authenticates but never conceals (see [Amateur-radio compliance](../operate/rf-r
 byte-level format, typed peer endpoints (https / 44net / ax25 / netrom / bbs), and the ARDC-verified
 44net onboarding flow are specified in the [Federation wire format](../reference/federation-wire.md).
 
+## Joining the network
+
+1. **Sign your feeds.** `deploy/setup.sh` generates `FED_PRIVATE_KEY` (elsewhere:
+   `node tools/fedkey/genkey.mjs`, see [Deployment](../operate/deployment.md#sign-your-feeds)). The key signs
+   your feeds and your corroboration questions; the instance id follows `APP_URL`'s host.
+2. **Add the peers you know** to `FED_PEERS` (`FED_PEERS=https://a.example,https://b.example`) and restart.
+   They start `trusted`: your instance mirrors them and counts their corroboration. This is the primary
+   path. **Instance admin → Federation** lists your peers and changes their trust, and admits a 44net peer by
+   callsign; it does not add a peer by URL.
+3. **Ask each peer's operator to do the same on their side** — add your `APP_URL` to their `FED_PEERS`.
+   Until they do, their instance holds you `unvetted` if it learns of you at all (through discovery, the
+   registry, 44net or a hub push): your records are mirrored but hidden on their map, and your answers do
+   not count toward their Tier A. They promote you under **Instance admin → Federation**.
+4. Optionally publish your operator identity (`FED_OPERATOR`, `FED_APRS_CALL`) and register in the shared
+   instance registry.
+
+Your instance then mirrors its peers, verifies everything it mirrors, and contributes corroboration back.
+The settings that decide how much a stranger can do are collected in
+[Federation operations](../reference/federation-operations.md).
+
 ## Signed feeds
 
 An instance with a signing key (`FED_PRIVATE_KEY`) publishes read-only, Ed25519-signed records over a
@@ -149,33 +169,3 @@ GDPR deletions propagate as **signed, PII-free tombstones** that name only a glo
 callsign); consumers purge the mirrored rows and suppress re-mirroring. Tombstones are kept permanently on
 both sides: they hold only ids, and a mirror checks them on every upsert so deleted data never comes back. Account portability works the same
 way — a signed account-move record re-points attribution when a user migrates instances.
-
-## Running federation safely
-
-The defaults are safe; these are the settings that decide how much a stranger can do.
-
-| Setting | Safe choice | Secure by default |
-|---|---|---|
-| `FED_PEERS` | List the peers you know. They start `trusted`; everything else starts `unvetted`. | yes |
-| `FED_DISCOVER` | Leave off, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
-| `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
-| `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |
-| `FED_REGISTRY` / `FED_REGISTRY_DNS` + `FED_REGISTRY_KEY` | Pin the registry authority's key; DNS may only locate the document. | yes (no registry) |
-| `FED_CORROBORATION_QUORUM` | Keep at least `2`, so no single peer can lift a find to Tier A. | yes (`2`) |
-| `FED_CORROBORATION_REQUIRE_KNOWN` | Set `1` to answer corroboration questions only from your peers. | no (answers anyone, coarsened) |
-| `FED_REVEAL_IGATE` | Leave off unless you and your peers want IGate credit to cross instances. | yes (off) |
-| `FED_ALLOW_PRIVATE` | Leave off, so federation never reaches your LAN except the peers you configured. | yes (off) |
-| 44net peers | Admitted `unvetted`; promote them yourself. Automatic admission trusts `DOH_URL`'s DNSSEC flag. | yes (`unvetted`) |
-
-Keep `FED_PRIVATE_KEY` secret and rotate it with `tools/fedkey/rotatekey.mjs` if it may have leaked; peers
-stop accepting the old key once its grace has passed.
-
-## Joining the network
-
-1. Generate a key and set `FED_PRIVATE_KEY` and `INSTANCE` (see [Deployment](../operate/deployment.md#sign-your-feeds)). The
-   key signs your feeds and your corroboration questions.
-2. Add peers: `FED_PEERS=https://a.example,https://b.example`.
-3. Optionally publish your operator identity (`FED_OPERATOR`, `FED_APRS_CALL`) and register in the shared
-   instance registry.
-
-Your instance now mirrors its peers, verifies everything it mirrors, and contributes corroboration back.

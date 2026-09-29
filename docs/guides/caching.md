@@ -33,8 +33,8 @@ The **Manual** icon in the top bar opens this manual.
 
 | Type | What it is |
 |---|---|
-| **Traditional / Single** | One fixed spot to find. |
-| **Two-stage / Multi** | Several stages; each stage's position is revealed when you unlock the previous one. |
+| **Traditional** | One container at a fixed spot. |
+| **Multi-stage** | Several stages; each stage's position is revealed when you unlock the previous one. |
 | **Virtual** | A place to visit, with no container. |
 | **Audio** | A stage unlocked by an audio clue. |
 | **Living (APRS)** | Moves with an APRS station — you find it by meeting the station. |
@@ -124,14 +124,16 @@ A multi-stage cache shows **Stages · 1/3 unlocked**. Unlock the next stage by:
 ## Hide a cache
 
 1. Tap **+ Hide a cache** (phone: **Hide**). You need to be signed in.
-2. Click the map where the cache is; drag the pin to adjust.
-3. Fill in **Title** and **Type**; set **Difficulty & terrain** with the sliders.
-4. Optional **Details**: **Hint**, **Description**, **Drive-in**, **Country**, **Tags**.
-5. **Rating & federation**: who may rate it, and the scope —
+2. Place the pin. On a phone it starts at your location; otherwise tap or click the map where the cache is,
+   or tap **Use my location**. Drag the pin to adjust.
+3. Fill in **Title** and **Type** (the line under the type says what it means); set **Difficulty & terrain**
+   with the sliders.
+4. Under **Advanced**, optionally: **Hint**, **Description**, **Drive-in**, **Country**, **Tags**, and
+   **Rating & federation** — who may rate it, and the scope —
    - **Public** — shared with linked instances;
    - **Unlisted** — shared, but not listed;
    - **Local only** — stays on this instance. The hint is never shared.
-6. Tap **Hide cache**. It gets a code like `AC-1234`.
+5. Tap **Hide cache**. It gets a code like `AC-1234`.
 
 Add photos afterwards from the cache's **Media** section. A **Living (APRS)** cache asks for the station
 callsign it follows; you can also create one from **Settings → My stations**. The minimum tier for a cache and

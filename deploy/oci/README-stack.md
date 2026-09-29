@@ -1,7 +1,7 @@
 # OCI one-click (Resource Manager stack)
 
 One Always-Free Ampere A1 VM running the all-in-one stack — gateway, ingest and Caddy — brought up by
-cloud-init. This is Topology 2 with the setup done for you.
+cloud-init. This is the self-host topology with the setup done for you.
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
 
@@ -33,7 +33,7 @@ straight there. The first boot builds the images, so allow a few minutes before 
 Capacity tip: Always-Free A1 capacity moves around. **Frankfurt (eu-frankfurt-1)** is a good bet for
 central Europe; if Apply fails with "out of host capacity", raise the availability domain and retry.
 
-For Topology 3, put Cloudflare in front afterwards — see `../cloudflare/`.
+To put Cloudflare's CDN in front afterwards, see `../cloudflare/`.
 
 ## Building the zip yourself
 

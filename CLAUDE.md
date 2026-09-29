@@ -28,13 +28,16 @@ feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs
 Worker, Node, Bun, browser). packages/shared = zod contracts.
 
 ## Deployment
-Five topologies (`deploy/`): **0** Bun single-binary desktop · **1** Pi at home (Cloudflare Tunnel) ·
-**2** OCI all-in-one VM (Caddy) · **3** OCI core + Cloudflare CDN · **4** OCI ingest + CF Workers/D1/R2.
-**Tri-runtime, all CI-conformance-green:** Node+SQLite (1–3, `servers/node`) · CF Worker+D1 (4,
-`workers/gateway`) · Bun+`bun:sqlite` (0, `servers/bun` — smoke+geofence pass under Bun). RF ingest is
-ALWAYS operator-local (local `apps/ingest` *or* browser Web Serial/BLE). Every instance MUST expose the
-AGPL §13 Source link + back up its DB. The desktop topology is a `bun --compile` single binary with the
-SPA + migrations embedded (`deploy/desktop/`); the rest of `deploy/` is validate-at-deploy.
+Three topologies (`deploy/`): **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations
+embedded) · **Self-host** — the Docker stack (gateway + ingest + Caddy) on a Pi, mini-PC or VM, reached through
+Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind Cloudflare's CDN · **Cloudflare** —
+Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`). **Tri-runtime, all CI-conformance-green:**
+Node+SQLite (self-host, `servers/node`) · CF Worker+D1 (Cloudflare, `workers/gateway`) · Bun+`bun:sqlite`
+(desktop, `servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every topology
+(local `apps/ingest` / `compose.ingest-only.yml` *or* browser Web Serial/BLE). `deploy/setup.sh` writes a
+self-host `.env` in one step (`--non-interactive` for scripts); `INSTANCE` and `RP_ID` default to `APP_URL`'s
+host. Every instance MUST expose the AGPL §13 Source link + back up its DB; the rest of `deploy/` is
+validate-at-deploy.
 
 ## Verification (the core)
 Trust follows corroboration, not transport:

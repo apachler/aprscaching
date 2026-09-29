@@ -46,4 +46,4 @@ body:
     id: env
     attributes:
       label: Environment
-      description: OS, browser (if web), Node/Bun version, deployment topology (0–4) if relevant.
+      description: OS, browser (if web), Node/Bun version, deployment topology (desktop, self-host, Cloudflare) if relevant.

@@ -5,7 +5,7 @@ aprscaching separates two concerns that deploy independently:
 - the **gateway** (API + data plane), which runs on any of three interchangeable runtimes, and
 - the **RF ingest**, which is always operator-local.
 
-You mix and match them into a topology that fits your hosting. Once your shape is up, work through
+You pick one of three topologies below. Once it is up, work through
 [Your first hour as sysop](first-hour.md) — the ordered checklist from "it boots" to a public,
 verified, backed-up instance (mirrored live in the app under **Instance admin → Setup**).
 
@@ -25,20 +25,47 @@ sysop surface work identically self-hosted. The runtime differences are infrastr
 vs in-process intervals, D1/R2 vs SQLite/filesystem). See the
 [Configuration reference](../reference/configuration.md).
 
-## Topologies
+## Three ways to deploy
 
-| # | Shape | How | Walkthrough |
-|---|-------|-----|-------------|
-| **0** | Desktop single binary | `bun --compile` bundles the SPA + migrations into one executable. | `deploy/desktop/README.md` |
-| **1** | Pi at home | Docker stack on a Pi, exposed with a free Cloudflare Tunnel — no port-forward, no static IP. | [Running in Docker](docker.md) + `deploy/README.md` |
-| **2** | All-in-one VM | Docker stack (gateway + ingest + Caddy TLS) on a single OCI/VPS host; `deploy/setup.sh` is the first-run wizard. | [Running in Docker](docker.md) · [one-click stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip) |
-| **3** | OCI core + CDN | Topology 2 plus Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`). | [Running in Docker](docker.md) |
-| **4** | Split | Managed Cloudflare core (Worker + D1 + R2 + Pages) via `deploy/cloudflare/deploy-cf.sh`; the operator RF box runs the ingest-only stack. | [Running in Docker](docker.md) + `deploy/README.md` |
+| Topology | Gateway | Ingress | Operator-local ingest | Walkthrough |
+|----------|---------|---------|-----------------------|-------------|
+| [**Desktop**](#desktop) | Bun single binary | none — `127.0.0.1`, or the LAN with `HOST=0.0.0.0` | the browser RF bridge, or `apps/ingest` beside it | `deploy/desktop/README.md` |
+| [**Self-host**](#self-host) | Node + SQLite in the Docker stack | Caddy with automatic TLS, or a Cloudflare Tunnel; optionally Cloudflare's CDN in front | the stack's own `ingest` service, or `compose.ingest-only.yml` on the radio box | [Running in Docker](docker.md) |
+| [**Cloudflare**](#cloudflare) | Worker + D1 + R2, SPA on Pages | Cloudflare's edge | `compose.ingest-only.yml` on your own box | `deploy/README.md` |
 
-`deploy/` carries the scaffolding for every shape: the multi-arch image + compose files, systemd units,
-the OCI Terraform/Resource-Manager one-click, the Cloudflare one-shot, `setup.sh` (first-run wizard,
-generates `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET`), and `backup.sh`. Bare-metal without
-Docker: the systemd units in `deploy/systemd/` run the same gateway + ingest from a checkout.
+In every topology the RF ingest runs on your own equipment (`compose.ingest-only.yml` points it at any
+gateway), and the browser can bridge a USB or Bluetooth radio with no server at all.
+
+### Desktop
+
+One executable (`bun build --compile`) with the gateway, the web app and the migrations inside. It keeps
+SQLite in the OS data directory and generates `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` there on
+first run. Best for one operator, a field day, or trying it out; it works off-grid.
+
+### Self-host
+
+The Docker stack (`deploy/docker-compose.yml`: gateway, ingest, Caddy) on anything that runs Docker — a
+Pi at home, a mini-PC, an OCI or other cloud VM. `deploy/setup.sh` writes its whole configuration and asks
+how people reach it:
+
+- **Caddy with TLS** — a public hostname, ports 80 and 443 open; Caddy fetches the certificate.
+- **Cloudflare Tunnel** — no open ports, no static IP (home connections, CGNAT); `compose.home.yml` adds the
+  connector.
+- **LAN / off-grid** — plain http on the local network, no internet needed; members sign in with the
+  operator's [one-time link](first-hour.md#off-grid-sign-in).
+
+A public box may put Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`, `TRUST_CF=1`). Oracle
+Cloud users can start the same stack with the
+[one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip).
+Bare metal without Docker: the systemd units in `deploy/systemd/` run the same gateway and ingest from a
+checkout.
+
+### Cloudflare
+
+A managed core: the Worker gateway with D1 and R2, and the SPA on Pages, set up by
+`deploy/cloudflare/deploy-cf.sh`. Nothing of yours runs in the cloud except that; the RF ingest runs on your
+own box with `compose.ingest-only.yml` and `INGEST_URL` pointing at the Worker. A cloud VM may add an
+APRS-IS-only feed the same way, never the RF bridge.
 
 ## Secrets every deployment sets
 
@@ -52,13 +79,14 @@ Docker: the systemd units in `deploy/systemd/` run the same gateway + ingest fro
     The three must differ from each other; the Node/Bun servers refuse to boot on an `OPERATOR_SECRET` or
     `SESSION_SECRET` equal to `INGEST_SECRET`. Generate each with `openssl rand -hex 32`.
 
-    - **Docker (topologies 1–3):** `deploy/setup.sh` fills all three in `deploy/.env`; the compose file
-      blanks the operator and session secrets for the ingest container.
-    - **Cloudflare Worker (topology 4):** `npx wrangler secret put INGEST_SECRET`, `… OPERATOR_SECRET` and
-      `… SESSION_SECRET` (`deploy/cloudflare/deploy-cf.sh` asks for all three).
+    - **Self-host (Docker):** `deploy/setup.sh` generates `INGEST_SECRET` and `OPERATOR_SECRET` in
+      `deploy/.env` and leaves `SESSION_SECRET` for the gateway to generate; the compose file blanks the
+      operator and session secrets (and the federation key) for the ingest container.
+    - **Cloudflare:** `npx wrangler secret put INGEST_SECRET`, `… OPERATOR_SECRET` and `… SESSION_SECRET`
+      (`deploy/cloudflare/deploy-cf.sh` asks for all three).
     - **systemd / bare metal:** add them to `deploy/.env`; leave `SESSION_SECRET` empty to have the gateway
       generate `data/session.secret`.
-    - **Desktop (topology 0):** generated on first run into the data directory.
+    - **Desktop:** generated on first run into the data directory.
 
 ### Upgrading an existing deployment
 
@@ -96,10 +124,14 @@ baseline global feed, but that is never the only way to get RF in. See
 
 To take part in federation, generate an instance key and set it as a secret so your feeds are signed:
 
+`deploy/setup.sh` generates the key for the Docker stack. Elsewhere:
+
 ```bash
 node tools/fedkey/genkey.mjs        # prints FED_PRIVATE_KEY + the public key it publishes
-# Cloudflare:  npx wrangler secret put FED_PRIVATE_KEY   (and set INSTANCE)
-# Node/Bun:    export FED_PRIVATE_KEY=...  INSTANCE=oe.example.org
+# Cloudflare:  npx wrangler secret put FED_PRIVATE_KEY
+# Node/Bun:    export FED_PRIVATE_KEY=...
 ```
+
+The instance id (`INSTANCE`) follows `APP_URL`'s host.
 
 Without a key, feeds still serve — unsigned — and peers won't mirror them. See [Federation](../guides/federation.md).

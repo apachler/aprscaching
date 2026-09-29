@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Topology 3: cache the static world at Cloudflare, bypass dynamic paths. Requires CF_API_TOKEN + CF_ZONE_ID.
+# Self-host behind Cloudflare's CDN: cache the static world at Cloudflare, bypass dynamic paths. Requires CF_API_TOKEN + CF_ZONE_ID.
 : "${CF_API_TOKEN:?set CF_API_TOKEN}"; : "${CF_ZONE_ID:?set CF_ZONE_ID}"
 curl -s -X PUT \
   "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/rulesets/phases/http_request_cache_settings/entrypoint" \
