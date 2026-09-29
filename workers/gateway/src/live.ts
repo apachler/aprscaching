@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * live.ts — M2 real-time layer. As positions arrive at /ingest we compute, per position, a live
+ * live.ts — the real-time layer. As positions arrive at /ingest we compute, per position, a live
  * envelope (a station delta + any geofence prompts for caches within radius) and dispatch it to the
  * region room. The room delivers to each subscriber by their subscription: station deltas to anyone
  * whose bbox contains the point, geofence prompts to the subscriber whose callsign matches.

@@ -82,11 +82,15 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
 ## Architecture: one gateway, three runtimes
 - `workers/gateway/src/app.ts` exports a runtime-neutral `handle()` (plus `runScheduled` /
   `runFrequentSync`); routing is the `p === "/…"` table plus regex segment routes in that file. Each
-  feature is one module beside it (`verify.ts`, `federation*.ts`, `webauthn.ts`, `ingest.ts`, …).
+  feature is one module beside it (`verify.ts`, `webauthn.ts`, `ingest.ts`, …); federation is
+  `federation.ts` (descriptor, keys, registry) plus `fedpull.ts` / `fedapply.ts` / `fedpush.ts` /
+  `fedpeers.ts`, and every incoming signed frame is admitted by `fedapply.ts` `admitFrame()`.
 - `servers/node` and `servers/bun` import that same app and supply the Cloudflare bindings
-  themselves: a D1-compatible shim over better-sqlite3 / `bun:sqlite` (`d1.ts`), an in-process
-  `Rooms` for the `RegionRoom` Durable Object (live WebSocket fan-out), filesystem media for R2, and
-  their own `migrate`. Fix behaviour in `workers/gateway`, never in one runtime's shim.
+  themselves: a D1-compatible shim over better-sqlite3 / `bun:sqlite` (`d1.ts`), a socket adapter
+  over the shared `rooms-core.ts` for the `RegionRoom` Durable Object (live WebSocket fan-out),
+  filesystem media for R2, and the shared `migrate.ts` runner. Bun reuses the Node host modules, and the
+  desktop launcher wraps `servers/bun/server.ts`'s `createServer()`. Fix behaviour in
+  `workers/gateway`, never in one runtime's shim.
 - The schema lives once in `db/migrations/*.sql` (one `0001_baseline.sql`; changes are new numbered files); wrangler applies it to D1
   (`migrations_dir = "../../db/migrations"`) and the Node/Bun servers apply it at boot.
 - CI proves parity by running the same `tools/smoke/*` suites against all three runtimes.
