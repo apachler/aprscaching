@@ -72,13 +72,18 @@ it. A test proves no other transport value grants attestation or changes a find'
 - **Finds are signed on-device.** Each user holds an Ed25519 keypair in their browser and registers the public
   key to their callsign, so authorship is cryptographically attributable and stays attributable even after a
   user moves instances. A browser without Ed25519 simply logs unsigned.
-- **Callsign control-verification** — proving you operate a callsign — is done by transmitting: the holder
-  sends `VERIFY <code>` to the instance's service call, and the call is verified only when an attested
-  receiving site hears it on its own radio. A copy over APRS-IS, an internet tunnel or the browser radio
-  bridge never counts. The instance operator confirms their own call with the operator CLI, and a sysop may
-  verify a call by hand, with a note, for someone out of range. The APRS-IS passcode verifies nothing (it is
-  a public hash); **licensing plus control-verification** is the real gate for anything that keys a
-  transmitter.
+- **Callsign control-verification** — proving you operate a callsign — is done by transmitting, or by a
+  credential from a body that reviewed the licence. On the air, the holder sends `VERIFY <code>` to the
+  instance's service call, and the call is verified only when an attested receiving site hears it on its own
+  radio — a TNC, or a MeshCom node that heard it directly over LoRa. A copy over APRS-IS, an internet
+  tunnel, the MeshCom server, a mesh relay or the browser radio bridge never counts. Off the air, the holder
+  publishes a code under their ARDC-delegated `<call>.ampr.org` name (counted only with a DNSSEC-validated
+  answer), or signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the
+  browser. The instance operator confirms their own call with the operator CLI, and a sysop may verify a
+  call by hand, with a note, for someone out of range. Every verification records its method and who
+  vouched. The APRS-IS passcode verifies nothing (it is a public hash); **licensing plus
+  control-verification** is the real gate for anything that keys a transmitter. Control-verification is
+  about the person and the callsign; it is separate from the A/B/C tiers, which grade a single find.
 - **Transmit is gated.** Any on-air TX (announce uplink, IGate TX, browser keying) requires a verified
   callsign and is off by default.
 

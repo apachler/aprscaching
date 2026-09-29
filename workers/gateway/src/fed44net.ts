@@ -15,13 +15,13 @@
  * What this attests is IDENTITY only: the peer enters `unvetted` like any discovered peer, and the
  * operator-set trust tier still governs whether its records count — transport is never trust.
  */
-import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
+import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { activeFedKeys, isInstanceId, type FedPublicKey } from "./federation.js";
+import { resolveTxt, acsFields, amprNames } from "./doh.js";
 
-const DEFAULT_DOH = "https://cloudflare-dns.com/dns-query";
 const RESOLVE_TIMEOUT_MS = 5000;
 const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
 
@@ -35,47 +35,28 @@ export interface Resolved44net {
 
 /** Parse the `v=acs1; inst=…; key=…` TXT payload. Returns null for anything else. */
 export function parse44netTxt(txt: string): { instance: string; publicKey: string } | null {
-  const fields = new Map<string, string>();
-  for (const part of txt.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq > 0) fields.set(part.slice(0, eq).trim().toLowerCase(), part.slice(eq + 1).trim());
-  }
-  if (fields.get("v") !== "acs1") return null;
+  const fields = acsFields(txt);
+  if (!fields) return null;
   const instance = fields.get("inst");
   const publicKey = fields.get("key");
   if (!instance || !publicKey || !/^[A-Za-z0-9_-]{40,50}$/.test(publicKey)) return null; // 32-byte key, b64url
   return { instance, publicKey };
 }
 
-interface DohAnswer {
-  Status: number;
-  AD?: boolean;
-  Answer?: { name: string; type: number; data: string }[];
-}
-
 /**
- * Resolve a callsign's federation TXT via DNS-over-HTTPS (runtime-neutral — plain fetch works on
- * Workers, Node and Bun alike; the JSON answer carries the resolver's DNSSEC-validated AD flag).
+ * Resolve a callsign's federation TXT via DNS-over-HTTPS (doh.ts); the answer carries the resolver's
+ * DNSSEC-validated AD flag.
  */
 export async function resolve44net(env: Env, callsign: string): Promise<Resolved44net> {
   const cs = callsign.trim().toUpperCase();
   if (!BASE_CALL_RE.test(cs)) throw new Error("a base callsign is required (letters/digits, no SSID)");
-  const host = `${cs.toLowerCase()}.ampr.org`;
-  const name = `_aprscaching.${host}`;
-  const doh = trimTrailingSlashes(env.DOH_URL || DEFAULT_DOH);
-  const res = await fetch(`${doh}?name=${encodeURIComponent(name)}&type=TXT`, {
-    headers: { accept: "application/dns-json" },
-    signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`DNS resolver ${res.status}`);
-  const ans = (await res.json()) as DohAnswer;
-  if (ans.Status !== 0) throw new Error(`no ${name} TXT record (DNS status ${ans.Status})`);
-  for (const a of ans.Answer ?? []) {
-    if (a.type !== 16) continue;
-    // TXT data arrives as one or more quoted chunks — unquote and join
-    const txt = a.data.replace(/^"|"$/g, "").replace(/"\s+"/g, "");
+  const { host, name } = amprNames(cs);
+  const ans = await resolveTxt(env, name);
+  if (ans.status !== 0) throw new Error(`no ${name} TXT record (DNS status ${ans.status})`);
+  for (const txt of ans.txts) {
     const parsed = parse44netTxt(txt);
-    if (parsed) return { callsign: cs, host, instance: parsed.instance, publicKey: parsed.publicKey, dnssec: !!ans.AD };
+    if (parsed)
+      return { callsign: cs, host, instance: parsed.instance, publicKey: parsed.publicKey, dnssec: ans.dnssec };
   }
   throw new Error(`no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…")`);
 }

@@ -35,6 +35,9 @@ The baseline groups into a handful of domains:
   - `0005_positions_transport` — how each stored position reached the gateway (`aprs-is`, `tnc`,
     `browser-rf`, `axudp`, `axip`, `meshcom`, `meshtastic`), derived from the ingest port. Display and
     statistics only: the verify engine never branches on it; rows stored earlier read `NULL`.
+  - `0012_verify_challenges` — outstanding challenges of the callsign control-verification methods that
+    complete in the signed-in session (`ampr_dns`, `lotw`), one per base call and method, bound to the
+    account that started it; covered by the account's data export and erasure.
   - `0013_licence_registry` — callsign validity from public licence registers: callsign, source, status,
     expiry and import date only (see [Licence registers](licence-sources.md)).
   - `0014_cache_adoption` — cache adoption: standing offers (`cache_adoption_offers`), requests to adopt

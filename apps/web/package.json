@@ -14,6 +14,7 @@
     "react-dom": "^19.3.0",
     "maplibre-gl": "^6.11.2",
     "uplot": "^1.6.30",
+    "node-forge": "^1.4.0",
     "@aprscaching/shared": "workspace:*",
     "@aprscaching/aprs": "workspace:*",
     "@aprscaching/ax25": "workspace:*",
@@ -26,7 +27,8 @@
     "typescript": "^6.0.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/geojson": "^7946.0.16"
+    "@types/geojson": "^7946.0.16",
+    "@types/node-forge": "^1.3.14"
   },
   "private": true
 }

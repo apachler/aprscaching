@@ -91,7 +91,8 @@ export interface Env {
   /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   FED_ENDPOINTS?: string; // this instance's typed transport endpoints (JSON array of {transport,address,priority}) — published in the descriptor
-  DOH_URL?: string; // DNS-over-HTTPS resolver for 44net peer onboarding (default cloudflare-dns.com; must return the DNSSEC AD flag)
+  DOH_URL?: string; // DNS-over-HTTPS resolver for 44net peer onboarding and ampr.org callsign verification (default cloudflare-dns.com; must return the DNSSEC AD flag)
+  LOTW_CA_PEM?: string; // PEM certificate(s) of the ARRL LoTW CA(s) trusted for LoTW callsign verification; absent ⇒ that method is off
   COT_STREAM_INTERVAL_MS?: string; // SSE CoT feed poll cadence (default 15000; clamped 1s–2min)
   COT_STREAM_MAX_MS?: string; // SSE CoT feed max connection lifetime before the client reconnects (default 5min)
   SPOTS_ENABLED?: string; // "1"/"true" to enable outbound spot polling (default off: /api/spots → empty)

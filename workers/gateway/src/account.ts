@@ -195,6 +195,11 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
       email ?? "",
     ),
     watchCalls: await rows(env, "SELECT callsign, added_at FROM watch_calls WHERE account_id=?", acct),
+    verificationChallenges: await rows(
+      env,
+      "SELECT callsign, method, attempts, created_at FROM callsign_challenges WHERE account_id=?",
+      acct,
+    ),
     watchAlerts: await rows(
       env,
       "SELECT callsign, kind, detail, cache_id, lat, lon, ts, seen FROM watch_alerts WHERE account_id=? ORDER BY ts",
@@ -422,6 +427,7 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
       "wx_keys",
       "account_stations",
       "account_prefs",
+      "callsign_challenges",
       "accounts",
     ])
       stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE account_id=?`).bind(accountId));

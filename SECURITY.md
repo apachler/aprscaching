@@ -35,7 +35,11 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
 - **Federation** — signature/replay/namespace attacks, tombstone forgery, peer impersonation or
   key-rotation bypass (`federation*.ts`, `tombstones.ts`).
 - **Auth & sessions** — WebAuthn/passkey flows, the magic-link path, session forgery, callsign
-  control-verification (the on-air `VERIFY` challenge, the operator bootstrap, sysop manual verification).
+  control-verification: the on-air `VERIFY` challenge (APRS and MeshCom — any way to make a copy that no
+  attested site heard directly count), the ampr.org DNS method (anything that verifies without a
+  DNSSEC-validated answer, `verify_ampr.ts`), the LoTW certificate method (a signature, chain, date or
+  callsign check that can be bypassed, or a certificate parser crash — `verify_lotw.ts`, `x509.ts`), the
+  operator bootstrap, and sysop manual verification.
 - **Ingest & parsers** — a single crafted packet that crashes or hangs the ingest/gateway
   (`packages/aprs`, `packages/packet`, `apps/ingest`).
 - **The tool-plugin sandbox** (`packages/tools`, `apps/web/src/tools/`) — sandbox escape or
@@ -51,6 +55,9 @@ network layer (that's the operator's edge/CDN concern).
 - The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, and
   no session is minted on a weak secret. Set a strong secret (`openssl rand -hex 24`); on a shared
   gateway also set a dedicated `SESSION_SECRET`.
+- `LOTW_CA_PEM` decides whose certificates prove a callsign: put only the ARRL LoTW CA certificates in
+  it, checked against a second independent copy. `DOH_URL` must name a DNSSEC-validating resolver you
+  trust, since its AD flag is what the ampr.org method relies on.
 - Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, VAPID keys, etc.) — use
   `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
   rotate anything it flags.

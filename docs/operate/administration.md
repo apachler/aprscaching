@@ -29,10 +29,41 @@ operator-local ingest box can still act with `INGEST_SECRET`).
 
 ## Callsign verification
 
-Users verify their own calls over the air: **Settings → Account → verify** gives them `VERIFY <code>` to send
-to the service call, and the call is verified (method `rf_heard`) only when a site in `FIRST_PARTY_SITES`
-hears the message on its own TNC or MeshCom node. A copy over APRS-IS, AXUDP/AXIP or a signed browser batch
+Users verify their own calls under **Settings → Account → verify**, choosing a method. Every verification
+records its method (`callsign_verifications.method`) and who vouched (`verified_by`):
+
+| Method | How | `verified_by` | Needs on this instance |
+|---|---|---|---|
+| `rf_heard` | `VERIFY <code>` sent to the service call, heard by a site in `FIRST_PARTY_SITES` on its own TNC, or by its MeshCom node directly over LoRa | the receiving site | attested sites |
+| `ampr_dns` | a code in `_aprscaching.<call>.ampr.org` TXT, looked up over `DOH_URL`; only a DNSSEC-validated answer counts | `<call>.ampr.org` | a validating resolver, and a DNSSEC-signed ampr.org |
+| `lotw` | a challenge signed with the user's LoTW callsign certificate, which must chain to a CA in `LOTW_CA_PEM` and name the call | the trusted CA's name | `LOTW_CA_PEM` |
+| `operator` | the operator CLI with the ingest secret, for an `ADMIN_CALLSIGNS` call | `operator` | — |
+| `sysop` | by hand, below | the sysop's call | — |
+
+On the air, a copy over APRS-IS, AXUDP/AXIP, the MeshCom server, a mesh relay or a signed browser batch
 never counts. Without attested sites nobody can verify that way.
+
+The `ampr_dns` method refuses any answer that is not DNSSEC-validated and never falls back to trusting a
+first answer. While the ampr.org zone is not DNSSEC-signed (the `org` zone publishes no DS record for it),
+every check is refused with that reason, and users pick another method.
+
+### LoTW callsign certificates
+
+No ARRL certificate ships with the gateway, so the `lotw` method stays off until you set `LOTW_CA_PEM` to the
+LoTW CA certificate(s) you trust — normally ARRL's *Logbook of the World Root CA*. Trusting the root is
+enough: TQSL writes the whole chain (callsign certificate, production CA, root) into every `.p12` it saves,
+and the browser sends that chain along. As a LoTW user you can take the CA certificates from your own file:
+
+```
+openssl pkcs12 -in my-call.p12 -cacerts -nokeys -out lotw-ca.pem   # add -legacy for an older-format file
+openssl x509 -in lotw-ca.pem -noout -subject -dates -fingerprint -sha256
+```
+
+Keep only the root's block, and compare its SHA-256 fingerprint with a second independent copy — another
+ham's TQSL file, or ARRL — before you trust it. The gateway then checks each callsign certificate's
+signature chain, that it is valid now and each CA was valid when it issued the certificate below it, that
+its subject attribute `AROcallsign` (OID `1.3.6.1.4.1.12348.1.1`) is exactly the base call, and the user's
+signature over the challenge. It does not consult LoTW's certificate revocation service.
 
 For an operator out of range of every attested site, a sysop verifies the call by hand under **Instance
 admin → Callsign verification**: the callsign, and a required note saying how control of the licence was
