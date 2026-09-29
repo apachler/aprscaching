@@ -212,6 +212,50 @@ describe("a VERIFY message heard at an attested site", () => {
   });
 });
 
+describe("a VERIFY message sent from a MeshCom node", () => {
+  // The packets the ingest's MeshCom listener emits (apps/ingest/test/meshcom.test.ts) for a direct
+  // message to the service call, heard by the operator's node OE8XXX-12 — an attested site here.
+  const NODE = "OE8XXX-12";
+  const meshEnv = () => authEnv({ FIRST_PARTY_SITES: NODE });
+  const meshcom = (code: string, o: Record<string, unknown> = {}) => ({
+    src: "OE8APR-1",
+    dst: "APRS",
+    path: [] as string[],
+    payload: `:APRSCG   :VERIFY ${code}{012`,
+    kind: "message",
+    heardVia: "rf",
+    igateCall: NODE,
+    port: "meshcom",
+    rxCall: NODE,
+    ts: Math.floor(Date.now() / 1000),
+    ...o,
+  });
+  const ingest = (env: Env, packet: Record<string, unknown>) =>
+    call(env, "POST", "/ingest", { packets: [packet] }, SECRET);
+
+  it("verifies when the attested node heard it directly over LoRa", async () => {
+    const env = meshEnv();
+    const { s } = await started(env);
+    expect((await ingest(env, meshcom(s.data.code))).status).toBe(200);
+    expect(await verified(env, "OE8APR")).toBe(true);
+    expect(await row(env, "OE8APR")).toMatchObject({ method: "rf_heard", verified_by: NODE });
+  });
+
+  it.each([
+    ["relayed over the mesh", { path: ["OE1XYZ-12"], igateCall: undefined }],
+    ["from the MeshCom server", { heardVia: "aprs_is", igateCall: undefined }],
+    ["heard by a node that is not attested", { igateCall: "OE9ZZZ-12", rxCall: "OE9ZZZ-12" }],
+  ])("does not verify when it arrives %s, and costs no attempt", async (_label, o) => {
+    const env = meshEnv();
+    const { s } = await started(env);
+    await ingest(env, meshcom(s.data.code, o));
+    expect(await verified(env, "OE8APR")).toBe(false);
+    expect((await row(env, "OE8APR"))!.attempts).toBe(0);
+    await ingest(env, meshcom(s.data.code, { ts: Math.floor(Date.now() / 1000) + 1 }));
+    expect(await verified(env, "OE8APR")).toBe(true);
+  });
+});
+
 describe("operator bootstrap", () => {
   it("needs the ingest secret and an ADMIN_CALLSIGNS call", async () => {
     const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });

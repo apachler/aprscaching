@@ -128,6 +128,44 @@ describe("MeshCom listener — provenance stamped on forwarded packets", () => {
   });
 });
 
+describe("MeshCom listener — VERIFY to the service call", () => {
+  // A MeshCom direct message to the service call reaches the gateway as an APRS message packet; the
+  // gateway's provenance rule accepts it for callsign verification only when it carries the node as gate.
+  const verify = (over: object = {}) =>
+    msg({ src: "OE8APR-1", dst: "APRSCG", msg: "VERIFY 123456{012", msg_id: "5A5A5A5A", ...over });
+  const at = 1_700_000_000_000;
+
+  it("a direct LoRa hearing becomes an APRS message to the service call, gated by the node", () => {
+    const { l } = make();
+    expect(l.receive(verify(), NODE, at)).toEqual({
+      src: "OE8APR-1",
+      dst: "APRS",
+      path: [],
+      payload: ":APRSCG   :VERIFY 123456{012",
+      kind: "message",
+      heardVia: "rf",
+      igateCall: CALL,
+      port: "meshcom",
+      rxCall: CALL,
+      ts: at / 1000,
+    });
+  });
+
+  it("a multi-hop mesh copy keeps its relay path and names no gate", () => {
+    const { l } = make();
+    const p = l.receive(verify({ src: "OE8APR-1,OE1XYZ-12" }), NODE, at)!;
+    expect(p).toMatchObject({ payload: ":APRSCG   :VERIFY 123456{012", heardVia: "rf", path: ["OE1XYZ-12"] });
+    expect(p.igateCall).toBeUndefined();
+  });
+
+  it("a MeshCom server copy is internet-sourced with no gate", () => {
+    const { l } = make();
+    const p = l.receive(verify({ src_type: "udp" }), NODE, at)!;
+    expect(p).toMatchObject({ payload: ":APRSCG   :VERIFY 123456{012", heardVia: "aprs_is" });
+    expect(p.igateCall).toBeUndefined();
+  });
+});
+
 describe("MeshCom listener — dedup", () => {
   it("forwards one copy, and again when a stronger RF copy follows a server copy", () => {
     const { l, out } = make();

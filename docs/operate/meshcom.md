@@ -117,6 +117,17 @@ node never corroborates your own finds.
 Relays and server copies still show up on the map and in the monitor — they just prove nothing about where
 a station was.
 
+### Callsign verification over MeshCom
+
+A player can verify their callsign from a MeshCom node: they tap **verify** in the app, get a code, and send
+the MeshCom direct message `VERIFY <code>` to the service call (`APRSCG`) from any SSID of their call
+([Verify your callsign](../guides/account.md#verify-your-callsign)). The same rule as above decides: the
+message verifies the call only when your node heard it **directly** over LoRa and the node's callsign is in
+`FIRST_PARTY_SITES`. A copy relayed by another node, or passed on by the MeshCom server, is dropped without
+an answer and costs the player no attempt — they can still reach your node directly afterwards. The
+verification names your node as the station that heard it. With [answering](#answering-radio-commands-optional)
+set up, the node acks the message and confirms the verification.
+
 ## What you see
 
 - **Map** — MeshCom stations' positions, like any other station.
