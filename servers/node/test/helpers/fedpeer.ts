@@ -73,6 +73,8 @@ export function instanceEnv(instance: string, key: FedKey | null, extra: Record<
     DB: db ?? freshDb().DB,
     INSTANCE: instance,
     INGEST_SECRET: "test-ingest-secret",
+    SESSION_SECRET: "test-session-secret",
+    OPERATOR_SECRET: "test-operator-secret",
     ...(key ? { FED_PRIVATE_KEY: key.env } : {}),
     ...extra,
   } as unknown as Env;

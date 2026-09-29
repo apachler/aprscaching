@@ -104,7 +104,7 @@ async function descriptorMatches(
  * confirm. A `blocked` peer is never resurrected by re-adding.
  */
 export async function handleFed44netAdd(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true }); // same gate as the peer-trust surface
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true }); // same gate as the peer-trust surface
   if (gate) return gate;
   const body = (await req.json().catch(() => ({}))) as { callsign?: string; confirm?: boolean };
   let resolved: Resolved44net;

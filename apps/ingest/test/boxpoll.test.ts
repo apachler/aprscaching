@@ -342,3 +342,36 @@ describe("answers to radio commands", () => {
     expect(setup({ remoteTx: false, radio: null }).poller.capsQuery()).toBe("tx=0&rf=0&meshcom=");
   });
 });
+
+describe("pairing", () => {
+  it("asks the gateway for a pairing code with the box secret and prints it for the operator", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const lines: string[] = [];
+    const { poller } = setup({
+      secret: "box-secret",
+      log: (m) => lines.push(m),
+      fetch: (async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(JSON.stringify({ boxId: "pi-home", code: "ABCD-EFGH", expiresAt: 1_700_000_900 }), {
+          status: 200,
+        });
+      }) as typeof fetch,
+    });
+    const code = await poller.requestPairingCode();
+    expect(code).toBe("ABCD-EFGH");
+    expect(calls[0]!.url).toBe("http://gw/api/box/pi-home/pair");
+    expect(calls[0]!.init?.method).toBe("POST");
+    expect((calls[0]!.init?.headers as Record<string, string>)["x-ingest-secret"]).toBe("box-secret");
+    expect(lines.join("\n")).toMatch(/pairing code for pi-home: ABCD-EFGH/);
+  });
+
+  it("a refused or failed pairing request is logged, never thrown", async () => {
+    const lines: string[] = [];
+    const { poller } = setup({
+      log: (m) => lines.push(m),
+      fetch: (async () => new Response("unauthorized", { status: 401 })) as unknown as typeof fetch,
+    });
+    expect(await poller.requestPairingCode()).toBeNull();
+    expect(lines.join("\n")).toMatch(/pairing code unavailable/);
+  });
+});

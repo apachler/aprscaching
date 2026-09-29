@@ -10,6 +10,8 @@
 const A = process.env.A ?? "http://127.0.0.1:9601";
 const B = process.env.B ?? "http://127.0.0.1:9602";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
+// forwarding partners and rules are operator configuration: they take OPERATOR_SECRET
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 let failures = 0;
 
 function ok(name, cond, detail = "") {
@@ -21,7 +23,7 @@ function ok(name, cond, detail = "") {
 async function call(base, method, path, body) {
   const res = await fetch(base + path, {
     method,
-    headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
+    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, "x-operator-secret": OPERATOR_SECRET },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;

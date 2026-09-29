@@ -35,29 +35,15 @@ describe("handleRegisterKey — registration is authenticated", () => {
     expect(res.status).toBe(401);
   });
 
-  it("accepts the trusted ingest daemon (shared secret) for a heard callsign", async () => {
-    const rows: unknown[][] = [];
-    const db = {
-      prepare: (_sql: string) => ({
-        bind: (...args: unknown[]) => ({
-          run: async () => {
-            rows.push(args);
-            return {};
-          },
-          first: async () => null, // isCallsignVerified → not verified
-          all: async () => ({ results: [] }),
-        }),
-      }),
-    };
+  it("refuses the ingest secret: no machine secret binds a key to a callsign (401, no DB write)", async () => {
     const res = await handleRegisterKey(
       post(
         { callsign: "DL1ABC", publicKey: "QUJDREVGR0hJSktMTU5PUEFCQ0RFRkdISUpLTE1OT1A" },
         { "x-ingest-secret": "s3cret-for-tests" },
       ),
-      { INGEST_SECRET: "s3cret-for-tests", DB: db } as unknown as Env,
+      env,
     );
-    expect(res.status).toBe(200);
-    expect(rows.length).toBeGreaterThan(0); // the key row was written
+    expect(res.status).toBe(401);
   });
 });
 

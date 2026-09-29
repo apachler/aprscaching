@@ -5,7 +5,8 @@ environment (Cloudflare `wrangler.toml` vars / secrets, or the process environme
 servers). The **ingest box** and the **web build** have their own separate variable namespaces.
 
 !!! warning "Secrets stay in the environment"
-    `INGEST_SECRET`, `FED_PRIVATE_KEY`, `ADMIN_CALLSIGNS`, `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
+    `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY`, `ADMIN_CALLSIGNS`,
+    `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
     security-critical and must never be settable at runtime or exposed to the client — supply them only
     through the environment (or `wrangler secret`). Other secrets: `APRSIS_PASSCODE`, `IGATE_PASS`,
     `APRSIS_SERVICE_PASS`, `FED_CORROBORATION_SECRET`, `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`.
@@ -22,16 +23,17 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `INGEST_SECRET` | Shared secret for `/ingest` and operator backend calls (`x-ingest-secret`). **Required** — the Node/Bun servers refuse to boot, and no session is ever minted or honored, while it is unset or `change-me` | *(required)* |
-| `SESSION_SECRET` | Dedicated session-signing secret. Recommended on shared gateways so the ingest-box credential cannot forge user sessions; absent ⇒ sessions derive from `INGEST_SECRET` | — |
+| `INGEST_SECRET` | The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror, heard federation frames, the catalog importer, finds logged over APRS, and remote-box polling and pairing. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me` | *(required)* |
+| `OPERATOR_SECRET` | The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, the FBB federation enqueue, relay dispatch, and donation confirms. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box | — |
+| `SESSION_SECRET` | The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Worker takes it as a secret (`wrangler secret put SESSION_SECRET`); the Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out | *(generated on self-host)* |
 | `INSTANCE` | Canonical federation instance id / domain | `aprscaching.local` |
-| `APP_URL` | App origin for magic-link redirects | — |
+| `APP_URL` | App origin: magic-link redirects, passkey origin, and the credentialed-CORS allowlist | — |
 | `RP_ID` | WebAuthn relying-party id (registrable domain) | — |
 | `SESSION_TTL_DAYS` | Session cookie lifetime | `30` |
-| `SESSION_EPOCH` | Bump to invalidate every outstanding session (key-compromise recovery) | — |
+| `SESSION_EPOCH` | Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all` | — |
 | `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in) | off |
 | `TRUST_CF` | Node/Bun only: keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel. The Worker always trusts it — there Cloudflare's edge sets it | off |
-| `CORS_ORIGINS` | Extra origins allowed for credentialed CORS (comma-separated) | — |
+| `CORS_ORIGINS` | Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (e.g. `pnpm dev:web` on `http://localhost:5173`) needs its origin listed here | — |
 | `ALLOW_DEV_TOKENS` | Return magic-link tokens in-band instead of emailing (dev/CI only — never production) | off |
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
@@ -42,7 +44,9 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
 (`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;
-`0` disables scheduled peer sync).
+`0` disables scheduled peer sync). The desktop app also reads `HOST` (`127.0.0.1`; set `0.0.0.0` or a LAN
+address to serve the local network) and `DATA_DIR`, and generates its `INGEST_SECRET`, `OPERATOR_SECRET`
+and `SESSION_SECRET` on first run into the data directory unless the environment sets them.
 
 ## Gateway — verification & retention
 
@@ -103,7 +107,7 @@ Read by `tools/licence/import.mjs` on the operator's machine, not by the gateway
 |---|---|---|
 | `LICENCE_SOURCES` | Registers to import when no `--source` is given, comma-separated: `fcc`, `ised`, `acma`, `at`, `de` (or `all`) | — |
 | `BASE` | Gateway to import into | `http://127.0.0.1:8787` |
-| `INGEST_SECRET` | The gateway's ingest secret; authorises the import | — |
+| `OPERATOR_SECRET` | The gateway's operator secret; authorises the import (an import rewrites instance-wide data) | — |
 
 ## Ingest box
 
@@ -115,7 +119,7 @@ only when its variable is present.
 | Variable | Purpose | Default |
 |---|---|---|
 | `INGEST_URL` | Gateway ingest endpoint to POST batches to | `http://127.0.0.1:8787/ingest` |
-| `INGEST_SECRET` | Sent as `x-ingest-secret` | `change-me` |
+| `INGEST_SECRET` | Sent as `x-ingest-secret`. The only gateway secret an ingest box holds — never give it `OPERATOR_SECRET` or `SESSION_SECRET` | `change-me` |
 | `BATCH_MS` | Batch flush interval | `1500` (`2000` in the Docker stack) |
 | `INGEST_SPOOL_MAX` | Undelivered-packet spool bound (drop-oldest) during a gateway outage | `5000` |
 | `APRSIS_HOST` / `APRSIS_PORT` | APRS-IS server | `rotate.aprs2.net` / `14580` |
@@ -137,7 +141,7 @@ only when its variable is present.
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
 | Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway. Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station |
-| Remote control (Shack → Remote control) | `BOX_ID`, `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`) |
+| Remote control (Shack → Remote control) | `BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`) |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the

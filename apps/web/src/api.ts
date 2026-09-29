@@ -49,8 +49,19 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+  if (!res.ok) throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status, body);
   return body;
+}
+
+/** A refused API call: the server's message, its HTTP status and the JSON body it sent. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly data: unknown,
+  ) {
+    super(message);
+  }
 }
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
@@ -293,6 +304,13 @@ export function enqueueBoxCommand(
 export function getBoxLog(boxId: string): Promise<{ boxId: string; commands: BoxCommand[] }> {
   return call(`/api/box/${encodeURIComponent(boxId)}/log`);
 }
+/** Link a box to the signed-in account with the pairing code the box printed at start. */
+export function pairBox(boxId: string, code: string): Promise<{ ok: boolean; boxId: string }> {
+  return call(`/api/box/${encodeURIComponent(boxId)}/claim`, { method: "POST", body: JSON.stringify({ code }) });
+}
+/** Did the gateway refuse because this box is not paired to the signed-in account yet? */
+export const needsPairing = (e: unknown): boolean =>
+  e instanceof ApiError && (e.data as { pair?: boolean } | null)?.pair === true;
 
 // ---- watchlist + alerts ----
 export interface WatchEntry {
@@ -1091,6 +1109,10 @@ export function getSession(): Promise<Session> {
 }
 export function logout(): Promise<{ ok: boolean }> {
   return call(`/auth/logout`, { method: "POST" });
+}
+/** End every session of the signed-in account, on every device. */
+export function logoutAll(): Promise<{ ok: boolean }> {
+  return call(`/auth/logout-all`, { method: "POST" });
 }
 export function claim(
   callsign: string,

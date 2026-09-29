@@ -55,7 +55,9 @@ describe("clientIp comes from sources the client cannot choose", () => {
   const reqWith = (h: Record<string, string>) => new Request("http://gw/x", { headers: h });
 
   it("cf-connecting-ip (edge-stamped) always wins", () => {
-    expect(clientIp(reqWith({ "cf-connecting-ip": "203.0.113.1", "x-forwarded-for": "6.6.6.6" }))).toBe("203.0.113.1");
+    expect(clientIp(reqWith({ "cf-connecting-ip": "203.0.113.1", "x-forwarded-for": "6.6.6.6" }), {} as Env)).toBe(
+      "203.0.113.1",
+    );
   });
 
   it("a client-supplied x-forwarded-for is IGNORED unless TRUST_PROXY=1", () => {
@@ -69,7 +71,7 @@ describe("clientIp comes from sources the client cannot choose", () => {
   });
 
   it("falls back to the bridge-stamped socket address, else 'unknown'", () => {
-    expect(clientIp(reqWith({ "x-real-ip": "192.0.2.9" }))).toBe("192.0.2.9");
-    expect(clientIp(reqWith({}))).toBe("unknown");
+    expect(clientIp(reqWith({ "x-real-ip": "192.0.2.9" }), {} as Env)).toBe("192.0.2.9");
+    expect(clientIp(reqWith({}), {} as Env)).toBe("unknown");
   });
 });

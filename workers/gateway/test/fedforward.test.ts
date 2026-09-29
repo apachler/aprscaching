@@ -94,7 +94,7 @@ function subscriberDb(caches: { gid: string }[]) {
 function post(url: string, body: unknown): Request {
   return new Request(url, {
     method: "POST",
-    headers: { "x-ingest-secret": SECRET, "content-type": "application/json" },
+    headers: { "x-ingest-secret": SECRET, "x-operator-secret": SECRET, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
 }
@@ -109,6 +109,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
       FED_PRIVATE_KEY: keyEnvVal,
       FED_APRS_CALL: "OE8APR-12",
       INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     const enq = await handleFedBbsEnqueue(post("http://gw/federation/bbs/enqueue", { types: ["cache"] }), pubEnv);
     expect(enq.status).toBe(200);
@@ -122,7 +123,12 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
 
     // subscriber: the same bulletin arrives over FBB forwarding; the inbound hook applies it
     const caches: { gid: string }[] = [];
-    const subEnv = { DB: subscriberDb(caches), INSTANCE: "oe.sub", INGEST_SECRET: SECRET } as unknown as Env;
+    const subEnv = {
+      DB: subscriberDb(caches),
+      INSTANCE: "oe.sub",
+      INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
+    } as unknown as Env;
     const inb = await handleForwardInbound(
       post("http://gw/api/bbs/forward/inbound", {
         message: { bid, type: "B", from: fromCall, to: toCall, title: "federation batch (1)", body },
@@ -161,6 +167,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
       INSTANCE: "oe.pub",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     const r = (await (await handleFedBbsEnqueue(post("http://gw/x", { types: ["cache"] }), env)).json()) as {
       enqueued: number;
@@ -173,12 +180,17 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
   // The unsigned-instance branch (409) is not exercisable here: the instance key is memoized
   // process-wide on first successful load, and the round-trip test above has already loaded it.
 
-  it("rejects a caller without the ingest secret or a sysop session", async () => {
-    const env = { DB: publisherDb([]), INSTANCE: "oe.pub", INGEST_SECRET: SECRET } as unknown as Env;
+  it("rejects a caller without the operator secret or a sysop session", async () => {
+    const env = {
+      DB: publisherDb([]),
+      INSTANCE: "oe.pub",
+      INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
+    } as unknown as Env;
     const res = await handleFedBbsEnqueue(
       new Request("http://gw/x", {
         method: "POST",
-        headers: { "x-ingest-secret": "wrong", "content-type": "application/json" },
+        headers: { "x-operator-secret": "wrong", "content-type": "application/json" },
         body: "{}",
       }),
       env,
@@ -188,7 +200,12 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
 
   it("an ordinary inbound bulletin is stored without triggering the federation path", async () => {
     const caches: { gid: string }[] = [];
-    const env = { DB: subscriberDb(caches), INSTANCE: "oe.sub", INGEST_SECRET: SECRET } as unknown as Env;
+    const env = {
+      DB: subscriberDb(caches),
+      INSTANCE: "oe.sub",
+      INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
+    } as unknown as Env;
     const res = await handleForwardInbound(
       post("http://gw/api/bbs/forward/inbound", {
         message: { bid: "1_OE8XBB", type: "B", from: "OE8APR", to: "ALL", title: "hi", body: "hello mesh" },

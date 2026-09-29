@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 import { changeCallsign, addCallsign, listCallsigns, type HeldCallsign } from "../api.js";
-import { Group, Badge, LicenceBadge, licenceLabel, Icon, Advanced } from "../ui/index.js";
+import { Group, Badge, LicenceBadge, licenceLabel, Icon, Advanced, useConfirm, useToast } from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
 
 type Session = {
@@ -10,6 +10,7 @@ type Session = {
   email: string | null;
   signedIn: boolean;
   signOut: () => void;
+  signOutEverywhere: () => Promise<void>;
   refresh: () => void;
 };
 const baseCall = (c: string) => c.toUpperCase().split("-")[0] ?? "";
@@ -23,7 +24,9 @@ export function AccountSettings(props: {
   /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it yet. */
   operatorPending?: boolean;
 }) {
-  const { callsign, email, signedIn, signOut, refresh } = props.session;
+  const { callsign, email, signedIn, signOut, signOutEverywhere, refresh } = props.session;
+  const confirmDialog = useConfirm();
+  const toast = useToast();
   const active = baseCall(callsign);
   const [held, setHeld] = useState<HeldCallsign[]>([]);
   const [verifying, setVerifying] = useState<string | null>(null);
@@ -78,6 +81,25 @@ export function AccountSettings(props: {
       await reload();
     } catch (e) {
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function endEverywhere() {
+    const ok = await confirmDialog({
+      title: "Sign out everywhere?",
+      message: "Every device signed in to this account is signed out, this one included.",
+      confirmLabel: "Sign out everywhere",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await signOutEverywhere();
+      toast("Signed out on every device");
+    } catch (e) {
+      setMsg({ text: (e as Error).message, kind: "error" });
     } finally {
       setBusy(false);
     }
@@ -171,7 +193,10 @@ export function AccountSettings(props: {
           <div className="setrow-c muted">{email}</div>
         </div>
       )}
-      <div className="row end mt-3">
+      <div className="row end wrap gap-2 mt-3">
+        <button onClick={endEverywhere} disabled={busy}>
+          Sign out everywhere
+        </button>
         <button className="danger" onClick={signOut}>
           Sign out
         </button>

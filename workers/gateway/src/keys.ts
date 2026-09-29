@@ -19,29 +19,20 @@ import {
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, fromB64, verifyDomain } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
-import { sessionCallsign, sessionAccountId, accountHoldsCall, secretOk } from "./auth.js";
+import { sessionIdentity, accountHoldsCall } from "./auth.js";
 
 export async function handleRegisterKey(req: Request, env: Env): Promise<Response> {
   const parsed = RegisterKeyRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
-  // Registering a key BINDS it to a callsign, and account.ts authorises destructive
-  // account actions (delete/bundle/move) by "any registered key" — so registration itself must be
-  // authenticated. A signed-in session registers for a base call its account holds (any SSID of
-  // it); the trusted ingest daemon (shared secret) registers for the callsign it heard. Never an
-  // anonymous body, and never a call on a licence the session's account does not hold.
-  const session = await sessionCallsign(req, env);
-  let callsign: string;
-  if (session) {
-    const me = await sessionAccountId(req, env);
-    if (!me) return json({ error: "sign in to register a device key" }, { status: 401 });
-    callsign = (parsed.data.callsign ?? session).toUpperCase();
-    if (!(await accountHoldsCall(env, me.accountId, callsign)))
-      return json({ error: "callsign is not yours" }, { status: 403 });
-  } else if (secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) && parsed.data.callsign) {
-    callsign = parsed.data.callsign.toUpperCase();
-  } else {
-    return json({ error: "sign in to register a device key" }, { status: 401 });
-  }
+  // Registering a key BINDS it to a callsign, and account.ts authorises destructive account actions
+  // (export/delete/bundle/move) and signed ingest by a registered key — so only the signed-in holder
+  // registers, for a base call their account holds (any SSID of it). No machine secret registers a key:
+  // whoever holds the ingest secret must not be able to bind a key to someone else's call.
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to register a device key" }, { status: 401 });
+  const callsign = (parsed.data.callsign ?? me.callsign).toUpperCase();
+  if (!(await accountHoldsCall(env, me.accountId, callsign)))
+    return json({ error: "callsign is not yours" }, { status: 403 });
   const verified = await isCallsignVerified(env, callsign);
   await env.DB.prepare(
     "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)",

@@ -147,7 +147,11 @@ describe("accounts persist only on register/finish", () => {
       }),
       batch: async () => [],
     };
-    const env = { DB: db, APP_URL: "https://aprscaching.net" } as unknown as Env;
+    const env = {
+      DB: db,
+      APP_URL: "https://aprscaching.net",
+      SESSION_SECRET: "a-strong-session-secret",
+    } as unknown as Env;
     const res = await handlePasskeyRegisterFinish(
       new Request("http://gw/auth/passkey/register/finish", {
         method: "POST",

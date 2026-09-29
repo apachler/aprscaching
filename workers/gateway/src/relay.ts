@@ -324,7 +324,7 @@ export async function handleRelayResult(req: Request, env: Env, id: string): Pro
  * HTTP legs, so no secret material ever rides the air.
  */
 export async function handleRelayDispatch(req: Request, env: Env, instance: string): Promise<Response> {
-  const denied = await requireSysop(req, env, { allowIngest: true });
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
   if (denied) return denied;
   const spoke = instance.toLowerCase();
   const hub = (env.INSTANCE ?? "").toLowerCase();

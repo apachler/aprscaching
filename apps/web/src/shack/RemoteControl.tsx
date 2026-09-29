@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
-import { enqueueBoxCommand, getBoxLog, type BoxCommand } from "../api.js";
+import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
 import { Row, Badge, EmptyState, ErrorState, useConfirm, useToast, Ico } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
- * them over its existing outbound connection. TX is gated on callsign control-verification:
- * unverified operators get RX/status only, with the transmit controls disabled + a reason.
+ * them over its existing outbound connection. A box answers only the account it is paired to: the box
+ * prints a one-time pairing code at start, and entering it here links the box. TX is gated on callsign
+ * control-verification: unverified operators get RX/status only, with the transmit controls disabled +
+ * a reason.
  */
 export function RemoteControl(props: { callsign: string; verified: boolean; map: maplibregl.Map | null }) {
   const fmt = useFmt();
@@ -26,8 +28,12 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
   const [comment, setComment] = useState("");
   const [log, setLog] = useState<BoxCommand[]>([]);
   const [logErr, setLogErr] = useState(false);
+  const [unpaired, setUnpaired] = useState(false);
+  const [code, setCode] = useState("");
+  const [pairing, setPairing] = useState(false);
   const signedIn = props.callsign.length >= 3;
-  const canTx = signedIn && props.verified;
+  const ready = signedIn && !!boxId && !unpaired;
+  const canTx = ready && props.verified;
 
   useEffect(() => {
     try {
@@ -42,9 +48,28 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
         .then((r) => {
           setLog(r.commands);
           setLogErr(false);
+          setUnpaired(false);
         })
-        .catch(() => setLogErr(true));
+        .catch((e) => {
+          setUnpaired(needsPairing(e));
+          setLogErr(!needsPairing(e));
+        });
   }, [boxId]);
+
+  async function pair() {
+    setPairing(true);
+    try {
+      await pairBox(boxId, code.trim());
+      setCode("");
+      setUnpaired(false);
+      toast(`${boxId} paired to your account`);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setPairing(false);
+    }
+  }
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, 5000);
@@ -72,6 +97,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       toast(`${kind} queued`);
       refresh();
     } catch (e) {
+      if (needsPairing(e)) setUnpaired(true);
       toast((e as Error).message);
     }
   }
@@ -102,32 +128,58 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       </Row>
       {!signedIn ? (
         <p className="muted">Sign in to control a box.</p>
+      ) : unpaired ? (
+        <Row
+          label="Pairing code"
+          help={`Printed by ${boxId} when it starts ("[box] pairing code …"), valid 15 minutes. Restart the box for a new one.`}
+        >
+          <div className="row gap-2">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && code.trim()) void pair();
+              }}
+              placeholder="ABCD-EFGH"
+              aria-label="Pairing code"
+              autoComplete="one-time-code"
+              className="mono field-sm"
+              maxLength={9}
+            />
+            <button className="primary" disabled={pairing || code.trim().length < 8} onClick={() => void pair()}>
+              {pairing ? "Pairing…" : "Pair box"}
+            </button>
+          </div>
+        </Row>
       ) : (
         !props.verified && <p className="muted">Verify your callsign to transmit — RX &amp; status only until then.</p>
       )}
+      {signedIn && unpaired && <p className="muted">Pair this box to your account before sending it commands.</p>}
 
       <div className="row wrap gap-2">
-        <button onClick={() => send("status")} disabled={!signedIn || !boxId}>
+        <button onClick={() => send("status")} disabled={!ready}>
           ↻ Status
         </button>
         <button
           onClick={beacon}
-          disabled={!canTx || !boxId}
-          title={canTx ? "Beacon the map centre" : "Verify your callsign to transmit"}
+          disabled={!canTx}
+          title={
+            canTx ? "Beacon the map centre" : unpaired ? "Pair this box first" : "Verify your callsign to transmit"
+          }
         >
           <Ico e="📍 " />
           Beacon here
         </button>
-        <button onClick={() => send("igate", { on: true })} disabled={!canTx || !boxId}>
+        <button onClick={() => send("igate", { on: true })} disabled={!canTx}>
           IGate on
         </button>
-        <button onClick={() => send("igate", { on: false })} disabled={!canTx || !boxId}>
+        <button onClick={() => send("igate", { on: false })} disabled={!canTx}>
           IGate off
         </button>
-        <button onClick={() => send("digi", { on: true })} disabled={!canTx || !boxId}>
+        <button onClick={() => send("digi", { on: true })} disabled={!canTx}>
           Digi on
         </button>
-        <button onClick={() => send("tx", { on: false })} disabled={!canTx || !boxId}>
+        <button onClick={() => send("tx", { on: false })} disabled={!canTx}>
           TX off
         </button>
       </div>
@@ -157,7 +209,7 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
             placeholder="message…"
             aria-label="Message text"
           />
-          <button className="primary" disabled={!canTx || !boxId || !to.trim() || !text.trim()} onClick={sendMessage}>
+          <button className="primary" disabled={!canTx || !to.trim() || !text.trim()} onClick={sendMessage}>
             Send
           </button>
         </div>

@@ -12,7 +12,7 @@ import { accountActionMessage } from "@aprscaching/shared";
 import { importVerifyKey, fromB64, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
-import { sessionCallsign, WITHDRAWN } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, WITHDRAWN } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
@@ -28,8 +28,9 @@ async function authorize(env: Env, req: Request, callsign: string, action: strin
     at?: number;
     [k: string]: unknown;
   };
-  const session = await sessionCallsign(req, env);
-  if (session && session.toUpperCase() === cs) return { ok: true, body };
+  // a session acts for the calls its own account holds
+  const me = await sessionIdentity(req, env);
+  if (me && (await accountHoldsCall(env, me.accountId, cs))) return { ok: true, body };
   if (!body.key || !body.sig || !body.at)
     return {
       ok: false,
@@ -518,8 +519,8 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   // follow-on once cross-instance bundle signing exists.)
   const stmts = [
     env.DB.prepare(
-      "INSERT INTO accounts (callsign, verified, verify_method, created_at) VALUES (?, 0, 'migrated', ?)",
-    ).bind(cs, now()),
+      "INSERT INTO accounts (callsign, account_id, verified, verify_method, created_at) VALUES (?, ?, 0, 'migrated', ?)",
+    ).bind(cs, crypto.randomUUID(), now()),
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)",
     ).bind(cs, `from:${bundle.instance ?? "?"}`, now()),

@@ -178,9 +178,9 @@ export async function passkeyLogin(env: Env, callsign: string, a: Authenticator,
   );
 }
 
-/** Confirm an ADMIN_CALLSIGNS call with the ingest secret, the way the operator CLI does. */
+/** Confirm an ADMIN_CALLSIGNS call with the operator secret, the way the operator CLI does. */
 export async function operatorVerify(env: Env, callsign: string): Promise<void> {
-  const r = await call(env, "POST", "/verify/operator", { callsign }, { "x-ingest-secret": "test-ingest-secret" });
+  const r = await call(env, "POST", "/verify/operator", { callsign }, { "x-operator-secret": "test-operator-secret" });
   if (r.data?.verified !== true) throw new Error(`operator-verify ${callsign} failed: ${JSON.stringify(r.data)}`);
 }
 

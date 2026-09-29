@@ -9,7 +9,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { requireSysop } from "./admin.js";
+import { requireIngestOrOperator } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
 import { applyFedFrames } from "./federation_sync.js";
@@ -66,7 +66,7 @@ export async function handleBeaconEmit(req: Request, env: Env): Promise<Response
 
 /** POST /federation/beacon — a heard datagram payload from the operator's ingest box. */
 export async function handleBeaconRx(req: Request, env: Env): Promise<Response> {
-  const denied = await requireSysop(req, env, { allowIngest: true });
+  const denied = await requireIngestOrOperator(req, env);
   if (denied) return denied;
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (bytes.length > MAX_RX_BYTES) return json({ error: "payload too large for a datagram" }, { status: 413 });
@@ -85,7 +85,7 @@ const MAX_PAGE_BYTES = 4 * 1024 * 1024; // a sync page is bounded server-side; r
  * mislabelled or hostile page buys nothing.
  */
 export async function handleFramesRx(req: Request, env: Env): Promise<Response> {
-  const denied = await requireSysop(req, env, { allowIngest: true });
+  const denied = await requireIngestOrOperator(req, env);
   if (denied) return denied;
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (bytes.length > MAX_PAGE_BYTES) return json({ error: "page too large" }, { status: 413 });

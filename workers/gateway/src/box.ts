@@ -9,6 +9,11 @@
  *                                     `?tx=1&rf=1&meshcom=CALL,…` reports what it can transmit (box_status)
  *   POST /api/box/:id/commands/ack    the box reports done/failed (x-ingest-secret)
  *   GET  /api/box/:id/log             operator view of recent commands + status (session or secret)
+ *   POST /api/box/:id/pair            the box obtains a one-time pairing code (x-ingest-secret) and shows it
+ *   POST /api/box/:id/claim {code}    a signed-in operator links the box to their account with that code
+ *
+ * A box belongs to the account that presented a pairing code the box itself obtained — proof of
+ * possession of the box (its ingest secret) — so no account can take a box id by touching it first.
  *
  * Gating (non-negotiable): every TX-capable command requires a callsign gated on control-verification;
  * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
@@ -16,12 +21,13 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, secretOk } from "./auth.js";
+import { sessionAccountId, ingestSecretOk, timingSafeEqual } from "./auth.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
 const now = () => Math.floor(Date.now() / 1000);
-const boxAuth = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+const boxAuth = ingestSecretOk;
 const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
 
 async function isVerified(env: Env, call: string): Promise<boolean> {
@@ -31,23 +37,87 @@ async function isVerified(env: Env, call: string): Promise<boolean> {
   return !!r;
 }
 
-/**
- * Authorize a session to control `boxId`. TOFU — the first account to control a box claims
- * ownership; thereafter only that account may enqueue to it. Returns the owning accountId, or null if
- * this session is not allowed to control the box.
- */
-async function ownBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
+/** Is `accountId` the paired owner of `boxId`? An unpaired box has no owner and takes no session commands. */
+async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
   const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?")
     .bind(boxId)
     .first<{ account_id: string }>();
-  if (!row) {
-    await env.DB.prepare("INSERT OR IGNORE INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)")
-      .bind(boxId, accountId, now())
-      .run();
-    return true;
-  }
-  return row.account_id === accountId;
+  return row?.account_id === accountId;
 }
+
+/** A pairing code is good for 15 minutes — long enough to read it off the box and type it in. */
+export const PAIR_TTL_SEC = 15 * 60;
+/** Claim attempts per box per window: a code has 40 bits, and guesses are capped besides. */
+const CLAIM_ATTEMPTS = 10;
+const CLAIM_WINDOW_MS = 15 * 60_000;
+/** Upper-case letters and digits without the look-alikes 0/O and 1/I: 32 symbols, 5 bits each. */
+const PAIR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function newPairCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const chars = [...bytes].map((b) => PAIR_ALPHABET[b % 32]!).join("");
+  return `${chars.slice(0, 4)}-${chars.slice(4)}`;
+}
+const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function codeHash(boxId: string, code: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${boxId}|${normCode(code)}`));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * POST /api/box/:id/pair — the box asks for a pairing code with its ingest secret and prints it for its
+ * operator. A new code replaces any earlier one. Only a hash is stored.
+ */
+export async function handleBoxPair(req: Request, env: Env, boxId: string): Promise<Response> {
+  if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
+  const code = newPairCode();
+  const expiresAt = now() + PAIR_TTL_SEC;
+  await env.DB.prepare(
+    `INSERT INTO box_pairings (box_id, code_hash, expires_at) VALUES (?,?,?)
+     ON CONFLICT(box_id) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at`,
+  )
+    .bind(boxId, await codeHash(boxId, code), expiresAt)
+    .run();
+  return json({ boxId, code, expiresAt });
+}
+
+/**
+ * POST /api/box/:id/claim {code} — link the box to the signed-in account. The code is single-use; a
+ * valid one also moves a box that was paired to another account (whoever holds the box decides).
+ */
+export async function handleBoxClaim(req: Request, env: Env, boxId: string): Promise<Response> {
+  const me = await sessionAccountId(req, env);
+  if (!me) return json({ error: "sign in to pair a box" }, { status: 401 });
+  const { code } = (await req.json().catch(() => ({}))) as { code?: string };
+  if (!code || normCode(code).length !== 8)
+    return json({ error: "enter the 8-character code the box shows" }, { status: 400 });
+  if (await rateLimitedDurable(env, `boxclaim:${boxId}`, Date.now(), CLAIM_ATTEMPTS, CLAIM_WINDOW_MS))
+    return json({ error: "too many pairing attempts — wait, then use a fresh code from the box" }, { status: 429 });
+  const row = await env.DB.prepare("SELECT code_hash, expires_at FROM box_pairings WHERE box_id = ?")
+    .bind(boxId)
+    .first<{ code_hash: string; expires_at: number }>();
+  const good = !!row && row.expires_at > now() && timingSafeEqual(row.code_hash, await codeHash(boxId, code));
+  if (!good)
+    return json(
+      { error: "that pairing code is wrong or expired — restart the ingest box for a fresh one" },
+      { status: 403 },
+    );
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM box_pairings WHERE box_id = ?").bind(boxId),
+    env.DB.prepare(
+      `INSERT INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)
+       ON CONFLICT(box_id) DO UPDATE SET account_id = excluded.account_id, created_at = excluded.created_at`,
+    ).bind(boxId, me.accountId, now()),
+  ]);
+  return json({ ok: true, boxId });
+}
+
+const unpaired = () =>
+  json(
+    { error: "pair this box first: enter the pairing code the ingest box prints at start", pair: true },
+    { status: 403 },
+  );
+
 /** Does `accountId` hold the given base callsign (so it may transmit as it)? */
 async function accountHoldsCall(env: Env, accountId: string, call: string): Promise<boolean> {
   const r = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id = ? AND callsign = ?")
@@ -72,8 +142,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   const me = await sessionAccountId(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in (or provide the box secret) to control a box" }, { status: 401 });
-  if (me && !trusted && !(await ownBox(env, boxId, me.accountId)))
-    return json({ error: "this box belongs to another operator" }, { status: 403 });
+  if (me && !trusted && !(await ownsBox(env, boxId, me.accountId))) return unpaired();
   // A session may only transmit as a callsign its own account holds; the trusted backend may name any.
   const callsign = (body.callsign ?? me?.callsign ?? "").toUpperCase();
   if (TX_KINDS.has(kind)) {
@@ -194,15 +263,8 @@ export async function handleBoxLog(req: Request, env: Env, boxId: string): Promi
   const me = await sessionAccountId(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in to view box activity" }, { status: 401 });
-  // a box's activity is visible only to its owner (or the trusted backend). An unclaimed
-  // box has no owner yet → only the box secret can read it until someone claims it by controlling it.
-  if (me && !trusted) {
-    const row = await env.DB.prepare("SELECT account_id FROM boxes WHERE box_id = ?")
-      .bind(boxId)
-      .first<{ account_id: string }>();
-    if (!row || row.account_id !== me.accountId)
-      return json({ error: "this box belongs to another operator" }, { status: 403 });
-  }
+  // a box's activity is visible only to its paired owner (or the box secret)
+  if (me && !trusted && !(await ownsBox(env, boxId, me.accountId))) return unpaired();
   const rows = (
     await env.DB.prepare(
       "SELECT id, callsign, kind, payload, status, result, created_at AS createdAt, sent_at AS sentAt, acked_at AS ackedAt FROM box_commands WHERE box_id = ? ORDER BY created_at DESC LIMIT 50",

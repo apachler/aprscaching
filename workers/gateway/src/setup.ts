@@ -3,7 +3,7 @@
  * setup.ts — the sysop first-install checklist. GET /api/admin/setup reports, for the signed-in
  * operator, what this instance has configured and what still needs attention — a web-driven setup
  * wizard within a hard boundary: security-critical settings are env-only by design (INGEST_SECRET,
- * SESSION_SECRET, ADMIN_CALLSIGNS, FED_PRIVATE_KEY, …), so the wizard reports their presence and
+ * SESSION_SECRET, OPERATOR_SECRET, ADMIN_CALLSIGNS, FED_PRIVATE_KEY, …), so the wizard reports their presence and
  * health READ-ONLY — it never writes them and NEVER echoes a secret value, only a status. The only
  * values echoed are already-public identity strings (instance domain, app URL, operator imprint).
  * Runtime-writable state (federation peers, forwarding partners, peer trust) stays with the
@@ -12,7 +12,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
-import { sessionCallsign, weakSecret } from "./auth.js";
+import { sessionCallsign, sessionsEnabled, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
 
 export interface SetupItem {
@@ -53,20 +53,29 @@ function envItems(env: Env): SetupItem[] {
     status: weakSecret(env.INGEST_SECRET) ? "missing" : "ok",
     source: "env",
     detail: weakSecret(env.INGEST_SECRET)
-      ? "unset or the 'change-me' default — the gateway refuses to mint sessions"
-      : "set — the ingest box authenticates with it",
+      ? "unset or the 'change-me' default — the ingest box cannot post packets"
+      : "set — the ingest box authenticates with it (ingest plane only)",
   });
   push({
     key: "SESSION_SECRET",
     label: "Session secret",
     group: "security",
-    status: !set(env.SESSION_SECRET) ? "warn" : weakSecret(env.SESSION_SECRET) ? "missing" : "ok",
+    // reaching this checklist takes a session, so a usable secret is in place whenever it renders
+    status: sessionsEnabled(env) ? "ok" : "missing",
     source: "env",
-    detail: !set(env.SESSION_SECRET)
-      ? "derived from INGEST_SECRET — fine for a single-operator box; shared gateways set a dedicated secret"
-      : weakSecret(env.SESSION_SECRET)
-        ? "set to the 'change-me' default — sessions are refused"
-        : "dedicated session-signing secret",
+    detail: sessionsEnabled(env)
+      ? "dedicated session-signing secret"
+      : "unset, weak or shared with a machine secret — nobody can sign in",
+  });
+  push({
+    key: "OPERATOR_SECRET",
+    label: "Operator secret",
+    group: "security",
+    status: weakSecret(env.OPERATOR_SECRET) ? "warn" : "ok",
+    source: "env",
+    detail: weakSecret(env.OPERATOR_SECRET)
+      ? "unset — operator scripts (tools/admin/*) are closed; the web operator surface still works"
+      : "set — operator scripts authenticate with it",
   });
   {
     const n = (env.ADMIN_CALLSIGNS ?? "").split(",").filter((c) => c.trim()).length;

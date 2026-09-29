@@ -24,6 +24,8 @@ INGEST_SECRET=…
 ```
 
 `INGEST_URL` is the gateway's `/ingest` address; `INGEST_SECRET` must be the same secret the gateway has.
+It is the only gateway secret the box needs — never put the gateway's `OPERATOR_SECRET` or `SESSION_SECRET`
+on it.
 
 **How you know it works.** The box logs a line per link (shown in each section below). It is silent while
 forwarding succeeds and logs `[forward] gateway unreachable …` when it can't reach the gateway. On the

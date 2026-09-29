@@ -92,7 +92,7 @@ export async function readGate(
       }
     }
   }
-  const bucket = key ? `apikey:${key}` : `apiip:${clientIp(req)}`;
+  const bucket = key ? `apikey:${key}` : `apiip:${clientIp(req, env)}`;
   if (await rateLimitedDurable(env, bucket, Date.now(), max, windowSec(env) * 1000)) {
     return json(
       { error: "rate limit exceeded", tier, limit: max, windowSec: windowSec(env) },

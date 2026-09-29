@@ -13,7 +13,11 @@ wrangler d1 create aprscaching || true
 echo ">> Paste the database_id into wrangler.toml, then press Enter."; read -r _
 wrangler d1 migrations apply aprscaching --remote
 wrangler r2 bucket create aprscaching-media || true
+# three distinct secrets: the ingest box's, the operator's scripts', and the session-signing key
+# (the Worker mints no session without SESSION_SECRET). Generate each with: openssl rand -hex 32
 wrangler secret put INGEST_SECRET
+wrangler secret put OPERATOR_SECRET
+wrangler secret put SESSION_SECRET
 SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
 wrangler deploy --var SOURCE_COMMIT:"$SOURCE_COMMIT" --var SOURCE_BUILT_AT:"$(date +%s)" --var SOURCE_REPO:"${SOURCE_REPO:-https://github.com/apachler/aprscaching}"
 # Build the SPA against the deployed gateway before publishing it — a stale/missing dist (it is

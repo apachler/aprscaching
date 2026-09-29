@@ -30,9 +30,25 @@ describe("CORS credentials are allowlisted", () => {
     expect(cors("https://nope.example", env).headers.get("Access-Control-Allow-Credentials")).toBeNull();
   });
 
-  it("an unconfigured instance keeps the permissive default behaviour", () => {
+  it("an unconfigured instance (no APP_URL, no CORS_ORIGINS) sends no credentialed CORS", () => {
     const anyOrigin = cors("https://anything.example", {});
-    expect(anyOrigin.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    expect(anyOrigin.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+    // no reflection of the caller's origin either: the public read API stays reachable via `*`,
+    // which a browser never pairs with cookies
+    expect(anyOrigin.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("an unconfigured instance answers a preflight without credentials", () => {
+    const res = withCors(
+      new Response(null, { status: 204 }),
+      new Request("http://api.gw/auth/session", {
+        method: "OPTIONS",
+        headers: { Origin: "https://evil.example", "Access-Control-Request-Headers": "content-type" },
+      }),
+      {} as Env,
+    );
+    expect(res.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+    expect(res.headers.get("Access-Control-Allow-Origin")).not.toBe("https://evil.example");
   });
 
   it("a same-origin (no Origin header) request is untouched", () => {
