@@ -29,11 +29,10 @@ Everything below happens in your web browser — on your phone or your computer.
    add an email address for recovery, or use **Email me a link** instead of a passkey.
 
     ![Sign in with your callsign](assets/shots/signin-mobile.webp){ width="280" loading=lazy }
-2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The
-   instance sends an APRS message to your callsign with a six-digit code (`aprscaching code 123456`, from
-   `APRSCG`). Read it on your radio — or, if no IGate near you passes messages to RF, on
-   [aprs.fi](https://aprs.fi) under *Messages* — and type it in within 15 minutes. Details:
-   [Your account](guides/account.md).
+2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The app
+   shows an APRS message to send, such as `VERIFY 482913` to `APRSCG`. Transmit it from your radio within
+   30 minutes; your callsign is verified once this instance's own receiving station hears it on the air.
+   Details: [Your account](guides/account.md).
 3. **Find a cache.** Browse the map, or tap **Nearby** for the closest caches. Tap one to open it: you see
    its description, difficulty and terrain, the hint, and **Navigate** to hand the coordinates to your maps
    app.

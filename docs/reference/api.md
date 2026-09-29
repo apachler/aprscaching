@@ -99,7 +99,9 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/admin/whoami` | Whether the caller is an operator |
+| GET | `/api/admin/whoami` | Whether the caller is an operator; `pending: "verify"` for the unconfirmed holder of an `ADMIN_CALLSIGNS` call |
+| GET · POST | `/api/admin/verifications` | List · add manual callsign verifications (`{ callsign, note }`) |
+| DELETE | `/api/admin/verifications/:call` | Revoke a manual verification |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
 | GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table · MHeard |
 | GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners |
@@ -122,7 +124,9 @@ All admin writes are **sysop**-gated server-side.
 |--------|------|---------|------|
 | POST | `/auth/passkey/*`, `/auth/email/*`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out | public → session |
 | GET/POST | `/auth/session`, `/auth/callsign(s)`, `/auth/profile` | Session + base-callsign management | session |
-| POST/GET | `/verify/aprs/start`, `/confirm`, `/status` | Callsign control-verification (APRS challenge) | session |
+| POST | `/verify/aprs/start` | Start callsign control-verification: returns `{ code, to, text, expiresAt }`, the message to transmit; sends nothing. Completed when an attested site hears `text` on the air | session (holds the call) |
+| GET | `/verify/aprs/status?callsign=` | `{ verified }` for the base call | public |
+| POST | `/verify/operator` | Verify an `ADMIN_CALLSIGNS` call (method `operator`) — the operator CLI | x-ingest-secret |
 | POST · GET | `/keys/register` · `/keys/:call` | Register a device key · list a callsign's keys | session · public |
 | POST | `/api/account/:call/export`, `/delete`, `/bundle`, `/move`, `/api/account/import` | GDPR export/erase + account portability | signed-body |
 | GET/PUT | `/api/prefs` · `/api/notify/prefs` | Preferences · notification settings | session |

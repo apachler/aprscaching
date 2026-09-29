@@ -6,6 +6,7 @@
  *
  *   FOUND <code> [text]   log a find          DNF <code> [text]   log a did-not-find
  *   NOTE <code> <text>    log a note          HELP                the command syntax
+ *   VERIFY <code>         complete the sender's callsign control-verification (callsign.ts)
  *
  * Every transport that carries text messages hands them to the ingest as APRS message packets, so one
  * handler serves APRS over RF, APRS-IS and MeshCom alike. The transport decides two things only:
@@ -30,11 +31,13 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionAccountId } from "./auth.js";
 import { provenanceOf, parseAttestedSites, transportForPort } from "./provenance.js";
+import { parseVerifyMessage, completeRfChallenge } from "./callsign.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
 import { encodeAprsMessage } from "@aprscaching/aprs";
+import type { Transport } from "@aprscaching/shared";
 
 /**
  * Commands one person (a base call, whatever SSID) may run per hour. Beyond that a message is dropped
@@ -61,7 +64,7 @@ export type RadioCommand =
   | { command: "note"; code: string; body: string }
   | { command: "help" };
 
-/** The service call radio commands are addressed to — the identity BBS mail and verification codes use. */
+/** The service call radio commands and `VERIFY` messages are addressed to — the identity BBS mail uses. */
 export const serviceCall = (env: Env): string => (env.BBS_CALL ?? "APRSCG").toUpperCase();
 
 const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
@@ -151,6 +154,24 @@ export function isTrustedMessage(m: RadioMessage, attestedSites: Set<string>): b
       path: m.path.join(","),
       transport: transportForPort(m.port, false),
     },
+    attestedSites,
+  ).firstPartyAttested;
+}
+
+/** Transports on which the ingest box itself hears the air: its TNCs and its MeshCom nodes. */
+const HEARD_ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom"]);
+
+/**
+ * Did the ingest box hear this message on its own radio at an attested site? Only a trusted-ingest copy
+ * counts: a signed batch comes from the browser RF bridge on the sender's own computer, which can put any
+ * port, path or site on what it sends, and APRS-IS or a tunnel is never a hearing at a site.
+ */
+export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
+  if (m.signed) return false;
+  const transport = transportForPort(m.port, false);
+  if (!transport || !HEARD_ON_AIR.has(transport)) return false;
+  return provenanceOf(
+    { heard_via: m.heardVia, igate_call: m.igateCall ?? null, path: m.path.join(","), transport },
     attestedSites,
   ).firstPartyAttested;
 }
@@ -344,6 +365,9 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
   if (src === serviceCall(env)) return; // never answer ourselves
   if (isAckOrRej(m.text)) return;
 
+  const verifyCode = parseVerifyMessage(m.text);
+  if (verifyCode !== null) return handleVerifyMessage(env, m, verifyCode);
+
   // A retry of a message already handled — same number and the same text, or the same text when
   // unnumbered: re-ack only. A copy heard at an attested site upgrades a pending command to logged. A
   // message that reuses a number with different text is a new command: matching on the number alone
@@ -436,6 +460,22 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
     id,
     parsed.command === "found" ? foundText(cache.code, score!) : `${cache.code} ${parsed.command.toUpperCase()} logged`,
   );
+}
+
+/**
+ * `VERIFY <code>` completes the sender's callsign control-verification challenge (callsign.ts). Only a
+ * copy heard on the air at an attested site counts. Any other copy — over APRS-IS, through a tunnel,
+ * from the browser RF bridge or an unattested receiver — is dropped unanswered: it costs no attempt, so
+ * nobody off the air can lock a challenge, and no ack tells the sender a site heard them when none did.
+ * A heard copy is acked, and a completed challenge answered with a short confirmation.
+ */
+async function handleVerifyMessage(env: Env, m: RadioMessage, code: string): Promise<void> {
+  if (!heardAtAttestedSite(m, parseAttestedSites(env.FIRST_PARTY_SITES))) return;
+  const base = baseCall(m.src);
+  if (await rateLimitedDurable(env, `radio:${base}`, Date.now(), RADIO_COMMANDS_PER_HOUR, 3600_000)) return;
+  const outcome = await completeRfChallenge(env, m.src, code, m.igateCall ?? null);
+  await ack(env, m);
+  if (outcome === "verified") await answer(env, m, `${base} verified`);
 }
 
 /**

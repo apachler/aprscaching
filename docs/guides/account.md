@@ -23,13 +23,22 @@ Signing in claims a callsign; **verifying** proves you actually control it. Veri
 on the leaderboard, announcing finds on APRS-IS, and transmitting from the browser. Receiving never needs it.
 
 1. Open **Settings → Account** and tap **verify** next to the callsign.
-2. The instance sends an APRS message to that callsign: from `APRSCG`, text `aprscaching code 123456`.
-3. Read the six-digit code on your radio. If no IGate near you passes APRS messages to RF, look up your
-   callsign's messages on [aprs.fi](https://aprs.fi) instead.
-4. Type the code into **Code sent to …** and tap **Confirm**. You see **… verified ✓**.
+2. The app shows the message to send: **To** the instance's service call (usually `APRSCG`), **Message**
+   `VERIFY` and a six-digit code, for example `VERIFY 482913`. Nothing is sent to you.
+3. Send that APRS message from your radio, from the callsign or any SSID of it (`-7`, `-9`, …).
+4. The app waits while it listens. Once one of the instance's own receiving stations hears the message on
+   the air, it shows **… is verified** and your radio gets an ack.
 
-The code is valid for **15 minutes** and allows five tries; after that, tap **verify** again for a new code.
-The APRS-IS passcode is not used for this — it proves nothing about who you are.
+The code is valid for **30 minutes**; tap **Get a new code** if it runs out. Five wrong codes heard on the air
+lock the code, and a new one starts over.
+
+Only a transmission heard directly by a receiving station this instance attests counts. A copy that reaches
+the instance over APRS-IS, through an internet tunnel, or from the browser radio bridge does not verify the
+call: those paths can carry any callsign, and APRS-IS is readable by anyone. The APRS-IS passcode is not used
+either — it proves nothing about who you are.
+
+If you are out of range of every receiving station of the instance, ask its operator: a sysop can verify a
+call by hand after checking your licence, and the verification lists who did it and how.
 
 ## Several callsigns
 

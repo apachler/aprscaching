@@ -41,6 +41,8 @@ export function SettingsPanel(props: {
   map: maplibregl.Map | null;
   onFly: (lat: number, lon: number) => void;
   session: Sess;
+  /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it with the operator CLI. */
+  operatorPending?: boolean;
   onSignIn: () => void;
   onDocs?: () => void;
   onClose: () => void;
@@ -143,7 +145,7 @@ export function SettingsPanel(props: {
       </label>
 
       {match("Account callsign callsigns identity verify SSID licence sign in passkey email") && (
-        <AccountSettings session={props.session} onSignIn={props.onSignIn} />
+        <AccountSettings session={props.session} onSignIn={props.onSignIn} operatorPending={!!props.operatorPending} />
       )}
 
       {match("Display appearance theme units measurement") && (

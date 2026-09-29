@@ -629,8 +629,35 @@ export function getFedDescriptor(): Promise<{
 
 // ---- instance operator (sysop) admin ----
 /** Is the signed-in account the instance operator? Drives whether the admin surface is revealed. */
-export function adminWhoami(): Promise<{ sysop: boolean; callsign: string | null; configured: boolean }> {
+/** `pending: "verify"` — the session holds an ADMIN_CALLSIGNS call that still needs the operator CLI. */
+export function adminWhoami(): Promise<{
+  sysop: boolean;
+  callsign: string | null;
+  configured: boolean;
+  pending?: "verify";
+}> {
   return call(`/api/admin/whoami`);
+}
+/** A callsign a sysop verified by hand, with the note saying how control was checked. */
+export interface ManualVerification {
+  callsign: string;
+  verifiedBy: string | null;
+  note: string | null;
+  verifiedAt: number;
+  /** An account on this instance holds the call. */
+  held: boolean;
+}
+export function listManualVerifications(): Promise<{ verifications: ManualVerification[] }> {
+  return call(`/api/admin/verifications`);
+}
+export function addManualVerification(
+  callsign: string,
+  note: string,
+): Promise<{ verified: boolean; callsign: string }> {
+  return call(`/api/admin/verifications`, { method: "POST", body: JSON.stringify({ callsign, note }) });
+}
+export function revokeManualVerification(callsign: string): Promise<{ revoked: boolean }> {
+  return call(`/api/admin/verifications/${encodeURIComponent(callsign)}`, { method: "DELETE" });
 }
 /** The Setup checklist: env-only settings as read-only statuses (never values) + DB-state probes. */
 export interface SetupItem {
@@ -907,12 +934,20 @@ export function registerKey(body: { callsign: string; publicKey: string; label?:
   return call(`/keys/register`, { method: "POST", body: JSON.stringify(body) });
 }
 
-/** Callsign-control verification (the APRS message-challenge). Verify the BASE call (SSIDs inherit). */
-export function startAprsVerify(callsign: string): Promise<{ sent: boolean }> {
-  return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+/**
+ * Callsign control-verification. Starting issues a code and names the message to transmit: `text` sent to
+ * `to` from the call (any SSID) over RF, heard by this instance's attested receiving site. Nothing is sent
+ * for the user. Verify the BASE call (SSIDs inherit); poll {@link getVerifyStatus} for the result.
+ */
+export interface VerifyChallenge {
+  code: string;
+  to: string;
+  text: string;
+  /** Unix seconds after which the code no longer verifies. */
+  expiresAt: number;
 }
-export function confirmAprsVerify(callsign: string, code: string): Promise<{ verified: boolean }> {
-  return call(`/verify/aprs/confirm`, { method: "POST", body: JSON.stringify({ callsign, code }) });
+export function startAprsVerify(callsign: string): Promise<VerifyChallenge> {
+  return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }> {
   return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);

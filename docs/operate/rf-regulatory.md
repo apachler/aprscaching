@@ -18,8 +18,9 @@ station's control operator of responsibility for what leaves the antenna. Two co
 tractable:
 
 - **Transmit is off by default and gated.** Browser and RF transmit are disabled until the callsign
-  is **control-verified**; the APRS-IS passcode verifies nothing and is never the gate. See
-  [RF ingest & transports](rf-ingest.md).
+  is **control-verified**: its holder transmitted `VERIFY <code>` and a receiving site you attest heard it
+  on the air, or the operator or a sysop vouched for it (see [Administration](administration.md)). The
+  APRS-IS passcode verifies nothing and is never the gate. See [RF ingest & transports](rf-ingest.md).
 - **Receiving never obligates transmitting.** RX is always safe and never lifts trust
   ([Core concepts](../concepts.md)); enabling automatic TX (digipeat, beacon, forward) is a separate,
   explicit, per-port opt-in.

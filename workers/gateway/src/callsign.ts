@@ -1,126 +1,184 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * callsign.ts — callsign control-verification: proof that an account controls the licence it holds.
+ * A verified base call (every SSID inherits it) gates transmitting and the sysop role.
+ *
+ * Control of a licence is proven by a transmission, never by reading a code: APRS-IS is a public feed,
+ * so a code sent to a station over it is readable by anyone. The ways a call becomes verified:
+ *
+ *  - `rf_heard` — the signed-in holder asks for a code ({@link startAprsChallenge}), transmits
+ *    `VERIFY <code>` to the service call from the call or any SSID of it, and a receiving site this
+ *    instance attests hears it on its own radio ({@link completeRfChallenge}, from radiolog.ts).
+ *  - `operator` — the instance operator confirms an `ADMIN_CALLSIGNS` call with the ingest secret
+ *    (`tools/admin/verify-call.mjs`), which bootstraps the sysop role on a fresh instance.
+ *  - `sysop` — a sysop verifies a call by hand for someone out of range of every attested site, with a
+ *    note saying how; it is listed, revocable and logged in `account_events`.
+ */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, accountHoldsCall, authThrottled, secretOk, timingSafeEqual } from "./auth.js";
+import { sessionAccountId, accountHoldsCall, secretOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { serviceCall } from "./radiolog.js";
+import { adminCalls } from "./admin.js";
 
-const CHALLENGE_TTL_SEC = 15 * 60; // a code is good for 15 minutes
-const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks
+/** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
+export const CHALLENGE_TTL_SEC = 30 * 60;
+/** Wrong codes heard on air before the challenge locks. */
+export const MAX_ATTEMPTS = 5;
 
-/** A cryptographically-random 6-digit code (Math.random is predictable → brute-forceable). */
+/** A cryptographically-random 6-digit code (Math.random is predictable). */
 function sixDigitCode(): string {
   const n = (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000) + 100000;
   return String(n);
 }
-const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
-/** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign.
- *  Each start sends a message over APRS, so these bound how hard anyone can page a station. */
+const baseOf = (c: string) => c.replace(/\*$/, "").trim().toUpperCase().split("-")[0]!;
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+/** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign. */
 const STARTS_PER_ACCOUNT = 10;
 const STARTS_PER_CALL = 5;
 const START_WINDOW_MS = 3_600_000;
 
-/** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
+/** The message text that completes a challenge. */
+export const verifyText = (code: string) => `VERIFY ${code}`;
+
+/** The code in a `VERIFY <code>` message (any case), `""` for a bare `VERIFY`, or null for any other text. */
+export function parseVerifyMessage(text: string): string | null {
+  // split on whitespace rather than match one pattern: radio text is attacker-controlled, and a regex with
+  // two adjacent whitespace runs backtracks polynomially on long blank padding
+  const words = text.trim().split(/\s+/);
+  if (words[0]?.toLowerCase() !== "verify" || words.length > 2) return null;
+  return words[1] ?? "";
+}
+
+/**
+ * POST /verify/aprs/start {callsign} — issue a code for a base call the signed-in account holds. Nothing
+ * is transmitted: the answer names the service call to message and the exact text to send, and the
+ * holder transmits it from their own radio.
+ */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
-  // a challenge may be requested only by a signed-in account (the confirm is bound to
-  // it) or the trusted backend (ingest secret — e.g. a CLI/LoTW flow). A public, unauthenticated
-  // caller cannot farm codes or spam outbound APRS.
   const me = await sessionAccountId(req, env);
-  const trusted = ingestOk(req, env);
-  if (!me && !trusted) return json({ error: "sign in to verify a callsign" }, { status: 401 });
+  if (!me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const cs = String(callsign ?? "").toUpperCase();
+  const cs = baseOf(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  if (me && !trusted) {
-    // a session proves control only of a licence its account already holds
-    if (!(await accountHoldsCall(env, me.accountId, cs)))
-      return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
-    const t = Date.now();
-    if (
-      (await rateLimitedDurable(env, `aprs-start:acct:${me.accountId}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
-      (await rateLimitedDurable(env, `aprs-start:call:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
-    )
-      return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
-  }
+  // a session proves control only of a licence its account already holds
+  if (!(await accountHoldsCall(env, me.accountId, cs)))
+    return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
+  const t = Date.now();
+  if (
+    (await rateLimitedDurable(env, `aprs-start:acct:${me.accountId}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
+    (await rateLimitedDurable(env, `aprs-start:call:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
+  )
+    return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
   const code = sixDigitCode();
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowSec();
   // A new challenge replaces any pending one but never revokes an existing verification: a verified
   // call stays verified (and keeps its method) while the new code is outstanding.
   await env.DB.prepare(
     `INSERT INTO callsign_verifications (callsign, method, status, challenge, account_id, attempts, created_at)
-     VALUES (?, 'aprs_msg', 'pending', ?, ?, 0, ?)
+     VALUES (?, 'rf_heard', 'pending', ?, ?, 0, ?)
      ON CONFLICT(callsign) DO UPDATE SET
-       method = CASE WHEN callsign_verifications.status = 'verified' THEN callsign_verifications.method ELSE 'aprs_msg' END,
+       method = CASE WHEN callsign_verifications.status = 'verified' THEN callsign_verifications.method ELSE 'rf_heard' END,
        status = CASE WHEN callsign_verifications.status = 'verified' THEN 'verified' ELSE 'pending' END,
        challenge=excluded.challenge, account_id=excluded.account_id, attempts=0, created_at=excluded.created_at`,
   )
-    .bind(cs, code, me?.accountId ?? null, now)
+    .bind(cs, code, me.accountId, now)
     .run();
-  // queue an APRS message to the user's callsign via the outbox (ingest delivers it)
-  await env.DB.prepare(
-    `INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload)
-     VALUES (?, 'APRSCG', 'APZACG', 'message', ?)`,
-  )
-    .bind(now, `:${cs.padEnd(9)}:aprscaching code ${code}`)
-    .run();
-  return json({ sent: true });
+  return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC });
 }
 
-export async function confirmAprsChallenge(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
-  const trusted = ingestOk(req, env);
-  if (!me && !trusted) return json({ error: "sign in to verify a callsign" }, { status: 401 });
-  const { callsign, code } = (await req.json().catch(() => ({}))) as { callsign?: string; code?: string };
-  const cs = String(callsign ?? "").toUpperCase();
-  // guesses from a session are throttled per address and per callsign on top of the per-code lockout,
-  // which a fresh start resets; the trusted backend confirms the codes it drove
-  if (!trusted) {
-    const limited = await authThrottled(env, req, "aprs-confirm", cs, {
-      perIp: 20,
-      perIdentity: 10,
-      windowMs: 600_000,
-    });
-    if (limited) return limited;
+/**
+ * Mark a base call verified by `method`, and mirror it onto the held base call (`account_callsigns`) and
+ * the account's active call (`accounts`) of `accountId` — or of whichever account holds the call when
+ * no account is given — so a verified call keeps its status when the account switches between its calls.
+ */
+async function markVerified(
+  env: Env,
+  cs: string,
+  method: "rf_heard" | "operator" | "sysop",
+  f: { accountId?: string | null; by?: string | null; note?: string | null },
+): Promise<void> {
+  const now = nowSec();
+  const holder =
+    f.accountId ??
+    (
+      await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
+        .bind(cs)
+        .first<{ account_id: string }>()
+    )?.account_id ??
+    null;
+  const ops = [
+    env.DB.prepare(
+      `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
+       VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
+       ON CONFLICT(callsign) DO UPDATE SET status='verified', method=excluded.method, challenge=NULL, attempts=0,
+         verified_at=excluded.verified_at, verified_by=excluded.verified_by, note=excluded.note`,
+    ).bind(cs, method, now, now, f.by ?? null, f.note ?? null),
+  ];
+  if (holder) {
+    ops.push(
+      env.DB.prepare(
+        "UPDATE account_callsigns SET verified=1, method=?, verified_at=? WHERE account_id=? AND callsign=?",
+      ).bind(method, now, holder, cs),
+      env.DB.prepare(
+        "UPDATE accounts SET verified=1, verify_method=?, verified_at=? WHERE account_id=? AND (callsign=? OR callsign LIKE ?)",
+      ).bind(method, now, holder, cs, `${cs}-%`),
+    );
   }
+  await env.DB.batch(ops);
+}
+
+/** What an on-air `VERIFY` did: completed the challenge, a wrong code, or nothing to answer. */
+export type RfChallengeOutcome = "verified" | "wrong" | "none";
+
+/**
+ * Complete a challenge from a `VERIFY <code>` message. The caller has established that the message was
+ * heard on the air at an attested site; this checks the rest: the sender's base call is the challenge's
+ * call, a challenge is outstanding and within its TTL, the attempts cap is not reached, and the code
+ * matches. A wrong code counts an attempt and locks a pending challenge at the cap; an already-verified
+ * call keeps its status whatever is sent.
+ */
+export async function completeRfChallenge(
+  env: Env,
+  src: string,
+  code: string,
+  site: string | null,
+): Promise<RfChallengeOutcome> {
+  const cs = baseOf(src);
   const row = await env.DB.prepare(
     "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
   )
     .bind(cs)
-    .first<{ challenge: string; account_id: string | null; attempts: number; created_at: number; status: string }>();
-  const now = Math.floor(Date.now() / 1000);
-  // an outstanding code only — and, for a browser session, one THIS account started (the trusted
-  // backend may confirm any pending challenge it drove). A used code is cleared, so it never replays.
-  if (!row || !row.challenge || row.status === "failed" || (me && !trusted && row.account_id !== me.accountId))
-    return json({ verified: false, error: "no active challenge" }, { status: 400 });
-  if (now - row.created_at > CHALLENGE_TTL_SEC)
-    return json({ verified: false, error: "challenge expired — request a new code" }, { status: 400 });
-  if (row.attempts >= MAX_ATTEMPTS)
-    return json({ verified: false, error: "too many attempts — request a new code" }, { status: 429 });
-  if (!timingSafeEqual(row.challenge ?? "", String(code ?? ""))) {
+    .first<{
+      challenge: string | null;
+      account_id: string | null;
+      attempts: number;
+      created_at: number;
+      status: string;
+    }>();
+  if (!row || !row.challenge || row.status === "failed") return "none";
+  if (nowSec() - row.created_at > CHALLENGE_TTL_SEC || row.attempts >= MAX_ATTEMPTS) return "none";
+  // the challenge binds to the account that started it, and only while that account still holds the call
+  if (!row.account_id || !(await accountHoldsCall(env, row.account_id, cs))) return "none";
+  if (!timingSafeEqual(row.challenge, code)) {
     await env.DB.prepare(
-      // wrong guesses lock the pending code; an already-verified call keeps its status
       "UPDATE callsign_verifications SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= ? AND status <> 'verified' THEN 'failed' ELSE status END WHERE callsign = ?",
     )
       .bind(MAX_ATTEMPTS, cs)
       .run();
-    return json({ verified: false }, { status: 400 });
+    return "wrong";
   }
-  await env.DB.batch([
-    env.DB.prepare(
-      "UPDATE callsign_verifications SET status='verified', method='aprs_msg', verified_at=?, challenge=NULL WHERE callsign=?",
-    ).bind(now, cs),
-    env.DB.prepare("UPDATE accounts SET verified=1, verify_method='aprs_msg', verified_at=? WHERE callsign=?").bind(
-      now,
-      cs,
-    ),
-    // mirror onto the held base call (account_callsigns) so a verified call keeps its status when
-    // the account later switches its active call to (or away from) this one.
-    env.DB.prepare("UPDATE account_callsigns SET verified=1, method='aprs_msg', verified_at=? WHERE callsign=?").bind(
-      now,
-      cs,
-    ),
-  ]);
-  return json({ verified: true });
+  // Claim the code before writing, so two copies of the message heard at once verify once.
+  const claim = await env.DB.prepare(
+    "UPDATE callsign_verifications SET challenge = NULL WHERE callsign = ? AND challenge = ?",
+  )
+    .bind(cs, row.challenge)
+    .run();
+  if ((claim.meta?.changes ?? 0) !== 1) return "none";
+  await markVerified(env, cs, "rf_heard", { accountId: row.account_id, by: site ? site.toUpperCase() : null });
+  return "verified";
 }
 
 export async function isCallsignVerified(env: Env, callsign: string): Promise<boolean> {
@@ -132,7 +190,98 @@ export async function isCallsignVerified(env: Env, callsign: string): Promise<bo
 
 /** GET /verify/aprs/status?callsign= — control-verification state of a callsign's BASE call. */
 export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response> {
-  const cs = (new URL(req.url).searchParams.get("callsign") ?? "").toUpperCase().split("-")[0]!;
+  const cs = baseOf(new URL(req.url).searchParams.get("callsign") ?? "");
   if (cs.length < 3) return json({ verified: false });
   return json({ verified: await isCallsignVerified(env, cs) });
+}
+
+/**
+ * POST /verify/operator {callsign} with `x-ingest-secret` — the operator CLI confirms the operator's own
+ * call. Only a call listed in `ADMIN_CALLSIGNS` qualifies, so the ingest secret (which also sits on the
+ * ingest box) cannot verify arbitrary calls.
+ */
+export async function handleOperatorVerify(req: Request, env: Env): Promise<Response> {
+  if (!secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET))
+    return new Response("unauthorized", { status: 401 });
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const cs = baseOf(String(callsign ?? ""));
+  if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  const listed = [...adminCalls(env)].some((c) => baseOf(c) === cs);
+  if (!listed) return json({ error: `${cs} is not listed in ADMIN_CALLSIGNS` }, { status: 403 });
+  await markVerified(env, cs, "operator", { by: "operator" });
+  return json({ verified: true, callsign: cs, method: "operator" });
+}
+
+// ---------------------------------------------------------------- sysop manual verification
+
+const NOTE_MIN = 3;
+const NOTE_MAX = 200;
+const CALL_RE = /^[A-Z0-9]{3,9}$/;
+
+async function logEvent(env: Env, cs: string, action: string, detail: Record<string, unknown>): Promise<void> {
+  await env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, ?, ?, ?)")
+    .bind(cs, action, JSON.stringify(detail), nowSec())
+    .run();
+}
+
+/** GET /api/admin/verifications — the calls verified by hand, newest first. The caller has passed requireSysop. */
+export async function listSysopVerifications(env: Env): Promise<Response> {
+  const rows = (
+    await env.DB.prepare(
+      `SELECT v.callsign, v.verified_by AS verifiedBy, v.note, v.verified_at AS verifiedAt,
+              EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.callsign = v.callsign) AS held
+         FROM callsign_verifications v WHERE v.method = 'sysop' AND v.status = 'verified'
+         ORDER BY v.verified_at DESC, v.callsign LIMIT 500`,
+    ).all<{ callsign: string; verifiedBy: string | null; note: string | null; verifiedAt: number; held: number }>()
+  ).results;
+  return json({ verifications: rows.map((r) => ({ ...r, held: r.held === 1 })) });
+}
+
+/**
+ * POST /api/admin/verifications {callsign, note} — a sysop verifies a call by hand. The note (how control
+ * was checked) is required. A call already verified another way is left as it is.
+ */
+export async function sysopVerify(req: Request, env: Env, sysopCall: string): Promise<Response> {
+  const { callsign, note } = (await req.json().catch(() => ({}))) as { callsign?: string; note?: string };
+  const cs = baseOf(String(callsign ?? ""));
+  if (!CALL_RE.test(cs)) return json({ error: "a valid callsign is required" }, { status: 400 });
+  const why = String(note ?? "").trim();
+  if (why.length < NOTE_MIN || why.length > NOTE_MAX)
+    return json(
+      { error: `a note of ${NOTE_MIN}–${NOTE_MAX} characters saying how control was checked is required` },
+      {
+        status: 400,
+      },
+    );
+  const cur = await env.DB.prepare("SELECT status, method FROM callsign_verifications WHERE callsign=?")
+    .bind(cs)
+    .first<{ status: string; method: string | null }>();
+  if (cur?.status === "verified")
+    return json({ error: `${cs} is already verified (${cur.method ?? "unknown"})` }, { status: 409 });
+  const by = baseOf(sysopCall);
+  await markVerified(env, cs, "sysop", { by, note: why });
+  await logEvent(env, cs, "sysop_verified", { by, note: why });
+  return json({ verified: true, callsign: cs, method: "sysop", verifiedBy: by, note: why }, { status: 201 });
+}
+
+/** DELETE /api/admin/verifications/:callsign — revoke a sysop verification (only that method). */
+export async function sysopRevoke(env: Env, callsign: string, sysopCall: string): Promise<Response> {
+  const cs = baseOf(callsign);
+  const cur = await env.DB.prepare("SELECT 1 AS x FROM callsign_verifications WHERE callsign=? AND method='sysop'")
+    .bind(cs)
+    .first();
+  if (!cur) return json({ error: `${cs} has no sysop verification` }, { status: 404 });
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=? AND method='sysop'").bind(cs),
+    env.DB.prepare(
+      "UPDATE account_callsigns SET verified=0, method=NULL, verified_at=NULL WHERE callsign=? AND method='sysop'",
+    ).bind(cs),
+    env.DB.prepare(
+      "UPDATE accounts SET verified=0, verify_method=NULL, verified_at=NULL WHERE (callsign=? OR callsign LIKE ?) AND verify_method='sysop'",
+    ).bind(cs, `${cs}-%`),
+    // device keys registered while the call counted as verified no longer carry that badge
+    env.DB.prepare("UPDATE callsign_keys SET verified=0 WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
+  ]);
+  await logEvent(env, cs, "sysop_revoked", { by: baseOf(sysopCall) });
+  return json({ revoked: true, callsign: cs });
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Every sign-in and verification endpoint is throttled per client address and per targeted identity
+// Every sign-in endpoint is throttled per client address and per targeted identity
 // (email or callsign), so neither one address nor a pool of addresses can hammer one account.
 import { describe, it, expect } from "vitest";
-import { authEnv, call, emailSignup, newAuthenticator, passkeyRegister } from "./helpers/authflow.js";
+import { authEnv, call, newAuthenticator, passkeyRegister } from "./helpers/authflow.js";
 import type { Env } from "@aprscaching/gateway/env";
 
 type Hit = (env: Env, i: number, ip: string) => Promise<number>;
@@ -70,20 +70,4 @@ describe("auth endpoints are rate limited", () => {
       expect(await statuses(env, 60, perId, rotatingIp)).toContain(429);
     });
   }
-
-  it("/verify/aprs/confirm: per client address and per callsign for session callers", async () => {
-    const env = authEnv();
-    const me = await emailSignup(env, "owner@example.test", "OE8APR");
-    await call(env, "POST", "/verify/aprs/start", { callsign: "OE8APR" }, { cookie: me.cookie });
-    const guess = (ip: string) =>
-      call(env, "POST", "/verify/aprs/confirm", { callsign: "OE8APR", code: "000000" }, { cookie: me.cookie }, ip);
-    const byIp: number[] = [];
-    for (let i = 0; i < 40; i++) byIp.push((await guess("198.51.100.7")).status);
-    expect(byIp.filter((s) => s === 429).length).toBeGreaterThan(0);
-    const rotating: number[] = [];
-    for (let i = 0; i < 40; i++) rotating.push((await guess(`203.0.113.${i + 1}`)).status);
-    expect(rotating).toContain(429);
-    // the limiter answers before the lookup: its body says "rate limited"
-    expect((await guess("203.0.113.250")).data.error).toMatch(/rate limited/);
-  });
 });

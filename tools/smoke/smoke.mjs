@@ -315,7 +315,7 @@ ok(
     mcCalls1.some((c) => c.callsign === "OE9CHG" && c.active),
   JSON.stringify(mcList1),
 );
-ok("active callsign verifies over APRS", await verifyCallsign("OE9CHG"));
+ok("active callsign verifies by an on-air VERIFY", await verifyCallsign("OE9CHG", cookie2));
 const whoV = await (await fetch(`${BASE}/auth/session`, { headers: { cookie: cookie2 } })).json();
 ok(
   "session reports the active callsign as verified",
@@ -600,18 +600,65 @@ ok(
   !(lbPre.data?.leaderboard ?? []).some((e) => e.loggerCall === "DL1ABC"),
   JSON.stringify(lbPre.data),
 );
-// control-verify DL1ABC the real way: start the APRS challenge, read the code off the outbox, confirm
-async function verifyCallsign(cs) {
-  await call("POST", "/verify/aprs/start", { callsign: cs });
-  const ob = await call("GET", "/outbox");
-  const m = (ob.data?.items ?? []).find(
-    (it) => (it.payload || "").includes(cs) && /code\s+\d{6}/.test(it.payload || ""),
-  );
-  const code = m && (m.payload.match(/code\s+(\d{6})/) || [])[1];
-  const conf = await call("POST", "/verify/aprs/confirm", { callsign: cs, code });
-  return conf.data?.verified === true;
+// Control-verify a call the real way: the holder's session starts a challenge (nothing is sent), and the
+// holder's `VERIFY <code>` message counts only as heard on the TNC of the attested site OE8XXX.
+async function signUp(cs) {
+  const st = await call("POST", "/auth/email/start", {
+    email: `${cs.toLowerCase()}+${now()}@example.test`,
+    callsign: cs,
+  });
+  const vr = await fetch(BASE + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: st.data?.devToken }),
+  });
+  return (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
 }
-ok("APRS message-challenge verifies the callsign (start → read code → confirm)", await verifyCallsign("DL1ABC"));
+function verifyMessage(cs, start, onAir) {
+  const stamp = onAir
+    ? { path: ["WIDE1-1", "qAR", "OE8XXX"], heardVia: "rf", igateCall: "OE8XXX", port: "kiss-tnc" }
+    : { path: ["TCPIP*", "qAR", "OE8XXX"], heardVia: "aprs_is", igateCall: "OE8XXX", port: "aprs-is" };
+  const packet = {
+    src: `${cs}-7`,
+    dst: "APRS",
+    payload: `:${String(start.to).padEnd(9)}:${start.text}`,
+    kind: "message",
+    ts: now(),
+    ...stamp,
+  };
+  return call("POST", "/ingest", { packets: [packet] }, { "x-ingest-secret": SECRET });
+}
+async function isVerified(cs) {
+  return (await call("GET", `/verify/aprs/status?callsign=${cs}`)).data?.verified === true;
+}
+async function verifyCallsign(cs, cookie) {
+  const start = await call("POST", "/verify/aprs/start", { callsign: cs }, { cookie });
+  if (start.status !== 200) return false;
+  await verifyMessage(cs, start.data, true);
+  return isVerified(cs);
+}
+{
+  const cookie = await signUp("DL1ABC");
+  const outboxBefore = (await call("GET", "/outbox")).data?.items?.length ?? 0;
+  const start = await call("POST", "/verify/aprs/start", { callsign: "DL1ABC" }, { cookie });
+  ok(
+    "verify start names the service call and the exact text to transmit",
+    start.status === 200 && start.data?.to === "APRSCG" && start.data?.text === `VERIFY ${start.data?.code}`,
+    JSON.stringify(start.data),
+  );
+  ok(
+    "verify start transmits nothing (the outbox is unchanged)",
+    ((await call("GET", "/outbox")).data?.items?.length ?? 0) === outboxBefore,
+  );
+  await verifyMessage("DL1ABC", start.data, false);
+  ok("a VERIFY message over APRS-IS does not verify the callsign", !(await isVerified("DL1ABC")));
+  await verifyMessage("DL1ABC", start.data, true);
+  ok("a VERIFY message heard on the TNC at the attested site verifies the callsign", await isVerified("DL1ABC"));
+}
+ok(
+  "the operator bootstrap needs the ingest secret",
+  (await call("POST", "/verify/operator", { callsign: "DL1ABC" }, { "x-ingest-secret": "" })).status === 401,
+);
 const lb = await call("GET", "/api/leaderboard?metric=finds");
 ok(
   "a verified callsign now ranks on the leaderboard",
@@ -1454,7 +1501,7 @@ const boxTxUnver = await call("POST", "/api/box/smoke-box/command", {
   payload: { lat: 47, lon: 15 },
 });
 ok("a TX command for an unverified callsign is blocked (403)", boxTxUnver.status === 403, String(boxTxUnver.status));
-await verifyCallsign("OE7BOX"); // control-verify a fresh call (DL1ABC was GDPR-erased earlier)
+await verifyCallsign("OE7BOX", await signUp("OE7BOX")); // control-verify a fresh call (DL1ABC was GDPR-erased earlier)
 const boxTx = await call("POST", "/api/box/smoke-box/command", {
   kind: "message",
   callsign: "OE7BOX",
@@ -1902,7 +1949,7 @@ ok(
     body: JSON.stringify({ token: st.data?.devToken }),
   });
   const rcookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
-  ok("radio: the sender's callsign verifies over APRS", await verifyCallsign(rc));
+  ok("radio: the sender's callsign verifies by an on-air VERIFY", await verifyCallsign(rc, rcookie));
   const code = created.data?.cache?.code;
   const msg = (text, extra) => ({
     src: `${rc}-7`,

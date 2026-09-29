@@ -140,7 +140,7 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
     achievements: await rows(env, "SELECT badge, earned_at FROM achievements WHERE callsign=?", cs),
     verifications: await rows(
       env,
-      "SELECT method, status, verified_at FROM callsign_verifications WHERE callsign=?",
+      "SELECT method, status, verified_at, verified_by, note FROM callsign_verifications WHERE callsign=?",
       cs,
     ),
     stations: await rows(
@@ -327,6 +327,9 @@ async function eraseCall(
     env.DB.prepare("DELETE FROM achievements WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM stage_unlocks WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=?").bind(cs),
+    env.DB.prepare(
+      "DELETE FROM account_events WHERE callsign=? AND action IN ('sysop_verified', 'sysop_revoked')",
+    ).bind(cs),
     env.DB.prepare("DELETE FROM account_stations WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM wx_keys WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM radio_commands WHERE from_call=? OR from_call LIKE ?").bind(cs, `${cs}-%`),
