@@ -69,6 +69,17 @@ describe("the email link needs a confirm step", () => {
     expect(await env.DB.prepare("SELECT 1 FROM accounts WHERE callsign='DL1CSR'").first()).toBeNull();
   });
 
+  it("the confirm page never reflects a value that is not a sign-in token", async () => {
+    const env = authEnv();
+    const probe = encodeURIComponent('"><script>alert(1)</script>');
+    const page = await serve(env)(
+      new Request(`${ORIGIN}/auth/email/verify?token=${probe}`, { headers: { accept: "text/html" } }),
+    );
+    expect(page.status).toBe(400);
+    expect(page.headers.get("content-type") ?? "").not.toContain("text/html");
+    expect(await page.text()).not.toContain("<script>");
+  });
+
   it("POST with the same token signs in (JSON and the confirm form)", async () => {
     const env = authEnv();
     const t1 = await start(env, "form@example.test", "DL1FRM");

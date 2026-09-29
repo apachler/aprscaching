@@ -39,6 +39,8 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
 }
+/** The shape {@link newToken} produces: 64 lowercase hex digits. Anything else is not a sign-in token. */
+const TOKEN_SHAPE = /^[0-9a-f]{64}$/;
 function appOrigin(req: Request, env: Env): string {
   return env.APP_URL ?? new URL(req.url).origin;
 }
@@ -194,6 +196,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (req.method === "GET") {
     const token = url.searchParams.get("token");
     if (!token) return json({ error: "missing token" }, { status: 400 });
+    // only a well-formed token ever reaches the HTML page, so nothing a link carries is reflected into it
+    if (!TOKEN_SHAPE.test(token)) return json({ error: "invalid token" }, { status: 400 });
     if ((req.headers.get("accept") ?? "").includes("text/html")) return confirmPage(token);
     return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
   }
