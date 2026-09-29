@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState, type CSSProperties } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { useFmt, useTheme } from "../format.js";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";
 import { Panel, EmptyState, ErrorState, Icon, Badge } from "../ui/index.js";
 import { saveArea } from "../offlineArea.js";
 import { listAdoptions, type AdoptionListing, type MapCache, type StationSummary } from "../api.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 type Filter = "all" | "caches" | "stations" | "adopt";
 
@@ -81,16 +81,16 @@ function AdoptionList(props: {
 export function NearbyPanel(props: {
   caches: MapCache[];
   stations: StationSummary[];
-  map: maplibregl.Map | null;
   selectedId: number | null;
   onPick: (id: number) => void;
   onClose: () => void;
 }) {
+  const { map } = usePlatform();
   const fmt = useFmt();
   const phosphor = useTheme() === "phosphor";
   const [filter, setFilter] = useState<Filter>("all");
   const [saved, setSaved] = useState(false);
-  const c = props.map?.getCenter();
+  const c = map?.getCenter();
   const here = c ? { lat: c.lat, lon: c.lng } : null;
   const grid = here ? maidenhead(here.lat, here.lon, 10) : null;
   const dist = (m: { lat: number | null; lon: number | null }) =>
@@ -119,7 +119,7 @@ export function NearbyPanel(props: {
           className="fine"
           title="Cache these caches for offline / field use"
           onClick={() => {
-            const b = props.map?.getBounds();
+            const b = map?.getBounds();
             if (!b || !props.caches.length) return;
             saveArea(props.caches, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
             setSaved(true);

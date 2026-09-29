@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { getActivity, getLeaderboard, getCorroborators, type BBox } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
-export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void; onClose: () => void }) {
+export function ActivityPanel(props: { onBoard: () => void; onClose: () => void }) {
+  const { map } = usePlatform();
   const fmt = useFmt();
   // snapshot the viewport once per open so paging stays anchored to a stable bbox
   const bbox = useMemo<BBox | undefined>(() => {
-    const m = props.map;
+    const m = map;
     if (!m) return undefined;
     const b = m.getBounds();
     return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-  }, [props.map]);
+  }, [map]);
   const feed = usePaged(
     (cursor) =>
       getActivity(bbox, cursor).then((r) => ({ items: r.activity, nextCursor: r.nextCursor, hasMore: r.hasMore })),

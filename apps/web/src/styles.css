@@ -3369,6 +3369,35 @@ button.link:hover {
   margin-top: 8px;
 }
 
+/* loading skeleton: placeholder bars while a surface's code or data arrives; opacity-only pulse */
+.skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0;
+}
+.skeleton span {
+  display: block;
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.skeleton span:nth-child(2) {
+  width: 80%;
+}
+.skeleton span:nth-child(3) {
+  width: 55%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton span {
+    animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+  }
+  @keyframes skeleton-pulse {
+    to {
+      opacity: 0.45;
+    }
+  }
+}
+
 /* transient confirmation toasts — centred above the tab bar; animate transform/opacity only */
 .toasts {
   position: absolute;

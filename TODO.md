@@ -581,8 +581,8 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 ## Engineering-quality follow-ups (opportunistic, not defects)
 
 - [x] **Platform overlay state** — the map platform's "single-overlay" invariant (at most one top-level
-  surface open) is modelled as one `useOverlays()` value instead of a boolean-per-panel plus a
-  hand-maintained close-everything list, so opening one surface cannot leave another stuck open.
+  surface open) is modelled as one `View` value (`apps/web/src/nav.ts`) instead of a boolean-per-panel
+  plus a hand-maintained close-everything list, so opening one surface cannot leave another stuck open.
 
 - [x] **Type-aware ESLint** — a separate, slower `lint:types` job now runs `@typescript-eslint`
   type-checked rules over `workers/` + `packages/` (the trust-critical surface), gating the real

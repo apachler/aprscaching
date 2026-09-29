@@ -2,6 +2,7 @@
 import { getMessages } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Ico } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /**
  * MessagesPanel — APRS text messaging as a first-class platform surface (its own inbox), NOT the BBS.
@@ -10,9 +11,10 @@ import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Ico } from ".
  * never sourced from APRS. Your own callsign's traffic is highlighted. Read view; transmit is gated
  * on callsign control-verification and lives with the RF path.
  */
-export function MessagesPanel(props: { callsign: string; onClose: () => void }) {
+export function MessagesPanel(props: { onClose: () => void }) {
+  const { callsign } = usePlatform();
   const fmt = useFmt();
-  const me = props.callsign.toUpperCase();
+  const me = callsign.toUpperCase();
   const messages = usePaged(
     (cursor) =>
       getMessages(false, cursor).then((r) => ({ items: r.messages, nextCursor: r.nextCursor, hasMore: r.hasMore })),

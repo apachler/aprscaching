@@ -47,6 +47,7 @@ import {
   useLoad,
   Disclosure,
 } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /**
  * AdminPanel — the instance-operator (sysop) back end. Instance-wide configuration that belongs to the ham
@@ -55,12 +56,8 @@ import {
  * rendered when `/api/admin/whoami` reports the signed-in account is an operator (ADMIN_CALLSIGNS); every
  * write here is sysop-gated server-side, so this is a convenience surface over already-protected endpoints.
  */
-export function AdminPanel(props: {
-  callsign: string;
-  map: maplibregl.Map | null;
-  onDocs: (slug: string) => void;
-  onClose: () => void;
-}) {
+export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () => void }) {
+  const { callsign, map } = usePlatform();
   // group filter (ui-ux.md §2: settings pages with >3 groups are searchable)
   const [q, setQ] = useState("");
   const show = (...words: string[]) => !q.trim() || words.some((w) => w.toLowerCase().includes(q.trim().toLowerCase()));
@@ -76,7 +73,7 @@ export function AdminPanel(props: {
     >
       <p className="muted">
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}
-        <span className="mono">{props.callsign}</span> is configured as an operator.
+        <span className="mono">{callsign}</span> is configured as an operator.
       </p>
       <label className="srch">
         <span className="srch-ic">⌕</span>
@@ -115,7 +112,7 @@ export function AdminPanel(props: {
       )}
       {show("ingest", "transports", "ports", "tak", "cot", "feed") && (
         <Group title="Ingest & transports" status="data plane" defaultOpen={false}>
-          <IngestAdmin map={props.map} />
+          <IngestAdmin map={map} />
         </Group>
       )}
     </Panel>
