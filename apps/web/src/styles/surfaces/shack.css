@@ -126,13 +126,6 @@
   .shack-pin.on {
     color: var(--accent);
   }
-  .shack-config-h {
-    margin: var(--sp-7) 0 var(--sp-2);
-    font-size: var(--fs-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-  }
   .rigctl {
     display: grid;
     gap: var(--sp-3);

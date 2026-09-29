@@ -1,13 +1,5 @@
-/* Field helpers: inline checks, copy rows and the settings search box. */
+/* Field helpers: copy rows and the settings search box. */
 @layer components {
-  .inline-check {
-    align-items: center;
-    gap: var(--sp-3);
-    font-weight: 500;
-  }
-  .inline-check input {
-    width: auto;
-  }
   /* a read-only value paired with a copy button (PWS URLs, share links) */
   .copyrow {
     display: flex;

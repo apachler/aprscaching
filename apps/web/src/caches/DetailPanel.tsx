@@ -304,7 +304,7 @@ export function DetailPanel(props: {
                 <span
                   key={m.month}
                   className="spark-bar"
-                  style={{ height: `${Math.max(10, (m.n / max) * 100)}%` }}
+                  style={{ "--h": `${Math.max(10, (m.n / max) * 100)}%` } as CSSProperties}
                   title={`${m.month}: ${m.n}`}
                 />
               );

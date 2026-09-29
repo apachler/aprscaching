@@ -40,9 +40,6 @@
   .field-xs {
     max-width: 4.5rem;
   }
-  .clickable {
-    cursor: pointer;
-  }
   .fw-normal {
     font-weight: 400;
   }

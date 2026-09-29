@@ -405,8 +405,10 @@
   .navcache-bearing p {
     margin: 0;
   }
+  /* the bearing arrives as --bearing */
   .navcache-arrow {
     display: inline-block;
+    transform: rotate(var(--bearing, 0deg));
   }
   @media (prefers-reduced-motion: no-preference) {
     .navcache-arrow {
@@ -450,8 +452,10 @@
     height: 34px;
     margin-top: var(--sp-1);
   }
+  /* the bar height arrives as --h */
   .spark-bar {
     flex: 1;
+    height: var(--h);
     min-width: 2px;
     background: var(--accent);
     border-radius: 1px 1px 0 0;

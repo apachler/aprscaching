@@ -27,21 +27,7 @@
     flex-direction: column;
     gap: 7px;
   }
-  .ccard {
-    position: relative;
-    display: flex;
-    gap: var(--sp-4);
-    padding: var(--sp-5);
-    border-radius: var(--r-7);
-    cursor: pointer;
-    border: 1px solid var(--hair);
-    background: var(--surface-2);
-    overflow: hidden;
-    text-align: left;
-    width: 100%;
-    font: inherit;
-    color: inherit;
-  }
+
   .ccard:hover {
     border-color: color-mix(in oklch, var(--brand) 40%, var(--line));
   }
@@ -125,6 +111,10 @@
     border-radius: var(--r-md);
     border: 1px solid var(--hair);
     margin-bottom: 5px;
+  }
+  /* a moving station's heading arrow, turned by its course (--course) */
+  .heading-ic {
+    transform: rotate(var(--course, 0deg));
   }
   .srow-b {
     flex: 1;

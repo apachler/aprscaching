@@ -103,8 +103,10 @@
     background: var(--surface-2);
     overflow: hidden;
   }
+  /* the fill length arrives as --pct */
   .tp-fill {
     display: block;
+    width: var(--pct);
     height: 100%;
     background: var(--accent);
   }

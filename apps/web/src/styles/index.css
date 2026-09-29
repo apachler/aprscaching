@@ -32,6 +32,7 @@
 @import "./components/dialog.css";
 @import "./components/hittarget.css";
 @import "./components/density.css";
+@import "./components/ansi.css";
 @import "./surfaces/shell.css";
 @import "./surfaces/cache.css";
 @import "./surfaces/map.css";
@@ -50,4 +51,5 @@
 @import "./surfaces/landing.css";
 @import "./surfaces/docs.css";
 @import "./themes/phosphor.css";
+@import "./surfaces/demo.css";
 @import "./utilities.css";

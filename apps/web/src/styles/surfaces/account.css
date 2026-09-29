@@ -15,40 +15,6 @@
   .callsigns li:first-child {
     border-top: none;
   }
-  .cs-pick {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    border: none;
-    background: none;
-    color: var(--ink);
-    cursor: pointer;
-    padding: var(--sp-0) 0;
-    text-align: left;
-  }
-  .cs-dot {
-    width: 9px;
-    height: 9px;
-    flex: none;
-    border-radius: 50%;
-    border: 2px solid var(--muted);
-  }
-  .cs-dot.on {
-    border-color: var(--accent);
-    background: var(--accent);
-  }
-  .cs-name {
-    font-size: var(--fs-md-up);
-  }
-  .callsigns li.active .cs-name {
-    font-weight: 600;
-  }
-  .cs-pick:focus-visible {
-    outline: 2px solid var(--heading);
-    outline-offset: 2px;
-    border-radius: var(--r-5);
-  }
   .verify-code {
     border: 1px solid var(--line);
     border-radius: var(--r-md);

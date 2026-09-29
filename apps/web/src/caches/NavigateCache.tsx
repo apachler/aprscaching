@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Icon, useToast } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { bearingDeg, bearing8, haversine } from "../map/geo.js";
@@ -73,7 +73,7 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
               <p className="mono" role="status">
                 <span
                   className="navcache-arrow"
-                  style={{ transform: `rotate(${Math.round(fix.bearing)}deg)` }}
+                  style={{ "--bearing": `${Math.round(fix.bearing)}deg` } as CSSProperties}
                   aria-hidden="true"
                 >
                   ↑

@@ -114,6 +114,12 @@
     white-space: pre-wrap;
     word-break: break-word;
   }
+  @supports (height: 1dvh) {
+    .pt-out {
+      max-height: 60dvh;
+    }
+  }
+
   .pt-line.tx {
     color: var(--accent);
   }
@@ -150,23 +156,13 @@
     font-size: var(--fs-xs-up);
     line-height: 1.4;
   }
+  /* the station-type colour arrives as --tag (a tool may recolour a line) */
   .pt-mon-tag {
     font-weight: 700;
+    color: var(--tag);
   }
   .pt-ctext input {
     width: 100%;
     margin-top: var(--sp-2);
-  }
-  .pt-tab.st-bbs {
-    border-top: 2px solid var(--st-bbs);
-  }
-  .pt-tab.st-node {
-    border-top: 2px solid var(--st-node);
-  }
-  .pt-tab.st-digi {
-    border-top: 2px solid var(--st-digi);
-  }
-  .pt-tab.st-service {
-    border-top: 2px solid var(--st-service);
   }
 }
