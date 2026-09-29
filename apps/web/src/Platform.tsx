@@ -24,9 +24,6 @@ import {
 import { TopBar } from "./TopBar.js";
 import { Tour, TOUR_STEPS, Ico, Button, useToast } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
-import { typeMeta } from "./cacheTypes.js";
-import { roleMeta } from "./stationRoles.js";
-import { aprsGlyph } from "./aprsGlyph.js";
 import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle, buildPhosphorStyle } from "./offlineBasemap.js";
 import {
@@ -83,6 +80,7 @@ import { TabBar } from "./platform/TabBar.js";
 import { useLiveSocket } from "./platform/useLiveSocket.js";
 import { useLogQueue } from "./platform/useLogQueue.js";
 import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
+import { useCacheMarkers, useStationMarkers, useSpotMarkers } from "./platform/markerLayers.js";
 // The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
 const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
@@ -100,6 +98,8 @@ const STYLE: string | StyleSpecification =
  *  map matches the terminal chrome; Modern uses the configured basemap. */
 const baseStyle = (): string | StyleSpecification =>
   document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
+
+const NONE: never[] = []; // a layer that is off draws no markers
 
 const bboxOf = (m: maplibregl.Map): BBox => {
   const b = m.getBounds();
@@ -135,7 +135,6 @@ function placeDraftPin(
 export default function Platform({ session, startTour }: { session: SessionState; startTour: boolean }) {
   const [mapNode, setMapNode] = useState<HTMLDivElement | null>(null);
   const toast = useToast();
-  const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
   const draftMarker = useRef<maplibregl.Marker | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -423,9 +422,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     [caches, filters],
   );
 
-  const stationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
-  const spotMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
-
   // ---- live socket: geofence prompts + live station deltas, subscribed to the viewport + callsign ----
   const { send } = useLiveSocket({
     onOpen: (sendNow) => {
@@ -504,139 +500,26 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (m) subscribeLive(bboxOf(m));
   }, [callsign, subscribeLive, mapRef]);
 
-  // ---- render cache markers (diffed against the live map) ----
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-    const phosphor = locSettings.theme === "phosphor";
-    const seen = new Set<string>();
-    for (const c of shown) {
-      if (c.lat == null || c.lon == null) continue;
-      seen.add(c.globalId);
-      const meta = typeMeta(c.type);
-      let el: HTMLElement;
-      const existing = markers.current.get(c.globalId);
-      if (existing) {
-        el = existing.getElement();
-        // keep the class + glyph in sync if a cache flips mirrored↔native or the theme flips
-        if (c.type !== "aprs_living") {
-          el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
-          const span = el.querySelector("span");
-          if (span) span.textContent = phosphor ? meta.cog : meta.glyph;
-        }
-      } else {
-        let anchor: maplibregl.PositionAnchor = "bottom";
-        if (c.type === "aprs_living") {
-          // living caches ARE a beaconing station — use the brand beacon icon
-          const img = document.createElement("img");
-          img.className = "beacon-pin";
-          img.src = ASSET.beaconBlue;
-          anchor = "center";
-          el = img;
-        } else {
-          const btn = document.createElement("button");
-          btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
-          btn.style.background = meta.color;
-          btn.innerHTML = `<span>${phosphor ? meta.cog : meta.glyph}</span>`;
-          el = btn;
-        }
-        markers.current.set(
-          c.globalId,
-          new maplibregl.Marker({ element: el, anchor }).setLngLat([c.lon, c.lat]).addTo(m),
-        );
-      }
-      // rebind title + click each pass so a cache whose title/mirrored/id changed doesn't keep a stale
-      // tooltip or route clicks the wrong way (mirrored→setRemote vs native→setSelectedId).
-      el.title = `${c.code} — ${c.title}${c.mirrored ? ` · via ${c.origin}` : ""}`;
-      el.onclick = (ev) => {
-        ev.stopPropagation();
-        if (c.mirrored) {
-          setSelectedId(null);
-          setRemote(c);
-        } else if (c.id != null) {
-          setRemote(null);
-          setSelectedId(c.id);
-        }
-      };
-    }
-    for (const [gid, mk] of markers.current) {
-      if (!seen.has(gid)) {
-        mk.remove();
-        markers.current.delete(gid);
-      }
-    }
-  }, [shown, locSettings.theme, mapRef]);
+  // ---- map markers: caches, live stations and activity spots (platform/markerLayers.ts) ----
+  const phosphor = locSettings.theme === "phosphor";
+  useCacheMarkers(map, shown, phosphor, (c) => {
+    if (c.mirrored) {
+      setSelectedId(null);
+      setRemote(c);
+    } else if (c.id != null) openCache(c.id);
+  });
+  useStationMarkers(map, stationsOn ? stations : NONE, phosphor, (call) => openView({ kind: "station", call }));
+  useSpotMarkers(map, spotsOn ? spots : NONE, setPickedSpot);
 
   // ---- live APRS stations layer (toggled from Search & filter) ----
   useEffect(() => {
     if (stationsOn) {
       void refresh();
     } else {
-      for (const [, mk] of stationMarkers.current) mk.remove();
-      stationMarkers.current.clear();
       setStations([]);
       setView((v) => (v.kind === "station" ? MAP : v));
     }
   }, [stationsOn, refresh]);
-
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-    if (!stationsOn) return;
-    const phosphor = locSettings.theme === "phosphor";
-    const seen = new Set<string>();
-    for (const s of stations) {
-      if (s.lat == null || s.lon == null) continue;
-      seen.add(s.callsign);
-      let mk = stationMarkers.current.get(s.callsign);
-      if (!mk) {
-        const btn = document.createElement("button");
-        btn.className = "station-pin";
-        btn.innerHTML = "<span></span>";
-        btn.onclick = (ev) => {
-          ev.stopPropagation();
-          openView({ kind: "station", call: s.callsign });
-        };
-        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
-        stationMarkers.current.set(s.callsign, mk);
-      } else {
-        mk.setLngLat([s.lon, s.lat]);
-      }
-      const el = mk.getElement();
-      const role = roleMeta(s.roles);
-      // Glyph precedence: station role → the station's own APRS symbol → moving/idle dot.
-      const aprs = role ? null : aprsGlyph(s.symbol);
-      const label = role ? role.label : aprs?.label;
-      el.title = `${s.callsign}${label ? ` · ${label}` : ""}${s.comment ? ` — ${s.comment}` : ""}`;
-      el.classList.toggle("role", !!role);
-      el.style.background = role ? role.color : "";
-      el.style.color = role ? "var(--ink-tier)" : "";
-      const moving = s.course != null && !!s.speedKn;
-      const span = el.querySelector("span") as HTMLElement;
-      span.textContent = role
-        ? phosphor
-          ? role.cog
-          : role.glyph
-        : aprs
-          ? phosphor
-            ? aprs.cog
-            : aprs.glyph
-          : moving
-            ? phosphor
-              ? "→"
-              : "➤"
-            : "•";
-      // only the bare directional dot rotates with course; a concrete symbol glyph stays upright
-      span.style.transform = !role && !aprs && moving ? `rotate(${(s.course ?? 0) - 90}deg)` : "";
-    }
-    for (const [cs, mk] of stationMarkers.current) {
-      if (!seen.has(cs)) {
-        mk.remove();
-        stationMarkers.current.delete(cs);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- openView is stable; listing it would rebuild all markers
-  }, [stations, stationsOn, locSettings.theme]);
 
   // ---- feed heard callsigns from the live APRS layer into the tool host ----
   // mheard/watch-alert are source-agnostic: the packet terminal feeds "RF", this feeds "APRS". A
@@ -657,8 +540,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (spotsOn) {
       void refresh();
     } else {
-      for (const [, mk] of spotMarkers.current) mk.remove();
-      spotMarkers.current.clear();
       setSpots([]);
       setPickedSpot(null);
     }
@@ -668,40 +549,6 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     if (spotsOn) void refresh();
   }, [spotFilters]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-    if (!spotsOn) return;
-    const seen = new Set<string>();
-    for (const s of spots) {
-      seen.add(s.id);
-      let mk = spotMarkers.current.get(s.id);
-      if (!mk) {
-        const btn = document.createElement("button");
-        btn.className = "spot-pin";
-        btn.innerHTML = "<span>◎</span>";
-        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([s.lon, s.lat]).addTo(m);
-        spotMarkers.current.set(s.id, mk);
-      } else {
-        mk.setLngLat([s.lon, s.lat]);
-      }
-      // rebind onclick + title every refresh: an existing marker's `s` would otherwise be the stale
-      // object captured at creation, so a spot that changed band/mode/ref would open the old card.
-      const el = mk.getElement();
-      el.onclick = (ev) => {
-        ev.stopPropagation();
-        setPickedSpot(s);
-      };
-      el.title = `${s.callsign}${s.ref ? ` @ ${s.ref}` : ""}${s.band ? ` · ${s.band}` : ""}${s.mode ? ` ${s.mode}` : ""}`;
-    }
-    for (const [id, mk] of spotMarkers.current) {
-      if (!seen.has(id)) {
-        mk.remove();
-        spotMarkers.current.delete(id);
-      }
-    }
-  }, [spots, spotsOn, mapRef]);
 
   // ---- load detail when a cache is selected ----
   useEffect(() => {
