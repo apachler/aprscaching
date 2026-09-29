@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
+import { SIG_DOMAIN } from "@aprscaching/shared";
 import {
   verifyRegistry,
   registryKeyAllowed,
@@ -22,7 +23,11 @@ async function signRegistry(entries: unknown[], at = 100) {
   const auth = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
   const authX = b64u(await crypto.subtle.exportKey("raw", auth.publicKey));
   const sig = b64u(
-    await crypto.subtle.sign("Ed25519", auth.privateKey, new TextEncoder().encode(stableStringify({ at, entries }))),
+    await crypto.subtle.sign(
+      "Ed25519",
+      auth.privateKey,
+      new TextEncoder().encode(SIG_DOMAIN.registry + stableStringify({ at, entries })),
+    ),
   );
   return { FED_REGISTRY: JSON.stringify({ entries, at, sig } satisfies SignedRegistry), FED_REGISTRY_KEY: authX };
 }
@@ -48,7 +53,11 @@ describe("signed instance registry", () => {
     const entries = [{ instance: "oe.net", url: "https://oe.aprscaching.net", key: "PEERKEY" }];
     const at = 100;
     const sig = b64u(
-      await crypto.subtle.sign("Ed25519", auth.privateKey, new TextEncoder().encode(stableStringify({ at, entries }))),
+      await crypto.subtle.sign(
+        "Ed25519",
+        auth.privateKey,
+        new TextEncoder().encode(SIG_DOMAIN.registry + stableStringify({ at, entries })),
+      ),
     );
     const doc: SignedRegistry = { entries, at, sig };
 

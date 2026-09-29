@@ -10,6 +10,7 @@ import { vi } from "vitest";
 import { makeD1 } from "../../src/d1.js";
 import { migrate } from "../../src/migrate.js";
 import { handle } from "@aprscaching/gateway/app";
+import { SIG_DOMAIN } from "@aprscaching/shared";
 import type { Env } from "@aprscaching/gateway/env";
 
 const MIGRATIONS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../db/migrations");
@@ -44,7 +45,7 @@ const stable = (v: unknown): string => {
 
 /** A rotation record: `next` vouched for by `prev` at `at`. */
 export async function rotation(prev: FedKey, next: FedKey, at: number) {
-  const msg = new TextEncoder().encode(stable({ key: next.pub, prevKey: prev.pub, at }));
+  const msg = new TextEncoder().encode(SIG_DOMAIN.rotation + stable({ key: next.pub, prevKey: prev.pub, at }));
   const sig = b64url(await crypto.subtle.sign("Ed25519", prev.priv, msg));
   return { key: next.pub, prevKey: prev.pub, at, sig };
 }
@@ -55,7 +56,7 @@ export async function signedRegistry(
   at: number,
   entries: Array<{ instance: string; key?: string; url?: string; operator?: string }>,
 ) {
-  const msg = new TextEncoder().encode(stable({ at, entries }));
+  const msg = new TextEncoder().encode(SIG_DOMAIN.registry + stable({ at, entries }));
   const sig = b64url(await crypto.subtle.sign("Ed25519", authority.priv, msg));
   return { entries, at, sig };
 }

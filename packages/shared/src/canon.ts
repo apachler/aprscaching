@@ -25,8 +25,7 @@ export interface Authorship {
 /**
  * Domain prefixes for standalone signed JSON documents: the signed bytes are the prefix followed by
  * the canonical message, so a signature made for one purpose can never be presented for another.
- * Verifiers also accept the unprefixed form for one release, so signatures made before the prefix
- * existed keep verifying while peers upgrade.
+ * Verifiers accept only the prefixed form.
  */
 export const SIG_DOMAIN = {
   rotation: "acs-rot/1\n",

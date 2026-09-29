@@ -34,6 +34,11 @@ A receiver verifies the signature **over the received payload bytes verbatim** (
 against the origin's accept set (below), then applies by `(type, gid, v)`. Cursors are per-transport
 delivery hints, not the source of truth — the content address is.
 
+Standalone signed JSON documents outside the CBOR frames carry their own domain prefix, prepended to
+the canonical (key-sorted) JSON: `acs-rot/1\n` for a rotation record `{key, prevKey, at}`,
+`acs-reg/1\n` for a registry `{at, entries}`, and `acs-ing/1\n` for a signed ingest batch. Verifiers
+accept only the prefixed bytes, so a signature made for one document type never verifies as another.
+
 ### Accept sets
 
 The keys a peer's frames verify under are decided by the receiver, never by the peer's descriptor alone,
