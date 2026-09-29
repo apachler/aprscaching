@@ -7,7 +7,7 @@ import { Landing } from "./Landing.js";
 import { SignIn } from "./identity/SignIn.js";
 import { ASSET } from "./brand.js";
 
-// The signed-in / explore platform owns MapLibre (~800 KB) plus all the map code. Lazy-load it so the
+// The signed-in / explore platform owns MapLibre (~1 MB) plus all the map code. Lazy-load it so the
 // signed-out marketing landing paints without ever fetching the map bundle: the
 // import() only fires once the user signs in or taps Explore.
 const Platform = lazy(() => import("./Platform.js"));

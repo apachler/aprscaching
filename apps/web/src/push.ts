@@ -5,6 +5,7 @@
  * gateway. All feature-detected and best-effort; on iOS this only works inside an installed PWA.
  */
 import { getPushKey, subscribePush, unsubscribePush } from "./api.js";
+import { fromB64u } from "./base64url.js";
 
 export function pushSupported(): boolean {
   return (
@@ -14,14 +15,6 @@ export function pushSupported(): boolean {
     "PushManager" in window &&
     "Notification" in window
   );
-}
-
-function urlBase64ToUint8Array(b64: string): Uint8Array {
-  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
-  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
 }
 
 async function registration(): Promise<ServiceWorkerRegistration | null> {
@@ -58,7 +51,7 @@ export async function enablePush(): Promise<"on" | "denied" | "unconfigured" | "
       existing ??
       (await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
+        applicationServerKey: fromB64u(key),
       }));
     await subscribePush(sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } });
     return "on";

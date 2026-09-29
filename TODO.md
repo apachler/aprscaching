@@ -513,6 +513,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   site attestation so a member's IGate can relay third-party RF — sysop-approved, or automated for
   hams with a 44net-verified hostname via the existing DoH/DNSSEC binding check. Tier-A stays gated
   on attestation, never on transport.
+- [ ] **Edit a cache in the web app** *(P3 · S)* — `PATCH /api/caches/:id` (`UpdateCacheRequest`) lets an
+  owner change a cache's title, hint, description, D/T and status, but the SPA has no edit form, so an owner
+  corrects a listing only through the API. Natural shape: an owner-only "Edit" action on the cache sheet
+  that reuses the sectioned hide-a-cache form.
 - [ ] **Instance-served offline tile packs** *(P3 · M)* — serve basemap tile packs from the instance
   (R2 on Cloudflare, filesystem self-host) behind the reserved `TILES` binding, so off-grid deployments
   get full-detail maps without any third-party tile provider. Natural shape: a Protomaps PMTiles

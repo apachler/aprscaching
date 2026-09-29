@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSession, logout, logoutAll, type Session } from "../api.js";
 
-/** The signed-in session (M9): identity comes from the server cookie, not localStorage. */
+/** The signed-in session: identity comes from the server cookie, not localStorage. */
 export function useSession() {
   const [s, setS] = useState<Session>({ callsign: null });
   const [loading, setLoading] = useState(true);

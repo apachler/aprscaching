@@ -27,7 +27,7 @@ Then open:
 - **`DemoHarness.tsx`** — mounts the surfaces; reached via the `?demo=` branch in `main.tsx`.
 
 Nothing here ships in the production app path: the `?demo=` code-splits into its own chunk, and
-`PacketTerminal` with no `makeTransport` behaves exactly as before (real Web Serial + its support gate).
+`PacketTerminal` with no `makeTransport` uses real Web Serial behind its support gate.
 
 ## Why it exists
 

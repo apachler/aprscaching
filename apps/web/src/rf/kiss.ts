@@ -68,7 +68,7 @@ export function frameToPacket(frame: ParsedFrame, data: AprsData, atSec: number)
 }
 
 /** Decode a complete KISS byte buffer into RF frames (pure; the testable core of the reader). */
-export function decodeKissBuffer(buf: Uint8Array, atMs: number): RfFrame[] {
+function decodeKissBuffer(buf: Uint8Array, atMs: number): RfFrame[] {
   const out: RfFrame[] = [];
   for (const raw of kissFrames(buf)) {
     const frame = decodeAx25(raw);

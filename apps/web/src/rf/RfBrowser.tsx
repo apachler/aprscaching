@@ -256,7 +256,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       return;
     await tx(encodeAprsMessage(msg.to, msg.text), `message to ${msg.to.toUpperCase()}`);
   }
-  function useMyLocation() {
+  function fillMyLocation() {
     navigator.geolocation?.getCurrentPosition(
       (p) => setBcn((b) => ({ ...b, lat: p.coords.latitude.toFixed(5), lon: p.coords.longitude.toFixed(5) })),
       () => toast("Couldn't get your location"),
@@ -449,7 +449,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       value={bcn.lon}
                       onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))}
                     />
-                    <button onClick={useMyLocation} title="Use my location" aria-label="Use my location">
+                    <button onClick={fillMyLocation} title="Use my location" aria-label="Use my location">
                       <Ico e="📍" c="@" />
                     </button>
                   </div>

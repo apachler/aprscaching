@@ -3875,7 +3875,7 @@ button.danger:hover {
   max-width: 60ch;
 }
 
-/* hero band (brand photo + overlay, as before — now with the nav + terminal on top) */
+/* hero band: the brand photo + overlay, with the nav and the terminal on top */
 .landing-hero {
   position: relative;
   padding: 16px clamp(16px, 4vw, 40px) clamp(40px, 7vw, 76px);
@@ -4533,7 +4533,7 @@ button.danger:hover {
   letter-spacing: 0.04em;
   flex: 0 0 auto;
 }
-/* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame now */
+/* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame */
 :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::before,
 :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::after {
   content: "";

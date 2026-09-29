@@ -82,7 +82,7 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null; styleEpoch?
     } catch {
       /* private mode */
     }
-    // SR-WEB: deregister the one-shot load handler so toggling while the style is unloaded doesn't
+    // Deregister the one-shot load handler so toggling while the style is unloaded doesn't
     // restack listeners. Re-runs on styleEpoch (theme setStyle) → ensureRaster re-adds the wiped layers.
     return () => {
       m.off("load", apply);

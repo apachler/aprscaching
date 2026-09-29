@@ -197,7 +197,7 @@ export function MapTools(props: {
     };
     if (m.isStyleLoaded()) setup();
     else m.once("load", setup);
-    // SR-WEB: remove our sources/layers on unmount, and deregister the one-shot load handler if we
+    // Remove our sources/layers on unmount, and deregister the one-shot load handler if we
     // unmount before it fires. Re-runs on styleEpoch (theme setStyle) to re-add — setup is idempotent.
     return () => {
       m.off("load", setup);

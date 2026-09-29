@@ -5,8 +5,8 @@
  * (`@aprscaching/tools`), which re-runs the robust batch decoder over a bounded window and returns the text so
  * far — so callers get LIVE text via `onText`, not just a result on stop. The DSP is all pure + unit-tested
  * (`stream.test.ts`, `psk31robust.test.ts`); this file is only the browser plumbing, and it is itself
- * exercised headlessly by `tools/e2e/audio-mic.mjs` (Chromium fake-audio capture) — no longer purely
- * validate-at-deploy. Chromium-first; needs mic permission.
+ * exercised headlessly by `tools/e2e/audio-mic.mjs` (Chromium fake-audio capture). Chromium-first; needs
+ * mic permission.
  *
  * Sample tap: an **AudioWorklet** (off the main thread — keeps sample handling away from the map render loop,
  * per `.claude/rules/css.md`), with a **ScriptProcessorNode fallback** for engines without worklet support.

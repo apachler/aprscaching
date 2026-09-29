@@ -110,7 +110,7 @@ function placeDraftPin(
 
 /**
  * Platform — the signed-in / explore shack: the MapLibre map plus every panel. Lazily imported by
- * `App` so the signed-out marketing landing never downloads maplibre-gl (~800 KB) or this map code.
+ * `App` so the signed-out marketing landing never downloads maplibre-gl (~1 MB) or this map code.
  * It mounts only when `active` (signed in or exploring), so `active` is constant-true within.
  */
 export default function Platform({ session, startTour }: { session: SessionState; startTour: boolean }) {

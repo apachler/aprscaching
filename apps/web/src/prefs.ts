@@ -17,7 +17,6 @@ const SYNCED: Record<string, string> = {
 
 /** Set true once a session-authenticated GET succeeds; gates pushes so guests never call the API. */
 let sessionActive = false;
-export const prefsSessionActive = (): boolean => sessionActive;
 
 /** Fired after a pull rewrites localStorage, so live components (settings, pinned rail) re-read. */
 export const PREFS_EVENT = "acs:prefs-synced";
@@ -32,7 +31,7 @@ function readLocal(k: string): unknown | undefined {
 }
 
 /** Snapshot the synced localStorage values into a prefs object for the server. */
-export function collectLocalPrefs(): AccountPrefs {
+function collectLocalPrefs(): AccountPrefs {
   const out: AccountPrefs = {};
   for (const [name, key] of Object.entries(SYNCED)) {
     const v = readLocal(key);
@@ -84,7 +83,7 @@ export async function pullPrefs(): Promise<void> {
 }
 
 /** Push the current local prefs to the account (only when a session is active). */
-export function pushPrefs(): void {
+function pushPrefs(): void {
   if (!sessionActive) return;
   putPrefs(collectLocalPrefs()).catch(() => {
     /* best-effort; localStorage remains the source of truth */

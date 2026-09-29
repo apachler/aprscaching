@@ -34,9 +34,9 @@ export function resolveCrt(s: LocaleSettings): "on" | "off" {
 export function resolveTheme(theme: Theme): "dark" | "phosphor" {
   return theme === "phosphor" ? "phosphor" : "dark";
 }
-/** Coerce any previously-stored value (old dark/light/auto, or the theme's former "cogmind" id)
- *  to a valid v1 theme. */
-export function normalizeTheme(t: unknown): Theme {
+/** Coerce any stored theme value to a valid theme: "phosphor" (or its alias "cogmind") stays phosphor;
+ *  anything else (dark/light/auto, garbage) is modern. */
+function normalizeTheme(t: unknown): Theme {
   return t === "phosphor" || t === "cogmind" ? "phosphor" : "modern";
 }
 
@@ -62,7 +62,7 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
   }
 }
 
-export function defaultSettings(): LocaleSettings {
+function defaultSettings(): LocaleSettings {
   const locale = browserLocale();
   return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "modern", crt: false };
 }
@@ -71,7 +71,7 @@ export function loadSettings(): LocaleSettings {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = { ...defaultSettings(), ...(JSON.parse(raw) as Partial<LocaleSettings>) };
-      s.theme = normalizeTheme(s.theme); // migrate old dark/light/auto → modern
+      s.theme = normalizeTheme(s.theme); // dark/light/auto → modern
       return s;
     }
   } catch {

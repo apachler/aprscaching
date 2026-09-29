@@ -13,8 +13,8 @@ import { StationPackets } from "../shack/StationPackets.js";
 /**
  * StationPanel — the live-station inspector, opened when a station pin is tapped on the map. Shows the
  * station's symbol/roles/telemetry, track replay, weather + packet graphs, and lets you adopt it into
- * "my stations". Its own surface now (APRS functionality lives on the map + its detail sheet, not in
- * the shack).
+ * "my stations". It is its own surface: APRS functionality lives on the map and its detail sheet, not in
+ * the Shack.
  */
 export function StationPanel(props: {
   callsign: string;
