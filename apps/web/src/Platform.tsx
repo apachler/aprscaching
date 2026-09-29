@@ -91,6 +91,23 @@ const baseStyle = (): string | StyleSpecification =>
 
 type Mode = "view" | "hide";
 
+/** Drop (or move) the draggable hide-a-cache pin at lat/lon; dragging it updates the draft. */
+function placeDraftPin(
+  m: maplibregl.Map,
+  marker: { current: maplibregl.Marker | null },
+  setDraft: (d: { lat: number; lon: number }) => void,
+  lat: number,
+  lon: number,
+) {
+  setDraft({ lat, lon });
+  marker.current?.remove();
+  marker.current = new maplibregl.Marker({ color: MAP_MARKER.draft, draggable: true }).setLngLat([lon, lat]).addTo(m);
+  marker.current.on("dragend", () => {
+    const ll = marker.current!.getLngLat();
+    setDraft({ lat: +ll.lat.toFixed(6), lon: +ll.wrap().lng.toFixed(6) });
+  });
+}
+
 /**
  * Platform — the signed-in / explore shack: the MapLibre map plus every panel. Lazily imported by
  * `App` so the signed-out marketing landing never downloads maplibre-gl (~800 KB) or this map code.
@@ -187,7 +204,8 @@ export default function Platform({ session, startTour }: { session: SessionState
         setSysop(false);
         setOperatorPending(false);
       });
-  }, [session.signedIn]);
+    // re-asked when the call's verification changes: the operator confirms it from the CLI, then re-checks
+  }, [session.signedIn, session.verified]);
   useEffect(() => {
     const onSync = () => setLocSettings(loadSettings());
     window.addEventListener(PREFS_EVENT, onSync);
@@ -542,17 +560,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     });
     m.on("click", (e) => {
       if (modeRef.current !== "hide") return;
-      const lat = +e.lngLat.lat.toFixed(6),
-        lon = +e.lngLat.wrap().lng.toFixed(6);
-      setDraft({ lat, lon });
-      draftMarker.current?.remove();
-      draftMarker.current = new maplibregl.Marker({ color: MAP_MARKER.draft, draggable: true })
-        .setLngLat([lon, lat])
-        .addTo(m);
-      draftMarker.current.on("dragend", () => {
-        const ll = draftMarker.current!.getLngLat();
-        setDraft({ lat: +ll.lat.toFixed(6), lon: +ll.wrap().lng.toFixed(6) });
-      });
+      placeDraftPin(m, draftMarker, setDraft, +e.lngLat.lat.toFixed(6), +e.lngLat.wrap().lng.toFixed(6));
     });
     return () => {
       m.remove();
@@ -953,7 +961,18 @@ export default function Platform({ session, startTour }: { session: SessionState
 
           {/* left-dock panels (single-overlay among themselves) — docked left at ≥1024px */}
           {mode === "hide" && (
-            <HidePanel callsign={callsign} draft={draft} onCancel={cancelHide} onCreated={onCreated} />
+            <HidePanel
+              callsign={callsign}
+              draft={draft}
+              onPlace={(lat, lon) => {
+                const m = map.current;
+                if (!m) return;
+                placeDraftPin(m, draftMarker, setDraft, lat, lon);
+                m.flyTo({ center: [lon, lat], zoom: Math.max(m.getZoom(), 16) });
+              }}
+              onCancel={cancelHide}
+              onCreated={onCreated}
+            />
           )}
           {ov.is("nearby") && mode === "view" && (
             <NearbyPanel

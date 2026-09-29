@@ -221,7 +221,7 @@ CREATE TABLE caches (
   code          TEXT UNIQUE NOT NULL,              -- AC-1234 (native) or the imported code
   owner_call    TEXT NOT NULL,                     -- ownership is call-based; hand-overs check the holder
   title         TEXT NOT NULL,
-  type          TEXT NOT NULL,                     -- the CacheType enum (single | multi | aprs_living | audio | virtual | sota | pota | …)
+  type          TEXT NOT NULL,                     -- the CacheType enum (traditional | multi | aprs_living | audio | virtual | sota | pota | …)
   status        TEXT NOT NULL DEFAULT 'active',    -- active | disabled | archived
   difficulty    REAL DEFAULT 1.5,                  -- 1.0..5.0
   terrain       REAL DEFAULT 1.5,                  -- 1.0..5.0

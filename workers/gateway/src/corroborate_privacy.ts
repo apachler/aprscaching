@@ -158,7 +158,7 @@ export function stampClientIp(headers: Headers, socketAddr: string | undefined, 
  *  - cf-connecting-ip: stamped by Cloudflare's edge. On the Worker the edge always sets it; the
  *    self-host runtimes keep it only behind a declared Cloudflare edge (TRUST_CF=1, see stampClientIp).
  *  - x-forwarded-for: honored ONLY when the operator declares a reverse proxy (TRUST_PROXY=1,
- *    topology 2/3 behind Caddy/CF) — otherwise any direct client could rotate identities per request.
+ *    a self-host box behind Caddy or Cloudflare) — otherwise any direct client could rotate identities per request.
  *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address (stampClientIp), so a
  *    client-supplied value never survives to this point on the self-host runtimes.
  */

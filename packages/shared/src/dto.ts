@@ -2,13 +2,11 @@
 import { z } from "zod";
 
 export const CacheType = z.enum([
-  "single",
-  "two_stage",
-  "multi",
+  "traditional", // one spot to find
+  "multi", // several stages, each revealed by the previous one
   "aprs_living",
   "audio",
   "virtual",
-  "traditional",
   "sota",
   "pota",
   "wwff",
@@ -68,7 +66,7 @@ export type RateRequest = z.infer<typeof RateRequest>;
 
 export const CreateCacheRequest = z.object({
   title: z.string().trim().min(1).max(120),
-  type: CacheType.default("single"),
+  type: CacheType.default("traditional"),
   lat: Lat,
   lon: Lon,
   difficulty: DT.default(1.5),

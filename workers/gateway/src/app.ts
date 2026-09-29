@@ -4,7 +4,7 @@
  * Imported by index.ts (Cloudflare Worker) and by the portable Node server — so both runtimes
  * serve byte-identical behaviour. This module never touches Workers-only globals.
  */
-import type { Env } from "./env.js";
+import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { handleIngest } from "./ingest.js";
 import {
@@ -29,7 +29,7 @@ import {
   handlePasskeyLoginBegin,
   handlePasskeyLoginFinish,
 } from "./auth.js";
-import { handleEmailStart, handleEmailVerify } from "./email.js";
+import { handleEmailStart, handleEmailVerify, handleOperatorLink } from "./email.js";
 import { handleProfileUpdate } from "./profile.js";
 import { handleWxSubmit, handleWxKey, handleWxTx } from "./wx.js";
 import {
@@ -172,6 +172,7 @@ export { syncAllPeers } from "./federation_sync.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
+  applyDerivedDefaults(env);
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   const res = await route(req, env, ctx);
   // gossip ping: a successful federated write coalesces into one "come pull" to our peers
@@ -185,6 +186,7 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
  * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
  */
 export async function runFrequentSync(env: Env): Promise<void> {
+  applyDerivedDefaults(env);
   try {
     await syncAllPeers(env);
   } catch (e) {
@@ -207,6 +209,7 @@ export async function runFrequentSync(env: Env): Promise<void> {
  * the watch-alert digests. Node/Bun run this once at boot + daily; the Worker runs it on the `0 4` cron.
  */
 export async function runScheduled(env: Env): Promise<void> {
+  applyDerivedDefaults(env);
   const nowS = Math.floor(Date.now() / 1000);
   // Prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
   // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
@@ -447,6 +450,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/passkey/login/finish" && m === "POST") return handlePasskeyLoginFinish(req, env);
   if (p === "/auth/email/start" && m === "POST") return handleEmailStart(req, env);
   if (p === "/auth/email/verify" && (m === "POST" || m === "GET")) return handleEmailVerify(req, env);
+  if (p === "/auth/operator-link" && m === "POST") return handleOperatorLink(req, env);
   if (p === "/auth/session" && m === "GET") return handleSession(req, env);
   if (p === "/auth/callsign" && m === "POST") return handleChangeCallsign(req, env);
   if (p === "/auth/profile" && m === "POST") return handleProfileUpdate(req, env);
@@ -472,7 +476,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   if (p === "/auth/callsigns" && m === "GET") return handleListCallsigns(req, env);
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
-  if (p === "/auth/logout" && m === "POST") return handleLogout();
+  if (p === "/auth/logout" && m === "POST") return handleLogout(env);
   if (p === "/auth/logout-all" && m === "POST") return handleLogoutAll(req, env);
 
   // callsign control-verification: an RF challenge, the operator's bootstrap, and the badge status

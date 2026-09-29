@@ -1,127 +1,84 @@
 # Your first hour as sysop
 
-Your instance boots ([Deployment](deployment.md) · [Running in Docker](docker.md)) — this page walks
-the ordered first hour from "it starts" to a public, verified, backed-up instance.
+From "it starts" to a working, verified, backed-up instance, in order. The commands are for the Docker stack
+([Running in Docker](docker.md)), run from `deploy/`; the [desktop app](deployment.md#desktop) generates its
+secrets itself, and the [Cloudflare](deployment.md#cloudflare) setup takes them as `wrangler secret`s.
 
-The same checklist lives **in the app**: sign in as an operator and open **Instance admin → Setup**.
-It checks every item below live against your instance and tells you what still needs attention.
+The same checklist runs live **in the app** under **Instance admin → Setup**: *Blocking* items mean sign-in or
+ingest is broken, *Recommended* ones are expected of a public instance, and *Optional* ones stay collapsed.
 
-!!! note "What the Setup wizard writes — and what it never writes"
-    Security-critical settings are **environment-only by design**: secrets (`INGEST_SECRET`,
-    `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY`, email/VAPID keys) and the operator list
-    (`ADMIN_CALLSIGNS`) can never be changed through the web — a compromised session must not be
-    able to rewrite them, and the server never echoes their values, only whether they are set and
-    healthy. The wizard shows these **read-only** with a hint where to set them. Everything that is
-    safe to manage at runtime — federation peers and trust, forwarding partners and rules — is
-    writable through the sysop surfaces (every write is gated server-side).
+## The checklist
 
-Where "set the env" appears below, that means your deployment's environment:
-`deploy/.env` (Docker), the systemd unit's `EnvironmentFile` (bare metal), or
-`npx wrangler secret put` / `--var` (Cloudflare). Restart the gateway after changing it.
+1. **Write the configuration.** `./setup.sh` asks for your callsign, the APRS-IS passcode and filter, how
+   people reach the box (a public domain, a Cloudflare Tunnel, or the LAN only), and the callsign-SSID of an
+   RF receiver you operate. It writes `.env`: `ADMIN_CALLSIGNS`, `APP_URL` (`INSTANCE` and `RP_ID` follow
+   its host), `DOMAIN`, the `APRSIS_*` feed, `RF_SITE_CALL` + `FIRST_PARTY_SITES`, and fresh
+   `INGEST_SECRET`, `OPERATOR_SECRET` and `FED_PRIVATE_KEY`. `SESSION_SECRET` stays empty: the gateway
+   generates it on first start. Re-running it keeps every value you already have.
+2. **Start it and check health.** `docker compose up -d --build`, then `curl -fsS https://<your domain>/health`
+   (`http://<LAN address>/health` off-grid). The wizard prints both for your choice.
+3. **Sign in as your call.** Open `APP_URL` and create the account with a passkey. Off-grid (plain http, no
+   email), use a one-time link instead — see [Off-grid sign-in](#off-grid-sign-in).
+4. **Confirm your call.**
 
-## 1. Set the secrets
+    ```bash
+    docker compose exec gateway node tools/admin/verify-call.mjs OE8APR
+    ```
 
-Three secrets, three jobs — keep them distinct, and give an ingest box only the first:
+    It uses `OPERATOR_SECRET` and accepts only a call in `ADMIN_CALLSIGNS`. **Settings → Account** shows the
+    command too, and the **Admin** entry appears once it has run. From a checkout, set `BASE` and
+    `OPERATOR_SECRET` yourself ([CLI](../reference/cli.md#operator-callsign)).
+5. **Clear the Blocking items** under **Instance admin → Setup**. *Ingest feeding* stays blocking until
+   packets arrive: check that `INGEST_URL` reaches the gateway and `INGEST_SECRET` matches, or connect a
+   radio ([quick starts](quickstarts.md)).
+6. **Make it public-ready** — the *Recommended* items:
+    - `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL` for `/imprint` and `/privacy`;
+    - `EMAIL_FROM` + `EMAIL_API_KEY`, so members without a passkey can sign in and recover;
+    - a nightly `deploy/backup.sh` cron (`wrangler d1 export` on Cloudflare);
+    - `SOURCE_REPO` pointing at your published fork if you changed the code (AGPL §13).
+7. **Attest your RF site.** `setup.sh` names it on both sides; with a second ingest box, add its
+   `RF_SITE_CALL` to `FIRST_PARTY_SITES`. Only frames a listed site's own receiver heard directly reach
+   Tier A — [why](../concepts.md#transport-is-not-trust).
+8. **Join the network.** Add the peers you know to `FED_PEERS` and ask their operators to add yours — see
+   [Federation → Joining the network](../guides/federation.md#joining-the-network).
 
-- `INGEST_SECRET` — the ingest-box credential: packets, the outbox, BBS delivery, the node mirror,
-  finds logged over APRS, remote-box polling. The gateway refuses to boot with the `change-me` default.
-- `OPERATOR_SECRET` — your scripts' credential for instance-wide configuration (the operator CLI below,
-  peer trust, forwarding partners and rules). Leave it unset and those machine paths stay closed; the web
-  sysop surface works either way. It must differ from `INGEST_SECRET`.
-- `SESSION_SECRET` — signs user sessions; nobody can sign in without it. The Node/Bun servers generate one
-  on first start and keep it beside the database when you leave it unset; on Cloudflare set it with
-  `npx wrangler secret put SESSION_SECRET`.
+Other members verify their calls themselves (**You → Verify callsign**): over the air once your RF site
+hears them, by `ampr.org` DNS, or with a LoTW certificate. A sysop can verify an out-of-range member by
+hand under **Instance admin → Callsign verification**.
 
-`deploy/setup.sh` generates all three for the Docker stack; the desktop app generates them into its data
-directory.
+Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_*`).
+The [Configuration reference](../reference/configuration.md) lists every key.
 
-## 2. Name yourself operator
+!!! note "What the Setup page never writes"
+    Secrets and the operator list are environment-only: a compromised session must not be able to rewrite
+    them, and the server reports only whether each is set and healthy, never its value. Set them in
+    `deploy/.env` (Docker), the systemd unit's `EnvironmentFile`, or `wrangler secret put` (Cloudflare), and
+    restart. Peers, trust and forwarding partners are managed on the sysop surfaces.
 
-Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, and sign in with that
-callsign. The operator role needs the call control-verified — a sign-up under the name alone is not a
-sysop, and **Settings → Account** says so. Confirm it with the operator CLI, which uses `OPERATOR_SECRET`
-and accepts only a call listed in `ADMIN_CALLSIGNS`:
+## Off-grid sign-in
 
-```bash
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
-```
-
-This needs no receiving site, so it works before step 6. The shield icon then reveals **Instance admin**
-(reload the app); its **Setup** group is this checklist, live.
-Without `ADMIN_CALLSIGNS` there is no web sysop at all — the admin endpoints stay locked.
-
-## 3. Fix your public identity
-
-- `INSTANCE` — the canonical domain (e.g. `oe.example.net`); it names your records in federation.
-- `APP_URL` — the app origin, used for magic-link redirects and credentialed CORS. Without it (or
-  `CORS_ORIGINS`) no other origin may send a signed-in user's cookie.
-- `RP_ID` — the registrable domain passkeys bind to. **Choose this before users register
-  passkeys**; changing it later invalidates them.
-
-## 4. Make email work
-
-Set `EMAIL_FROM` + `EMAIL_API_KEY` (a Resend-style API). Without them the instance fails closed:
-sign-in links cannot be delivered and dev tokens stay off. Email is also the mandatory fallback for
-notifications where web push is unavailable.
-
-## 5. Verify control of your callsign
-
-Step 2 verified your call. Every other operator verifies theirs over the air: **Settings → Account →
-verify** shows a message such as `VERIFY 482913` to send to the service call, and the call is verified
-once a site listed in `FIRST_PARTY_SITES` (step 6) hears it on its own radio. Until you attest a site, no
-user can verify that way; a sysop can verify an out-of-range operator by hand under **Instance admin →
-Callsign verification**. Receiving never needs verification, but every transmit path is gated on it — the
-APRS-IS passcode verifies nothing.
-
-## 6. Attest your RF sites (the Tier-A gate)
-
-Set `FIRST_PARTY_SITES` to the IGate/site callsigns **you operate** (e.g. `OE8XBM-10`), and give
-each of your ingest boxes the matching `RF_SITE_CALL` (or `IGATE_CALL`). Transport never equals
-trust: only frames that a listed site's own ingest box heard directly on its TNC or MeshCom node can
-originate a Tier-A find. An APRS-IS line naming the site (`qAR,OE8XBM-10`) never does — APRS-IS passcodes
-are public, so anyone can inject one — and an IGate visible to you only on APRS-IS must run the ingest box
-for its hearings to count. Without this, no find on your instance reaches Tier A.
-
-## 7. Publish the legal pages
-
-Set `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL`. `/imprint` and `/privacy` render them —
-and show a loud not-configured warning until you do. A public instance in most of Europe needs
-this.
-
-## 8. Sign your feeds and join federation
+A box reached over plain http (`APP_URL=http://192.168.1.10`) has no passkeys — browsers allow them only on
+https or `localhost` — and usually no email. The operator signs people in with a one-time link:
 
 ```bash
-node tools/fedkey/genkey.mjs     # prints FED_PRIVATE_KEY (+ the public key it publishes)
+docker compose exec gateway node tools/admin/signin-link.mjs OE8APR
 ```
 
-Set it (as a secret) together with `INSTANCE`. Unsigned feeds still serve, but peers won't mirror
-them. Then add peers under **Instance admin → Federation** — by URL or, verified, by callsign over
-44net. See [Federation](../guides/federation.md).
+It prints a link to `APP_URL` that opens a confirm page; **Sign in** there opens a session for the account
+holding the call's base call, or creates one, unverified, for a new call. Hand the link to the person it is
+for — show it on their screen, send it as a QR code, or type it on their device.
 
-## 9. Check the data is flowing
+How it is kept safe:
 
-The Setup checklist shows packets heard in the last hour. Silent? Check the ingest box
-(`INGEST_URL` points at this gateway, `INGEST_SECRET` matches) or use the browser RF bridge.
-[Connect a radio: quick starts](quickstarts.md) walks through each link;
-[RF ingest & transports](rf-ingest.md) lists every setting.
-
-## 10. Back up the database
-
-Positions are TTL'd; caches, finds, accounts, and keys are the permanent record. Cron
-`deploy/backup.sh` (SQLite, uploads to a bucket) or `wrangler d1 export` (D1). Backing up is a
-required obligation of running a public instance, same as the next item.
-
-## 11. Expose your source (AGPL §13)
-
-Every instance serves `/.well-known/source` and shows a Source link. If you run modified code, set
-`SOURCE_REPO` to your published fork — the upstream default is only honest for an unmodified
-checkout.
-
-## 12. Optional polish
-
-- **Web push**: generate VAPID keys and set `VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT`
-  (push falls back to the email digest without them).
-- **Supporter links**: `SUPPORT_*` env — recognition only, never feature-gating.
-- **Spots**: `SPOTS_ENABLED=1` for POTA/SOTA activity on the map.
-
-The [Configuration reference](../reference/configuration.md) documents every key.
+- **Only the operator secret mints a link**, and only on the gateway host (the script reaches it over
+  loopback). The ingest secret cannot.
+- **Scope.** On an off-grid instance the link serves any call, since it is the only way in. Where passkeys
+  (https `APP_URL`) or email work, it serves only `ADMIN_CALLSIGNS` calls, so a leaked operator secret cannot
+  open a member's account there.
+- **Single use, 15 minutes.** The token is spent on the first confirm and refused after it expires.
+- **No login CSRF.** Opening the link signs nobody in; only the confirm page's own form (a same-origin POST)
+  spends it, so a page that makes a browser load someone's link cannot sign that browser in.
+- **Not a verification.** A link opens an account; it never proves control of a callsign. Transmit stays
+  gated on control-verification.
+- **The link is a bearer credential** until it is used or expires: whoever opens it first gets the session.
+  Over plain http the session cookie travels unencrypted on the LAN, like everything else there.

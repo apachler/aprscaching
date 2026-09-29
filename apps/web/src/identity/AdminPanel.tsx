@@ -682,30 +682,44 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
 }
 
 // ---------------------------------------------------------------- first-install checklist (Setup)
-const SETUP_GROUPS: Array<{ id: SetupItem["group"]; title: string }> = [
-  { id: "security", title: "Security" },
-  { id: "identity", title: "Identity & auth" },
-  { id: "trust", title: "Trust & federation" },
-  { id: "legal", title: "Legal & source" },
-  { id: "delivery", title: "Delivery" },
-  { id: "data", title: "Runtime state" },
-];
+const SETUP_GROUP_ORDER: SetupItem["group"][] = ["security", "identity", "delivery", "trust", "legal", "data"];
+const byGroup = (a: SetupItem, b: SetupItem) => SETUP_GROUP_ORDER.indexOf(a.group) - SETUP_GROUP_ORDER.indexOf(b.group);
+
+/** One checklist row: status chip (text, never colour alone), name, env marker, one-line detail. */
+function SetupRow(props: { item: SetupItem }) {
+  const i = props.item;
+  return (
+    <li className="setup-item">
+      <Badge kind={i.status === "ok" ? "found" : i.status === "warn" ? "warn" : "dnf"}>
+        {i.status === "ok" ? "ok" : i.status === "warn" ? "check" : "missing"}
+      </Badge>
+      <span className="setup-name">
+        {i.label} {i.source === "env" && <span className="muted mono">env</span>}
+      </span>
+      <span className="setup-detail">{i.detail}</span>
+    </li>
+  );
+}
 
 /**
  * The web-driven first-install wizard, within its hard boundary: security-critical settings are
  * env-only (deploy/.env, systemd EnvironmentFile, wrangler secrets), so the checklist shows their
  * presence READ-ONLY — the server never echoes a secret value, and nothing here writes env config.
- * Runtime-writable state (peers, partners, trust) lives in the sibling admin groups; each DB row
- * says where it is managed.
+ * Items come in three levels so a working box reads as working: Blocking (sign-in or ingest broken),
+ * Recommended for a public instance, and Optional (collapsed). Runtime-writable state (peers,
+ * partners, trust) lives in the sibling admin groups; each DB row says where it is managed.
  */
 function SetupAdmin(props: { onDocs: (slug: string) => void }) {
   const [items, setItems] = useState<SetupItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const refresh = () => {
     setError(null);
+    setLoading(true);
     getAdminSetup()
       .then((r) => setItems(r.items))
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
   };
   useEffect(() => {
     refresh();
@@ -714,43 +728,50 @@ function SetupAdmin(props: { onDocs: (slug: string) => void }) {
   if (error) return <ErrorState onRetry={refresh}>{error}</ErrorState>;
   if (!items) return <EmptyState>Checking this instance's configuration…</EmptyState>;
 
-  const attention = items.filter((i) => i.status !== "ok").length;
+  const level = (l: SetupItem["level"]) => items.filter((i) => i.level === l).sort(byGroup);
+  const blocking = level("blocking");
+  const recommended = level("recommended");
+  const optional = level("optional");
+  const open = (rows: SetupItem[]) => rows.filter((i) => i.status !== "ok").length;
+  const broken = open(blocking);
   return (
     <>
-      <p className="muted">
-        {attention === 0
-          ? "Everything checks out — this instance is fully configured."
-          : `${attention} item${attention === 1 ? "" : "s"} need${attention === 1 ? "s" : ""} attention.`}{" "}
-        Settings marked <span className="mono">env</span> are read-only here by design: they hold secrets or identity
-        the server must not accept at runtime — set them in the deployment environment (
-        <span className="mono">deploy/.env</span>, systemd unit, or <span className="mono">wrangler secret put</span>)
-        and restart. The walkthrough:{" "}
+      <p className={broken ? "error" : "muted"} role="status">
+        {broken === 0
+          ? "Sign-in and ingest work."
+          : `${broken} blocking item${broken === 1 ? "" : "s"}: sign-in or ingest is not working yet.`}
+        {broken === 0 && open(recommended) > 0 && ` ${open(recommended)} recommended for a public instance.`}
+      </p>
+      <h4 className="set-subh">Blocking</h4>
+      <ul className="setup-list">
+        {blocking.map((i) => (
+          <SetupRow key={i.key} item={i} />
+        ))}
+      </ul>
+      <h4 className="set-subh">Recommended for a public instance</h4>
+      <ul className="setup-list">
+        {recommended.map((i) => (
+          <SetupRow key={i.key} item={i} />
+        ))}
+      </ul>
+      <Disclosure label={`Optional (${optional.length}${open(optional) ? `, ${open(optional)} not set up` : ""})`}>
+        <ul className="setup-list">
+          {optional.map((i) => (
+            <SetupRow key={i.key} item={i} />
+          ))}
+        </ul>
+      </Disclosure>
+      <p className="muted fine">
+        Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
+        <span className="mono">deploy/.env</span>, the systemd unit, or{" "}
+        <span className="mono">wrangler secret put</span>) and restart.{" "}
         <button className="link-btn" onClick={() => props.onDocs("operate/first-hour")}>
           Your first hour as sysop
         </button>
-        .
       </p>
-      {SETUP_GROUPS.map((g) => {
-        const rows = items.filter((i) => i.group === g.id);
-        if (rows.length === 0) return null;
-        return (
-          <div key={g.id}>
-            <h4 className="set-subh">{g.title}</h4>
-            {rows.map((i) => (
-              <div className="setrow" key={i.key}>
-                <div className="setrow-l">
-                  <Badge kind={i.status === "ok" ? "found" : i.status === "warn" ? "warn" : "dnf"}>
-                    {i.status === "ok" ? "ok" : i.status === "warn" ? "check" : "missing"}
-                  </Badge>{" "}
-                  {i.label} {i.source === "env" && <span className="muted mono">env</span>}
-                </div>
-                <div className="setrow-c muted">{i.detail}</div>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-      <button onClick={refresh}>Re-check</button>
+      <button onClick={refresh} disabled={loading}>
+        {loading ? "Checking…" : "Re-check"}
+      </button>
     </>
   );
 }

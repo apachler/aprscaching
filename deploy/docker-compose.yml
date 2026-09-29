@@ -1,4 +1,4 @@
-# Base stack: gateway + ingest + Caddy. Topology 2 (OCI all-in-one) and any VPS.
+# Self-host stack: gateway + ingest + Caddy, on any VM, VPS, Pi or mini-PC.
 # Up:  docker compose up -d --build          (config comes from ./.env — run ./setup.sh once)
 
 # Bound container logs (the json-file driver is unbounded by default) so an unattended box
@@ -72,6 +72,7 @@ services:
       # .env reaches this container too: blank the gateway-only secrets so the ingest box never holds them
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""
+      FED_PRIVATE_KEY: ""
     depends_on:
       gateway: { condition: service_healthy }
     restart: unless-stopped

@@ -68,8 +68,8 @@ nav:
   - Core concepts: concepts.md
   - Operating an instance:
       - Deployment: operate/deployment.md
-      - Your first hour as sysop: operate/first-hour.md
       - Running in Docker: operate/docker.md
+      - Your first hour as sysop: operate/first-hour.md
       - "Connect a radio: quick starts": operate/quickstarts.md
       - RF ingest & transports: operate/rf-ingest.md
       - MeshCom: operate/meshcom.md
@@ -81,6 +81,7 @@ nav:
       - Run from source: getting-started.md
       - HTTP API: reference/api.md
       - Federation wire format: reference/federation-wire.md
+      - Federation operations: reference/federation-operations.md
       - Configuration: reference/configuration.md
       - Command-line tools: reference/cli.md
       - Licence registers: reference/licence-sources.md

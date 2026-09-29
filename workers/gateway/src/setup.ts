@@ -9,11 +9,11 @@
  * Runtime-writable state (federation peers, forwarding partners, peer trust) stays with the
  * existing sysop surfaces; the web panel links each DB-sourced item to the surface that manages it.
  */
-import type { Env } from "./env.js";
+import { applyDerivedDefaults, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
-import { sessionIdentity, sessionsEnabled, weakSecret } from "./auth.js";
+import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 
@@ -22,6 +22,9 @@ export interface SetupItem {
   key: string;
   label: string;
   group: "security" | "identity" | "trust" | "legal" | "delivery" | "data";
+  /** How much a non-ok status matters: blocking = sign-in or ingest is broken; recommended = expected of a
+   *  public instance; optional = a feature this instance may do without. */
+  level: "blocking" | "recommended" | "optional";
   status: "ok" | "warn" | "missing";
   /** env ⇒ read-only here, set in the deployment environment; db ⇒ managed by an admin surface. */
   source: "env" | "db";
@@ -30,6 +33,15 @@ export interface SetupItem {
 }
 
 const set = (v: string | undefined): boolean => typeof v === "string" && v.trim().length > 0;
+
+/** APP_URL's hostname, the default of INSTANCE and RP_ID (env.ts applyDerivedDefaults). */
+function appHost(env: Env): string | null {
+  try {
+    return set(env.APP_URL) ? new URL(env.APP_URL!).hostname || null : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Count helper tolerant of a probe failing (a missing optional table must not break the checklist). */
 async function count(env: Env, sql: string, ...binds: unknown[]): Promise<number | null> {
@@ -50,6 +62,7 @@ function envItems(env: Env): SetupItem[] {
   // ---- security — the env-only core; the gateway fails closed without it
   push({
     key: "INGEST_SECRET",
+    level: "blocking",
     label: "Ingest secret",
     group: "security",
     status: weakSecret(env.INGEST_SECRET) ? "missing" : "ok",
@@ -60,6 +73,7 @@ function envItems(env: Env): SetupItem[] {
   });
   push({
     key: "SESSION_SECRET",
+    level: "blocking",
     label: "Session secret",
     group: "security",
     // reaching this checklist takes a session, so a usable secret is in place whenever it renders
@@ -71,18 +85,20 @@ function envItems(env: Env): SetupItem[] {
   });
   push({
     key: "OPERATOR_SECRET",
+    level: "recommended",
     label: "Operator secret",
     group: "security",
     status: weakSecret(env.OPERATOR_SECRET) ? "warn" : "ok",
     source: "env",
     detail: weakSecret(env.OPERATOR_SECRET)
-      ? "unset — operator scripts (tools/admin/*) are closed; the web operator surface still works"
+      ? "unset — operator scripts (tools/admin/verify-call.mjs, signin-link.mjs) are closed; the web operator surface still works"
       : "set — operator scripts authenticate with it",
   });
   {
     const n = (env.ADMIN_CALLSIGNS ?? "").split(",").filter((c) => c.trim()).length;
     push({
       key: "ADMIN_CALLSIGNS",
+      level: "blocking",
       label: "Instance operators",
       group: "security",
       status: "ok", // reaching this endpoint requires a configured operator
@@ -91,32 +107,42 @@ function envItems(env: Env): SetupItem[] {
     });
   }
 
-  // ---- identity — public strings, safe to echo
-  push({
-    key: "INSTANCE",
-    label: "Instance id",
-    group: "identity",
-    status: set(env.INSTANCE) ? "ok" : "warn",
-    source: "env",
-    detail: set(env.INSTANCE) ? String(env.INSTANCE) : "unset — federation records need a canonical instance domain",
-  });
+  // ---- identity — public strings, safe to echo. INSTANCE and RP_ID follow APP_URL unless set.
+  const host = appHost(env);
+  const signIn = signInPaths(env);
+  const fromApp = (v: string | undefined) => (v === host ? `${v} (APP_URL's host)` : String(v));
   push({
     key: "APP_URL",
+    level: "recommended",
     label: "App origin",
     group: "identity",
     status: set(env.APP_URL) ? "ok" : "warn",
     source: "env",
-    detail: set(env.APP_URL) ? String(env.APP_URL) : "unset — magic-link redirects and CORS use same-origin defaults",
+    detail: !set(env.APP_URL)
+      ? "unset — passkeys are closed, and sign-in links, redirects and CORS fall back to the request host"
+      : signIn.passkeys
+        ? String(env.APP_URL)
+        : `${env.APP_URL} — plain http: passkeys need https, so members sign in with email or the operator's sign-in link`,
+  });
+  push({
+    key: "INSTANCE",
+    level: "recommended",
+    label: "Instance id",
+    group: "identity",
+    status: set(env.INSTANCE) ? "ok" : "warn",
+    source: "env",
+    detail: set(env.INSTANCE)
+      ? fromApp(env.INSTANCE)
+      : "unset — set APP_URL (INSTANCE follows its host); federation records need a canonical instance domain",
   });
   push({
     key: "RP_ID",
+    level: "optional",
     label: "Passkey domain",
     group: "identity",
     status: set(env.RP_ID) ? "ok" : "warn",
     source: "env",
-    detail: set(env.RP_ID)
-      ? String(env.RP_ID)
-      : "unset — passkeys bind to the request host; set the registrable domain for a public instance",
+    detail: set(env.RP_ID) ? fromApp(env.RP_ID) : "unset — set APP_URL (the passkey domain follows its host)",
   });
 
   // ---- trust — what Tier A and federation need
@@ -124,6 +150,7 @@ function envItems(env: Env): SetupItem[] {
     const sites = (env.FIRST_PARTY_SITES ?? "").split(",").filter((c) => c.trim());
     push({
       key: "FIRST_PARTY_SITES",
+      level: "optional",
       label: "First-party RF sites",
       group: "trust",
       status: sites.length ? "ok" : "warn",
@@ -135,6 +162,7 @@ function envItems(env: Env): SetupItem[] {
   }
   push({
     key: "FED_PRIVATE_KEY",
+    level: "recommended",
     label: "Federation signing key",
     group: "trust",
     status: set(env.FED_PRIVATE_KEY) ? "ok" : "warn",
@@ -147,6 +175,7 @@ function envItems(env: Env): SetupItem[] {
     const err = federationConfigError(env);
     push({
       key: "FED_REGISTRY_KEY",
+      level: "blocking",
       label: "Registry authority key",
       group: "trust",
       status: err ? "missing" : "ok",
@@ -160,6 +189,7 @@ function envItems(env: Env): SetupItem[] {
     const all = set(env.OPERATOR_NAME) && set(env.OPERATOR_ADDRESS) && set(env.OPERATOR_EMAIL);
     push({
       key: "OPERATOR",
+      level: "recommended",
       label: "Operator imprint",
       group: "legal",
       status: all ? "ok" : "missing",
@@ -171,6 +201,7 @@ function envItems(env: Env): SetupItem[] {
   }
   push({
     key: "SOURCE_REPO",
+    level: "optional",
     label: "Source link (AGPL §13)",
     group: "legal",
     status: set(env.SOURCE_REPO) ? "ok" : "warn",
@@ -182,22 +213,31 @@ function envItems(env: Env): SetupItem[] {
 
   // ---- delivery — how sign-in links and notifications leave the box
   {
-    const mail = set(env.EMAIL_FROM) && set(env.EMAIL_API_KEY);
+    // Email is how members sign in when passkeys are unavailable and how they recover an account. It is
+    // blocking only when nothing else lets anyone in: no passkey origin and no operator sign-in link.
+    const mail = signIn.email;
+    const noWayIn = !signIn.passkeys && !signIn.email && !signIn.operatorLink;
     push({
       key: "EMAIL",
+      level: noWayIn ? "blocking" : signIn.passkeys ? "recommended" : "optional",
       label: "Email delivery",
       group: "delivery",
-      status: mail ? "ok" : "warn",
+      status: mail ? "ok" : noWayIn ? "missing" : "warn",
       source: "env",
       detail: mail
-        ? `magic-link + digest mail from ${env.EMAIL_FROM}`
-        : "EMAIL_FROM / EMAIL_API_KEY unset — sign-in links cannot be delivered (dev tokens stay off by default)",
+        ? `sign-in links + digest mail from ${env.EMAIL_FROM}`
+        : noWayIn
+          ? "nobody can sign in: no https APP_URL (passkeys), no EMAIL_FROM / EMAIL_API_KEY, no OPERATOR_SECRET (operator sign-in link) — set one"
+          : signIn.passkeys
+            ? "EMAIL_FROM / EMAIL_API_KEY unset — passkeys work; members without one, or who lose theirs, cannot recover by email"
+            : "EMAIL_FROM / EMAIL_API_KEY unset — members sign in with the operator's link (node tools/admin/signin-link.mjs <CALL>)",
     });
   }
   {
     const pushKeys = set(env.VAPID_PUBLIC) && set(env.VAPID_PRIVATE);
     push({
       key: "VAPID",
+      level: "optional",
       label: "Web push",
       group: "delivery",
       status: pushKeys ? "ok" : "warn",
@@ -218,6 +258,7 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   const rx = await count(env, "SELECT COUNT(*) AS n FROM packets_recent WHERE ts > ?", nowS - 3600);
   items.push({
     key: "db:ingest",
+    level: "blocking",
     label: "Ingest feeding",
     group: "data",
     status: rx ? "ok" : "warn",
@@ -230,6 +271,7 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   const peers = await count(env, "SELECT COUNT(*) AS n FROM fed_peers WHERE enabled = 1");
   items.push({
     key: "db:peers",
+    level: "optional",
     label: "Federation peers",
     group: "data",
     status: peers ? "ok" : "warn",
@@ -242,6 +284,7 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   const partners = await count(env, "SELECT COUNT(*) AS n FROM bbs_partners WHERE enabled = 1");
   items.push({
     key: "db:partners",
+    level: "optional",
     label: "Forwarding partners",
     group: "data",
     status: "ok", // FBB forwarding is optional — a count, not a to-do
@@ -252,6 +295,7 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   const caches = await count(env, "SELECT COUNT(*) AS n FROM caches WHERE status != 'archived'");
   items.push({
     key: "db:caches",
+    level: "optional",
     label: "Caches",
     group: "data",
     status: caches ? "ok" : "warn",
@@ -264,13 +308,14 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
     const v = await isCallsignVerified(env, base);
     items.push({
       key: "db:verify",
+      level: "recommended",
       label: "Your callsign control-verification",
       group: "data",
       status: v ? "ok" : "warn",
       source: "db",
       detail: v
         ? `${base} is control-verified — transmit paths are available to you`
-        : `${base} is not control-verified — verify it (Settings → account) to enable transmit`,
+        : `${base} is not control-verified — verify it (You → Verify callsign) to enable transmit`,
     });
   }
   return items;
@@ -281,5 +326,6 @@ export async function handleAdminSetup(req: Request, env: Env): Promise<Response
   const guard = await requireSysop(req, env);
   if (guard) return guard;
   const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
+  applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values
   return json({ items: [...envItems(env), ...(await dbItems(env, callsign))] });
 }

@@ -29,7 +29,8 @@ Everything below happens in your web browser — on your phone or your computer.
    add an email address for recovery, or use **Email me a link** instead of a passkey.
 
     ![Sign in with your callsign](assets/shots/signin-mobile.webp){ width="280" loading=lazy }
-2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The
+2. **Verify your callsign.** Open **You** and tap **Verify callsign** under your call (it opens
+   **Settings → Account**, where **verify** sits next to each callsign you hold). The
    default is **On the air**: the app shows a message to send, such as `VERIFY 482913` to `APRSCG`. Transmit
    it within 30 minutes as an APRS message from your radio or a MeshCom message from your node; your callsign
    is verified once this instance's own receiving station hears it directly on the air. You can instead
@@ -42,7 +43,8 @@ Everything below happens in your web browser — on your phone or your computer.
     ![A cache sheet on a phone](assets/shots/detail-mobile.webp){ width="280" loading=lazy }
 4. **Log it.** At the spot, tap **✓ Log a find**. Allow location access when your browser asks — that is
    how the app confirms you were there. The result shows how well the find is verified (see below).
-5. **Hide your own.** Tap **+ Hide a cache** (or **Hide** on a phone), click the map where it is, give it a
+5. **Hide your own.** Tap **+ Hide a cache** (or **Hide** on a phone). On a phone the pin starts at your
+   location; otherwise tap or click the map where it is (or **Use my location**). Give it a
    title, type, difficulty and terrain, and tap **Hide cache**.
 
 More in [Caching](guides/caching.md).
@@ -73,8 +75,10 @@ A club or a single operator can run a complete aprscaching instance: the map, th
 radio gateway, on a Raspberry Pi at home, a small cloud server, or entirely off-grid. Instances can link up
 with each other so caches and radio confirmations are shared across the network.
 
-1. [Deployment](operate/deployment.md) — choose a setup (Pi at home, cloud server, desktop app).
-2. [Running in Docker](operate/docker.md) — the usual way to install it.
+1. [Deployment](operate/deployment.md) — choose a setup: the desktop app, self-host (a Pi, a mini-PC or a
+   cloud server), or Cloudflare.
+2. [Running in Docker](operate/docker.md) — the usual way to install it; `deploy/setup.sh` writes the whole
+   configuration.
 3. [Your first hour as sysop](operate/first-hour.md) — the checklist from "it starts" to a public instance.
 4. [Radio transports](operate/rf-ingest.md) — connect a TNC, an IGate, Meshtastic or MeshCom.
 

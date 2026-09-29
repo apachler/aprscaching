@@ -90,7 +90,7 @@ ok("health", await waitHealthy());
 // hide a cache
 const created = await call("POST", "/api/caches", {
   title: "Smoke Cache",
-  type: "single",
+  type: "traditional",
   lat: 47.0735,
   lon: 15.4378,
   difficulty: 1.5,
@@ -122,7 +122,7 @@ ok(
 // drive-in flag + country + tags (deduped/lowercased), round-tripped through create + detail
 const metaCache = await call("POST", "/api/caches", {
   title: "Drive-In Lookout",
-  type: "single",
+  type: "traditional",
   lat: 47.09,
   lon: 15.45,
   ownerCall: "OE8APR",
@@ -248,7 +248,7 @@ ok("web log without a session is rejected (401)", noAuthLog.status === 401, `sta
 const noAuthHide = await fetch(`${BASE}/api/caches`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ title: "x", type: "single", lat: 47, lon: 15, ownerCall: "NOSESS" }),
+  body: JSON.stringify({ title: "x", type: "traditional", lat: 47, lon: 15, ownerCall: "NOSESS" }),
 });
 ok("web hide without a session is rejected (401)", noAuthHide.status === 401, `status=${noAuthHide.status}`);
 // the genuine web path: register via email magic-link -> session cookie -> log attributed to it
@@ -272,7 +272,7 @@ const eVer = await fetch(`${BASE}/auth/email/verify`, {
 const cookie = (eVer.headers.get("set-cookie") ?? "").split(";")[0];
 const sCache = await call("POST", "/api/caches", {
   title: "Session Find " + now(),
-  type: "single",
+  type: "traditional",
   lat: 47.2,
   lon: 15.6,
   ownerCall: "OE8APR",
@@ -535,7 +535,7 @@ ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data))
 // before echoing signerKey; a tampered *replay* is still rejected by the signature check, tested here).
 const sfCache = await call("POST", "/api/caches", {
   title: "Signed Find Cache",
-  type: "single",
+  type: "traditional",
   lat: 47.074,
   lon: 15.438,
   difficulty: 1,
@@ -1114,7 +1114,7 @@ ok(
 // NFC stage unlock — present the tag's secret (or type it as the manual-code fallback)
 const nfcCache = await call("POST", "/api/caches", {
   title: "Tag Hunt",
-  type: "two_stage",
+  type: "multi",
   lat: 47.2,
   lon: 15.6,
   ownerCall: "OE8APR",
@@ -1976,7 +1976,9 @@ const s2c = await (
 ).json();
 ok(
   "turn a station into a cache at its location",
-  s2c.cache?.type === "single" && Math.abs((s2c.cache?.lat ?? 0) - 47.62) < 0.01 && s2c.cache?.ownerCall === "OE9PROF",
+  s2c.cache?.type === "traditional" &&
+    Math.abs((s2c.cache?.lat ?? 0) - 47.62) < 0.01 &&
+    s2c.cache?.ownerCall === "OE9PROF",
   JSON.stringify(s2c.cache),
 );
 const meC = await (

@@ -12,13 +12,14 @@ that verification succeeds, so the operator confirms their call once after first
 CLI:
 
 ```bash
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
+docker compose exec gateway node tools/admin/verify-call.mjs OE8APR                   # Docker stack, from deploy/
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR   # from a checkout
 ```
 
 It calls `POST /verify/operator` with the operator secret (`x-operator-secret`), which verifies a call listed in `ADMIN_CALLSIGNS`
 (method `operator`) and nothing else. `GET /api/admin/whoami` tells the web app whether to reveal the operator
 surface; for the account that holds a listed call not yet confirmed it answers `pending: "verify"`, and
-**Settings → Account** tells that operator to run the CLI. Nobody else learns anything about the list. Every operator write is enforced by `requireSysop` on the server — hiding a control in
+**Settings → Account** shows that operator both commands. Nobody else learns anything about the list. Every operator write is enforced by `requireSysop` on the server — hiding a control in
 the UI is never the gate. If `ADMIN_CALLSIGNS` is unset, the web operator surface is locked entirely.
 
 ## Machine credentials
@@ -28,10 +29,12 @@ Two shared secrets reach the gateway from machines, and they never overlap:
 | Secret | Header | Authorises | Held by |
 |---|---|---|---|
 | `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
-| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: `POST /verify/operator`, `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
+| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
 
 The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a
-stolen ingest box cannot take over an account or the instance. Leave `OPERATOR_SECRET` unset to close the
+stolen ingest box cannot take over an account or the instance. The operator secret mints one-time sign-in
+links ([Off-grid sign-in](first-hour.md#off-grid-sign-in)): on an instance with passkeys or email only for
+`ADMIN_CALLSIGNS` calls, on an off-grid instance for any account — keep it on the gateway host. Leave `OPERATOR_SECRET` unset to close the
 machine paths altogether; the web operator surface is unaffected. Sessions are signed with the separate
 `SESSION_SECRET`.
 

@@ -59,7 +59,7 @@ const LAT = 47.5,
   LON = 15.5;
 const created = await call("POST", "/api/caches", {
   title: "Geofence Cache " + now(),
-  type: "single",
+  type: "traditional",
   lat: LAT,
   lon: LON,
   ownerCall: "OE8APR",

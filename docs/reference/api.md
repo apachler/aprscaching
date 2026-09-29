@@ -10,7 +10,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 |------|---------|
 | **public** | No authentication. |
 | **rate-limited** | Public, throttled per IP (and higher with a free API key). |
-| **session** | A passkey or email-verified cookie session, signed with `SESSION_SECRET`. It names the account and its session generation, and resolves only while that account exists at that generation and holds the session's call. |
+| **session** | A passkey, email-link or operator-link cookie session, signed with `SESSION_SECRET`. It names the account and its session generation, and resolves only while that account exists at that generation and holds the session's call. |
 | **actor** | A session **or** `x-ingest-secret` — the "web write behind sign-in / RF write over APRS" dual path. |
 | **x-ingest-secret** | Matches `INGEST_SECRET` — the ingest box. Ingest-plane only: never operator configuration, device keys or sessions. |
 | **x-operator-secret** | Matches `OPERATOR_SECRET` — the operator's scripts. Closed while `OPERATOR_SECRET` is unset. |
@@ -22,6 +22,17 @@ Cross-origin requests carry credentials only from `APP_URL` and `CORS_ORIGINS`; 
 gateway answers `Access-Control-Allow-Origin: *` without credentials.
 
 ## Public read API
+
+```bash
+curl -s https://aprs.example.net/api/v1                                          # index: routes, limits, how to get a key
+curl -s "https://aprs.example.net/api/v1/caches?bbox=15.3,47.0,15.5,47.1"        # bbox = minLon,minLat,maxLon,maxLat
+KEY=$(curl -s -X POST https://aprs.example.net/api/v1/keys | jq -r .key)         # free key, no sign-up
+curl -s -H "Authorization: Bearer $KEY" "https://aprs.example.net/api/v1/stations?bbox=15.3,47.0,15.5,47.1"
+curl -s "https://aprs.example.net/api/v1/activity?key=$KEY"                       # or pass the key as ?key=
+```
+
+Limits per 60-second window: 60 requests per IP without a key, 600 with one (`API_RATE_*`); a box may span at
+most 20° a side (`API_MAX_BBOX_DEG`).
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -149,6 +160,7 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 | POST | `/verify/lotw/start` | `{ callsign }` → `{ challenge, message, algorithm, expiresAt }`: the exact `message` to sign (valid 15 min); `503` when no LoTW CA is configured | session (holds the call) |
 | POST | `/verify/lotw/complete` | `{ callsign, certificates: [base64 DER…], signature: base64 }` — RSASSA-PKCS1-v1_5/SHA-256 over `message` with the LoTW callsign certificate's key; verifies (method `lotw`) when the signature, the chain to a trusted LoTW CA, the dates and the certificate's callsign check out | session (holds the call) |
 | POST | `/verify/operator` | Verify an `ADMIN_CALLSIGNS` call (method `operator`) — the operator CLI | x-operator-secret |
+| POST | `/auth/operator-link` | Mint a single-use, 15-minute sign-in link `{ callsign }` → `{ link, callsign, account, expiresIn }`; the link opens `/auth/email/verify`. Every call on an off-grid instance (no https `APP_URL`, no email), only `ADMIN_CALLSIGNS` calls otherwise — `tools/admin/signin-link.mjs` | x-operator-secret |
 | GET | `/api/licence/:call` | Callsign **validity** from imported public licence registers: `{ callsign, status, source?, sourceName?, expiresAt?, checkedAt? }`, `status` one of `licensed`, `expired`, `unconfirmed`. The call is normalised to its home call (`OE/DL1ABC/P` → `DL1ABC`). Never control-verification; see [Licence registers](licence-sources.md) | rate-limited |
 | GET | `/api/licence` | The imported registers: `{ sources: [{ source, sourceName, rows, importedAt }] }` | rate-limited |
 | POST | `/api/licence/import` · `/api/licence/import/finish` | Register import from `tools/licence/import.mjs`: batches of `{ source, importedAt, rows: [[callsign, status, expiresAt]] }` (≤ 1000), then `{ source, importedAt, count }` closes the run and removes calls the register no longer lists (`409` and no pruning when the count differs) | x-operator-secret |

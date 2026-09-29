@@ -25,10 +25,10 @@ export interface Env {
   // rotating secrets.
   SESSION_TTL_DAYS?: string;
   SESSION_EPOCH?: string;
-  // "1" when a reverse proxy (Caddy/CF tunnel, topology 2/3) fronts this instance — only then is
+  // "1" when a reverse proxy (Caddy, a Cloudflare Tunnel) fronts this instance — only then is
   // x-forwarded-for trusted for rate-limit keying.
   TRUST_PROXY?: string;
-  // "1" when a Cloudflare edge (Tunnel or proxied DNS, topology 1/3) fronts a Node/Bun instance — only
+  // "1" when a Cloudflare edge (Tunnel or proxied DNS) fronts a Node/Bun instance — only
   // then does a `cf-connecting-ip` header survive into rate-limit keying. Set it only when the origin
   // is reachable solely through Cloudflare.
   TRUST_CF?: string;
@@ -40,7 +40,7 @@ export interface Env {
   ADMIN_CALLSIGNS?: string;
 
   // ---- federation — all optional; absent => feeds served unsigned ----
-  INSTANCE?: string; // canonical instance id/domain, e.g. "oe.aprscaching.org"
+  INSTANCE?: string; // canonical instance id/domain, e.g. "oe.aprscaching.org"; default: APP_URL's hostname
   FED_PRIVATE_KEY?: string; // base64(JSON{pkcs8,pub}) Ed25519 CURRENT signing key; if set, records are signed
   FED_KEY_HISTORY?: string; // JSON [{x,since?,until?,revoked?}] of previous/extra public keys + revocations
   FED_ROTATIONS?: string; // JSON [{key,prevKey,at,sig}] rotation records — each new key vouched by the old
@@ -115,7 +115,7 @@ export interface Env {
   // ---- identity & auth — all optional; absent => dev mode (email token returned in-band) ----
   APP_URL?: string; // app origin for magic-link redirects, e.g. "https://aprscaching.net"
   CORS_ORIGINS?: string; // extra comma-separated origins allowed credentialed CORS (beyond APP_URL)
-  RP_ID?: string; // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.net"
+  RP_ID?: string; // WebAuthn relying-party id (registrable domain), e.g. "aprscaching.net"; default: APP_URL's hostname
   EMAIL_FROM?: string; // sender address for magic-link mail; absent => dev mode
   EMAIL_API_KEY?: string; // Resend-style API key; absent => dev mode (no real send)
   ALLOW_DEV_TOKENS?: string; // "1"/"true" to return magic-link tokens in-band when email is unconfigured
@@ -243,4 +243,26 @@ export function stringEnvFrom(src: Record<string, string | undefined>): Partial<
     if (v !== undefined) out[k] = v;
   }
   return out as Partial<Env>;
+}
+
+const blank = (v: string | undefined): boolean => typeof v !== "string" || v.trim() === "";
+
+/**
+ * Fill the settings that follow from APP_URL: INSTANCE and RP_ID default to its hostname, so an operator
+ * configures one public URL instead of three strings that must agree. An explicit value always wins; a
+ * blank one (compose passes `${VAR:-}`) counts as unset. Without a parseable APP_URL both stay unset,
+ * which keeps their own fallbacks (the request host; passkeys closed). Idempotent: it fills `env` in place
+ * so per-env caches keyed on the object stay valid, and returns it.
+ */
+export function applyDerivedDefaults(env: Env): Env {
+  if (!blank(env.INSTANCE) && !blank(env.RP_ID)) return env;
+  let host: string | null;
+  try {
+    host = blank(env.APP_URL) ? null : new URL(env.APP_URL as string).hostname || null;
+  } catch {
+    host = null;
+  }
+  if (blank(env.INSTANCE)) env.INSTANCE = host ?? undefined;
+  if (blank(env.RP_ID)) env.RP_ID = host ?? undefined;
+  return env;
 }

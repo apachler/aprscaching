@@ -16,16 +16,21 @@ docker build -f deploy/Dockerfile -t aprscaching:local .
 
 ## Full stack (gateway + ingest + web + TLS)
 
-This is Topology 2 (all-in-one VM / any VPS) and the base for Topology 1 (home Pi behind a
-Cloudflare Tunnel).
+This is the [self-host](deployment.md#self-host) topology: one box, any VM, VPS, Pi or mini-PC.
 
 ```bash
 cd deploy
-cp .env.example .env && ./setup.sh     # wizard: callsign, passcode, filter, domain; generates INGEST_SECRET, OPERATOR_SECRET, SESSION_SECRET
+./setup.sh                             # writes .env; prints the start, health and verify commands for your choice
 docker compose up -d --build
 docker compose ps                      # the gateway shows "healthy" once it is ready
-curl -fsS http://localhost/health      # with DOMAIN=:80; otherwise https://<your domain>/health
+curl -fsS https://<your domain>/health # off-grid: http://<LAN address>/health (Caddy publishes 80/443; the gateway's 8080 is internal)
 ```
+
+`setup.sh` asks for your callsign, the APRS-IS passcode and filter, how people reach the box, and an RF
+site call, then writes `ADMIN_CALLSIGNS`, `APP_URL`, `DOMAIN`, `APRSIS_*`, `RF_SITE_CALL` +
+`FIRST_PARTY_SITES`, `INGEST_SECRET`, `OPERATOR_SECRET` and `FED_PRIVATE_KEY`. A value already in `.env` is
+kept unless you confirm the change, so re-running it is safe. For scripts: `./setup.sh --non-interactive
+--call OE8APR --domain aprs.example.net` (`--help` lists every flag).
 
 Every setting in `deploy/.env` reaches both the gateway and the ingest container, so the whole
 [first-hour checklist](first-hour.md) — `ADMIN_CALLSIGNS`, `FIRST_PARTY_SITES`, `OPERATOR_*`,
@@ -37,7 +42,7 @@ What comes up:
 | Service | Role | Notes |
 |---|---|---|
 | `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one); also takes `OPERATOR_SECRET` and `SESSION_SECRET` (an empty session secret is generated into the `data` volume) |
-| `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env`, with `OPERATOR_SECRET` and `SESSION_SECRET` blanked — the ingest box holds only `INGEST_SECRET` |
+| `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env`, with `OPERATOR_SECRET`, `SESSION_SECRET` and `FED_PRIVATE_KEY` blanked — the ingest box holds only `INGEST_SECRET` |
 | `webdist` | one-shot | Copies the SPA built inside the image into the volume Caddy serves (a fresh clone has no host `apps/web/dist` — it is gitignored) |
 | `caddy` | TLS + SPA + reverse proxy | `DOMAIN=:80` = plain HTTP (local/off-grid); `DOMAIN=your.host` = automatic Let's Encrypt |
 
@@ -45,7 +50,7 @@ Operational defaults baked into the compose file: `restart: unless-stopped` on e
 service, JSON log caps (~30 MB retained per service), and a gateway healthcheck other services and
 your uptime monitoring can key off.
 
-### Topology 1 — home Pi behind a Cloudflare Tunnel
+### Cloudflare Tunnel ingress (a Pi or mini-PC at home)
 
 No port-forwarding, no static IP, CGNAT-friendly — the Pi opens an outbound connection to
 Cloudflare and your domain rides it. You need a (free) Cloudflare account with your domain's DNS
@@ -55,9 +60,10 @@ on it.
    Create a tunnel** → connector type *Cloudflared* → name it (e.g. `aprscaching-pi`). On the
    "Install connector" step, copy the long token from the shown command — that is the
    `TUNNEL_TOKEN`. (Don't run their install command; the compose stack runs the connector.)
-2. **Give the token to the stack.** In `deploy/.env`, set `TUNNEL_TOKEN=eyJh…` and
-   `DOMAIN=:80` — TLS terminates at Cloudflare's edge, so Caddy serves plain HTTP inside the
-   stack and must not try to fetch a certificate.
+2. **Give the token to the stack.** Run `./setup.sh`, choose the Cloudflare Tunnel, and paste the token
+   and your hostname: it writes `TUNNEL_TOKEN`, `APP_URL=https://<hostname>` and `DOMAIN=:80` — TLS
+   terminates at Cloudflare's edge, so Caddy serves plain HTTP inside the stack and must not try to fetch
+   a certificate.
 3. **Route your hostname.** Still in the tunnel dialog (or later under **Tunnels → your tunnel →
    Public hostnames**): add e.g. `aprs.example.net`, service type **HTTP**, URL `caddy:80`. The
    connector shares the compose network, so the service name resolves. Cloudflare creates the DNS
@@ -70,14 +76,12 @@ on it.
     ```
 
 5. **Verify.** The tunnel shows *HEALTHY* in the dashboard, `https://aprs.example.net/health`
-   answers `ok`, and the SPA loads. Set `APP_URL`/`RP_ID` in `.env` to the public hostname before
-   anyone registers a passkey, then continue with
-   [Your first hour as sysop](first-hour.md).
+   answers `ok`, and the SPA loads. Continue with [Your first hour as sysop](first-hour.md).
 
-### Topology 4 — operator RF box feeding a remote gateway
+### The operator RF box for a remote gateway
 
-Only the ingest runs locally (the RF ingest is always operator-local); the core is a Cloudflare
-Worker or another remote gateway:
+In the [Cloudflare](deployment.md#cloudflare) topology — or beside any gateway on another host — only the
+ingest runs locally (the RF ingest is always operator-local):
 
 ```bash
 INGEST_URL=https://api.your.host/ingest docker compose -f compose.ingest-only.yml up -d --build
@@ -89,8 +93,10 @@ box IS-only: RF transports always belong on the operator's own equipment.
 
 ### Off-grid
 
-Leave `DOMAIN=:80` and `INGEST_URL=http://gateway:8080/ingest` — the full map + RF stack with no
-internet at all.
+Choose the LAN option in `./setup.sh`: `DOMAIN=:80`, `APP_URL=http://<LAN address>`, and the default
+`INGEST_URL=http://gateway:8080/ingest` — the full map + RF stack with no internet at all. Without https
+there are no passkeys, so members sign in with the operator's
+[one-time link](first-hour.md#off-grid-sign-in).
 
 ## RF hardware from a container
 
@@ -122,8 +128,8 @@ only) and `apps/ingest/Dockerfile` (ingest only). Both build from the repo root.
 
 ## What Docker does NOT cover
 
-- **Topology 0** (desktop) is a Bun single binary — `deploy/desktop/`, no container.
-- **Topology 4's core** is Cloudflare Workers/D1/R2 — deployed with `deploy/cloudflare/deploy-cf.sh`
+- The **desktop** app is a Bun single binary — `deploy/desktop/`, no container.
+- The **Cloudflare** core is Workers/D1/R2 — deployed with `deploy/cloudflare/deploy-cf.sh`
   (wrangler), not Docker. Back up D1 with `wrangler d1 export` (see `deploy/README.md`).
 - The **interop test peers** under `tools/interop/` have their own compose file and are test
   infrastructure, not deployment.

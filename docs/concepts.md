@@ -48,8 +48,11 @@ The verification engine consumes a normalized **provenance** object, never a raw
 
 `firstPartyAttested` is the *only* gate on Tier A. It is set only for a frame that the operator's own
 ingest box heard on its own receiver — a local TNC (KISS, AGWPE, WA8DED host mode) or a MeshCom node —
-directly, at a receiving site the operator lists as their own (`FIRST_PARTY_SITES`). The ingest box's writes
-need the ingest secret, so the path itself vouches for the hearing.
+directly, at a receiving site the operator lists as their own (`FIRST_PARTY_SITES`). The site is named on
+both sides: the ingest box stamps its frames with `RF_SITE_CALL`, and the gateway attests that call. The
+ingest box's writes need the ingest secret, so the path itself vouches for the hearing. Until a site is
+attested no find reaches Tier A locally, and no member can verify a callsign on the air, because nothing
+the instance hears counts as heard by its own radio.
 
 An APRS-IS line is never attested, even one whose q-construct names an attested site (`qAR,OE8XBM-10`):
 APRS-IS passcodes are public, so anyone can inject that line. A standalone IGate that is visible only on
