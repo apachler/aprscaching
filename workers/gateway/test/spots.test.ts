@@ -186,7 +186,7 @@ describe("spots — SOTA normalizer + summit resolution (S3)", () => {
           timeStamp: "2024-06-01T08:05:00Z",
         },
       ];
-      const env = { SPOTS_SOTA_SUMMITS_URL: "http://stub/summits/" } as unknown as Env;
+      const env = {} as unknown as Env;
       const out = await normalizeSota(raw, env);
       expect(out).toHaveLength(2);
       expect(out[0]).toMatchObject({ ref: "OE/OO-001", lat: 48.1, lon: 14.0, name: "Test Summit" });

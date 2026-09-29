@@ -27,7 +27,7 @@ import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
-import { coarsenConfig } from "./corroborate_privacy.js";
+import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
@@ -672,10 +672,7 @@ export async function scoreFind(
       until: at,
       excludeIgates: [...loggerOwnIgates],
     });
-    if (
-      ev &&
-      plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, coarsenConfig(env).timeBucketSec)
-    ) {
+    if (ev && plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";

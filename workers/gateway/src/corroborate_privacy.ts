@@ -27,8 +27,12 @@ interface CoarsenConfig {
   timeBucketSec: number; // time-window + response-ts bucket
   distBucketM: number; // response distance bucket
 }
-/** Site defaults: ~550 m grid, 10-min buckets, 100 m distance steps. Tunable per deployment. */
-const DEFAULT_COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
+/**
+ * The coarsening every instance applies to corroboration questions and answers: ~550 m grid, 10-min
+ * buckets, 100 m distance steps. Asker and answerer must bucket alike for an answer to match its
+ * question, so these are fixed network-wide rather than per instance.
+ */
+export const COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
 
 const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 
@@ -170,13 +174,4 @@ export function clientIp(req: Request, env: Env): string {
     if (xff) return xff;
   }
   return req.headers.get("x-real-ip") || "unknown";
-}
-
-export function coarsenConfig(env: Env): CoarsenConfig {
-  const n = (v: string | undefined, d: number) => (v != null && Number(v) > 0 ? Number(v) : d);
-  return {
-    gridDeg: n(env.FED_CORROBORATION_GRID_DEG, DEFAULT_COARSEN.gridDeg),
-    timeBucketSec: n(env.FED_CORROBORATION_TIME_BUCKET_SEC, DEFAULT_COARSEN.timeBucketSec),
-    distBucketM: n(env.FED_CORROBORATION_DIST_BUCKET_M, DEFAULT_COARSEN.distBucketM),
-  };
 }

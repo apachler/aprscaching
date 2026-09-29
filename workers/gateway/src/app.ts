@@ -7,6 +7,7 @@
 import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
+import { retentionFrom } from "./retention.js";
 import { handleIngest } from "./ingest.js";
 import {
   handleLog,
@@ -220,18 +221,17 @@ export async function runScheduled(env: Env): Promise<void> {
       .run();
     if ((r.meta?.changes ?? 0) < 5000) break;
   }
-  // raw packet ring is a short-lived shack diagnostic — prune hard (default 24h)
-  const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
-  // Bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
-  // (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
+  // Bound the other unbounded firehose/diagnostic tables too (see retention.ts). Presence-critical
+  // logger data (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
+  const keep = retentionFrom(env);
   const days = (n: number) => now - n * 24 * 3600;
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(now - pktTtl),
-    env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(days(Number(env.MESSAGES_TTL_DAYS) || 7)),
-    env.DB.prepare("DELETE FROM sensor_readings WHERE ts < ?").bind(days(Number(env.SENSOR_TTL_DAYS) || 30)),
-    env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(Number(env.PORTSTATS_TTL_DAYS) || 7)),
-    env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
-    env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
+    env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(now - keep.packetsHours * 3600),
+    env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(days(keep.messagesDays)),
+    env.DB.prepare("DELETE FROM sensor_readings WHERE ts < ?").bind(days(keep.sensorDays)),
+    env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(keep.portStatsDays)),
+    env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(keep.alertsDays)),
+    env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(keep.mheardDays)),
     env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(now * 1000), // expired windows
   ]);
   // radio commands nobody confirmed within the pending window expire

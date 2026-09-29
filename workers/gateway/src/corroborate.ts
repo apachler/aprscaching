@@ -24,7 +24,7 @@ import { signFedRecord, verifyFedFrame } from "./fedcbor.js";
 import { bodyFromWire, bodyToWire } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
 import {
-  coarsenConfig,
+  COARSEN,
   snapToGrid,
   gridSlackM,
   bucketWindow,
@@ -174,11 +174,7 @@ function probeKey(asker: string, b: CorroborationQuery, exclude: Set<string>): s
  * window that ended more than seven days ago is refused. Whatever the asker sends, the answer can
  * only say "roughly here, roughly then".
  */
-function boundQuestion(
-  q: CorroborationQuery,
-  cfg: ReturnType<typeof coarsenConfig>,
-  nowS: number,
-): CorroborationQuery | null {
+function boundQuestion(q: CorroborationQuery, cfg: typeof COARSEN, nowS: number): CorroborationQuery | null {
   if (![q.lat, q.lon, q.since, q.until].every(Number.isFinite) || q.until < q.since) return null;
   const until = Math.min(q.until, nowS);
   if (until < nowS - ANSWER_MAX_AGE_S) return null;
@@ -248,7 +244,7 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
   const b = bodyFromWire(rec.body) as Partial<CorroborationQuery> & { nonce?: unknown };
   if (typeof b.callsign !== "string" || typeof b.nonce !== "string" || b.nonce.length > 64)
     return json({ corroborated: false, error: "bad question" }, { status: 400 });
-  const cfg = coarsenConfig(env);
+  const cfg = COARSEN;
   const bounded = boundQuestion(b as CorroborationQuery, cfg, now);
   if (!bounded) return json({ corroborated: false, error: "window out of range" }, { status: 400 });
 
@@ -441,7 +437,7 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
 
   // good-citizen request coarsening: snap the center to a grid cell, widen the radius to cover the
   // snap, bucket the time window — peers never see our exact lat/lon/second.
-  const cfg = coarsenConfig(env);
+  const cfg = COARSEN;
   const c = snapToGrid(q.lat, q.lon, cfg.gridDeg);
   const w = bucketWindow(q.since, q.until, cfg.timeBucketSec);
   const cq: CorroborationQuery = {

@@ -41,7 +41,8 @@ import {
 const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
 const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
 const keyedMax = (env: Env) => Number(env.API_RATE_KEYED) || 600;
-const maxBboxDeg = (env: Env) => Number(env.API_MAX_BBOX_DEG) || 20;
+/** Largest bounding-box side, in degrees, a read may ask for. */
+const MAX_BBOX_DEG = 20;
 
 const ENDPOINTS = [
   { method: "GET", path: "/api/v1/caches?bbox=minLon,minLat,maxLon,maxLat", desc: "caches in a bbox (capped)" },
@@ -111,7 +112,7 @@ function apiIndex(env: Env): Response {
     keys: "POST /api/v1/keys for a free key; send it as Authorization: Bearer <key> or ?key=.",
     pagination:
       "Linear lists (activity) accept ?limit= & ?cursor=; responses carry nextCursor + hasMore. Pass nextCursor back as ?cursor= for the next page (keyset, not offset).",
-    bbox_max_degrees: maxBboxDeg(env),
+    bbox_max_degrees: MAX_BBOX_DEG,
     endpoints: ENDPOINTS,
   });
 }
@@ -147,15 +148,14 @@ async function keyInfo(env: Env, key: string): Promise<Response> {
 }
 
 /** Reject a bbox larger than the cap (cost control); returns null if OK or absent. */
-function bboxTooLarge(req: Request, env: Env): Response | null {
+function bboxTooLarge(req: Request): Response | null {
   const raw = new URL(req.url).searchParams.get("bbox");
   if (!raw) return null;
   const p = raw.split(",").map(Number);
   if (p.length !== 4 || !p.every(Number.isFinite))
     return json({ error: "bbox must be minLon,minLat,maxLon,maxLat" }, { status: 400 });
-  const cap = maxBboxDeg(env);
-  if (Math.abs(p[2]! - p[0]!) > cap || Math.abs(p[3]! - p[1]!) > cap)
-    return json({ error: `bbox too large (max ${cap}° per side)` }, { status: 400 });
+  if (Math.abs(p[2]! - p[0]!) > MAX_BBOX_DEG || Math.abs(p[3]! - p[1]!) > MAX_BBOX_DEG)
+    return json({ error: `bbox too large (max ${MAX_BBOX_DEG}° per side)` }, { status: 400 });
   return null;
 }
 
@@ -173,14 +173,14 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (g instanceof Response) return g;
 
   // exports — GPX / KML / ADIF
-  if (rest === "/caches.gpx") return bboxTooLarge(req, env) ?? handleCachesGpx(req, env);
-  if (rest === "/caches.kml") return bboxTooLarge(req, env) ?? handleCachesKml(req, env);
+  if (rest === "/caches.gpx") return bboxTooLarge(req) ?? handleCachesGpx(req, env);
+  if (rest === "/caches.kml") return bboxTooLarge(req) ?? handleCachesKml(req, env);
   const gpxCode = /^\/caches\/([A-Za-z0-9-]+)\.gpx$/.exec(rest);
   if (gpxCode) return handleCacheGpx(req, env, gpxCode[1]!.toUpperCase());
   const adifCall = /^\/profile\/([A-Za-z0-9-]+)\.adif$/.exec(rest);
   if (adifCall) return handleFindsAdif(req, env, adifCall[1]!.toUpperCase());
 
-  if (rest === "/caches") return bboxTooLarge(req, env) ?? handleCachesInBBox(req, env);
+  if (rest === "/caches") return bboxTooLarge(req) ?? handleCachesInBBox(req, env);
   const codeM = /^\/caches\/([A-Za-z0-9-]+)$/.exec(rest);
   if (codeM) {
     const row = await env.DB.prepare("SELECT id FROM caches WHERE code = ?")
@@ -192,8 +192,8 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (rest === "/activity") return handleActivity(req, env);
   if (rest === "/leaderboard") return handleLeaderboard(req, env);
   if (rest === "/corroborators") return handleCorroborators(req, env);
-  if (rest === "/stations") return bboxTooLarge(req, env) ?? handleStations(req, env);
-  if (rest === "/spots") return bboxTooLarge(req, env) ?? handleSpots(req, env);
+  if (rest === "/stations") return bboxTooLarge(req) ?? handleStations(req, env);
+  if (rest === "/spots") return bboxTooLarge(req) ?? handleSpots(req, env);
   const stTrack = /^\/station\/([A-Za-z0-9-]+)\/track$/.exec(rest);
   if (stTrack) return handleStationTrack(req, env, stTrack[1]!.toUpperCase());
   const stKml = /^\/station\/([A-Za-z0-9-]+)\.kml$/.exec(rest);

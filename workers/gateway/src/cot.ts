@@ -123,11 +123,16 @@ export async function handleCot(req: Request, env: Env, now: number): Promise<Re
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** How often the CoT stream polls for newly heard stations. */
+const COT_STREAM_INTERVAL_MS = 15_000;
+/** How long one CoT stream connection lives before the client reconnects. */
+const COT_STREAM_MAX_MS = 5 * 60_000;
+
 /**
  * GET /api/cot/stream — a Server-Sent Events CoT feed so TAK clients (ATAK/WinTAK) get PUSH updates,
  * not just the /api/cot bbox snapshot. On connect we emit the current snapshot as `event: cot`
  * frames, then poll for stations heard since a monotonic cursor and push each as it arrives, with a
- * `: ping` heartbeat every cycle. The stream ends after `maxMs` (the client reconnects) or when the
+ * `: ping` heartbeat every cycle. The stream ends after five minutes (the client reconnects) or when the
  * client disconnects (req.signal abort / stream cancel). Runtime-neutral: the response is a
  * ReadableStream — Workers/Bun stream it natively; the Node shell pipes text/event-stream bodies.
  */
@@ -135,8 +140,6 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
   const u = new URL(req.url);
   const bbox = parseBbox(u);
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 86400);
-  const intervalMs = Math.min(Math.max(Number(env.COT_STREAM_INTERVAL_MS ?? 15000) || 15000, 1000), 120000);
-  const maxMs = Math.min(Math.max(Number(env.COT_STREAM_MAX_MS ?? 300000) || 300000, 10000), 3600000);
   const enc = new TextEncoder();
   let closed = false;
   const stop = () => {
@@ -160,8 +163,8 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
         for (const r of snap) send(`event: cot\ndata: ${stationToCotEvent(r, now)}\n\n`);
         send(`: snapshot ${snap.length}\n\n`);
         let cursor = now; // deltas = stations heard strictly after connect
-        while (!closed && Date.now() - startedMs < maxMs) {
-          await sleep(intervalMs);
+        while (!closed && Date.now() - startedMs < COT_STREAM_MAX_MS) {
+          await sleep(COT_STREAM_INTERVAL_MS);
           if (closed) break;
           const tick = nowS();
           const rows = await cotStations(env, "last_seen > ?", cursor, bbox, "ASC", 500);
