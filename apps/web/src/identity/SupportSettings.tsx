@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from "react";
 import {
   getSupport,
   getSupportPrefs,
@@ -8,7 +7,7 @@ import {
   type SupportInfo,
   type SupportPrefs,
 } from "../api.js";
-import { Row, Switch, useToast } from "../ui/index.js";
+import { Row, Switch, useToast, useLoad } from "../ui/index.js";
 
 /**
  * Settings → Support. Recognition only — donations gate nothing. Shows donation links,
@@ -16,17 +15,11 @@ import { Row, Switch, useToast } from "../ui/index.js";
  */
 export function SupportSettings(props: { signedIn: boolean }) {
   const toast = useToast();
-  const [info, setInfo] = useState<SupportInfo | null>(null);
-  const [prefs, setPrefs] = useState<SupportPrefs | null>(null);
-  useEffect(() => {
-    getSupport()
-      .then(setInfo)
-      .catch(() => {});
-    if (props.signedIn)
-      getSupportPrefs()
-        .then(setPrefs)
-        .catch(() => {});
-  }, [props.signedIn]);
+  const { data: info } = useLoad<SupportInfo>(getSupport, []);
+  const { data: prefs, setData: setPrefs } = useLoad<SupportPrefs | undefined>(
+    () => (props.signedIn ? getSupportPrefs() : Promise.resolve(undefined)),
+    [props.signedIn],
+  );
 
   const eur = (c: number) =>
     (c / 100).toLocaleString(undefined, { style: "currency", currency: info?.ledger.currency || "EUR" });

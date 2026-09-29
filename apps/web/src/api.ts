@@ -4,7 +4,6 @@ import type {
   CacheDetail,
   CacheLogEntry,
   CreateCacheRequest,
-  UpdateCacheRequest,
   MapCache,
   LogType,
   AppGeo,
@@ -38,6 +37,7 @@ export type {
   Spot,
 };
 import { saveArea, loadArea } from "./offlineArea.js";
+import { fromB64u, toB64u } from "./base64url.js";
 
 /**
  * Gateway base URL. A dev server talks to the local gateway on :8787. A production build without
@@ -624,10 +624,6 @@ export async function ingestSigned(
 export function cotUrl(bbox: BBox): string {
   return `${API_BASE}/api/cot?bbox=${bbox.join(",")}`;
 }
-/** Streaming CoT/TAK feed (Server-Sent Events) — pushes station updates instead of a one-shot snapshot. */
-export function cotStreamUrl(bbox: BBox): string {
-  return `${API_BASE}/api/cot/stream?bbox=${bbox.join(",")}`;
-}
 
 /** A federation peer with its health metrics (operator observability). */
 export interface FedPeer {
@@ -939,10 +935,6 @@ export function postBbsMessage(body: {
 }): Promise<{ ok: boolean; id: number; type: string; threadId?: number }> {
   return call(`/api/bbs/messages`, { method: "POST", body: JSON.stringify(body) });
 }
-/** A BBS conversation (root + replies), oldest first (thread tree). */
-export function getBbsThread(id: number): Promise<{ threadId: number; messages: BbsMessage[] }> {
-  return call(`/api/bbs/thread/${id}`);
-}
 // ---- NET/ROM node read surface ----
 export interface NodeRouteRow {
   dest: string;
@@ -1009,10 +1001,6 @@ export function deleteAccount(callsign: string, auth: SignedAction): Promise<{ o
 
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {
   return call(`/api/caches`, { method: "POST", body: JSON.stringify(body) });
-}
-
-export function updateCache(id: number, body: UpdateCacheRequest): Promise<{ cache: CacheSummary }> {
-  return call(`/api/caches/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 export interface LogResult {
@@ -1222,18 +1210,6 @@ export function addCallsign(
   return call(`/auth/callsigns`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 
-function b64uToBuf(s: string): ArrayBuffer {
-  const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
-  const u = new Uint8Array(b.length);
-  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
-  return u.buffer;
-}
-function bufToB64u(b: ArrayBuffer): string {
-  const u = new Uint8Array(b);
-  let s = "";
-  for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]!);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 /** Is a platform passkey usable here? (WebAuthn present + secure context.) */
 export function passkeySupported(): boolean {
   return typeof window !== "undefined" && !!window.PublicKeyCredential && window.isSecureContext;
@@ -1246,14 +1222,14 @@ export async function registerPasskey(callsign: string, email?: string): Promise
   });
   const cred = (await navigator.credentials.create({
     publicKey: {
-      challenge: b64uToBuf(o.challenge),
+      challenge: fromB64u(o.challenge),
       rp: o.rp,
-      user: { id: b64uToBuf(o.user.id), name: o.user.name, displayName: o.user.displayName },
+      user: { id: fromB64u(o.user.id), name: o.user.name, displayName: o.user.displayName },
       pubKeyCredParams: o.pubKeyCredParams,
       timeout: o.timeout,
       attestation: o.attestation,
       authenticatorSelection: o.authenticatorSelection,
-      excludeCredentials: (o.excludeCredentials ?? []).map((c: any) => ({ type: c.type, id: b64uToBuf(c.id) })),
+      excludeCredentials: (o.excludeCredentials ?? []).map((c: any) => ({ type: c.type, id: fromB64u(c.id) })),
     },
   })) as PublicKeyCredential;
   const r = cred.response as AuthenticatorAttestationResponse;
@@ -1264,8 +1240,8 @@ export async function registerPasskey(callsign: string, email?: string): Promise
       credential: {
         id: cred.id,
         response: {
-          clientDataJSON: bufToB64u(r.clientDataJSON),
-          attestationObject: bufToB64u(r.attestationObject),
+          clientDataJSON: toB64u(r.clientDataJSON),
+          attestationObject: toB64u(r.attestationObject),
           transports: r.getTransports?.() ?? [],
         },
       },
@@ -1276,11 +1252,11 @@ export async function loginPasskey(callsign: string): Promise<{ ok: boolean; cal
   const o = await call<any>(`/auth/passkey/login/begin`, { method: "POST", body: JSON.stringify({ callsign }) });
   const cred = (await navigator.credentials.get({
     publicKey: {
-      challenge: b64uToBuf(o.challenge),
+      challenge: fromB64u(o.challenge),
       rpId: o.rpId,
       timeout: o.timeout,
       userVerification: o.userVerification,
-      allowCredentials: (o.allowCredentials ?? []).map((c: any) => ({ type: c.type, id: b64uToBuf(c.id) })),
+      allowCredentials: (o.allowCredentials ?? []).map((c: any) => ({ type: c.type, id: fromB64u(c.id) })),
     },
   })) as PublicKeyCredential;
   const r = cred.response as AuthenticatorAssertionResponse;
@@ -1291,9 +1267,9 @@ export async function loginPasskey(callsign: string): Promise<{ ok: boolean; cal
       credential: {
         id: cred.id,
         response: {
-          clientDataJSON: bufToB64u(r.clientDataJSON),
-          authenticatorData: bufToB64u(r.authenticatorData),
-          signature: bufToB64u(r.signature),
+          clientDataJSON: toB64u(r.clientDataJSON),
+          authenticatorData: toB64u(r.authenticatorData),
+          signature: toB64u(r.signature),
         },
       },
     }),

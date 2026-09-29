@@ -12,26 +12,14 @@ import {
   SIG_DOMAIN,
   type Authorship,
 } from "@aprscaching/shared";
+import { fromB64u, toB64u } from "./base64url.js";
 
-const PRIV = "acs.key.priv", // legacy: an *extractable* pkcs8 in localStorage (migrated away, see below)
+const PRIV = "acs.key.priv", // an *extractable* pkcs8 in localStorage: re-imported non-extractable, then deleted
   PUB = "acs.key.pub"; // the public key is not secret — a base64url string in localStorage is fine
 
-const b64 = (buf: ArrayBuffer) => {
-  let s = "";
-  for (const x of new Uint8Array(buf)) s += String.fromCharCode(x);
-  return btoa(s);
-};
-const b64u = (buf: ArrayBuffer) => b64(buf).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const unb64 = (s: string) => {
-  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-  const o = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
-  return o;
-};
-
-// SR-WEB: the private signing key lives in IndexedDB as a NON-extractable CryptoKey — an XSS on the
-// origin can still *use* it while on the page, but (unlike the old extractable pkcs8 in localStorage)
-// cannot export/exfiltrate the key material. IndexedDB structured-clones a CryptoKey and preserves
+// The private signing key lives in IndexedDB as a NON-extractable CryptoKey — an XSS on the origin can
+// still *use* it while on the page, but (unlike an extractable pkcs8 in localStorage) cannot
+// export/exfiltrate the key material. IndexedDB structured-clones a CryptoKey and preserves
 // its non-extractable flag.
 const IDB_NAME = "acs-keys",
   IDB_STORE = "keys",
@@ -77,11 +65,11 @@ async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
   const idbPriv = await idbGet(IDB_KEY).catch(() => undefined);
   if (storedPub && idbPriv) return { publicKey: storedPub, priv: idbPriv };
 
-  // Migrate an existing extractable key: re-import the old localStorage pkcs8 as NON-extractable into
-  // IndexedDB, then delete the extractable copy. Same key → no re-registration.
+  // An extractable key in localStorage is re-imported as NON-extractable into IndexedDB, then the
+  // extractable copy is deleted. Same key → no re-registration.
   const legacy = localStorage.getItem(PRIV);
   if (storedPub && legacy) {
-    const priv = await crypto.subtle.importKey("pkcs8", unb64(legacy), { name: "Ed25519" }, false, ["sign"]);
+    const priv = await crypto.subtle.importKey("pkcs8", fromB64u(legacy), { name: "Ed25519" }, false, ["sign"]);
     await idbPut(IDB_KEY, priv).catch(() => {});
     localStorage.removeItem(PRIV);
     return { publicKey: storedPub, priv };
@@ -89,7 +77,7 @@ async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
 
   // Fresh: generate, export the public key once, then persist ONLY a non-extractable private key.
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
-  const publicKey = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
+  const publicKey = toB64u(await crypto.subtle.exportKey("raw", kp.publicKey));
   const pkcs8 = await crypto.subtle.exportKey("pkcs8", kp.privateKey);
   const priv = await crypto.subtle.importKey("pkcs8", pkcs8, { name: "Ed25519" }, false, ["sign"]);
   await idbPut(IDB_KEY, priv).catch(() => {});
@@ -100,7 +88,7 @@ async function loadOrCreate(): Promise<{ publicKey: string; priv: CryptoKey }> {
 
 async function deviceKey(): Promise<{ publicKey: string; priv: CryptoKey }> {
   if (cached) return cached;
-  // SR-WEB: coalesce concurrent callers (signAuthorship + devicePublicKey, etc.) so two racing calls
+  // Coalesce concurrent callers (signAuthorship + devicePublicKey, etc.) so two racing calls
   // can't each generate a key and clobber the registered public key.
   if (!inflight)
     inflight = loadOrCreate()
@@ -122,7 +110,7 @@ export async function signAuthorship(a: Authorship): Promise<AuthorSig | undefin
   try {
     const { publicKey, priv } = await deviceKey();
     const sig = await crypto.subtle.sign("Ed25519", priv, new TextEncoder().encode(authorshipMessage(a)));
-    return { authorKey: publicKey, authorSig: b64u(sig), signedAt: a.at };
+    return { authorKey: publicKey, authorSig: toB64u(sig), signedAt: a.at };
   } catch {
     return undefined;
   }
@@ -157,7 +145,7 @@ export async function signIngest(callsign: string, packets: unknown[]): Promise<
     return {
       "x-acs-callsign": callsign.toUpperCase(),
       "x-acs-key": publicKey,
-      "x-acs-sig": b64u(sig),
+      "x-acs-sig": toB64u(sig),
       "x-acs-at": String(at),
     };
   } catch {
@@ -179,7 +167,7 @@ export async function signAccountAction(
       priv,
       new TextEncoder().encode(accountActionMessage({ action, callsign, instance, at })),
     );
-    return { key: publicKey, sig: b64u(sig), at };
+    return { key: publicKey, sig: toB64u(sig), at };
   } catch {
     return undefined;
   }

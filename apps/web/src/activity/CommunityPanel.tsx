@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, EmptyState, Ico } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Community — area leaderboard, drill into a finder's profile. */
-export function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () => void }) {
+export function CommunityPanel(props: { onClose: () => void }) {
+  const { map } = usePlatform();
   const fmt = useFmt();
   const [metric, setMetric] = useState<"points" | "finds">("points");
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
@@ -14,7 +15,7 @@ export function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () 
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    const m = props.map;
+    const m = map;
     if (!m) return;
     const b = m.getBounds();
     setLoading(true);
@@ -25,7 +26,7 @@ export function CommunityPanel(props: { map: maplibregl.Map | null; onClose: () 
     } finally {
       setLoading(false);
     }
-  }, [props.map, metric]);
+  }, [map, metric]);
   useEffect(() => {
     if (!profile) void load();
   }, [load, profile]);

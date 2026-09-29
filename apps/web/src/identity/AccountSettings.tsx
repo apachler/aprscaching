@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   API_BASE,
   trimTrailingSlashes,
@@ -9,6 +9,7 @@ import {
   type HeldCallsign,
 } from "../api.js";
 import {
+  Button,
   Group,
   Badge,
   CallVerifiedBadge,
@@ -18,6 +19,7 @@ import {
   CommandBlock,
   useConfirm,
   useToast,
+  useLoad,
 } from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
 
@@ -45,23 +47,16 @@ export function AccountSettings(props: {
   const confirmDialog = useConfirm();
   const toast = useToast();
   const active = baseCall(callsign);
-  const [held, setHeld] = useState<HeldCallsign[]>([]);
+  // the calls this account holds; a failed reload keeps the last list
+  const { data: heldList, reload } = useLoad<HeldCallsign[] | undefined>(
+    () => (signedIn ? listCallsigns().then((r) => r.callsigns) : Promise.resolve(undefined)),
+    [signedIn, callsign],
+  );
+  const held = heldList ?? [];
   const [verifying, setVerifying] = useState<string | null>(null);
   const [newCs, setNewCs] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; kind: "ok" | "error" } | null>(null);
-
-  const reload = useCallback(async () => {
-    if (!signedIn) return;
-    try {
-      setHeld((await listCallsigns()).callsigns);
-    } catch {
-      /* keep prior list */
-    }
-  }, [signedIn]);
-  useEffect(() => {
-    void reload();
-  }, [reload, callsign]);
 
   async function setActive(cs: string) {
     setBusy(true);
@@ -70,7 +65,7 @@ export function AccountSettings(props: {
       await changeCallsign(cs);
       setMsg({ text: `Now operating as ${cs}.`, kind: "ok" });
       refresh();
-      await reload();
+      reload();
     } catch (e) {
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
     } finally {
@@ -79,7 +74,7 @@ export function AccountSettings(props: {
   }
   const onVerified = useCallback(() => {
     if (verifying === active) refresh();
-    void reload();
+    reload();
   }, [verifying, active, refresh, reload]);
 
   async function addNew() {
@@ -95,7 +90,7 @@ export function AccountSettings(props: {
       setNewCs("");
       const reg = added.licence ? ` Public registers: ${licenceLabel(added.licence)}.` : "";
       setMsg({ text: `Added ${n} — verify it below to enable announce + leaderboard credit.${reg}`, kind: "ok" });
-      await reload();
+      reload();
     } catch (e) {
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
     } finally {
@@ -127,9 +122,9 @@ export function AccountSettings(props: {
       <Group title="Account" status="signed out">
         <p className="muted">Sign in with your callsign to claim and log your finds.</p>
         <div className="row end">
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Sign in
-          </button>
+          </Button>
         </div>
       </Group>
     );
@@ -190,9 +185,9 @@ export function AccountSettings(props: {
               if (e.key === "Enter") addNew();
             }}
           />
-          <button className="primary" disabled={busy} onClick={addNew}>
+          <Button variant="primary" disabled={busy} onClick={addNew}>
             Add
-          </button>
+          </Button>
         </div>
       </Advanced>
       {email && (
@@ -207,9 +202,9 @@ export function AccountSettings(props: {
         <button onClick={endEverywhere} disabled={busy}>
           Sign out everywhere
         </button>
-        <button className="danger" onClick={signOut}>
+        <Button variant="danger" onClick={signOut}>
           Sign out
-        </button>
+        </Button>
       </div>
       {msg && <p className={`mt-2 ${msg.kind === "error" ? "error" : "muted"}`}>{msg.text}</p>}
       <p className="muted fine mt-2">

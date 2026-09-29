@@ -35,10 +35,3 @@ export function loadArea(): OfflineArea | null {
     return null;
   }
 }
-export function hasOfflineArea(): boolean {
-  try {
-    return !!localStorage.getItem(KEY);
-  } catch {
-    return false;
-  }
-}

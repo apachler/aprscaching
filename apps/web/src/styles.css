@@ -1036,13 +1036,6 @@ button.spot-pin::after {
 }
 
 /* shack packet decoder */
-.decoded {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 11px;
-  margin-top: 10px;
-  background: var(--surface-2);
-}
 .decoded .kind {
   display: inline-block;
   margin: 6px 0;
@@ -1762,13 +1755,6 @@ button.link:hover {
 }
 
 /* log form + logbook */
-.logform {
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: 11px;
-  margin: 12px 0;
-  background: var(--surface-2);
-}
 .logform .geo {
   display: flex;
   align-items: center;
@@ -1923,44 +1909,7 @@ button.link:hover {
   background: var(--accent);
 }
 
-/* verification status panel (signal → state rows) */
-.verify {
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  overflow: hidden;
-  margin: 14px 0;
-}
-.verify-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 13px 14px;
-}
-.verify-row + .verify-row {
-  border-top: 1px solid var(--hair);
-}
-.vr-t {
-  flex: 1;
-  min-width: 0;
-}
-.vr-t b {
-  font-weight: 600;
-  font-size: 13.5px;
-}
-.vr-t p {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.vr-ic.ok {
-  color: var(--ok);
-}
-.vr-ic.warn {
-  color: var(--warn);
-}
-.vr-ic.muted {
-  color: var(--muted);
-}
+/* tier-coloured icons (MinTier) */
 .tcol.A {
   color: var(--tier-a);
 }
@@ -3298,12 +3247,7 @@ button.link:hover {
 
 /* one-tap log result card */
 .logresult {
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 14px;
-  margin: 12px 0;
-  background: var(--surface-2);
-  text-align: center;
+  text-align: center; /* a Card: the find result, centred */
 }
 .logresult .big {
   font-family: var(--font-brand);
@@ -3367,6 +3311,35 @@ button.link:hover {
 }
 .empty-action {
   margin-top: 8px;
+}
+
+/* loading skeleton: placeholder bars while a surface's code or data arrives; opacity-only pulse */
+.skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0;
+}
+.skeleton span {
+  display: block;
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.skeleton span:nth-child(2) {
+  width: 80%;
+}
+.skeleton span:nth-child(3) {
+  width: 55%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton span {
+    animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+  }
+  @keyframes skeleton-pulse {
+    to {
+      opacity: 0.45;
+    }
+  }
 }
 
 /* transient confirmation toasts — centred above the tab bar; animate transform/opacity only */
@@ -3875,7 +3848,7 @@ button.danger:hover {
   max-width: 60ch;
 }
 
-/* hero band (brand photo + overlay, as before — now with the nav + terminal on top) */
+/* hero band: the brand photo + overlay, with the nav and the terminal on top */
 .landing-hero {
   position: relative;
   padding: 16px clamp(16px, 4vw, 40px) clamp(40px, 7vw, 76px);
@@ -4533,7 +4506,7 @@ button.danger:hover {
   letter-spacing: 0.04em;
   flex: 0 0 auto;
 }
-/* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame now */
+/* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame */
 :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::before,
 :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::after {
   content: "";

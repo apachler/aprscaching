@@ -27,11 +27,10 @@ Then open:
 - **`DemoHarness.tsx`** — mounts the surfaces; reached via the `?demo=` branch in `main.tsx`.
 
 Nothing here ships in the production app path: the `?demo=` code-splits into its own chunk, and
-`PacketTerminal` with no `makeTransport` behaves exactly as before (real Web Serial + its support gate).
+`PacketTerminal` with no `makeTransport` uses real Web Serial behind its support gate.
 
 ## Why it exists
 
-The protocol cores (`packages/ax25`, `packages/packet`) are testable without hardware, but the **UI
-shells were not** — the terminal only rendered with a live TNC. This harness closes that gap and is the
-bench the **Stage-3 Phosphor "flip"** (`` + `` P5) — the late-90s green-screen terminal
-shell — will be built and reviewed on.
+The protocol cores (`packages/ax25`, `packages/packet`) are testable without hardware; the **UI
+shells** otherwise render only with a live TNC. This harness renders them without one, and is the bench
+for UI work on the terminal shell, such as the Phosphor "flip" (a late-90s green-screen terminal look).

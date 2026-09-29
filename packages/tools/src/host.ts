@@ -99,6 +99,8 @@ export interface ToolHostOpts {
   transmit?: (tool: string, info: string) => void;
   /** Register a beacon schedule (wired to the beacon scheduler); gated by the host already. */
   onBeacon?: (tool: string, spec: BeaconSpec) => void;
+  /** A tool replaced its panel or map layer: a UI showing contributions re-reads them. */
+  onChange?: () => void;
 }
 
 interface Registered {
@@ -291,10 +293,12 @@ export class ToolHost {
       setPanel: (spec) => {
         need("panel");
         r.panel = spec;
+        this.opts.onChange?.();
       },
       setMapLayer: (spec) => {
         need("map");
         r.mapLayer = spec;
+        this.opts.onChange?.();
       },
       store: {
         get: (k) => this.vars.get(k),

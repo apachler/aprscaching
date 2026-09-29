@@ -20,6 +20,7 @@ import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { useFmt, useTheme } from "../format.js";
 import { maidenhead, haversine } from "../map/geo.js";
 import {
+  Button,
   Panel,
   Badge,
   Icon,
@@ -40,6 +41,7 @@ import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
 import { CacheMedia } from "./CacheMedia.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -74,7 +76,6 @@ function useKnownPosition(from: LatLon | null | undefined): LatLon | null {
 /** Cache detail + logbook — operator layout; single primary action (Log a find). */
 export function DetailPanel(props: {
   detail: CacheDetail;
-  callsign: string;
   /** The viewer's position, when the map already knows it. */
   here?: LatLon | null;
   activating?: Spot | null;
@@ -82,6 +83,7 @@ export function DetailPanel(props: {
   onLogged: () => void;
   onSignIn: () => void;
 }) {
+  const { callsign } = usePlatform();
   const c = props.detail;
   const meta = typeMeta(c.type);
   const fmt = useFmt();
@@ -116,11 +118,11 @@ export function DetailPanel(props: {
     }
   }
   async function toggleFav() {
-    if (props.callsign.length < 3) return;
+    if (callsign.length < 3) return;
     const want = !fav.on;
     setFav((f) => ({ on: want, count: f.count + (want ? 1 : -1) })); // optimistic
     try {
-      const r = await toggleFavorite(c.id, props.callsign, want);
+      const r = await toggleFavorite(c.id, callsign, want);
       setFav(r);
     } catch {
       setFav({ on: c.favorited, count: c.favorites });
@@ -206,7 +208,7 @@ export function DetailPanel(props: {
         </Stat>
       </div>
 
-      <RatingWidget cacheId={c.id} callsign={props.callsign} rating={c.rating} onToast={toast} />
+      <RatingWidget cacheId={c.id} callsign={callsign} rating={c.rating} onToast={toast} />
 
       {grid && (
         <div className="coordblock">
@@ -251,10 +253,9 @@ export function DetailPanel(props: {
       </p>
       {c.description && <p className="desc">{c.description}</p>}
       {c.hint && (
-        <details>
-          <summary>Hint</summary>
+        <Disclosure label="Hint">
           <p>{c.hint}</p>
-        </details>
+        </Disclosure>
       )}
       <Disclosure
         className="cache-verify"
@@ -263,7 +264,7 @@ export function DetailPanel(props: {
         <MinTier tier={minTier} />
       </Disclosure>
 
-      <CacheMedia cacheId={c.id} isOwner={props.callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
+      <CacheMedia cacheId={c.id} isOwner={callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
 
       {c.source === "native" && <AdoptionSection cacheId={c.id} code={c.code} onSignIn={props.onSignIn} />}
 
@@ -281,14 +282,14 @@ export function DetailPanel(props: {
         </div>
       )}
 
-      {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={props.callsign} />}
+      {c.stageCount > 0 && <StagesSection cacheId={c.id} callsign={callsign} />}
 
       <LogForm
         cacheId={c.id}
         cacheCode={c.code}
         cacheLat={c.lat ?? null}
         cacheLon={c.lon ?? null}
-        callsign={props.callsign}
+        callsign={callsign}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
       />
@@ -454,9 +455,9 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
         <>
           <p className="muted fine">The sysop has offered your cache to the community. Keep it and the offer ends.</p>
           <div className="row">
-            <button className="primary" disabled={busy} aria-busy={busy} onClick={() => void keep()}>
+            <Button variant="primary" disabled={busy} aria-busy={busy} onClick={() => void keep()}>
               {busy ? "Keeping…" : "Keep my cache"}
-            </button>
+            </Button>
           </div>
         </>
       ) : pending ? (

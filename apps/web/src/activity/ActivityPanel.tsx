@@ -1,42 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
-import {
-  getActivity,
-  getLeaderboard,
-  getCorroborators,
-  type LeaderboardEntry,
-  type Corroborator,
-  type BBox,
-} from "../api.js";
+import { useMemo } from "react";
+import { getActivity, getLeaderboard, getCorroborators, type BBox } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
+import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad } from "../ui/index.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
-export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void; onClose: () => void }) {
+export function ActivityPanel(props: { onBoard: () => void; onClose: () => void }) {
+  const { map } = usePlatform();
   const fmt = useFmt();
-  const [top, setTop] = useState<LeaderboardEntry[]>([]);
-  const [corr, setCorr] = useState<Corroborator[]>([]);
   // snapshot the viewport once per open so paging stays anchored to a stable bbox
   const bbox = useMemo<BBox | undefined>(() => {
-    const m = props.map;
+    const m = map;
     if (!m) return undefined;
     const b = m.getBounds();
     return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-  }, [props.map]);
+  }, [map]);
   const feed = usePaged(
     (cursor) =>
       getActivity(bbox, cursor).then((r) => ({ items: r.activity, nextCursor: r.nextCursor, hasMore: r.hasMore })),
     [bbox],
   );
-  useEffect(() => {
-    getLeaderboard(bbox ?? [-180, -90, 180, 90], "points")
-      .then((r) => setTop(r.leaderboard.slice(0, 5)))
-      .catch(console.error);
-    getCorroborators(bbox)
-      .then((r) => setCorr(r.corroborators.slice(0, 5)))
-      .catch(console.error);
-  }, [bbox]);
+  // the two side glances are optional context: a failure leaves them empty rather than erroring the panel
+  const top =
+    useLoad(() => getLeaderboard(bbox ?? [-180, -90, 180, 90], "points").then((r) => r.leaderboard.slice(0, 5)), [bbox])
+      .data ?? [];
+  const corr = useLoad(() => getCorroborators(bbox).then((r) => r.corroborators.slice(0, 5)), [bbox]).data ?? [];
   return (
     <Panel title="Activity" onClose={props.onClose}>
       <h4>Recent finds</h4>

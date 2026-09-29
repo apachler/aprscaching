@@ -2,8 +2,8 @@
 import { useTheme } from "../format.js";
 
 /**
- * A decorative glyph that is emoji in Modern and ASCII/CP437 in Phosphor (which is strictly emoji-free —
- *). `e` = the Modern glyph (include any trailing space, e.g. "📻 "); `c` = the Phosphor
+ * A decorative glyph that is emoji in Modern and ASCII/CP437 in Phosphor (which is strictly emoji-free,
+ * enforced by `test/no-emoji.mjs`). `e` = the Modern glyph (include any trailing space, e.g. "📻 "); `c` = the Phosphor
  * replacement (default "" → dropped entirely, letting the box-drawing frame / adjacent label carry the
  * meaning). Rendered aria-hidden: these are decorative, the adjacent text is the accessible name.
  */

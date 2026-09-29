@@ -6,7 +6,7 @@
  * teaser shows the same chrome everywhere (ui-ux §6: one component, no bespoke one-offs).
  */
 import { ASSET } from "./brand.js";
-import { Icon, Ico } from "./ui/index.js";
+import { Button, Icon, Ico } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
 import type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
 
@@ -87,9 +87,9 @@ export function TopBar(props: {
           <Ico e="👤" c="ME" />
         </button>
       </span>
-      <button className="primary hide-cta" onClick={props.onHide}>
+      <Button variant="primary" className="hide-cta" onClick={props.onHide}>
         + Hide a cache
-      </button>
+      </Button>
     </header>
   );
 }

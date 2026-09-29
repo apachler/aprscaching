@@ -74,8 +74,8 @@ pnpm --filter @aprscaching/node-gateway dev                      # same app on N
 pnpm dev:ingest       # needs .env (copy .env.example)
 pnpm dev:web
 ```
-`apps/web` has no vitest suite; its `test` is two guard scripts (no emoji, tour anchors resolve) and
-its real check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
+`apps/web`'s `test` runs two guard scripts (no emoji, tour anchors resolve) and a vitest suite over its
+pure logic modules (`apps/web/test/*.test.ts`, no DOM); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
 the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
 

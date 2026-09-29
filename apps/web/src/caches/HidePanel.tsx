@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead } from "../map/geo.js";
-import { Panel, Row, Switch, Advanced } from "../ui/index.js";
+import { Button, Panel, Row, Switch, Advanced } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprscaching/shared";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 const SCOPES: { v: FedScope; label: string; help: string }[] = [
   { v: "public", label: "Public", help: "Shared across the whole network." },
@@ -20,13 +21,13 @@ const touchFirst = (): boolean => window.matchMedia?.("(pointer: coarse)").match
  * rating/federation under Advanced. Submit is gated on a dropped pin + title + callsign.
  */
 export function HidePanel(props: {
-  callsign: string;
   draft: { lat: number; lon: number } | null;
   /** Drop the pin at a position (and bring the map there). */
   onPlace: (lat: number, lon: number) => void;
   onCancel: () => void;
   onCreated: (c: CacheSummary) => void;
 }) {
+  const { callsign } = usePlatform();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<CacheType>("traditional");
   const [difficulty, setDifficulty] = useState(1.5);
@@ -79,7 +80,7 @@ export function HidePanel(props: {
     if (touchFirst() && !hasDraft.current) locate(true);
   }, []);
 
-  const ready = !!props.draft && title.trim().length > 0 && props.callsign.length >= 3;
+  const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3;
 
   const tagList = tags
     .split(",")
@@ -99,7 +100,7 @@ export function HidePanel(props: {
         terrain,
         lat: props.draft.lat,
         lon: props.draft.lon,
-        ownerCall: props.callsign,
+        ownerCall: callsign,
         hint: hint.trim() || undefined,
         description: description.trim() || undefined,
         fedScope,
@@ -260,11 +261,11 @@ export function HidePanel(props: {
       {err && <p className="error">{err}</p>}
       <div className="row end">
         <button onClick={props.onCancel}>Cancel</button>
-        <button className="primary" disabled={!ready || busy} onClick={submit}>
+        <Button variant="primary" disabled={!ready || busy} onClick={submit}>
           {busy ? "Hiding…" : "Hide cache"}
-        </button>
+        </Button>
       </div>
-      {props.callsign.length < 3 && <p className="muted">Sign in to own a cache.</p>}
+      {callsign.length < 3 && <p className="muted">Sign in to own a cache.</p>}
     </Panel>
   );
 }

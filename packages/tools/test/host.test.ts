@@ -265,6 +265,20 @@ describe("Tool surfaces — a tool's type routes its contributions", () => {
     expect(host.setEnabled("rogue-map", true).error).toMatch(/permission 'map' not granted/);
   });
 
+  it("onChange fires whenever a tool replaces its panel or map layer, so a UI re-reads without polling", () => {
+    const onChange = vi.fn();
+    const host = new ToolHost({ onChange });
+    for (const t of builtinTools()) host.register(t);
+    host.setEnabled("mheard", true);
+    onChange.mockClear();
+    host.dispatch("on_frame", { peerCall: "OE8XBM-7", source: "RF" }); // mheard re-renders its panel
+    expect(onChange).toHaveBeenCalled();
+    host.setEnabled("map-waypoints", true);
+    onChange.mockClear();
+    host.runCommand("wp", "JN76jx home", "web"); // the waypoint layer is replaced
+    expect(onChange).toHaveBeenCalled();
+  });
+
   it("panel capability: setPanel is gated + panels() returns the spec for the surface", () => {
     const host = new ToolHost();
     host.register(builtinTools().find((t) => t.manifest.name === "aprs-ssid-guide")!); // panel, web

@@ -16,6 +16,7 @@ import {
 } from "../api.js";
 import { useFmt } from "../format.js";
 import {
+  Button,
   Badge,
   EmptyState,
   ErrorState,
@@ -112,9 +113,9 @@ export function MyStations(props: { callsign: string }) {
       <h4>Add a station</h4>
       <StationFields value={draft} onChange={setDraft} callsignEditable />
       <div className="row end mt-2">
-        <button className="primary" onClick={add} disabled={!draft.callsign || draft.callsign.endsWith("-")}>
+        <Button variant="primary" onClick={add} disabled={!draft.callsign || draft.callsign.endsWith("-")}>
           Add station
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -174,12 +175,12 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
         <div className="station-body">
           <StationFields value={edit} onChange={setEdit} />
           <div className="row between mt-2">
-            <button className="danger" onClick={remove}>
+            <Button variant="danger" onClick={remove}>
               Remove
-            </button>
-            <button className="primary" onClick={save} disabled={busy}>
+            </Button>
+            <Button variant="primary" onClick={save} disabled={busy}>
               Save
-            </button>
+            </Button>
           </div>
           <div className="row end mt-1">
             <button
@@ -334,9 +335,9 @@ function StationWxKeyPanel(props: { stationId: number }) {
       <h5>Weather push</h5>
       {!info?.key ? (
         <div className="row end">
-          <button className="primary" onClick={issue} disabled={busy}>
+          <Button variant="primary" onClick={issue} disabled={busy}>
             Enable weather push
-          </button>
+          </Button>
         </div>
       ) : (
         <>

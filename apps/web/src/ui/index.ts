@@ -10,7 +10,11 @@ export { EmptyState } from "./EmptyState.js";
 export { ErrorState } from "./ErrorState.js";
 export { LoadMore } from "./LoadMore.js";
 export { usePaged, type PageResult } from "./usePaged.js";
+export { useLoad } from "./useLoad.js";
+export { usePoll } from "./usePoll.js";
 export { ToastProvider, useToast, TOAST_EVENT } from "./Toast.js";
+// Two glyph kinds: Icon is the UI chrome (stroke SVG on rail items, buttons and controls, coloured by
+// currentColor); Ico is a decorative content glyph (emoji in Modern, CP437/ASCII in Phosphor).
 export { Icon, type IconName } from "./Icon.js";
 export { Ico } from "./Ico.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";
@@ -20,4 +24,4 @@ export { ConfirmProvider, useConfirm, useChoice } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";
 export { CommandBlock } from "./CommandBlock.js";
 export { copyText } from "./clipboard.js";
-export { TierChip, MinTier, DtBars, Stat, VerifyPanel, VerifyRow, type Tier } from "./operator.js";
+export { TierChip, MinTier, DtBars, Stat, type Tier } from "./operator.js";

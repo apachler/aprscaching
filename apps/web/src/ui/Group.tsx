@@ -6,6 +6,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { Switch } from "./Switch.js";
+import { Disclosure } from "./Disclosure.js";
 
 /**
  * A labelled, collapsible settings group. With `master`, it's a toggle-gated subsystem: when the
@@ -70,18 +71,11 @@ export function Row(props: { label: ReactNode; help?: ReactNode; children: React
   );
 }
 
-/** Expert options, collapsed by default (real disclosure, not a CSS hack). */
+/** Expert options, collapsed by default (a section-style Disclosure). */
 export function Advanced(props: { children: ReactNode; label?: string }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="adv">
-      <button className="adv-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className={`chev${open ? " open" : ""}`} aria-hidden="true">
-          ▸
-        </span>{" "}
-        {props.label ?? "Advanced"}
-      </button>
-      {open && <div className="adv-body">{props.children}</div>}
-    </div>
+    <Disclosure variant="section" label={props.label ?? "Advanced"}>
+      {props.children}
+    </Disclosure>
   );
 }

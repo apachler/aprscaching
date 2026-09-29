@@ -14,7 +14,7 @@ import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext }
 
 const root = createRoot(document.getElementById("root")!);
 // `/?demo=packet|bbs|1` mounts the hardware-free design harness (real components + in-process simulator)
-// instead of the app — a durable bench for the packet/BBS shells (and the Stage-3 Phosphor flip).
+// instead of the app — a durable bench for the packet/BBS shells (and the Phosphor terminal look).
 const demo = new URLSearchParams(location.search).get("demo");
 if (demo) {
   // the harness renders components directly (no Platform), so provide the format/theme context Ico needs
