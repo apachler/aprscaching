@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { getWxKey, issueWxKey, type WxKeyInfo } from "../api.js";
 import { useFmt } from "../format.js";
-import { useConfirm, useToast } from "../ui/index.js";
+import { Button, useConfirm, useToast } from "../ui/index.js";
 import { WxTxToggles } from "./WxTxToggles.js";
 import { SerialWeather } from "./SerialWeather.js";
 
@@ -64,9 +64,9 @@ export function WeatherStation(props: { callsign: string }) {
 
       {!info?.key ? (
         <div className="row end mt-2">
-          <button className="primary" onClick={issue} disabled={busy}>
+          <Button variant="primary" onClick={issue} disabled={busy}>
             Enable weather station
-          </button>
+          </Button>
         </div>
       ) : (
         <>

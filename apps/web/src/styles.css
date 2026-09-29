@@ -1036,13 +1036,6 @@ button.spot-pin::after {
 }
 
 /* shack packet decoder */
-.decoded {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 11px;
-  margin-top: 10px;
-  background: var(--surface-2);
-}
 .decoded .kind {
   display: inline-block;
   margin: 6px 0;
@@ -1762,13 +1755,6 @@ button.link:hover {
 }
 
 /* log form + logbook */
-.logform {
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: 11px;
-  margin: 12px 0;
-  background: var(--surface-2);
-}
 .logform .geo {
   display: flex;
   align-items: center;
@@ -1923,44 +1909,7 @@ button.link:hover {
   background: var(--accent);
 }
 
-/* verification status panel (signal → state rows) */
-.verify {
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  overflow: hidden;
-  margin: 14px 0;
-}
-.verify-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 13px 14px;
-}
-.verify-row + .verify-row {
-  border-top: 1px solid var(--hair);
-}
-.vr-t {
-  flex: 1;
-  min-width: 0;
-}
-.vr-t b {
-  font-weight: 600;
-  font-size: 13.5px;
-}
-.vr-t p {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.vr-ic.ok {
-  color: var(--ok);
-}
-.vr-ic.warn {
-  color: var(--warn);
-}
-.vr-ic.muted {
-  color: var(--muted);
-}
+/* tier-coloured icons (MinTier) */
 .tcol.A {
   color: var(--tier-a);
 }
@@ -3298,12 +3247,7 @@ button.link:hover {
 
 /* one-tap log result card */
 .logresult {
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 14px;
-  margin: 12px 0;
-  background: var(--surface-2);
-  text-align: center;
+  text-align: center; /* a Card: the find result, centred */
 }
 .logresult .big {
   font-family: var(--font-brand);

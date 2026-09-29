@@ -34,6 +34,7 @@ import {
 } from "../api.js";
 import { useFmt } from "../format.js";
 import {
+  Button,
   Panel,
   Group,
   Badge,
@@ -214,9 +215,9 @@ function VerificationAdmin() {
           />
         </label>
         <div className="row end">
-          <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
             {saving ? "Verifying…" : "Verify callsign"}
-          </button>
+          </Button>
         </div>
       </div>
       {formErr && (
@@ -381,9 +382,9 @@ function AdoptionAdmin() {
           />
         </label>
         <div className="row end">
-          <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void offerByCode()}>
+          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void offerByCode()}>
             {saving ? "Offering…" : "Offer for adoption"}
-          </button>
+          </Button>
         </div>
       </div>
       {formErr && (
@@ -556,9 +557,9 @@ function OfferWithdrawn(props: { cache: AdoptCache; onDone: () => void }) {
       </label>
       <div className="row end">
         <button onClick={() => setOpen(false)}>Cancel</button>
-        <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+        <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
           {saving ? "Offering…" : `Offer ${props.cache.code}`}
-        </button>
+        </Button>
       </div>
       {err && (
         <p className="error fine" role="alert">
@@ -648,9 +649,9 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
       </label>
       <div className="row end">
         <button onClick={() => setOpen(false)}>Cancel</button>
-        <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+        <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
           {saving ? "Assigning…" : "Assign owner"}
-        </button>
+        </Button>
       </div>
       {err && (
         <p className="error fine" role="alert">
@@ -797,9 +798,9 @@ function FederationAdmin() {
               <button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
                 Unvet
               </button>
-              <button className="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
+              <Button variant="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
                 Block
-              </button>
+              </Button>
             </div>
           </li>
         ))}
@@ -858,9 +859,9 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
           onKeyDown={(e) => e.key === "Enter" && !busy && !pending && void submit(false)}
           aria-label="Peer callsign on 44net"
         />
-        <button className="primary" disabled={busy || !callsign.trim() || !!pending} onClick={() => void submit(false)}>
+        <Button variant="primary" disabled={busy || !callsign.trim() || !!pending} onClick={() => void submit(false)}>
           {busy && !pending ? "Resolving…" : "Look up"}
-        </button>
+        </Button>
       </div>
       <div className="comment">
         Resolves the peer's ARDC-verified <span className="mono">&lt;call&gt;.ampr.org</span> binding.
@@ -879,9 +880,9 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
             confirming pins this key for the peer.
           </div>
           <div className="row">
-            <button className="primary" disabled={busy} onClick={() => void submit(true)}>
+            <Button variant="primary" disabled={busy} onClick={() => void submit(true)}>
               Confirm &amp; pin
-            </button>
+            </Button>
             <button disabled={busy} onClick={() => setPending(null)}>
               Cancel
             </button>
@@ -1134,9 +1135,9 @@ function ForwardingAdmin() {
             />
           </label>
           <div className="row">
-            <button className="primary" onClick={submitPartner}>
+            <Button variant="primary" onClick={submitPartner}>
               Save partner
-            </button>
+            </Button>
             <button
               onClick={() => {
                 setForm(EMPTY_PARTNER);

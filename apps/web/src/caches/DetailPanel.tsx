@@ -20,6 +20,7 @@ import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { useFmt, useTheme } from "../format.js";
 import { maidenhead, haversine } from "../map/geo.js";
 import {
+  Button,
   Panel,
   Badge,
   Icon,
@@ -252,10 +253,9 @@ export function DetailPanel(props: {
       </p>
       {c.description && <p className="desc">{c.description}</p>}
       {c.hint && (
-        <details>
-          <summary>Hint</summary>
+        <Disclosure label="Hint">
           <p>{c.hint}</p>
-        </details>
+        </Disclosure>
       )}
       <Disclosure
         className="cache-verify"
@@ -455,9 +455,9 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
         <>
           <p className="muted fine">The sysop has offered your cache to the community. Keep it and the offer ends.</p>
           <div className="row">
-            <button className="primary" disabled={busy} aria-busy={busy} onClick={() => void keep()}>
+            <Button variant="primary" disabled={busy} aria-busy={busy} onClick={() => void keep()}>
               {busy ? "Keeping…" : "Keep my cache"}
-            </button>
+            </Button>
           </div>
         </>
       ) : pending ? (

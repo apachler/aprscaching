@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import { decodePacket, type DecodedPacket } from "../api.js";
-import { Badge } from "../ui/index.js";
+import { Button, Badge, Card } from "../ui/index.js";
 
 /**
  * DecoderPanel — paste a raw TNC2 / APRS-IS line and see the decoded AX.25 frame + parsed fields.
@@ -34,13 +34,13 @@ export function DecoderPanel() {
         <button className="link" onClick={() => setRaw(SAMPLE)}>
           use a sample
         </button>
-        <button className="primary" onClick={decode} disabled={!raw.trim()}>
+        <Button variant="primary" onClick={decode} disabled={!raw.trim()}>
           Decode
-        </button>
+        </Button>
       </div>
       {decoded && !decoded.ok && <p className="error">{decoded.error}</p>}
       {decoded?.ok && decoded.frame && (
-        <div className="decoded">
+        <Card className="decoded">
           <div className="row between">
             <strong className="mono">{decoded.frame.src}</strong>
             <Badge>{decoded.frame.heardVia}</Badge>
@@ -58,7 +58,7 @@ export function DecoderPanel() {
                 </div>
               ))}
           </dl>
-        </div>
+        </Card>
       )}
     </>
   );

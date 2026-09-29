@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead } from "../map/geo.js";
-import { Panel, Row, Switch, Advanced } from "../ui/index.js";
+import { Button, Panel, Row, Switch, Advanced } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprscaching/shared";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -261,9 +261,9 @@ export function HidePanel(props: {
       {err && <p className="error">{err}</p>}
       <div className="row end">
         <button onClick={props.onCancel}>Cancel</button>
-        <button className="primary" disabled={!ready || busy} onClick={submit}>
+        <Button variant="primary" disabled={!ready || busy} onClick={submit}>
           {busy ? "Hiding…" : "Hide cache"}
-        </button>
+        </Button>
       </div>
       {callsign.length < 3 && <p className="muted">Sign in to own a cache.</p>}
     </Panel>

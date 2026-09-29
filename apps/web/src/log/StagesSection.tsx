@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Ico } from "../ui/index.js";
+import { Button, Ico } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
 
 // Minimal WebNFC shapes (lib.dom doesn't ship them): just what we read off a tag.
@@ -198,9 +198,14 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
               </div>
             )}
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && s.unlock !== "nfc" && (
-              <button className="primary mt-2" disabled={busy === s.stageNo} onClick={() => reveal(s.stageNo)}>
+              <Button
+                variant="primary"
+                className="mt-2"
+                disabled={busy === s.stageNo}
+                onClick={() => reveal(s.stageNo)}
+              >
                 {busy === s.stageNo ? "Checking…" : s.unlock === "geo" ? "I'm here — reveal" : "Reveal next stage"}
-              </button>
+              </Button>
             )}
           </li>
         ))}

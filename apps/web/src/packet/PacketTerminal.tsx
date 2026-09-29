@@ -24,6 +24,7 @@ import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
+import { Button, Disclosure } from "../ui/index.js";
 
 /** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
 export interface TermTransport extends Transport {
@@ -300,9 +301,9 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         {portOpen ? (
           <button onClick={closePort}>Close TNC</button>
         ) : (
-          <button className="primary" onClick={openPort}>
+          <Button variant="primary" onClick={openPort}>
             Open KISS TNC…
-          </button>
+          </Button>
         )}
       </div>
       {err && <p className="error">{err}</p>}
@@ -451,8 +452,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                 </button>
               ))}
             </div>
-            <details className="pt-ctext">
-              <summary>CTEXT</summary>
+            <Disclosure className="pt-ctext" label="CTEXT">
               <input
                 value={ctext}
                 placeholder="Connect-text auto-sent on connect, e.g. Welcome {call}"
@@ -461,7 +461,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                   localStorage.setItem(LS_CTEXT, e.target.value);
                 }}
               />
-            </details>
+            </Disclosure>
           </div>
         </>
       )}

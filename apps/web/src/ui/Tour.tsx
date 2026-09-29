@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "./Button.js";
+import { useModalDialog } from "./useModalDialog.js";
 
 export type TourStep = {
   title: string;
@@ -61,12 +63,6 @@ export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () =
   const step = shown[idx];
   const anchor = step?.anchor;
 
-  // restore focus to whatever opened the tour when it closes (ui-ux.md §7)
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    return () => prev?.focus?.();
-  }, []);
-
   // Ring the step's element and let CSS anchor the card to it. The class is the only thing set from
   // JS — `anchor-name`, the ring and the placement all live in the stylesheet (css.md).
   useEffect(() => {
@@ -85,31 +81,8 @@ export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () =
   useEffect(() => {
     cardRef.current?.querySelector<HTMLElement>("button.primary")?.focus();
   }, [idx]);
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        finish();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const f = Array.from(card.querySelectorAll<HTMLElement>("button"));
-      if (!f.length) return;
-      const first = f[0]!,
-        last = f[f.length - 1]!;
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    card.addEventListener("keydown", onKey);
-    return () => card.removeEventListener("keydown", onKey);
-  }, [finish]);
+  // a modal dialog (ui-ux.md §7): Tab stays in the card, Escape ends the tour, focus returns to the opener
+  useModalDialog(cardRef, finish);
 
   if (!step) return null;
   const last = idx >= shown.length - 1;
@@ -134,9 +107,9 @@ export function Tour(props: { steps: TourStep[]; signedIn: boolean; onDone: () =
             Skip
           </button>
           {idx > 0 && <button onClick={() => setI(idx - 1)}>Back</button>}
-          <button className="primary" onClick={() => (last ? finish() : setI(idx + 1))}>
+          <Button variant="primary" onClick={() => (last ? finish() : setI(idx + 1))}>
             {last ? "Done" : "Next"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

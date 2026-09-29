@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Ico } from "../ui/index.js";
+import { Button, Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Ico } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
@@ -144,9 +144,9 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
               className="mono field-sm"
               maxLength={9}
             />
-            <button className="primary" disabled={pairing || code.trim().length < 8} onClick={() => void pair()}>
+            <Button variant="primary" disabled={pairing || code.trim().length < 8} onClick={() => void pair()}>
               {pairing ? "Pairing…" : "Pair box"}
-            </button>
+            </Button>
           </div>
         </Row>
       ) : (
@@ -207,9 +207,9 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
             placeholder="message…"
             aria-label="Message text"
           />
-          <button className="primary" disabled={!canTx || !to.trim() || !text.trim()} onClick={sendMessage}>
+          <Button variant="primary" disabled={!canTx || !to.trim() || !text.trim()} onClick={sendMessage}>
             Send
-          </button>
+          </Button>
         </div>
       </Row>
 

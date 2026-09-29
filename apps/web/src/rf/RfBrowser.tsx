@@ -14,7 +14,7 @@ import { fieldStation } from "./fieldStation.js";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
-import { Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
+import { Button, Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
@@ -283,15 +283,15 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
       <div className="row gap-2">
         {link ? (
-          <button className="danger" onClick={disconnect}>
+          <Button variant="danger" onClick={disconnect}>
             Disconnect
-          </button>
+          </Button>
         ) : (
           <>
             {serialOk && (
-              <button className="primary" onClick={() => connect("serial")} disabled={busy}>
+              <Button variant="primary" onClick={() => connect("serial")} disabled={busy}>
                 {busy ? "…" : "Connect USB radio"}
-              </button>
+              </Button>
             )}
             {bleOk && (
               <button onClick={() => connect("ble")} disabled={busy}>
@@ -461,9 +461,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     onChange={(e) => setBcn((b) => ({ ...b, comment: e.target.value }))}
                   />
                   <div className="row end">
-                    <button className="primary" onClick={beacon} disabled={txBusy}>
+                    <Button variant="primary" onClick={beacon} disabled={txBusy}>
                       Beacon
-                    </button>
+                    </Button>
                   </div>
                   <h5>Message</h5>
                   <div className="row gap-2">
@@ -484,9 +484,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                     />
                   </div>
                   <div className="row end">
-                    <button className="primary" onClick={sendMsg} disabled={txBusy}>
+                    <Button variant="primary" onClick={sendMsg} disabled={txBusy}>
                       Send
-                    </button>
+                    </Button>
                   </div>
                   <p className="muted fine">
                     Each transmit is deliberate. Do not transmit without a valid licence for{" "}

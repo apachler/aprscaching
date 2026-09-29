@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
+import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
 import { RadioLogs } from "./RadioLogs.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -49,9 +49,9 @@ export function ProfilePanel(props: {
       {callsign.length < 3 ? (
         <>
           <p className="muted">Sign in with your callsign to claim and log your finds.</p>
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Sign in
-          </button>
+          </Button>
         </>
       ) : error ? (
         <ErrorState onRetry={load}>Couldn't load your profile — check your connection and retry.</ErrorState>

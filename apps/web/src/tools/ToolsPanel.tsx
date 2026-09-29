@@ -18,7 +18,7 @@ import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/aud
 import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost } from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
-import { Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
+import { Button, Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
 
 // ---- trust-on-first-use pin store (author callsign → last-seen author pubkey) ----
 const TOFU_KEY = "acs.tool.keys";
@@ -455,9 +455,9 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
               </p>
               <div className="row gap-2 end">
                 <button onClick={() => setPrompt(null)}>Cancel</button>
-                <button className="primary" onClick={approveImport}>
+                <Button variant="primary" onClick={approveImport}>
                   Approve + run
-                </button>
+                </Button>
               </div>
             </div>
           );

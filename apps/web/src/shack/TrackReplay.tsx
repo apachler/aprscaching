@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
-import { usePoll } from "../ui/index.js";
+import { Button, usePoll } from "../ui/index.js";
 
 /**
  * Track history + time-replay. Browse a station's / living-cache's past positions by
@@ -230,9 +230,9 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
           max={new Date(Date.now()).toISOString().slice(0, 10)}
           onChange={(e) => setDay(e.target.value)}
         />
-        <button className="primary" onClick={load} disabled={loading}>
+        <Button variant="primary" onClick={load} disabled={loading}>
           {loading ? "Loading…" : "Load"}
-        </button>
+        </Button>
       </div>
 
       {err && <div className="tr-err">{err}</div>}

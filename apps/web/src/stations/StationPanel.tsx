@@ -4,7 +4,7 @@ import { getStation, createStation, type StationDetail } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, Ico, useToast } from "../ui/index.js";
+import { Panel, Badge, ErrorState, Ico, useToast, Card } from "../ui/index.js";
 import { TrackReplay } from "../shack/TrackReplay.js";
 import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
@@ -64,7 +64,7 @@ export function StationPanel(props: {
       ) : !station ? (
         <p className="muted">Loading station…</p>
       ) : (
-        <div className="logform">
+        <Card className="logform">
           <div className="muted">
             {station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}
           </div>
@@ -124,7 +124,7 @@ export function StationPanel(props: {
           <TrackReplay map={map} callsign={station.callsign} />
           <StationGraphs callsign={station.callsign} />
           <StationPackets callsign={station.callsign} />
-        </div>
+        </Card>
       )}
     </Panel>
   );

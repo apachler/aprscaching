@@ -279,9 +279,9 @@ export function SettingsPanel(props: {
               </p>
               <div className="row">
                 <button onClick={exportData}>Export my data</button>
-                <button className="danger" onClick={deleteData}>
+                <Button variant="danger" onClick={deleteData}>
                   Erase my account
-                </button>
+                </Button>
               </div>
               {gdpr && <p className="muted mt-2">{gdpr}</p>}
             </>

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
+import { Button } from "./ui/index.js";
 
 /**
  * Marketing landing — the signed-out front door. The hero opens with the product's thesis: a live
@@ -24,9 +25,9 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
             <a href="#privacy">Privacy</a>
             <a href="#selfhost">Self-host</a>
           </span>
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Sign in
-          </button>
+          </Button>
         </nav>
         <div className="landing-hero-grid">
           <div className="landing-hero-copy">
@@ -39,9 +40,9 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
               really there. No app store, no subscription, no tracking: ham radio, a map, and cryptographic honesty.
             </p>
             <div className="landing-cta">
-              <button className="primary" onClick={props.onSignIn}>
+              <Button variant="primary" onClick={props.onSignIn}>
                 Sign in with your callsign
-              </button>
+              </Button>
               <button onClick={props.onExplore}>Explore the live map</button>
             </div>
           </div>
@@ -264,9 +265,9 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
               features. Built by OE8APR from open specifications.
             </p>
           </div>
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Start caching →
-          </button>
+          </Button>
         </div>
       </section>
 

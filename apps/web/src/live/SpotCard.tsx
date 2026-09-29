@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Spot } from "../api.js";
 import { useFmt } from "../format.js";
-import { Badge, useToast, Ico } from "../ui/index.js";
+import { Button, Badge, useToast, Ico } from "../ui/index.js";
 import { cat, useCatConnected } from "../rf/cat.js";
 
 /**
@@ -52,9 +52,9 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
         </button>
       )}
       {props.onViewCache && (
-        <button className="primary spot-cta" onClick={props.onViewCache}>
+        <Button variant="primary" className="spot-cta" onClick={props.onViewCache}>
           This cache is being activated — open it →
-        </button>
+        </Button>
       )}
     </div>
   );

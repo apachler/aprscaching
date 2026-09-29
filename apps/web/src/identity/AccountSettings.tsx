@@ -9,6 +9,7 @@ import {
   type HeldCallsign,
 } from "../api.js";
 import {
+  Button,
   Group,
   Badge,
   CallVerifiedBadge,
@@ -121,9 +122,9 @@ export function AccountSettings(props: {
       <Group title="Account" status="signed out">
         <p className="muted">Sign in with your callsign to claim and log your finds.</p>
         <div className="row end">
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Sign in
-          </button>
+          </Button>
         </div>
       </Group>
     );
@@ -184,9 +185,9 @@ export function AccountSettings(props: {
               if (e.key === "Enter") addNew();
             }}
           />
-          <button className="primary" disabled={busy} onClick={addNew}>
+          <Button variant="primary" disabled={busy} onClick={addNew}>
             Add
-          </button>
+          </Button>
         </div>
       </Advanced>
       {email && (
@@ -201,9 +202,9 @@ export function AccountSettings(props: {
         <button onClick={endEverywhere} disabled={busy}>
           Sign out everywhere
         </button>
-        <button className="danger" onClick={signOut}>
+        <Button variant="danger" onClick={signOut}>
           Sign out
-        </button>
+        </Button>
       </div>
       {msg && <p className={`mt-2 ${msg.kind === "error" ? "error" : "muted"}`}>{msg.text}</p>}
       <p className="muted fine mt-2">
