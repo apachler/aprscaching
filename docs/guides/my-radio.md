@@ -41,7 +41,7 @@ gateway**; the **Auth** choice appears below it:
   way (any SSID of your callsign), so a stranger can't inject traffic in your name — which also means other
   stations your radio hears, and Meshtastic nodes, stay in your browser.
 - **secret (self-host)** — for your own instance. Enter the **Gateway base URL** and the instance's
-  **Ingest secret** (the `INGEST_SECRET` its sysop set). The secret stays in this browser.
+  **Ingest secret** (the `INGEST_SECRET` its sysop set). The URL is remembered in this browser; the secret is kept in memory for the session only and is entered again after a reload.
   With the secret, everything your radio hears is forwarded.
 
 Packets heard through your browser never verify a find — at most it is **Logged** (tier C): your own radio

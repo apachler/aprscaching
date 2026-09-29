@@ -16,7 +16,7 @@ import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
 import { Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
 
-const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-secret) path
+const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
 const LINK_LABEL: Record<LinkKind, string> = {
   serial: "USB radio",
@@ -54,13 +54,17 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const [count, setCount] = useState(0);
   const [fwdOn, setFwdOn] = useState(false);
   const [mode, setMode] = useState<"signed" | "secret">(signedIn ? "signed" : "secret");
-  const [secretCfg, setSecretCfg] = useState<{ url: string; secret: string }>(() => {
+  // Only the gateway URL persists. The ingest secret lives in memory for this page's life: written to
+  // storage it would sit readable by any script on the origin, long after the RF session ends.
+  const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
     try {
-      return JSON.parse(localStorage.getItem(FWD_KEY) || "null") ?? { url: "", secret: "" };
+      return localStorage.getItem(FWD_KEY) ?? "";
     } catch {
-      return { url: "", secret: "" };
+      return "";
     }
   });
+  const [ingestSecret, setIngestSecret] = useState("");
+  const secretCfg = { url: gatewayUrl, secret: ingestSecret };
 
   const linkRef = useRef<RfLink | null>(null);
   const fwd = useRef({ on: false, mode, secretCfg, callsign: props.callsign });
@@ -196,11 +200,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     fwdErr.current = false;
     setFwdOn(on);
   }
-  function saveSecret(url: string, secret: string) {
-    const v = { url: url.trim(), secret: secret.trim() };
-    setSecretCfg(v);
+  function saveGatewayUrl(url: string) {
+    const u = url.trim();
+    setGatewayUrl(u);
     try {
-      localStorage.setItem(FWD_KEY, JSON.stringify(v));
+      localStorage.setItem(FWD_KEY, u);
     } catch {
       /* ignore */
     }
@@ -375,7 +379,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       className="mono"
                       defaultValue={secretCfg.url}
                       placeholder="https://your-gateway"
-                      onBlur={(e) => saveSecret(e.target.value, secretCfg.secret)}
+                      onBlur={(e) => saveGatewayUrl(e.target.value)}
                     />
                   </label>
                   <label>
@@ -385,13 +389,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       type="password"
                       defaultValue={secretCfg.secret}
                       placeholder="INGEST_SECRET"
-                      onBlur={(e) => saveSecret(secretCfg.url, e.target.value)}
+                      onBlur={(e) => setIngestSecret(e.target.value.trim())}
                     />
                   </label>
                   <p className="muted fine">
                     {secretCfg.secret
-                      ? "Stored only in this browser."
-                      : "Forwarding starts once the ingest secret is set. It is stored only in this browser."}
+                      ? "Kept in memory for this session only; enter it again after a reload."
+                      : "Forwarding starts once the ingest secret is set. It is kept in memory for this session only."}
                   </p>
                 </>
               )}
