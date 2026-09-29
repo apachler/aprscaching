@@ -46,7 +46,6 @@ describe("CoT event builder", () => {
 describe("CoT SSE stream (/api/cot/stream)", () => {
   // Mock DB: the snapshot query ("last_seen >= ?") returns one station; delta polls ("last_seen > ?") empty.
   const env = {
-    COT_STREAM_INTERVAL_MS: "1000",
     DB: {
       prepare: (sql: string) => ({
         bind: () => ({

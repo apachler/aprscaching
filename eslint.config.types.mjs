@@ -71,7 +71,7 @@ export default tseslint.config(
   {
     // SYNC_DEFS carries a plain data property named `apply` (a standalone applier function, no
     // `this`) — the rule mistakes it for Function.prototype.apply.
-    files: ["workers/gateway/src/federation_sync.ts"],
+    files: ["workers/gateway/src/fedapply.ts"],
     rules: { "@typescript-eslint/unbound-method": "off" },
   },
 );

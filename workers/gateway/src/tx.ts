@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
@@ -13,7 +14,7 @@ import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
  * `src_call` = the verified user call; the box drains + injects. RF legality holds:
  * the wire source is a real, control-verified licensed call.
  */
-export interface UserTxBody {
+interface UserTxBody {
   kind?: string;
   addressee?: string;
   text?: string;
@@ -71,7 +72,7 @@ export async function handleUserTx(req: Request, env: Env): Promise<Response> {
   const ins = await env.DB.prepare(
     "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload, target) VALUES (?,?,?,?,?, 'is')",
   )
-    .bind(Math.floor(Date.now() / 1000), callsign, built.tocall, built.kind, built.payload)
+    .bind(nowS(), callsign, built.tocall, built.kind, built.payload)
     .run();
   return json(
     { id: Number(ins.meta.last_row_id), srcCall: callsign, kind: built.kind, tocall: built.tocall, status: "queued" },

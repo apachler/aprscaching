@@ -12,7 +12,7 @@ import {
   SIG_DOMAIN,
   type FedRecord,
 } from "@aprscaching/shared";
-import { applyFedBbsBulletin } from "../src/federation_sync.js";
+import { applyFedBbsBulletin } from "../src/fedapply.js";
 import { stableStringify } from "../src/federation.js";
 import type { Env } from "../src/env.js";
 

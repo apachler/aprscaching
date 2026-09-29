@@ -22,13 +22,17 @@ import type { Env } from "./env.js";
 
 const M_PER_DEG = 111_320; // metres per degree of latitude (good enough for slack sizing)
 
-export interface CoarsenConfig {
+interface CoarsenConfig {
   gridDeg: number; // grid-square size in degrees for the request center snap
   timeBucketSec: number; // time-window + response-ts bucket
   distBucketM: number; // response distance bucket
 }
-/** Site defaults: ~550 m grid, 10-min buckets, 100 m distance steps. Tunable per deployment. */
-export const DEFAULT_COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
+/**
+ * The coarsening every instance applies to corroboration questions and answers: ~550 m grid, 10-min
+ * buckets, 100 m distance steps. Asker and answerer must bucket alike for an answer to match its
+ * question, so these are fixed network-wide rather than per instance.
+ */
+export const COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
 
 const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 
@@ -70,7 +74,7 @@ interface RlWindow {
 }
 const rlBuckets = new Map<string, RlWindow>();
 export const RL_MAX = 60; // probes per key per window
-export const RL_WINDOW_MS = 60_000;
+const RL_WINDOW_MS = 60_000;
 
 /** Fixed-window rate limit. Returns true when `key` is OVER budget. `nowMs` is injected for testing. */
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
@@ -118,7 +122,7 @@ export async function rateLimitedDurable(
 }
 
 const negMemo = new Map<string, number>(); // key -> expiry (ms)
-export const NEG_TTL_MS = 30_000;
+const NEG_TTL_MS = 30_000;
 const NEG_MAX_ENTRIES = 5000;
 
 export function negCached(key: string, nowMs: number): boolean {
@@ -170,13 +174,4 @@ export function clientIp(req: Request, env: Env): string {
     if (xff) return xff;
   }
   return req.headers.get("x-real-ip") || "unknown";
-}
-
-export function coarsenConfig(env: Env): CoarsenConfig {
-  const n = (v: string | undefined, d: number) => (v != null && Number(v) > 0 ? Number(v) : d);
-  return {
-    gridDeg: n(env.FED_CORROBORATION_GRID_DEG, DEFAULT_COARSEN.gridDeg),
-    timeBucketSec: n(env.FED_CORROBORATION_TIME_BUCKET_SEC, DEFAULT_COARSEN.timeBucketSec),
-    distBucketM: n(env.FED_CORROBORATION_DIST_BUCKET_M, DEFAULT_COARSEN.distBucketM),
-  };
 }

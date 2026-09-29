@@ -10,6 +10,7 @@
  * inside its parent. Signatures are RSASSA-PKCS1-v1_5 with SHA-1/256/384/512 (the algorithms LoTW's
  * RSA certificates use); any other algorithm fails verification.
  */
+import { b64urlToBytes } from "./util/b64.js";
 
 /** One DER element: its tag, and where its header and contents sit in the buffer. */
 interface Tlv {
@@ -251,24 +252,17 @@ export async function verifiedBy(cert: Certificate, issuer: Certificate): Promis
   return rsaVerify(issuer.spki, hash, cert.signature, cert.tbs);
 }
 
-export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
-}
-
-function fromBase64(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
 }
 
 /** The DER of each `CERTIFICATE` block in PEM text. A literal `\n` counts as a line break. */
 export function pemBlocks(text: string): Uint8Array[] {
   const out: Uint8Array[] = [];
   const re = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
-  for (const m of text.replace(/\\n/g, "\n").matchAll(re)) out.push(fromBase64(m[1]!.replace(/\s+/g, "")));
+  for (const m of text.replace(/\\n/g, "\n").matchAll(re)) out.push(b64urlToBytes(m[1]!.replace(/\s+/g, "")));
   return out;
 }
 
@@ -276,7 +270,7 @@ export function pemBlocks(text: string): Uint8Array[] {
 export function base64Bytes(s: unknown): Uint8Array | null {
   if (typeof s !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(s)) return null;
   try {
-    return fromBase64(s);
+    return b64urlToBytes(s);
   } catch {
     return null;
   }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import { ingestSecretOk } from "./auth.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
@@ -12,12 +13,10 @@ import { json, asStr } from "./app.js";
 import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
-import { applyFedBbsBulletin, type FedBbsApplyResult } from "./federation_sync.js";
-
-const now = () => Math.floor(Date.now() / 1000);
+import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
 
 /** Build a router from the enabled forward rules. */
-export async function loadRouter(env: Env): Promise<ForwardRouter> {
+async function loadRouter(env: Env): Promise<ForwardRouter> {
   const rows = (
     await env.DB.prepare("SELECT partner, route, transport FROM bbs_forward_rules WHERE enabled=1").all<ForwardRule>()
   ).results;
@@ -33,7 +32,7 @@ async function homeBbs(env: Env, call: string): Promise<string | null> {
 }
 
 /** Resolve a destination (explicit "@bbs" address, or a callsign steered via White Pages) → partner. */
-export async function resolvePartner(env: Env, dest: string): Promise<{ addr: string; partner: ForwardRule | null }> {
+async function resolvePartner(env: Env, dest: string): Promise<{ addr: string; partner: ForwardRule | null }> {
   let addr = dest.trim();
   if (!addr.includes("@")) {
     const home = await homeBbs(env, addr);
@@ -44,12 +43,12 @@ export async function resolvePartner(env: Env, dest: string): Promise<{ addr: st
 }
 
 /** Learn a White Pages entry from a heard/posted message ("S OE8APR @ OE8XBM…"). Best-effort. */
-export async function learnWhitePages(env: Env, call: string, bbs: string): Promise<void> {
+async function learnWhitePages(env: Env, call: string, bbs: string): Promise<void> {
   if (!call || !bbs) return;
   await env.DB.prepare(
     "INSERT INTO white_pages (callsign, home_bbs, updated_at) VALUES (?,?,?) ON CONFLICT(callsign) DO UPDATE SET home_bbs=excluded.home_bbs, updated_at=excluded.updated_at",
   )
-    .bind(call.toUpperCase(), bbs.toUpperCase(), now())
+    .bind(call.toUpperCase(), bbs.toUpperCase(), nowS())
     .run();
 }
 
@@ -91,7 +90,7 @@ export async function handleForwardRules(req: Request, env: Env): Promise<Respon
   const res = await env.DB.prepare(
     "INSERT INTO bbs_forward_rules (partner, route, transport, enabled, created_at) VALUES (?,?,?,1,?)",
   )
-    .bind(b.partner.toLowerCase(), b.route.toUpperCase(), (b.transport ?? "rf-fbb").toLowerCase(), now())
+    .bind(b.partner.toLowerCase(), b.route.toUpperCase(), (b.transport ?? "rf-fbb").toLowerCase(), nowS())
     .run();
   return json({ ok: true, id: Number(res.meta.last_row_id) }, { status: 201 });
 }
@@ -192,7 +191,7 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
   }
   const p = normalizePartner(await req.json().catch(() => ({})));
   if (!p) return json({ error: "valid partner call required" }, { status: 400 });
-  const ts = now();
+  const ts = nowS();
   await env.DB.prepare(
     `INSERT INTO bbs_partners (call, ha, connect_script, proto, interval_min, timebands, request_reverse, msgtypes, max_block, enabled, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
@@ -232,7 +231,7 @@ export async function handleForwardPartnerDelete(req: Request, env: Env, id: num
 
 // ---- FBB forwarding pool — the ingest scheduler pulls outbound / pushes inbound here ----
 /** An FBB message on the wire (matches @aprscaching/packet FbbMessage; the ingest feeds these to FbbSession). */
-export interface FbbWireMsg {
+interface FbbWireMsg {
   type: "P" | "B";
   from: string;
   at: string;
@@ -318,7 +317,7 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
          AND NOT EXISTS (SELECT 1 FROM bbs_forward_log l WHERE l.partner=? AND l.bid=m.bid)
        ORDER BY m.posted_at LIMIT 200`,
     )
-      .bind(now(), partner)
+      .bind(nowS(), partner)
       .all<PoolRow>()
   ).results;
 
@@ -337,7 +336,7 @@ export async function handleForwardPool(req: Request, env: Env): Promise<Respons
 export async function handleForwardInbound(req: Request, env: Env): Promise<Response> {
   if (!ingestOk(req, env)) return new Response("unauthorized", { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { message?: Partial<FbbWireMsg>; origin?: string };
-  const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), now());
+  const row = inboundRow(b.message ?? {}, (b.origin ?? "rf-fbb").slice(0, 32), nowS());
   if (!row) return json({ error: "bid, from, to, body required" }, { status: 400 });
   // A federation batch's BID is the hash of its content, so it is claimed only by that content: a
   // bulletin whose BID doesn't match what it carries is refused before it can squat the BID and make
@@ -381,7 +380,7 @@ export async function handleForwardSent(req: Request, env: Env): Promise<Respons
   const partner = (b.partner ?? "").toUpperCase();
   if (!partner || !Array.isArray(b.bids) || !b.bids.length)
     return json({ error: "partner + bids required" }, { status: 400 });
-  const ts = now();
+  const ts = nowS();
   await env.DB.batch(
     b.bids
       .slice(0, 200)

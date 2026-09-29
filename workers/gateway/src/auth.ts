@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
-import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
+import { randomChallenge, verifyRegistration, verifyAssertion } from "./webauthn.js";
+import { bytesToB64, bytesToB64url, b64urlToBytes } from "./util/b64.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { licenceFor } from "./licence.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
@@ -74,7 +76,7 @@ function webauthnUnconfigured(): Response {
   );
 }
 async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   await env.DB.batch([
     // reap expired ceremonies while we're here — abandoned begins must not accumulate
     env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now),
@@ -91,7 +93,7 @@ async function takeChallenge(env: Env, cs: string, kind: string): Promise<string
   const row = await env.DB.prepare(
     "SELECT id, value FROM auth_challenges WHERE callsign=? AND kind=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1",
   )
-    .bind(cs, kind, Math.floor(Date.now() / 1000))
+    .bind(cs, kind, nowS())
     .first<{ id: string; value: string }>();
   if (!row) return null;
   await env.DB.prepare("DELETE FROM auth_challenges WHERE id=?").bind(row.id).run();
@@ -117,7 +119,7 @@ export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAW
 /** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
  *  and the default service call that takes radio commands and sends BBS mail. */
 const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
-export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
+const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
 /** The account holding a base call. `account_callsigns` is the one record of who holds a licence:
  *  every account holds the base of its active call there, and a base call has at most one holder. */
@@ -308,7 +310,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     if (pending.a) {
       // Passkey proven — NOW create the account. If the callsign was claimed through another path
       // during the ceremony window, refuse rather than bind this passkey to someone else's account.
-      const now = Math.floor(Date.now() / 1000);
+      const now = nowS();
       const raced = await unclaimableReason(env, cs);
       if (raced) return json({ error: raced }, { status: 409 });
       try {
@@ -334,14 +336,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-      .bind(
-        r.credentialId,
-        cs,
-        r.coseKey,
-        r.signCount,
-        JSON.stringify(credential.response.transports ?? []),
-        Math.floor(Date.now() / 1000),
-      )
+      .bind(r.credentialId, cs, r.coseKey, r.signCount, JSON.stringify(credential.response.transports ?? []), nowS())
       .run();
     return json(
       { ok: true, callsign: cs, licence: await licenceFor(env, cs) },
@@ -421,7 +416,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
 }
 
 /** The signed-in person as the session proves them: the durable account, the active call and its base. */
-export interface SessionIdentity {
+interface SessionIdentity {
   accountId: string;
   callsign: string;
   base: string;
@@ -533,7 +528,7 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
       { status: 409 },
     );
   try {
-    await env.DB.batch(holdCall(env, me.accountId, base, false, Math.floor(Date.now() / 1000)));
+    await env.DB.batch(holdCall(env, me.accountId, base, false, nowS()));
   } catch {
     return json({ error: "callsign already held by another account" }, { status: 409 });
   }
@@ -560,7 +555,7 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   const owner = await baseHolder(env, next);
   if (owner && owner !== me.accountId)
     return json({ error: "callsign already held by another account" }, { status: 409 });
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   // a held call keeps its verification (no re-verify); a brand-new base call is held, unverified
   const verified = owner === me.accountId && (await isCallsignVerified(env, next));
   const ops = [
@@ -587,7 +582,7 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
 }
 
 /** Thrown when this instance has no usable SESSION_SECRET: sign-in is closed, not silently weakened. */
-export class SessionUnavailable extends Error {
+class SessionUnavailable extends Error {
   constructor() {
     super(
       "sessions are disabled: set SESSION_SECRET to a strong value of its own (not INGEST_SECRET, OPERATOR_SECRET or 'change-me')",
@@ -635,7 +630,7 @@ export async function handleLogoutAll(req: Request, env: Env): Promise<Response>
 }
 
 /** Invalidate every outstanding session of an account by moving it to the next generation. */
-export async function endAllSessions(env: Env, accountId: string): Promise<void> {
+async function endAllSessions(env: Env, accountId: string): Promise<void> {
   await env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(accountId).run();
 }
 
@@ -705,13 +700,13 @@ async function signSession(env: Env, c: SessionClaims): Promise<string> {
   if (!k) throw new SessionUnavailable();
   const payload = [SESSION_VERSION, c.accountId, c.gen, c.callsign, Date.now()].join(".");
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
-  return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+  return `${btoa(payload)}.${bytesToB64(new Uint8Array(sig))}`;
 }
 /** The cookie's Max-Age is only a client hint — enforce the lifetime server-side too,
  *  or a captured token stays valid until the signing secret rotates. Tunable via SESSION_TTL_DAYS;
  *  SESSION_EPOCH (unix seconds) lets an operator revoke every session minted before a point in
  *  time without rotating secrets (e.g. after a device loss report). */
-export const SESSION_TTL_DAYS_DEFAULT = 30;
+const SESSION_TTL_DAYS_DEFAULT = 30;
 export function sessionExpired(mintedAtMs: number, env: Env, nowMs: number): boolean {
   if (!Number.isFinite(mintedAtMs)) return true;
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
@@ -727,7 +722,7 @@ async function verifySession(token: string, env: Env): Promise<SessionClaims | n
     if (!k) return null; // no usable secret ⇒ no session is ever valid
     const [p, sg] = token.split(".");
     const payload = atob(p!);
-    const sig = Uint8Array.from(atob(sg!), (c) => c.charCodeAt(0));
+    const sig = b64urlToBytes(sg!);
     const ok = await crypto.subtle.verify("HMAC", k, sig, new TextEncoder().encode(payload));
     if (!ok) return null;
     // a token without an account (any other shape) is never valid

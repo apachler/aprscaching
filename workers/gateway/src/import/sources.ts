@@ -38,7 +38,7 @@ export interface ImportScope {
   deepLink?: string; // deepLink may contain {ref}
 }
 
-export interface SourceAdapter {
+interface SourceAdapter {
   id: string;
   sourceName: string;
   load(env: Env, scope: ImportScope): Promise<ImportedCache[]>;

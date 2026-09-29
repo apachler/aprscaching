@@ -27,6 +27,7 @@
  * call string. A find is scored by the normal verification engine at the time the message was sent; a
  * radio message carries no in-app device reading, so it reaches Tier A or C, never B.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, baseHolder } from "./auth.js";
@@ -47,11 +48,11 @@ export const RADIO_COMMANDS_PER_HOUR = 10;
 /** Acks and replies the service queues per hour across all senders — the ceiling on what a flood makes it send. */
 export const RADIO_ANSWERS_PER_HOUR = 200;
 /** Decided commands (logged, rejected, discarded, expired, help) are purged this long after the decision. */
-export const RADIO_COMMAND_RETENTION_SEC = 30 * 24 * 3600;
+const RADIO_COMMAND_RETENTION_SEC = 30 * 24 * 3600;
 /** A pending command the player has not confirmed expires after this long. */
-export const RADIO_PENDING_TTL_SEC = 7 * 24 * 3600;
+const RADIO_PENDING_TTL_SEC = 7 * 24 * 3600;
 /** At most one text reply per destination in this window. */
-export const RADIO_REPLY_INTERVAL_SEC = 10 * 60;
+const RADIO_REPLY_INTERVAL_SEC = 10 * 60;
 /** A retry of the same message (same number and text, or same text when unnumbered) within this window runs once. */
 const DUPLICATE_WINDOW_SEC = 30 * 60;
 /** APRS message text limit. */
@@ -59,7 +60,7 @@ const APRS_TEXT_MAX = 67;
 
 export const HELP_TEXT = "FOUND <code> [log]; DNF <code> [log]; NOTE <code> <text>";
 
-export type RadioCommand =
+type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
   | { command: "note"; code: string; body: string }
   | { command: "help" };
@@ -112,7 +113,7 @@ const isAckOrRej = (text: string) => /^(ack|rej)[A-Za-z0-9]{1,5}$/i.test(text.tr
  * Text as an APRS101 message body: printable ASCII only, without the reserved `|`, `~` and `{`, within the
  * 67-character limit. Dashes that are not ASCII become `-`; any other non-ASCII character is dropped.
  */
-export function aprsText(text: string): string {
+function aprsText(text: string): string {
   return text
     .replace(/[\u2010-\u2015]/g, "-")
     .replace(/[^\x20-\x7e]/g, "")
@@ -164,7 +165,7 @@ const HEARD_ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom
  * counts: a signed batch comes from the browser RF bridge on the sender's own computer, which can put any
  * port, path or site on what it sends, and APRS-IS or a tunnel is never a hearing at a site.
  */
-export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
+function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
   if (m.signed) return false;
   const transport = transportForPort(m.port, false);
   if (!HEARD_ON_AIR.has(transport)) return false;
@@ -173,8 +174,6 @@ export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>)
     attestedSites,
   ).firstPartyAttested;
 }
-
-const now = () => Math.floor(Date.now() / 1000);
 
 type CacheForLog = CacheRow & { id: number; code: string; title: string };
 
@@ -197,7 +196,7 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?, ?, 'APZACG', 'message', ?)",
   )
-    .bind(now(), serviceCall(env), encodeAprsMessage(to, text))
+    .bind(nowS(), serviceCall(env), encodeAprsMessage(to, text))
     .run();
 }
 
@@ -236,7 +235,7 @@ async function answer(env: Env, m: RadioMessage, raw: string): Promise<boolean> 
  * no ack frame; its receive path recognises a text message `SENDER   :ack<nnn>` as the acknowledgement of
  * message nnn and matches it by number alone, so the node that heard the message can ack it that way.
  */
-export function ackText(port: string, src: string, msgNo: string): string {
+function ackText(port: string, src: string, msgNo: string): string {
   return port === "meshcom" ? `${addressee(src)}:ack${msgNo}` : `ack${msgNo}`;
 }
 
@@ -253,11 +252,11 @@ async function reply(env: Env, m: RadioMessage, rowId: number, text: string, ask
   const recent = await env.DB.prepare(
     "SELECT 1 AS x FROM radio_commands WHERE from_call = ? AND replied_at >= ? LIMIT 1",
   )
-    .bind(m.src.toUpperCase(), now() - RADIO_REPLY_INTERVAL_SEC)
+    .bind(m.src.toUpperCase(), nowS() - RADIO_REPLY_INTERVAL_SEC)
     .first();
   if (recent) return;
   if (!(await answer(env, m, text))) return;
-  await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(now(), rowId).run();
+  await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(nowS(), rowId).run();
 }
 
 async function insertRow(
@@ -299,8 +298,8 @@ async function insertRow(
       f.score ? JSON.stringify(f.score) : null,
       f.logId ?? null,
       m.ts,
-      now(),
-      f.status === "pending" ? null : now(),
+      nowS(),
+      f.status === "pending" ? null : nowS(),
     )
     .run();
   return Number(r.meta?.last_row_id);
@@ -497,7 +496,7 @@ async function confirmRow(
     env.DB.prepare(
       "UPDATE radio_commands SET status = ?, reason = ?, log_id = ?, decided_at = ?, trusted = MAX(trusted, ?) WHERE id = ? AND status = 'confirming'",
     )
-      .bind(status, reason, logId, now(), onAir ? 1 : 0, row.id)
+      .bind(status, reason, logId, nowS(), onAir ? 1 : 0, row.id)
       .run();
   try {
     const cache = row.cache_id != null ? await loadCache(env, row.cache_id) : null;
@@ -529,12 +528,12 @@ export async function expireRadioCommands(env: Env): Promise<void> {
   await env.DB.prepare(
     "UPDATE radio_commands SET status = 'expired', decided_at = ? WHERE status = 'pending' AND sent_at < ?",
   )
-    .bind(now(), now() - RADIO_PENDING_TTL_SEC)
+    .bind(nowS(), nowS() - RADIO_PENDING_TTL_SEC)
     .run();
   await env.DB.prepare(
     "DELETE FROM radio_commands WHERE status NOT IN ('pending', 'confirming') AND COALESCE(decided_at, created_at) < ?",
   )
-    .bind(now() - RADIO_COMMAND_RETENTION_SEC)
+    .bind(nowS() - RADIO_COMMAND_RETENTION_SEC)
     .run();
 }
 
@@ -576,7 +575,7 @@ export async function decideRadioCommand(
     await env.DB.prepare(
       "UPDATE radio_commands SET status = 'discarded', decided_at = ? WHERE id = ? AND status = 'pending'",
     )
-      .bind(now(), id)
+      .bind(nowS(), id)
       .run();
     return { status: 200, body: { ok: true, status: "discarded" } };
   }

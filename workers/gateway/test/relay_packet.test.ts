@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { decodeFedBbsBatch, decodeFedFrame, decodeFedSyncPage } from "@aprscaching/shared";
 import { handleRelayDispatch } from "../src/relay.js";
-import { applyFedBbsBulletin } from "../src/federation_sync.js";
+import { applyFedBbsBulletin } from "../src/fedapply.js";
 import type { Env } from "../src/env.js";
 
 const SECRET = "test-ingest-secret-0123456789";

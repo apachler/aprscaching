@@ -3,12 +3,12 @@ import { describe, it, expect } from "vitest";
 import { SIG_DOMAIN } from "@aprscaching/shared";
 import {
   activeFedKeys,
+  resolvePeerKeys,
   verifyRotationRecord,
   stableStringify,
   type FedPublicKey,
   type RotationRecord,
 } from "../src/federation.js";
-import { rotationChainReaches } from "../src/federation_sync.js";
 
 const b64u = (buf: ArrayBuffer) => {
   let s = "";
@@ -58,7 +58,10 @@ describe("rotation-record continuity", () => {
 
 // The sync must only accept a peer's CHANGED key when a valid rotation chain proves continuity from
 // the previously-pinned key. A hijacked domain that just swaps keys has no such proof.
-describe("rotationChainReaches — key-change continuity", () => {
+describe("resolvePeerKeys — key-change continuity", () => {
+  /** Does the pin move from `from` to `to` given these rotation records? */
+  const moves = async (from: string, to: string, rotations: RotationRecord[] | undefined) =>
+    (await resolvePeerKeys({ pinned: from, current: to, published: [], rotations, prior: [], nowS: 1000 })).ok;
   async function kp() {
     const k = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     return { x: b64u(await crypto.subtle.exportKey("raw", k.publicKey)), priv: k.privateKey };
@@ -77,21 +80,21 @@ describe("rotationChainReaches — key-change continuity", () => {
   it("accepts a single valid rotation A→B", async () => {
     const a = await kp(),
       b = await kp();
-    expect(await rotationChainReaches(a.x, [b.x], [await rot(a, b)])).toBe(true);
+    expect(await moves(a.x, b.x, [await rot(a, b)])).toBe(true);
   });
 
   it("accepts a multi-hop chain A→B→C", async () => {
     const a = await kp(),
       b = await kp(),
       c = await kp();
-    expect(await rotationChainReaches(a.x, [c.x], [await rot(a, b), await rot(b, c)])).toBe(true);
+    expect(await moves(a.x, c.x, [await rot(a, b), await rot(b, c)])).toBe(true);
   });
 
   it("rejects a key swap with NO rotation record (the hijack case)", async () => {
     const a = await kp(),
       evil = await kp();
-    expect(await rotationChainReaches(a.x, [evil.x], [])).toBe(false);
-    expect(await rotationChainReaches(a.x, [evil.x], undefined)).toBe(false);
+    expect(await moves(a.x, evil.x, [])).toBe(false);
+    expect(await moves(a.x, evil.x, undefined)).toBe(false);
   });
 
   it("rejects a chain whose record is not signed by the real predecessor", async () => {
@@ -111,11 +114,11 @@ describe("rotationChainReaches — key-change continuity", () => {
         ),
       ),
     };
-    expect(await rotationChainReaches(a.x, [b.x], [forged])).toBe(false);
+    expect(await moves(a.x, b.x, [forged])).toBe(false);
   });
 
-  it("is trivially true when the pinned key is still among the active set", async () => {
+  it("keeps an unchanged pin without any rotation record", async () => {
     const a = await kp();
-    expect(await rotationChainReaches(a.x, [a.x], [])).toBe(true);
+    expect(await moves(a.x, a.x, [])).toBe(true);
   });
 });

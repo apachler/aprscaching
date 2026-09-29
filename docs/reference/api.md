@@ -32,7 +32,7 @@ curl -s "https://aprs.example.net/api/v1/activity?key=$KEY"                     
 ```
 
 Limits per 60-second window: 60 requests per IP without a key, 600 with one (`API_RATE_*`); a box may span at
-most 20° a side (`API_MAX_BBOX_DEG`).
+most 20° a side.
 
 | Method | Path | Purpose |
 |--------|------|---------|

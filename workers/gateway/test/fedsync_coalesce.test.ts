@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { coalesceRun, newCoalescer } from "../src/federation_sync.js";
+import { coalesceRun, newCoalescer } from "../src/fedpull.js";
 
 function deferred() {
   let resolve!: () => void;

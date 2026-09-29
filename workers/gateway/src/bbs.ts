@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import { ingestSecretOk } from "./auth.js";
 /**
  * bbs.ts — store-and-forward message BBS (connectionless). A message base of personal mail
@@ -12,7 +13,6 @@ import { json } from "./app.js";
 import type { FeedServeDef } from "./federation.js";
 import { FED_BBS_CATEGORY } from "@aprscaching/shared";
 
-const now = () => Math.floor(Date.now() / 1000);
 const MAX_ATTEMPTS = 5;
 const RETRY_INTERVAL = 60; // seconds between (re)delivery attempts
 const APRS_BODY_MAX = 67; // APRS message text limit
@@ -36,7 +36,7 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   const from = b.fromCall.toUpperCase(),
     to = b.toCall.toUpperCase();
   const type = b.type === "B" || b.type === "P" || b.type === "T" ? b.type : BULLETIN_TO.test(to) ? "B" : "P";
-  const posted = now();
+  const posted = nowS();
   const expires = b.lifetimeSec ? posted + b.lifetimeSec : type === "B" ? posted + 30 * 86400 : null;
 
   // Reply: inherit the parent's conversation root so replies chain into a thread
@@ -127,7 +127,7 @@ export async function handleBbsList(req: Request, env: Env): Promise<Response> {
 export async function handleBbsBulletins(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const cat = u.searchParams.get("category");
-  const n = now();
+  const n = nowS();
   // The reserved federation category (ACSFED) is machine carrier traffic, not human mail — it is
   // hidden from the default listing but still reachable by asking for the category explicitly.
   let sql = "SELECT * FROM bbs_messages WHERE type='B' AND (expires_at IS NULL OR expires_at > ?)";
@@ -147,7 +147,7 @@ export async function handleBbsBulletins(req: Request, env: Env): Promise<Respon
   return json({ bulletins: rows.map(row) });
 }
 export async function handleBbsRead(req: Request, env: Env, id: number): Promise<Response> {
-  await env.DB.prepare("UPDATE bbs_messages SET read_at=? WHERE id=? AND read_at IS NULL").bind(now(), id).run();
+  await env.DB.prepare("UPDATE bbs_messages SET read_at=? WHERE id=? AND read_at IS NULL").bind(nowS(), id).run();
   return json({ ok: true });
 }
 
@@ -170,7 +170,7 @@ export async function handleBbsSession(req: Request, env: Env): Promise<Response
       WHERE (expires_at IS NULL OR expires_at > ?) AND (type='B' OR to_call=? OR from_call=?)
       ORDER BY posted_at DESC LIMIT 300`,
     )
-      .bind(now(), call, call)
+      .bind(nowS(), call, call)
       .all<any>()
   ).results;
   const messages = rows.map((m) => ({
@@ -252,7 +252,7 @@ export const BULLETIN_FEED: FeedServeDef<BulletinRow> = {
          AND (posted_at > ? OR (posted_at = ? AND id > ?))
        ORDER BY posted_at, id LIMIT ?`,
       )
-        .bind(now(), since, since, sinceId, limit)
+        .bind(nowS(), since, since, sinceId, limit)
         .all<BulletinRow>()
     ).results,
   // the gid lives in the instance's namespace like every record; the FBB BID (the cross-mesh dedup
@@ -303,7 +303,7 @@ export async function upsertRemoteBulletin(
       String(d.toCall).toUpperCase(),
       d.subject ?? null,
       String(d.body),
-      d.postedAt ?? now(),
+      d.postedAt ?? nowS(),
       d.expiresAt ?? null,
       origin,
     )
@@ -314,7 +314,7 @@ export async function upsertRemoteBulletin(
 /** Called when `callsign` is heard: (re)deliver any held/unacked personal mail to it over APRS. */
 export async function deliverHeld(env: Env, callsign: string): Promise<number> {
   const cs = callsign.toUpperCase();
-  const n = now();
+  const n = nowS();
   const due = (
     await env.DB.prepare(
       `SELECT d.msg_id AS msgId, d.attempts, m.from_call AS fromCall, m.body
@@ -360,6 +360,6 @@ export async function bbsOnAck(env: Env, fromCall: string, lineNo: string | numb
   await env.DB.prepare(
     "UPDATE bbs_delivery SET status='acked', acked_at=? WHERE to_call=? AND line_no=? AND acked_at IS NULL",
   )
-    .bind(now(), fromCall.toUpperCase(), n)
+    .bind(nowS(), fromCall.toUpperCase(), n)
     .run();
 }

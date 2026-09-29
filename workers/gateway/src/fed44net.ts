@@ -15,6 +15,7 @@
  * What this attests is IDENTITY only: the peer enters `unvetted` like any discovered peer, and the
  * operator-set trust tier still governs whether its records count — transport is never trust.
  */
+import { nowS } from "./util/time.js";
 import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -25,7 +26,7 @@ import { resolveTxt, acsFields, amprNames } from "./doh.js";
 const RESOLVE_TIMEOUT_MS = 5000;
 const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
 
-export interface Resolved44net {
+interface Resolved44net {
   callsign: string; // base call, uppercased
   host: string; // <call>.ampr.org
   instance: string;
@@ -79,7 +80,7 @@ async function descriptorMatches(
     });
     if (!res.ok) return { checked: false, ok: true, detail: `descriptor unreachable (${res.status})` };
     const wk = (await res.json()) as { instance?: string; publicKeys?: FedPublicKey[] };
-    const keys = activeFedKeys(Array.isArray(wk.publicKeys) ? wk.publicKeys : [], Math.floor(Date.now() / 1000));
+    const keys = activeFedKeys(Array.isArray(wk.publicKeys) ? wk.publicKeys : [], nowS());
     if (wk.instance !== expected.instance)
       return {
         checked: true,
@@ -147,7 +148,7 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
        endpoints    = excluded.endpoints,
        trust        = fed_peers.trust`, // an existing tier (incl. 'blocked') is never changed by re-adding
   )
-    .bind(url, resolved.instance, resolved.publicKey, endpoints, Math.floor(Date.now() / 1000))
+    .bind(url, resolved.instance, resolved.publicKey, endpoints, nowS())
     .run();
   return json(
     {

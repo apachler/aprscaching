@@ -30,6 +30,7 @@
  * so a verification or a revocation shows everywhere at once. A claim of a call nobody held starts
  * unverified (`holdCall` in auth.ts clears what was recorded before).
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
@@ -48,7 +49,7 @@ export function listeningSites(env: Env): string[] {
 }
 
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
-export const CHALLENGE_TTL_SEC = 30 * 60;
+const CHALLENGE_TTL_SEC = 30 * 60;
 /** Wrong codes heard on air before the challenge locks. */
 export const MAX_ATTEMPTS = 5;
 
@@ -57,8 +58,6 @@ function sixDigitCode(): string {
   const n = (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000) + 100000;
   return String(n);
 }
-
-const nowSec = () => Math.floor(Date.now() / 1000);
 
 /** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign. */
 const STARTS_PER_ACCOUNT = 10;
@@ -108,7 +107,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
   )
     return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
   const code = sixDigitCode();
-  const now = nowSec();
+  const now = nowS();
   // A new challenge replaces any pending one but never revokes an existing verification: a verified
   // call stays verified (and keeps its method) while the new code is outstanding.
   await env.DB.prepare(
@@ -125,7 +124,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
 }
 
 /** How a call's control was proven. */
-export type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
+type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
 
 /** Mark a base call verified by `method`: the one write of a verification. Every SSID inherits it. */
 export async function markVerified(
@@ -134,7 +133,7 @@ export async function markVerified(
   method: VerifyMethod,
   f: { by?: string | null; note?: string | null },
 ): Promise<void> {
-  const now = nowSec();
+  const now = nowS();
   await env.DB.prepare(
     `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
      VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
@@ -146,7 +145,7 @@ export async function markVerified(
 }
 
 /** What an on-air `VERIFY` did: completed the challenge, a wrong code, or nothing to answer. */
-export type RfChallengeOutcome = "verified" | "wrong" | "none";
+type RfChallengeOutcome = "verified" | "wrong" | "none";
 
 /**
  * Complete a challenge from a `VERIFY <code>` message. The caller has established that the message was
@@ -174,7 +173,7 @@ export async function completeRfChallenge(
       status: string;
     }>();
   if (!row || !row.challenge || row.status === "failed") return "none";
-  if (nowSec() - row.created_at > CHALLENGE_TTL_SEC || row.attempts >= MAX_ATTEMPTS) return "none";
+  if (nowS() - row.created_at > CHALLENGE_TTL_SEC || row.attempts >= MAX_ATTEMPTS) return "none";
   // the challenge binds to the account that started it, and only while that account still holds the call
   if (!row.account_id || !(await accountHoldsCall(env, row.account_id, cs))) return "none";
   if (!timingSafeEqual(row.challenge, code)) {
@@ -265,7 +264,7 @@ const CALL_RE = /^[A-Z0-9]{3,9}$/;
 
 async function logEvent(env: Env, cs: string, action: string, detail: Record<string, unknown>): Promise<void> {
   await env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, ?, ?, ?)")
-    .bind(cs, action, JSON.stringify(detail), nowSec())
+    .bind(cs, action, JSON.stringify(detail), nowS())
     .run();
 }
 

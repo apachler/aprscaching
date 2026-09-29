@@ -11,6 +11,7 @@
  *   GET    /api/watch/alerts     my recent alerts (newest first)
  *   POST   /api/watch/seen       mark all my alerts seen
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
@@ -18,7 +19,6 @@ import { sessionIdentity } from "./auth.js";
 import { pushAlert } from "./notify.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const HEARD_THROTTLE_SEC = 3600; // at most one "heard" alert per watched call per hour
 const NEAR_CACHE_DEG = 0.0045; // ~500 m bounding box for the near-a-cache tie-in
 
@@ -46,7 +46,7 @@ export async function handleWatchAdd(req: Request, env: Env): Promise<Response> 
   const cs = baseCall(String(callsign ?? "").trim());
   if (!/^[A-Z0-9]{3,}$/.test(cs)) return json({ error: "a valid callsign is required" }, { status: 400 });
   await env.DB.prepare("INSERT OR IGNORE INTO watch_calls (account_id, callsign, added_at) VALUES (?,?,?)")
-    .bind(acct, cs, now())
+    .bind(acct, cs, nowS())
     .run();
   return json({ ok: true, callsign: cs }, { status: 201 });
 }
@@ -107,7 +107,7 @@ export async function recordWatchHeard(env: Env, heard: { src: string; lat: numb
   ).results;
   if (!watchers.length) return;
 
-  const t = now();
+  const t = nowS();
   for (const w of watchers) {
     const recent = await env.DB.prepare(
       "SELECT 1 AS x FROM watch_alerts WHERE account_id = ? AND callsign = ? AND ts > ? LIMIT 1",

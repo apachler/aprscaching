@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { isCallsignVerified } from "./callsign.js";
 
@@ -22,7 +23,7 @@ export async function maybeAnnounceFind(
   const title = cacheTitle ? ` (${cacheTitle})` : "";
   const payload = `>Found ${cacheCode}${title} via aprscaching.net`.slice(0, 120);
   await env.DB.prepare("INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?,?,?, 'status', ?)")
-    .bind(Math.floor(Date.now() / 1000), callsign, acct.announce_tocall ?? "APZACG", payload)
+    .bind(nowS(), callsign, acct.announce_tocall ?? "APZACG", payload)
     .run();
   return true;
 }

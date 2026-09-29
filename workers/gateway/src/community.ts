@@ -4,6 +4,7 @@
  * Built on the existing tables (cache_logs, caches, achievements, favorites, watches, accounts).
  * A find counts toward stats/points only when verified; points reward distinct caches + trust tier.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { displayCall } from "./auth.js";
@@ -12,7 +13,6 @@ import { parsePage, keyset, paginate } from "./paging.js";
 import { actor } from "./caches.js";
 import { RateRequest } from "@aprscaching/shared";
 
-const now = () => Math.floor(Date.now() / 1000);
 const DAY = 86400;
 
 // per distinct found cache: trust-tier base + difficulty + terrain (best find wins)
@@ -23,8 +23,8 @@ const POINTS =
 const VERIFIED_LOGGER = "AND l.logger_call IN (SELECT callsign FROM callsign_verifications WHERE status='verified')";
 
 function periodStart(period: string | null): number {
-  if (period === "month") return now() - 30 * DAY;
-  if (period === "year") return now() - 365 * DAY;
+  if (period === "month") return nowS() - 30 * DAY;
+  if (period === "year") return nowS() - 365 * DAY;
   return 0;
 }
 function bboxClause(u: URL): { sql: string; binds: number[] } {
@@ -320,7 +320,7 @@ export async function handleRate(req: Request, env: Env, cacheId: number): Promi
     `INSERT INTO cache_ratings (cache_id, callsign, stars, ts) VALUES (?,?,?,?)
      ON CONFLICT(cache_id, callsign) DO UPDATE SET stars=excluded.stars, ts=excluded.ts`,
   )
-    .bind(cacheId, who, parsed.data.stars, Math.floor(Date.now() / 1000))
+    .bind(cacheId, who, parsed.data.stars, nowS())
     .run();
   return json({ rating: await ratingInfo(env, cacheId, policy, who) });
 }
@@ -364,7 +364,7 @@ export async function awardFindBadges(env: Env, callsign: string): Promise<void>
     env.DB.prepare("INSERT OR IGNORE INTO achievements (callsign, badge, earned_at) VALUES (?,?,?)").bind(
       cs,
       badge,
-      now(),
+      nowS(),
     );
   const stmts = [];
   const finds =
@@ -408,7 +408,7 @@ export async function awardHideBadge(env: Env, callsign: string): Promise<void> 
     env.DB.prepare("INSERT OR IGNORE INTO achievements (callsign, badge, earned_at) VALUES (?,?,?)").bind(
       cs,
       badge,
-      now(),
+      nowS(),
     );
   const stmts = [];
   if (hides >= 1) stmts.push(grant("hider"));

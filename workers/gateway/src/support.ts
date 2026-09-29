@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
+import { jsonSetting } from "./util/config.js";
 import { baseCall } from "@aprscaching/aprs";
 import { operatorSecretOk, sessionIdentity } from "./auth.js";
 /**
@@ -16,11 +18,10 @@ import { operatorSecretOk, sessionIdentity } from "./auth.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
 
-export interface LedgerRow {
+interface LedgerRow {
   ts: number;
   direction: string;
   bucket: string;
@@ -28,7 +29,7 @@ export interface LedgerRow {
   currency?: string | null;
 }
 
-export interface LedgerSummary {
+interface LedgerSummary {
   currency: string;
   totalInCents: number;
   totalOutCents: number;
@@ -70,14 +71,32 @@ export function summarizeLedger(rows: LedgerRow[]): LedgerSummary {
   };
 }
 
-/** Donation links from env (only the configured ones are surfaced). */
-function donationLinks(env: Env): { label: string; url: string }[] {
+/** At most this many donation links are surfaced. */
+const MAX_SUPPORT_LINKS = 12;
+
+/**
+ * The operator's donation links, from `SUPPORT_LINKS` — a JSON array of `{label, url}` in display
+ * order, e.g. `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Only entries with a label and
+ * an http(s) URL are surfaced; unset or malformed ⇒ none.
+ */
+export function supportLinks(env: Env): { label: string; url: string }[] {
+  const v = jsonSetting(env.SUPPORT_LINKS);
+  if (!Array.isArray(v)) return [];
   const links: { label: string; url: string }[] = [];
-  if (env.SUPPORT_LIBERAPAY) links.push({ label: "Liberapay", url: env.SUPPORT_LIBERAPAY });
-  if (env.SUPPORT_KOFI) links.push({ label: "Ko-fi", url: env.SUPPORT_KOFI });
-  if (env.SUPPORT_PATREON) links.push({ label: "Patreon", url: env.SUPPORT_PATREON });
-  if (env.SUPPORT_GITHUB) links.push({ label: "GitHub Sponsors", url: env.SUPPORT_GITHUB });
-  if (env.SUPPORT_OPENCOLLECTIVE) links.push({ label: "Open Collective", url: env.SUPPORT_OPENCOLLECTIVE });
+  for (const e of v as unknown[]) {
+    if (!e || typeof e !== "object") continue;
+    const { label, url } = e as { label?: unknown; url?: unknown };
+    if (typeof label !== "string" || !label.trim() || typeof url !== "string") continue;
+    let proto: string;
+    try {
+      proto = new URL(url).protocol;
+    } catch {
+      continue;
+    }
+    if (proto !== "https:" && proto !== "http:") continue;
+    links.push({ label: label.trim(), url });
+    if (links.length >= MAX_SUPPORT_LINKS) break;
+  }
   return links;
 }
 
@@ -104,7 +123,7 @@ export async function handleSupport(_req: Request, env: Env): Promise<Response> 
   const [ledger, supporters] = await Promise.all([ledgerSummary(env), publicSupporters(env)]);
   return json({
     model: "free-in-full · recognition-only · ad-free (donations gate nothing functional)",
-    donationLinks: donationLinks(env),
+    donationLinks: supportLinks(env),
     ledger,
     supporters,
     supporterCount: supporters.length,
@@ -142,7 +161,7 @@ export async function handleSupportConfirm(req: Request, env: Env): Promise<Resp
     note?: string;
     source?: string;
   };
-  const ts = now();
+  const ts = nowS();
   let supporter: string | null = null;
   if (b.callsign) {
     const base = baseCall(b.callsign);
@@ -178,7 +197,7 @@ export async function handleSupportConfirm(req: Request, env: Env): Promise<Resp
 export async function handleSupportPage(_req: Request, env: Env): Promise<Response> {
   const eur = (c: number) => (c / 100).toLocaleString("en", { style: "currency", currency: "EUR" });
   const ledger = await ledgerSummary(env);
-  const links = donationLinks(env);
+  const links = supportLinks(env);
   const supporters = await publicSupporters(env);
   const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const bucketRows = BUCKETS.map(

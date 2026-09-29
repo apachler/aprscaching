@@ -12,6 +12,7 @@
  *   GET    /api/my/stations/:id/wx-key   read the station's PWS key + URLs
  *   POST   /api/my/stations/:id/wx-key   (re)issue the station's PWS key (weather role required)
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
@@ -23,7 +24,6 @@ import { handleCreateCache } from "./caches.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { gridToLatLon, STATION_ROLES, type StationRole, type OperatedStation } from "@aprscaching/shared";
 
-const now = () => Math.floor(Date.now() / 1000);
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}(-[0-9]{1,2})?$/; // base call + optional SSID
 
 /** Is this a syntactically valid station callsign (base + optional SSID)? Case-insensitive. */
@@ -74,7 +74,7 @@ function coord(v: unknown, lo: number, hi: number): { ok: boolean; value: number
 }
 
 /** A sensible APRS map symbol for a station's primary role (so non-web clients show it sanely too). */
-export function symbolForRoles(roles: StationRole[], explicit?: string | null): string {
+function symbolForRoles(roles: StationRole[], explicit?: string | null): string {
   if (explicit) return explicit;
   if (roles.includes("weather")) return "_"; // weather station
   if (roles.includes("digipeater")) return "#"; // digipeater
@@ -100,7 +100,7 @@ async function placeOnMap(
   await env.DB.prepare(
     `INSERT INTO stations (callsign, lat, lon, last_seen, symbol, source_call) VALUES (?,?,?,?,?,?) ${conflict}`,
   )
-    .bind(callsign, lat, lon, now(), symbol, callsign)
+    .bind(callsign, lat, lon, nowS(), symbol, callsign)
     .run();
 }
 
@@ -149,7 +149,7 @@ export async function handleMyStations(req: Request, env: Env): Promise<Response
     }
 
     const sym = symbolForRoles(roles, symbol);
-    const ts = now();
+    const ts = nowS();
     const ins = await env.DB.prepare(
       "INSERT INTO account_stations (account_id, callsign, lat, lon, symbol, description, roles, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
     )
@@ -218,7 +218,7 @@ export async function handleMyStation(req: Request, env: Env, id: number): Promi
     await env.DB.prepare(
       "UPDATE account_stations SET lat=?, lon=?, symbol=?, description=?, roles=?, updated_at=? WHERE id=?",
     )
-      .bind(next.lat, next.lon, next.symbol, next.description, next.roles, now(), id)
+      .bind(next.lat, next.lon, next.symbol, next.description, next.roles, nowS(), id)
       .run();
     // Reflect an explicit edit on the map (moves the pin / updates the role glyph). Live RF beacons
     // continue to override this from ingest.
@@ -243,7 +243,7 @@ export async function handleStationWxKey(req: Request, env: Env, id: number): Pr
   if (req.method === "POST") {
     await env.DB.prepare("DELETE FROM wx_keys WHERE station_id = ?").bind(id).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, station_id, created_at) VALUES (?,?,?,?,?)")
-      .bind(makeWxKey(), base, acct, id, now())
+      .bind(makeWxKey(), base, acct, id, nowS())
       .run();
   }
   const key = await env.DB.prepare(

@@ -19,6 +19,7 @@
  * RX-only boxes simply never receive TX kinds. This is operator→own-box control, distinct
  * from the federation/APRS service identity.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, accountHoldsCall, ingestSecretOk, timingSafeEqual } from "./auth.js";
@@ -27,7 +28,6 @@ import { isCallsignVerified } from "./callsign.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
-const now = () => Math.floor(Date.now() / 1000);
 const boxAuth = ingestSecretOk;
 
 /** Is `accountId` the paired owner of `boxId`? An unpaired box has no owner and takes no session commands. */
@@ -39,7 +39,7 @@ async function ownsBox(env: Env, boxId: string, accountId: string): Promise<bool
 }
 
 /** A pairing code is good for 15 minutes — long enough to read it off the box and type it in. */
-export const PAIR_TTL_SEC = 15 * 60;
+const PAIR_TTL_SEC = 15 * 60;
 /** Claim attempts per box per window: a code has 40 bits, and guesses are capped besides. */
 const CLAIM_ATTEMPTS = 10;
 const CLAIM_WINDOW_MS = 15 * 60_000;
@@ -64,7 +64,7 @@ async function codeHash(boxId: string, code: string): Promise<string> {
 export async function handleBoxPair(req: Request, env: Env, boxId: string): Promise<Response> {
   if (!boxAuth(req, env)) return new Response("unauthorized", { status: 401 });
   const code = newPairCode();
-  const expiresAt = now() + PAIR_TTL_SEC;
+  const expiresAt = nowS() + PAIR_TTL_SEC;
   await env.DB.prepare(
     `INSERT INTO box_pairings (box_id, code_hash, expires_at) VALUES (?,?,?)
      ON CONFLICT(box_id) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at`,
@@ -89,7 +89,7 @@ export async function handleBoxClaim(req: Request, env: Env, boxId: string): Pro
   const row = await env.DB.prepare("SELECT code_hash, expires_at FROM box_pairings WHERE box_id = ?")
     .bind(boxId)
     .first<{ code_hash: string; expires_at: number }>();
-  const good = !!row && row.expires_at > now() && timingSafeEqual(row.code_hash, await codeHash(boxId, code));
+  const good = !!row && row.expires_at > nowS() && timingSafeEqual(row.code_hash, await codeHash(boxId, code));
   if (!good)
     return json(
       { error: "that pairing code is wrong or expired — restart the ingest box for a fresh one" },
@@ -100,7 +100,7 @@ export async function handleBoxClaim(req: Request, env: Env, boxId: string): Pro
     env.DB.prepare(
       `INSERT INTO boxes (box_id, account_id, created_at) VALUES (?,?,?)
        ON CONFLICT(box_id) DO UPDATE SET account_id = excluded.account_id, created_at = excluded.created_at`,
-    ).bind(boxId, me.accountId, now()),
+    ).bind(boxId, me.accountId, nowS()),
   ]);
   return json({ ok: true, boxId });
 }
@@ -141,7 +141,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
   const ins = await env.DB.prepare(
     "INSERT INTO box_commands (box_id, callsign, kind, payload, sig, status, created_at) VALUES (?,?,?,?,?, 'queued', ?)",
   )
-    .bind(boxId, callsign, kind, body.payload != null ? JSON.stringify(body.payload) : null, body.sig ?? null, now())
+    .bind(boxId, callsign, kind, body.payload != null ? JSON.stringify(body.payload) : null, body.sig ?? null, nowS())
     .run();
   return json(
     { id: Number(ins.meta.last_row_id), boxId, kind, callsign, status: "queued", tx: TX_KINDS.has(kind) },
@@ -150,14 +150,14 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
 }
 
 /** What a box reported it can transmit on its last poll. */
-export interface BoxCaps {
+interface BoxCaps {
   tx: boolean;
   rf: boolean;
   meshcom: string[];
 }
 
 /** Parse the capability report a box sends with its poll (`?tx=1&rf=1&meshcom=CALL,…`). */
-export function parseBoxCaps(url: URL): BoxCaps {
+function parseBoxCaps(url: URL): BoxCaps {
   const meshcom = (url.searchParams.get("meshcom") ?? "")
     .split(",")
     .map((c) => c.trim().toUpperCase())
@@ -167,14 +167,14 @@ export function parseBoxCaps(url: URL): BoxCaps {
 }
 
 /** A box that polled within this many seconds is considered reachable for a reply. */
-export const BOX_FRESH_SEC = 120;
+const BOX_FRESH_SEC = 120;
 
 /** The box's last capability report, or null when it has not polled recently. */
 export async function freshBoxCaps(env: Env, boxId: string): Promise<BoxCaps | null> {
   const r = await env.DB.prepare("SELECT caps, last_seen FROM box_status WHERE box_id = ?")
     .bind(boxId)
     .first<{ caps: string; last_seen: number }>();
-  if (!r || now() - r.last_seen > BOX_FRESH_SEC) return null;
+  if (!r || nowS() - r.last_seen > BOX_FRESH_SEC) return null;
   try {
     return JSON.parse(r.caps) as BoxCaps;
   } catch {
@@ -196,7 +196,7 @@ export async function enqueueSystemBoxCommand(
   await env.DB.prepare(
     "INSERT INTO box_commands (box_id, callsign, kind, payload, status, created_at) VALUES (?, NULL, ?, ?, 'queued', ?)",
   )
-    .bind(boxId, kind, JSON.stringify(payload), now())
+    .bind(boxId, kind, JSON.stringify(payload), nowS())
     .run();
 }
 
@@ -209,7 +209,7 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
       `INSERT INTO box_status (box_id, caps, last_seen) VALUES (?,?,?)
        ON CONFLICT(box_id) DO UPDATE SET caps = excluded.caps, last_seen = excluded.last_seen`,
     )
-      .bind(boxId, JSON.stringify(parseBoxCaps(url)), now())
+      .bind(boxId, JSON.stringify(parseBoxCaps(url)), nowS())
       .run();
   const rows = (
     await env.DB.prepare(
@@ -219,7 +219,7 @@ export async function handleBoxPoll(req: Request, env: Env, boxId: string): Prom
       .all<{ id: number; payload: string | null }>()
   ).results;
   if (rows.length) {
-    const t = now();
+    const t = nowS();
     await env.DB.batch(
       rows.map((r) => env.DB.prepare("UPDATE box_commands SET status='sent', sent_at=? WHERE id=?").bind(t, r.id)),
     );
@@ -238,7 +238,7 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
   if (!id || (status !== "done" && status !== "failed"))
     return json({ error: "id and status (done|failed) required" }, { status: 400 });
   await env.DB.prepare("UPDATE box_commands SET status=?, result=?, acked_at=? WHERE id=? AND box_id=?")
-    .bind(status, result ?? null, now(), id, boxId)
+    .bind(status, result ?? null, nowS(), id, boxId)
     .run();
   return json({ ok: true });
 }
