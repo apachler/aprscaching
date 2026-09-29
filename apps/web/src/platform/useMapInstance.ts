@@ -2,6 +2,13 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+
+// MapLibre locates its worker next to its own module by default, but the bundle has no such file: the
+// worker (which parses tiles, GeoJSON and styles off the main thread) is built as its own asset here.
+// Without it the style never finishes loading, so the map shows no basemap and never fires "load".
+maplibregl.setWorkerUrl(workerUrl);
+
 export interface MapHandlers {
   /** The style finished loading for the first time. */
   onLoad: (m: maplibregl.Map) => void;

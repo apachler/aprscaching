@@ -758,14 +758,6 @@ export default function Platform({ session, startTour }: { session: SessionState
   const target: [number, number] | null =
     detail && detail.lat != null && detail.lon != null ? [detail.lat, detail.lon] : null;
 
-  // in the 3-pane shell the map is a flex child — resize MapLibre when a dock opens/closes
-  const leftOpen = view.kind !== "map";
-  const rightOpen = detail != null || remote != null;
-  useEffect(() => {
-    const t = setTimeout(() => mapRef.current?.resize(), 60);
-    return () => clearTimeout(t);
-  }, [op, leftOpen, rightOpen, mapRef]);
-
   // global search: a Maidenhead locator or "lat, lon" flies the map there; otherwise filter by text
   function runSearch(raw: string) {
     const q = raw.trim();
