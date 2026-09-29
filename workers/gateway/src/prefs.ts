@@ -8,11 +8,11 @@
  *   GET /api/prefs   → { prefs }       my synced UI prefs (session)
  *   PUT /api/prefs   { prefs } → { ok } replace them (validated + size-capped)
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const UNITS = new Set(["metric", "imperial"]);
 // Themes are "modern"/"phosphor". Also accepted so previously-stored prefs still validate:
 // "cogmind" (the phosphor theme's former id — the client folds it to phosphor) and
@@ -79,7 +79,7 @@ export async function handlePrefsPut(req: Request, env: Env): Promise<Response> 
     "INSERT INTO account_prefs (account_id, prefs, updated_at) VALUES (?,?,?) " +
       "ON CONFLICT(account_id) DO UPDATE SET prefs=excluded.prefs, updated_at=excluded.updated_at",
   )
-    .bind(me.accountId, str, now())
+    .bind(me.accountId, str, nowS())
     .run();
   return json({ ok: true, prefs });
 }

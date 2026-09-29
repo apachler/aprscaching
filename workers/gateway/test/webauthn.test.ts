@@ -4,7 +4,8 @@
 // rewinds the counter, and the verifier must reject it. We also pin origin/rpId binding and that a
 // tampered signature fails closed.
 import { describe, it, expect } from "vitest";
-import { verifyAssertion, bytesToB64url } from "../src/webauthn.js";
+import { verifyAssertion } from "../src/webauthn.js";
+import { bytesToB64url } from "../src/util/b64.js";
 
 const enc = new TextEncoder();
 const RP_ID = "aprscaching.net";

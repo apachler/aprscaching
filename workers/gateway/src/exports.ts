@@ -4,6 +4,7 @@
  * and a callsign's finds as ADIF (standard logbooks — Log4OM/N1MM/DXLab). Pure builders + read-only
  * queries; served under /api/v1 behind the same rate-limit gate. Runtime-neutral.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { xmlEscape } from "./sitemap.js";
 
@@ -163,7 +164,7 @@ async function stationTrack(env: Env, call: string, from: number, until: number)
 
 function trackWindow(req: Request): { from: number; until: number } {
   const u = new URL(req.url);
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   const until = Number(u.searchParams.get("to")) || now;
   let from = Number(u.searchParams.get("from")) || until - 24 * 3600;
   if (until - from > 31 * 24 * 3600) from = until - 31 * 24 * 3600; // cap span at 31 days

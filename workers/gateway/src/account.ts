@@ -6,17 +6,18 @@
  * accountActionMessage(). The server speaks SI/public data; this is where a user takes their data
  * out or has it removed.
  */
+import { b64urlToBytes } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { accountActionMessage } from "@aprscaching/shared";
-import { importVerifyKey, fromB64, serveFeed, type FeedServeDef } from "./federation.js";
+import { importVerifyKey, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
 import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN } from "./auth.js";
 import { verificationOf, verificationsOf } from "./callsign.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
 type AuthResult = { ok: true; body: any } | { ok: false; res: Response };
@@ -38,7 +39,7 @@ async function authorize(env: Env, req: Request, callsign: string, action: strin
       ok: false,
       res: json({ error: "signed action required (key, sig, at) or a matching session" }, { status: 401 }),
     };
-  if (Math.abs(now() - body.at) > 300)
+  if (Math.abs(nowS() - body.at) > 300)
     return { ok: false, res: json({ error: "stale signature (>5 min)" }, { status: 401 }) };
   if (!(await isKeyRegistered(env, cs, body.key)))
     return { ok: false, res: json({ error: "key not registered to this callsign" }, { status: 403 }) };
@@ -47,7 +48,7 @@ async function authorize(env: Env, req: Request, callsign: string, action: strin
     const msg = new TextEncoder().encode(
       accountActionMessage({ action, callsign: cs, instance: instanceOf(env, req), at: body.at }),
     );
-    const valid = await crypto.subtle.verify("Ed25519", key, fromB64(body.sig), msg);
+    const valid = await crypto.subtle.verify("Ed25519", key, b64urlToBytes(body.sig), msg);
     if (!valid) return { ok: false, res: json({ error: "invalid signature" }, { status: 401 }) };
   } catch {
     return { ok: false, res: json({ error: "invalid key/signature" }, { status: 401 }) };
@@ -121,7 +122,7 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
   const data = {
     instance: instanceOf(env, req),
     callsign: cs,
-    exportedAt: now(),
+    exportedAt: nowS(),
     account: accountRow && {
       callsign: accountRow.callsign,
       verified: verifiedFlag,
@@ -374,7 +375,7 @@ async function eraseCall(
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
     env.DB.prepare(
       "UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=? OR owner_call LIKE ?",
-    ).bind(marker, now(), cs, `${cs}-%`),
+    ).bind(marker, nowS(), cs, `${cs}-%`),
     env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=?").bind(marker, cs),
     // The adoption trail stays for the instance, anonymised: the person's calls become the marker and the
     // notes on rows naming them (which may describe them) are dropped.
@@ -408,7 +409,7 @@ async function eraseCall(
     env.DB.prepare("DELETE FROM accounts WHERE callsign=?").bind(cs),
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'deleted', NULL, ?)",
-    ).bind(cs, now()),
+    ).bind(cs, nowS()),
   ]);
   return {
     tombstones: [
@@ -494,7 +495,7 @@ export async function handleAccountBundle(req: Request, env: Env, callsign: stri
       callsign: cs,
       verified,
       keys,
-      at: now(),
+      at: nowS(),
     },
   });
 }
@@ -507,7 +508,7 @@ export async function handleAccountMove(req: Request, env: Env, callsign: string
   if (!target) return json({ error: "target instance required" }, { status: 400 });
   const cs = callsign.toUpperCase();
   await env.DB.prepare("INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)")
-    .bind(cs, target, now())
+    .bind(cs, target, nowS())
     .run();
   return json({ ok: true, callsign: cs, movedTo: target });
 }
@@ -528,13 +529,13 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   // signed over an action bound to THIS (target) instance.
   if (!bundle.keys.some((k: any) => k.publicKey === a.key))
     return json({ error: "assertion key is not in the bundle" }, { status: 403 });
-  if (Math.abs(now() - a.at) > 300) return json({ error: "stale assertion" }, { status: 401 });
+  if (Math.abs(nowS() - a.at) > 300) return json({ error: "stale assertion" }, { status: 401 });
   try {
     const key = await importVerifyKey(a.key);
     const msg = new TextEncoder().encode(
       accountActionMessage({ action: "migrate", callsign: cs, instance: instanceOf(env, req), at: a.at }),
     );
-    if (!(await crypto.subtle.verify("Ed25519", key, fromB64(a.sig), msg)))
+    if (!(await crypto.subtle.verify("Ed25519", key, b64urlToBytes(a.sig), msg)))
       return json({ error: "invalid migration assertion" }, { status: 401 });
   } catch {
     return json({ error: "invalid assertion" }, { status: 401 });
@@ -554,27 +555,27 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   // The account + its keys land UNVERIFIED; the operator re-proves control on this instance.
   const accountId = crypto.randomUUID();
   const stmts = [
-    ...holdCall(env, accountId, base, true, now()),
+    ...holdCall(env, accountId, base, true, nowS()),
     env.DB.prepare("INSERT INTO accounts (callsign, account_id, created_at) VALUES (?, ?, ?)").bind(
       cs,
       accountId,
-      now(),
+      nowS(),
     ),
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)",
-    ).bind(cs, `from:${bundle.instance ?? "?"}`, now()),
+    ).bind(cs, `from:${bundle.instance ?? "?"}`, nowS()),
     // announce the move to the network — the target attests "this callsign now homes here",
     // signed at serve time on the account-move feed so peers can re-point attribution.
     // with the mover's signed assertion as its proof, so mirrors can check the move for themselves
     env.DB.prepare(
       "INSERT INTO account_moves (callsign, from_instance, to_instance, ts, proof_key, proof_sig, proof_at) VALUES (?,?,?,?,?,?,?)",
-    ).bind(cs, bundle.instance ?? null, instanceOf(env, req), now(), a.key, a.sig, a.at),
+    ).bind(cs, bundle.instance ?? null, instanceOf(env, req), nowS(), a.key, a.sig, a.at),
   ];
   for (const k of bundle.keys)
     stmts.push(
       env.DB.prepare(
         "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, created_at) VALUES (?,?,?,?)",
-      ).bind(cs, k.publicKey, k.label ?? null, now()),
+      ).bind(cs, k.publicKey, k.label ?? null, nowS()),
     );
   try {
     await env.DB.batch(stmts);

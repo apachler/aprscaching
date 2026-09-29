@@ -6,16 +6,18 @@
  * Starting again replaces the outstanding challenge; completing it spends it; failed completions count
  * toward a cap that locks it. Starts and completions are rate limited per account and per call.
  */
+import { bytesToB64url } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
 import { sessionIdentity, accountHoldsCall } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 
-export type ChallengeMethod = "ampr_dns" | "lotw";
+type ChallengeMethod = "ampr_dns" | "lotw";
 
 /** Failed completions before a challenge locks. */
-export const CHALLENGE_MAX_ATTEMPTS = 5;
+const CHALLENGE_MAX_ATTEMPTS = 5;
 const WINDOW_MS = 3_600_000;
 /** Per hour: starts per account and per call, and completion attempts per account. */
 const STARTS_PER_ACCOUNT = 10;
@@ -23,14 +25,10 @@ const STARTS_PER_CALL = 5;
 const COMPLETES_PER_ACCOUNT = 10;
 
 const CALL_RE = /^[A-Z0-9]{3,9}$/;
-const nowSec = () => Math.floor(Date.now() / 1000);
 
 /** A random URL-safe token of `bytes` random bytes. */
 export function randomToken(bytes = 16): string {
-  const b = crypto.getRandomValues(new Uint8Array(bytes));
-  let s = "";
-  for (const x of b) s += String.fromCharCode(x);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return bytesToB64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
 export interface Caller {
@@ -67,7 +65,7 @@ export async function issueChallenge(
     (await rateLimitedDurable(env, `${method}-start:call:${c.cs}`, t, STARTS_PER_CALL, WINDOW_MS))
   )
     return null;
-  const createdAt = nowSec();
+  const createdAt = nowS();
   await env.DB.prepare(
     `INSERT INTO callsign_challenges (callsign, method, account_id, challenge, attempts, created_at)
      VALUES (?, ?, ?, ?, 0, ?)
@@ -100,7 +98,7 @@ export async function openChallenge(
     .bind(c.cs, method)
     .first<{ account_id: string; challenge: string; attempts: number; created_at: number }>();
   if (!row || row.account_id !== c.accountId) return null;
-  if (nowSec() - row.created_at > ttlSec || row.attempts >= CHALLENGE_MAX_ATTEMPTS) return null;
+  if (nowS() - row.created_at > ttlSec || row.attempts >= CHALLENGE_MAX_ATTEMPTS) return null;
   return row.challenge;
 }
 

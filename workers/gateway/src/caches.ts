@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
@@ -26,7 +27,7 @@ import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
-import { coarsenConfig } from "./corroborate_privacy.js";
+import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
@@ -334,7 +335,7 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   const owner = await actor(req, env, b.ownerCall);
   if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   const tmpCode = `__minting__${crypto.randomUUID()}`;
   try {
     const ins = await env.DB.prepare(
@@ -415,7 +416,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     rating_policy: b.ratingPolicy ?? existing.rating_policy ?? "finders",
     rendezvous: b.rendezvous === undefined ? existing.rendezvous : b.rendezvous ? 1 : 0,
   };
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   await env.DB.prepare(
     `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
        station_call=?, hint=?, description=?, min_trust=?, fed_scope=?,
@@ -480,7 +481,7 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     .first<CacheRow & { code: string; title: string }>();
   if (!cache) return json({ error: "no such cache" }, { status: 404 });
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
 
   // Per-callsign authorship: if the logger signed the log with their device key, verify it
   // (signature valid AND key registered to the callsign) and persist it as portable provenance.
@@ -671,10 +672,7 @@ export async function scoreFind(
       until: at,
       excludeIgates: [...loggerOwnIgates],
     });
-    if (
-      ev &&
-      plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, coarsenConfig(env).timeBucketSec)
-    ) {
+    if (ev && plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";
       result.method = "aprs_rf_peer";
@@ -739,7 +737,7 @@ export async function commitFind(
     .run();
   if ((ins.meta?.changes ?? 1) === 0) return { duplicate: true };
   const logId = Number(ins.meta?.last_row_id) || undefined;
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
 
   // award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);

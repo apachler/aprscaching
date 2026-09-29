@@ -5,16 +5,15 @@
  * recordMheard is called from ingest for every heard packet. Driving the node over actual AX.25
  * connects + advertising NODES on RF is validate-at-deploy; this is the table + admin.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireIngestOrOperator } from "./admin.js";
 
-const now = () => Math.floor(Date.now() / 1000);
-
 /** Upsert a per-port MHeard entry (best-effort; called from ingest). */
 export async function recordMheard(env: Env, calls: { src: string; port: string }[]): Promise<void> {
   if (!calls.length) return;
-  const ts = now();
+  const ts = nowS();
   await env.DB.batch(
     calls.map((c) =>
       env.DB.prepare(
@@ -56,7 +55,7 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
       b.neighbor.toUpperCase(),
       b.quality ?? 100,
       b.port ?? null,
-      now(),
+      nowS(),
     )
     .run();
   return json({ ok: true, dest: b.dest.toUpperCase() }, { status: 201 });

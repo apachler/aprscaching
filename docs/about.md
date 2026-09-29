@@ -8,8 +8,8 @@ reach an instance. Four invariants hold, and each one is code you can read rathe
 
 **Positions expire.** The nightly job in `workers/gateway/src/app.ts` prunes firehose and browser-RF positions
 older than seven days, in bounded batches so a backlog never stalls a small box. The raw packet ring is a
-short-lived shack diagnostic and goes after 24 hours (`PACKETS_TTL_HOURS`); the message log, sensor readings,
-port counters and node mheard rows carry their own TTLs (see the
+short-lived shack diagnostic and goes after 24 hours; the message log, sensor readings, port counters and
+node mheard rows carry their own retention, all adjustable with `RETENTION` (see the
 [Configuration reference](reference/configuration.md)). The one deliberate exception is evidence: a position
 that corroborates a find is kept as long as the find it verifies, because a Tier A find without its
 corroborating fix is just a claim.

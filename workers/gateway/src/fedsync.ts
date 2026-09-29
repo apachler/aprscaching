@@ -13,6 +13,7 @@
  * (the deterministic codec refuses floats): lat/lon ↔ latE7/lonE7 (1e-7°), difficulty/terrain ↔
  * ×10, distanceM ↔ centimetres. The consumer maps them back before apply.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { encodeFedPayload, type FedRecord, type FedRecordKind } from "@aprscaching/shared";
@@ -22,8 +23,6 @@ import { CACHE_FEED, FIND_FEED, KEY_FEED, instanceOf, type FeedServeDef } from "
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
-
-export const SYNC_CBOR_CAPABILITY = "sync-cbor";
 
 /** Feed type → envelope record kind (the sync type strings are the shared vocabulary). */
 const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
@@ -100,7 +99,7 @@ export async function buildFedFrames(
   const def = FEED_FOR_TYPE[feedType];
   const kind = KIND_FOR_TYPE[feedType];
   if (!def || !kind) return { frames: [], nextCursor: since };
-  const at = Math.floor(Date.now() / 1000);
+  const at = nowS();
   const rows = await def.selectRows(env, since, limit, def.composite ? sinceId : undefined);
   let nextCursor = since;
   // a composite feed resumes after (cursor, id) of the last row; rows come ordered by that pair

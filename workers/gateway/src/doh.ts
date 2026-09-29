@@ -14,9 +14,9 @@
 import { trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 
-export const DEFAULT_DOH = "https://cloudflare-dns.com/dns-query";
+const DEFAULT_DOH = "https://cloudflare-dns.com/dns-query";
 /** Independent public resolvers, run by three different operators, for answers DNSSEC cannot vouch for. */
-export const DEFAULT_AMPR_RESOLVERS = [
+const DEFAULT_AMPR_RESOLVERS = [
   "https://cloudflare-dns.com/dns-query",
   "https://dns.google/resolve",
   "https://dns.quad9.net:5053/dns-query",
@@ -50,7 +50,7 @@ interface DohJson {
 }
 
 /** One TXT record's presentation data (`"chunk" "chunk"`) as the text it encodes. */
-export function unquoteTxt(data: string): string {
+function unquoteTxt(data: string): string {
   return data.replace(/^"|"$/g, "").replace(/"\s+"/g, "");
 }
 

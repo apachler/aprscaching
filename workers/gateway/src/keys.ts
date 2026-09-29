@@ -6,6 +6,8 @@
  * (not merely asserted by an instance). Whether a key is *authorised* for a callsign is the job of
  * the callsign-control badge: a key reads as verified while its call's base call is control-verified.
  */
+import { b64urlToBytes } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import {
@@ -17,7 +19,7 @@ import {
   stableStringify,
 } from "@aprscaching/shared";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { importVerifyKey, fromB64, verifyDomain } from "./federation.js";
+import { importVerifyKey, verifyDomain } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { sessionIdentity, accountHoldsCall } from "./auth.js";
 
@@ -34,7 +36,7 @@ export async function handleRegisterKey(req: Request, env: Env): Promise<Respons
   if (!(await accountHoldsCall(env, me.accountId, callsign)))
     return json({ error: "callsign is not yours" }, { status: 403 });
   await env.DB.prepare("INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, created_at) VALUES (?,?,?,?)")
-    .bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, Math.floor(Date.now() / 1000))
+    .bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, nowS())
     .run();
   const verified = await isCallsignVerified(env, callsign);
   return json({ ok: true, callsign, publicKey: parsed.data.publicKey, verified });
@@ -68,7 +70,7 @@ export async function isKeyRegistered(env: Env, callsign: string, publicKey: str
   return !!r;
 }
 
-export interface AuthorshipCheck {
+interface AuthorshipCheck {
   cache: string;
   instance: string;
   logger: string;
@@ -84,7 +86,7 @@ export async function verifyAuthorship(a: AuthorshipCheck): Promise<boolean> {
     const msg = new TextEncoder().encode(
       authorshipMessage({ cache: a.cache, instance: a.instance, logger: a.logger, logType: a.logType, at: a.at }),
     );
-    return await crypto.subtle.verify("Ed25519", key, fromB64(a.authorSig), msg);
+    return await crypto.subtle.verify("Ed25519", key, b64urlToBytes(a.authorSig), msg);
   } catch {
     return false;
   }
@@ -106,13 +108,13 @@ export async function verifySignedIngest(
   const sig = req.headers.get("x-acs-sig") ?? "";
   const at = Number(req.headers.get("x-acs-at") ?? 0);
   if (!callsign || !key || !sig || !Number.isFinite(at)) return null;
-  if (Math.abs(Math.floor(Date.now() / 1000) - at) > 300) return null; // 5-min freshness window
+  if (Math.abs(nowS() - at) > 300) return null; // 5-min freshness window
   if (!(await isKeyRegistered(env, callsign, key))) return null; // key must belong to the callsign
   try {
     const digest = await sha256Hex(stableStringify(packets));
     const ok = await verifyDomain(
       await importVerifyKey(key),
-      fromB64(sig),
+      b64urlToBytes(sig),
       SIG_DOMAIN.ingest,
       ingestMessage({ callsign, at, count: packets.length, digest }),
     );

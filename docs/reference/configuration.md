@@ -13,8 +13,8 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 !!! note "Runtime coverage"
     **Every gateway variable below works on every runtime** — the Node and Bun servers forward the
-    complete config-key set from the process environment (`ENV_STRING_KEYS` in the gateway's `env.ts`
-    is the single source of truth), so sysop admin, rate limits, spots, email/push, and first-party
+    complete config-key set from the process environment (the key list in the gateway's `env.ts`, from
+    which its `Env` type is derived, is the single source of truth), so sysop admin, rate limits, spots, email/push, and first-party
     attestation are all live on self-host too. The only real runtime differences are infrastructural:
     the Worker runs scheduled work on cron triggers (self-host uses in-process intervals), stores in
     D1/R2 (self-host: SQLite/filesystem), and takes secrets via `wrangler secret`.
@@ -63,9 +63,7 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` also requires `x-fed-secret`; an asker sends it only to trusted `https` peers. Questions are signed either way; the secret narrows who is answered to the peers you gave it, which `FED_CORROBORATION_REQUIRE_KNOWN` (any known key, `unvetted` peers included) does not | — |
 | `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
-| `FED_CORROBORATION_GRID_DEG` / `_TIME_BUCKET_SEC` / `_DIST_BUCKET_M` | Location/time coarsening of corroboration queries | `0.005` / `600` / `100` |
-| `PACKETS_TTL_HOURS` | Retention of the Shack raw-packet ring | `24` |
-| `MESSAGES_TTL_DAYS` / `SENSOR_TTL_DAYS` / `PORTSTATS_TTL_DAYS` / `ALERTS_TTL_DAYS` / `MHEARD_TTL_DAYS` | Retention of messages, telemetry/WX samples, port statistics, watch alerts, and the node MHeard list | built-in |
+| `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays`, `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default | `24` h / `7` / `30` / `7` / `30` / `7` d |
 
 ## Gateway — federation
 
@@ -90,14 +88,13 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | Variable | Purpose | Default |
 |---|---|---|
 | `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits | `60` / `60` / `600` |
-| `API_MAX_BBOX_DEG` | Maximum bounding-box side for `/api/v1` reads | `20` |
 | `SPOTS_ENABLED` | Enable outbound activity-spot polling | off |
-| `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_*_URL` | Spot source allowlist, cache TTL, per-source endpoint overrides | built-in |
+| `SPOTS_SOURCES` / `SPOTS_TTL_SEC` / `SPOTS_USER_AGENT` | Spot source allowlist, seconds between upstream polls (never below a source's own floor), and the User-Agent sent upstream | all / `120` / names aprscaching |
+| `SPOTS_RECEPTION_URLS` | Endpoints of the reception networks, which have no built-in feed: JSON `{"pskreporter":"…","dxcluster":"…","rbn":"…"}`. A network without an endpoint is not polled. POTA, SOTA and GMA use their public APIs | — |
 | `EMAIL_FROM` / `EMAIL_API_KEY` | Sender address and API key of a Resend-compatible email provider, for sign-in links and the watch-alert digest. Absent ⇒ no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT` | Web-push keys (absent ⇒ push off) | — |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |
-| `SUPPORT_*` | Donation links surfaced on `/support` (recognition only) | — |
-| `COT_STREAM_INTERVAL_MS` / `COT_STREAM_MAX_MS` | TAK CoT SSE stream: push interval + max connection lifetime | built-in |
+| `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL | — |
 
 ## Licence-register import
 

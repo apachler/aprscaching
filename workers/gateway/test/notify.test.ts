@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { composeDigest, b64urlToBytes, bytesToB64url } from "../src/notify.js";
+import { composeDigest } from "../src/notify.js";
+import { b64urlToBytes, bytesToB64url } from "../src/util/b64.js";
 
 describe("notify — email digest + helpers", () => {
   it("composeDigest summarises alerts, pluralising correctly", () => {

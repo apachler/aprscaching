@@ -5,7 +5,7 @@
  * When an instance erases data (a GDPR account delete, or an explicit cache/find delete) it emits
  * a **tombstone**: a tiny signed record naming the *global id* of the removed record — never a
  * callsign or any other personal datum. Peers fetch the tombstone feed, verify the origin's
- * signature, and purge the matching mirrored record (`federation_sync.ts:syncTombstones`). This is
+ * signature, and purge the matching mirrored record (`fedapply.ts:applyTombstone`). This is
  * what makes a delete converge across the network: the caches/finds feeds are append-only by cursor,
  * so they can't carry a removal — only a tombstone can.
  *
@@ -14,12 +14,11 @@
  * The feed signs at serve time, exactly like the caches/finds/keys feeds (so key rotation and
  * unsigned-instance behaviour stay consistent).
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { serveFeed, type FeedServeDef } from "./federation.js";
 
-const now = () => Math.floor(Date.now() / 1000);
-
-export type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
+type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
 export interface TombstoneItem {
   kind: TombstoneKind;
   targetId: string;
@@ -44,7 +43,7 @@ function tombstoneData(r: { kind: string; target_id: string; origin: string; ts:
  */
 export async function emitTombstones(env: Env, origin: string, items: TombstoneItem[]): Promise<number> {
   if (!items.length) return 0;
-  const ts = now();
+  const ts = nowS();
   const stmts = items.map((it) =>
     env.DB.prepare("INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts) VALUES (?, ?, ?, ?, ?)").bind(
       crypto.randomUUID(),

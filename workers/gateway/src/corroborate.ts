@@ -11,19 +11,20 @@
  * iNaturalist "more observers ⇒ better data" dynamic. Mirrors are display-only; corroboration is
  * the trust-bearing exchange.
  */
+import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
-import { listEnabledPeers, keysForOrigin } from "./federation_sync.js";
+import { listEnabledPeers, keysForOrigin } from "./fedpeers.js";
 import { parseAttestedSites, provenanceOf } from "./provenance.js";
 import { isInstanceId, loadRegistry } from "./federation.js";
 import { signFedRecord, verifyFedFrame } from "./fedcbor.js";
 import { bodyFromWire, bodyToWire } from "./fedsync.js";
 import { decodeFedFrame } from "@aprscaching/shared";
 import {
-  coarsenConfig,
+  COARSEN,
   snapToGrid,
   gridSlackM,
   bucketWindow,
@@ -60,15 +61,13 @@ export interface CorroborationQuery {
   excludeIgates?: string[];
 }
 
-/** Advertised in the descriptor: this instance speaks the signed corroboration exchange. */
-export const CORROBORATE_CAPABILITY = "corroborate-signed/1";
 /** How far a signed question or answer's `at` may sit from the receiver's clock. */
 const CORROBORATION_SKEW_S = 120;
 /** The answerer's bounds on a question: radius, window length, and how far back it may reach. */
-export const ANSWER_MIN_RADIUS_M = 150;
-export const ANSWER_MAX_RADIUS_M = 1000;
-export const ANSWER_MAX_WINDOW_S = 3600;
-export const ANSWER_MAX_AGE_S = 7 * 86400;
+const ANSWER_MIN_RADIUS_M = 150;
+const ANSWER_MAX_RADIUS_M = 1000;
+const ANSWER_MAX_WINDOW_S = 3600;
+const ANSWER_MAX_AGE_S = 7 * 86400;
 const MAX_QUESTION_BYTES = 16 * 1024;
 const CALL_RE = /^[A-Z0-9]{1,7}(?:-[A-Z0-9]{1,2})?$/;
 
@@ -102,7 +101,7 @@ export function corroboratorIgate(opts: {
   return baseCall(ig) === baseCall(opts.loggerCall) ? null : ig.toUpperCase();
 }
 
-export interface RfPositionRow {
+interface RfPositionRow {
   lat: number;
   lon: number;
   ts: number;
@@ -175,11 +174,7 @@ function probeKey(asker: string, b: CorroborationQuery, exclude: Set<string>): s
  * window that ended more than seven days ago is refused. Whatever the asker sends, the answer can
  * only say "roughly here, roughly then".
  */
-export function boundQuestion(
-  q: CorroborationQuery,
-  cfg: ReturnType<typeof coarsenConfig>,
-  nowS: number,
-): CorroborationQuery | null {
+function boundQuestion(q: CorroborationQuery, cfg: typeof COARSEN, nowS: number): CorroborationQuery | null {
   if (![q.lat, q.lon, q.since, q.until].every(Number.isFinite) || q.until < q.since) return null;
   const until = Math.min(q.until, nowS);
   if (until < nowS - ANSWER_MAX_AGE_S) return null;
@@ -220,13 +215,13 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
     return json({ corroborated: false, error: "bad question" }, { status: 400 });
   }
   const rec = frame.record;
-  const nowS = Math.floor(Date.now() / 1000);
+  const now = nowS();
   if (
     rec.kind !== "corroborationQuery" ||
     !isInstanceId(rec.origin) ||
     rec.signer !== rec.origin ||
     rec.body.target !== us ||
-    Math.abs(rec.at - nowS) > CORROBORATION_SKEW_S
+    Math.abs(rec.at - now) > CORROBORATION_SKEW_S
   )
     return json({ corroborated: false, error: "bad question" }, { status: 400 });
 
@@ -249,8 +244,8 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
   const b = bodyFromWire(rec.body) as Partial<CorroborationQuery> & { nonce?: unknown };
   if (typeof b.callsign !== "string" || typeof b.nonce !== "string" || b.nonce.length > 64)
     return json({ corroborated: false, error: "bad question" }, { status: 400 });
-  const cfg = coarsenConfig(env);
-  const bounded = boundQuestion(b as CorroborationQuery, cfg, nowS);
+  const cfg = COARSEN;
+  const bounded = boundQuestion(b as CorroborationQuery, cfg, now);
   if (!bounded) return json({ corroborated: false, error: "window out of range" }, { status: 400 });
 
   const nowMs = Date.now();
@@ -278,8 +273,8 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
     kind: "corroboration",
     gid: `${us}:corroboration:${b.nonce}`,
     origin: us,
-    v: nowS,
-    at: nowS,
+    v: now,
+    at: now,
     signer: us,
     body: bodyToWire({ ...body, nonce: b.nonce, queryHash: await payloadHash(frame.payload) }),
   });
@@ -338,7 +333,7 @@ export function effectiveQuorum(baseQuorum: number, autoPromotedContributed: boo
 /** Reward the peers whose corroboration was independently confirmed (the find reached Tier A): bump
  *  rep_confirmed, and auto-promote any unvetted peer that crosses the threshold. */
 async function creditCorroboration(env: Env, urls: string[], threshold: number): Promise<void> {
-  const at = Math.floor(Date.now() / 1000);
+  const at = nowS();
   for (const url of new Set(urls)) {
     await env.DB.prepare("UPDATE fed_peers SET rep_confirmed = rep_confirmed + 1 WHERE url = ?").bind(url).run();
     if (threshold > 0)
@@ -376,7 +371,7 @@ async function debitContradiction(env: Env, urls: string[]): Promise<void> {
  * FED_REVEAL_IGATE and it is not one of the logger's own. Returns the evidence, `"no"` for a verified
  * denial, or null for anything that does not verify.
  */
-export async function acceptAnswer(
+async function acceptAnswer(
   bytes: Uint8Array,
   ctx: {
     instance: string;
@@ -442,7 +437,7 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
 
   // good-citizen request coarsening: snap the center to a grid cell, widen the radius to cover the
   // snap, bucket the time window — peers never see our exact lat/lon/second.
-  const cfg = coarsenConfig(env);
+  const cfg = COARSEN;
   const c = snapToGrid(q.lat, q.lon, cfg.gridDeg);
   const w = bucketWindow(q.since, q.until, cfg.timeBucketSec);
   const cq: CorroborationQuery = {
@@ -461,14 +456,14 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
       const instance = peer.instance as string;
       const keys = await keysForOrigin(env, instance);
       if (keys === "blocked" || !keys.length) return none;
-      const nowS = Math.floor(Date.now() / 1000);
+      const now = nowS();
       const nonce = newNonce();
       const question = await signFedRecord(env, {
         kind: "corroborationQuery",
         gid: `${us}:corroborationQuery:${nonce}`,
         origin: us,
-        v: nowS,
-        at: nowS,
+        v: now,
+        at: now,
         signer: us,
         body: bodyToWire({ ...cq, nonce, target: instance }),
       });
@@ -495,7 +490,7 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
           revealIgate: !!env.FED_REVEAL_IGATE,
           distBucketM: cfg.distBucketM,
           timeBucketSec: cfg.timeBucketSec,
-          nowS: Math.floor(Date.now() / 1000),
+          nowS: nowS(),
         });
         if (verdict === "no") return { peer, ev: null, denied: true }; // an explicit, verified "no"
         return verdict ? { peer, ev: verdict, denied: false } : none;

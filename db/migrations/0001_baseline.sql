@@ -24,7 +24,7 @@
 
 CREATE TABLE accounts (
   callsign       TEXT PRIMARY KEY,                 -- the active operating call (may carry an SSID)
-  account_id     TEXT,                             -- durable identity; every account row carries one
+  account_id     TEXT NOT NULL,                    -- durable identity; every account row carries one
   email          TEXT,                             -- recovery / magic-link address (never shown)
   created_at     INTEGER NOT NULL,
   -- a session names the account and this generation; bumping it ends every session the account holds
@@ -494,7 +494,6 @@ CREATE INDEX idx_pos_source_ts ON positions (source, ts);
 -- The latest known state per station (the live map).
 CREATE TABLE stations (
   callsign     TEXT PRIMARY KEY,
-  ssid         INTEGER,
   symbol       TEXT,
   lat          REAL,
   lon          REAL,
@@ -502,7 +501,6 @@ CREATE TABLE stations (
   course       INTEGER,
   speed_kn     INTEGER,
   altitude_m   INTEGER,
-  status_color TEXT,
   comment      TEXT,
   source_call  TEXT                                -- the gating IGate
 );
@@ -551,9 +549,7 @@ CREATE TABLE sensor_readings (
   gust_kn        REAL,
   rain_mm        REAL,                             -- last hour
   rain_24h_mm    REAL,
-  rain_mid_mm    REAL,                             -- since local midnight
   luminosity_wm2 REAL,
-  snow_mm        REAL,
   source         TEXT,                             -- rf | aprs_is | ecowitt | wu | serial | cwop
   PRIMARY KEY (station, ts)
 );

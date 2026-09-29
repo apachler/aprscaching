@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The CBOR sync surface end-to-end in miniature: serve a page of signed fedwire frames from a mock
-// DB, then consume it the way federation_sync does — decode the page, verify each frame under the
+// DB, then consume it the way fedpull does — decode the page, verify each frame under the
 // instance key, and map the wire body back to the JSON record shape. Also pins the scaled-field
 // codec: fractional fields travel as integer twins and restore to the same values.
 import { describe, it, expect, beforeAll } from "vitest";

@@ -46,7 +46,7 @@ Other members verify their calls themselves (**You → Verify callsign**): over 
 hears them, by `ampr.org` DNS, or with a LoTW certificate. A sysop can verify an out-of-range member by
 hand under **Instance admin → Callsign verification**.
 
-Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_*`).
+Optional extras: web push (`VAPID_*`), activity spots (`SPOTS_ENABLED=1`), supporter links (`SUPPORT_LINKS`).
 The [Configuration reference](../reference/configuration.md) lists every key.
 
 !!! note "What the Setup page never writes"

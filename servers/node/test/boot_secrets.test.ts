@@ -65,10 +65,10 @@ describe("resolveInstanceSecrets (the desktop app)", () => {
 });
 
 describe("the Bun runtime resolves secrets with the same code", () => {
-  it("servers/bun/secrets.ts is identical to servers/node/src/secrets.ts", () => {
+  it("servers/bun imports servers/node/src/secrets.ts rather than keeping a copy", () => {
     const here = path.dirname(new URL(import.meta.url).pathname);
-    const node = fs.readFileSync(path.join(here, "../src/secrets.ts"), "utf8");
-    const bun = fs.readFileSync(path.join(here, "../../bun/secrets.ts"), "utf8");
-    expect(bun).toBe(node);
+    const bun = path.join(here, "../../bun");
+    expect(fs.existsSync(path.join(bun, "secrets.ts"))).toBe(false);
+    expect(fs.readFileSync(path.join(bun, "server.ts"), "utf8")).toContain('from "../node/src/secrets.ts"');
   });
 });

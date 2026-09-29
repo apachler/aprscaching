@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * live.ts — M2 real-time layer. As positions arrive at /ingest we compute, per position, a live
+ * live.ts — the real-time layer. As positions arrive at /ingest we compute, per position, a live
  * envelope (a station delta + any geofence prompts for caches within radius) and dispatch it to the
  * region room. The room delivers to each subscriber by their subscription: station deltas to anyone
  * whose bbox contains the point, geofence prompts to the subscriber whose callsign matches.
@@ -8,12 +8,13 @@
  * `deliveriesFor` is pure and runtime-neutral so the Durable Object (Worker) and the in-memory
  * rooms (Node) share identical delivery semantics.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
 import { haversineMeters } from "@aprscaching/aprs";
 
-export const GEOFENCE_RADIUS_M = 150;
-export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
+const GEOFENCE_RADIUS_M = 150;
+const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
 
 export interface LiveEnvelope {
   station?: StationDelta;
@@ -54,7 +55,7 @@ export async function envelopeForPosition(
     lon,
     symbol,
     course,
-    lastSeen: Math.floor(Date.now() / 1000),
+    lastSeen: nowS(),
   };
 
   const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);

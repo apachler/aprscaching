@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, corsAllowlist } from "./app.js";
@@ -72,7 +73,7 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, ?, ?, ?, 0)",
   )
-    .bind(token, e, cs, purpose, Math.floor(Date.now() / 1000))
+    .bind(token, e, cs, purpose, nowS())
     .run();
 
   // The link opens this gateway's confirm page. It names the gateway's own public origin, which is the
@@ -127,7 +128,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   await env.DB.prepare(
     "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, '', ?, ?, ?, 0)",
   )
-    .bind(token, cs, OPERATOR_PURPOSE, Math.floor(Date.now() / 1000))
+    .bind(token, cs, OPERATOR_PURPOSE, nowS())
     .run();
   // A script on the box reaches the gateway over loopback, which no other device can open: the link then
   // names the app origin. Reached on a public host (an API host beside a static app), it names that host.
@@ -215,7 +216,7 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   )
     .bind(token)
     .first<{ email: string; callsign: string | null; purpose: string; created_at: number; used: number }>();
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   if (!row || row.used || now - row.created_at > TTL_SEC) {
     return json({ error: "invalid or expired link" }, { status: 400 });
   }

@@ -1,188 +1,162 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * aprscaching bun-gateway — the Bun-runtime self-host / single-binary core (the desktop topology).
+ * aprscaching bun-gateway — the Bun-runtime self-host core, and the server the desktop single binary
+ * wraps (deploy/desktop/launcher.ts).
  *
  * Same handlers as the Cloudflare Worker and the Node server (imported from @aprscaching/gateway/app),
- * wired to: bun:sqlite via the D1-compatible shim (./d1.ts) · in-memory region rooms over Bun.serve
- * WebSockets (./rooms.ts) · a filesystem MediaStore (./media.ts). Bun.serve speaks Web Request/
- * Response natively, so handle() is called directly with no http bridge.
+ * wired to: bun:sqlite via the D1-compatible shim (./d1.ts) · the shared in-memory region rooms over
+ * Bun.serve WebSockets (./rooms.ts) · the Node server's filesystem MediaStore, secrets, fetch guard,
+ * migration reader and schedules (node:fs and friends work under Bun). Bun.serve speaks Web
+ * Request/Response natively, so handle() is called directly with no http bridge.
  *
  * Run: `bun run servers/bun/server.ts`  (env: PORT, DB_PATH, MIGRATIONS_DIR, MEDIA_DIR, INGEST_SECRET, OPERATOR_SECRET, …)
  */
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
-import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
+import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
-import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
-import { resolveSessionSecret } from "./secrets.ts";
-import { makeFetchGuard } from "./fetchguard.ts";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
-import type { LiveEnvelope } from "@aprscaching/gateway/live";
+import { migrate, type Migration } from "@aprscaching/gateway/migrate";
+import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { BunDb } from "./d1.ts";
-import { migrate } from "./migrate.ts";
-import { makeFsMedia } from "./media.ts";
-import { BunRooms, type WsData } from "./rooms.ts";
+import { roomHandlers, type WsData } from "./rooms.ts";
+import { makeFsMedia } from "../node/src/media.ts";
+import { migrationsFromDir } from "../node/src/migrate.ts";
+import { resolveServerSecrets, type ServerSecrets } from "../node/src/secrets.ts";
+import {
+  fedSyncInterval,
+  gitHead,
+  guardFederationFetches,
+  logStrayErrors,
+  roomNamespace,
+  startSchedules,
+} from "../node/src/host.ts";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 8787; // a blank/NaN PORT must not bind port 0
-const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
-const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations");
-const MEDIA_DIR = process.env.MEDIA_DIR ?? join(HERE, "data/media");
-const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
-
-// Boot guard: the ingest box authenticates with INGEST_SECRET; the known default would let anyone post
-// packets and log finds as the ingest plane.
-if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
-  console.error(
-    "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
-      "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)",
-  );
-  process.exit(1);
+export interface BunServerOptions {
+  /** The process environment the settings are read from. */
+  environment: Record<string, string | undefined>;
+  port: number;
+  /** The address to listen on (all interfaces when unset). */
+  hostname?: string;
+  dbPath: string;
+  mediaDir: string;
+  migrations: Migration[];
+  /** The resolved ingest, operator and session secrets. */
+  secrets: ServerSecrets;
+  /** The running commit or tag, for the AGPL §13 source link. */
+  sourceCommit?: string;
+  /** Serves every request no gateway route claims — the desktop app's embedded SPA. */
+  spa?: (pathname: string) => Response;
 }
-// Boot guard: OPERATOR_SECRET is optional (unset closes the operator's machine paths), but a set value
-// must be strong and must not be the ingest secret — that would hand the ingest box operator rights.
-const OPERATOR_SECRET = process.env.OPERATOR_SECRET;
-if (OPERATOR_SECRET !== undefined && OPERATOR_SECRET !== "") {
-  if (OPERATOR_SECRET === "change-me" || OPERATOR_SECRET === INGEST_SECRET) {
-    console.error(
-      "FATAL: OPERATOR_SECRET is the 'change-me' default or equal to INGEST_SECRET.\n" +
-        "  Set its own strong value, e.g.:  OPERATOR_SECRET=$(openssl rand -hex 24)  (or leave it unset)",
-    );
+
+export interface BunServer {
+  server: ReturnType<typeof Bun.serve>;
+  env: Env;
+  db: BunDb;
+  /** Migrations applied at start. */
+  migrated: string[];
+}
+
+/**
+ * Start the gateway on Bun: migrate the database, build the runtime-neutral env, serve HTTP and the
+ * live WebSocket rooms, start the scheduled jobs, and stop cleanly (WAL checkpointed) on SIGINT/SIGTERM.
+ * Refuses a federation registry whose authority key is not pinned, as the Node server does.
+ */
+export function createServer(opts: BunServerOptions): BunServer {
+  const fedConfigError = federationConfigError(opts.environment as unknown as Env);
+  if (fedConfigError) throw new Error(fedConfigError);
+
+  mkdirSync(dirname(opts.dbPath), { recursive: true });
+  const db = new BunDb(opts.dbPath);
+  const migrated = migrate(
+    { exec: (sql) => db.raw.exec(sql), query: (sql, ...params) => db.raw.query(sql).all(...params) },
+    opts.migrations,
+  );
+
+  const rooms = new RoomsCore();
+  const env: Env = {
+    DB: db,
+    TILES: {},
+    MEDIA: makeFsMedia(opts.mediaDir),
+    ROOMS: roomNamespace(rooms),
+    ...stringEnvFrom(opts.environment), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway
+    ...opts.secrets,
+    SOURCE_COMMIT: opts.environment.SOURCE_COMMIT ?? opts.sourceCommit,
+  };
+  guardFederationFetches(env);
+
+  const server = Bun.serve<WsData, undefined>({
+    hostname: opts.hostname,
+    port: opts.port,
+    async fetch(req, srv) {
+      const url = new URL(req.url);
+      if (url.pathname === "/ws") {
+        const region = url.searchParams.get("region") ?? "global";
+        if (srv.upgrade(req, { data: { region } })) return undefined;
+        return new Response("websocket upgrade failed", { status: 400 });
+      }
+      if (opts.spa && !isGatewayPath(url.pathname)) return opts.spa(url.pathname);
+      // the socket address is the client identity for rate limits: overwrite any client-supplied
+      // x-real-ip and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared
+      const headers = new Headers(req.headers);
+      stampClientIp(headers, srv.requestIP(req)?.address, env);
+      return handle(new Request(req, { headers }), env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
+    },
+    websocket: roomHandlers(rooms),
+  });
+
+  startSchedules(env, fedSyncInterval(opts.environment));
+
+  // 24/7 resilience: log stray errors; a stop signal closes the listener and checkpoints SQLite (WAL)
+  // so a service stop or a window-manager quit is never data-lossy.
+  logStrayErrors();
+  let stopping = false;
+  const stop = (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${signal} received — closing gateway`);
+    try {
+      server.stop();
+      db.raw.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch (e) {
+      console.error("stop:", e);
+    }
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => stop("SIGTERM"));
+  process.on("SIGINT", () => stop("SIGINT"));
+
+  return { server, env, db, migrated };
+}
+
+if (import.meta.main) {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const DB_PATH = process.env.DB_PATH ?? join(HERE, "data/aprscaching.db");
+  const secrets = resolveServerSecrets(process.env, dirname(DB_PATH));
+  if (!secrets.ok) {
+    console.error(`FATAL: ${secrets.error}`);
     process.exit(1);
   }
-}
-// Boot guard: sessions are signed with SESSION_SECRET only. Unset ⇒ generated once and kept beside the
-// database, so a single box needs no setup; a set value must be strong and its own.
-const SESSION = resolveSessionSecret(process.env, dirname(DB_PATH));
-if (!SESSION.ok) {
-  console.error(`FATAL: ${SESSION.error}\n  e.g.:  SESSION_SECRET=$(openssl rand -hex 32)`);
-  process.exit(1);
-}
-if (SESSION.source === "generated") console.log(`SESSION_SECRET generated and kept in ${dirname(DB_PATH)}`);
-
-// Boot guard: a registry whose authority key is not pinned cannot be verified, and federation
-// would otherwise run on whatever DNS says. Refuse to start instead of failing open.
-const fedConfigError = federationConfigError(process.env as unknown as Env);
-if (fedConfigError) {
-  console.error(`FATAL: ${fedConfigError}`);
-  process.exit(1);
-}
-function gitHead(): string | undefined {
+  if (secrets.sessionSource === "generated") console.log(`SESSION_SECRET generated and kept in ${dirname(DB_PATH)}`);
+  let started: BunServer;
   try {
-    return (
-      execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
-        .toString()
-        .trim() || undefined
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-// ---- storage ----
-mkdirSync(dirname(DB_PATH), { recursive: true });
-const db = new BunDb(DB_PATH);
-const ran = migrate(db.raw, MIGRATIONS_DIR);
-console.log(ran.length ? `migrations applied: ${ran.join(", ")}` : "migrations up to date");
-
-// ---- env (runtime-neutral bindings) ----
-const rooms = new BunRooms();
-const env: Env = {
-  DB: db,
-  TILES: {},
-  MEDIA: makeFsMedia(MEDIA_DIR),
-  ROOMS: {
-    idFromName: (n) => n,
-    get: (id) => ({
-      fetch: async (req: Request) => {
-        // live dispatch from /ingest; the WS upgrade itself is handled in Bun.serve below
-        if (req.method === "POST") {
-          const { envelopes } = (await req.json()) as { envelopes: LiveEnvelope[] };
-          rooms.dispatch(String(id), envelopes);
-          return new Response(null, { status: 204 });
-        }
-        return new Response("expected websocket upgrade", { status: 426 });
-      },
-    }),
-  },
-  INGEST_SECRET,
-  ...stringEnvFrom(process.env), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway
-  SESSION_SECRET: SESSION.secret, // the resolved secret (env, kept file, or freshly generated)
-  // AGPL §13 source: commit from env, else git (self-host-from-source) — the resolved value wins
-  SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
-};
-// Federation fetches never reach this host's private networks, except the peers the operator
-// configured by hand (FED_PEERS, FED_HUB_URL) or with FED_ALLOW_PRIVATE=1.
-env.FED_FETCH_GUARD = makeFetchGuard({
-  allowedOrigins: operatorOrigins(env),
-  allowPrivate: env.FED_ALLOW_PRIVATE === "1",
-});
-
-const server = Bun.serve<WsData, undefined>({
-  port: PORT,
-  async fetch(req, srv) {
-    const url = new URL(req.url);
-    if (url.pathname === "/ws") {
-      const region = url.searchParams.get("region") ?? "global";
-      if (srv.upgrade(req, { data: { region } })) return undefined;
-      return new Response("websocket upgrade failed", { status: 400 });
-    }
-    // overwrite any client-supplied x-real-ip with the socket address and drop a client-sent
-    // cf-connecting-ip unless a Cloudflare edge is declared (mirrors servers/node)
-    const headers = new Headers(req.headers);
-    stampClientIp(headers, srv.requestIP(req)?.address, env);
-    const fwd = new Request(req, { headers });
-    return handle(fwd, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
-  },
-  websocket: {
-    open(ws) {
-      rooms.join(ws);
-    },
-    message(ws, msg) {
-      rooms.onMessage(ws, msg);
-    },
-    pong(ws) {
-      rooms.onPong(ws);
-    },
-    close(ws) {
-      rooms.leave(ws);
-    },
-  },
-});
-console.log(`aprscaching bun-gateway listening on :${server.port}  (db: ${DB_PATH})`);
-
-// nightly TTL of firehose positions (logger positions kept longer for verification).
-// Run once at startup too — a box that reboots more often than daily never prunes otherwise.
-const runTtl = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
-runTtl();
-setInterval(runTtl, 24 * 3600 * 1000);
-
-// Frequent federation tasks on an interval (default 5 min): pull from peers, push to a hub,
-// answer relay queries — the same set the Worker's 15-minute cron runs, so a self-hosted spoke is
-// just as responsive as the managed one. Each sub-task no-ops unless its config is present.
-const FED_SYNC_MS = Number(process.env.FED_SYNC_INTERVAL_MS ?? 5 * 60 * 1000);
-if ((env.FED_PEERS || env.FED_HUB_URL) && FED_SYNC_MS > 0) {
-  setInterval(() => void runFrequentSync(env).catch((e) => console.error("federation sync:", e)), FED_SYNC_MS);
-}
-
-// ---- 24/7 process resilience (mirrors servers/node) ----
-process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
-process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
-let shuttingDown = false;
-function shutdown(signal: string): void {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`${signal} received — closing gateway`);
-  try {
-    server.stop();
+    started = createServer({
+      environment: process.env,
+      port: Number(process.env.PORT) || 8787, // a blank/NaN PORT must not bind port 0
+      dbPath: DB_PATH,
+      mediaDir: process.env.MEDIA_DIR ?? join(HERE, "data/media"),
+      migrations: migrationsFromDir(process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrations")),
+      secrets: secrets.secrets,
+      sourceCommit: gitHead(),
+    });
   } catch (e) {
-    console.error("server stop:", e);
+    console.error(`FATAL: ${(e as Error).message}`);
+    process.exit(1);
   }
-  process.exit(0);
+  const { migrated, server } = started;
+  console.log(migrated.length ? `migrations applied: ${migrated.join(", ")}` : "migrations up to date");
+  console.log(`aprscaching bun-gateway listening on :${server.port}  (db: ${DB_PATH})`);
 }
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));

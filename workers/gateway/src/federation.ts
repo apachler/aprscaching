@@ -14,6 +14,8 @@
  * Cursors are high-water marks; re-fetching the boundary is safe because records are idempotent
  * by `id` (a mirror upserts on the namespaced id).
  */
+import { b64urlToBytes } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -130,12 +132,6 @@ export function stableStringify(v: unknown): string {
     .map((k) => `${JSON.stringify(k)}:${stableStringify(o[k])}`)
     .join(",")}}`;
 }
-export function fromB64(b64: string): ArrayBuffer {
-  const bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out.buffer;
-}
 
 interface FedKey {
   key: CryptoKey;
@@ -156,8 +152,8 @@ function loadKey(env: Env): Promise<FedKey | null> {
   if (hit) return hit;
   const p: Promise<FedKey | null> = (async () => {
     if (!env.FED_PRIVATE_KEY) return null; // legitimately unconfigured → a cacheable null
-    const { pkcs8, pub } = JSON.parse(new TextDecoder().decode(fromB64(env.FED_PRIVATE_KEY)));
-    const key = await crypto.subtle.importKey("pkcs8", fromB64(pkcs8), { name: "Ed25519" }, false, ["sign"]);
+    const { pkcs8, pub } = JSON.parse(new TextDecoder().decode(b64urlToBytes(env.FED_PRIVATE_KEY)));
+    const key = await crypto.subtle.importKey("pkcs8", b64urlToBytes(pkcs8), { name: "Ed25519" }, false, ["sign"]);
     return { key, publicX: pub, jwk: { kty: "OKP", crv: "Ed25519", x: pub } };
   })().catch((e) => {
     // A configured key that fails to import is a TRANSIENT error — memoizing it as null
@@ -243,11 +239,11 @@ export function isInstanceId(s: unknown): s is string {
 }
 
 /** Days a rotated-away key keeps verifying when its history entry names no `until`. */
-export const DEFAULT_ROTATION_GRACE_DAYS = 7;
+const DEFAULT_ROTATION_GRACE_DAYS = 7;
 const MAX_CLOCK_SKEW_S = 300;
 
 /** One key a peer's frames may verify under: the pin (no `until`), or a predecessor until its cutoff. */
-export interface AcceptKey {
+interface AcceptKey {
   x: string;
   until?: number;
 }
@@ -262,7 +258,7 @@ export function parseAcceptKeys(s: string | null | undefined): AcceptKey[] {
   return parseJsonArray<AcceptKey>(s ?? undefined).filter((k) => k && typeof k.x === "string" && k.x);
 }
 
-export type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKey[] } | { ok: false; reason: string };
+type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKey[] } | { ok: false; reason: string };
 
 /**
  * Decide which keys a peer's frames verify under, from its descriptor and what we stored before.
@@ -375,7 +371,7 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
     const k = await importVerifyKey(authorityKeyB64url);
     return verifyDomain(
       k,
-      fromB64(doc.sig),
+      b64urlToBytes(doc.sig),
       SIG_DOMAIN.registry,
       stableStringify({ at: doc.at ?? 0, entries: doc.entries }),
     );
@@ -416,7 +412,7 @@ export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
 }
 
 /** A registry that cannot be trusted as configured: federation refuses to guess instead. */
-export class RegistryConfigError extends Error {}
+class RegistryConfigError extends Error {}
 
 /**
  * Registry settings that would make the registry unverifiable, or null when they are sound. A
@@ -481,7 +477,7 @@ async function registryFromDns(env: Env, name: string, authority: string): Promi
            ON CONFLICT(authority_key) DO UPDATE SET max_at = excluded.max_at, doc = excluded.doc,
              fetched_at = excluded.fetched_at WHERE excluded.max_at >= fed_registry_state.max_at`,
         )
-          .bind(authority, at, JSON.stringify(doc), Math.floor(Date.now() / 1000))
+          .bind(authority, at, JSON.stringify(doc), nowS())
           .run()
           .catch(() => {});
         return map;
@@ -578,7 +574,7 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
     const pk = await importVerifyKey(r.prevKey);
     return verifyDomain(
       pk,
-      fromB64(r.sig),
+      b64urlToBytes(r.sig),
       SIG_DOMAIN.rotation,
       stableStringify({ key: r.key, prevKey: r.prevKey, at: r.at }),
     );
@@ -602,7 +598,7 @@ export async function verifyDomain(
 
 /** Import a peer's raw Ed25519 public key (base64url) for verifying its frames. */
 export function importVerifyKey(rawB64url: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", fromB64(rawB64url), { name: "Ed25519" }, false, ["verify"]);
+  return crypto.subtle.importKey("raw", b64urlToBytes(rawB64url), { name: "Ed25519" }, false, ["verify"]);
 }
 
 export function instanceOf(req: Request, env: Env): string {
@@ -685,7 +681,7 @@ function feedParams(req: Request): { since: number; limit: number } {
 }
 
 /** Build the record items for a feed page (the browse surface — mirroring pulls CBOR frames). */
-export async function buildFeed(
+async function buildFeed(
   env: Env,
   instance: string,
   def: FeedServeDef,
@@ -712,7 +708,7 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 
 // only NATIVE caches are federated; imported third-party data stays local
 /** Cache versions count revisions from here: above every unix-second timestamp a version could be. */
-export const CACHE_VERSION_BASE = 2 ** 32;
+const CACHE_VERSION_BASE = 2 ** 32;
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   composite: true,

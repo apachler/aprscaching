@@ -6,15 +6,17 @@
  * `<name>.secret` beside the database, so a single box works with no setup and keeps its secrets across
  * restarts. Deleting `session.secret` ends every session on the next start.
  *
- * The Node server resolves SESSION_SECRET this way; the desktop app resolves all three, so it never runs
- * on a public default. `servers/bun/secrets.ts` is a byte-identical copy (a test keeps them equal).
+ * The Node and Bun servers resolve SESSION_SECRET this way; the desktop app resolves all three, so it never
+ * runs on a public default.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 
-export type ResolvedSecret =
-  { ok: true; secret: string; source: "env" | "file" | "generated" } | { ok: false; error: string };
+/** Where a resolved secret came from. */
+export type SecretSource = "env" | "file" | "generated";
+
+export type ResolvedSecret = { ok: true; secret: string; source: SecretSource } | { ok: false; error: string };
 
 const weak = (s: string | undefined) => !s || s === "change-me";
 
@@ -82,5 +84,48 @@ export function resolveInstanceSecrets(
   return {
     ok: true,
     secrets: { INGEST_SECRET: ingest.secret, OPERATOR_SECRET: operator.secret, SESSION_SECRET: session.secret },
+  };
+}
+
+export interface ServerSecrets {
+  INGEST_SECRET: string;
+  OPERATOR_SECRET?: string;
+  SESSION_SECRET: string;
+}
+
+/**
+ * The secrets of a self-host server (Node or Bun). INGEST_SECRET is required: the ingest box
+ * authenticates with it, and the known default would let anyone post packets and log finds as the
+ * ingest plane. OPERATOR_SECRET is optional (unset closes the operator's machine paths), but a set value
+ * must be strong and must not be the ingest secret — that would hand the ingest box operator rights.
+ * SESSION_SECRET is resolved as {@link resolveSessionSecret} does. `error` is the operator-facing reason
+ * the server refuses to start.
+ */
+export function resolveServerSecrets(
+  env: Record<string, string | undefined>,
+  dataDir: string,
+): { ok: true; secrets: ServerSecrets; sessionSource: SecretSource } | { ok: false; error: string } {
+  const ingest = env.INGEST_SECRET ?? "";
+  if (!ingest || ingest === "change-me")
+    return {
+      ok: false,
+      error:
+        "INGEST_SECRET is unset or still the 'change-me' default.\n" +
+        "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)",
+    };
+  const operator = env.OPERATOR_SECRET;
+  if (operator !== undefined && operator !== "" && (operator === "change-me" || operator === ingest))
+    return {
+      ok: false,
+      error:
+        "OPERATOR_SECRET is the 'change-me' default or equal to INGEST_SECRET.\n" +
+        "  Set its own strong value, e.g.:  OPERATOR_SECRET=$(openssl rand -hex 24)  (or leave it unset)",
+    };
+  const session = resolveSessionSecret(env, dataDir);
+  if (!session.ok) return { ok: false, error: `${session.error}\n  e.g.:  SESSION_SECRET=$(openssl rand -hex 32)` };
+  return {
+    ok: true,
+    secrets: { INGEST_SECRET: ingest, OPERATOR_SECRET: operator, SESSION_SECRET: session.secret },
+    sessionSource: session.source,
   };
 }

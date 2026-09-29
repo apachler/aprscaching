@@ -12,7 +12,9 @@
  * Disabled by default (SPOTS_ENABLED) so CI/offline never makes outbound calls — the pure
  * normalize/dedup/filter logic is unit-tested with fixtures instead.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
+import { jsonObjectSetting } from "./util/config.js";
 import { json } from "./app.js";
 import {
   type Spot,
@@ -62,7 +64,7 @@ const pickStr = (o: Record<string, unknown>, ...keys: string[]): string | undefi
 const toUnix = (v: unknown): number => {
   if (typeof v === "number") return v > 1e12 ? Math.floor(v / 1000) : Math.floor(v);
   const t = Date.parse(String(v));
-  return Number.isFinite(t) ? Math.floor(t / 1000) : Math.floor(Date.now() / 1000);
+  return Number.isFinite(t) ? Math.floor(t / 1000) : nowS();
 };
 
 /** POTA — api.pota.app/spot/activator: array of activator spots carrying lat/lon. */
@@ -136,8 +138,7 @@ const sotaSummits = new Map<string, { lat: number; lon: number; name?: string }>
 async function sotaCoords(env: Env, code: string): Promise<{ lat: number; lon: number; name?: string } | null> {
   if (sotaSummits.has(code)) return sotaSummits.get(code)!;
   try {
-    const base = env.SPOTS_SOTA_SUMMITS_URL || "https://api-db2.sota.org.uk/api/summits/";
-    const res = await fetch(`${base}${encodeURIComponent(code)}`, {
+    const res = await fetch(`${SOTA_SUMMITS_URL}${encodeURIComponent(code)}`, {
       headers: { accept: "application/json", "user-agent": spotsUserAgent(env) },
       signal: AbortSignal.timeout(8000),
     });
@@ -272,34 +273,51 @@ export function normalizeRbn(raw: unknown): Spot[] {
     .filter((s): s is Spot => s != null);
 }
 
+/** SOTA summit details, for resolving a spot's summit code to coordinates. */
+const SOTA_SUMMITS_URL = "https://api-db2.sota.org.uk/api/summits/";
+
+/**
+ * The reception networks have no single public JSON feed to build in, so each is polled only at an
+ * endpoint the operator names: `SPOTS_RECEPTION_URLS={"pskreporter":"…","dxcluster":"…","rbn":"…"}`.
+ */
+const receptionUrl = (env: Env, source: SpotSource): string => {
+  const v = jsonObjectSetting(env.SPOTS_RECEPTION_URLS)[source];
+  return typeof v === "string" ? v : "";
+};
+
 const SOURCES: SourceDef[] = [
   {
     source: "pota",
-    url: (env) => env.SPOTS_POTA_URL || "https://api.pota.app/spot/activator",
+    url: () => "https://api.pota.app/spot/activator",
     normalize: normalizePota,
     minIntervalSec: 120,
   },
   {
     source: "sota",
-    url: (env) => env.SPOTS_SOTA_URL || "https://api2.sota.org.uk/api/spots/50/all",
+    url: () => "https://api2.sota.org.uk/api/spots/50/all",
     normalize: normalizeSota,
     minIntervalSec: 180, // SOTA asks for reasonable use and blocks heavy clients; stay well inside it
   },
   {
     source: "gma",
-    url: (env) => env.SPOTS_GMA_URL || "https://www.cqgma.org/api/spots/25/",
+    url: () => "https://www.cqgma.org/api/spots/25/",
     normalize: normalizeGma,
     minIntervalSec: 120,
   },
-  // reception networks (mappable only with a grid/coords); enable explicitly via SPOTS_SOURCES.
-  { source: "pskreporter", url: (env) => env.SPOTS_PSK_URL || "", normalize: normalizePsk, minIntervalSec: 300 },
+  // reception networks (mappable only with a grid/coords), polled only at a configured endpoint
+  {
+    source: "pskreporter",
+    url: (env) => receptionUrl(env, "pskreporter"),
+    normalize: normalizePsk,
+    minIntervalSec: 300,
+  },
   {
     source: "dxcluster",
-    url: (env) => env.SPOTS_DXCLUSTER_URL || "",
+    url: (env) => receptionUrl(env, "dxcluster"),
     normalize: normalizeDxCluster,
     minIntervalSec: 120,
   },
-  { source: "rbn", url: (env) => env.SPOTS_RBN_URL || "", normalize: normalizeRbn, minIntervalSec: 120 },
+  { source: "rbn", url: (env) => receptionUrl(env, "rbn"), normalize: normalizeRbn, minIntervalSec: 120 },
 ];
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */

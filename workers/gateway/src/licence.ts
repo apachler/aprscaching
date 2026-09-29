@@ -17,14 +17,15 @@
  * exactly the rows the tool sent, then deletes that source's rows from older runs — so a call dropped
  * from the register disappears, and an interrupted run prunes nothing.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
 import { operatorSecretOk } from "./auth.js";
 import { readGate } from "./readapi.js";
 
-export type LicenceStatus = "licensed" | "expired" | "unconfirmed";
-export interface LicenceResult {
+type LicenceStatus = "licensed" | "expired" | "unconfirmed";
+interface LicenceResult {
   status: LicenceStatus;
   source?: string;
   sourceName?: string;
@@ -90,7 +91,7 @@ export function resolveLicence(rows: RegistryRow[], nowS: number): LicenceResult
  * "unconfirmed", so sign-up and adding a call carry on unaffected. Null only when `raw` has no callsign
  * shape at all.
  */
-export async function lookupLicence(env: Env, raw: string): Promise<({ callsign: string } & LicenceResult) | null> {
+async function lookupLicence(env: Env, raw: string): Promise<({ callsign: string } & LicenceResult) | null> {
   const callsign = homeCall(raw);
   if (!callsign) return null;
   try {
@@ -100,7 +101,7 @@ export async function lookupLicence(env: Env, raw: string): Promise<({ callsign:
           .bind(callsign)
           .all<RegistryRow>()
       ).results ?? [];
-    return { callsign, ...resolveLicence(rows, Math.floor(Date.now() / 1000)) };
+    return { callsign, ...resolveLicence(rows, nowS()) };
   } catch {
     return { callsign, status: "unconfirmed" };
   }
@@ -156,14 +157,14 @@ export async function handleLicenceSources(req: Request, env: Env): Promise<Resp
  * instance-wide data, so it is an operator action, never the ingest box's. Every import route checks
  * through this one helper.
  */
-export function operatorMachineOk(req: Request, env: Env): boolean {
+function operatorMachineOk(req: Request, env: Env): boolean {
   return operatorSecretOk(req, env);
 }
 
 const SOURCE_ID = /^[a-z][a-z0-9_-]{0,23}$/;
 const ROW_CALL = /^(?=[A-Z0-9]*[0-9])(?=[A-Z0-9]*[A-Z])[A-Z0-9]{3,12}$/;
 /** Rows per POST — bounds one request's work on every runtime. */
-export const MAX_BATCH = 1000;
+const MAX_BATCH = 1000;
 
 type Row = [callsign: string, status: "licensed" | "expired", expiresAt: number | null];
 
@@ -189,7 +190,7 @@ function runParams(body: Record<string, unknown>): { source: string; importedAt:
   if (!SOURCE_ID.test(source)) return "source must be a short lowercase id";
   const importedAt = body.importedAt;
   if (!Number.isInteger(importedAt) || (importedAt as number) <= 0) return "importedAt must be unix seconds";
-  if ((importedAt as number) > Math.floor(Date.now() / 1000) + 3600) return "importedAt is in the future";
+  if ((importedAt as number) > nowS() + 3600) return "importedAt is in the future";
   return { source, importedAt: importedAt as number };
 }
 

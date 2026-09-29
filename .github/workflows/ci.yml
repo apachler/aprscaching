@@ -25,6 +25,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run format:check
+      # every gateway export has a user outside its own file (module-private code is not exported)
+      - run: node tools/checks/dead-exports.mjs
 
   lint-types:
     name: lint (type-aware, slow)

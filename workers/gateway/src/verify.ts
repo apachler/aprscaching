@@ -87,7 +87,7 @@ export interface VerifyResult {
 }
 
 /** Data the engine needs, supplied by the caller (Worker reads these from D1). */
-export interface VerifyDeps {
+interface VerifyDeps {
   /** logger's stored positions within [now-window, now], newest first */
   loggerPositions: PositionRow[];
   /** for aprs_living: the cache-station's positions in the same window */

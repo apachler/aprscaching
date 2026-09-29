@@ -1,32 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/** Apply db/migrations/*.sql in order (the Node analogue of `wrangler d1 migrations apply`). */
+/** Apply db/migrations/*.sql to a better-sqlite3 database with the shared runner. */
 import fs from "node:fs";
 import path from "node:path";
 import type BetterSqlite3 from "better-sqlite3";
+import { migrate as runMigrations, type Migration } from "@aprscaching/gateway/migrate";
 
-export function migrate(db: BetterSqlite3.Database, dir: string): string[] {
-  db.exec("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
-  const applied = new Set((db.prepare("SELECT name FROM _migrations").all() as { name: string }[]).map((r) => r.name));
-  const files = fs
+/** The `*.sql` files of a migrations directory (Node and Bun both read it with node:fs). */
+export function migrationsFromDir(dir: string): Migration[] {
+  return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
-    .sort();
-  const insert = db.prepare("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)");
-  const ran: string[] = [];
+    .map((name) => ({ name, sql: fs.readFileSync(path.join(dir, name), "utf8") }));
+}
 
-  for (const f of files) {
-    if (applied.has(f)) continue;
-    const sql = fs.readFileSync(path.join(dir, f), "utf8");
-    db.exec("BEGIN");
-    try {
-      db.exec(sql);
-      insert.run(f, Math.floor(Date.now() / 1000));
-      db.exec("COMMIT");
-      ran.push(f);
-    } catch (e) {
-      db.exec("ROLLBACK");
-      throw new Error(`migration ${f} failed: ${(e as Error).message}`, { cause: e });
-    }
-  }
-  return ran;
+export function migrate(db: BetterSqlite3.Database, dir: string): string[] {
+  return runMigrations(
+    {
+      exec: (sql) => void db.exec(sql),
+      query: (sql, ...params) => {
+        const st = db.prepare(sql);
+        if (st.reader) return st.all(...params);
+        st.run(...params);
+        return [];
+      },
+    },
+    migrationsFromDir(dir),
+  );
 }
