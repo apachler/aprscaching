@@ -226,6 +226,22 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
       ...by("from_call").binds,
       ...by("to_call").binds,
     ),
+    // adoption requests the person made, and the adoption trail rows naming them (as actor, old or new owner)
+    adoptionRequests: await rows(
+      env,
+      `SELECT cache_id, callsign, in_place, note, status, requested_at, decided_at FROM cache_adoption_requests
+        WHERE account_id=? OR ${by("callsign").sql} ORDER BY id`,
+      acct,
+      ...by("callsign").binds,
+    ),
+    adoptionLog: await rows(
+      env,
+      `SELECT cache_id, action, actor_call, from_call, to_call, note, at FROM cache_adoptions
+        WHERE ${by("actor_call").sql} OR ${by("from_call").sql} OR ${by("to_call").sql} ORDER BY id`,
+      ...by("actor_call").binds,
+      ...by("from_call").binds,
+      ...by("to_call").binds,
+    ),
     stationsOperated: await rows(
       env,
       "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE account_id=?",
@@ -318,6 +334,16 @@ async function eraseCall(
       cs,
     ),
     env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=?").bind(marker, cs),
+    // The adoption trail stays for the instance, anonymised: the person's calls become the marker and the
+    // notes on rows naming them (which may describe them) are dropped.
+    env.DB.prepare(
+      `UPDATE cache_adoptions SET note=NULL
+        WHERE actor_call=? OR actor_call LIKE ? OR from_call=? OR from_call LIKE ? OR to_call=? OR to_call LIKE ?`,
+    ).bind(cs, `${cs}-%`, cs, `${cs}-%`, cs, `${cs}-%`),
+    ...(["actor_call", "from_call", "to_call"] as const).map((col) =>
+      env.DB.prepare(`UPDATE cache_adoptions SET ${col}=? WHERE ${col}=? OR ${col} LIKE ?`).bind(marker, cs, `${cs}-%`),
+    ),
+    env.DB.prepare("DELETE FROM cache_adoption_requests WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     ...media.map((m) => env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(m.id)),
     env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=?").bind(cs),
@@ -386,6 +412,7 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
   if (email) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(email));
   if (accountId)
     for (const table of [
+      "cache_adoption_requests",
       "account_callsigns",
       "callsign_history",
       "watch_calls",

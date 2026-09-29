@@ -137,6 +137,25 @@ Add photos afterwards from the cache's **Media** section. A **Living (APRS)** ca
 callsign it follows; you can also create one from **Settings → My stations**. The minimum tier for a cache and
 its stages are set through the [HTTP API](../reference/api.md).
 
+## Adopt a cache
+
+When a cache's owner leaves — they erased their account, or stopped looking after it — the sysop can put the
+cache up for adoption. **Nearby → Up for adoption** lists those caches, nearest first; most are archived, so
+they are not on the map.
+
+1. Open the cache. The **Up for adoption** card says why it is offered.
+2. Tick **I have checked that the container is in place** if you have been to the site, and add a note for
+   the sysop if you like.
+3. Tap **Request adoption**. You need to be signed in with a control-verified callsign
+   (**Settings → Account → verify**).
+
+The sysop approves one request. The cache becomes yours with all its finds and logbook; if you confirmed the
+container is in place it is active again, otherwise it stays archived until you edit it and set it active.
+You get an alert either way, and you can withdraw a pending request from the same card.
+
+If a cache of yours is offered, you get an alert and the card shows **Keep my cache**: tap it and the offer
+ends. You have 14 days before the cache can change hands.
+
 ## Community
 
 - **Activity** — recent finds, **Top finders**, and **Top corroborators**: the receiving stations whose

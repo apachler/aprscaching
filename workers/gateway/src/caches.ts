@@ -22,7 +22,7 @@ import {
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import { sessionCallsign, secretOk, isWithdrawnCall, displayCall } from "./auth.js";
+import { sessionCallsign, sessionAccountId, accountHoldsCall, secretOk, isWithdrawnCall, displayCall } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { coarsenConfig } from "./corroborate_privacy.js";
@@ -156,6 +156,16 @@ export async function actor(req: Request, env: Env, fallback?: string): Promise<
   if (s) return isWithdrawnCall(s) ? null : s.toUpperCase();
   if (ingestOk(req, env) && fallback && !isWithdrawnCall(fallback)) return fallback.toUpperCase();
   return null;
+}
+
+/**
+ * Does the signed-in session's account hold the licence of `cs`? Cache ownership is call-based, and a
+ * session names a call string: once that call's licence is held by another account (or by nobody), the
+ * session must not act as the owner of the call's caches.
+ */
+export async function sessionHoldsCall(req: Request, env: Env, cs: string): Promise<boolean> {
+  const me = await sessionAccountId(req, env);
+  return !!me && (await accountHoldsCall(env, me.accountId, cs));
 }
 
 interface RemoteCacheRow {
@@ -396,6 +406,8 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     return json({ error: "this cache's owner has withdrawn — it cannot be edited" }, { status: 403 });
   const who = await actor(req, env, b.ownerCall);
   if (!who || who !== existing.owner_call.toUpperCase())
+    return json({ error: "only the owner may edit this cache" }, { status: 403 });
+  if ((await sessionCallsign(req, env)) && !(await sessionHoldsCall(req, env, who)))
     return json({ error: "only the owner may edit this cache" }, { status: 403 });
 
   // merge: undefined keeps existing
