@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import { handleIngest } from "../src/ingest.js";
 import type { Env } from "../src/env.js";
-import { ingestMessage, sha256Hex, stableStringify } from "@aprscaching/shared";
+import { ingestMessage, sha256Hex, SIG_DOMAIN, stableStringify } from "@aprscaching/shared";
 
 const b64u = (buf: ArrayBuffer) => {
   let s = "";
@@ -62,7 +62,9 @@ async function signedIngest(env: Env, signerCall: string, packets: unknown[]) {
     await crypto.subtle.sign(
       "Ed25519",
       kp.privateKey,
-      new TextEncoder().encode(ingestMessage({ callsign: signerCall, at, count: packets.length, digest })),
+      new TextEncoder().encode(
+        SIG_DOMAIN.ingest + ingestMessage({ callsign: signerCall, at, count: packets.length, digest }),
+      ),
     ),
   );
   const req = new Request("http://gw/ingest", {

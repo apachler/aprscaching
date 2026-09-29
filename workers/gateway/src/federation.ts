@@ -389,7 +389,7 @@ export async function verifyRegistry(doc: SignedRegistry, authorityKeyB64url: st
   if (!doc?.sig || !Array.isArray(doc.entries)) return false;
   try {
     const k = await importVerifyKey(authorityKeyB64url);
-    return verifyDomainOrLegacy(
+    return verifyDomain(
       k,
       fromB64(doc.sig),
       SIG_DOMAIN.registry,
@@ -592,7 +592,7 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
   if (!r?.key || !r.prevKey || !r.at || !r.sig) return false;
   try {
     const pk = await importVerifyKey(r.prevKey);
-    return verifyDomainOrLegacy(
+    return verifyDomain(
       pk,
       fromB64(r.sig),
       SIG_DOMAIN.rotation,
@@ -604,18 +604,16 @@ export async function verifyRotationRecord(r: RotationRecord): Promise<boolean> 
 }
 
 /**
- * Verify an Ed25519 signature over a domain-prefixed canonical message, or — for one release, while
- * peers upgrade — over the bare message it was signed as before the prefix existed.
+ * Verify an Ed25519 signature over a domain-prefixed canonical message. Only the prefixed form
+ * verifies, so a signature made for one purpose can never be presented for another.
  */
-export async function verifyDomainOrLegacy(
+export async function verifyDomain(
   key: CryptoKey,
   sig: ArrayBuffer | Uint8Array<ArrayBuffer>,
   domain: string,
   message: string,
 ): Promise<boolean> {
-  const enc = new TextEncoder();
-  if (await crypto.subtle.verify("Ed25519", key, sig, enc.encode(domain + message))) return true;
-  return crypto.subtle.verify("Ed25519", key, sig, enc.encode(message));
+  return crypto.subtle.verify("Ed25519", key, sig, new TextEncoder().encode(domain + message));
 }
 
 /** Import a peer's raw Ed25519 public key (base64url) for verifying its frames. */

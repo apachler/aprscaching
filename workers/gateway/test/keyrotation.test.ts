@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
+import { SIG_DOMAIN } from "@aprscaching/shared";
 import {
   activeFedKeys,
   verifyRotationRecord,
@@ -44,7 +45,7 @@ describe("rotation-record continuity", () => {
       await crypto.subtle.sign(
         "Ed25519",
         prev.privateKey,
-        new TextEncoder().encode(stableStringify({ key: nextX, prevKey: prevX, at })),
+        new TextEncoder().encode(SIG_DOMAIN.rotation + stableStringify({ key: nextX, prevKey: prevX, at })),
       ),
     );
 
@@ -67,7 +68,7 @@ describe("rotationChainReaches — key-change continuity", () => {
       await crypto.subtle.sign(
         "Ed25519",
         prev.priv,
-        new TextEncoder().encode(stableStringify({ key: next.x, prevKey: prev.x, at })),
+        new TextEncoder().encode(SIG_DOMAIN.rotation + stableStringify({ key: next.x, prevKey: prev.x, at })),
       ),
     );
     return { key: next.x, prevKey: prev.x, at, sig };
@@ -106,7 +107,7 @@ describe("rotationChainReaches — key-change continuity", () => {
         await crypto.subtle.sign(
           "Ed25519",
           imposter.priv,
-          new TextEncoder().encode(stableStringify({ key: b.x, prevKey: a.x, at: 1 })),
+          new TextEncoder().encode(SIG_DOMAIN.rotation + stableStringify({ key: b.x, prevKey: a.x, at: 1 })),
         ),
       ),
     };

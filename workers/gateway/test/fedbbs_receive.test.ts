@@ -9,6 +9,7 @@ import {
   encodeFedPayload,
   encodeFedFrame,
   fedSigningBytes,
+  SIG_DOMAIN,
   type FedRecord,
 } from "@aprscaching/shared";
 import { applyFedBbsBulletin } from "../src/federation_sync.js";
@@ -155,7 +156,11 @@ describe("fed-over-BBS receive: trust-gated apply", () => {
     const entries = [{ instance: "oe.peer", key: peer.pub }];
     const at = 100;
     const sig = b64url(
-      await crypto.subtle.sign("Ed25519", auth.privateKey, new TextEncoder().encode(stableStringify({ at, entries }))),
+      await crypto.subtle.sign(
+        "Ed25519",
+        auth.privateKey,
+        new TextEncoder().encode(SIG_DOMAIN.registry + stableStringify({ at, entries })),
+      ),
     );
     const env = {
       DB: makeDb({}, []),
