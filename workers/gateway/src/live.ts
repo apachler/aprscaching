@@ -8,6 +8,7 @@
  * `deliveriesFor` is pure and runtime-neutral so the Durable Object (Worker) and the in-memory
  * rooms (Node) share identical delivery semantics.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
 import { haversineMeters } from "@aprscaching/aprs";
@@ -54,7 +55,7 @@ export async function envelopeForPosition(
     lon,
     symbol,
     course,
-    lastSeen: Math.floor(Date.now() / 1000),
+    lastSeen: nowS(),
   };
 
   const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { b64urlToBytes } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
@@ -29,7 +31,6 @@ import {
   type RotationRecord,
   type RegistryEntry,
   importVerifyKey,
-  fromB64,
 } from "./federation.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { upsertRemoteBulletin } from "./bbs.js";
@@ -48,7 +49,6 @@ import {
   type FedRecordKind,
 } from "@aprscaching/shared";
 
-const now = () => Math.floor(Date.now() / 1000);
 const MAX_PAGES = 50;
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
@@ -102,7 +102,7 @@ const MAX_DISCOVERED = 200;
  * so a replayed or forged record at a version already applied changes nothing.
  */
 async function versionAdmits(env: Env, rec: FeedRecord): Promise<boolean> {
-  const t = now();
+  const t = nowS();
   if (rec.at != null && rec.at > t + MAX_FUTURE_S) return false;
   if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return false;
   const row = await env.DB.prepare("SELECT v FROM fed_versions WHERE gid = ?").bind(rec.id).first<{ v: number }>();
@@ -116,14 +116,14 @@ async function noteVersion(env: Env, gid: string, origin: string, v: number): Pr
      ON CONFLICT(gid) DO UPDATE SET v = excluded.v, origin = excluded.origin, applied_at = excluded.applied_at
      WHERE excluded.v > fed_versions.v`,
   )
-    .bind(gid, origin, v, now())
+    .bind(gid, origin, v, nowS())
     .run();
 }
 
 /** A peer-supplied timestamp, never later than this clock allows (a far-future value would pin a row). */
 function clampFuture(v: unknown): number | null {
   const n = Number(v);
-  return v == null || !Number.isFinite(n) ? null : Math.min(n, now() + MAX_FUTURE_S);
+  return v == null || !Number.isFinite(n) ? null : Math.min(n, nowS() + MAX_FUTURE_S);
 }
 
 /** Apply one admitted record and remember its version. */
@@ -154,7 +154,7 @@ async function seedPeers(env: Env): Promise<void> {
          trust       = CASE WHEN fed_peers.trust = 'blocked' THEN 'blocked' ELSE 'trusted' END,
          approved_at = COALESCE(fed_peers.approved_at, excluded.approved_at)`,
     )
-      .bind(url, now())
+      .bind(url, nowS())
       .run();
   }
   // registry discovery: seed peers from the verified signed registry as `unvetted` (operator
@@ -219,7 +219,7 @@ async function syncOnePeer(env: Env, p: PeerRow): Promise<boolean> {
     return true;
   } catch (e) {
     await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
-      .bind((e as Error).message, now(), p.url)
+      .bind((e as Error).message, nowS(), p.url)
       .run();
     return false;
   }
@@ -321,7 +321,7 @@ async function syncAllPeersInner(env: Env): Promise<{
       const msg = (e as Error).message;
       errors.push(`${p.url}: ${msg}`);
       await env.DB.prepare("UPDATE fed_peers SET last_error=?, last_sync=?, sync_err = sync_err + 1 WHERE url=?")
-        .bind(msg, now(), p.url)
+        .bind(msg, nowS(), p.url)
         .run();
     }
   }
@@ -381,7 +381,7 @@ async function syncPeer(
     published: Array.isArray(wk.publicKeys) ? wk.publicKeys : [],
     rotations: wk.rotations,
     prior: parseAcceptKeys(p.accept_keys),
-    nowS: now(),
+    nowS: nowS(),
     graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
   });
   if (!keys.ok) throw new Error(`peer ${wk.instance}: ${keys.reason} — refusing (possible hijack)`);
@@ -395,7 +395,7 @@ async function syncPeer(
       throw new Error(`instance ${wk.instance} is already bound to another peer — refusing`, { cause: e });
     throw e;
   }
-  const newActive = usableKeys(keys.accept, now());
+  const newActive = usableKeys(keys.accept, nowS());
 
   // Opt-in transitive discovery: learn the peers a TRUSTED peer advertises. Only https URLs are
   // taken, a learned peer starts `unvetted` and disabled (never fetched until an operator enables
@@ -445,7 +445,7 @@ async function syncPeer(
     `UPDATE fed_peers SET last_sync=?, last_ok=?, last_error=NULL, sync_ok = sync_ok + 1,
        mirrored_total = mirrored_total + ?, last_counts = ? WHERE url=?`,
   )
-    .bind(now(), now(), total, JSON.stringify({ ...counts, encoding: "cbor" }), p.url)
+    .bind(nowS(), nowS(), total, JSON.stringify({ ...counts, encoding: "cbor" }), p.url)
     .run();
   return {
     caches: counts.cache ?? 0,
@@ -668,7 +668,7 @@ async function applyTombstone(env: Env, rec: FeedRecord, origin: string): Promis
     env.DB.prepare("DELETE FROM remote_account_moves WHERE global_id = ?").bind(target),
     env.DB.prepare(
       "INSERT OR REPLACE INTO remote_tombstones (target_id, origin, kind, ts, mirrored_at) VALUES (?,?,?,?,?)",
-    ).bind(target, origin, d.kind ?? "unknown", d.ts ?? now(), now()),
+    ).bind(target, origin, d.kind ?? "unknown", d.ts ?? nowS(), nowS()),
   ]);
 }
 
@@ -696,7 +696,7 @@ async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string
   if (d.toInstance !== origin) throw new Error("account move to another instance");
   const cs = d.callsign.toUpperCase();
   if (!(await moveProofValid(env, cs, origin, d))) throw new Error("account move without a verifiable proof");
-  const ts = Math.min(Number(d.ts) || 0, now() + 300);
+  const ts = Math.min(Number(d.ts) || 0, nowS() + 300);
   await env.DB.prepare(
     // ordered by the proof's signing time, which the announcing instance cannot choose
     `INSERT INTO remote_account_moves (callsign, from_instance, to_instance, ts, origin, mirrored_at, global_id, proof_at)
@@ -707,7 +707,7 @@ async function upsertRemoteAccountMove(env: Env, rec: FeedRecord, origin: string
        proof_at = excluded.proof_at
      WHERE excluded.proof_at > COALESCE(remote_account_moves.proof_at, -1)`,
   )
-    .bind(cs, d.fromInstance ?? null, d.toInstance, ts, origin, now(), rec.id, d.proofAt as number)
+    .bind(cs, d.fromInstance ?? null, d.toInstance, ts, origin, nowS(), rec.id, d.proofAt as number)
     .run();
 }
 
@@ -734,7 +734,7 @@ async function moveProofValid(
     const msg = new TextEncoder().encode(
       accountActionMessage({ action: "migrate", callsign, instance: origin, at: d.proofAt as number }),
     );
-    return await crypto.subtle.verify("Ed25519", await importVerifyKey(d.proofKey), fromB64(d.proofSig), msg);
+    return await crypto.subtle.verify("Ed25519", await importVerifyKey(d.proofKey), b64urlToBytes(d.proofSig), msg);
   } catch {
     return false;
   }
@@ -748,7 +748,7 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
     `INSERT OR REPLACE INTO remote_keys (global_id, origin, callsign, public_key, verified, created_at, mirrored_at)
      VALUES (?,?,?,?,?,?,?)`,
   )
-    .bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, now())
+    .bind(rec.id, origin, d.callsign ?? null, d.publicKey ?? null, d.verified ? 1 : 0, d.createdAt ?? null, nowS())
     .run();
 }
 
@@ -929,7 +929,7 @@ async function handleRelayFrame(env: Env, rec: FedRecord): Promise<"applied" | "
   if (!Number.isInteger(id) || id <= 0) return "rejected";
   // each relay frame is acted on once and only while fresh: a replayed query would otherwise
   // trigger a new answer bulletin every time it is re-flooded
-  const t = now();
+  const t = nowS();
   if (rec.at > t + MAX_FUTURE_S || rec.at < t - RELAY_FRAME_MAX_AGE_S) return "rejected";
   const seen = await env.DB.prepare("SELECT 1 AS x FROM fed_versions WHERE gid = ?").bind(rec.gid).first();
   if (seen) return "rejected";
@@ -956,7 +956,7 @@ async function actOnRelayFrame(
     const q = parseRelayQuery({ kind: rec.body.kind, params });
     if (!q) return "rejected";
     const result = await answerRelayQuery(q, { feed: (p) => feedSource(env, p) });
-    const at = now();
+    const at = nowS();
     const frame = await signFedRecord(env, {
       kind: "relayAnswer",
       gid: `${us}:relay:${id}:a`,
@@ -981,7 +981,7 @@ async function actOnRelayFrame(
   const res = await env.DB.prepare(
     "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND instance=? AND status IN ('queued','leased','dispatched')",
   )
-    .bind(JSON.stringify(result), now(), id, rec.origin.toLowerCase())
+    .bind(JSON.stringify(result), nowS(), id, rec.origin.toLowerCase())
     .run();
   return res.meta.changes ? "applied" : "rejected";
 }
@@ -1015,7 +1015,7 @@ async function originKeys(
   const keys = new Set<string>();
   if (row) {
     const accept = parseAcceptKeys(row.accept_keys);
-    if (accept.length) for (const k of usableKeys(accept, now())) keys.add(k);
+    if (accept.length) for (const k of usableKeys(accept, nowS())) keys.add(k);
     else if (row.public_key) keys.add(row.public_key);
   }
   const regKey = registry.get(origin)?.key;
@@ -1078,7 +1078,7 @@ export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: strin
       d.minTrust ?? null,
       d.createdAt ?? null,
       clampFuture(d.updatedAt),
-      now(),
+      nowS(),
     )
     .run();
 }
@@ -1112,7 +1112,7 @@ export async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string
       d.verifyMethod ?? null,
       d.distanceM ?? null,
       d.comment ?? null,
-      now(),
+      nowS(),
     )
     .run();
 }
@@ -1177,7 +1177,7 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
          enabled = CASE WHEN added_via = 'discovered' AND ? != 'blocked' THEN 1 ELSE enabled END
        WHERE url = ?`,
     )
-      .bind(trust, trust, now(), trust, url)
+      .bind(trust, trust, nowS(), trust, url)
       .run();
   } catch (e) {
     // unblocking a row whose instance id another live row already holds
@@ -1317,7 +1317,7 @@ async function submitRecords(
     return json({ ok: false, error: "instance is blocked on this hub" }, { status: 403 });
   for (const r of known) {
     const accept = parseAcceptKeys(r.accept_keys);
-    const keys = accept.length ? usableKeys(accept, now()) : r.public_key ? [r.public_key] : [];
+    const keys = accept.length ? usableKeys(accept, nowS()) : r.public_key ? [r.public_key] : [];
     if (!keys.length || keys.includes(publicKey)) continue;
     // A spoke that rotated proves it the same way a pulled peer does: rotation records (sent in
     // x-fed-rotations) leading from its pinned key to the new one. Only its own submit row moves.
@@ -1328,7 +1328,7 @@ async function submitRecords(
         published: [{ x: publicKey }, ...accept.filter((k) => k.x !== publicKey)],
         rotations,
         prior: accept,
-        nowS: now(),
+        nowS: nowS(),
         graceDays: env.FED_ROTATION_GRACE_DAYS ? Number(env.FED_ROTATION_GRACE_DAYS) : undefined,
       });
       if (moved.ok) {

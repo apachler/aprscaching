@@ -14,10 +14,9 @@
  * The feed signs at serve time, exactly like the caches/finds/keys feeds (so key rotation and
  * unsigned-instance behaviour stay consistent).
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { serveFeed, type FeedServeDef } from "./federation.js";
-
-const now = () => Math.floor(Date.now() / 1000);
 
 export type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
 export interface TombstoneItem {
@@ -44,7 +43,7 @@ function tombstoneData(r: { kind: string; target_id: string; origin: string; ts:
  */
 export async function emitTombstones(env: Env, origin: string, items: TombstoneItem[]): Promise<number> {
   if (!items.length) return 0;
-  const ts = now();
+  const ts = nowS();
   const stmts = items.map((it) =>
     env.DB.prepare("INSERT OR IGNORE INTO tombstones (id, kind, target_id, origin, ts) VALUES (?, ?, ?, ?, ?)").bind(
       crypto.randomUUID(),

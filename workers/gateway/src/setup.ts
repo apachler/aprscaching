@@ -9,6 +9,7 @@
  * Runtime-writable state (federation peers, forwarding partners, peer trust) stays with the
  * existing sysop surfaces; the web panel links each DB-sourced item to the surface that manages it.
  */
+import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
@@ -252,10 +253,10 @@ function envItems(env: Env): SetupItem[] {
 
 /** Runtime-state probes — each names the existing surface that manages it. */
 async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> {
-  const nowS = Math.floor(Date.now() / 1000);
+  const now = nowS();
   const items: SetupItem[] = [];
 
-  const rx = await count(env, "SELECT COUNT(*) AS n FROM packets_recent WHERE ts > ?", nowS - 3600);
+  const rx = await count(env, "SELECT COUNT(*) AS n FROM packets_recent WHERE ts > ?", now - 3600);
   items.push({
     key: "db:ingest",
     level: "blocking",

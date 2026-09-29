@@ -27,6 +27,7 @@
  * call string. A find is scored by the normal verification engine at the time the message was sent; a
  * radio message carries no in-app device reading, so it reaches Tier A or C, never B.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, baseHolder } from "./auth.js";
@@ -174,8 +175,6 @@ export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>)
   ).firstPartyAttested;
 }
 
-const now = () => Math.floor(Date.now() / 1000);
-
 type CacheForLog = CacheRow & { id: number; code: string; title: string };
 
 interface CommandRow {
@@ -197,7 +196,7 @@ async function queueAprs(env: Env, to: string, text: string): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?, ?, 'APZACG', 'message', ?)",
   )
-    .bind(now(), serviceCall(env), encodeAprsMessage(to, text))
+    .bind(nowS(), serviceCall(env), encodeAprsMessage(to, text))
     .run();
 }
 
@@ -253,11 +252,11 @@ async function reply(env: Env, m: RadioMessage, rowId: number, text: string, ask
   const recent = await env.DB.prepare(
     "SELECT 1 AS x FROM radio_commands WHERE from_call = ? AND replied_at >= ? LIMIT 1",
   )
-    .bind(m.src.toUpperCase(), now() - RADIO_REPLY_INTERVAL_SEC)
+    .bind(m.src.toUpperCase(), nowS() - RADIO_REPLY_INTERVAL_SEC)
     .first();
   if (recent) return;
   if (!(await answer(env, m, text))) return;
-  await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(now(), rowId).run();
+  await env.DB.prepare("UPDATE radio_commands SET replied_at = ? WHERE id = ?").bind(nowS(), rowId).run();
 }
 
 async function insertRow(
@@ -299,8 +298,8 @@ async function insertRow(
       f.score ? JSON.stringify(f.score) : null,
       f.logId ?? null,
       m.ts,
-      now(),
-      f.status === "pending" ? null : now(),
+      nowS(),
+      f.status === "pending" ? null : nowS(),
     )
     .run();
   return Number(r.meta?.last_row_id);
@@ -497,7 +496,7 @@ async function confirmRow(
     env.DB.prepare(
       "UPDATE radio_commands SET status = ?, reason = ?, log_id = ?, decided_at = ?, trusted = MAX(trusted, ?) WHERE id = ? AND status = 'confirming'",
     )
-      .bind(status, reason, logId, now(), onAir ? 1 : 0, row.id)
+      .bind(status, reason, logId, nowS(), onAir ? 1 : 0, row.id)
       .run();
   try {
     const cache = row.cache_id != null ? await loadCache(env, row.cache_id) : null;
@@ -529,12 +528,12 @@ export async function expireRadioCommands(env: Env): Promise<void> {
   await env.DB.prepare(
     "UPDATE radio_commands SET status = 'expired', decided_at = ? WHERE status = 'pending' AND sent_at < ?",
   )
-    .bind(now(), now() - RADIO_PENDING_TTL_SEC)
+    .bind(nowS(), nowS() - RADIO_PENDING_TTL_SEC)
     .run();
   await env.DB.prepare(
     "DELETE FROM radio_commands WHERE status NOT IN ('pending', 'confirming') AND COALESCE(decided_at, created_at) < ?",
   )
-    .bind(now() - RADIO_COMMAND_RETENTION_SEC)
+    .bind(nowS() - RADIO_COMMAND_RETENTION_SEC)
     .run();
 }
 
@@ -576,7 +575,7 @@ export async function decideRadioCommand(
     await env.DB.prepare(
       "UPDATE radio_commands SET status = 'discarded', decided_at = ? WHERE id = ? AND status = 'pending'",
     )
-      .bind(now(), id)
+      .bind(nowS(), id)
       .run();
     return { status: 200, body: { ok: true, status: "discarded" } };
   }

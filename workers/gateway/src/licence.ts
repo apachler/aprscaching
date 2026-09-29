@@ -17,6 +17,7 @@
  * exactly the rows the tool sent, then deletes that source's rows from older runs — so a call dropped
  * from the register disappears, and an interrupted run prunes nothing.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
@@ -100,7 +101,7 @@ export async function lookupLicence(env: Env, raw: string): Promise<({ callsign:
           .bind(callsign)
           .all<RegistryRow>()
       ).results ?? [];
-    return { callsign, ...resolveLicence(rows, Math.floor(Date.now() / 1000)) };
+    return { callsign, ...resolveLicence(rows, nowS()) };
   } catch {
     return { callsign, status: "unconfirmed" };
   }
@@ -189,7 +190,7 @@ function runParams(body: Record<string, unknown>): { source: string; importedAt:
   if (!SOURCE_ID.test(source)) return "source must be a short lowercase id";
   const importedAt = body.importedAt;
   if (!Number.isInteger(importedAt) || (importedAt as number) <= 0) return "importedAt must be unix seconds";
-  if ((importedAt as number) > Math.floor(Date.now() / 1000) + 3600) return "importedAt is in the future";
+  if ((importedAt as number) > nowS() + 3600) return "importedAt is in the future";
   return { source, importedAt: importedAt as number };
 }
 

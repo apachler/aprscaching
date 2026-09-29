@@ -8,11 +8,11 @@
  *   DELETE /api/views/:slug    delete (owner)
  *   GET    /v/:slug            resolve a public view → { name, state, ownerCall, createdAt }
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, mayActAsOwner } from "./auth.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 function makeSlug(): string {
   const b = new Uint8Array(8);
@@ -40,7 +40,7 @@ export async function handleViewCreate(req: Request, env: Env): Promise<Response
           (body.name ?? "").slice(0, 80) || null,
           stateStr,
           body.public === false ? 0 : 1,
-          now(),
+          nowS(),
         )
         .run();
       return json({ slug, public: body.public !== false }, { status: 201 });

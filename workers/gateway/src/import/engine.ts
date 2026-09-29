@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "../util/time.js";
 import { ingestSecretOk } from "../auth.js";
 /** Import engine (M3): upsert normalized records (dedup + update on re-import) + the HTTP entry. */
 import type { Env } from "../env.js";
@@ -29,7 +30,7 @@ export async function upsertImported(
     skipped = 0,
     deduped = 0,
     superseded = 0;
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   for (const r of records) {
     if (!isFinite(r.lat) || !isFinite(r.lon) || !r.externalId || !r.title) {
       skipped++;

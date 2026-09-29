@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { b64urlToBytes, bytesToB64, bytesToB64url } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import { secretOk } from "./auth.js";
 /**
@@ -42,7 +44,6 @@ export interface RelayResult {
   error?: string;
 }
 
-const now = () => Math.floor(Date.now() / 1000);
 const relayAuth = (req: Request, env: Env): boolean => {
   const s = env.FED_RELAY_SECRET;
   return secretOk(req.headers.get("x-relay-secret"), s);
@@ -80,7 +81,7 @@ export async function signRelayRequest(
   body: string = "",
 ): Promise<Record<string, string> | null> {
   const instance = (env.INSTANCE ?? "").toLowerCase();
-  const at = now();
+  const at = nowS();
   const u = new URL(url);
   const signed = await signRaw(
     env,
@@ -95,10 +96,7 @@ export async function signRelayRequest(
   return {
     "x-relay-instance": instance,
     "x-relay-at": String(at),
-    "x-relay-sig": btoa(String.fromCharCode(...signed.sig))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, ""),
+    "x-relay-sig": bytesToB64url(signed.sig),
   };
 }
 
@@ -110,14 +108,14 @@ async function spokeAuth(req: Request, env: Env, instance: string, body: Uint8Ar
   if (!instance || req.headers.get("x-relay-instance")?.toLowerCase() !== instance) return false;
   const at = Number(req.headers.get("x-relay-at"));
   const sig = req.headers.get("x-relay-sig") ?? "";
-  if (!Number.isInteger(at) || Math.abs(at - now()) > RELAY_SKEW_S || !sig) return false;
+  if (!Number.isInteger(at) || Math.abs(at - nowS()) > RELAY_SKEW_S || !sig) return false;
   const keys = await keysForOrigin(env, instance);
   if (keys === "blocked" || !keys.length) return false;
   const u = new URL(req.url);
   const msg = await relaySigningBytes(req.method, u.pathname + u.search, at, body);
   let sigBytes: Uint8Array<ArrayBuffer>;
   try {
-    sigBytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    sigBytes = b64urlToBytes(sig);
   } catch {
     return false;
   }
@@ -139,7 +137,7 @@ const MAX_ANSWER_BYTES = 8 * 1024 * 1024;
  * dispatched over the FBB mesh may take days to come back, so it is kept for a week.
  */
 export async function purgeRelayQueue(env: Env): Promise<void> {
-  const t = now();
+  const t = nowS();
   await env.DB.prepare(
     "DELETE FROM fed_relay_queue WHERE (status != 'dispatched' AND created_at < ?) OR created_at < ?",
   )
@@ -152,7 +150,7 @@ export async function expireRelayLeases(env: Env): Promise<void> {
   await env.DB.prepare(
     "UPDATE fed_relay_queue SET status = 'queued', leased_at = NULL WHERE status = 'leased' AND leased_at < ?",
   )
-    .bind(now() - RELAY_LEASE_TTL_S)
+    .bind(nowS() - RELAY_LEASE_TTL_S)
     .run();
 }
 
@@ -189,12 +187,6 @@ export async function answerRelayQuery(
 /** Relay feed name → the sync feed type the CBOR producer speaks. */
 const SYNC_TYPE_BY_FEED: Record<string, string> = { caches: "cache", finds: "find", keys: "key" };
 
-const b64 = (bytes: Uint8Array): string => {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x4000) s += String.fromCharCode(...bytes.subarray(i, i + 0x4000));
-  return btoa(s);
-};
-
 /**
  * The spoke's real feed source: answer with a base64 fedwire sync page — the same signed frames as
  * every other carrier; the requester's gateway verifies each frame when it consumes the page.
@@ -214,7 +206,7 @@ export async function feedSource(env: Env, params: Record<string, unknown>): Pro
     encoding: "cbor",
     nextCursor: built.nextCursor,
     complete: built.frames.length < limit,
-    pageB64: b64(encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames)),
+    pageB64: bytesToB64(encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames)),
   };
 }
 
@@ -242,7 +234,7 @@ export async function handleRelayEnqueue(req: Request, env: Env, instance: strin
       instance.toLowerCase(),
       q.kind,
       JSON.stringify(q.params),
-      now(),
+      nowS(),
       await sha256Hex(new TextEncoder().encode(ticket) as Uint8Array<ArrayBuffer>),
       requester,
     )
@@ -265,7 +257,7 @@ export async function handleRelayLease(req: Request, env: Env): Promise<Response
       .all<{ id: number; kind: string; params: string }>()
   ).results;
   if (rows.length) {
-    const t = now();
+    const t = nowS();
     await env.DB.batch(
       rows.map((r) =>
         env.DB.prepare("UPDATE fed_relay_queue SET status='leased', leased_at=? WHERE id=?").bind(t, r.id),
@@ -294,7 +286,7 @@ export async function handleRelayAnswer(req: Request, env: Env): Promise<Respons
   await env.DB.prepare(
     "UPDATE fed_relay_queue SET status='answered', answer=?, answered_at=? WHERE id=? AND status='leased' AND instance=?",
   )
-    .bind(JSON.stringify(result), now(), id, inst)
+    .bind(JSON.stringify(result), nowS(), id, inst)
     .run();
   return json({ ok: true });
 }
@@ -338,7 +330,7 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
   ).results;
   if (!rows.length) return json({ ok: true, dispatched: 0 });
 
-  const at = now();
+  const at = nowS();
   const frames: Uint8Array[] = [];
   for (const r of rows) {
     const frame = await signFedRecord(env, {
@@ -354,7 +346,7 @@ export async function handleRelayDispatch(req: Request, env: Env, instance: stri
     frames.push(frame);
   }
   const bull = await enqueueAcsfedBulletin(env, frames);
-  const t = now();
+  const t = nowS();
   await env.DB.batch(
     // dispatched, not leased: an FBB round trip takes hours, so these never time back into the queue
     rows.map((r) =>

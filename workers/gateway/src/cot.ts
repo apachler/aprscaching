@@ -5,6 +5,7 @@
  * <event> and return a snapshot <events> document over a bbox. Pure builder + a thin handler so the
  * mapping is conformance-tested on both runtimes.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 
 interface CotStation {
@@ -162,13 +163,13 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
         while (!closed && Date.now() - startedMs < maxMs) {
           await sleep(intervalMs);
           if (closed) break;
-          const nowS = Math.floor(Date.now() / 1000);
+          const tick = nowS();
           const rows = await cotStations(env, "last_seen > ?", cursor, bbox, "ASC", 500);
           for (const r of rows) {
-            send(`event: cot\ndata: ${stationToCotEvent(r, nowS)}\n\n`);
+            send(`event: cot\ndata: ${stationToCotEvent(r, tick)}\n\n`);
             if (r.lastSeen > cursor) cursor = r.lastSeen;
           }
-          send(`: ping ${nowS}\n\n`);
+          send(`: ping ${tick}\n\n`);
         }
         try {
           controller.close();

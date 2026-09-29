@@ -7,6 +7,7 @@
  * the same trust-gated pipeline every carrier feeds — a beacon from an unknown origin is quarantined
  * and can never introduce a peer.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireIngestOrOperator } from "./admin.js";
@@ -41,7 +42,7 @@ function parseJsonArray(s: string | undefined): unknown[] {
  */
 export async function handleBeaconEmit(req: Request, env: Env): Promise<Response> {
   const instance = instanceOf(req, env);
-  const at = Math.floor(Date.now() / 1000);
+  const at = nowS();
   let addresses: FedEndpoint[] = parseEndpoints(parseJsonArray(env.FED_ENDPOINTS));
   for (;;) {
     const frame = await signFedRecord(env, {

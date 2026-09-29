@@ -12,6 +12,7 @@
  * Disabled by default (SPOTS_ENABLED) so CI/offline never makes outbound calls — the pure
  * normalize/dedup/filter logic is unit-tested with fixtures instead.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import {
@@ -62,7 +63,7 @@ const pickStr = (o: Record<string, unknown>, ...keys: string[]): string | undefi
 const toUnix = (v: unknown): number => {
   if (typeof v === "number") return v > 1e12 ? Math.floor(v / 1000) : Math.floor(v);
   const t = Date.parse(String(v));
-  return Number.isFinite(t) ? Math.floor(t / 1000) : Math.floor(Date.now() / 1000);
+  return Number.isFinite(t) ? Math.floor(t / 1000) : nowS();
 };
 
 /** POTA — api.pota.app/spot/activator: array of activator spots carrying lat/lon. */

@@ -10,12 +10,12 @@
  *   GET /feeds/leaderboard.xml   top finders (snapshot)
  *   GET /feeds/u/<callsign>.xml  a callsign's finds + badges + scoring
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { xml } from "./app.js";
 import { userFeedPath } from "@aprscaching/shared";
 import { appBase, gatewayBase, surfaceUrl, xmlEscape } from "./sitemap.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const rfc822 = (unixSec: number) => new Date(unixSec * 1000).toUTCString();
 
 interface Item {
@@ -58,7 +58,7 @@ function rss(opts: {
     `    <link>${xmlEscape(opts.link)}</link>\n` +
     `    <atom:link href="${xmlEscape(self)}" rel="self" type="application/rss+xml"/>\n` +
     `    <description>${xmlEscape(opts.description)}</description>\n` +
-    `    <lastBuildDate>${rfc822(now())}</lastBuildDate>\n` +
+    `    <lastBuildDate>${rfc822(nowS())}</lastBuildDate>\n` +
     `    <generator>aprscaching</generator>\n` +
     `${items}\n` +
     `  </channel>\n</rss>\n`;
@@ -132,7 +132,7 @@ export async function handleBulletinsFeed(req: Request, env: Env): Promise<Respo
        FROM bbs_messages WHERE type = 'B' AND (expires_at IS NULL OR expires_at > ?)
        ORDER BY posted_at DESC LIMIT 50`,
     )
-      .bind(now())
+      .bind(nowS())
       .all<any>()
   ).results;
   const items: Item[] = rows.map((r) => ({
@@ -162,7 +162,7 @@ export async function handleLeaderboardFeed(req: Request, env: Env): Promise<Res
        GROUP BY logger_call ORDER BY finds DESC LIMIT 25`,
     ).all<any>()
   ).results;
-  const t = now();
+  const t = nowS();
   const items: Item[] = rows.map((r, i) => ({
     title: `#${i + 1} ${r.loggerCall} — ${r.finds} verified finds`,
     link: `${gatewayBase(req, env)}${userFeedPath(r.loggerCall)}`,

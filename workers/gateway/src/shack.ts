@@ -4,12 +4,11 @@
  * Stations and weather are enriched at ingest time (see ingest.ts) using the @aprscaching/aprs
  * decoder; these read endpoints expose them, plus an on-demand decode tool for raw TNC2 lines.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
-
-const now = () => Math.floor(Date.now() / 1000);
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -67,7 +66,7 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
       WHERE s.lat IS NOT NULL AND s.last_seen >= ?${bb.sql}
       ORDER BY s.last_seen DESC LIMIT ?`,
     )
-      .bind(now() - maxAge, ...bb.binds, limit)
+      .bind(nowS() - maxAge, ...bb.binds, limit)
       .all<{ roles: string | null }>()
   ).results;
   return json({ stations: rows.map((r) => ({ ...r, roles: rolesArr(r.roles) })) });
@@ -75,7 +74,7 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
 
 // ------------------------------------------------------------- transports (ports)
 export async function handlePorts(_req: Request, env: Env): Promise<Response> {
-  const since = now() - 24 * 3600;
+  const since = nowS() - 24 * 3600;
   const rows = (
     await env.DB.prepare(
       `SELECT port, SUM(rx) AS rx, SUM(tx) AS tx, MAX(ts) AS lastBucket
@@ -158,7 +157,7 @@ export async function handleStationSeries(req: Request, env: Env, callsign: stri
   const DAY = 86_400;
   const windowSec = Math.min(Math.max(Number(u.searchParams.get("window")) || DAY, 3_600), 31 * DAY);
   const cap = 2_000;
-  const since = now() - windowSec;
+  const since = nowS() - windowSec;
 
   const wx = (
     await env.DB.prepare(

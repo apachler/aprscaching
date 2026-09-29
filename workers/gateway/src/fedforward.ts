@@ -7,14 +7,13 @@
  * The bulletin's content-addressed BID rides `bbs_messages.bid` (UNIQUE), so re-enqueueing an
  * unchanged snapshot dedups here, and every relay hop dedups the flood the same way.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { buildFedFrames } from "./fedsync.js";
 import { encodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";
-
-const now = () => Math.floor(Date.now() / 1000);
 
 /** Feed order inside a batch: tombstones FIRST, so a delete suppresses a stale record later in it. */
 const ENQUEUE_TYPES = ["tombstone", "cache", "find", "key", "account-move", "bulletin"] as const;
@@ -34,7 +33,7 @@ export async function enqueueAcsfedBulletin(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
      VALUES (?, 'B', ?, ?, ?, ?, ?, 'local')`,
   )
-    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, now())
+    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, nowS())
     .run();
   return { bid: bull.bid, enqueued: res.meta.changes ? 1 : 0 };
 }

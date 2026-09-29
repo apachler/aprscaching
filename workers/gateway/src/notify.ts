@@ -12,26 +12,12 @@
  * Web-push encryption follows RFC 8291 (aes128gcm) + VAPID; it's config-gated (off unless VAPID_* set)
  * and strictly best-effort. The digest composition + base64url helpers are unit-tested.
  */
+import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sendEmail } from "./email.js";
 import { sessionIdentity } from "./auth.js";
-
-const now = () => Math.floor(Date.now() / 1000);
-
-// ---- base64url ----
-export function b64urlToBytes(s: string): Uint8Array {
-  const t = s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4);
-  const bin = atob(t);
-  const u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u;
-}
-export function bytesToB64url(b: Uint8Array): string {
-  let s = "";
-  for (const x of b) s += String.fromCharCode(x);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 
 // ---- digest (pure, testable) ----
 export interface DigestAlert {
@@ -66,7 +52,7 @@ export async function handlePushSubscribe(req: Request, env: Env): Promise<Respo
   await env.DB.prepare(
     "INSERT OR REPLACE INTO push_subs (account_id, endpoint, p256dh, auth, topics, created_at) VALUES (?,?,?,?,?,?)",
   )
-    .bind(acct, b.endpoint, b.keys?.p256dh ?? null, b.keys?.auth ?? null, (b.topics ?? ["watch"]).join(","), now())
+    .bind(acct, b.endpoint, b.keys?.p256dh ?? null, b.keys?.auth ?? null, (b.topics ?? ["watch"]).join(","), nowS())
     .run();
   return json({ ok: true }, { status: 201 });
 }
@@ -159,7 +145,7 @@ async function vapidJwt(env: Env, aud: string): Promise<string> {
   const header = bytesToB64url(new TextEncoder().encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
   const body = bytesToB64url(
     new TextEncoder().encode(
-      JSON.stringify({ aud, exp: now() + 12 * 3600, sub: env.VAPID_SUBJECT ?? "mailto:admin@aprscaching.net" }),
+      JSON.stringify({ aud, exp: nowS() + 12 * 3600, sub: env.VAPID_SUBJECT ?? "mailto:admin@aprscaching.net" }),
     ),
   );
   const sig = new Uint8Array(

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import { baseCall } from "@aprscaching/aprs";
 import { operatorSecretOk, sessionIdentity } from "./auth.js";
 /**
@@ -16,7 +17,6 @@ import { operatorSecretOk, sessionIdentity } from "./auth.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 
-const now = () => Math.floor(Date.now() / 1000);
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
 
@@ -142,7 +142,7 @@ export async function handleSupportConfirm(req: Request, env: Env): Promise<Resp
     note?: string;
     source?: string;
   };
-  const ts = now();
+  const ts = nowS();
   let supporter: string | null = null;
   if (b.callsign) {
     const base = baseCall(b.callsign);

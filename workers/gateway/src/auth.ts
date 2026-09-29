@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
-import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
+import { randomChallenge, verifyRegistration, verifyAssertion } from "./webauthn.js";
+import { bytesToB64url, b64urlToBytes } from "./util/b64.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { licenceFor } from "./licence.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
@@ -74,7 +76,7 @@ function webauthnUnconfigured(): Response {
   );
 }
 async function storeChallenge(env: Env, cs: string, kind: string, value: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   await env.DB.batch([
     // reap expired ceremonies while we're here — abandoned begins must not accumulate
     env.DB.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now),
@@ -91,7 +93,7 @@ async function takeChallenge(env: Env, cs: string, kind: string): Promise<string
   const row = await env.DB.prepare(
     "SELECT id, value FROM auth_challenges WHERE callsign=? AND kind=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1",
   )
-    .bind(cs, kind, Math.floor(Date.now() / 1000))
+    .bind(cs, kind, nowS())
     .first<{ id: string; value: string }>();
   if (!row) return null;
   await env.DB.prepare("DELETE FROM auth_challenges WHERE id=?").bind(row.id).run();
@@ -308,7 +310,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     if (pending.a) {
       // Passkey proven — NOW create the account. If the callsign was claimed through another path
       // during the ceremony window, refuse rather than bind this passkey to someone else's account.
-      const now = Math.floor(Date.now() / 1000);
+      const now = nowS();
       const raced = await unclaimableReason(env, cs);
       if (raced) return json({ error: raced }, { status: 409 });
       try {
@@ -334,14 +336,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-      .bind(
-        r.credentialId,
-        cs,
-        r.coseKey,
-        r.signCount,
-        JSON.stringify(credential.response.transports ?? []),
-        Math.floor(Date.now() / 1000),
-      )
+      .bind(r.credentialId, cs, r.coseKey, r.signCount, JSON.stringify(credential.response.transports ?? []), nowS())
       .run();
     return json(
       { ok: true, callsign: cs, licence: await licenceFor(env, cs) },
@@ -533,7 +528,7 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
       { status: 409 },
     );
   try {
-    await env.DB.batch(holdCall(env, me.accountId, base, false, Math.floor(Date.now() / 1000)));
+    await env.DB.batch(holdCall(env, me.accountId, base, false, nowS()));
   } catch {
     return json({ error: "callsign already held by another account" }, { status: 409 });
   }
@@ -560,7 +555,7 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   const owner = await baseHolder(env, next);
   if (owner && owner !== me.accountId)
     return json({ error: "callsign already held by another account" }, { status: 409 });
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowS();
   // a held call keeps its verification (no re-verify); a brand-new base call is held, unverified
   const verified = owner === me.accountId && (await isCallsignVerified(env, next));
   const ops = [

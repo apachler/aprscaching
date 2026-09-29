@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import { ingestSecretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
@@ -91,8 +92,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
   // [now − 7 d, now + 60 s] before anything is persisted.
-  const nowS = Math.floor(Date.now() / 1000);
-  const clampTs = (t: number) => Math.min(Math.max(t, nowS - 7 * 24 * 3600), nowS + 60);
+  const now = nowS();
+  const clampTs = (t: number) => Math.min(Math.max(t, now - 7 * 24 * 3600), now + 60);
   for (const p of packets) {
     p.ts = clampTs(p.ts);
     portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
@@ -211,7 +212,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     );
   }
   // per-transport RX counters, bucketed by hour (port_stats)
-  const bucket = Math.floor((maxTs || Math.floor(Date.now() / 1000)) / 3600) * 3600;
+  const bucket = Math.floor((maxTs || nowS()) / 3600) * 3600;
   for (const [port, rx] of portRx) {
     stmts.push(
       env.DB.prepare(

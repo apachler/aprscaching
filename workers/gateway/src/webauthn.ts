@@ -6,20 +6,8 @@
  * replay guard. Attestation statements are NOT trusted/parsed (we use "none" — we only bind the
  * credential public key); that's the standard, safe choice for passwordless login.
  */
+import { b64urlToBytes, bytesToB64url } from "./util/b64.js";
 
-// ---- base64url ----
-export function b64urlToBytes(s: string): Uint8Array {
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4);
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-export function bytesToB64url(b: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]!);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 /** A fresh 32-byte challenge, base64url (matches what clientDataJSON.challenge encodes). */
 export function randomChallenge(): string {
   const b = new Uint8Array(32);

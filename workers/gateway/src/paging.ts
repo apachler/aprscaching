@@ -15,6 +15,7 @@
  *   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
  *   return json({ activity: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
  */
+import { b64urlToStr, strToB64url } from "./util/b64.js";
 
 export interface Cursor {
   primary: number;
@@ -25,17 +26,14 @@ export interface PageParams {
   cursor: Cursor | null;
 }
 
-const b64url = (s: string): string => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const unb64url = (s: string): string => atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-
 export function encodeCursor(c: Cursor): string {
-  return b64url(`${c.primary}:${c.id}`);
+  return strToB64url(`${c.primary}:${c.id}`);
 }
 
 export function decodeCursor(s: string | null): Cursor | null {
   if (!s) return null;
   try {
-    const [p, i] = unb64url(s).split(":");
+    const [p, i] = b64urlToStr(s).split(":");
     const primary = Number(p),
       id = Number(i);
     return Number.isFinite(primary) && Number.isFinite(id) ? { primary, id } : null;

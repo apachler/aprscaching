@@ -5,6 +5,7 @@
  * a mutual meeting. Deliberately separate from the verified-find tiers (verify.ts): a rendezvous is a
  * social record, never points/leaderboard credit, so two stations parking together can't farm finds.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { haversineMeters } from "@aprscaching/aprs";
 
@@ -21,7 +22,7 @@ interface LivingRow {
 
 /** Best-effort: record rendezvous for any just-heard living cache. Never throws into the ingest path. */
 export async function recordRendezvous(env: Env, heard: { src: string; lat: number; lon: number }[]): Promise<void> {
-  const nowS = Math.floor(Date.now() / 1000);
+  const now = nowS();
   for (const h of heard) {
     const me = await env.DB.prepare(
       "SELECT id, station_call, lat, lon FROM caches WHERE type='aprs_living' AND rendezvous=1 AND UPPER(station_call)=UPPER(?)",
@@ -38,7 +39,7 @@ export async function recordRendezvous(env: Env, heard: { src: string; lat: numb
         WHERE c.type='aprs_living' AND c.rendezvous=1 AND UPPER(c.station_call)<>UPPER(?)
           AND s.last_seen >= ? AND s.lat IS NOT NULL AND s.lon IS NOT NULL`,
       )
-        .bind(h.src, nowS - HEARD_WINDOW)
+        .bind(h.src, now - HEARD_WINDOW)
         .all<LivingRow & { lastSeen: number }>()
     ).results;
 
@@ -50,13 +51,13 @@ export async function recordRendezvous(env: Env, heard: { src: string; lat: numb
         `SELECT 1 AS x FROM rendezvous_log
           WHERE ts >= ? AND ((cache_a=? AND cache_b=?) OR (cache_a=? AND cache_b=?)) LIMIT 1`,
       )
-        .bind(nowS - DEDUP_WINDOW, me.id, o.id, o.id, me.id)
+        .bind(now - DEDUP_WINDOW, me.id, o.id, o.id, me.id)
         .first();
       if (recent) continue;
       await env.DB.prepare(
         "INSERT INTO rendezvous_log (cache_a, cache_b, call_a, call_b, ts, lat, lon) VALUES (?,?,?,?,?,?,?)",
       )
-        .bind(me.id, o.id, me.station_call.toUpperCase(), o.station_call.toUpperCase(), nowS, h.lat, h.lon)
+        .bind(me.id, o.id, me.station_call.toUpperCase(), o.station_call.toUpperCase(), now, h.lat, h.lon)
         .run();
     }
   }

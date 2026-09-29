@@ -20,6 +20,7 @@
  *
  * Runtime-neutral; CORS is applied globally (open for embeds).
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
@@ -41,7 +42,6 @@ const windowSec = (env: Env) => Number(env.API_RATE_WINDOW_SEC) || 60;
 const anonMax = (env: Env) => Number(env.API_RATE_ANON) || 60;
 const keyedMax = (env: Env) => Number(env.API_RATE_KEYED) || 600;
 const maxBboxDeg = (env: Env) => Number(env.API_MAX_BBOX_DEG) || 20;
-const now = () => Math.floor(Date.now() / 1000);
 
 const ENDPOINTS = [
   { method: "GET", path: "/api/v1/caches?bbox=minLon,minLat,maxLon,maxLat", desc: "caches in a bbox (capped)" },
@@ -86,7 +86,7 @@ export async function readGate(
       tier = "keyed";
       max = keyedMax(env);
       try {
-        await env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE key = ?").bind(now(), raw).run();
+        await env.DB.prepare("UPDATE api_keys SET last_used_at = ? WHERE key = ?").bind(nowS(), raw).run();
       } catch {
         /* best-effort */
       }
@@ -123,7 +123,7 @@ async function issueKey(req: Request, env: Env): Promise<Response> {
   const body = (await req.json().catch(() => ({}))) as { label?: string; ownerCall?: string };
   const key = "acg_" + crypto.randomUUID().replace(/-/g, "");
   await env.DB.prepare("INSERT INTO api_keys (key, owner_call, label, rate_tier, created_at) VALUES (?,?,?, 'free', ?)")
-    .bind(key, body.ownerCall?.toUpperCase() || null, body.label?.slice(0, 80) || null, now())
+    .bind(key, body.ownerCall?.toUpperCase() || null, body.label?.slice(0, 80) || null, nowS())
     .run();
   return json(
     {

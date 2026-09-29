@@ -22,6 +22,7 @@
  * logs, media and history stay with the cache. `updated_at` moves forward, so the caches feed carries
  * the new owner to every peer. Each step is written to `cache_adoptions`.
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { baseCall } from "@aprscaching/aprs";
@@ -38,7 +39,6 @@ export const ADOPTION_NOTICE_SEC = 14 * 86_400;
 const NOTE_MIN = 3;
 const NOTE_MAX = 300;
 const CALL_RE = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
-const nowSec = () => Math.floor(Date.now() / 1000);
 
 interface CacheLite {
   id: number;
@@ -114,7 +114,7 @@ function audit(
 ): SqlStatement {
   return env.DB.prepare(
     "INSERT INTO cache_adoptions (cache_id, action, actor_call, from_call, to_call, note, at) VALUES (?,?,?,?,?,?,?)",
-  ).bind(cacheId, action, actor, f.from ?? null, f.to ?? null, f.note ?? null, nowSec());
+  ).bind(cacheId, action, actor, f.from ?? null, f.to ?? null, f.note ?? null, nowS());
 }
 
 /** Tell an account something about a cache, in its alert list and by push. */
@@ -124,7 +124,7 @@ async function alertAccount(env: Env, accountId: string | null, c: CacheLite, ki
   await env.DB.prepare(
     "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
   )
-    .bind(accountId, c.code, kind, detail, c.id, c.lat, c.lon, nowSec())
+    .bind(accountId, c.code, kind, detail, c.id, c.lat, c.lon, nowS())
     .run();
   await pushAlert(env, accountId);
 }
@@ -157,7 +157,7 @@ async function handOver(
     `UPDATE caches SET owner_call=?, status=CASE WHEN ?=1 THEN 'active' ELSE status END,
        updated_at=MAX(updated_at + 1, ?) WHERE id=? AND owner_call=?`,
   )
-    .bind(to, activate ? 1 : 0, nowSec(), c.id, c.owner_call)
+    .bind(to, activate ? 1 : 0, nowS(), c.id, c.owner_call)
     .run();
   if ((moved.meta?.changes ?? 0) !== 1) return false;
   await env.DB.batch([env.DB.prepare("DELETE FROM cache_adoption_offers WHERE cache_id=?").bind(c.id), ...after]);
@@ -173,7 +173,7 @@ async function settlePending(env: Env, cacheId: number, status: "declined" | "ca
   ).results;
   const stmt = env.DB.prepare(
     "UPDATE cache_adoption_requests SET status=?, decided_at=?, decided_by=? WHERE cache_id=? AND status='pending'",
-  ).bind(status, nowSec(), by, cacheId);
+  ).bind(status, nowS(), by, cacheId);
   return { pending, stmt };
 }
 
@@ -304,7 +304,7 @@ async function requestAdoption(req: Request, env: Env, c: CacheLite): Promise<Re
       `INSERT INTO cache_adoption_requests (cache_id, account_id, callsign, in_place, note, status, requested_at)
        VALUES (?,?,?,?,?, 'pending', ?)`,
     )
-      .bind(c.id, me.accountId, me.callsign, inPlace ? 1 : 0, n.note, nowSec())
+      .bind(c.id, me.accountId, me.callsign, inPlace ? 1 : 0, n.note, nowS())
       .run();
     await audit(env, c.id, "requested", me.callsign, { from: c.owner_call, to: me.callsign, note: n.note }).run();
     return json(
@@ -329,7 +329,7 @@ async function cancelRequest(req: Request, env: Env, c: CacheLite): Promise<Resp
   if (!r) return json({ error: "no pending request" }, { status: 404 });
   await env.DB.batch([
     env.DB.prepare("UPDATE cache_adoption_requests SET status='cancelled', decided_at=?, decided_by=? WHERE id=?").bind(
-      nowSec(),
+      nowS(),
       r.callsign,
       r.id,
     ),
@@ -475,7 +475,7 @@ async function makeOffer(req: Request, env: Env): Promise<Response> {
       c.id,
       by,
       n.note,
-      nowSec(),
+      nowS(),
     ),
     audit(env, c.id, "offered", by, { from: c.owner_call, note: n.note }),
   ]);
@@ -514,7 +514,7 @@ async function noticeBlocks(env: Env, c: CacheLite): Promise<string | null> {
   const o = await loadOffer(env, c.id);
   if (!o) return `${c.code} has an active owner: offer it for adoption first, so the owner is told`;
   const ends = noticeEndsAt(c, o.offered_at);
-  if (nowSec() < ends)
+  if (nowS() < ends)
     return `${c.code} has an active owner, who can keep it until the notice period ends (${new Date(ends * 1000).toISOString().slice(0, 10)})`;
   return null;
 }
@@ -568,7 +568,7 @@ async function decideRequest(
   const n = noteOf(b.note, false);
   if ("error" in n) return json({ error: n.error }, { status: 400 });
   const by = await sysopCall(req, env);
-  const now = nowSec();
+  const now = nowS();
 
   if (decision === "decline") {
     await env.DB.batch([

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { nowS } from "./util/time.js";
 import { ingestSecretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -16,7 +17,7 @@ export async function outboxAck(req: Request, env: Env): Promise<Response> {
   if (!ingestSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
   const { ids } = (await req.json()) as { ids: number[] };
   if (ids?.length) {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowS();
     await env.DB.batch(
       ids.map((id) => env.DB.prepare("UPDATE aprs_outbox SET status='sent', sent_at=? WHERE id=?").bind(now, id)),
     );

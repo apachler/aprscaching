@@ -4,6 +4,7 @@
  * Imported by index.ts (Cloudflare Worker) and by the portable Node server — so both runtimes
  * serve byte-identical behaviour. This module never touches Workers-only globals.
  */
+import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { handleIngest } from "./ingest.js";
@@ -210,7 +211,7 @@ export async function runFrequentSync(env: Env): Promise<void> {
  */
 export async function runScheduled(env: Env): Promise<void> {
   applyDerivedDefaults(env);
-  const nowS = Math.floor(Date.now() / 1000);
+  const now = nowS();
   // Prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
   // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
   // Node runtime a single mega-DELETE stalls every request until it finishes. 40 × 5000 caps one
@@ -220,7 +221,7 @@ export async function runScheduled(env: Env): Promise<void> {
     const r = await env.DB.prepare(
       "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ? LIMIT 5000)",
     )
-      .bind(nowS - 7 * 24 * 3600)
+      .bind(now - 7 * 24 * 3600)
       .run();
     if ((r.meta?.changes ?? 0) < 5000) break;
   }
@@ -228,15 +229,15 @@ export async function runScheduled(env: Env): Promise<void> {
   const pktTtl = (Number(env.PACKETS_TTL_HOURS) || 24) * 3600;
   // Bound the other unbounded firehose/diagnostic tables too. Presence-critical logger data
   // (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
-  const days = (n: number) => nowS - n * 24 * 3600;
+  const days = (n: number) => now - n * 24 * 3600;
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(nowS - pktTtl),
+    env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(now - pktTtl),
     env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(days(Number(env.MESSAGES_TTL_DAYS) || 7)),
     env.DB.prepare("DELETE FROM sensor_readings WHERE ts < ?").bind(days(Number(env.SENSOR_TTL_DAYS) || 30)),
     env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(Number(env.PORTSTATS_TTL_DAYS) || 7)),
     env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(Number(env.ALERTS_TTL_DAYS) || 30)),
     env.DB.prepare("DELETE FROM node_mheard WHERE last_heard < ?").bind(days(Number(env.MHEARD_TTL_DAYS) || 7)),
-    env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(nowS * 1000), // expired windows
+    env.DB.prepare("DELETE FROM rate_limits WHERE reset_at < ?").bind(now * 1000), // expired windows
   ]);
   // radio commands nobody confirmed within the pending window expire
   await expireRadioCommands(env);
@@ -551,8 +552,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/node/mheard" && m === "GET") return handleNodeMheard(req, env);
 
   // shack interop + transports
-  if (p === "/api/cot" && m === "GET") return handleCot(req, env, Math.floor(Date.now() / 1000));
-  if (p === "/api/cot/stream" && m === "GET") return handleCotStream(req, env, Math.floor(Date.now() / 1000));
+  if (p === "/api/cot" && m === "GET") return handleCot(req, env, nowS());
+  if (p === "/api/cot/stream" && m === "GET") return handleCotStream(req, env, nowS());
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
   if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // gated user TX via the ingest box

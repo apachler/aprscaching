@@ -10,6 +10,7 @@
  *   GET/POST /api/wx/updateweatherstation  WU-Rapidfire alias
  *   GET/POST /api/wx/key                 (session) read / (re)issue your push key + URLs
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity } from "./auth.js";
@@ -19,7 +20,6 @@ import { isCallsignVerified } from "./callsign.js";
 
 const WX_BEACON_MIN_SEC = 300; // throttle WX beacons to ≤ once / 5 min (cost + APRS etiquette)
 
-const now = () => Math.floor(Date.now() / 1000);
 const num = (v: string | undefined): number | undefined => {
   if (v == null || v === "") return undefined;
   const n = parseFloat(v);
@@ -135,7 +135,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
       const t = Date.parse(d.replace(" ", "T") + "Z");
       if (Number.isFinite(t)) return Math.floor(t / 1000);
     }
-    return now();
+    return nowS();
   })();
   const source = get("stationtype") || get("softwaretype") ? "ecowitt" : get("id") ? "wu" : "ecowitt";
   await env.DB.prepare(
@@ -157,7 +157,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
       source,
     )
     .run();
-  await env.DB.prepare("UPDATE wx_keys SET last_seen = ? WHERE key = ?").bind(now(), key).run();
+  await env.DB.prepare("UPDATE wx_keys SET last_seen = ? WHERE key = ?").bind(nowS(), key).run();
 
   if (place) {
     await env.DB.prepare(
@@ -206,11 +206,11 @@ async function maybeBeaconWx(
     .first<{ txIs: number; txCwop: number; lastBeacon: number | null }>();
   if (!k || (!k.txIs && !k.txCwop)) return;
   if (!o.place) return; // a WX report must carry a position
-  if (now() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return; // throttle
+  if (nowS() - (k.lastBeacon ?? 0) < WX_BEACON_MIN_SEC) return; // throttle
   if (!(await isCallsignVerified(env, o.baseCall))) return; // control-verified gate
 
   const info = encodeAprsWeather(o.place.lat, o.place.lon, toWxFields(o.wx));
-  const ts = now();
+  const ts = nowS();
   const targets: string[] = [];
   if (k.txIs) targets.push("is");
   if (k.txCwop) targets.push("cwop");
@@ -248,7 +248,7 @@ export async function handleWxKey(req: Request, env: Env): Promise<Response> {
   if (req.method === "POST") {
     await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
-      .bind(makeWxKey(), base, (await sessionIdentity(req, env))?.accountId ?? null, now())
+      .bind(makeWxKey(), base, (await sessionIdentity(req, env))?.accountId ?? null, nowS())
       .run();
   }
   const row = await env.DB.prepare(

@@ -5,12 +5,11 @@
  * previous stage — by being physically at it (geofence) or after its audio clue. Audio lives in the
  * MEDIA store (R2 on CF, filesystem on Node).
  */
+import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
 import { haversineMeters } from "@aprscaching/aprs";
-
-const now = () => Math.floor(Date.now() / 1000);
 
 interface StageRow {
   stage_no: number;
@@ -214,7 +213,7 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   await env.DB.prepare(
     "INSERT OR IGNORE INTO stage_unlocks (callsign, cache_id, stage_no, unlocked_at) VALUES (?,?,?,?)",
   )
-    .bind(cs, cacheId, stageNo, now())
+    .bind(cs, cacheId, stageNo, nowS())
     .run();
   return json({
     unlocked: true,
@@ -289,7 +288,7 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   const ins = await env.DB.prepare(
     "INSERT INTO cache_media (cache_id, media_key, kind, content_type, title, bytes, created_at) VALUES (?,?,?,?,?,?,?)",
   )
-    .bind(cacheId, key, kind, ct, title, bytes.length, now())
+    .bind(cacheId, key, kind, ct, title, bytes.length, nowS())
     .run();
   return json(
     {
