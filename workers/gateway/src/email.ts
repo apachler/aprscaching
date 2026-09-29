@@ -2,6 +2,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { issueSessionCookie, unclaimableReason, authThrottled } from "./auth.js";
+import { licenceFor } from "./licence.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -121,7 +122,10 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (req.method === "GET" && (req.headers.get("accept") ?? "").includes("text/html")) {
     return new Response(null, { status: 302, headers: { "set-cookie": cookie, location: appOrigin(req, env) + "/" } });
   }
-  return json({ ok: true, callsign: acct.callsign }, { headers: { "set-cookie": cookie } });
+  return json(
+    { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
+    { headers: { "set-cookie": cookie } },
+  );
 }
 
 /** Pluggable sender. Resend-compatible JSON API; returns false (dev mode) when unconfigured. */

@@ -16,6 +16,7 @@
  *   GET  /api/v1/profile/:call        a callsign's public profile
  *   GET  /api/v1/stations?bbox=       live stations
  *   GET  /api/v1/spots?bbox=          live activity spots
+ *   GET  /api/v1/licence/:call        callsign validity from imported public licence registers
  *
  * Runtime-neutral; CORS is applied globally (open for embeds).
  */
@@ -26,6 +27,7 @@ import { handleCachesInBBox, handleCacheDetail } from "./caches.js";
 import { handleLeaderboard, handleActivity, handleProfile, handleCorroborators } from "./community.js";
 import { handleStations, handleStation } from "./shack.js";
 import { handleSpots } from "./spots.js";
+import { licenceAnswer } from "./licence.js";
 import {
   handleCachesGpx,
   handleCachesKml,
@@ -57,6 +59,7 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/station/:call/track?from=&to=", desc: "position history (JSON)" },
   { method: "GET", path: "/api/v1/station/:call.kml", desc: "position history as a KML track" },
   { method: "GET", path: "/api/v1/spots?bbox=", desc: "live activity spots" },
+  { method: "GET", path: "/api/v1/licence/:call", desc: "callsign validity from public licence registers" },
   { method: "POST", path: "/api/v1/keys", desc: "issue a free API key" },
 ];
 
@@ -68,7 +71,10 @@ function extractKey(req: Request): string | null {
 }
 
 /** Rate-limit gate: resolves the tier (keyed if a valid key is presented) and 429s when over budget. */
-async function gate(req: Request, env: Env): Promise<{ tier: "anon" | "keyed"; key: string | null } | Response> {
+export async function readGate(
+  req: Request,
+  env: Env,
+): Promise<{ tier: "anon" | "keyed"; key: string | null } | Response> {
   const raw = extractKey(req);
   let key: string | null = null;
   let tier: "anon" | "keyed" = "anon";
@@ -163,7 +169,7 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (keyM && m === "GET") return keyInfo(env, keyM[1]!);
 
   if (m !== "GET") return json({ error: "read-only API" }, { status: 405 });
-  const g = await gate(req, env);
+  const g = await readGate(req, env);
   if (g instanceof Response) return g;
 
   // exports — GPX / KML / ADIF
@@ -194,6 +200,8 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (stKml) return handleStationKml(req, env, stKml[1]!.toUpperCase());
   const stInfo = /^\/station\/([A-Za-z0-9-]+)$/.exec(rest);
   if (stInfo) return handleStation(req, env, stInfo[1]!.toUpperCase());
+  const licM = /^\/licence\/([^/]+)$/.exec(rest);
+  if (licM) return licenceAnswer(env, licM[1]!);
   const profM = /^\/profile\/([A-Za-z0-9-]+)$/.exec(rest);
   if (profM) return handleProfile(req, env, profM[1]!.toUpperCase());
 

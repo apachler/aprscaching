@@ -25,6 +25,24 @@ Confirms the operator's own callsign so the sysop role opens on a fresh instance
 marks it verified (method `operator`), including on the account that holds it. `BASE` defaults to
 `http://127.0.0.1:8787`. See [Administration](../operate/administration.md#operator-identity).
 
+## Licence registers — `tools/licence/` {#licence-registers}
+
+```bash
+BASE=https://api.example.net INGEST_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
+node tools/licence/import.mjs --source all                    # every register
+node tools/licence/import.mjs --source de --file liste.pdf    # a file already downloaded (.zip, .pdf or pdftotext .txt)
+node tools/licence/import.mjs --source ised --dry-run         # parse and count; send nothing
+node tools/licence/import.mjs --list                          # the registers and their ids
+```
+
+Imports public amateur licence registers for the [licence badge](licence-sources.md). Each register is
+downloaded and parsed on this machine; only callsign, status and expiry are posted, in batches of 1000, to
+`/api/licence/import` with `INGEST_SECRET`, and the run is closed with `/api/licence/import/finish`, which
+removes calls the register no longer lists. With no `--source`, `LICENCE_SOURCES` (comma-separated) names
+the registers, for scheduled runs. `BASE` (or `--base`) defaults to `http://127.0.0.1:8787`. The PDF
+registers need `pdftotext` (poppler-utils). Exits non-zero if any register fails. See
+[Administration](../operate/administration.md#licence-registers).
+
 ## Federation keys — `tools/fedkey/`
 
 ```bash

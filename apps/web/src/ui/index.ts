@@ -4,7 +4,7 @@ export { Switch } from "./Switch.js";
 export { Group, Row, Advanced } from "./Group.js";
 export { Panel } from "./Panel.js";
 export { Button } from "./Button.js";
-export { Badge, TierBadge } from "./Badge.js";
+export { Badge, TierBadge, LicenceBadge, licenceLabel } from "./Badge.js";
 export { Card } from "./Card.js";
 export { EmptyState } from "./EmptyState.js";
 export { ErrorState } from "./ErrorState.js";

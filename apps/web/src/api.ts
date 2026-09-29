@@ -1055,7 +1055,9 @@ export function getSession(): Promise<Session> {
 export function logout(): Promise<{ ok: boolean }> {
   return call(`/auth/logout`, { method: "POST" });
 }
-export function claim(callsign: string): Promise<{ callsign: string; exists: boolean; hasPasskey: boolean }> {
+export function claim(
+  callsign: string,
+): Promise<{ callsign: string; exists: boolean; hasPasskey: boolean; licence?: Licence }> {
   return call(`/auth/claim`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 export function emailStart(
@@ -1069,13 +1071,36 @@ export function emailStart(
 export function changeCallsign(callsign: string): Promise<{ ok: boolean; callsign: string; verified: boolean }> {
   return call(`/auth/callsign`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
-export type HeldCallsign = { callsign: string; verified: boolean; isPrimary: boolean; active: boolean };
+/** Callsign validity from the public licence registers this instance imports. It flags, never gates:
+ *  "unconfirmed" means no imported register lists the call (many countries publish none). Distinct from
+ *  `verified`, which is control-verification. */
+export type Licence = {
+  callsign: string;
+  status: "licensed" | "expired" | "unconfirmed";
+  source?: string;
+  sourceName?: string;
+  expiresAt?: number;
+  checkedAt?: number;
+};
+/** Look a callsign up in the imported public licence registers. */
+export function getLicence(callsign: string): Promise<Licence> {
+  return call(`/api/licence/${encodeURIComponent(callsign)}`);
+}
+export type HeldCallsign = {
+  callsign: string;
+  verified: boolean;
+  isPrimary: boolean;
+  active: boolean;
+  licence?: Licence;
+};
 /** The base callsigns this account holds, with verification + which is active/primary. */
 export function listCallsigns(): Promise<{ active: string; callsigns: HeldCallsign[] }> {
   return call(`/auth/callsigns`);
 }
 /** Add another base callsign to the account (held + unverified; does not switch the active call). */
-export function addCallsign(callsign: string): Promise<{ ok: boolean; callsign: string; verified: boolean }> {
+export function addCallsign(
+  callsign: string,
+): Promise<{ ok: boolean; callsign: string; verified: boolean; licence?: Licence }> {
   return call(`/auth/callsigns`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 

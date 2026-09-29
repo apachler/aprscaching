@@ -35,6 +35,8 @@ The baseline groups into a handful of domains:
   - `0005_positions_transport` — how each stored position reached the gateway (`aprs-is`, `tnc`,
     `browser-rf`, `axudp`, `axip`, `meshcom`, `meshtastic`), derived from the ingest port. Display and
     statistics only: the verify engine never branches on it; rows stored earlier read `NULL`.
+  - `0013_licence_registry` — callsign validity from public licence registers: callsign, source, status,
+    expiry and import date only (see [Licence registers](licence-sources.md)).
   - `0014_cache_adoption` — cache adoption: standing offers (`cache_adoption_offers`), requests to adopt
     (`cache_adoption_requests`) and the audit trail of every step (`cache_adoptions`). Ownership stays on
     `caches.owner_call`.

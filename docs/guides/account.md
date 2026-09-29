@@ -40,6 +40,14 @@ either — it proves nothing about who you are.
 If you are out of range of every receiving station of the instance, ask its operator: a sysop can verify a
 call by hand after checking your licence, and the verification lists who did it and how.
 
+## The licence badge
+
+Beside each of your calls, **Settings → Account** shows whether a public licence register lists it:
+**licence confirmed (FCC)**, **licence expired**, or **not found in public registers**. It checks that the
+call is a real, current licence; it does not prove that you control it — only the verified tick does. Many
+countries publish no register, so "not found" is normal and never stops you from using the call. See
+[Licence registers](../reference/licence-sources.md).
+
 ## Several callsigns
 
 One account can hold several licensed base calls — a club call, or a call from another country:

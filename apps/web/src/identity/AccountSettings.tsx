@@ -9,7 +9,7 @@ import {
   type HeldCallsign,
   type VerifyChallenge,
 } from "../api.js";
-import { Group, Badge, Icon, Advanced, copyText, useToast } from "../ui/index.js";
+import { Group, Badge, LicenceBadge, licenceLabel, Icon, Advanced, copyText, useToast } from "../ui/index.js";
 import { useFmt } from "../format.js";
 
 type Session = {
@@ -131,9 +131,10 @@ export function AccountSettings(props: {
     setBusy(true);
     setMsg(null);
     try {
-      await addCallsign(n);
+      const added = await addCallsign(n);
       setNewCs("");
-      setMsg({ text: `Added ${n} — verify it below to enable announce + leaderboard credit.`, kind: "ok" });
+      const reg = added.licence ? ` Public registers: ${licenceLabel(added.licence)}.` : "";
+      setMsg({ text: `Added ${n} — verify it below to enable announce + leaderboard credit.${reg}`, kind: "ok" });
       await reload();
     } catch (e) {
       setMsg({ text: (e as Error).message.replace(/^.*?: /, ""), kind: "error" });
@@ -173,6 +174,7 @@ export function AccountSettings(props: {
                 </Badge>
               )}
               {c.isPrimary && <Badge title="the callsign your passkey is bound to">primary</Badge>}
+              <LicenceBadge licence={c.licence} />
             </div>
             <div className="setrow-c">
               {c.verified ? (
@@ -287,6 +289,10 @@ export function AccountSettings(props: {
       <p className="muted fine mt-2">
         Switching your active call never re-verifies a call you already hold; only adding a new one does. Past finds
         stay attributed to the call they were logged with.
+      </p>
+      <p className="muted fine">
+        The licence badge shows whether a public licence register lists the call; it confirms the call exists, not that
+        you control it. Only the verified tick means control-verified.
       </p>
     </Group>
   );

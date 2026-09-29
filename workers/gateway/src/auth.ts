@@ -3,6 +3,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
+import { licenceFor } from "./licence.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -146,7 +147,7 @@ export async function handleClaim(req: Request, env: Env): Promise<Response> {
   const hasPasskey = existing
     ? await env.DB.prepare("SELECT 1 FROM credentials WHERE callsign=? LIMIT 1").bind(cs).first()
     : null;
-  return json({ callsign: cs, exists: !!existing, hasPasskey: !!hasPasskey });
+  return json({ callsign: cs, exists: !!existing, hasPasskey: !!hasPasskey, licence: await licenceFor(env, cs) });
 }
 
 type Cred = {
@@ -281,7 +282,10 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
         Math.floor(Date.now() / 1000),
       )
       .run();
-    return json({ ok: true, callsign: cs }, { headers: { "set-cookie": await issueSessionCookie(cs, env) } });
+    return json(
+      { ok: true, callsign: cs, licence: await licenceFor(env, cs) },
+      { headers: { "set-cookie": await issueSessionCookie(cs, env) } },
+    );
   } catch (e) {
     return json({ error: "registration failed: " + (e as Error).message }, { status: 400 });
   }
@@ -393,13 +397,16 @@ export async function handleListCallsigns(req: Request, env: Env): Promise<Respo
         .bind(me.accountId)
         .all<{ callsign: string; verified: number; is_primary: number }>()
     ).results ?? [];
+  // `verified` is control-verification; `licence` is register validity — shown side by side, never merged
+  const licences = await Promise.all(rows.map((r) => licenceFor(env, r.callsign)));
   return json({
     active,
-    callsigns: rows.map((r) => ({
+    callsigns: rows.map((r, i) => ({
       callsign: r.callsign,
       verified: !!r.verified,
       isPrimary: !!r.is_primary,
       active: r.callsign === active,
+      licence: licences[i],
     })),
   });
 }
@@ -430,7 +437,7 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
   )
     .bind(me.accountId, base, Math.floor(Date.now() / 1000))
     .run();
-  return json({ ok: true, callsign: base, verified: false });
+  return json({ ok: true, callsign: base, verified: false, licence: await licenceFor(env, base) });
 }
 
 /**
