@@ -45,8 +45,11 @@ export const verifyText = (code: string) => `VERIFY ${code}`;
 
 /** The code in a `VERIFY <code>` message (any case), `""` for a bare `VERIFY`, or null for any other text. */
 export function parseVerifyMessage(text: string): string | null {
-  const m = /^verify(?:\s+(\S*))?\s*$/i.exec(text.trim());
-  return m ? (m[1] ?? "") : null;
+  // split on whitespace rather than match one pattern: radio text is attacker-controlled, and a regex with
+  // two adjacent whitespace runs backtracks polynomially on long blank padding
+  const words = text.trim().split(/\s+/);
+  if (words[0]?.toLowerCase() !== "verify" || words.length > 2) return null;
+  return words[1] ?? "";
 }
 
 /**

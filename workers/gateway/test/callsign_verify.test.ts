@@ -82,6 +82,12 @@ describe("parseVerifyMessage", () => {
     expect(parseVerifyMessage(text)).toBeNull(),
   );
 
+  it("parses long blank padding in linear time", () => {
+    const t = Date.now();
+    expect(parseVerifyMessage(`verify${" ".repeat(200_000)}x${" ".repeat(200_000)}y`)).toBeNull();
+    expect(Date.now() - t).toBeLessThan(1000);
+  });
+
   it("round-trips the text the start endpoint hands out", () => {
     expect(parseVerifyMessage(verifyText("123456"))).toBe("123456");
   });
