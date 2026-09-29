@@ -13,7 +13,7 @@ import { json, asStr } from "./app.js";
 import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
-import { applyFedBbsBulletin, type FedBbsApplyResult } from "./federation_sync.js";
+import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
 
 /** Build a router from the enabled forward rules. */
 export async function loadRouter(env: Env): Promise<ForwardRouter> {

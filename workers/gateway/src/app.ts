@@ -87,14 +87,9 @@ import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, 
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
-import {
-  handleFederationSync,
-  handleFederationPeers,
-  handlePeerTrust,
-  handleFederationSubmit,
-  syncAllPeers,
-  pushToHub,
-} from "./federation_sync.js";
+import { handleFederationSync, syncAllPeers } from "./fedpull.js";
+import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
+import { handleFederationSubmit, pushToHub } from "./fedpush.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
@@ -169,7 +164,7 @@ import {
 } from "./forward.js";
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
 import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommands } from "./radiolog.js";
-export { syncAllPeers } from "./federation_sync.js";
+export { syncAllPeers } from "./fedpull.js";
 
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {

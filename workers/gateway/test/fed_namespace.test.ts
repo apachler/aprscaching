@@ -4,7 +4,7 @@
 // serve a record — or a tombstone — targeting ANOTHER instance's namespace, signed with its own
 // key, and overwrite that instance's genuine mirror or censor its records.
 import { describe, it, expect } from "vitest";
-import { idInNamespace } from "../src/federation_sync.js";
+import { idInNamespace } from "../src/fedapply.js";
 
 describe("id namespace ownership", () => {
   it("accepts an id in the serving peer's own namespace", () => {

@@ -8,7 +8,7 @@ import {
   type FedPublicKey,
   type RotationRecord,
 } from "../src/federation.js";
-import { rotationChainReaches } from "../src/federation_sync.js";
+import { rotationChainReaches } from "../src/fedpeers.js";
 
 const b64u = (buf: ArrayBuffer) => {
   let s = "";

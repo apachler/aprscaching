@@ -13,7 +13,7 @@ import { json } from "./app.js";
 import { requireIngestOrOperator } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { signFedRecord } from "./fedcbor.js";
-import { applyFedFrames } from "./federation_sync.js";
+import { applyFedFrames } from "./fedapply.js";
 import { decodeFedSyncPage } from "./fedsync.js";
 import {
   encodeFedBeacon,

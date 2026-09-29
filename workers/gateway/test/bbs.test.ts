@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
 import { BULLETIN_FEED } from "../src/bbs.js";
-import { negotiateFeeds } from "../src/federation_sync.js";
+import { negotiateFeeds } from "../src/fedpull.js";
 
 describe("BBS bulletin federation (#1)", () => {
   it("BULLETIN_FEED.recordOf carries a stable BID + the bulletin payload", () => {

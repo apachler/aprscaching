@@ -17,7 +17,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
-import { listEnabledPeers, keysForOrigin } from "./federation_sync.js";
+import { listEnabledPeers, keysForOrigin } from "./fedpeers.js";
 import { parseAttestedSites, provenanceOf } from "./provenance.js";
 import { isInstanceId, loadRegistry } from "./federation.js";
 import { signFedRecord, verifyFedFrame } from "./fedcbor.js";

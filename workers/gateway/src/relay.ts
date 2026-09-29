@@ -29,7 +29,7 @@ import { signFedRecord } from "./fedcbor.js";
 import { enqueueAcsfedBulletin } from "./fedforward.js";
 import { buildFedFrames, encodeFedSyncPage } from "./fedsync.js";
 import { importVerifyKey, signRaw } from "./federation.js";
-import { keysForOrigin } from "./federation_sync.js";
+import { keysForOrigin } from "./fedpeers.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 
 export type RelayKind = "feed" | "corroborate";

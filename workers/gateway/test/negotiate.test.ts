@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { negotiateFeeds } from "../src/federation_sync.js";
+import { negotiateFeeds } from "../src/fedpull.js";
 
 const DEFS = [
   { type: "tombstone", capability: "tombstones" },

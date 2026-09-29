@@ -17,7 +17,8 @@ import { fedFetch, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { json } from "./app.js";
-import { listEnabledPeers, syncPeerByInstance } from "./federation_sync.js";
+import { listEnabledPeers } from "./fedpeers.js";
+import { syncPeerByInstance } from "./fedpull.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 
 const COOLDOWN_MS = 2000;

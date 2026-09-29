@@ -11,7 +11,7 @@ import {
   fedSigningBytes,
   type FedRecord,
 } from "@aprscaching/shared";
-import { handleFederationSubmit, pushToHub } from "../src/federation_sync.js";
+import { handleFederationSubmit, pushToHub } from "../src/fedpush.js";
 import { feedSource } from "../src/relay.js";
 import type { Env } from "../src/env.js";
 

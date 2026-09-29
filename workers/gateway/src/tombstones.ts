@@ -5,7 +5,7 @@
  * When an instance erases data (a GDPR account delete, or an explicit cache/find delete) it emits
  * a **tombstone**: a tiny signed record naming the *global id* of the removed record — never a
  * callsign or any other personal datum. Peers fetch the tombstone feed, verify the origin's
- * signature, and purge the matching mirrored record (`federation_sync.ts:syncTombstones`). This is
+ * signature, and purge the matching mirrored record (`fedapply.ts:applyTombstone`). This is
  * what makes a delete converge across the network: the caches/finds feeds are append-only by cursor,
  * so they can't carry a removal — only a tombstone can.
  *
