@@ -19,11 +19,14 @@ const sources = git("ls-files", "*.ts", "*.tsx", "*.mjs", "*.js").filter((f) => 
 const text = new Map(sources.map((f) => [f, readFileSync(resolve(root, f), "utf8")]));
 const gateway = sources.filter((f) => f.startsWith("workers/gateway/src/") && f.endsWith(".ts"));
 
+/** Escape every regex metacharacter, so a name is matched literally. */
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const DECL = /^export (?:declare )?(?:async )?(?:function\*?|const|let|class|interface|type|enum) ([A-Za-z0-9_$]+)/gm;
 const unused = [];
 for (const file of gateway) {
   for (const [, name] of text.get(file).matchAll(DECL)) {
-    const word = new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`);
+    const word = new RegExp(`(?<![\\w$])${escapeRegExp(name)}(?![\\w$])`);
     const used = [...text].some(([other, body]) => other !== file && word.test(body));
     if (!used) unused.push(`${file}: ${name}`);
   }
