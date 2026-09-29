@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
-import { getProfile, type Profile } from "../api.js";
+import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge, ErrorState, Ico } from "../ui/index.js";
+import { Panel, Group, Badge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
 import { RadioLogs } from "./RadioLogs.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
@@ -20,6 +20,7 @@ export function ProfilePanel(props: {
   const fmt = useFmt();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState(false);
+  const [licence, setLicence] = useState<Licence | null>(null);
   const load = useCallback(() => {
     setError(false);
     if (props.callsign.length >= 3)
@@ -27,6 +28,12 @@ export function ProfilePanel(props: {
         .then(setProfile)
         .catch(() => setError(true));
     else setProfile(null);
+    setLicence(null);
+    // validity from public registers is a side note: a failed lookup simply shows no badge
+    if (props.callsign.length >= 3)
+      getLicence(props.callsign)
+        .then(setLicence)
+        .catch(() => setLicence(null));
   }, [props.callsign]);
   useEffect(() => {
     load();
@@ -91,6 +98,12 @@ export function ProfilePanel(props: {
                 >
                   Verify callsign
                 </button>
+              </>
+            )}
+            {licence && (
+              <>
+                {" "}
+                <LicenceBadge licence={licence} />
               </>
             )}
             {profile?.supporter && (

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { claim, registerPasskey, loginPasskey, emailStart, passkeySupported } from "../api.js";
-import { Panel, Icon } from "../ui/index.js";
+import { claim, registerPasskey, loginPasskey, emailStart, passkeySupported, type Licence } from "../api.js";
+import { Panel, Icon, LicenceBadge } from "../ui/index.js";
 
-type Probe = { exists: boolean; hasPasskey: boolean } | null;
+type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
 
 /** Sign in / create account: passkey first, email magic-link fallback. Callsign-led. */
 export function SignIn(props: { onDone: () => void; onClose: () => void }) {
@@ -91,6 +91,11 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
             Callsign <span className="mono">{callsign}</span>
             {probe.exists ? "" : " — new account"}.
           </p>
+          {!probe.exists && probe.licence && (
+            <p className="muted fine">
+              <LicenceBadge licence={probe.licence} />
+            </p>
+          )}
 
           {probe.hasPasskey && canPasskey && (
             <button className="primary log-primary" disabled={busy} onClick={() => run(() => loginPasskey(callsign))}>

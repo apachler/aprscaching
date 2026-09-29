@@ -38,3 +38,31 @@ export function TierBadge(props: {
     </Badge>
   );
 }
+
+/** The short wording of a licence-register result, for badges and inline confirmations. */
+export function licenceLabel(l: { status: string; sourceName?: string }): string {
+  if (l.status === "licensed") return `licence confirmed${l.sourceName ? ` (${l.sourceName})` : ""}`;
+  if (l.status === "expired") return "licence expired";
+  return "not found in public registers";
+}
+
+/**
+ * Licence-register validity chip: is the call listed as licensed in a public register this instance
+ * imports? Validity only — it is never the control-verified tick, and "not found" is neutral, not an
+ * error (many countries publish no register).
+ */
+export function LicenceBadge(props: { licence?: { status: string; sourceName?: string; expiresAt?: number } | null }) {
+  const l = props.licence;
+  if (!l) return null;
+  const title =
+    l.status === "licensed"
+      ? `Listed as licensed in the ${l.sourceName ?? "public"} register. This confirms the call exists, not who controls it.`
+      : l.status === "expired"
+        ? `The ${l.sourceName ?? "public"} register lists this call, but not as currently licensed.`
+        : "No public register this instance imports lists this call. Many countries publish none — this is not an error.";
+  return (
+    <Badge kind={l.status === "expired" ? "warn" : undefined} title={title}>
+      {licenceLabel(l)}
+    </Badge>
+  );
+}
