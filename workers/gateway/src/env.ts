@@ -151,7 +151,7 @@ export interface Env {
  * email, push, rate limits, and first-party attestation are all live on self-host. Keep this in sync
  * with the optional string fields above — one source of truth for both runtimes.
  */
-export const ENV_STRING_KEYS = [
+const ENV_STRING_KEYS = [
   "OPERATOR_SECRET",
   "SESSION_SECRET",
   "SESSION_TTL_DAYS",

@@ -70,7 +70,7 @@ export async function isKeyRegistered(env: Env, callsign: string, publicKey: str
   return !!r;
 }
 
-export interface AuthorshipCheck {
+interface AuthorshipCheck {
   cache: string;
   instance: string;
   logger: string;

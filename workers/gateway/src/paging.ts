@@ -21,7 +21,7 @@ export interface Cursor {
   primary: number;
   id: number;
 }
-export interface PageParams {
+interface PageParams {
   limit: number;
   cursor: Cursor | null;
 }

@@ -14,7 +14,7 @@ import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
  * `src_call` = the verified user call; the box drains + injects. RF legality holds:
  * the wire source is a real, control-verified licensed call.
  */
-export interface UserTxBody {
+interface UserTxBody {
   kind?: string;
   addressee?: string;
   text?: string;

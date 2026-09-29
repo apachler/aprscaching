@@ -6,9 +6,9 @@
  *   - {@link FedSyncTransport}: request/response pull-sync (HTTP over the internet or over
  *     44net/HAMNET amateur IP space). The adapter here serves both — 44net sync IS HTTP, just
  *     addressed by an amateur-space name.
- *   - {@link FedForwardTransport}: fire-and-forget store-and-forward delivery (BBS forwarding, the
- *     rendezvous relay, packet circuits). Nothing to negotiate live — the carrier's limits are
- *     operator config; frames are applied idempotently by global id on arrival.
+ *   - fire-and-forget store-and-forward delivery (BBS forwarding, the rendezvous relay, packet
+ *     circuits). Nothing to negotiate live — the carrier's limits are operator config; frames are
+ *     applied idempotently by global id on arrival (fedapply.ts).
  *
  * Endpoint selection: a peer row carries an ordered typed endpoint set (`endpoints` JSON); the
  * lowest-priority sync-capable endpoint wins. A peer without an endpoint set (a FED_PEERS URL, a
@@ -17,7 +17,7 @@
 import { trimTrailingSlashes } from "./fetchguard.js";
 import { parseEndpoints, type FedEndpoint, type FedTransportKind } from "@aprscaching/shared";
 
-export const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
+const PEER_FETCH_TIMEOUT_MS = 5000; // a blackholed peer must not hang the whole sync cron
 
 export interface FedSyncTransport {
   readonly kind: FedTransportKind;
@@ -29,20 +29,14 @@ export interface FedSyncTransport {
   fetchJson<T>(path: string): Promise<T>;
 }
 
-export interface FedForwardTransport {
-  readonly kind: FedTransportKind;
-  /** Hand signed wire frames to the carrier; delivery is asynchronous and unacknowledged. */
-  enqueue(frames: Uint8Array[]): Promise<void>;
-}
-
 /** The peer row fields endpoint resolution reads (a subset of the fed_peers row). */
-export interface PeerAddressing {
+interface PeerAddressing {
   url?: string | null;
   endpoints?: string | null;
 }
 
 /** A peer's typed endpoint set, priority-ordered; without one, its https `url`. */
-export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
+function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
   if (p.endpoints) {
     try {
       const list = parseEndpoints(JSON.parse(p.endpoints));
@@ -62,7 +56,7 @@ export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
  * 44net endpoints resolve to plain http on the amateur-space name — 44net/HAMNET addresses have no
  * public-CA TLS, and record authenticity comes from signatures, not the channel.
  */
-export function endpointBaseUrl(e: FedEndpoint): string | null {
+function endpointBaseUrl(e: FedEndpoint): string | null {
   if (e.transport === "https") return trimTrailingSlashes(e.address);
   if (e.transport === "44net") return `http://${e.address}`;
   return null;

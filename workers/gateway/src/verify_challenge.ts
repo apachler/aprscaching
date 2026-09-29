@@ -14,10 +14,10 @@ import { baseCall } from "@aprscaching/aprs";
 import { sessionIdentity, accountHoldsCall } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 
-export type ChallengeMethod = "ampr_dns" | "lotw";
+type ChallengeMethod = "ampr_dns" | "lotw";
 
 /** Failed completions before a challenge locks. */
-export const CHALLENGE_MAX_ATTEMPTS = 5;
+const CHALLENGE_MAX_ATTEMPTS = 5;
 const WINDOW_MS = 3_600_000;
 /** Per hour: starts per account and per call, and completion attempts per account. */
 const STARTS_PER_ACCOUNT = 10;

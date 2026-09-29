@@ -16,7 +16,7 @@ import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./fedapply.js";
 
 /** Build a router from the enabled forward rules. */
-export async function loadRouter(env: Env): Promise<ForwardRouter> {
+async function loadRouter(env: Env): Promise<ForwardRouter> {
   const rows = (
     await env.DB.prepare("SELECT partner, route, transport FROM bbs_forward_rules WHERE enabled=1").all<ForwardRule>()
   ).results;
@@ -32,7 +32,7 @@ async function homeBbs(env: Env, call: string): Promise<string | null> {
 }
 
 /** Resolve a destination (explicit "@bbs" address, or a callsign steered via White Pages) → partner. */
-export async function resolvePartner(env: Env, dest: string): Promise<{ addr: string; partner: ForwardRule | null }> {
+async function resolvePartner(env: Env, dest: string): Promise<{ addr: string; partner: ForwardRule | null }> {
   let addr = dest.trim();
   if (!addr.includes("@")) {
     const home = await homeBbs(env, addr);
@@ -43,7 +43,7 @@ export async function resolvePartner(env: Env, dest: string): Promise<{ addr: st
 }
 
 /** Learn a White Pages entry from a heard/posted message ("S OE8APR @ OE8XBM…"). Best-effort. */
-export async function learnWhitePages(env: Env, call: string, bbs: string): Promise<void> {
+async function learnWhitePages(env: Env, call: string, bbs: string): Promise<void> {
   if (!call || !bbs) return;
   await env.DB.prepare(
     "INSERT INTO white_pages (callsign, home_bbs, updated_at) VALUES (?,?,?) ON CONFLICT(callsign) DO UPDATE SET home_bbs=excluded.home_bbs, updated_at=excluded.updated_at",
@@ -231,7 +231,7 @@ export async function handleForwardPartnerDelete(req: Request, env: Env, id: num
 
 // ---- FBB forwarding pool — the ingest scheduler pulls outbound / pushes inbound here ----
 /** An FBB message on the wire (matches @aprscaching/packet FbbMessage; the ingest feeds these to FbbSession). */
-export interface FbbWireMsg {
+interface FbbWireMsg {
   type: "P" | "B";
   from: string;
   at: string;

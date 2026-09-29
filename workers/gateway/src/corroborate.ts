@@ -61,15 +61,13 @@ export interface CorroborationQuery {
   excludeIgates?: string[];
 }
 
-/** Advertised in the descriptor: this instance speaks the signed corroboration exchange. */
-export const CORROBORATE_CAPABILITY = "corroborate-signed/1";
 /** How far a signed question or answer's `at` may sit from the receiver's clock. */
 const CORROBORATION_SKEW_S = 120;
 /** The answerer's bounds on a question: radius, window length, and how far back it may reach. */
-export const ANSWER_MIN_RADIUS_M = 150;
-export const ANSWER_MAX_RADIUS_M = 1000;
-export const ANSWER_MAX_WINDOW_S = 3600;
-export const ANSWER_MAX_AGE_S = 7 * 86400;
+const ANSWER_MIN_RADIUS_M = 150;
+const ANSWER_MAX_RADIUS_M = 1000;
+const ANSWER_MAX_WINDOW_S = 3600;
+const ANSWER_MAX_AGE_S = 7 * 86400;
 const MAX_QUESTION_BYTES = 16 * 1024;
 const CALL_RE = /^[A-Z0-9]{1,7}(?:-[A-Z0-9]{1,2})?$/;
 
@@ -103,7 +101,7 @@ export function corroboratorIgate(opts: {
   return baseCall(ig) === baseCall(opts.loggerCall) ? null : ig.toUpperCase();
 }
 
-export interface RfPositionRow {
+interface RfPositionRow {
   lat: number;
   lon: number;
   ts: number;
@@ -176,7 +174,7 @@ function probeKey(asker: string, b: CorroborationQuery, exclude: Set<string>): s
  * window that ended more than seven days ago is refused. Whatever the asker sends, the answer can
  * only say "roughly here, roughly then".
  */
-export function boundQuestion(
+function boundQuestion(
   q: CorroborationQuery,
   cfg: ReturnType<typeof coarsenConfig>,
   nowS: number,
@@ -377,7 +375,7 @@ async function debitContradiction(env: Env, urls: string[]): Promise<void> {
  * FED_REVEAL_IGATE and it is not one of the logger's own. Returns the evidence, `"no"` for a verified
  * denial, or null for anything that does not verify.
  */
-export async function acceptAnswer(
+async function acceptAnswer(
   bytes: Uint8Array,
   ctx: {
     instance: string;

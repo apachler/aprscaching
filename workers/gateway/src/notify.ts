@@ -20,7 +20,7 @@ import { sendEmail } from "./email.js";
 import { sessionIdentity } from "./auth.js";
 
 // ---- digest (pure, testable) ----
-export interface DigestAlert {
+interface DigestAlert {
   callsign: string;
   kind: string;
   detail?: string | null;

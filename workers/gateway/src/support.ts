@@ -20,7 +20,7 @@ import { json } from "./app.js";
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
 
-export interface LedgerRow {
+interface LedgerRow {
   ts: number;
   direction: string;
   bucket: string;
@@ -28,7 +28,7 @@ export interface LedgerRow {
   currency?: string | null;
 }
 
-export interface LedgerSummary {
+interface LedgerSummary {
   currency: string;
   totalInCents: number;
   totalOutCents: number;

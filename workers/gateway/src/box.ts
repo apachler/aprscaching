@@ -39,7 +39,7 @@ async function ownsBox(env: Env, boxId: string, accountId: string): Promise<bool
 }
 
 /** A pairing code is good for 15 minutes — long enough to read it off the box and type it in. */
-export const PAIR_TTL_SEC = 15 * 60;
+const PAIR_TTL_SEC = 15 * 60;
 /** Claim attempts per box per window: a code has 40 bits, and guesses are capped besides. */
 const CLAIM_ATTEMPTS = 10;
 const CLAIM_WINDOW_MS = 15 * 60_000;
@@ -150,14 +150,14 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
 }
 
 /** What a box reported it can transmit on its last poll. */
-export interface BoxCaps {
+interface BoxCaps {
   tx: boolean;
   rf: boolean;
   meshcom: string[];
 }
 
 /** Parse the capability report a box sends with its poll (`?tx=1&rf=1&meshcom=CALL,…`). */
-export function parseBoxCaps(url: URL): BoxCaps {
+function parseBoxCaps(url: URL): BoxCaps {
   const meshcom = (url.searchParams.get("meshcom") ?? "")
     .split(",")
     .map((c) => c.trim().toUpperCase())
@@ -167,7 +167,7 @@ export function parseBoxCaps(url: URL): BoxCaps {
 }
 
 /** A box that polled within this many seconds is considered reachable for a reply. */
-export const BOX_FRESH_SEC = 120;
+const BOX_FRESH_SEC = 120;
 
 /** The box's last capability report, or null when it has not polled recently. */
 export async function freshBoxCaps(env: Env, boxId: string): Promise<BoxCaps | null> {

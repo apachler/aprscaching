@@ -31,7 +31,7 @@ function v4Private(a: number[]): string | null {
 }
 
 /** Why an IP literal must not be fetched, or null when it is a public address. */
-export function blockedAddress(ip: string): string | null {
+function blockedAddress(ip: string): string | null {
   const s = ip.replace(/^\[|\]$/g, "").toLowerCase();
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
   if (v4) return v4Private(v4.slice(1).map(Number));

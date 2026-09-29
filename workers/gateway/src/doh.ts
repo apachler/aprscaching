@@ -50,7 +50,7 @@ interface DohJson {
 }
 
 /** One TXT record's presentation data (`"chunk" "chunk"`) as the text it encodes. */
-export function unquoteTxt(data: string): string {
+function unquoteTxt(data: string): string {
   return data.replace(/^"|"$/g, "").replace(/"\s+"/g, "");
 }
 

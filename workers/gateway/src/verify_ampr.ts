@@ -41,10 +41,10 @@ import {
 } from "./verify_challenge.js";
 
 /** Publishing a record at the ARDC portal and waiting out TTLs takes time: a code is good for 48 hours. */
-export const AMPR_CHALLENGE_TTL_SEC = 48 * 3600;
+const AMPR_CHALLENGE_TTL_SEC = 48 * 3600;
 
 /** The TXT value that completes a challenge. */
-export const amprTxtValue = (code: string) => `v=acs1; verify=${code}`;
+const amprTxtValue = (code: string) => `v=acs1; verify=${code}`;
 
 /** POST /verify/ampr/start {callsign} — issue a code and name the exact record to publish. */
 export async function startAmprChallenge(req: Request, env: Env): Promise<Response> {

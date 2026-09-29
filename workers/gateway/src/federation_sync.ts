@@ -24,7 +24,6 @@ export {
   type TrustLevel,
   listEnabledPeers,
   keysForOrigin,
-  rotationChainReaches,
   handleFederationPeers,
   handlePeerTrust,
 } from "./fedpeers.js";

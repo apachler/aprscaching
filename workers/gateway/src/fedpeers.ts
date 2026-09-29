@@ -8,15 +8,7 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { trimTrailingSlashes } from "./fetchguard.js";
-import {
-  isInstanceId,
-  loadRegistry,
-  parseAcceptKeys,
-  usableKeys,
-  verifyRotationRecord,
-  type RegistryEntry,
-  type RotationRecord,
-} from "./federation.js";
+import { isInstanceId, loadRegistry, parseAcceptKeys, usableKeys, type RegistryEntry } from "./federation.js";
 
 export type TrustLevel = "trusted" | "unvetted" | "blocked";
 export const TRUST_LEVELS: readonly TrustLevel[] = ["trusted", "unvetted", "blocked"];
@@ -214,32 +206,4 @@ export async function handlePeerTrust(req: Request, env: Env): Promise<Response>
     throw e;
   }
   return json({ ok: true, url, trust });
-}
-/**
- * Is one of `targets` reachable from `from` through VALID rotation records (each new key
- * signed by its predecessor)? Verifies every published record first, then walks prev→new edges. Bounds
- * the walk to the number of records so a cyclic/oversized rotation list can't loop.
- */
-export async function rotationChainReaches(
-  from: string,
-  targets: string[],
-  rotations: RotationRecord[] | undefined,
-): Promise<boolean> {
-  const want = new Set(targets);
-  if (want.has(from)) return true;
-  const edges: Array<{ prev: string; key: string }> = [];
-  for (const r of rotations ?? []) if (await verifyRotationRecord(r)) edges.push({ prev: r.prevKey, key: r.key });
-  const reach = new Set([from]);
-  for (let i = 0; i < edges.length; i++) {
-    // at most |edges| relaxations reach every node
-    let grew = false;
-    for (const e of edges)
-      if (reach.has(e.prev) && !reach.has(e.key)) {
-        reach.add(e.key);
-        grew = true;
-        if (want.has(e.key)) return true;
-      }
-    if (!grew) break;
-  }
-  return false;
 }

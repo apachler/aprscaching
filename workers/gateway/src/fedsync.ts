@@ -24,8 +24,6 @@ import { TOMBSTONE_FEED } from "./tombstones.js";
 import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
 
-export const SYNC_CBOR_CAPABILITY = "sync-cbor";
-
 /** Feed type → envelope record kind (the sync type strings are the shared vocabulary). */
 const KIND_FOR_TYPE: Record<string, FedRecordKind> = {
   cache: "cache",

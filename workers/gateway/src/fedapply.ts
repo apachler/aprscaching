@@ -26,7 +26,7 @@ import {
 } from "@aprscaching/shared";
 
 /** A record on its way to an applier — the decoded form of a verified fedwire frame. */
-export interface FeedRecord {
+interface FeedRecord {
   type: string;
   id: string;
   cursor: number;
@@ -37,7 +37,7 @@ export interface FeedRecord {
 }
 
 /** How far a frame's signing time, or a timestamp version, may run ahead of this clock. */
-export const MAX_FUTURE_S = 300;
+const MAX_FUTURE_S = 300;
 /** Record types whose version is a timestamp (a cache's is a revision counter; the rest count up). */
 const TIME_VERSIONED = new Set(["bulletin"]);
 /**
@@ -46,7 +46,7 @@ const TIME_VERSIONED = new Set(["bulletin"]);
  * not in the future (a far-future version would freeze the mirror). Equal versions never overwrite,
  * so a replayed or forged record at a version already applied changes nothing.
  */
-export async function versionAdmits(env: Env, rec: FeedRecord): Promise<boolean> {
+async function versionAdmits(env: Env, rec: FeedRecord): Promise<boolean> {
   const t = nowS();
   if (rec.at != null && rec.at > t + MAX_FUTURE_S) return false;
   if (TIME_VERSIONED.has(rec.type) && rec.cursor > t + MAX_FUTURE_S) return false;
@@ -72,7 +72,7 @@ function clampFuture(v: unknown): number | null {
 }
 
 /** Apply one admitted record and remember its version. */
-export async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: FeedRecord, origin: string) {
+async function applyVersioned(env: Env, def: { apply: SyncDef["apply"] }, rec: FeedRecord, origin: string) {
   await def.apply(env, rec, origin);
   await noteVersion(env, rec.id, origin, rec.cursor);
 }
@@ -258,7 +258,7 @@ async function upsertRemoteKey(env: Env, rec: FeedRecord, origin: string): Promi
 }
 
 /** Fedwire record kind → the sync feed that applies it; kinds with no local applier map to null. */
-export const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
+const SYNC_TYPE_BY_KIND: Record<FedRecordKind, string | null> = {
   cache: "cache",
   find: "find",
   key: "key",

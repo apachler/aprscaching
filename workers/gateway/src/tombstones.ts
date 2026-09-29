@@ -18,7 +18,7 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { serveFeed, type FeedServeDef } from "./federation.js";
 
-export type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
+type TombstoneKind = "account" | "find" | "cache" | "key" | "move";
 export interface TombstoneItem {
   kind: TombstoneKind;
   targetId: string;

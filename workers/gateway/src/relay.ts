@@ -32,12 +32,12 @@ import { importVerifyKey, signRaw } from "./federation.js";
 import { keysForOrigin } from "./fedpeers.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 
-export type RelayKind = "feed" | "corroborate";
-export interface ParsedRelayQuery {
+type RelayKind = "feed" | "corroborate";
+interface ParsedRelayQuery {
   kind: RelayKind;
   params: Record<string, unknown>;
 }
-export interface RelayResult {
+interface RelayResult {
   ok: boolean;
   kind: RelayKind;
   data?: unknown;
@@ -50,7 +50,7 @@ const relayAuth = (req: Request, env: Env): boolean => {
 };
 
 /** A lease not answered within this many seconds returns to the queue. */
-export const RELAY_LEASE_TTL_S = 300;
+const RELAY_LEASE_TTL_S = 300;
 /** How far a spoke's signed request time may sit from the hub's clock. */
 const RELAY_SKEW_S = 120;
 /** Queries one requester may have waiting at once, and enqueues it may make per minute. */
@@ -74,7 +74,7 @@ async function relaySigningBytes(
 }
 
 /** Headers that authenticate a relay request as this instance (its federation key signs it). */
-export async function signRelayRequest(
+async function signRelayRequest(
   env: Env,
   method: string,
   url: string,

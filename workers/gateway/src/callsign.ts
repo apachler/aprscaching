@@ -49,7 +49,7 @@ export function listeningSites(env: Env): string[] {
 }
 
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
-export const CHALLENGE_TTL_SEC = 30 * 60;
+const CHALLENGE_TTL_SEC = 30 * 60;
 /** Wrong codes heard on air before the challenge locks. */
 export const MAX_ATTEMPTS = 5;
 
@@ -124,7 +124,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
 }
 
 /** How a call's control was proven. */
-export type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
+type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
 
 /** Mark a base call verified by `method`: the one write of a verification. Every SSID inherits it. */
 export async function markVerified(
@@ -145,7 +145,7 @@ export async function markVerified(
 }
 
 /** What an on-air `VERIFY` did: completed the challenge, a wrong code, or nothing to answer. */
-export type RfChallengeOutcome = "verified" | "wrong" | "none";
+type RfChallengeOutcome = "verified" | "wrong" | "none";
 
 /**
  * Complete a challenge from a `VERIFY <code>` message. The caller has established that the message was

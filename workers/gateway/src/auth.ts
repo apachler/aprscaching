@@ -119,7 +119,7 @@ export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAW
 /** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
  *  and the default service call that takes radio commands and sends BBS mail. */
 const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
-export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
+const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
 /** The account holding a base call. `account_callsigns` is the one record of who holds a licence:
  *  every account holds the base of its active call there, and a base call has at most one holder. */
@@ -416,7 +416,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
 }
 
 /** The signed-in person as the session proves them: the durable account, the active call and its base. */
-export interface SessionIdentity {
+interface SessionIdentity {
   accountId: string;
   callsign: string;
   base: string;
@@ -582,7 +582,7 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
 }
 
 /** Thrown when this instance has no usable SESSION_SECRET: sign-in is closed, not silently weakened. */
-export class SessionUnavailable extends Error {
+class SessionUnavailable extends Error {
   constructor() {
     super(
       "sessions are disabled: set SESSION_SECRET to a strong value of its own (not INGEST_SECRET, OPERATOR_SECRET or 'change-me')",
@@ -630,7 +630,7 @@ export async function handleLogoutAll(req: Request, env: Env): Promise<Response>
 }
 
 /** Invalidate every outstanding session of an account by moving it to the next generation. */
-export async function endAllSessions(env: Env, accountId: string): Promise<void> {
+async function endAllSessions(env: Env, accountId: string): Promise<void> {
   await env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(accountId).run();
 }
 
@@ -706,7 +706,7 @@ async function signSession(env: Env, c: SessionClaims): Promise<string> {
  *  or a captured token stays valid until the signing secret rotates. Tunable via SESSION_TTL_DAYS;
  *  SESSION_EPOCH (unix seconds) lets an operator revoke every session minted before a point in
  *  time without rotating secrets (e.g. after a device loss report). */
-export const SESSION_TTL_DAYS_DEFAULT = 30;
+const SESSION_TTL_DAYS_DEFAULT = 30;
 export function sessionExpired(mintedAtMs: number, env: Env, nowMs: number): boolean {
   if (!Number.isFinite(mintedAtMs)) return true;
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;

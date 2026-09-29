@@ -251,7 +251,7 @@ export async function verifiedBy(cert: Certificate, issuer: Certificate): Promis
   return rsaVerify(issuer.spki, hash, cert.signature, cert.tbs);
 }
 
-export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;

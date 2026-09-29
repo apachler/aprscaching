@@ -55,7 +55,7 @@ export function parseCsv(
 }
 
 // ---------- GeoJSON (Point features) ----------
-export interface GeoFeature {
+interface GeoFeature {
   lat: number;
   lon: number;
   props: Record<string, unknown>;
@@ -75,7 +75,7 @@ export function parseGeoJsonFeatures(text: string): GeoFeature[] {
 }
 
 // ---------- GPX (<wpt>) ----------
-export interface GpxWpt {
+interface GpxWpt {
   lat: number;
   lon: number;
   name?: string;

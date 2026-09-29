@@ -13,8 +13,8 @@ import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
 import { haversineMeters } from "@aprscaching/aprs";
 
-export const GEOFENCE_RADIUS_M = 150;
-export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
+const GEOFENCE_RADIUS_M = 150;
+const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
 
 export interface LiveEnvelope {
   station?: StationDelta;

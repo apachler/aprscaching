@@ -74,7 +74,7 @@ function coord(v: unknown, lo: number, hi: number): { ok: boolean; value: number
 }
 
 /** A sensible APRS map symbol for a station's primary role (so non-web clients show it sanely too). */
-export function symbolForRoles(roles: StationRole[], explicit?: string | null): string {
+function symbolForRoles(roles: StationRole[], explicit?: string | null): string {
   if (explicit) return explicit;
   if (roles.includes("weather")) return "_"; // weather station
   if (roles.includes("digipeater")) return "#"; // digipeater

@@ -48,14 +48,14 @@ import {
 export const AROCALLSIGN_OID = "1.3.6.1.4.1.12348.1.1";
 const COMMON_NAME_OID = "2.5.4.3";
 /** A challenge is signed right after it is issued: good for 15 minutes. */
-export const LOTW_CHALLENGE_TTL_SEC = 15 * 60;
+const LOTW_CHALLENGE_TTL_SEC = 15 * 60;
 const MAX_CERTS = 8;
 const MAX_CERT_B64 = 16_384;
 const MAX_SIG_B64 = 2_048;
 const MAX_DEPTH = 6;
 
 /** The exact text the browser signs: domain-separated, and bound to the call and the challenge. */
-export const lotwMessage = (cs: string, challenge: string) => `aprscaching-lotw-verify:v1:${cs}:${challenge}`;
+const lotwMessage = (cs: string, challenge: string) => `aprscaching-lotw-verify:v1:${cs}:${challenge}`;
 
 /** The callsign a LoTW certificate names, uppercased, or null. */
 export function lotwCallsign(c: Certificate): string | null {
@@ -65,7 +65,7 @@ export function lotwCallsign(c: Certificate): string | null {
 let anchorCache: { src: string; certs: Certificate[] } | null = null;
 
 /** The operator's trusted LoTW CA certificates (`LOTW_CA_PEM`); unparseable blocks are skipped. */
-export function lotwAnchors(env: Env): Certificate[] {
+function lotwAnchors(env: Env): Certificate[] {
   const src = env.LOTW_CA_PEM ?? "";
   if (anchorCache?.src === src) return anchorCache.certs;
   const certs: Certificate[] = [];
@@ -80,7 +80,7 @@ export function lotwAnchors(env: Env): Certificate[] {
   return certs;
 }
 
-export type ChainResult = { ok: true; leaf: Certificate; anchor: Certificate } | { ok: false; error: string };
+type ChainResult = { ok: true; leaf: Certificate; anchor: Certificate } | { ok: false; error: string };
 
 const within = (c: Certificate, t: number) => c.notBefore <= t && t <= c.notAfter;
 

@@ -48,11 +48,11 @@ export const RADIO_COMMANDS_PER_HOUR = 10;
 /** Acks and replies the service queues per hour across all senders — the ceiling on what a flood makes it send. */
 export const RADIO_ANSWERS_PER_HOUR = 200;
 /** Decided commands (logged, rejected, discarded, expired, help) are purged this long after the decision. */
-export const RADIO_COMMAND_RETENTION_SEC = 30 * 24 * 3600;
+const RADIO_COMMAND_RETENTION_SEC = 30 * 24 * 3600;
 /** A pending command the player has not confirmed expires after this long. */
-export const RADIO_PENDING_TTL_SEC = 7 * 24 * 3600;
+const RADIO_PENDING_TTL_SEC = 7 * 24 * 3600;
 /** At most one text reply per destination in this window. */
-export const RADIO_REPLY_INTERVAL_SEC = 10 * 60;
+const RADIO_REPLY_INTERVAL_SEC = 10 * 60;
 /** A retry of the same message (same number and text, or same text when unnumbered) within this window runs once. */
 const DUPLICATE_WINDOW_SEC = 30 * 60;
 /** APRS message text limit. */
@@ -60,7 +60,7 @@ const APRS_TEXT_MAX = 67;
 
 export const HELP_TEXT = "FOUND <code> [log]; DNF <code> [log]; NOTE <code> <text>";
 
-export type RadioCommand =
+type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
   | { command: "note"; code: string; body: string }
   | { command: "help" };
@@ -113,7 +113,7 @@ const isAckOrRej = (text: string) => /^(ack|rej)[A-Za-z0-9]{1,5}$/i.test(text.tr
  * Text as an APRS101 message body: printable ASCII only, without the reserved `|`, `~` and `{`, within the
  * 67-character limit. Dashes that are not ASCII become `-`; any other non-ASCII character is dropped.
  */
-export function aprsText(text: string): string {
+function aprsText(text: string): string {
   return text
     .replace(/[\u2010-\u2015]/g, "-")
     .replace(/[^\x20-\x7e]/g, "")
@@ -165,7 +165,7 @@ const HEARD_ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom
  * counts: a signed batch comes from the browser RF bridge on the sender's own computer, which can put any
  * port, path or site on what it sends, and APRS-IS or a tunnel is never a hearing at a site.
  */
-export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
+function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
   if (m.signed) return false;
   const transport = transportForPort(m.port, false);
   if (!HEARD_ON_AIR.has(transport)) return false;
@@ -235,7 +235,7 @@ async function answer(env: Env, m: RadioMessage, raw: string): Promise<boolean> 
  * no ack frame; its receive path recognises a text message `SENDER   :ack<nnn>` as the acknowledgement of
  * message nnn and matches it by number alone, so the node that heard the message can ack it that way.
  */
-export function ackText(port: string, src: string, msgNo: string): string {
+function ackText(port: string, src: string, msgNo: string): string {
   return port === "meshcom" ? `${addressee(src)}:ack${msgNo}` : `ack${msgNo}`;
 }
 

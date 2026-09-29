@@ -239,11 +239,11 @@ export function isInstanceId(s: unknown): s is string {
 }
 
 /** Days a rotated-away key keeps verifying when its history entry names no `until`. */
-export const DEFAULT_ROTATION_GRACE_DAYS = 7;
+const DEFAULT_ROTATION_GRACE_DAYS = 7;
 const MAX_CLOCK_SKEW_S = 300;
 
 /** One key a peer's frames may verify under: the pin (no `until`), or a predecessor until its cutoff. */
-export interface AcceptKey {
+interface AcceptKey {
   x: string;
   until?: number;
 }
@@ -258,7 +258,7 @@ export function parseAcceptKeys(s: string | null | undefined): AcceptKey[] {
   return parseJsonArray<AcceptKey>(s ?? undefined).filter((k) => k && typeof k.x === "string" && k.x);
 }
 
-export type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKey[] } | { ok: false; reason: string };
+type PeerKeyResolution = { ok: true; pin: string | null; accept: AcceptKey[] } | { ok: false; reason: string };
 
 /**
  * Decide which keys a peer's frames verify under, from its descriptor and what we stored before.
@@ -412,7 +412,7 @@ export function parseRegistryTxt(txt: string): { url?: string; key?: string } {
 }
 
 /** A registry that cannot be trusted as configured: federation refuses to guess instead. */
-export class RegistryConfigError extends Error {}
+class RegistryConfigError extends Error {}
 
 /**
  * Registry settings that would make the registry unverifiable, or null when they are sound. A
@@ -681,7 +681,7 @@ function feedParams(req: Request): { since: number; limit: number } {
 }
 
 /** Build the record items for a feed page (the browse surface — mirroring pulls CBOR frames). */
-export async function buildFeed(
+async function buildFeed(
   env: Env,
   instance: string,
   def: FeedServeDef,
@@ -708,7 +708,7 @@ export async function serveFeed(req: Request, env: Env, def: FeedServeDef): Prom
 
 // only NATIVE caches are federated; imported third-party data stays local
 /** Cache versions count revisions from here: above every unix-second timestamp a version could be. */
-export const CACHE_VERSION_BASE = 2 ** 32;
+const CACHE_VERSION_BASE = 2 ** 32;
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   composite: true,

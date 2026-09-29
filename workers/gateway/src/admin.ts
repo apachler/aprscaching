@@ -39,7 +39,7 @@ async function adminSession(req: Request, env: Env) {
  * held by the session's own account, and control-verified — the same proof the TX gate demands. A bare
  * string match would hand the operator role to whoever first signs up under the listed call.
  */
-export async function isSysop(req: Request, env: Env): Promise<boolean> {
+async function isSysop(req: Request, env: Env): Promise<boolean> {
   const me = await adminSession(req, env);
   return !!me && (await isCallsignVerified(env, me.base));
 }

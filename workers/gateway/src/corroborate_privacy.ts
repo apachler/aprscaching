@@ -22,13 +22,13 @@ import type { Env } from "./env.js";
 
 const M_PER_DEG = 111_320; // metres per degree of latitude (good enough for slack sizing)
 
-export interface CoarsenConfig {
+interface CoarsenConfig {
   gridDeg: number; // grid-square size in degrees for the request center snap
   timeBucketSec: number; // time-window + response-ts bucket
   distBucketM: number; // response distance bucket
 }
 /** Site defaults: ~550 m grid, 10-min buckets, 100 m distance steps. Tunable per deployment. */
-export const DEFAULT_COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
+const DEFAULT_COARSEN: CoarsenConfig = { gridDeg: 0.005, timeBucketSec: 600, distBucketM: 100 };
 
 const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;
 
@@ -70,7 +70,7 @@ interface RlWindow {
 }
 const rlBuckets = new Map<string, RlWindow>();
 export const RL_MAX = 60; // probes per key per window
-export const RL_WINDOW_MS = 60_000;
+const RL_WINDOW_MS = 60_000;
 
 /** Fixed-window rate limit. Returns true when `key` is OVER budget. `nowMs` is injected for testing. */
 export function rateLimited(key: string, nowMs: number, max = RL_MAX, windowMs = RL_WINDOW_MS): boolean {
@@ -118,7 +118,7 @@ export async function rateLimitedDurable(
 }
 
 const negMemo = new Map<string, number>(); // key -> expiry (ms)
-export const NEG_TTL_MS = 30_000;
+const NEG_TTL_MS = 30_000;
 const NEG_MAX_ENTRIES = 5000;
 
 export function negCached(key: string, nowMs: number): boolean {

@@ -26,7 +26,7 @@ import { resolveTxt, acsFields, amprNames } from "./doh.js";
 const RESOLVE_TIMEOUT_MS = 5000;
 const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
 
-export interface Resolved44net {
+interface Resolved44net {
   callsign: string; // base call, uppercased
   host: string; // <call>.ampr.org
   instance: string;
