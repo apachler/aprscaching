@@ -43,6 +43,25 @@ The baseline groups into a handful of domains:
   - `0014_cache_adoption` — cache adoption: standing offers (`cache_adoption_offers`), requests to adopt
     (`cache_adoption_requests`) and the audit trail of every step (`cache_adoptions`). Ownership stays on
     `caches.owner_call`.
+  - `0015_single_verification_store` — one store per identity fact. Every account holds the base call of
+    its active call in `account_callsigns` (backfilled for any account without a held-call row), and the
+    copies of the verification flag on `accounts`, `account_callsigns` and `callsign_keys` are dropped.
+
+## Identity: who holds a call, and whether it is verified
+
+Two tables answer the two identity questions, and nothing else stores either answer:
+
+- **Who holds a licence** — `account_callsigns`, one row per held base call (no SSID), at most one account
+  per base call. Every account holds the base call of its active call (`accounts.callsign`); a session,
+  cache ownership and device-key registration all resolve through it.
+- **Whether control is proven** — `callsign_verifications`, keyed by base call, `status = 'verified'`, with
+  the method, who vouched and when. The session's `verified`, the held-call list, device keys (and the
+  key feed peers mirror), transmitting, the sysop role and the GDPR export all derive the flag from it,
+  so a verification or a revocation shows everywhere at once. Every SSID inherits its base call's state.
+  Claiming a base call nobody held clears any verification recorded for it, so a claim starts unverified.
+
+`callsign_history.verified` is a history record — whether the call was verified when the account
+switched to it — not a live flag.
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —
 live in `@aprscaching/shared` (Zod schemas) and are the source of truth for request/response shapes.

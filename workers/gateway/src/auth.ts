@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
+import type { SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
 import { randomChallenge, bytesToB64url, b64urlToBytes, verifyRegistration, verifyAssertion } from "./webauthn.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { licenceFor } from "./licence.js";
+import { isCallsignVerified, verificationsOf } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
@@ -62,8 +65,6 @@ async function takeChallenge(env: Env, cs: string, kind: string): Promise<string
   return row.value;
 }
 
-const baseOf = (c: string) => c.toUpperCase().trim().split("-")[0] ?? "";
-
 /** A registrable call: a 3–9 character base of letters and digits with an optional 1–2 character SSID.
  *  Anything else — including the `#` that marks an erased identity — can never name an account. */
 const REGISTRABLE_CALL = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
@@ -83,28 +84,42 @@ export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAW
 /** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
  *  and the default service call that takes radio commands and sends BBS mail. */
 const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
-export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseOf(c));
+export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseCall(c));
 
-/** The account holding a base call: its `account_callsigns` holder, else an `accounts` row whose
- *  call is that base or one of its SSIDs (an account that has no held-call rows). */
+/** The account holding a base call. `account_callsigns` is the one record of who holds a licence:
+ *  every account holds the base of its active call there, and a base call has at most one holder. */
 export async function baseHolder(env: Env, base: string): Promise<string | null> {
   const held = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
     .bind(base)
     .first<{ account_id: string }>();
-  if (held) return held.account_id;
-  const anchored = await env.DB.prepare(
-    "SELECT callsign, account_id FROM accounts WHERE callsign=? OR substr(callsign, 1, ?)=? LIMIT 1",
-  )
-    .bind(base, base.length + 1, `${base}-`)
-    .first<{ callsign: string; account_id: string | null }>();
-  return anchored ? (anchored.account_id ?? `callsign:${anchored.callsign}`) : null;
+  return held?.account_id ?? null;
+}
+
+/**
+ * The statements that make `accountId` the holder of `base`, for a batch that creates or extends an
+ * account. The unique index on the held call fails the whole batch when another account holds it. A
+ * claim starts unverified: a verification recorded while nobody held the call was made for someone
+ * else (or for nobody), so it is cleared — never for a call some account still holds.
+ */
+export function holdCall(env: Env, accountId: string, base: string, primary: boolean, at: number): SqlStatement[] {
+  return [
+    env.DB.prepare(
+      "DELETE FROM callsign_verifications WHERE callsign=? AND NOT EXISTS (SELECT 1 FROM account_callsigns WHERE callsign=?)",
+    ).bind(base, base),
+    env.DB.prepare("INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES (?,?,?,?)").bind(
+      accountId,
+      base,
+      primary ? 1 : 0,
+      at,
+    ),
+  ];
 }
 
 /** Why `cs` cannot open a new account, or null when it can: a malformed or reserved call, or a base
  *  call some account already holds (an SSID never opens a second account on someone else's licence). */
 export async function unclaimableReason(env: Env, cs: string): Promise<string | null> {
   if (!REGISTRABLE_CALL.test(cs)) return "invalid callsign";
-  const base = baseOf(cs);
+  const base = baseCall(cs);
   if (isReservedCall(base)) return "that callsign is reserved";
   if (await baseHolder(env, base)) return "callsign already claimed — sign in instead";
   return null;
@@ -112,7 +127,7 @@ export async function unclaimableReason(env: Env, cs: string): Promise<string | 
 
 /** Does this account hold the base call of `cs`? Keys and calls bind only to a licence the account holds. */
 export async function accountHoldsCall(env: Env, accountId: string, cs: string): Promise<boolean> {
-  return (await baseHolder(env, baseOf(cs))) === accountId;
+  return (await baseHolder(env, baseCall(cs))) === accountId;
 }
 
 /**
@@ -264,12 +279,13 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
         // seed the held-callsign set with this call as the account's primary (the passkey binds here);
         // the unique base-call index makes a concurrent claim fail the whole batch
         await env.DB.batch([
-          env.DB.prepare(
-            "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-          ).bind(pending.a, baseOf(cs), now),
-          env.DB.prepare(
-            "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-          ).bind(cs, pending.a, pending.e ?? null, now),
+          ...holdCall(env, pending.a, baseCall(cs), true, now),
+          env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, created_at) VALUES (?, ?, ?, ?)").bind(
+            cs,
+            pending.a,
+            pending.e ?? null,
+            now,
+          ),
         ]);
       } catch {
         return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
@@ -378,8 +394,7 @@ export interface SessionIdentity {
 /**
  * Resolve the signed-in session — the single canonical resolver every authorisation decision uses. The
  * cookie names an account, a session generation and a call; it resolves only while that account still
- * exists at that generation and holds the call's base (a person holds one or more BASE calls in
- * `account_callsigns`, the `accounts` row being the anchor of a single-call account). An erased
+ * exists at that generation and holds the call's base in `account_callsigns`. An erased
  * account, a later holder of the same call, a sign-out-everywhere, and a callsign change all leave an
  * older cookie resolving to nobody.
  */
@@ -393,18 +408,28 @@ export async function sessionIdentity(req: Request, env: Env): Promise<SessionId
     .bind(claims.accountId)
     .first<{ session_gen: number }>();
   if (!row || Number(row.session_gen) !== claims.gen) return null;
-  const base = baseOf(claims.callsign);
+  const base = baseCall(claims.callsign);
   if ((await baseHolder(env, base)) !== claims.accountId) return null;
   return { accountId: claims.accountId, callsign: claims.callsign, base };
 }
 
-/** The account id + active call behind the session (see {@link sessionIdentity}). */
-export async function sessionAccountId(
+/**
+ * May this request act as the owner of something owned by `ownerCall` (a cache, its stages and media, a
+ * saved view)? Ownership follows the licence, not the call string: a signed-in session acts as owner
+ * when its account holds the owner call's base call, whichever of its calls it is operating. Without a
+ * session only the ingest plane acts, for the exact owner call it names (`claimed`) — the over-APRS path.
+ * An erased owner's withdrawn marker has no owner.
+ */
+export async function mayActAsOwner(
   req: Request,
   env: Env,
-): Promise<{ accountId: string; callsign: string } | null> {
+  ownerCall: string,
+  claimed?: string | null,
+): Promise<boolean> {
+  if (!ownerCall || isWithdrawnCall(ownerCall)) return false;
   const me = await sessionIdentity(req, env);
-  return me ? { accountId: me.accountId, callsign: me.callsign } : null;
+  if (me) return accountHoldsCall(env, me.accountId, ownerCall);
+  return ingestSecretOk(req, env) && !!claimed && claimed.trim().toUpperCase() === ownerCall.toUpperCase();
 }
 
 /** The durable account id anchored at a call (its `accounts` row). */
@@ -421,24 +446,28 @@ async function accountIdOf(env: Env, cs: string): Promise<string | null> {
  * passkey lives on the primary; the active call is whichever the session is bound to.
  */
 export async function handleListCallsigns(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
-  const active = baseOf(me.callsign);
+  const active = me.base;
   const rows =
     (
       await env.DB.prepare(
-        "SELECT callsign, verified, is_primary FROM account_callsigns WHERE account_id=? ORDER BY is_primary DESC, added_at ASC, callsign ASC",
+        "SELECT callsign, is_primary FROM account_callsigns WHERE account_id=? ORDER BY is_primary DESC, added_at ASC, callsign ASC",
       )
         .bind(me.accountId)
-        .all<{ callsign: string; verified: number; is_primary: number }>()
+        .all<{ callsign: string; is_primary: number }>()
     ).results ?? [];
   // `verified` is control-verification; `licence` is register validity — shown side by side, never merged
+  const verified = await verificationsOf(
+    env,
+    rows.map((r) => r.callsign),
+  );
   const licences = await Promise.all(rows.map((r) => licenceFor(env, r.callsign)));
   return json({
     active,
     callsigns: rows.map((r, i) => ({
       callsign: r.callsign,
-      verified: !!r.verified,
+      verified: verified.has(r.callsign),
       isPrimary: !!r.is_primary,
       active: r.callsign === active,
       licence: licences[i],
@@ -452,10 +481,10 @@ export async function handleListCallsigns(req: Request, env: Env): Promise<Respo
  * only one account, so a call already on another account is rejected.
  */
 export async function handleAddCallsign(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const base = baseOf(String(callsign ?? ""));
+  const base = baseCall(String(callsign ?? ""));
   if (base.length < 3) return json({ error: "callsign required" }, { status: 400 });
   if (!REGISTRABLE_CALL.test(base)) return json({ error: "invalid callsign" }, { status: 400 });
   if (isReservedCall(base)) return json({ error: "that callsign is reserved" }, { status: 409 });
@@ -467,11 +496,11 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
         : { error: "callsign already held by another account" },
       { status: 409 },
     );
-  await env.DB.prepare(
-    "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?,?,0,0,?)",
-  )
-    .bind(me.accountId, base, Math.floor(Date.now() / 1000))
-    .run();
+  try {
+    await env.DB.batch(holdCall(env, me.accountId, base, false, Math.floor(Date.now() / 1000)));
+  } catch {
+    return json({ error: "callsign already held by another account" }, { status: 409 });
+  }
   return json({ ok: true, callsign: base, verified: false, licence: await licenceFor(env, base) });
 }
 
@@ -483,13 +512,12 @@ export async function handleAddCallsign(req: Request, env: Env): Promise<Respons
  * active call and the change is recorded in callsign_history.
  */
 export async function handleChangeCallsign(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const next = baseOf(String(callsign ?? ""));
+  const next = baseCall(String(callsign ?? ""));
   if (next.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const cur = baseOf(me.callsign);
-  if (next === cur) return json({ error: "that is already your active callsign" }, { status: 400 });
+  if (next === me.base) return json({ error: "that is already your active callsign" }, { status: 400 });
   if (!REGISTRABLE_CALL.test(next)) return json({ error: "invalid callsign" }, { status: 400 });
   if (isReservedCall(next)) return json({ error: "that callsign is reserved" }, { status: 409 });
   // a base call held by a DIFFERENT account is off-limits
@@ -497,52 +525,29 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
   if (owner && owner !== me.accountId)
     return json({ error: "callsign already held by another account" }, { status: 409 });
   const now = Math.floor(Date.now() / 1000);
-  const held = await env.DB.prepare(
-    "SELECT verified, method, verified_at FROM account_callsigns WHERE account_id=? AND callsign=?",
-  )
-    .bind(me.accountId, next)
-    .first<{ verified: number; method: string | null; verified_at: number | null }>();
-  const ops = [];
-  if (held) {
-    // already a held call — restore its verification state onto the active account row (no re-verify)
-    ops.push(
-      env.DB.prepare(
-        "UPDATE accounts SET callsign=?, verified=?, verify_method=?, verified_at=? WHERE account_id=?",
-      ).bind(next, held.verified, held.method, held.verified_at, me.accountId),
-    );
-  } else {
-    // a brand-new base call — hold it (unverified) and switch to it
-    ops.push(
-      env.DB.prepare(
-        "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?,?,0,0,?)",
-      ).bind(me.accountId, next, now),
-    );
-    ops.push(
-      env.DB.prepare(
-        "UPDATE accounts SET callsign=?, verified=0, verify_method=NULL, verified_at=NULL WHERE account_id=?",
-      ).bind(next, me.accountId),
-    );
-  }
-  ops.push(
+  // a held call keeps its verification (no re-verify); a brand-new base call is held, unverified
+  const verified = owner === me.accountId && (await isCallsignVerified(env, next));
+  const ops = [
+    ...(owner ? [] : holdCall(env, me.accountId, next, false, now)),
+    env.DB.prepare("UPDATE accounts SET callsign=? WHERE account_id=?").bind(next, me.accountId),
     env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?,?,?,?)").bind(
       me.accountId,
       next,
       now,
-      held?.verified ?? 0,
+      verified ? 1 : 0,
     ),
     // sessions that carried the old call end; this response carries the only session for the new one
     env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(me.accountId),
-  );
-  await env.DB.batch(ops);
+  ];
+  try {
+    await env.DB.batch(ops);
+  } catch {
+    return json({ error: "callsign already held by another account" }, { status: 409 });
+  }
   return json(
-    { ok: true, callsign: next, verified: !!held?.verified },
+    { ok: true, callsign: next, verified },
     { headers: { "set-cookie": await issueSessionCookie(env, me.accountId, next) } },
   );
-}
-
-/** The signed-in callsign, or null — {@link sessionIdentity} reduced to its call. */
-export async function sessionCallsign(req: Request, env: Env): Promise<string | null> {
-  return (await sessionIdentity(req, env))?.callsign ?? null;
 }
 
 /** Thrown when this instance has no usable SESSION_SECRET: sign-in is closed, not silently weakened. */
@@ -572,10 +577,10 @@ export async function issueSessionCookie(env: Env, accountId: string, callsign: 
 export async function handleSession(req: Request, env: Env): Promise<Response> {
   const me = await sessionIdentity(req, env);
   if (!me) return json({ callsign: null });
-  const acct = await env.DB.prepare("SELECT verified, email FROM accounts WHERE account_id = ?")
+  const acct = await env.DB.prepare("SELECT email FROM accounts WHERE account_id = ?")
     .bind(me.accountId)
-    .first<{ verified: number; email: string | null }>();
-  return json({ callsign: me.callsign, verified: !!acct?.verified, email: acct?.email ?? null });
+    .first<{ email: string | null }>();
+  return json({ callsign: me.callsign, verified: await isCallsignVerified(env, me.base), email: acct?.email ?? null });
 }
 
 const CLEAR_COOKIE = `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;

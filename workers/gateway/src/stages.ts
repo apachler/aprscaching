@@ -7,7 +7,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { actor } from "./caches.js";
+import { mayActAsOwner } from "./auth.js";
 import { haversineMeters } from "@aprscaching/aprs";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -26,8 +26,8 @@ interface StageRow {
 /** Normalise an NFC/manual unlock code for comparison (trim + casefold; tag serials/text vary in case). */
 const normCode = (s: string) => s.trim().toLowerCase();
 
-/** The owner of a native cache. An erased owner's marker is returned as-is; `actor()` never yields it,
- *  so no caller can match it. */
+/** The owner call of a native cache. An erased owner's withdrawn marker is returned as-is;
+ *  {@link mayActAsOwner} lets nobody act for it. */
 async function ownerOf(env: Env, cacheId: number): Promise<string | null> {
   const r = await env.DB.prepare("SELECT owner_call FROM caches WHERE id=? AND source='native'")
     .bind(cacheId)
@@ -59,8 +59,8 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
   };
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  const who = await actor(req, env, b.ownerCall);
-  if (!who || who !== owner) return json({ error: "only the owner may set stages" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner, b.ownerCall)))
+    return json({ error: "only the owner may set stages" }, { status: 403 });
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
   // Replacing the stage list drops rows that point at stored audio clues — collect those
@@ -110,8 +110,8 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  const who = await actor(req, env, req.headers.get("x-owner-call") ?? undefined);
-  if (!who || who !== owner) return json({ error: "only the owner may upload media" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+    return json({ error: "only the owner may upload media" }, { status: 403 });
 
   const ct = req.headers.get("content-type") ?? "application/octet-stream";
   if (!/^audio\//.test(ct)) return json({ error: "expected an audio/* body" }, { status: 415 });
@@ -269,8 +269,8 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  const who = await actor(req, env, req.headers.get("x-owner-call") ?? undefined);
-  if (!who || who !== owner) return json({ error: "only the owner may add media" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+    return json({ error: "only the owner may add media" }, { status: 403 });
 
   const ct = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim();
   const bytes = new Uint8Array(await req.arrayBuffer());
@@ -315,8 +315,8 @@ export async function handleDeleteCacheMedia(
 ): Promise<Response> {
   const owner = await ownerOf(env, cacheId);
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
-  const who = await actor(req, env, req.headers.get("x-owner-call") ?? undefined);
-  if (!who || who !== owner) return json({ error: "only the owner may delete media" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+    return json({ error: "only the owner may delete media" }, { status: 403 });
   const row = await env.DB.prepare("SELECT media_key FROM cache_media WHERE id=? AND cache_id=?")
     .bind(mediaId, cacheId)
     .first<{ media_key: string }>();

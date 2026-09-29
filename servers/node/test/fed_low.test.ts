@@ -18,7 +18,7 @@ const sign = async (k: FedKey, text: string) =>
   b64u(await crypto.subtle.sign("Ed25519", k.priv, new TextEncoder().encode(text)));
 
 async function registerKey(env: Env, callsign: string, key: FedKey) {
-  await env.DB.prepare("INSERT INTO callsign_keys (callsign, public_key, verified, created_at) VALUES (?, ?, 1, ?)")
+  await env.DB.prepare("INSERT INTO callsign_keys (callsign, public_key, created_at) VALUES (?, ?, ?)")
     .bind(callsign, key.pub, nowS())
     .run();
 }

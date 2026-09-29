@@ -6,10 +6,10 @@
  * (A), builds an ACK for a message addressed to us (B), and shapes locally-heard receptions for sync-back
  * (D). The client store + radio TX + IndexedDB live in `apps/web`; this stays reusable + unit-tested.
  */
+import { baseCall } from "./callsign.js";
 import type { ParsedFrame, AprsData } from "./types.js";
 import { encodeAprsMessage } from "./encode.js";
 
-const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
 const cleanCall = (c: string) => c.replace(/\*$/, "").toUpperCase();
 
 export interface LocalStation {

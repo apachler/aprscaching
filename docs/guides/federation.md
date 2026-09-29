@@ -102,12 +102,14 @@ A peer that can't be dialled inbound can still contribute:
 
 - **Push-to-hub.** A spoke pushes its signed records to a reachable hub's `POST /federation/submit`
   (secret-gated by `FED_SUBMIT_SECRET`; the hub verifies each record and requires the submitter to be its
-  own signer). A submission for an instance the hub already knows under another key, or for a blocked
+  own signer). The signature proves which instance sent a record; the secret decides who may introduce a
+  new spoke's key to the hub at all. A submission for an instance the hub already knows under another key, or for a blocked
   instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A spoke that
   rotated its key sends its rotation records with each push (`FED_ROTATIONS`), so the hub follows the
   rotation from the key it pinned. A submission body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
 - **Rendezvous relay.** A poll-based relay lets a firewalled peer's feed be served through a hub with no
-  tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). A requester gets a
+  tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). The secret is what
+  admits a requester — enqueueing and reading results carry no signature. A requester gets a
   ticket with each query and reads only its own results; queries per requester are capped. A spoke leases
   and answers by signing each request with its own federation key, which the hub checks against the key it
   holds for that instance — so the hub must already know the spoke (as a pulled peer, in the registry, or
@@ -150,8 +152,9 @@ answer's location can't be reached from at a plausible speed keeps the find belo
 asked about where its station last was. The answerer snaps and bounds every question (radius 150–1000 m, a
 bucketed window of at most an hour, no older than seven days) and coarsens every answer, so corroboration is
 never a location oracle; the exact IGate is revealed only if both peers opt in (`FED_REVEAL_IGATE`). The
-shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted https peers; set
-`FED_CORROBORATION_REQUIRE_KNOWN=1` to answer only peers you know.
+shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted https peers, and an answerer that sets it
+answers only the peers holding it; set `FED_CORROBORATION_REQUIRE_KNOWN=1` to answer only peers whose key
+you know (including `unvetted` ones).
 
 ## Privacy across the network
 

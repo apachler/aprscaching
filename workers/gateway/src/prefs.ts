@@ -10,7 +10,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId } from "./auth.js";
+import { sessionIdentity } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const UNITS = new Set(["metric", "imperial"]);
@@ -60,7 +60,7 @@ const parse = (s: string): Record<string, unknown> => {
 };
 
 export async function handlePrefsGet(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in" }, { status: 401 });
   const row = await env.DB.prepare("SELECT prefs FROM account_prefs WHERE account_id=?")
     .bind(me.accountId)
@@ -69,7 +69,7 @@ export async function handlePrefsGet(req: Request, env: Env): Promise<Response> 
 }
 
 export async function handlePrefsPut(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { prefs?: unknown };
   const prefs = sanitizePrefs(body.prefs);

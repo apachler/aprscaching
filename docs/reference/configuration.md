@@ -27,7 +27,7 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `OPERATOR_SECRET` | The operator's machine credential (`x-operator-secret`) for instance-wide configuration from scripts: `POST /verify/operator` (`tools/admin/verify-call.mjs`), federation sync trigger, peer list and trust, 44net onboarding, FBB forwarding partners and rules, the FBB federation enqueue, relay dispatch, and donation confirms. Unset ⇒ those machine paths are closed (a signed-in, verified sysop still administers the instance from the web). Must differ from `INGEST_SECRET` — the Node/Bun servers refuse to boot otherwise. Never give it to an ingest box | — |
 | `SESSION_SECRET` | The session-signing key. **Required for sign-in**: unset, `change-me`, or equal to `INGEST_SECRET`/`OPERATOR_SECRET` ⇒ no session is minted or honoured. The Worker takes it as a secret (`wrangler secret put SESSION_SECRET`); the Node/Bun servers and the desktop app generate one on first start when it is unset and keep it beside the database (`session.secret`, owner-only). Changing it signs every user out | *(generated on self-host)* |
 | `INSTANCE` | Canonical federation instance id / domain | `aprscaching.local` |
-| `APP_URL` | App origin: magic-link redirects, passkey origin, and the credentialed-CORS allowlist | — |
+| `APP_URL` | App origin: where the email sign-in returns to, the passkey origin, and the credentialed-CORS allowlist. The emailed link itself opens the gateway's confirm page — on `APP_URL` when the app and the gateway share a host, otherwise on the gateway's own origin | — |
 | `RP_ID` | WebAuthn relying-party id (registrable domain) | — |
 | `SESSION_TTL_DAYS` | Session cookie lifetime | `30` |
 | `SESSION_EPOCH` | Unix seconds: every session minted before it is refused (sign every user out without rotating `SESSION_SECRET`). One user signs out on every device with `POST /auth/logout-all` | — |
@@ -58,7 +58,7 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `LOTW_CA_PEM` | PEM certificate(s) of the ARRL Logbook of The World CA(s) trusted for LoTW callsign-certificate verification. Several blocks may be concatenated; a literal `\n` counts as a line break, so the PEM fits a one-line `.env` value. No ARRL certificate ships with the gateway — see [Administration](../operate/administration.md#lotw-callsign-certificates). Unset ⇒ the LoTW method is off | — |
 | `FED_ENDPOINTS` | This instance's typed transport endpoints (JSON array of `{transport,address,priority}`), published as `addresses` in both the descriptor and the registry self-entry | — |
 | `FED_AUTO_PROMOTE` | Confirmed-corroboration count to auto-promote an unvetted peer (`0` = off) | `0` |
-| `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` also requires `x-fed-secret`; an asker sends it only to trusted `https` peers | — |
+| `FED_CORROBORATION_SECRET` | If set, `/federation/corroborate` also requires `x-fed-secret`; an asker sends it only to trusted `https` peers. Questions are signed either way; the secret narrows who is answered to the peers you gave it, which `FED_CORROBORATION_REQUIRE_KNOWN` (any known key, `unvetted` peers included) does not | — |
 | `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
 | `FED_CORROBORATION_GRID_DEG` / `_TIME_BUCKET_SEC` / `_DIST_BUCKET_M` | Location/time coarsening of corroboration queries | `0.005` / `600` / `100` |
@@ -79,10 +79,10 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
 | `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |
 | `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |
-| `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret | — |
+| `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret. Records are signed either way; the secret decides who may register a new spoke's key on the hub | — |
 | `FED_SUBMIT_INSTANCES` | Hub allowlist of submitter instances | any non-self |
 | `FED_HUB_URL` | Spoke: a reachable hub to push signed records to | — |
-| `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results; spokes lease and answer by signing with their own key | — |
+| `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key | — |
 
 ## Gateway — read API, spots, email/push
 

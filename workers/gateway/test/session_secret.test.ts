@@ -4,12 +4,13 @@
 // value forge an `acs` cookie for any account, including a sysop — so the gateway mints no session and
 // honours no cookie in any of those states.
 import { describe, it, expect } from "vitest";
-import { issueSessionCookie, sessionCallsign, weakSecret, sessionsEnabled } from "../src/auth.js";
+import { issueSessionCookie, sessionIdentity, weakSecret, sessionsEnabled } from "../src/auth.js";
 import type { Env } from "../src/env.js";
 import { sessionDb, sessionRequest } from "./sessiondb.js";
 
 const ACCT = { accountId: "acct-1", base: "OE8APR" };
 const envWith = (o: Partial<Env>) => ({ DB: sessionDb(ACCT), ...o }) as unknown as Env;
+const sessionCallsign = async (req: Request, env: Env) => (await sessionIdentity(req, env))?.callsign ?? null;
 const reqWith = (setCookie: string) =>
   new Request("http://gw/api/whoami", { headers: { cookie: setCookie.split(";")[0]! } });
 

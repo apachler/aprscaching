@@ -10,7 +10,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign, sessionAccountId, ingestSecretOk, operatorSecretOk } from "./auth.js";
+import { sessionIdentity, ingestSecretOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
@@ -24,23 +24,24 @@ export function adminCalls(env: Env): Set<string> {
 }
 
 /**
+ * The signed-in session when its call is listed in ADMIN_CALLSIGNS. The session resolves only while its
+ * account holds the call's base call, so the listed call is held by the session's own account.
+ */
+async function adminSession(req: Request, env: Env) {
+  const admins = adminCalls(env);
+  if (admins.size === 0) return null;
+  const me = await sessionIdentity(req, env);
+  return me && admins.has(me.callsign.toUpperCase()) ? me : null;
+}
+
+/**
  * Is the requester a signed-in instance operator? The session's call must be listed in ADMIN_CALLSIGNS,
- * its base call must be held by the session's own account, and that call must be control-verified —
- * the same proof the TX gate demands. A bare string match would hand the operator role to whoever
- * first signs up under the listed call.
+ * held by the session's own account, and control-verified — the same proof the TX gate demands. A bare
+ * string match would hand the operator role to whoever first signs up under the listed call.
  */
 export async function isSysop(req: Request, env: Env): Promise<boolean> {
-  const admins = adminCalls(env);
-  if (admins.size === 0) return false;
-  const me = await sessionAccountId(req, env);
-  if (!me || !admins.has(me.callsign.toUpperCase())) return false;
-  const base = me.callsign.toUpperCase().split("-")[0]!;
-  const held = await env.DB.prepare(
-    "SELECT verified FROM account_callsigns WHERE account_id=? AND callsign=? AND verified=1",
-  )
-    .bind(me.accountId, base)
-    .first<{ verified: number }>();
-  return !!held && (await isCallsignVerified(env, base));
+  const me = await adminSession(req, env);
+  return !!me && (await isCallsignVerified(env, me.base));
 }
 
 /**
@@ -76,30 +77,17 @@ export async function requireIngestOrOperator(req: Request, env: Env): Promise<R
 }
 
 /**
- * The session's call when it is listed in ADMIN_CALLSIGNS and held by the session's own account but not
- * yet control-verified — the operator on a fresh instance, who still has to confirm the call.
- */
-async function pendingOperatorCall(req: Request, env: Env): Promise<string | null> {
-  const admins = adminCalls(env);
-  if (admins.size === 0) return null;
-  const me = await sessionAccountId(req, env);
-  if (!me || !admins.has(me.callsign.toUpperCase())) return null;
-  const base = me.callsign.toUpperCase().split("-")[0]!;
-  const held = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id=? AND callsign=?")
-    .bind(me.accountId, base)
-    .first();
-  return held ? base : null;
-}
-
-/**
  * GET /api/admin/whoami — lets the web app decide whether to reveal the operator admin surface. The
  * unverified holder of an ADMIN_CALLSIGNS call is told what is missing (`pending: "verify"`); nobody
  * else learns anything about the admin list.
  */
 export async function handleAdminWhoami(req: Request, env: Env): Promise<Response> {
-  const callsign = await sessionCallsign(req, env);
-  const sysop = await isSysop(req, env);
-  const pending = !sysop && (await pendingOperatorCall(req, env)) ? { pending: "verify" as const } : {};
+  const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
+  // the holder of an ADMIN_CALLSIGNS call that is not yet control-verified: the operator on a fresh
+  // instance, who still has to confirm the call
+  const admin = await adminSession(req, env);
+  const sysop = !!admin && (await isCallsignVerified(env, admin.base));
+  const pending = admin && !sysop ? { pending: "verify" as const } : {};
   return json({ sysop, callsign, configured: adminCalls(env).size > 0, ...pending });
 }
 
@@ -107,7 +95,7 @@ export async function handleAdminWhoami(req: Request, env: Env): Promise<Respons
 export async function handleAdminVerifications(req: Request, env: Env, callsign?: string): Promise<Response> {
   const denied = await requireSysop(req, env);
   if (denied) return denied;
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   const m = req.method;
   if (callsign === undefined && m === "GET") return listSysopVerifications(env);
   if (callsign === undefined && m === "POST") return sysopVerify(req, env, me!.callsign);

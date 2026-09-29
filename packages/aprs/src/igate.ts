@@ -6,10 +6,10 @@
  * The transport (KISS / APRS-IS sockets) and the "heard locally" state live in the connector; the
  * gating rules below are pure and unit-tested.
  */
+import { baseCall } from "./callsign.js";
 import type { ParsedFrame } from "./types.js";
 
 const NO_GATE_TOKENS = ["TCPIP", "TCPXX", "NOGATE", "RFONLY"];
-const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
 
 /** Third-party traffic (already gated by someone else) — never re-gate. */
 export const isThirdParty = (payload: string) => payload.startsWith("}");

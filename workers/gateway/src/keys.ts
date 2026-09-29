@@ -4,7 +4,7 @@
  * registers the public key against their callsign. Find logs are then signed by that key, so the
  * authorship of a find is cryptographically attributable to a callsign and verifiable network-wide
  * (not merely asserted by an instance). Whether a key is *authorised* for a callsign is the job of
- * the callsign-control badge (we record its verified state at registration).
+ * the callsign-control badge: a key reads as verified while its call's base call is control-verified.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -33,12 +33,10 @@ export async function handleRegisterKey(req: Request, env: Env): Promise<Respons
   const callsign = (parsed.data.callsign ?? me.callsign).toUpperCase();
   if (!(await accountHoldsCall(env, me.accountId, callsign)))
     return json({ error: "callsign is not yours" }, { status: 403 });
-  const verified = await isCallsignVerified(env, callsign);
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?,?,?)",
-  )
-    .bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, verified ? 1 : 0, Math.floor(Date.now() / 1000))
+  await env.DB.prepare("INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, created_at) VALUES (?,?,?,?)")
+    .bind(callsign, parsed.data.publicKey, parsed.data.label ?? null, Math.floor(Date.now() / 1000))
     .run();
+  const verified = await isCallsignVerified(env, callsign);
   return json({ ok: true, callsign, publicKey: parsed.data.publicKey, verified });
 }
 
@@ -46,17 +44,18 @@ export async function handleGetKeys(req: Request, env: Env, callsign: string): P
   const cs = callsign.toUpperCase();
   const rows = (
     await env.DB.prepare(
-      "SELECT public_key, label, verified, created_at FROM callsign_keys WHERE callsign = ? ORDER BY created_at",
+      "SELECT public_key, label, created_at FROM callsign_keys WHERE callsign = ? ORDER BY created_at",
     )
       .bind(cs)
-      .all<{ public_key: string; label: string | null; verified: number; created_at: number }>()
+      .all<{ public_key: string; label: string | null; created_at: number }>()
   ).results;
+  const verified = await isCallsignVerified(env, cs);
   return json({
     callsign: cs,
     keys: rows.map((r) => ({
       publicKey: r.public_key,
       label: r.label,
-      verified: r.verified === 1,
+      verified,
       createdAt: r.created_at,
     })),
   });

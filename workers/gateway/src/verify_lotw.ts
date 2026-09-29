@@ -187,7 +187,6 @@ export async function completeLotwChallenge(req: Request, env: Env): Promise<Res
   const by = subjectAttr(chain.anchor, COMMON_NAME_OID) ?? "LoTW";
   const until = new Date(chain.leaf.notAfter).toISOString().slice(0, 10);
   await markVerified(env, c.cs, "lotw", {
-    accountId: c.accountId,
     by,
     note: `LoTW certificate serial ${chain.leaf.serialHex}, valid until ${until}`,
   });

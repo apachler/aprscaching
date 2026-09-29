@@ -21,21 +21,14 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, ingestSecretOk, timingSafeEqual } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, ingestSecretOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
+import { isCallsignVerified } from "./callsign.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
 const now = () => Math.floor(Date.now() / 1000);
 const boxAuth = ingestSecretOk;
-const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
-
-async function isVerified(env: Env, call: string): Promise<boolean> {
-  const r = await env.DB.prepare("SELECT 1 AS x FROM callsign_verifications WHERE callsign = ? AND status = 'verified'")
-    .bind(call.toUpperCase())
-    .first();
-  return !!r;
-}
 
 /** Is `accountId` the paired owner of `boxId`? An unpaired box has no owner and takes no session commands. */
 async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {
@@ -86,7 +79,7 @@ export async function handleBoxPair(req: Request, env: Env, boxId: string): Prom
  * valid one also moves a box that was paired to another account (whoever holds the box decides).
  */
 export async function handleBoxClaim(req: Request, env: Env, boxId: string): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to pair a box" }, { status: 401 });
   const { code } = (await req.json().catch(() => ({}))) as { code?: string };
   if (!code || normCode(code).length !== 8)
@@ -118,14 +111,6 @@ const unpaired = () =>
     { status: 403 },
   );
 
-/** Does `accountId` hold the given base callsign (so it may transmit as it)? */
-async function accountHoldsCall(env: Env, accountId: string, call: string): Promise<boolean> {
-  const r = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id = ? AND callsign = ?")
-    .bind(accountId, base(call))
-    .first();
-  return !!r;
-}
-
 /** POST /api/box/:id/command — the operator enqueues a command for their box. */
 export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): Promise<Response> {
   const body = (await req.json().catch(() => ({}))) as {
@@ -139,7 +124,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
     return json({ error: `unknown command kind; one of ${[...ALL_KINDS].join(", ")}` }, { status: 400 });
   // authorize: a signed-in operator session that OWNS this box, or the box secret (trusted
   // backend / the operator's own box). Read commands need no callsign; TX commands require a verified one.
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in (or provide the box secret) to control a box" }, { status: 401 });
   if (me && !trusted && !(await ownsBox(env, boxId, me.accountId))) return unpaired();
@@ -149,7 +134,7 @@ export async function handleBoxEnqueue(req: Request, env: Env, boxId: string): P
     if (!callsign) return json({ error: "a licensed callsign is required to transmit" }, { status: 400 });
     if (me && !trusted && !(await accountHoldsCall(env, me.accountId, callsign)))
       return json({ error: `${callsign} is not held by your account` }, { status: 403 });
-    if (!(await isVerified(env, callsign)))
+    if (!(await isCallsignVerified(env, callsign)))
       return json({ error: `verify ${callsign} to transmit — control-verification required` }, { status: 403 });
   }
 
@@ -260,7 +245,7 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
 
 /** GET /api/box/:id/log — operator view of recent commands + their status. */
 export async function handleBoxLog(req: Request, env: Env, boxId: string): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   const trusted = boxAuth(req, env);
   if (!me && !trusted) return json({ error: "sign in to view box activity" }, { status: 401 });
   // a box's activity is visible only to its paired owner (or the box secret)

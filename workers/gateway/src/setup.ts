@@ -10,10 +10,12 @@
  * existing sysop surfaces; the web panel links each DB-sourced item to the surface that manages it.
  */
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
-import { sessionCallsign, sessionsEnabled, weakSecret } from "./auth.js";
+import { sessionIdentity, sessionsEnabled, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
+import { isCallsignVerified } from "./callsign.js";
 
 export interface SetupItem {
   /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
@@ -258,8 +260,8 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   });
 
   if (callsign) {
-    const base = callsign.split("-")[0]!;
-    const v = await count(env, "SELECT COUNT(*) AS n FROM accounts WHERE callsign = ? AND verified = 1", base);
+    const base = baseCall(callsign);
+    const v = await isCallsignVerified(env, base);
     items.push({
       key: "db:verify",
       label: "Your callsign control-verification",
@@ -278,6 +280,6 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
 export async function handleAdminSetup(req: Request, env: Env): Promise<Response> {
   const guard = await requireSysop(req, env);
   if (guard) return guard;
-  const callsign = await sessionCallsign(req, env);
+  const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
   return json({ items: [...envItems(env), ...(await dbItems(env, callsign))] });
 }

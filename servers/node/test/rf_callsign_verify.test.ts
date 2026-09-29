@@ -49,10 +49,14 @@ async function started(env: Env, email = "owner@example.test", cs = "OE8APR") {
 
 const row = (env: Env, cs: string) =>
   env.DB.prepare("SELECT * FROM callsign_verifications WHERE callsign=?").bind(cs).first<Record<string, unknown>>();
-const held = (env: Env, cs: string) =>
-  env.DB.prepare("SELECT verified, method FROM account_callsigns WHERE callsign=?")
+/** A held call's verification as its account sees it — derived from the one store — or null if unheld. */
+async function held(env: Env, cs: string): Promise<{ verified: number; method: string | null } | null> {
+  if (!(await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE callsign=?").bind(cs).first())) return null;
+  const v = await env.DB.prepare("SELECT method FROM callsign_verifications WHERE callsign=? AND status='verified'")
     .bind(cs)
-    .first<{ verified: number; method: string | null }>();
+    .first<{ method: string | null }>();
+  return { verified: v ? 1 : 0, method: v?.method ?? null };
+}
 
 describe("starting an RF verification", () => {
   it("returns the code, the service call and the exact text to send, and queues nothing", async () => {

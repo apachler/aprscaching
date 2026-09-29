@@ -4,7 +4,7 @@ import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
 import { IngestBatch } from "@aprscaching/shared";
-import { decodeAprs } from "@aprscaching/aprs";
+import { baseCall, decodeAprs } from "@aprscaching/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { deliverHeld, bbsOnAck } from "./bbs.js";
 import { recordWatchHeard } from "./watch.js";
@@ -16,7 +16,6 @@ import { handleRadioMessage, serviceCall, splitMessageNumber, type RadioMessage 
 import { transportForPort } from "./provenance.js";
 
 /** Base call (no SSID, no digipeat `*`), uppercased — the licence identity behind a callsign. */
-const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {

@@ -27,14 +27,15 @@ export function appBase(env: Env): string {
  * sitemap, robots.txt, the read API — link here, because the app may live on another host (a Pages site in
  * front of an API host) that would answer those paths with the app itself. On the app's own host APP_URL
  * carries the right scheme; elsewhere the request host is used, with the scheme a TLS-terminating proxy
- * reports (the Node/Bun servers only ever see plain http).
+ * reports (the Node/Bun servers only ever see plain http). A request that arrived over https stays https:
+ * a header can raise the scheme, never lower it.
  */
 export function gatewayBase(req: Request, env: Env): string {
   const u = new URL(req.url);
   const app = appBase(env);
   if (new URL(app).host === u.host) return app;
   const fwd = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const scheme = fwd === "https" || fwd === "http" ? fwd : u.protocol.replace(/:$/, "");
+  const scheme = u.protocol === "https:" || fwd === "https" ? "https" : "http";
   return `${scheme}://${u.host}`;
 }
 

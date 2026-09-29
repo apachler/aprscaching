@@ -10,7 +10,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionIdentity, mayActAsOwner } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -21,7 +21,7 @@ function makeSlug(): string {
 }
 
 export async function handleViewCreate(req: Request, env: Env): Promise<Response> {
-  const owner = await sessionCallsign(req, env);
+  const owner = (await sessionIdentity(req, env))?.callsign;
   if (!owner) return json({ error: "sign in to save a view" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { name?: string; state?: unknown; public?: boolean };
   if (!body.state || typeof body.state !== "object") return json({ error: "state object required" }, { status: 400 });
@@ -51,27 +51,34 @@ export async function handleViewCreate(req: Request, env: Env): Promise<Response
   return json({ error: "could not allocate a slug" }, { status: 500 });
 }
 
+/** GET /api/views — the views saved under any call the signed-in account holds (or an SSID of one). */
 export async function handleViewList(req: Request, env: Env): Promise<Response> {
-  const owner = await sessionCallsign(req, env);
-  if (!owner) return json({ error: "sign in" }, { status: 401 });
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in" }, { status: 401 });
+  const held = (
+    await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id = ?")
+      .bind(me.accountId)
+      .all<{ callsign: string }>()
+  ).results.map((r) => r.callsign);
   const rows = (
     await env.DB.prepare(
-      "SELECT slug, name, public, created_at AS createdAt FROM saved_views WHERE owner_call = ? ORDER BY created_at DESC LIMIT 100",
+      `SELECT slug, name, public, created_at AS createdAt FROM saved_views
+        WHERE ${held.map(() => "owner_call = ? OR owner_call LIKE ?").join(" OR ")}
+        ORDER BY created_at DESC LIMIT 100`,
     )
-      .bind(owner.toUpperCase())
+      .bind(...held.flatMap((c) => [c, `${c}-%`]))
       .all<{ public: number }>()
   ).results.map((r) => ({ ...r, public: r.public === 1 }));
   return json({ views: rows });
 }
 
 export async function handleViewDelete(req: Request, env: Env, slug: string): Promise<Response> {
-  const owner = await sessionCallsign(req, env);
-  if (!owner) return json({ error: "sign in" }, { status: 401 });
+  if (!(await sessionIdentity(req, env))) return json({ error: "sign in" }, { status: 401 });
   const row = await env.DB.prepare("SELECT owner_call FROM saved_views WHERE slug = ?")
     .bind(slug)
     .first<{ owner_call: string }>();
   if (!row) return json({ error: "not found" }, { status: 404 });
-  if (row.owner_call !== owner.toUpperCase()) return json({ error: "not your view" }, { status: 403 });
+  if (!(await mayActAsOwner(req, env, row.owner_call))) return json({ error: "not your view" }, { status: 403 });
   await env.DB.prepare("DELETE FROM saved_views WHERE slug = ?").bind(slug).run();
   return json({ ok: true });
 }
@@ -84,7 +91,7 @@ export async function handleViewResolve(req: Request, env: Env, slug: string): P
     .bind(slug)
     .first<{ ownerCall: string; name: string | null; state: string; public: number; createdAt: number }>();
   if (!row) return json({ error: "view not found" }, { status: 404 });
-  if (row.public !== 1 && (await sessionCallsign(req, env))?.toUpperCase() !== row.ownerCall)
+  if (row.public !== 1 && !(await mayActAsOwner(req, env, row.ownerCall)))
     return json({ error: "this view is private" }, { status: 403 });
   return json({
     slug,

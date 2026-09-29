@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { operatorSecretOk } from "./auth.js";
+import { baseCall } from "@aprscaching/aprs";
+import { operatorSecretOk, sessionIdentity } from "./auth.js";
 /**
  * support.ts — supporter recognition + the public transparency ledger.
  *
@@ -14,7 +15,6 @@ import { operatorSecretOk } from "./auth.js";
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId } from "./watch.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
@@ -113,7 +113,7 @@ export async function handleSupport(_req: Request, env: Env): Promise<Response> 
 
 /** GET/POST /api/support/prefs — read or set the caller's hide-nag; also reports supporter status. */
 export async function handleSupportPrefs(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   if (req.method === "POST") {
     const b = (await req.json().catch(() => ({}))) as { hideNag?: boolean };
@@ -145,7 +145,7 @@ export async function handleSupportConfirm(req: Request, env: Env): Promise<Resp
   const ts = now();
   let supporter: string | null = null;
   if (b.callsign) {
-    const base = b.callsign.toUpperCase().split("-")[0]!;
+    const base = baseCall(b.callsign);
     const acct =
       (await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
         .bind(base)

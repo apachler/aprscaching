@@ -57,7 +57,7 @@ describe("an SSID of a held base call cannot open a second account", () => {
     const { env } = await victim();
     // an account row naming an SSID of a base call that another account holds
     await env.DB.prepare(
-      "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES ('OE1VIC-9','acct-evil','evil@example.test',0,1)",
+      "INSERT INTO accounts (callsign, account_id, email, created_at) VALUES ('OE1VIC-9','acct-evil','evil@example.test',1)",
     ).run();
     const login = await call(env, "POST", "/auth/email/start", { email: "evil@example.test" });
     const ver = await call(env, "POST", "/auth/email/verify", { token: login.data.devToken });
@@ -70,7 +70,7 @@ describe("an SSID of a held base call cannot open a second account", () => {
   it("a device key may only be registered for a base call the session's account holds", async () => {
     const { env } = await victim();
     await env.DB.prepare(
-      "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES ('OE1VIC-9','acct-evil','evil@example.test',0,1)",
+      "INSERT INTO accounts (callsign, account_id, email, created_at) VALUES ('OE1VIC-9','acct-evil','evil@example.test',1)",
     ).run();
     const login = await call(env, "POST", "/auth/email/start", { email: "evil@example.test" });
     const ver = await call(env, "POST", "/auth/email/verify", { token: login.data.devToken });

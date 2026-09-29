@@ -92,8 +92,11 @@ describe("checking the published record", () => {
       method: "ampr_dns",
       verified_by: "oe8apr.ampr.org",
     });
-    const held = await e.DB.prepare("SELECT verified, method FROM account_callsigns WHERE callsign='OE8APR'").first();
-    expect(held).toEqual({ verified: 1, method: "ampr_dns" });
+    // the held call reads as verified through the one store
+    const held = await e.DB.prepare(
+      "SELECT ac.callsign, v.method FROM account_callsigns ac JOIN callsign_verifications v ON v.callsign = ac.callsign AND v.status = 'verified' WHERE ac.callsign='OE8APR'",
+    ).first();
+    expect(held).toEqual({ callsign: "OE8APR", method: "ampr_dns" });
     // the challenge is spent
     expect((await check(e, me.cookie)).status).toBe(409);
   });

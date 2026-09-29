@@ -18,6 +18,7 @@
  * from the register disappears, and an interrupted run prunes nothing.
  */
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
 import { operatorSecretOk } from "./auth.js";
 import { readGate } from "./readapi.js";
@@ -57,7 +58,7 @@ export const sourceName = (id: string): string => SOURCE_NAMES[id] ?? id.toUpper
 export function homeCall(raw: string): string | null {
   let best: string | null = null;
   for (const seg of raw.toUpperCase().trim().replace(/\*$/, "").split("/")) {
-    const part = seg.trim().split("-")[0] ?? "";
+    const part = baseCall(seg);
     if (!CALL_SHAPE.test(part)) continue;
     if (!best || part.length > best.length) best = part;
   }

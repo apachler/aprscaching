@@ -20,7 +20,7 @@
  * (e.g. flagship/competition caches require A).
  */
 
-import { haversineMeters } from "@aprscaching/aprs";
+import { baseCall, haversineMeters } from "@aprscaching/aprs";
 
 export type TrustTier = "A" | "B" | "C";
 
@@ -107,13 +107,11 @@ function rank(t: TrustTier): number {
   return t === "A" ? 3 : t === "B" ? 2 : 1;
 }
 
-const igBase = (c: string): string => c.split("-")[0]!.toUpperCase();
-
 /** True when this fix was gated by an IGate independent of the logger (compared by BASE call —
  *  OE8APR-10 gating OE8APR-9 is still self-gating). No gater or a controlled gater ⇒ not independent. */
 function independentlyGated(p: PositionRow, deps: VerifyDeps): boolean {
   const ig = p.igate_call ?? "";
-  return !!ig && !deps.loggerOwnIgates?.has(igBase(ig));
+  return !!ig && !deps.loggerOwnIgates?.has(baseCall(ig));
 }
 
 /**
