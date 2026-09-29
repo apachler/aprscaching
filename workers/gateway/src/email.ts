@@ -39,6 +39,8 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
 }
+/** The shape {@link newToken} produces: 64 lowercase hex digits. Anything else is not a sign-in token. */
+const TOKEN_SHAPE = /^[0-9a-f]{64}$/;
 function appOrigin(req: Request, env: Env): string {
   return env.APP_URL ?? new URL(req.url).origin;
 }
@@ -142,11 +144,16 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
 
 const esc = (v: string) => v.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
 
-/** The confirm step a browser sees when it opens the link: one button that POSTs the token back. */
+/**
+ * The confirm step a browser sees when it opens the link: one button that POSTs the token back. The
+ * `same-origin` referrer policy keeps the token-bearing URL from reaching any other site, while the form
+ * POST still carries this page's origin — under `no-referrer` a browser sends `Origin: null`, which the
+ * origin check refuses.
+ */
 function confirmPage(token: string): Response {
   return new Response(
     `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=referrer content=no-referrer>
+<meta name=referrer content=same-origin>
 <title>Sign in · aprscaching</title><style>
 :root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}
 h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height:44px;padding:.6rem 1.2rem;border-radius:10px}
@@ -160,7 +167,7 @@ button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
-        "referrer-policy": "no-referrer",
+        "referrer-policy": "same-origin",
       },
     },
   );
@@ -189,6 +196,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (req.method === "GET") {
     const token = url.searchParams.get("token");
     if (!token) return json({ error: "missing token" }, { status: 400 });
+    // only a well-formed token ever reaches the HTML page, so nothing a link carries is reflected into it
+    if (!TOKEN_SHAPE.test(token)) return json({ error: "invalid token" }, { status: 400 });
     if ((req.headers.get("accept") ?? "").includes("text/html")) return confirmPage(token);
     return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
   }

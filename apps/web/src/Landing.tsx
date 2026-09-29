@@ -7,10 +7,11 @@ import { API_BASE } from "./api.js";
  * APRS frame proving a find on the air, decoding into its Tier-A stamp (the packet uses our real
  * APZACG tocall and is heard directly by an attested receiving site). Below it: the three-step find flow, the A/B/C trust
  * tiers, the shack capability grid, the run-anywhere topologies, and the free-and-open band.
- * Register/Login open the callsign-led sign-in; Explore drops the visitor into the read-only
+ * One call to action opens the callsign-led sign-in (which creates the account for a new call); Explore
+ * drops the visitor into the read-only
  * platform. The footer carries the canonical site-wide links (the Site map is the crawlable page).
  */
-export function Landing(props: { onRegister: () => void; onLogin: () => void; onExplore: () => void }) {
+export function Landing(props: { onSignIn: () => void; onExplore: () => void }) {
   return (
     <main className="landing">
       <div className="landing-hero">
@@ -23,8 +24,8 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
             <a href="#privacy">Privacy</a>
             <a href="#selfhost">Self-host</a>
           </span>
-          <button className="primary" onClick={props.onRegister}>
-            Register
+          <button className="primary" onClick={props.onSignIn}>
+            Sign in
           </button>
         </nav>
         <div className="landing-hero-grid">
@@ -38,13 +39,10 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
               really there. No app store, no subscription, no tracking: ham radio, a map, and cryptographic honesty.
             </p>
             <div className="landing-cta">
-              <button className="primary" onClick={props.onRegister}>
-                Register with your callsign
+              <button className="primary" onClick={props.onSignIn}>
+                Sign in with your callsign
               </button>
               <button onClick={props.onExplore}>Explore the live map</button>
-              <button className="landing-ghost" onClick={props.onLogin}>
-                Log in
-              </button>
             </div>
           </div>
           <div className="landing-term" aria-label="A find verified on the air">
@@ -57,7 +55,7 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
               </div>
               <div className="landing-frame f2">&gt;Found AC-1042 via aprscaching.net</div>
               <div className="landing-frame f3 dim">heard direct at OE8XBM-10 (attested site) · track plausible</div>
-              <span className="landing-stamp">✓ TIER A · VERIFIED BY RADIO</span>
+              <span className="landing-stamp">✓ RADIO-VERIFIED · TIER A</span>
             </div>
           </div>
         </div>
@@ -84,8 +82,8 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
           <li>
             <h3>Key the find</h3>
             <p>
-              Transmit the find over APRS from the site — handheld, tracker, or the in-app logger. Independent IGates
-              hear you, and the find earns its trust tier.
+              Transmit the find over APRS from the site — handheld, tracker, or the in-app logger. When this
+              instance&rsquo;s own receiving station hears you on the air, the find is radio-verified.
             </p>
           </li>
         </ol>
@@ -101,21 +99,24 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
         <div className="landing-tiers">
           <div className="landing-tier tier-a">
             <span className="landing-tier-badge">TIER A</span>
-            <h3>Verified by radio</h3>
+            <h3>Radio-verified</h3>
             <p>
-              Your RF transmission, heard by an independent receiver near the cache, with a plausible track. The gold
-              standard.
+              Your RF transmission, heard on the air by this instance&rsquo;s own receiving station, with a plausible
+              track. A copy relayed over the internet never counts. The gold standard.
             </p>
           </div>
           <div className="landing-tier tier-b">
             <span className="landing-tier-badge">TIER B</span>
-            <h3>Verified by presence</h3>
+            <h3>Location-verified</h3>
             <p>The in-app logger confirms your device's own position matches the cache. No radio required to play.</p>
           </div>
           <div className="landing-tier tier-c">
             <span className="landing-tier-badge">TIER C</span>
             <h3>Logged</h3>
-            <p>A bare internet beacon. Counted and shown — and honestly labelled as unverified.</p>
+            <p>
+              Nothing independent placed you at the cache — at most a bare internet beacon. Counted and shown, and
+              honestly labelled as not verified.
+            </p>
           </div>
         </div>
       </section>
@@ -263,7 +264,7 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
               features. Built by OE8APR from open specifications.
             </p>
           </div>
-          <button className="primary" onClick={props.onRegister}>
+          <button className="primary" onClick={props.onSignIn}>
             Start caching →
           </button>
         </div>

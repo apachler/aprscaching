@@ -10,7 +10,7 @@ import {
   type BBox,
 } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
+import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged } from "../ui/index.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
 export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () => void; onClose: () => void }) {
@@ -48,8 +48,8 @@ export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () =
         <ul className="logs">
           {feed.items.map((a) => (
             <li key={a.id}>
-              {a.logType === "found" && a.verified ? (
-                <Badge kind={`tier${a.tier ?? "C"}`}>{a.tier === "A" ? "RF" : a.tier === "B" ? "App" : "✓"}</Badge>
+              {a.logType === "found" ? (
+                <TierBadge tier={a.tier as "A" | "B" | "C" | null} verified={a.verified} />
               ) : (
                 <Badge kind={a.logType}>{a.logType}</Badge>
               )}
@@ -83,7 +83,8 @@ export function ActivityPanel(props: { map: maplibregl.Map | null; onBoard: () =
             <h4>Top corroborators</h4>
           </div>
           <p className="muted fine">
-            IGates whose RF helped verify finds to Tier A — infrastructure that feeds the commons.
+            Receiving stations that heard finds on the air and made them Radio-verified — infrastructure that feeds the
+            commons.
           </p>
           <ol className="board">
             {corr.map((c) => (

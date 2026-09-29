@@ -7,6 +7,7 @@
  */
 import { useEffect, useReducer } from "react";
 import { ToolHost, builtinTools } from "@aprscaching/tools";
+import { TOAST_EVENT } from "../ui/Toast.js";
 
 // TX gate: a module flag the app keeps in sync with the signed-in session's verified state, so a
 // tool's scheduleBeacon/requestTx is allowed only for a verified callsign — real on-air keying
@@ -17,10 +18,10 @@ export function setToolTxVerified(v: boolean): void {
 }
 
 const CHANGED = "acs:tools-changed"; // fired when a tool is enabled/disabled → surfaces re-read
-export const TOOLS_TOAST_EVENT = "acs:tools-toast"; // beacon/TX feedback for whatever surface wants to show it
+// beacon/TX feedback: the app-wide toast provider shows it whichever surface is open
 const toast = (msg: string) => {
   try {
-    window.dispatchEvent(new CustomEvent(TOOLS_TOAST_EVENT, { detail: msg }));
+    window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: msg }));
   } catch {
     /* SSR */
   }

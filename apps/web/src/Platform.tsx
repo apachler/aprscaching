@@ -175,6 +175,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
   const [operatorPending, setOperatorPending] = useState(false); // operator's call not yet confirmed
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
+  const [here, setHere] = useState<{ lat: number; lon: number } | null>(null); // the viewer, once located
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => {
     setLocSettings(s);
@@ -545,7 +546,10 @@ export default function Platform({ session, startTour }: { session: SessionState
       hash: true,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-    m.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), "top-left");
+    const locate = new maplibregl.GeolocateControl({ trackUserLocation: true });
+    // the viewer's own fix, once they ask the map to locate them: the cache sheet shows the distance
+    locate.on("geolocate", (e) => setHere({ lat: e.coords.latitude, lon: e.coords.longitude }));
+    m.addControl(locate, "top-left");
     map.current = m;
 
     const trackCenter = () => setCenter([m.getCenter().lat, m.getCenter().lng]);
@@ -1181,6 +1185,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             <DetailPanel
               detail={detail}
               callsign={callsign}
+              here={here}
               activating={
                 detail.lat != null && detail.lon != null
                   ? (spots.find((s) => haversine(s.lat, s.lon, detail.lat!, detail.lon!) <= 300) ?? null)

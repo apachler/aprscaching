@@ -164,7 +164,7 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `VITE_API_BASE` | Gateway base URL | `http://127.0.0.1:8787` |
+| `VITE_API_BASE` | Gateway base URL. Set it whenever the API lives on another host (Pages + a Worker). A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost | dev server: `http://127.0.0.1:8787` · production build: same origin |
 | `VITE_BASEMAP` | `offline` uses the self-contained graticule; else the online vector basemap | online |
 | `VITE_BASEMAP_STYLE` | MapLibre style URL for the vector basemap (self-hosted tiles, commercial provider) | OpenFreeMap `liberty` |
 | `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOX Sentinel-2 cloudless 2016 (CC-BY 4.0) |

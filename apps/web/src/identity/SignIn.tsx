@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { claim, registerPasskey, loginPasskey, emailStart, passkeySupported, type Licence } from "../api.js";
+import {
+  claim,
+  registerPasskey,
+  loginPasskey,
+  emailStart,
+  passkeySupported,
+  errorText,
+  ApiError,
+  type Licence,
+} from "../api.js";
 import { Panel, Icon, LicenceBadge } from "../ui/index.js";
 
 type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
@@ -26,7 +35,7 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
     try {
       setProbe(await claim(callsign));
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -38,7 +47,7 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
       await fn();
       props.onDone();
     } catch (e) {
-      setErr((e as Error).message.replace(/^.*?: /, ""));
+      setErr(errorText(e).replace(/^.*?: /, ""));
     } finally {
       setBusy(false);
     }
@@ -54,7 +63,15 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
       const r = await emailStart(email.trim(), callsign);
       setSent(r.devLink ? `Dev: open ${r.devLink}` : `Check ${email} for your sign-in link.`);
     } catch (e) {
-      setErr((e as Error).message);
+      // An email with no account opens a new one for the call, so a held call refuses it: for a returning
+      // user that means the email is not the one on their account.
+      if (probe?.exists && e instanceof ApiError && e.status === 409)
+        setErr(
+          `That email doesn't match ${callsign}'s account — use the email you registered with${
+            probe.hasPasskey && canPasskey ? ", or sign in with your passkey" : ""
+          }.`,
+        );
+      else setErr(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -114,11 +131,23 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
 
           <div className="adv-body">
             <p className="muted fine mt-3">
-              {canPasskey ? "Or use an email link" : "Sign in with an email link"}{" "}
-              {probe.exists ? "" : "(optional, for recovery)"}:
+              {probe.exists
+                ? canPasskey && probe.hasPasskey
+                  ? "Or use the email on your account:"
+                  : "Get a sign-in link at the email on your account:"
+                : canPasskey
+                  ? "Or create it with an email link:"
+                  : "Create your account with an email link:"}
             </p>
             <label className="m-0">
-              <input value={email} placeholder="you@example.com" onChange={(e) => setEmail(e.target.value)} />
+              <input
+                aria-label="Email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                placeholder="you@example.com"
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </label>
             <div className="row end mt-2">
               <button disabled={busy} onClick={sendEmail}>
@@ -137,7 +166,11 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
           </button>
         </>
       )}
-      {err && <p className="error mt-2">{err}</p>}
+      {err && (
+        <p className="error mt-2" role="alert">
+          {err}
+        </p>
+      )}
       {!canPasskey && !probe && (
         <p className="muted fine mt-3">Passkeys need a secure (https) context; email sign-in works anywhere.</p>
       )}

@@ -4,7 +4,8 @@ Your account is your callsign. There is no username and, if you use a passkey, n
 
 ## Sign in
 
-1. Tap **Sign in** in the top bar.
+1. Tap **Sign in** in the top bar, or **Sign in with your callsign** on the front page. The same step creates
+   the account for a callsign that has none.
 2. Type your **Callsign** and tap **Continue**.
 3. Then either:
     - **Create account with a passkey** (first visit) or **Sign in with passkey** (returning). Your phone,
@@ -12,7 +13,8 @@ Your account is your callsign. There is no username and, if you use a passkey, n
       Passkeys need an `https://` address — on a plain `http://` instance use the email link.
     - Or type your email and tap **Email me a link**, then open the link from your inbox and tap **Sign in**
       on the page it opens — opening the link alone signs nobody in. On a new account the email is optional
-      and used for recovery.
+      and used for recovery. A returning user must use the email on their account: any other address is
+      refused with *That email doesn't match …'s account*.
 
 **← different callsign** takes you back to step 2.
 
@@ -37,6 +39,11 @@ Open **Settings → Account** and tap **verify** next to the callsign, then pick
 | **ampr.org DNS** | Your ARDC-delegated `<call>.ampr.org` name | ARDC reviewed your licence before delegating the name to you |
 | **LoTW certificate** | Your ARRL Logbook of The World callsign certificate, saved from TQSL as a `.p12` file | ARRL checked your licence before issuing the certificate |
 
+**On the air** needs a receiving station run by the instance. An instance without one says *This instance
+has no receiving station yet — ask the operator, or use another method* and opens on **ampr.org DNS**
+instead; where there are stations, the app names the calls that are listening. **LoTW certificate** shows
+only where the operator has set it up.
+
 If none of these is within reach, ask the instance's operator: a sysop can verify a call by hand after
 checking your licence, and the verification lists who did it and how.
 
@@ -46,7 +53,8 @@ LoTW certificate authority, or the sysop). Your data export lists it.
 ### On the air
 
 1. Tap **Get a code**. The app shows the message to send: **To** the instance's service call (usually
-   `APRSCG`), **Message** `VERIFY` and a six-digit code, for example `VERIFY 482913`. Nothing is sent to you.
+   `APRSCG`), **Message** `VERIFY` and a six-digit code, for example `VERIFY 482913`, and the receiving
+   stations listening for it (**Receiving stations:** `OE8XXX`). Nothing is sent to you.
 2. Send that message from the callsign or any SSID of it (`-7`, `-9`, …): as an APRS message from your radio,
    or as a MeshCom direct message to the service call from your MeshCom node.
 3. The app waits while it listens. Once one of the instance's own receiving stations hears the message on

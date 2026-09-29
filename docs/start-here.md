@@ -55,9 +55,9 @@ Every find gets a badge:
 
 | Badge | Tier | What it means |
 |---|---|---|
-| **Verified · RF** | A | Your APRS position was heard **on the air** near the cache by a receiving station that isn't yours. |
-| **Verified · App** | B | Your phone's location, taken when you logged, matched the cache. |
-| **Verified · C** / **Logged · unverified** | C | Only an internet (APRS-IS) position was available — the find is logged but not confirmed. |
+| **Radio-verified** | A | Your APRS position was heard **on the air** near the cache by a receiving station the instance runs, and that isn't yours. |
+| **Location-verified** | B | Your phone's location, taken when you logged, matched the cache. |
+| **Logged** | C | Nothing independent placed you at the cache (at most an internet APRS-IS position) — the find is on record but not verified. |
 
 A position that only travelled over the internet proves nothing about where you were, so it can never count
 as more than tier C. Most finds are tier B; tier A appears wherever operators run their own receivers and

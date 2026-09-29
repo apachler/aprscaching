@@ -20,17 +20,17 @@ export const TOUR_STEPS: TourStep[] = [
   {
     title: "Nearby sorts them by distance",
     anchor: '[data-tour="nearby"]',
-    body: "The same caches as a list, closest first. Open one for its hint, its find code, and the trust tier a find there can reach.",
+    body: "The same caches as a list, closest first. Open one for its hint, its find code, and the verification a find there needs.",
   },
   {
     title: "Log the find at the cache",
     anchor: '[data-tour="log"]',
     when: "signed-in",
-    body: "Log a find sits at the foot of a cache. Key it over APRS from the spot and independent receivers corroborate you — corroboration is what earns Tier A, not the tap.",
+    body: "Log a find sits at the foot of a cache. Tap it at the spot with location on for a Location-verified find. Key it over APRS and, once this instance's receiving station hears you, it is Radio-verified.",
   },
   {
     title: "Explore now, sign in to play",
     when: "signed-out",
-    body: "Browsing is read-only. Register with your callsign to log finds, hide caches, and open the Shack.",
+    body: "Browsing is read-only. Sign in with your callsign to log finds, hide caches, and open the Shack.",
   },
 ];

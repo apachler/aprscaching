@@ -39,14 +39,61 @@ export type {
 };
 import { saveArea, loadArea } from "./offlineArea.js";
 
-/** Worker base URL. In dev the Worker runs on :8787; in prod set VITE_API_BASE to api.aprscaching.net. */
-export const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8787";
+/**
+ * Gateway base URL. A dev server talks to the local gateway on :8787. A production build without
+ * `VITE_API_BASE` talks to its own origin (`""`), which is right wherever one host serves both the SPA and
+ * the API (the desktop binary, a Pi, an all-in-one VM) and fails visibly anywhere else — never a silent
+ * localhost that only answers on the builder's machine. A split deployment (Pages + a Worker on
+ * `api.aprscaching.net`) sets `VITE_API_BASE` at build time.
+ */
+/** Drop trailing `/` from a URL without a regex (the URL can be typed by the user). */
+export function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
+}
+
+export const API_BASE: string =
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8787");
+
+/**
+ * The browser could not reach the gateway at all (offline, DNS, CORS, the server down). It stays a
+ * `TypeError`, as `fetch` throws, so offline handling that tests for one still recognises it, but carries
+ * a message a person can act on instead of the browser's "Failed to fetch".
+ */
+export class NetworkError extends TypeError {
+  constructor() {
+    super("Can't reach the server — check your connection and try again");
+  }
+}
+
+/** Human text for any error shown to a user: the server's reason, or the network failure in words. */
+export function errorText(e: unknown): string {
+  if (e instanceof NetworkError) return e.message;
+  const m = e instanceof Error ? e.message : String(e);
+  // the browsers' own words for an unreachable host: Chromium, Firefox, Safari
+  if (e instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(m)) return new NetworkError().message;
+  return m.replace(/^\d{3} /, "");
+}
+
+/** `fetch` that throws a {@link NetworkError} when the host cannot be reached; an abort stays an abort. */
+async function reach(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") throw e;
+    throw new NetworkError();
+  }
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API_BASE + path, {
+  // A JSON content-type makes a cross-origin request non-simple, so it is sent only with a JSON body: a GET
+  // without it needs no CORS preflight.
+  const json = typeof init?.body === "string" ? { "content-type": "application/json" } : undefined;
+  const res = await reach(API_BASE + path, {
     ...init,
     credentials: "include",
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: { ...json, ...(init?.headers ?? {}) },
   });
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status, body);
@@ -92,7 +139,7 @@ export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<
 }
 import type { Corroborator } from "@aprscaching/shared";
 export type { Corroborator };
-/** Top IGates by Tier-A finds they helped verify — running infrastructure as a visible contribution. */
+/** Top receiving stations by the finds they made Radio-verified — running infrastructure as a visible contribution. */
 export function getCorroborators(
   bbox?: BBox,
   period = "all",
@@ -436,7 +483,7 @@ export function submitWxReading(
   if (r.windDirDeg != null) set("winddir", r.windDirDeg, 0);
   if (r.windKn != null) set("windspeedmph", r.windKn * 1.15078, 1);
   if (r.rainTodayMm != null) set("dailyrainin", r.rainTodayMm / 25.4, 2);
-  return fetch(`${API_BASE}/api/wx/submit?${q.toString()}`, { credentials: "include" }).then((res) => {
+  return reach(`${API_BASE}/api/wx/submit?${q.toString()}`, { credentials: "include" }).then((res) => {
     if (!res.ok) throw new Error(`submit failed (${res.status})`);
   });
 }
@@ -543,7 +590,7 @@ export async function ingestPackets(
   secret: string,
   base = API_BASE,
 ): Promise<{ ok: boolean; stored: number }> {
-  const res = await fetch(`${base.replace(/\/+$/, "")}/ingest`, {
+  const res = await reach(`${trimTrailingSlashes(base)}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-ingest-secret": secret },
     body: JSON.stringify({ packets }),
@@ -555,7 +602,7 @@ export async function ingestPackets(
 /**
  * Forward decoded RF to a PUBLIC gateway, authenticated by the operator's device-key signature
  * — no shared secret. The key must be registered to `callsign` (registerKey).
- * Browser-heard frames are stored IGate-less and stay Tier C.
+ * Browser-heard frames are never attested and stay Tier C.
  */
 export async function ingestSigned(
   packets: Packet[],
@@ -564,7 +611,7 @@ export async function ingestSigned(
 ): Promise<{ ok: boolean; stored: number }> {
   const headers = await signIngest(callsign, packets);
   if (!headers) throw new Error("this browser can't sign (needs Ed25519)");
-  const res = await fetch(`${base.replace(/\/+$/, "")}/ingest`, {
+  const res = await reach(`${trimTrailingSlashes(base)}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify({ packets }),
@@ -851,7 +898,7 @@ export function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[
 /** Upload a media item (raw body) — authorised by the signed-in owner session. */
 export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
   const q = title ? `?title=${encodeURIComponent(title)}` : "";
-  const res = await fetch(`${API_BASE}/api/caches/${cacheId}/media${q}`, {
+  const res = await reach(`${API_BASE}/api/caches/${cacheId}/media${q}`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": file.type || "application/octet-stream" },
@@ -981,6 +1028,7 @@ export interface LogResult {
   corroboratedBy?: string | null; // peer instance that granted Tier A
   signerKey?: string | null; // device key that signed the find
   queued?: boolean; // saved offline, will sync when connectivity returns
+  duplicate?: boolean; // this callsign had already logged the cache; the first find stands unchanged
 }
 
 export interface AuthorSig {
@@ -1059,6 +1107,8 @@ export interface VerifyChallenge {
   text: string;
   /** Unix seconds after which the code no longer verifies. */
   expiresAt: number;
+  /** The receiving-site calls listening for the message. */
+  sites?: string[];
 }
 export function startAprsVerify(callsign: string): Promise<VerifyChallenge> {
   return call(`/verify/aprs/start`, { method: "POST", body: JSON.stringify({ callsign }) });
@@ -1067,8 +1117,15 @@ export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }
   return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);
 }
 
-/** Which verification methods this instance offers (LoTW needs the operator's trusted LoTW CA). */
-export function getVerifyMethods(): Promise<{ methods: { rf_heard: boolean; ampr_dns: boolean; lotw: boolean } }> {
+/**
+ * Which verification methods this instance offers: on the air needs an attested receiving site (`rfSites`
+ * names them), LoTW needs the operator's trusted LoTW CA.
+ */
+export interface VerifyMethods {
+  methods: { rf_heard: boolean; ampr_dns: boolean; lotw: boolean };
+  rfSites?: string[];
+}
+export function getVerifyMethods(): Promise<VerifyMethods> {
   return call(`/verify/methods`);
 }
 
