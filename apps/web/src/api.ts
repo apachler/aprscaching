@@ -46,6 +46,13 @@ import { saveArea, loadArea } from "./offlineArea.js";
  * localhost that only answers on the builder's machine. A split deployment (Pages + a Worker on
  * `api.aprscaching.net`) sets `VITE_API_BASE` at build time.
  */
+/** Drop trailing `/` from a URL without a regex (the URL can be typed by the user). */
+export function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
+}
+
 export const API_BASE: string =
   (import.meta.env.VITE_API_BASE as string | undefined) ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8787");
 
@@ -583,7 +590,7 @@ export async function ingestPackets(
   secret: string,
   base = API_BASE,
 ): Promise<{ ok: boolean; stored: number }> {
-  const res = await reach(`${base.replace(/\/+$/, "")}/ingest`, {
+  const res = await reach(`${trimTrailingSlashes(base)}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-ingest-secret": secret },
     body: JSON.stringify({ packets }),
@@ -604,7 +611,7 @@ export async function ingestSigned(
 ): Promise<{ ok: boolean; stored: number }> {
   const headers = await signIngest(callsign, packets);
   if (!headers) throw new Error("this browser can't sign (needs Ed25519)");
-  const res = await reach(`${base.replace(/\/+$/, "")}/ingest`, {
+  const res = await reach(`${trimTrailingSlashes(base)}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify({ packets }),
