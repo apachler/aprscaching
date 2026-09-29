@@ -21,7 +21,7 @@ Cloudflare Tunnel).
 
 ```bash
 cd deploy
-cp .env.example .env && ./setup.sh     # wizard: callsign, passcode, filter, domain; generates INGEST_SECRET
+cp .env.example .env && ./setup.sh     # wizard: callsign, passcode, filter, domain; generates INGEST_SECRET, OPERATOR_SECRET, SESSION_SECRET
 docker compose up -d --build
 docker compose ps                      # the gateway shows "healthy" once it is ready
 curl -fsS http://localhost/health      # with DOMAIN=:80; otherwise https://<your domain>/health
@@ -36,8 +36,8 @@ What comes up:
 
 | Service | Role | Notes |
 |---|---|---|
-| `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one) |
-| `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env` |
+| `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one); also takes `OPERATOR_SECRET` and `SESSION_SECRET` (an empty session secret is generated into the `data` volume) |
+| `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env`, with `OPERATOR_SECRET` and `SESSION_SECRET` blanked — the ingest box holds only `INGEST_SECRET` |
 | `webdist` | one-shot | Copies the SPA built inside the image into the volume Caddy serves (a fresh clone has no host `apps/web/dist` — it is gitignored) |
 | `caddy` | TLS + SPA + reverse proxy | `DOMAIN=:80` = plain HTTP (local/off-grid); `DOMAIN=your.host` = automatic Let's Encrypt |
 

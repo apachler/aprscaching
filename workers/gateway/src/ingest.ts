@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { secretOk } from "./auth.js";
+import { ingestSecretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
@@ -66,7 +66,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // an operator's device key, registered to their callsign, signs the batch — so a PUBLIC gateway
   // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
   // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
-  const trusted = secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+  const trusted = ingestSecretOk(req, env);
   let signer: { callsign: string } | null = null;
   if (!trusted) {
     signer = await verifySignedIngest(req, env, body.data.packets);

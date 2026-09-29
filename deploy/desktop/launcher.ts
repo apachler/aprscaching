@@ -6,6 +6,11 @@
  * the **browser (Web Serial/BLE)** — operator-local, per .claude/rules/ingest-locality.md; an
  * always-on local ingest is run separately (apps/ingest) when wanted. Off-grid by default.
  *
+ * It listens on 127.0.0.1 only; HOST=0.0.0.0 (or a LAN address) opts into serving the local network.
+ * Its ingest, operator and session secrets are generated on first run and kept in the app-data dir
+ * (`ingest.secret`, `operator.secret`, `session.secret`) unless the environment sets them — there is no
+ * built-in default anyone could know.
+ *
  * Assets (SPA + migrations) are embedded via assets.generated.ts when compiled; in dev (plain
  * `bun run launcher.ts`) it falls back to reading apps/web/dist + db/migrations from disk.
  */
@@ -16,11 +21,21 @@ import { appDataDir } from "./appdata.ts";
 import { BunDb } from "../../servers/bun/d1.ts";
 import { makeFsMedia } from "../../servers/bun/media.ts";
 import { BunRooms, type WsData } from "../../servers/bun/rooms.ts";
-import { handle, runScheduled, stampClientIp, type Env, type LiveEnvelope } from "../../servers/bun/gateway.ts";
+import { resolveInstanceSecrets } from "../../servers/bun/secrets.ts";
+import {
+  handle,
+  runScheduled,
+  stampClientIp,
+  stringEnvFrom,
+  type Env,
+  type LiveEnvelope,
+} from "../../servers/bun/gateway.ts";
 
 declare const BUILD_VERSION: string;
 const VERSION = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "dev";
-const PORT = Number(process.env.PORT ?? 8787);
+const PORT = Number(process.env.PORT) || 8787;
+/** Loopback unless the operator opts into the LAN with HOST. */
+const HOST = process.env.HOST || "127.0.0.1";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // ---- assets: embedded (compiled) or disk (dev) ----
@@ -65,6 +80,13 @@ for (const m of MIGRATIONS) {
   ran++;
 }
 
+// ---- secrets: each from the environment, else generated once and kept in the app-data dir ----
+const resolved = resolveInstanceSecrets(process.env, dir);
+if (!resolved.ok) {
+  console.error(`aprscaching: ${resolved.error}`);
+  process.exit(1);
+}
+
 // ---- env (runtime-neutral bindings; same shape as servers/bun + servers/node) ----
 const rooms = new BunRooms();
 const env: Env = {
@@ -84,13 +106,11 @@ const env: Env = {
       },
     }),
   },
-  INGEST_SECRET: process.env.INGEST_SECRET ?? "local-desktop",
-  INSTANCE: process.env.INSTANCE,
-  FED_PRIVATE_KEY: process.env.FED_PRIVATE_KEY,
-  FED_PEERS: process.env.FED_PEERS,
-  FED_DISCOVER: process.env.FED_DISCOVER,
+  INGEST_SECRET: resolved.secrets.INGEST_SECRET,
+  ...stringEnvFrom(process.env), // every config key the Node/Bun servers forward (ADMIN_CALLSIGNS, rate limits, …)
+  OPERATOR_SECRET: resolved.secrets.OPERATOR_SECRET,
+  SESSION_SECRET: resolved.secrets.SESSION_SECRET,
   // AGPL §13 source link: the build stamps BUILD_VERSION (git describe) as the commit/tag.
-  SOURCE_REPO: process.env.SOURCE_REPO,
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? (VERSION !== "dev" ? VERSION : undefined),
 };
 
@@ -135,6 +155,7 @@ function serveSpa(pathname: string): Response {
 const DYNAMIC = /^\/(api|auth|verify|keys|ingest|outbox|federation|badge|health|source|\.well-known)(\/|$|\?)/;
 
 const server = Bun.serve<WsData, undefined>({
+  hostname: HOST,
   port: PORT,
   async fetch(req, srv) {
     const url = new URL(req.url);
@@ -164,9 +185,14 @@ const server = Bun.serve<WsData, undefined>({
   },
 });
 
-const localUrl = `http://localhost:${server.port}`;
+// open the address actually bound: "localhost" may resolve to ::1, which a 127.0.0.1 listener does not answer
+const openHost = HOST === "0.0.0.0" || HOST.includes(":") ? "127.0.0.1" : HOST;
+const localUrl = `http://${openHost}:${server.port}`;
 console.log(
-  `aprscaching ${VERSION} → ${localUrl}   (data: ${dir}${ran ? `, ${ran} migrations applied` : ""}${embedded ? ", embedded assets" : ", disk assets"})`,
+  `aprscaching ${VERSION} → ${localUrl}   (listening on ${HOST}; data: ${dir}${ran ? `, ${ran} migrations applied` : ""}${embedded ? ", embedded assets" : ", disk assets"})`,
+);
+console.log(
+  `secrets: ingest.secret, operator.secret and session.secret in ${dir} (an ingest box or tools/admin/* needs them)`,
 );
 openBrowser(localUrl);
 

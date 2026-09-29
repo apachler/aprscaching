@@ -10,10 +10,17 @@ Your account is your callsign. There is no username and, if you use a passkey, n
     - **Create account with a passkey** (first visit) or **Sign in with passkey** (returning). Your phone,
       computer or password manager stores the passkey; it works with a fingerprint, face or device PIN.
       Passkeys need an `https://` address — on a plain `http://` instance use the email link.
-    - Or type your email and tap **Email me a link**, then open the link from your inbox. On a new account the
-      email is optional and used for recovery.
+    - Or type your email and tap **Email me a link**, then open the link from your inbox and tap **Sign in**
+      on the page it opens — opening the link alone signs nobody in. On a new account the email is optional
+      and used for recovery.
 
 **← different callsign** takes you back to step 2.
+
+## Sign out
+
+**Settings → Account → Sign out** ends the session on this device. **Sign out everywhere** ends every
+session of your account on every device — use it after losing a phone or signing in on a shared computer.
+Changing your active callsign also signs your other devices out.
 
 ![The sign-in panel](../assets/shots/signin-desktop.webp){ width="720" loading=lazy }
 

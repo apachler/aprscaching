@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Callsign validity from public licence registers. The operator's import tool reads a register file,
-// keeps only callsign, status and expiry, and posts batches to the gateway with the ingest secret; the
+// keeps only callsign, status and expiry, and posts batches to the gateway with the operator secret; the
 // gateway answers `GET /api/licence/:call` and shows the result beside a held call. The check only
 // flags: a call no register lists is "unconfirmed", never refused, and it is kept apart from
 // control-verification.
@@ -18,7 +18,7 @@ import { authEnv, call, emailSignup } from "./helpers/authflow.js";
 import { serve } from "./helpers/fedpeer.js";
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../tools/licence");
-const SECRET = { "x-ingest-secret": "test-ingest-secret" };
+const SECRET = { "x-operator-secret": "test-operator-secret" };
 const DAY = 86400;
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -93,7 +93,7 @@ function runImport(env: Env, id: string, file: string, extra: Record<string, unk
     source: sources[id],
     file,
     base: "https://gw.test",
-    secret: "test-ingest-secret",
+    secret: "test-operator-secret",
     fetch: (url: string, init: RequestInit) => serve(env)(new Request(url, init)),
     log: () => {},
     ...extra,
@@ -209,13 +209,25 @@ describe("source parsers keep only callsign, status and expiry", () => {
 });
 
 describe("importing into the gateway", () => {
-  it("refuses an import without the ingest secret", async () => {
+  it("refuses an import without the operator secret", async () => {
     const env = authEnv();
     const r = await call(env, "POST", "/api/licence/import", {
       source: "fcc",
       importedAt: nowS(),
       rows: [["K0TST", "licensed", null]],
     });
+    expect(r.status).toBe(401);
+  });
+
+  it("refuses an import carrying only the ingest secret — an import is an operator action", async () => {
+    const env = authEnv();
+    const r = await call(
+      env,
+      "POST",
+      "/api/licence/import",
+      { source: "fcc", importedAt: nowS(), rows: [["K0TST", "licensed", null]] },
+      { "x-ingest-secret": "test-ingest-secret" },
+    );
     expect(r.status).toBe(401);
   });
 

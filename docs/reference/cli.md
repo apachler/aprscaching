@@ -6,7 +6,7 @@ callsign and support key management, signing, and verification.
 ## Instance operation — `deploy/`
 
 ```bash
-cd deploy && ./setup.sh                  # first-run wizard: callsign, passcode, filter, domain; writes .env with a fresh INGEST_SECRET
+cd deploy && ./setup.sh                  # first-run wizard: callsign, passcode, filter, domain; writes .env with fresh INGEST_SECRET, OPERATOR_SECRET, SESSION_SECRET
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
 deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
@@ -17,18 +17,18 @@ See [Deployment](../operate/deployment.md) and [Running in Docker](../operate/do
 ## Operator callsign — `tools/admin/` {#operator-callsign}
 
 ```bash
-BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
 ```
 
 Confirms the operator's own callsign so the sysop role opens on a fresh instance. It posts to
-`/verify/operator` with `INGEST_SECRET`; the gateway accepts only a call listed in `ADMIN_CALLSIGNS` and
+`/verify/operator` with `OPERATOR_SECRET` (`x-operator-secret`; refused while the gateway has none); the gateway accepts only a call listed in `ADMIN_CALLSIGNS` and
 marks it verified (method `operator`), including on the account that holds it. `BASE` defaults to
 `http://127.0.0.1:8787`. See [Administration](../operate/administration.md#operator-identity).
 
 ## Licence registers — `tools/licence/` {#licence-registers}
 
 ```bash
-BASE=https://api.example.net INGEST_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
 node tools/licence/import.mjs --source all                    # every register
 node tools/licence/import.mjs --source de --file liste.pdf    # a file already downloaded (.zip, .pdf or pdftotext .txt)
 node tools/licence/import.mjs --source ised --dry-run         # parse and count; send nothing
@@ -37,7 +37,7 @@ node tools/licence/import.mjs --list                          # the registers an
 
 Imports public amateur licence registers for the [licence badge](licence-sources.md). Each register is
 downloaded and parsed on this machine; only callsign, status and expiry are posted, in batches of 1000, to
-`/api/licence/import` with `INGEST_SECRET`, and the run is closed with `/api/licence/import/finish`, which
+`/api/licence/import` with `OPERATOR_SECRET`, and the run is closed with `/api/licence/import/finish`, which
 removes calls the register no longer lists. With no `--source`, `LICENCE_SOURCES` (comma-separated) names
 the registers, for scheduled runs. `BASE` (or `--base`) defaults to `http://127.0.0.1:8787`. The PDF
 registers need `pdftotext` (poppler-utils). Exits non-zero if any register fails. See

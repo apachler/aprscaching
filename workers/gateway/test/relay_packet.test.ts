@@ -93,7 +93,10 @@ function makeDb(
 }
 
 const post = (url: string) =>
-  new Request(url, { method: "POST", headers: { "x-ingest-secret": SECRET, "content-type": "application/json" } });
+  new Request(url, {
+    method: "POST",
+    headers: { "x-ingest-secret": SECRET, "x-operator-secret": SECRET, "content-type": "application/json" },
+  });
 
 describe("rendezvous relay over the FBB carrier", () => {
   it("hub → spoke → hub: dispatch, answer off the receive path, landed answer", async () => {
@@ -107,6 +110,7 @@ describe("rendezvous relay over the FBB carrier", () => {
       INSTANCE: "oe.hub",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     const disp = await handleRelayDispatch(post("http://gw/federation/relay/oe.spoke/dispatch"), hubEnv, "oe.spoke");
     expect(disp.status).toBe(200);
@@ -162,6 +166,7 @@ describe("rendezvous relay over the FBB carrier", () => {
       INSTANCE: "oe.hub",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     await handleRelayDispatch(post("http://gw/federation/relay/oe.spoke/dispatch"), hubEnv, "oe.spoke");
     const body = String(hubSinks.bbs[0]![4]);
@@ -186,6 +191,7 @@ describe("rendezvous relay over the FBB carrier", () => {
       INSTANCE: "oe.hub",
       FED_PRIVATE_KEY: keyEnvVal,
       INGEST_SECRET: SECRET,
+      OPERATOR_SECRET: SECRET,
     } as unknown as Env;
     await handleRelayDispatch(post("http://gw/federation/relay/oe.spoke/dispatch"), hubEnv, "oe.spoke");
     const spokeSinks: Sinks = { bbs: [], queueUpdates: [] };

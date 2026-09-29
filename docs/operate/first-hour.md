@@ -8,7 +8,7 @@ It checks every item below live against your instance and tells you what still n
 
 !!! note "What the Setup wizard writes — and what it never writes"
     Security-critical settings are **environment-only by design**: secrets (`INGEST_SECRET`,
-    `SESSION_SECRET`, `FED_PRIVATE_KEY`, email/VAPID keys) and the operator list
+    `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY`, email/VAPID keys) and the operator list
     (`ADMIN_CALLSIGNS`) can never be changed through the web — a compromised session must not be
     able to rewrite them, and the server never echoes their values, only whether they are set and
     healthy. The wizard shows these **read-only** with a hint where to set them. Everything that is
@@ -21,20 +21,29 @@ Where "set the env" appears below, that means your deployment's environment:
 
 ## 1. Set the secrets
 
-- `INGEST_SECRET` — the ingest-box credential. The gateway refuses to boot with the `change-me`
-  default; `deploy/setup.sh` generates a strong one for the Docker stack.
-- `SESSION_SECRET` — optional on a single-operator box (sessions derive from `INGEST_SECRET`), but
-  a shared gateway sets a dedicated one so the machine credential and user sessions stay separate.
+Three secrets, three jobs — keep them distinct, and give an ingest box only the first:
+
+- `INGEST_SECRET` — the ingest-box credential: packets, the outbox, BBS delivery, the node mirror,
+  finds logged over APRS, remote-box polling. The gateway refuses to boot with the `change-me` default.
+- `OPERATOR_SECRET` — your scripts' credential for instance-wide configuration (the operator CLI below,
+  peer trust, forwarding partners and rules). Leave it unset and those machine paths stay closed; the web
+  sysop surface works either way. It must differ from `INGEST_SECRET`.
+- `SESSION_SECRET` — signs user sessions; nobody can sign in without it. The Node/Bun servers generate one
+  on first start and keep it beside the database when you leave it unset; on Cloudflare set it with
+  `npx wrangler secret put SESSION_SECRET`.
+
+`deploy/setup.sh` generates all three for the Docker stack; the desktop app generates them into its data
+directory.
 
 ## 2. Name yourself operator
 
 Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, and sign in with that
 callsign. The operator role needs the call control-verified — a sign-up under the name alone is not a
-sysop, and **Settings → Account** says so. Confirm it with the operator CLI, which uses `INGEST_SECRET`
+sysop, and **Settings → Account** says so. Confirm it with the operator CLI, which uses `OPERATOR_SECRET`
 and accepts only a call listed in `ADMIN_CALLSIGNS`:
 
 ```bash
-BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
 ```
 
 This needs no receiving site, so it works before step 6. The shield icon then reveals **Instance admin**
@@ -44,7 +53,8 @@ Without `ADMIN_CALLSIGNS` there is no web sysop at all — the admin endpoints s
 ## 3. Fix your public identity
 
 - `INSTANCE` — the canonical domain (e.g. `oe.example.net`); it names your records in federation.
-- `APP_URL` — the app origin, used for magic-link redirects and credentialed CORS.
+- `APP_URL` — the app origin, used for magic-link redirects and credentialed CORS. Without it (or
+  `CORS_ORIGINS`) no other origin may send a signed-in user's cookie.
 - `RP_ID` — the registrable domain passkeys bind to. **Choose this before users register
   passkeys**; changing it later invalidates them.
 

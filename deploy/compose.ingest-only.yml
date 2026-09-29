@@ -30,5 +30,8 @@ services:
       APRSIS_FILTER: ${APRSIS_FILTER}
       INGEST_URL: ${INGEST_URL} # e.g. https://gateway.<you>.workers.dev/ingest
       INGEST_SECRET: ${INGEST_SECRET} # or per-operator peer key when feeding a shared gateway
+      # the ingest box holds only INGEST_SECRET — never the gateway's operator or session secret
+      OPERATOR_SECRET: ""
+      SESSION_SECRET: ""
     restart: unless-stopped
     logging: *default-logging

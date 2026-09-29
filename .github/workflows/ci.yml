@@ -66,10 +66,13 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: start node-gateway + smoke
-        # INGEST_SECRET must be shared by BOTH the gateway (boot guard) AND the smoke client
-        # (it sends x-ingest-secret to authorise writes) → set it at step scope, not inline.
+        # INGEST_SECRET and OPERATOR_SECRET must be shared by BOTH the gateway AND the smoke client (it
+        # sends x-ingest-secret for ingest-plane writes and x-operator-secret for operator calls) → set
+        # them at step scope, not inline. SESSION_SECRET is the gateway's own session-signing key.
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
+          OPERATOR_SECRET: ci-conformance-operator-secret
+          SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
           # Tier A is default-deny — it needs the operator to attest their receiving sites. The smoke
           # suite feeds its RF fixes as direct hearings on OE8XXX's own TNC, so name it as attested.
@@ -94,14 +97,15 @@ jobs:
         working-directory: workers/gateway
         run: CI=1 npx wrangler d1 migrations apply aprscaching --local
       - name: start wrangler dev + smoke
-        # The Worker reads INGEST_SECRET from .dev.vars; the smoke client reads it from its own
-        # environment — both must carry the same value or the ingest-authorised writes 401.
+        # The Worker reads its secrets from .dev.vars; the smoke client reads INGEST_SECRET and
+        # OPERATOR_SECRET from its own environment — both must carry the same values or writes 401.
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
+          OPERATOR_SECRET: ci-conformance-operator-secret
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
           # FIRST_PARTY_SITES=OE8XXX names the smoke suite's receiving site as attested (Tier A is default-deny).
-          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\n' "$KEY" > workers/gateway/.dev.vars
+          printf 'INSTANCE=ci.worker\nFED_PRIVATE_KEY=%s\nINGEST_SECRET=ci-conformance-ingest-secret\nOPERATOR_SECRET=ci-conformance-operator-secret\nSESSION_SECRET=ci-conformance-session-secret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\n' "$KEY" > workers/gateway/.dev.vars
           (cd workers/gateway && CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &)
           BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs
           BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
@@ -116,9 +120,11 @@ jobs:
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: publisher + subscriber + federation smoke
-        # Shared by the two gateways (boot guard) AND the federation smoke client (ingest writes).
+        # Shared by the two gateways AND the federation smoke client (ingest writes, operator calls).
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
+          OPERATOR_SECRET: ci-conformance-operator-secret
+          SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
         run: |
           KEY=$(node tools/fedkey/genkey.mjs --raw)
@@ -158,6 +164,8 @@ jobs:
       - name: start bun-gateway + smoke
         env:
           INGEST_SECRET: ci-conformance-ingest-secret
+          OPERATOR_SECRET: ci-conformance-operator-secret
+          SESSION_SECRET: ci-conformance-session-secret
           ALLOW_DEV_TOKENS: "1"
           # Tier A is default-deny — name the smoke suite's receiving site (OE8XXX) as attested.
           FIRST_PARTY_SITES: OE8XXX

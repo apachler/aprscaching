@@ -7,7 +7,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { requireSysop } from "./admin.js";
+import { requireIngestOrOperator } from "./admin.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -36,8 +36,8 @@ export async function handleNodeNodes(req: Request, env: Env): Promise<Response>
     ).results;
     return json({ nodes: rows });
   }
-  const gate = await requireSysop(req, env, { allowIngest: true });
-  if (gate) return gate; // sysop or ingest mirror
+  const gate = await requireIngestOrOperator(req, env);
+  if (gate) return gate; // the ingest box mirroring learned routes, or the operator
   const b = (await req.json().catch(() => ({}))) as {
     dest?: string;
     alias?: string;

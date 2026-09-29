@@ -12,8 +12,12 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 SUITES="${*:-${SUITES:-smoke geofence}}"
-# The gateway refuses to boot on the 'change-me' default secret — generate a per-run one.
+# The gateway refuses to boot on the 'change-me' default secret — generate per-run ingest, operator and
+# session secrets (the smoke client needs the first two; the third keeps the gateway from writing a
+# session.secret file beside the throwaway database).
 SECRET="${INGEST_SECRET:-smoke-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')}"
+OPSECRET="${OPERATOR_SECRET:-smoke-op-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')}"
+SESSECRET="${SESSION_SECRET:-smoke-sess-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')}"
 # Tier A is default-deny: it requires the operator to attest their own receiving sites. The smoke
 # suite gates its RF fixes through OE8XXX, so name it here for the conformance run to reach Tier A.
 FIRST_PARTY_SITES="${FIRST_PARTY_SITES:-OE8XXX}"
@@ -25,7 +29,8 @@ run_suite() {
   db="$(mktemp -u)-${suite}.db"
   log="$(mktemp)"
   # start in its own process group so we can reap pnpm AND its node/tsx children on teardown
-  setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" PORT="$port" ALLOW_DEV_TOKENS=1 \
+  setsid env DB_PATH="$db" INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" \
+    PORT="$port" ALLOW_DEV_TOKENS=1 \
     FIRST_PARTY_SITES="$FIRST_PARTY_SITES" \
     pnpm --filter @aprscaching/node-gateway start >"$log" 2>&1 &
   pid=$!
@@ -36,7 +41,7 @@ run_suite() {
     sleep 0.5
   done
   echo "== ${suite} (:${port}) =="
-  if BASE="http://127.0.0.1:${port}" INGEST_SECRET="$SECRET" node "tools/smoke/${suite}.mjs"; then
+  if BASE="http://127.0.0.1:${port}" INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" node "tools/smoke/${suite}.mjs"; then
     rc=0
   else
     rc=1; echo "--- server log tail ---"; tail -8 "$log"

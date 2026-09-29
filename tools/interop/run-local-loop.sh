@@ -6,6 +6,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 export INGEST_SECRET="${INGEST_SECRET:-interop-local-secret-01}"
+export OPERATOR_SECRET="${OPERATOR_SECRET:-interop-local-operator-01}"
 # A stale gateway on the loop ports would silently serve old code/state to the assertions —
 # refuse to run rather than test the wrong thing.
 for port in 9601 9602; do
@@ -23,10 +24,10 @@ trap cleanup EXIT
 # sandboxes must not spend 30 s per reconnect on an unreachable public server.
 COMMON="APRSIS_HOST=127.0.0.1 APRSIS_PORT=1 BATCH_MS=500"
 
-setsid env DB_PATH="$DBA" PORT=9601 INSTANCE=oe.ia INGEST_SECRET="$INGEST_SECRET" FED_PRIVATE_KEY='' \
+setsid env DB_PATH="$DBA" PORT=9601 INSTANCE=oe.ia INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwa.log 2>&1 &
 PIDS+=($!)
-setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib INGEST_SECRET="$INGEST_SECRET" FED_PRIVATE_KEY='' \
+setsid env DB_PATH="$DBB" PORT=9602 INSTANCE=oe.ib INGEST_SECRET="$INGEST_SECRET" OPERATOR_SECRET="$OPERATOR_SECRET" FED_PRIVATE_KEY='' \
   bash -c "exec pnpm --filter @aprscaching/node-gateway start" >/tmp/interop-gwb.log 2>&1 &
 PIDS+=($!)
 for i in $(seq 1 60); do

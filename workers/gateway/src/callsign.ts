@@ -17,7 +17,7 @@
  *    DNSSEC-validated answer carries it (verify_ampr.ts).
  *  - `lotw` — the holder signs a challenge with the key of their ARRL Logbook of The World callsign
  *    certificate, which chains to a LoTW CA the operator trusts (verify_lotw.ts).
- *  - `operator` — the instance operator confirms an `ADMIN_CALLSIGNS` call with the ingest secret
+ *  - `operator` — the instance operator confirms an `ADMIN_CALLSIGNS` call with the operator secret
  *    (`tools/admin/verify-call.mjs`), which bootstraps the sysop role on a fresh instance.
  *  - `sysop` — a sysop verifies a call by hand for someone out of range of every attested site, with a
  *    note saying how; it is listed, revocable and logged in `account_events`.
@@ -26,7 +26,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, accountHoldsCall, secretOk, timingSafeEqual } from "./auth.js";
+import { sessionAccountId, accountHoldsCall, timingSafeEqual, operatorSecretOk } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { serviceCall } from "./radiolog.js";
 import { adminCalls } from "./admin.js";
@@ -209,13 +209,12 @@ export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response
 }
 
 /**
- * POST /verify/operator {callsign} with `x-ingest-secret` — the operator CLI confirms the operator's own
- * call. Only a call listed in `ADMIN_CALLSIGNS` qualifies, so the ingest secret (which also sits on the
- * ingest box) cannot verify arbitrary calls.
+ * POST /verify/operator {callsign} with `x-operator-secret` — the operator CLI confirms the operator's own
+ * call. Only a call listed in `ADMIN_CALLSIGNS` qualifies, so even the operator secret cannot verify
+ * arbitrary calls. Unset OPERATOR_SECRET ⇒ closed; the ingest secret never reaches it.
  */
 export async function handleOperatorVerify(req: Request, env: Env): Promise<Response> {
-  if (!secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET))
-    return new Response("unauthorized", { status: 401 });
+  if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
   const cs = baseOf(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });

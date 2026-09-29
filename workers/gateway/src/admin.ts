@@ -5,11 +5,12 @@
  * instance, not to platform users. The operator is named by the `ADMIN_CALLSIGNS` env (comma-separated
  * licensed calls); a request is a sysop request when its session is bound to one of those calls, held
  * by the session's account and control-verified.
- * Absent env ⇒ no web sysop at all (the config endpoints are locked; the ingest still uses INGEST_SECRET).
+ * Absent env ⇒ no web sysop at all. Scripts reach the same endpoints with OPERATOR_SECRET; INGEST_SECRET
+ * authorises only the ingest plane and never operator configuration.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign, sessionAccountId, secretOk } from "./auth.js";
+import { sessionCallsign, sessionAccountId, ingestSecretOk, operatorSecretOk } from "./auth.js";
 import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
@@ -42,28 +43,36 @@ export async function isSysop(req: Request, env: Env): Promise<boolean> {
   return !!held && (await isCallsignVerified(env, base));
 }
 
-/** Ingest machine credential (shared with the forwarding pool / node mirror). */
-const ingestOk = (req: Request, env: Env): boolean => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
-
 /**
  * Guard a sysop-only endpoint: returns a 401/403 Response to short-circuit, or null to proceed. Pass
- * `{ allowIngest: true }` for endpoints the operator-local ingest also legitimately reads/writes with its
- * secret (e.g. the forwarding partner list the forwarder loads, or the node-table mirror it posts).
+ * `{ allowOperatorSecret: true }` for endpoints the operator also drives from scripts with
+ * `x-operator-secret`. The ingest secret is never accepted here.
  */
 export async function requireSysop(
   req: Request,
   env: Env,
-  opts: { allowIngest?: boolean } = {},
+  opts: { allowOperatorSecret?: boolean } = {},
 ): Promise<Response | null> {
-  if (opts.allowIngest && ingestOk(req, env)) return null;
+  if (opts.allowOperatorSecret && operatorSecretOk(req, env)) return null;
   if (await isSysop(req, env)) return null;
-  // A machine that PRESENTED an ingest secret but it was wrong → 401 (bad credential), matching the
-  // established ingest-auth contract. A browser with no session / a non-operator session → 403.
-  if (opts.allowIngest && req.headers.get("x-ingest-secret") !== null)
+  // A machine that PRESENTED an operator secret but it was wrong (or none is configured) → 401 (bad
+  // credential). A browser with no session / a non-operator session → 403.
+  if (opts.allowOperatorSecret && req.headers.get("x-operator-secret") !== null)
     return new Response("unauthorized", { status: 401 });
   if (adminCalls(env).size === 0)
     return json({ error: "no instance operator configured (set ADMIN_CALLSIGNS)" }, { status: 403 });
   return json({ error: "instance-operator (sysop) access required" }, { status: 403 });
+}
+
+/**
+ * Guard an ingest-plane endpoint the ingest box itself calls with its INGEST_SECRET — delivering what its
+ * radios heard (the NET/ROM node mirror, heard federation beacons and sync pages) or reading the
+ * forwarding partner list its FBB scheduler dials. The operator reaches the same endpoints too.
+ */
+export async function requireIngestOrOperator(req: Request, env: Env): Promise<Response | null> {
+  if (ingestSecretOk(req, env)) return null;
+  if (req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
+  return requireSysop(req, env, { allowOperatorSecret: true });
 }
 
 /**

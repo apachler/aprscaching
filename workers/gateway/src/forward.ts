@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { secretOk } from "./auth.js";
+import { ingestSecretOk } from "./auth.js";
 /**
  * forward.ts (gateway) — BBS forwarding + hierarchical routing. Loads the forward table
  * into the pure ForwardRouter (@aprscaching/packet), resolves a destination to a partner, keeps the FBB
@@ -9,7 +9,7 @@ import { secretOk } from "./auth.js";
  */
 import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
-import { requireSysop } from "./admin.js";
+import { requireSysop, requireIngestOrOperator } from "./admin.js";
 import { parseHierAddr, ForwardRouter, type ForwardRule } from "@aprscaching/packet";
 import { isFedBbsCategory, decodeFedBbsBatch } from "@aprscaching/shared";
 import { applyFedBbsBulletin, type FedBbsApplyResult } from "./federation_sync.js";
@@ -78,7 +78,7 @@ export async function handleWhitePages(req: Request, env: Env): Promise<Response
 
 /** Operator forward-rule CRUD: GET list · POST add · DELETE /:id. Sysop session or the operator secret. */
 export async function handleForwardRules(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   if (req.method === "GET") {
     const rows = (
@@ -97,7 +97,7 @@ export async function handleForwardRules(req: Request, env: Env): Promise<Respon
 }
 
 export async function handleForwardRuleDelete(req: Request, env: Env, id: number): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_forward_rules WHERE id=?").bind(id).run();
   return json({ ok: true });
@@ -173,10 +173,14 @@ const partnerRow = (r: any): ForwardPartner & { id: number } => ({
   enabled: !!r.enabled,
 });
 
-/** Operator partner CRUD: GET list · POST create (upsert by call). Sysop session or the operator secret
- *  (the forwarder ingest loads the list with its INGEST_SECRET). Never a plain user. */
+/** Operator partner CRUD: GET list · POST create (upsert by call). Writes take a sysop session or the
+ *  operator secret; the list read is also open to the ingest box, whose FBB scheduler dials it with its
+ *  INGEST_SECRET. Never a plain user. */
 export async function handleForwardPartners(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate =
+    req.method === "GET"
+      ? await requireIngestOrOperator(req, env)
+      : await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   if (req.method === "GET") {
     const rows = (
@@ -220,7 +224,7 @@ export async function handleForwardPartners(req: Request, env: Env): Promise<Res
 }
 
 export async function handleForwardPartnerDelete(req: Request, env: Env, id: number): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   await env.DB.prepare("DELETE FROM bbs_partners WHERE id=?").bind(id).run();
   return json({ ok: true });
@@ -292,7 +296,7 @@ export function inboundRow(
   };
 }
 
-const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+const ingestOk = ingestSecretOk;
 
 /** GET /api/bbs/forward/pool?partner=CALL&limit= — local messages routed to that partner, not yet forwarded. */
 export async function handleForwardPool(req: Request, env: Env): Promise<Response> {

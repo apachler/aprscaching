@@ -162,10 +162,10 @@ export function stampClientIp(headers: Headers, socketAddr: string | undefined, 
  *  - x-real-ip: OVERWRITTEN by our Node/Bun bridges with the socket address (stampClientIp), so a
  *    client-supplied value never survives to this point on the self-host runtimes.
  */
-export function clientIp(req: Request, env?: Env): string {
+export function clientIp(req: Request, env: Env): string {
   const cf = req.headers.get("cf-connecting-ip");
   if (cf) return cf;
-  if (env?.TRUST_PROXY === "1") {
+  if (env.TRUST_PROXY === "1") {
     const xff = (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim();
     if (xff) return xff;
   }

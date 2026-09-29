@@ -22,7 +22,15 @@ import {
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import { sessionCallsign, sessionAccountId, accountHoldsCall, secretOk, isWithdrawnCall, displayCall } from "./auth.js";
+import {
+  sessionCallsign,
+  sessionAccountId,
+  sessionIdentity,
+  accountHoldsCall,
+  isWithdrawnCall,
+  displayCall,
+  ingestSecretOk,
+} from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { coarsenConfig } from "./corroborate_privacy.js";
@@ -137,7 +145,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
 }
 
 function ingestOk(req: Request, env: Env): boolean {
-  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+  return ingestSecretOk(req, env);
 }
 function baseCall(c: string): string {
   return c.toUpperCase().split("-")[0] ?? "";
@@ -151,7 +159,7 @@ function baseCall(c: string): string {
  * without breaking the over-APRS logging path.
  */
 export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
-  const s = await sessionCallsign(req, env);
+  const s = (await sessionIdentity(req, env))?.callsign;
   // the withdrawn marker names an erased identity, never someone acting now
   if (s) return isWithdrawnCall(s) ? null : s.toUpperCase();
   if (ingestOk(req, env) && fallback && !isWithdrawnCall(fallback)) return fallback.toUpperCase();
@@ -479,7 +487,7 @@ export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number
 
   // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
   // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
-  const sessionCall = await sessionCallsign(req, env);
+  const sessionCall = (await sessionIdentity(req, env))?.callsign ?? null;
   let loggerCall: string;
   if (sessionCall) {
     loggerCall = sessionCall.toUpperCase();

@@ -8,6 +8,8 @@ import net from "node:net";
 
 const ACS = process.env.ACS ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "interop-ci-secret-0001";
+// forwarding partners and rules are operator configuration: they take OPERATOR_SECRET
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "interop-ci-operator-0001";
 const BPQ = { host: process.env.BPQ_HOST ?? "127.0.0.1", port: Number(process.env.BPQ_PORT ?? 8010) };
 let failures = 0;
 const ok = (name, cond, detail = "") => {
@@ -20,7 +22,7 @@ async function api(method, path, body) {
   try {
     const res = await fetch(ACS + path, {
       method,
-      headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
+      headers: { "content-type": "application/json", "x-ingest-secret": SECRET, "x-operator-secret": OPERATOR_SECRET },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return { status: res.status, data: await res.json().catch(() => null) };

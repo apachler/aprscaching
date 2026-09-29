@@ -1126,15 +1126,16 @@ export async function upsertRemoteFind(env: Env, rec: FeedRecord, origin: string
 }
 
 // ---- endpoints ----
+/** POST /federation/sync — run a pull from every peer now (the scheduled sync runs the same). Operator-only. */
 export async function handleFederationSync(req: Request, env: Env): Promise<Response> {
-  if (!secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET))
-    return new Response("unauthorized", { status: 401 });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (gate) return gate;
   const summary = await syncAllPeers(env);
   return json({ ok: true, ...summary });
 }
 
 export async function handleFederationPeers(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate; // operator observability
   await seedPeers(env);
   const rows = (
@@ -1163,11 +1164,11 @@ export async function handleFederationPeers(req: Request, env: Env): Promise<Res
 
 /**
  * Operator control: set a peer's trust level. Sysop-only (signed-in instance operator) or the
- * ingest secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
+ * operator secret, so the operator's Instance-admin → Federation surface can promote (`trusted`), demote
  * (`unvetted`), or quarantine (`blocked`) a peer. Promotion stamps `approved_at` once.
  */
 export async function handlePeerTrust(req: Request, env: Env): Promise<Response> {
-  const gate = await requireSysop(req, env, { allowIngest: true });
+  const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
   const b = (await req.json().catch(() => null)) as { url?: string; trust?: string } | null;
   const trust = b?.trust as TrustLevel | undefined;

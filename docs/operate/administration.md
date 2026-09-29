@@ -12,15 +12,38 @@ that verification succeeds, so the operator confirms their call once after first
 CLI:
 
 ```bash
-BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
 ```
 
-It calls `POST /verify/operator` with the ingest secret, which verifies a call listed in `ADMIN_CALLSIGNS`
+It calls `POST /verify/operator` with the operator secret (`x-operator-secret`), which verifies a call listed in `ADMIN_CALLSIGNS`
 (method `operator`) and nothing else. `GET /api/admin/whoami` tells the web app whether to reveal the operator
 surface; for the account that holds a listed call not yet confirmed it answers `pending: "verify"`, and
 **Settings → Account** tells that operator to run the CLI. Nobody else learns anything about the list. Every operator write is enforced by `requireSysop` on the server — hiding a control in
-the UI is never the gate. If `ADMIN_CALLSIGNS` is unset, the web operator surface is locked entirely (the
-operator-local ingest box can still act with `INGEST_SECRET`).
+the UI is never the gate. If `ADMIN_CALLSIGNS` is unset, the web operator surface is locked entirely.
+
+## Machine credentials
+
+Two shared secrets reach the gateway from machines, and they never overlap:
+
+| Secret | Header | Authorises | Held by |
+|---|---|---|---|
+| `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
+| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: `POST /verify/operator`, `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
+
+The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a
+stolen ingest box cannot take over an account or the instance. Leave `OPERATOR_SECRET` unset to close the
+machine paths altogether; the web operator surface is unaffected. Sessions are signed with the separate
+`SESSION_SECRET`.
+
+## Sessions
+
+A session names the account behind it and that account's session generation, and is honoured only while
+the account exists at that generation and still holds the session's call. Erasing an account, changing the
+active callsign, and **Settings → Account → Sign out everywhere** (`POST /auth/logout-all`) each end every
+outstanding session of that account; an erased account's cookie never acts as the next holder of the same
+call. To sign out every user at once, set `SESSION_EPOCH` to the current Unix time or rotate
+`SESSION_SECRET`. Revoking a manual callsign verification does not end sessions — the account still holds
+the call, and transmitting and the sysop role check verification on every request.
 
 !!! warning
     `ADMIN_CALLSIGNS` is security-critical and env-only — it must never be settable at runtime. It works
@@ -113,7 +136,7 @@ operator's machine — the ingest box, or any computer with Node 22+ — downloa
 callsign, status and expiry, and posts them to the gateway with `INGEST_SECRET`:
 
 ```bash
-BASE=https://api.example.net INGEST_SECRET=… node tools/licence/import.mjs --source fcc,ised,at,de
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,at,de
 node tools/licence/import.mjs --list              # the registers it knows
 ```
 
@@ -127,7 +150,7 @@ FCC rebuilds its full file weekly and the other registers change more slowly, so
 
 ```bash
 # /etc/cron.d/aprscaching-licence — Sundays 04:30
-30 4 * * 0  aprs  cd /opt/aprscaching && BASE=http://127.0.0.1:8787 INGEST_SECRET=… LICENCE_SOURCES=fcc,ised,at,de node tools/licence/import.mjs
+30 4 * * 0  aprs  cd /opt/aprscaching && BASE=http://127.0.0.1:8787 OPERATOR_SECRET=… LICENCE_SOURCES=fcc,ised,at,de node tools/licence/import.mjs
 ```
 
 ```ini
@@ -162,7 +185,8 @@ preferences, media, enabling tools, and their own data actions — is **not** on
 ## Import heritage places
 
 Places from other programs — summits, parks, castles, islands — can be imported as caches. An import runs
-on request, from any machine that knows the instance's `INGEST_SECRET`; running it again updates the
+on request, from any machine that knows the instance's `INGEST_SECRET` (the importer is part of the ingest
+plane); running it again updates the
 places in place. Every place carries its source and a link back, duplicates across sources collapse to
 the ham-radio program's entry, and imported places never leave your instance.
 
@@ -195,8 +219,13 @@ You can drive your own ingest box from the web app without opening any inbound p
 commands and the box pulls them over its existing outbound connection (`/api/box/:id/*`), runs them, and
 reports each result back to the command log in **Shack → Remote control**.
 
-1. On the box, set `BOX_ID` to a name of your choice (for example `pi-home`) and restart the ingest.
-2. In the app, enter the same name as the **Box ID**. The first signed-in account to control a box owns it.
+1. On the box, set `BOX_ID` to a name of your choice (for example `pi-home`) and restart the ingest. At start
+   the box prints a one-time pairing code to its log:
+   `[box] pairing code for pi-home: ABCD-EFGH (valid 15 min)`.
+2. In the app, enter the same name as the **Box ID**, then the **Pairing code**, and press **Pair box**. The
+   box then belongs to your account; no other account can send it commands or read its log. The code is
+   single-use and expires after 15 minutes — restart the box for a fresh one. Pairing again with a new code
+   moves the box to whoever enters it, so only someone who can see the box's output can take it over.
 3. Press **Status**: within a few seconds the log shows the box's uptime and which functions are on.
 
 Status and switching the digipeater, IGate or transmit **off** work with `BOX_ID` alone. Anything that keys
@@ -221,8 +250,9 @@ gates — the transmit switch, the command age and the rate limit.
 
 ## Data protection (GDPR / DSGVO)
 
-Sensitive account actions are authorised by a passkey session or a signature from a device key registered to
-the callsign — there is no central password.
+Sensitive account actions are authorised by the account's own session or a signature from a device key
+registered to the callsign — there is no central password. A device key is registered only by the signed-in
+holder of the call; no machine secret registers one.
 
 - **Export** (`POST /api/account/:call/export`) returns a full machine-readable copy of the account's data.
 - **Erase** (`/delete`) covers the whole account: every base call it holds. It anonymises finds, owned

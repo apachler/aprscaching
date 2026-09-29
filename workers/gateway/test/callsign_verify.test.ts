@@ -30,7 +30,12 @@ function makeEnv(): Env {
       return [];
     },
   };
-  return { DB: db, INGEST_SECRET: "trusted-secret", ADMIN_CALLSIGNS: "OE8APR" } as unknown as Env;
+  return {
+    DB: db,
+    INGEST_SECRET: "trusted-secret",
+    OPERATOR_SECRET: "operator-secret",
+    ADMIN_CALLSIGNS: "OE8APR",
+  } as unknown as Env;
 }
 
 const req = (path: string, body: unknown, headers: Record<string, string> = {}) =>
@@ -54,16 +59,18 @@ describe("callsign control-verification entry points", () => {
     expect(res.status).toBe(401);
   });
 
-  it("the operator bootstrap needs the ingest secret", async () => {
+  it("the operator bootstrap needs the operator secret — never the ingest secret", async () => {
     expect((await handleOperatorVerify(req("/verify/operator", { callsign: "OE8APR" }), makeEnv())).status).toBe(401);
-    const wrong = req("/verify/operator", { callsign: "OE8APR" }, { "x-ingest-secret": "nope" });
+    const wrong = req("/verify/operator", { callsign: "OE8APR" }, { "x-operator-secret": "nope" });
     expect((await handleOperatorVerify(wrong, makeEnv())).status).toBe(401);
+    const ingest = req("/verify/operator", { callsign: "OE8APR" }, { "x-ingest-secret": "trusted-secret" });
+    expect((await handleOperatorVerify(ingest, makeEnv())).status).toBe(401);
   });
 
   it("the operator bootstrap confirms only an ADMIN_CALLSIGNS call", async () => {
-    const other = req("/verify/operator", { callsign: "DL1AAA" }, { "x-ingest-secret": "trusted-secret" });
+    const other = req("/verify/operator", { callsign: "DL1AAA" }, { "x-operator-secret": "operator-secret" });
     expect((await handleOperatorVerify(other, makeEnv())).status).toBe(403);
-    const own = req("/verify/operator", { callsign: "oe8apr-9" }, { "x-ingest-secret": "trusted-secret" });
+    const own = req("/verify/operator", { callsign: "oe8apr-9" }, { "x-operator-secret": "operator-secret" });
     const res = await handleOperatorVerify(own, makeEnv());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ verified: true, callsign: "OE8APR", method: "operator" });

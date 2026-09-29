@@ -16,6 +16,7 @@ services:
         ipv4_address: 172.31.93.10
     environment:
       INGEST_SECRET: interop-ci-secret-0001
+      OPERATOR_SECRET: interop-ci-operator-0001
       INSTANCE: oe.interop
       # AXUDP port peering with every packet peer on the compose network
       AXUDP_PORT: "10093"

@@ -5,6 +5,10 @@
  * (`GET /api/box/:id/commands`), executes each one, and reports the outcome
  * (`POST /api/box/:id/commands/ack`). No inbound port is ever opened on the box.
  *
+ * Pairing: at start the box asks the gateway for a one-time pairing code (`POST /api/box/:id/pair`, with
+ * its secret) and prints it. The operator enters that code in the web app to link the box to their
+ * account — only someone who can see this box's output can claim it. Restart the box for a fresh code.
+ *
  * The gateway already requires a control-verified callsign for every transmit kind. The box enforces
  * its own, independent gates, because the shared ingest secret also lets a trusted backend enqueue:
  *  - remote transmit is off unless the operator opts in on the box (`BOX_TX=1`);
@@ -139,7 +143,30 @@ export class BoxPoller {
   start(): void {
     this.timer = setInterval(() => void this.tick(), this.o.pollMs ?? 5000);
     this.timer.unref?.();
+    void this.requestPairingCode();
     void this.tick();
+  }
+
+  /** Obtain a one-time pairing code from the gateway and print it for the operator. Never throws. */
+  async requestPairingCode(): Promise<string | null> {
+    try {
+      const r = await this.fetch(this.url("/pair"), {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-ingest-secret": this.o.secret },
+        body: "{}",
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const { code, expiresAt } = (await r.json()) as { code?: string; expiresAt?: number };
+      if (!code) throw new Error("no code in the answer");
+      const mins = expiresAt ? Math.max(1, Math.round((expiresAt * 1000 - this.now()) / 60_000)) : 15;
+      this.log(
+        `[box] pairing code for ${this.o.boxId}: ${code} (valid ${mins} min) — enter it under Shack → Remote box to link this box to your account`,
+      );
+      return code;
+    } catch (e) {
+      this.log(`[box] pairing code unavailable (${(e as Error).message}); restart the box to try again`);
+      return null;
+    }
   }
 
   stop(): void {

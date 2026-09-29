@@ -23,6 +23,10 @@ aarch64 image itself, so it never asks for an OCID you would have to go and find
 | SSH public key | Console access to the `ubuntu` user. |
 | Availability domain | Raise it and re-apply if OCI reports it is out of host capacity. |
 
+The instance generates its operator and session secrets itself on first boot (`OPERATOR_SECRET`,
+`SESSION_SECRET` in `/opt/aprscaching/deploy/.env`), so they never pass through Terraform state. Read
+`OPERATOR_SECRET` from that file over SSH to run `tools/admin/verify-call.mjs`.
+
 Then **Plan**, then **Apply**. Point DNS at the `public_ip` output; the *Open the instance* link goes
 straight there. The first boot builds the images, so allow a few minutes before the site answers.
 

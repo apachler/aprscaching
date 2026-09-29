@@ -29,6 +29,7 @@ type Sess = {
   email: string | null;
   signedIn: boolean;
   signOut: () => void;
+  signOutEverywhere: () => Promise<void>;
   refresh: () => void;
 };
 

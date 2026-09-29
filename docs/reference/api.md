@@ -10,12 +10,16 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 |------|---------|
 | **public** | No authentication. |
 | **rate-limited** | Public, throttled per IP (and higher with a free API key). |
-| **session** | A passkey or email-verified cookie session. |
+| **session** | A passkey or email-verified cookie session, signed with `SESSION_SECRET`. It names the account and its session generation, and resolves only while that account exists at that generation and holds the session's call. |
 | **actor** | A session **or** `x-ingest-secret` — the "web write behind sign-in / RF write over APRS" dual path. |
-| **x-ingest-secret** | Matches `INGEST_SECRET` — a trusted operator backend (the ingest box). |
-| **sysop** | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS`, held by their account and control-verified (or `x-ingest-secret`). Locked if `ADMIN_CALLSIGNS` is unset. |
-| **signed-body** | An Ed25519 assertion (`key`, `sig`, `at`) registered to the callsign, or a matching session. |
+| **x-ingest-secret** | Matches `INGEST_SECRET` — the ingest box. Ingest-plane only: never operator configuration, device keys or sessions. |
+| **x-operator-secret** | Matches `OPERATOR_SECRET` — the operator's scripts. Closed while `OPERATOR_SECRET` is unset. |
+| **sysop** | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS`, held by their account and control-verified, or `x-operator-secret` where marked. Locked if `ADMIN_CALLSIGNS` is unset. |
+| **signed-body** | An Ed25519 assertion (`key`, `sig`, `at`) registered to the callsign, or a session of the account that holds the call. |
 | **x-relay-secret / x-fed-secret / wx-key** | Federation relay / federation submit-corroborate / weather-station keys. |
+
+Cross-origin requests carry credentials only from `APP_URL` and `CORS_ORIGINS`; with neither set the
+gateway answers `Access-Control-Allow-Origin: *` without credentials.
 
 ## Public read API
 
@@ -79,25 +83,28 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 |--------|------|---------|------|
 | GET | `/.well-known/aprscaching` | Instance discovery document | public |
 | GET | `/federation/caches`, `/finds`, `/bulletins`, `/keys`, `/tombstones`, `/account-moves`, `/registry` | Signed, cursor-paged feeds | public |
-| GET · POST | `/federation/peers` · `/peers/trust` | Peer list + health · set trust | sysop |
-| POST | `/federation/peers/44net` | Add a peer by ARDC-verified `<call>.ampr.org` binding (DNSSEC auto-admits, else confirm) | sysop |
+| GET · POST | `/federation/peers` · `/peers/trust` | Peer list + health · set trust | sysop or x-operator-secret |
+| POST | `/federation/peers/44net` | Add a peer by ARDC-verified `<call>.ampr.org` binding (DNSSEC auto-admits, else confirm) | sysop or x-operator-secret |
 | GET | `/federation/sync/:type` | CBOR sync page of signed fedwire frames (the canonical wire; see the federation wire format) | public |
-| POST | `/federation/sync` | Pull from all peers | x-ingest-secret |
+| POST | `/federation/sync` | Pull from all peers | sysop or x-operator-secret |
 | POST | `/federation/corroborate` | Cross-instance corroboration query | public (rate-limited; `x-fed-secret` if configured) |
 | POST | `/federation/notify` | Gossip "come pull" ping | public |
 | POST | `/federation/submit` | Hub accepts a spoke's signed records | x-fed-secret (`FED_SUBMIT_SECRET`) |
-| POST | `/federation/frames` | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding) | signature-verified |
-| GET · POST | `/federation/beacon` | Beacon-tier presence: serve our signed single-frame record · apply a heard one | public (trust-gated apply) |
-| POST | `/federation/bbs/enqueue` | Queue federation records for the FBB store-and-forward carrier | x-ingest-secret |
-| POST · GET | `/federation/relay/:instance/query`, `/lease`, `/answer`, `/result/:id`, `/dispatch` | The poll-based rendezvous relay | x-relay-secret |
+| POST | `/federation/frames` | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding); frames are signature-verified | x-ingest-secret, sysop or x-operator-secret |
+| GET · POST | `/federation/beacon` | Beacon-tier presence: serve our signed single-frame record · apply a heard one (trust-gated) | public · x-ingest-secret, sysop or x-operator-secret |
+| POST | `/federation/bbs/enqueue` | Queue federation records for the FBB store-and-forward carrier | sysop or x-operator-secret |
+| POST · GET | `/federation/relay/:instance/query`, `/lease`, `/answer`, `/result/:id` | The poll-based rendezvous relay | x-relay-secret |
+| POST | `/federation/relay/:instance/dispatch` | Pack a packet-only spoke's queued queries into an FBB bulletin | sysop or x-operator-secret |
 
 ## Remote box
 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
-| POST | `/api/box/:id/command` | Enqueue a command (TX kinds need a verified callsign) | session or x-ingest-secret |
+| POST | `/api/box/:id/pair` | The box obtains a one-time pairing code (`{ code, expiresAt }`, 15 min) to print for its operator | x-ingest-secret |
+| POST | `/api/box/:id/claim` | Link the box to the signed-in account with that code (`{ code }`); single-use | session |
+| POST | `/api/box/:id/command` | Enqueue a command (TX kinds need a verified callsign); `403 { pair: true }` until the box is paired to the session's account | session (paired owner) or x-ingest-secret |
 | GET · POST | `/api/box/:id/commands` · `/commands/ack` | Box leases · acks commands | x-ingest-secret |
-| GET | `/api/box/:id/log` | Operator view of command activity | actor |
+| GET | `/api/box/:id/log` | Operator view of command activity | session (paired owner) or x-ingest-secret |
 
 ## Admin / sysop
 
@@ -111,10 +118,10 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) |
 | POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
-| GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table · MHeard |
-| GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners |
+| GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table (public read; the POST mirror takes x-ingest-secret, sysop or x-operator-secret) · MHeard |
+| GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners (the partner-list read is also open to x-ingest-secret, for the ingest box's scheduler) |
 
-All admin writes are **sysop**-gated server-side.
+All admin writes are **sysop**-gated server-side; each also accepts `x-operator-secret` for scripts.
 
 ## Ingest & BBS backend
 
@@ -130,7 +137,9 @@ All admin writes are **sysop**-gated server-side.
 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
-| POST | `/auth/passkey/*`, `/auth/email/*`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out. `/auth/claim`, passkey registration and email verification answer with a `licence` result for the call (nothing is stored) | public → session |
+| POST | `/auth/passkey/*`, `/auth/email/start`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out. `/auth/claim` and passkey registration answer with a `licence` result for the call (nothing is stored) | public → session |
+| GET · POST | `/auth/email/verify` | The magic link: GET shows a confirm page (or `{ confirm: true }` to an API client) and never signs in; POST `{ token }` (JSON or the confirm form) spends the token and opens a session, and a JSON answer carries the call's `licence` result. A browser POST from another origin is refused | public → session |
+| POST | `/auth/logout-all` | Sign out every session of the account, on every device | session |
 | GET/POST | `/auth/session`, `/auth/callsign(s)`, `/auth/profile` | Session + base-callsign management. `GET/POST /auth/callsigns` carry a `licence` result per call, beside `verified` | session |
 | POST | `/verify/aprs/start` | Start callsign control-verification: returns `{ code, to, text, expiresAt }`, the message to transmit; sends nothing. Completed when an attested site hears `text` on the air (a TNC, or a MeshCom node hearing it directly over LoRa) — method `rf_heard` | session (holds the call) |
 | GET | `/verify/aprs/status?callsign=` | `{ verified }` for the base call | public |
@@ -139,11 +148,11 @@ All admin writes are **sysop**-gated server-side.
 | POST | `/verify/ampr/check` | `{ callsign }` → looks the record up over DoH; verifies (method `ampr_dns`) only when the name exists, the answer is DNSSEC-validated and the TXT carries the current code. `422` with the reason otherwise, `502` when the resolver fails | session (holds the call) |
 | POST | `/verify/lotw/start` | `{ callsign }` → `{ challenge, message, algorithm, expiresAt }`: the exact `message` to sign (valid 15 min); `503` when no LoTW CA is configured | session (holds the call) |
 | POST | `/verify/lotw/complete` | `{ callsign, certificates: [base64 DER…], signature: base64 }` — RSASSA-PKCS1-v1_5/SHA-256 over `message` with the LoTW callsign certificate's key; verifies (method `lotw`) when the signature, the chain to a trusted LoTW CA, the dates and the certificate's callsign check out | session (holds the call) |
-| POST | `/verify/operator` | Verify an `ADMIN_CALLSIGNS` call (method `operator`) — the operator CLI | x-ingest-secret |
+| POST | `/verify/operator` | Verify an `ADMIN_CALLSIGNS` call (method `operator`) — the operator CLI | x-operator-secret |
 | GET | `/api/licence/:call` | Callsign **validity** from imported public licence registers: `{ callsign, status, source?, sourceName?, expiresAt?, checkedAt? }`, `status` one of `licensed`, `expired`, `unconfirmed`. The call is normalised to its home call (`OE/DL1ABC/P` → `DL1ABC`). Never control-verification; see [Licence registers](licence-sources.md) | rate-limited |
 | GET | `/api/licence` | The imported registers: `{ sources: [{ source, sourceName, rows, importedAt }] }` | rate-limited |
-| POST | `/api/licence/import` · `/api/licence/import/finish` | Register import from `tools/licence/import.mjs`: batches of `{ source, importedAt, rows: [[callsign, status, expiresAt]] }` (≤ 1000), then `{ source, importedAt, count }` closes the run and removes calls the register no longer lists (`409` and no pruning when the count differs) | x-ingest-secret |
-| POST · GET | `/keys/register` · `/keys/:call` | Register a device key · list a callsign's keys | session · public |
+| POST | `/api/licence/import` · `/api/licence/import/finish` | Register import from `tools/licence/import.mjs`: batches of `{ source, importedAt, rows: [[callsign, status, expiresAt]] }` (≤ 1000), then `{ source, importedAt, count }` closes the run and removes calls the register no longer lists (`409` and no pruning when the count differs) | x-operator-secret |
+| POST · GET | `/keys/register` · `/keys/:call` | Register a device key for a call the session's account holds · list a callsign's keys | session · public |
 | POST | `/api/account/:call/export`, `/delete`, `/bundle`, `/move`, `/api/account/import` | GDPR export/erase + account portability | signed-body |
 | GET/PUT | `/api/prefs` · `/api/notify/prefs` | Preferences · notification settings | session |
 | GET · POST · DELETE | `/api/watch/alerts` · `/api/watch/seen` · `/api/watch/:id` | Watchlist alerts · mark seen · stop watching | session |
@@ -163,7 +172,7 @@ All admin writes are **sysop**-gated server-side.
 `GET /health` (readiness; `?live` for liveness) · `/source` + `/.well-known/source` (running source) ·
 `/imprint` + `/privacy` (legal pages from `OPERATOR_*`) · `/sitemap` (human-readable site map) ·
 `/support` + `/api/support` · `GET/POST /api/support/prefs` + `POST /api/support/confirm`
-(supporter recognition; prefs are session-gated, confirm is ingest-secret) · `/sitemap.xml` +
+(supporter recognition; prefs are session-gated, confirm is x-operator-secret) · `/sitemap.xml` +
 `/api/sitemap` (JSON) + `/robots.txt` · `/feeds/*.xml` (RSS: activity, caches, bulletins, leaderboard,
 per-user) · `/badge/:call.svg` (embeddable network badge) · `/embed` + `/embed/qr.svg` (embeddable map +
 QR) · `DELETE /api/views/:id` (remove a saved view) · `POST /api/logs`, `/api/logs/find` (aliases of the
