@@ -8,8 +8,9 @@
  * frame heard here decodes identically. Chromium-only + session-bound; callers MUST feature-detect
  * and provide a non-RF fallback.
  *
- * Trust note: a frame heard directly on the operator's own radio has no independent IGate,
- * so the provenance derivation keeps it Tier C — a browser receiver can't self-corroborate to Tier A.
+ * Trust note: only a receiving site this instance attests, delivering through its own ingest, carries
+ * first-party attestation. A frame the browser heard is not attested, so the provenance derivation keeps it
+ * Tier C — a browser receiver can't self-corroborate to Tier A.
  */
 import {
   kissFrames,

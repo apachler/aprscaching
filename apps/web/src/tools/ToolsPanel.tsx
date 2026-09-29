@@ -15,7 +15,7 @@ import {
 } from "@aprscaching/tools";
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
 import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/audioDecode.js";
-import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost, TOOLS_TOAST_EVENT } from "./host.js";
+import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost } from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
 import { ToolPanels } from "./ToolPanels.js";
 import { Badge, Switch, useToast, useModalDialog } from "../ui/index.js";
@@ -143,13 +143,6 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
       live = false;
     };
   }, []);
-
-  // Surface beacon/TX feedback the shared host emits (it can't hold a React toast itself).
-  useEffect(() => {
-    const h = (e: Event) => toast((e as CustomEvent<string>).detail);
-    window.addEventListener(TOOLS_TOAST_EVENT, h);
-    return () => window.removeEventListener(TOOLS_TOAST_EVENT, h);
-  }, [toast]);
 
   // Live panels (mheard, etc.) update their spec from background events, not React state — tick a
   // gentle re-render so the web console reflects new frames without any per-tool wiring.

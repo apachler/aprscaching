@@ -13,9 +13,13 @@ A find is only as trustworthy as the evidence behind it. Every find carries exac
 
 | Tier | Name | Requirement |
 |------|------|-------------|
-| **A** | RF-corroborated | The station was heard directly on the air by a receiving site the operator attests — the site's own TNC or MeshCom node, delivered by its own ingest box — that the finder does **not** operate, on a plausible track. An APRS-IS copy (`qAR,<site>`) never counts. |
-| **B** | App-corroborated | The finder's own device reported a first-party geolocation that matches the cache at log time. |
-| **C** | IS-only | A bare APRS-IS beacon reached the instance — recorded, but not independently corroborated. |
+| **A** | Radio-verified | The station was heard directly on the air by a receiving site the operator attests — the site's own TNC or MeshCom node, delivered by its own ingest box — that the finder does **not** operate, on a plausible track. An APRS-IS copy (`qAR,<site>`) never counts. |
+| **B** | Location-verified | The finder's own device reported a first-party geolocation that matches the cache at log time. |
+| **C** | Logged | Nothing independent placed the finder at the cache — at most a bare APRS-IS beacon reached the instance. Recorded, but not verified. |
+
+The app uses these names everywhere a find's trust shows, with the letter as a secondary label. They grade a
+single find; a verified *callsign* (control of the licence) is a separate fact about the account and never
+wears a tier's name or colour.
 
 A bare internet packet can never reach Tier B by itself: Tier B requires the independent *app* reading, and
 Tier A requires independent *RF* evidence. Each instance sets a **minimum accepted tier** (site default

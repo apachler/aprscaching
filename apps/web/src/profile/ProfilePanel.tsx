@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
+import { Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
 import { RadioLogs } from "./RadioLogs.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
@@ -85,9 +85,7 @@ export function ProfilePanel(props: {
           )}
           <p>
             {props.verified ? (
-              <Badge kind="found" title="You verified control of this callsign over the air">
-                ✓ control-verified
-              </Badge>
+              <CallVerifiedBadge label="control-verified" title="You verified control of this callsign" />
             ) : (
               <>
                 <Badge title="Verify control of your callsign to enable transmit">unverified</Badge>{" "}
@@ -127,7 +125,7 @@ export function ProfilePanel(props: {
             </p>
           )}
           {profile && (profile.corroborations ?? 0) > 0 && (
-            <p title="Tier-A finds your IGate(s) helped verify">
+            <p title="Finds your receiving stations heard on the air and made Radio-verified">
               <Badge kind="tierA">⇅ Infrastructure</Badge> <strong>{profile.corroborations}</strong> finds corroborated
             </p>
           )}

@@ -5,6 +5,7 @@
  * ("tierA" | "tierB" | "tierC" | "found" | "dnf" | …) or omit it for the neutral chip.
  */
 import type { ReactNode } from "react";
+import { Icon } from "./Icon.js";
 
 export function Badge(props: { kind?: string; title?: string; className?: string; children: ReactNode }) {
   const cls = ["badge", props.kind, props.className].filter(Boolean).join(" ");
@@ -15,26 +16,52 @@ export function Badge(props: { kind?: string; title?: string; className?: string
   );
 }
 
-/** Trust-tier chip with the standard short label (RF / App / tier letter). */
+/**
+ * The one vocabulary for a find's trust tier, used on every surface. Tier A is a transmission heard on
+ * the air by a receiving station this instance attests, through that station's own ingest — never a copy
+ * relayed over APRS-IS. Tier B is the finder's own device location at the cache. Tier C is a find on
+ * record that nothing corroborated.
+ */
+export const TIER_NAME: Record<"A" | "B" | "C", string> = {
+  A: "Radio-verified",
+  B: "Location-verified",
+  C: "Logged",
+};
+
+/** One line on what each tier means, for help text and titles. */
+export const TIER_DESC: Record<"A" | "B" | "C", string> = {
+  A: "Heard on the air at the cache by this instance's own receiving station, with a plausible track.",
+  B: "The finder's device location matched the cache when the find was logged.",
+  C: "On record, but neither a receiving station nor the finder's device placed them at the cache.",
+};
+
+/**
+ * Trust-tier chip: the tier's name, with the tier letter as a small secondary label when `letter` is set.
+ * A find that did not meet its cache's minimum reads as Logged, whatever evidence it had.
+ */
 export function TierBadge(props: {
   tier?: "A" | "B" | "C" | null;
   verified?: boolean;
-  prefix?: string;
+  letter?: boolean;
   title?: string;
 }) {
-  if (props.verified === false) {
-    return (
-      <Badge kind="tierC" title={props.title}>
-        {props.prefix ? `${props.prefix} · ` : ""}unverified
-      </Badge>
-    );
-  }
-  const t = props.tier ?? "C";
-  const label = t === "A" ? "RF" : t === "B" ? "App" : String(t);
+  const t = props.verified === false ? "C" : (props.tier ?? "C");
   return (
-    <Badge kind={`tier${t}`} title={props.title}>
-      {props.prefix ? `${props.prefix} · ` : ""}
-      {label}
+    <Badge kind={`tier${t}`} title={props.title ?? TIER_DESC[t]}>
+      {TIER_NAME[t]}
+      {props.letter && <span className="badge-sub"> · Tier {t}</span>}
+    </Badge>
+  );
+}
+
+/**
+ * Callsign control-verified chip: the account proved it controls the licence. It is about the account,
+ * not about any find, so it wears the neutral chip with a tick — never a trust-tier colour.
+ */
+export function CallVerifiedBadge(props: { label?: string; title?: string }) {
+  return (
+    <Badge kind="callok" title={props.title ?? "Control of this callsign is verified"}>
+      <Icon name="check" size={12} /> {props.label ?? "verified"}
     </Badge>
   );
 }

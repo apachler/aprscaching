@@ -21,7 +21,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { markVerified } from "./callsign.js";
+import { markVerified, listeningSites } from "./callsign.js";
 import {
   parseCertificate,
   pemBlocks,
@@ -122,9 +122,16 @@ export async function verifyLotwChain(ders: Uint8Array[], anchors: Certificate[]
   return { ok: false, error: "the certificate does not chain to a LoTW CA this instance trusts" };
 }
 
-/** GET /verify/methods — which verification methods this instance offers. */
+/**
+ * GET /verify/methods — which verification methods this instance offers. On-air verification needs an
+ * attested receiving site; `rfSites` names the ones listening.
+ */
 export function verifyMethods(env: Env): Response {
-  return json({ methods: { rf_heard: true, ampr_dns: true, lotw: lotwAnchors(env).length > 0 } });
+  const rfSites = listeningSites(env);
+  return json({
+    methods: { rf_heard: rfSites.length > 0, ampr_dns: true, lotw: lotwAnchors(env).length > 0 },
+    rfSites,
+  });
 }
 
 /** POST /verify/lotw/start {callsign} — issue a challenge and the exact message to sign. */

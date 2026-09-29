@@ -33,18 +33,20 @@ around the clock, use an [ingest box](../operate/rf-ingest.md) on a Raspberry Pi
 
 ## Send what you hear to an instance
 
-Turn on **Forward to a gateway** and choose **Auth**:
+Once a radio is connected (or the field station holds frames heard off-grid), turn on **Forward to a
+gateway**; the **Auth** choice appears below it:
 
 - **signed (YOURCALL)** — for a public instance such as aprscaching.net. Packets are signed with your
   browser's key; no password is needed. A public instance accepts only **your own station's** packets this
   way (any SSID of your callsign), so a stranger can't inject traffic in your name — which also means other
   stations your radio hears, and Meshtastic nodes, stay in your browser.
-- **secret (self-host)** — for your own instance. Open **Self-host gateway**, enter the **Gateway base URL**
-  and the instance's **Ingest secret** (the `INGEST_SECRET` its sysop set). The secret stays in this browser.
+- **secret (self-host)** — for your own instance. Enter the **Gateway base URL** and the instance's
+  **Ingest secret** (the `INGEST_SECRET` its sysop set). The URL is remembered in this browser; the secret is kept in memory for the session only and is entered again after a reload.
   With the secret, everything your radio hears is forwarded.
 
-Packets heard through your browser are always **tier C** for find verification: your own radio is not an
-independent witness of your own position. They still put stations on the map and messages in the log.
+Packets heard through your browser never verify a find — at most it is **Logged** (tier C): your own radio
+is not an independent witness of your own position, and only the instance's own receiving station can make a
+find **Radio-verified**. **What your radio can verify** under the connect buttons says the same. They still put stations on the map and messages in the log.
 
 ## Transmit (optional)
 

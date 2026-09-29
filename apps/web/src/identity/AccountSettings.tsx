@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { API_BASE, changeCallsign, addCallsign, listCallsigns, type HeldCallsign } from "../api.js";
+import {
+  API_BASE,
+  trimTrailingSlashes,
+  changeCallsign,
+  addCallsign,
+  listCallsigns,
+  type HeldCallsign,
+} from "../api.js";
 import {
   Group,
   Badge,
+  CallVerifiedBadge,
   LicenceBadge,
   licenceLabel,
-  Icon,
   Advanced,
   CommandBlock,
   useConfirm,
@@ -145,9 +152,7 @@ export function AccountSettings(props: {
             </div>
             <div className="setrow-c">
               {c.verified ? (
-                <Badge kind="tierA" title="callsign-control verified">
-                  <Icon name="check" size={12} /> verified
-                </Badge>
+                <CallVerifiedBadge />
               ) : (
                 <button
                   className="link"
@@ -234,7 +239,7 @@ function OperatorVerify(props: { callsign: string; onDone: () => void }) {
       <CommandBlock label="Docker stack (in deploy/)" command={`docker compose exec gateway ${script}`} />
       <CommandBlock
         label="From a checkout (OPERATOR_SECRET from your .env)"
-        command={`BASE=${API_BASE.replace(/\/+$/, "")} OPERATOR_SECRET=<operator secret> ${script}`}
+        command={`BASE=${trimTrailingSlashes(API_BASE || window.location.origin)} OPERATOR_SECRET=<operator secret> ${script}`}
       />
       <button onClick={props.onDone}>I&apos;ve run it — check again</button>
     </div>

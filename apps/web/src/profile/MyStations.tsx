@@ -88,8 +88,8 @@ export function MyStations(props: { callsign: string }) {
         tap any station pin to add it directly.
       </p>
       <p className="muted fine">
-        Running infrastructure feeds the commons: every IGate and digi you operate helps corroborate other people's
-        finds (Tier&nbsp;A). It's recognised, never gated.
+        Running infrastructure feeds the commons: a receiving station this instance attests makes other people&apos;s
+        finds Radio-verified when it hears them. It&apos;s recognised, never gated.
       </p>
       <div className="row end">
         <button onClick={becomeCache}>★ Become a cache</button>
