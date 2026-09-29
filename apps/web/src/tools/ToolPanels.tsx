@@ -29,7 +29,7 @@ function Node({ n }: { n: PanelNode }) {
         <div className="tp-bar">
           <span className="tp-k">{n.label}</span>
           <span className="tp-track" role="progressbar" aria-valuenow={n.value} aria-valuemax={n.max}>
-            <span className={`tp-fill${toneClass(n.tone)}`} style={{ width: `${pct}%` } as CSSProperties} />
+            <span className={`tp-fill${toneClass(n.tone)}`} style={{ "--pct": `${pct}%` } as CSSProperties} />
           </span>
         </div>
       );
@@ -60,7 +60,7 @@ function Node({ n }: { n: PanelNode }) {
       return (
         <div className="tp-blocks" style={{ "--tp-cols": n.cols } as CSSProperties} role="img" aria-label="block art">
           {n.cells.map((cell, i) => (
-            <span key={i} style={cell.c != null ? ({ color: `var(--ansi-${cell.c})` } as CSSProperties) : undefined}>
+            <span key={i} className={cell.c != null ? `ansi-fg-${cell.c}` : undefined}>
               {cell.ch === " " ? " " : cell.ch}
             </span>
           ))}

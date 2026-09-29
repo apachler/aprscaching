@@ -1,0 +1,2 @@
+/* uPlot's stylesheet, in the vendor cascade layer (loaded with the lazy graph chunk). */
+@import "uplot/dist/uPlot.min.css" layer(vendor);

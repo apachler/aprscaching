@@ -194,8 +194,8 @@ export function NearbyPanel(props: {
                 <Icon
                   name="navigation"
                   size={18}
-                  className="tcol B"
-                  style={{ transform: `rotate(${s.course ?? 0}deg)` }}
+                  className="tcol B heading-ic"
+                  style={{ "--course": `${s.course ?? 0}deg` } as CSSProperties}
                 />
                 <div className="srow-b">
                   <div className="srow-call">{s.callsign}</div>

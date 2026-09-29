@@ -1,0 +1,76 @@
+/* Quick-tour coach marks. */
+@layer components {
+  /* Quick-tour coach marks. Two presentations of one accessible dialog: a step naming an on-screen
+   element rings it and anchors the card beside it; a step without one keeps the bottom-anchored
+   dialog, which is also the fallback wherever CSS anchor positioning is missing. */
+  .tour-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dialog);
+    display: grid;
+    align-items: end;
+    justify-items: center;
+    padding: 0 var(--sp-7) calc(var(--sp-10) + env(safe-area-inset-bottom));
+    background: color-mix(in oklch, var(--shade) 50%, transparent);
+    animation: tour-in 0.18s ease;
+  }
+  .tour-card {
+    width: min(460px, 100%);
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--r-9);
+    padding: var(--sp-7) var(--sp-8);
+    box-shadow: var(--elev-10);
+  }
+  .tour-card h3 {
+    margin: var(--sp-1) 0 var(--sp-2);
+    color: var(--heading);
+  }
+  .tour-stepn {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .tour-actions {
+    margin-top: var(--sp-6);
+    gap: var(--sp-3);
+  }
+  @keyframes tour-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tour-scrim {
+      animation: none;
+    }
+  }
+  /* The ring is the coach mark. It carries the anchor name too, so moving the card is a class toggle
+   in JS and nothing more — the placement itself stays declarative. */
+  .tour-target {
+    anchor-name: --tour-target;
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: var(--r-7);
+  }
+  @supports (anchor-name: --x) {
+    /* An anchored step must show what it points at, so the scrim stops dimming and only keeps its
+     click-to-dismiss job. */
+    .tour-scrim[data-anchored="true"] {
+      background: transparent;
+    }
+    .tour-scrim[data-anchored="true"] .tour-card {
+      position: fixed;
+      position-anchor: --tour-target;
+      position-area: block-end;
+      position-try-fallbacks: flip-block, flip-inline;
+      max-width: min(460px, calc(100vw - 32px));
+      margin: var(--sp-4);
+    }
+  }
+}

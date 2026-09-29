@@ -1,0 +1,49 @@
+/* Single-purpose helpers (spacing, flex, field widths). Their layer is last, so a utility on an element always applies. */
+@layer utilities {
+  /* layout utilities — token-driven spacing so JSX carries no inline style for these (css.md) */
+  .mt-1 {
+    margin-top: var(--sp-1);
+  }
+  .mt-2 {
+    margin-top: var(--sp-2);
+  }
+  .mt-3 {
+    margin-top: var(--sp-3);
+  }
+  .mt-5 {
+    margin-top: var(--sp-5);
+  }
+  .mt-6 {
+    margin-top: var(--sp-6);
+  }
+  .m-0 {
+    margin: 0;
+  }
+  .mb-0 {
+    margin-bottom: 0;
+  }
+  .ml-2 {
+    margin-left: var(--sp-2);
+  }
+  .flex-1 {
+    flex: 1;
+  }
+  .row.gap-2 {
+    gap: var(--sp-2);
+  }
+  .row.wrap {
+    flex-wrap: wrap;
+  }
+  .field-sm {
+    max-width: 8rem;
+  }
+  .field-xs {
+    max-width: 4.5rem;
+  }
+  .fw-normal {
+    font-weight: 400;
+  }
+  .block {
+    display: block;
+  }
+}

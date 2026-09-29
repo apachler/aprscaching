@@ -1,0 +1,178 @@
+/* Shack tools (plugins) and their declarative panels. */
+@layer surfaces {
+  /* tools (plugins) panel */
+  .tools-panel {
+    display: grid;
+    gap: var(--sp-4);
+  }
+  .tools-list {
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .tool-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .tool-meta {
+    min-width: 0;
+  }
+  .tool-perms {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .tool-sub {
+    border-top: 1px dashed var(--line);
+    padding-top: var(--sp-3);
+    display: grid;
+    gap: var(--sp-2);
+  }
+  .tool-sub textarea,
+  .tool-sub input {
+    width: 100%;
+  }
+  .tool-out {
+    background: var(--surface-2);
+    border-radius: var(--r-6);
+    padding: var(--sp-3);
+    font-size: var(--fs-sm);
+    margin: 0;
+    white-space: pre-wrap;
+  }
+  .tool-prompt {
+    border: 1px solid var(--warn);
+    border-radius: var(--r-md);
+    padding: var(--sp-4) var(--sp-5);
+    background: color-mix(in oklch, var(--warn) 8%, transparent);
+  }
+  .tool-surfaces {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .tool-surfaces .badge {
+    margin-right: var(--sp-1);
+  }
+  /* declarative tool panels (the `panel` capability) — a tool's typed nodes rendered by the host */
+  .tool-panels {
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .tool-panel {
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+    display: grid;
+    gap: var(--sp-2);
+  }
+  .tool-panel-h {
+    margin: 0;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+  }
+  .tp-text {
+    margin: 0;
+    font-size: var(--fs-md);
+  }
+  .tp-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    font-size: var(--fs-md);
+  }
+  .tp-k {
+    color: var(--muted);
+  }
+  .tp-v {
+    font-family: var(--font-mono);
+  }
+  .tp-bar {
+    display: grid;
+    gap: 3px;
+    font-size: var(--fs-sm);
+  }
+  .tp-track {
+    display: block;
+    height: 8px;
+    border-radius: var(--r-3);
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  /* the fill length arrives as --pct */
+  .tp-fill {
+    display: block;
+    width: var(--pct);
+    height: 100%;
+    background: var(--accent);
+  }
+  .tp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm-up);
+  }
+  .tp-table th {
+    text-align: left;
+    color: var(--muted);
+    font-size: var(--fs-2xs-up);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0 var(--sp-3) 3px 0;
+  }
+  .tp-table td {
+    padding: 1px var(--sp-3) 1px 0;
+    font-family: var(--font-mono);
+  }
+  .tp-muted {
+    color: var(--muted);
+  }
+  .tp-accent,
+  .tp-fill.tp-accent {
+    color: var(--accent);
+  }
+  .tp-ok {
+    color: var(--ok);
+  }
+  .tp-fill.tp-ok {
+    background: var(--ok);
+  }
+  .tp-warn {
+    color: var(--warn);
+  }
+  .tp-fill.tp-warn {
+    background: var(--warn);
+  }
+  .tp-bad {
+    color: var(--bad);
+  }
+  .tp-fill.tp-bad {
+    background: var(--bad);
+  }
+  /* CP437/ANSI cell grid (GP GIP) — a monospace grid; each cell one glyph, colour from the ANSI token. */
+  .tp-blocks {
+    display: grid;
+    grid-template-columns: repeat(var(--tp-cols, 1), 1ch);
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    line-height: 1.05;
+    white-space: pre;
+    color: var(--accent);
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .tp-blocks > span {
+    display: block;
+    text-align: center;
+  }
+  /* tool-contributed map markers (map surface) — a small tokened glyph */
+  .tool-map-pin {
+    font-size: var(--fs-xl);
+    line-height: 1;
+    cursor: default;
+    text-shadow: 0 0 2px var(--surface);
+  }
+}

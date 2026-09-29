@@ -162,7 +162,7 @@ export function FilterPanel(props: {
           Share this view
         </button>
       </div>
-      <div className="row between mt-5">
+      <div className="row between mt-6">
         <button className="link" onClick={() => setFilters({ types: [], q: "" })}>
           Clear all
         </button>

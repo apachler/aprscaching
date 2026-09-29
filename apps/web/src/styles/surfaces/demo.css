@@ -1,0 +1,57 @@
+/* Design harness (?demo=): real components side by side, without hardware. */
+@layer surfaces {
+  .demo-shell {
+    height: 100vh;
+  }
+  .demo-bench {
+    min-height: 100vh;
+    background: var(--surface);
+    padding: var(--sp-9);
+  }
+  @supports (height: 1dvh) {
+    .demo-shell {
+      height: 100dvh;
+    }
+    .demo-bench {
+      min-height: 100dvh;
+    }
+  }
+  .demo-map {
+    background: var(--surface-2);
+  }
+  .demo-head {
+    margin-bottom: var(--sp-6);
+  }
+  .demo-head h1 {
+    margin: 0;
+    font-size: var(--fs-4xl);
+  }
+  .demo-head p {
+    margin: var(--sp-1) 0 0;
+  }
+  .demo-row {
+    display: flex;
+    gap: var(--sp-9);
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  /* neutralise the app's absolute / docked .panel positioning so each surface sizes to its content */
+  .demo-surface > .panel,
+  .demo-surface.panel {
+    position: static;
+    inset: auto;
+    width: var(--panel-w);
+    max-width: var(--panel-w);
+    height: auto;
+    box-shadow: none;
+  }
+  .demo-surface,
+  .demo-surface * {
+    min-width: 0;
+  }
+  .demo-surface .pt-out,
+  .demo-surface .pt-mon-out {
+    overflow: auto;
+    max-width: 100%;
+  }
+}

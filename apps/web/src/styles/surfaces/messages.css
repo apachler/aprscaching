@@ -1,0 +1,30 @@
+/* APRS messages inbox. */
+@layer surfaces {
+  /* APRS messages inbox (first-class surface, separate from BBS) */
+  .msg-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .msg-row {
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-6);
+    border: 1px solid transparent;
+  }
+  .msg-row + .msg-row {
+    margin-top: var(--sp-1);
+  }
+  .msg-row.mine {
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+    border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  }
+  .msg-h {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: 0.86rem;
+  }
+  .msg-body {
+    margin-top: var(--sp-0);
+  }
+}

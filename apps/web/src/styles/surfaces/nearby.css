@@ -1,0 +1,159 @@
+/* Nearby list: cache cards and station rows. */
+@layer surfaces {
+  /* ---- Nearby: operator cache cards + station rows ---- */
+  .nearby-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: var(--sp-0) 0 var(--sp-5);
+  }
+  .nearby-grid {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+  .cardsec {
+    padding: var(--sp-0) var(--sp-0) var(--sp-3);
+  }
+  .cardsec.top {
+    padding-top: var(--sp-6);
+  }
+  .cardlist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  /* a wide slot (a landscape phone sheet, a wide panel) lays the cards out two across */
+  @container panel (min-width: 40rem) {
+    .cardlist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .ccard {
+    position: relative;
+    display: flex;
+    gap: var(--sp-4);
+    padding: var(--sp-5);
+    border-radius: var(--r-7);
+    cursor: pointer;
+    border: 1px solid var(--hair);
+    background: var(--surface-2);
+    overflow: hidden;
+    text-align: left;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+  }
+  .ccard:hover {
+    border-color: color-mix(in oklch, var(--brand) 40%, var(--line));
+  }
+  .ccard:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 1px;
+  }
+  .ccard.active {
+    border-color: color-mix(in oklch, var(--brand) 55%, var(--line));
+    background: color-mix(in oklch, var(--brand) 10%, var(--surface-2));
+  }
+  .ccard.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--brand);
+  }
+  .ccard-ico {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border-radius: var(--r-6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--fs-xl);
+    background: color-mix(in oklch, var(--tc, var(--accent)) 20%, transparent);
+    color: var(--tc, var(--accent));
+  }
+  .ccard-b {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .ccard-name {
+    font-weight: 600;
+    font-size: var(--fs-md-up);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ccard-sub {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ccard-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-3);
+  }
+  .dtpill {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: var(--fs-2xs-up);
+    color: var(--ink-2);
+    background: var(--field-bg);
+    padding: 3px var(--sp-2);
+    border-radius: var(--r-4);
+  }
+  .ccard-dist {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .srow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px var(--sp-5);
+    border-radius: var(--r-md);
+    border: 1px solid var(--hair);
+    margin-bottom: 5px;
+  }
+  /* a moving station's heading arrow, turned by its course (--course) */
+  .heading-ic {
+    transform: rotate(var(--course, 0deg));
+  }
+  .srow-b {
+    flex: 1;
+    min-width: 0;
+  }
+  .srow-call {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: var(--fs-sm-up);
+  }
+  .srow-sub {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .srow-heard {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+}

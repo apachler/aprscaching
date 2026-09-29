@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from "react";
 import {
   TerminalSession,
   parseAnsi,
@@ -56,12 +56,10 @@ function expand(text: string, vars: { call: string; chan: string }): string {
   return expandMacros(text, withNow({ call: vars.call, mycall: vars.call, chan: vars.chan, peer: vars.chan }));
 }
 
-function ansiStyle(fg: number | null, bg: number | null, bold: boolean): React.CSSProperties {
-  const s: React.CSSProperties = {};
-  if (fg != null) s.color = `var(--ansi-${fg})`;
-  if (bg != null) s.background = `var(--ansi-${bg})`;
-  if (bold) s.fontWeight = 700;
-  return s;
+/** The ANSI colour classes (styles/components/ansi.css) for one parsed span. */
+function ansiClass(fg: number | null, bg: number | null, bold: boolean): string | undefined {
+  const c = [fg != null && `ansi-fg-${fg}`, bg != null && `ansi-bg-${bg}`, bold && "ansi-b"].filter(Boolean);
+  return c.length ? c.join(" ") : undefined;
 }
 
 /** Render a line of (possibly ANSI) text into coloured spans. */
@@ -71,7 +69,7 @@ function AnsiLine({ text }: { text: string }) {
   return (
     <>
       {spans.map((s, i) => (
-        <span key={i} style={ansiStyle(s.fg, s.bg, s.bold)}>
+        <span key={i} className={ansiClass(s.fg, s.bg, s.bold)}>
           {s.text}
         </span>
       ))}
@@ -384,7 +382,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                   if (hidden) return null;
                   return (
                     <div key={i} className="pt-mon-line">
-                      <span className="pt-mon-tag" style={{ color: `var(${colorVar})` }}>
+                      <span className="pt-mon-tag" style={{ "--tag": `var(${colorVar})` } as CSSProperties}>
                         {TYPE_TAG[type as StationType]}
                       </span>{" "}
                       <span className="mono">

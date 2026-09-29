@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import "./styles.css";
+import "./styles/index.css";
 import { ToastProvider, ConfirmProvider, tourSeen } from "./ui/index.js";
 import { useSession } from "./identity/useSession.js";
 import { Landing } from "./Landing.js";

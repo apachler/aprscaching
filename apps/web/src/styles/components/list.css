@@ -1,0 +1,16 @@
+/* Keyset pagination (Load more). */
+@layer components {
+  /* keyset "Load more" control — centered, recedes; the list bottoms out cleanly when hidden */
+  .loadmore {
+    display: flex;
+    justify-content: center;
+    padding: var(--sp-3) 0 var(--sp-0);
+  }
+  .loadmore button {
+    min-height: var(--hit);
+  }
+  .loadmore button[aria-busy="true"] {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}

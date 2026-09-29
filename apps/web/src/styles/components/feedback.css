@@ -1,0 +1,40 @@
+/* Inline alerts and loading skeletons. */
+@layer components {
+  /* inline alert: a one-line condition tied to the surface it sits in — a warn-tinted bar with the text in ink */
+  .inline-note {
+    padding: var(--sp-2) var(--sp-3);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--r-sm);
+    background: color-mix(in oklch, var(--warn) 12%, transparent);
+    color: var(--ink);
+    font-size: var(--fs-md);
+  }
+  /* loading skeleton: placeholder bars while a surface's code or data arrives; opacity-only pulse */
+  .skeleton {
+    display: grid;
+    gap: var(--sp-4);
+    padding: var(--sp-3) 0;
+  }
+  .skeleton span {
+    display: block;
+    height: 14px;
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+  .skeleton span:nth-child(2) {
+    width: 80%;
+  }
+  .skeleton span:nth-child(3) {
+    width: 55%;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton span {
+      animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes skeleton-pulse {
+      to {
+        opacity: 0.45;
+      }
+    }
+  }
+}

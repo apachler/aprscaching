@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import * as maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import "./styles.css";
+import "./styles/vendor/maplibre.css";
+import "./styles/index.css";
 import {
   listCaches,
   getCache,

@@ -1,0 +1,36 @@
+/* The confirmation dialog. */
+@layer components {
+  /* ---- the one confirmation dialog (ui/Confirm.tsx) ---- */
+  .confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dialog);
+    background: color-mix(in oklch, var(--page-bg) 55%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-7);
+  }
+  .confirm-dialog {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-9);
+    padding: var(--sp-7);
+    width: 100%;
+    max-width: 26rem;
+  }
+  .confirm-dialog h3 {
+    margin: 0 0 var(--sp-3);
+    font-size: var(--fs-lg);
+  }
+  .confirm-body {
+    color: var(--muted);
+    font-size: var(--fs-md-up);
+    margin-bottom: var(--sp-6);
+  }
+  .confirm-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}

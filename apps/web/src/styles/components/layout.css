@@ -1,0 +1,19 @@
+/* The .row flex primitive and its alignment modifiers. */
+@layer components {
+  .row {
+    display: flex;
+    gap: var(--sp-4);
+    align-items: center;
+  }
+  .row > label {
+    flex: 1;
+  }
+  .row.end {
+    justify-content: flex-end;
+    margin-top: var(--sp-5);
+  }
+  .row.between {
+    justify-content: space-between;
+    align-items: center;
+  }
+}

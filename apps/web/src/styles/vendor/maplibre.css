@@ -1,0 +1,2 @@
+/* MapLibre's own stylesheet, placed in the vendor cascade layer: above the element defaults, below every app layer. */
+@import "maplibre-gl/dist/maplibre-gl.css" layer(vendor);

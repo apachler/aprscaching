@@ -1,0 +1,41 @@
+/* Field helpers: copy rows and the settings search box. */
+@layer components {
+  /* a read-only value paired with a copy button (PWS URLs, share links) */
+  .copyrow {
+    display: flex;
+    gap: var(--sp-2);
+    align-items: stretch;
+  }
+  .copyrow input {
+    flex: 1;
+    min-width: 0;
+  }
+  .copyrow .iconbtn {
+    padding: 0 var(--sp-3);
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--r-5);
+  }
+  /* settings search box */
+  .srch {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: var(--sp-3) 0 var(--sp-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-6);
+    padding: 0 var(--sp-3);
+    background: var(--field-bg);
+  }
+  .srch-ic {
+    color: var(--muted);
+  }
+  .srch input {
+    border: none;
+    background: none;
+    padding: 7px 0;
+  }
+  .srch input:focus {
+    outline: none;
+  }
+}

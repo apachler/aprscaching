@@ -125,7 +125,7 @@ export function ProfileEditor(props: { callsign: string }) {
         </button>
       )}
 
-      <div className="row end mt-5">
+      <div className="row end mt-6">
         <Button variant="primary" onClick={save} disabled={busy}>
           Save profile
         </Button>

@@ -1,0 +1,8 @@
+/* Density (ui-ux.md §6): the switch is the token set in tokens.css — comfortable on :root, compact
+   under [data-density="compact"] (Shack apps, instance admin). Controls, rows and sub-headings read the
+   tokens; the compact surface also sets its running text size here. */
+@layer components {
+  [data-density="compact"] {
+    font-size: var(--density-fs);
+  }
+}
