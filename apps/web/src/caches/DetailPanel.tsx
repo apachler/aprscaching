@@ -18,7 +18,7 @@ import {
 import type { CacheLogEntry } from "@aprscaching/shared";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { useFmt, useTheme } from "../format.js";
-import { maidenhead } from "../map/geo.js";
+import { maidenhead, haversine } from "../map/geo.js";
 import {
   Panel,
   Badge,
@@ -26,6 +26,8 @@ import {
   Ico,
   TierChip,
   MinTier,
+  Disclosure,
+  TIER_NAME,
   DtBars,
   Stat,
   LoadMore,
@@ -39,16 +41,42 @@ import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
 import { CacheMedia } from "./CacheMedia.js";
 
-const TIER_DESC: Record<Tier, string> = {
-  A: "RF-corroborated — heard on RF via an independent IGate.",
-  B: "App-corroborated — in-app device geolocation at the cache.",
-  C: "IS-only — a bare APRS-IS beacon, logged but unverified.",
-};
+/** A point on the globe. */
+type LatLon = { lat: number; lon: number };
+
+/**
+ * Where the viewer is, when that is already known: the map's locate control, or — only when location
+ * permission was granted before — a fresh reading. It never prompts; an unknown position shows nothing.
+ */
+function useKnownPosition(from: LatLon | null | undefined): LatLon | null {
+  const [pos, setPos] = useState<LatLon | null>(null);
+  useEffect(() => {
+    if (from || !navigator.geolocation || !navigator.permissions) return;
+    let live = true;
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((p) => {
+        if (!live || p.state !== "granted") return;
+        navigator.geolocation.getCurrentPosition(
+          (g) => live && setPos({ lat: g.coords.latitude, lon: g.coords.longitude }),
+          () => {},
+          { maximumAge: 60_000, timeout: 8000 },
+        );
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [from]);
+  return from ?? pos;
+}
 
 /** Cache detail + logbook — operator layout; single primary action (Log a find). */
 export function DetailPanel(props: {
   detail: CacheDetail;
   callsign: string;
+  /** The viewer's position, when the map already knows it. */
+  here?: LatLon | null;
   activating?: Spot | null;
   onClose: () => void;
   onLogged: () => void;
@@ -98,7 +126,9 @@ export function DetailPanel(props: {
       setFav({ on: c.favorited, count: c.favorites });
     }
   }
-  const minTier: Tier = c.minTrust ?? "B"; // site default is B (CLAUDE.md)
+  const minTier: Tier = c.minTrust ?? "B"; // the site default minimum is B
+  const here = useKnownPosition(props.here);
+  const away = here && c.lat != null && c.lon != null ? haversine(here.lat, here.lon, c.lat, c.lon) : null;
   const grid = c.lat != null && c.lon != null ? maidenhead(c.lat, c.lon, 10) : null;
   function copyCoords() {
     if (c.lat == null || c.lon == null) return;
@@ -140,6 +170,12 @@ export function DetailPanel(props: {
       </div>
       <p className="muted mt-1">
         by <span className="mono">{c.ownerCall}</span>
+        {away != null && (
+          <>
+            {" · "}
+            <span className="cache-away">{fmt.distance(away)} away</span>
+          </>
+        )}
       </p>
 
       {(c.driveIn || c.country || c.tags.length > 0) && (
@@ -169,8 +205,6 @@ export function DetailPanel(props: {
           <div className="mt-2">{c.terrain.toFixed(1)} / 5</div>
         </Stat>
       </div>
-
-      <MinTier tier={minTier} desc={TIER_DESC[minTier]} />
 
       <RatingWidget cacheId={c.id} callsign={props.callsign} rating={c.rating} onToast={toast} />
 
@@ -222,6 +256,12 @@ export function DetailPanel(props: {
           <p>{c.hint}</p>
         </details>
       )}
+      <Disclosure
+        className="cache-verify"
+        label={`Verification · ${TIER_NAME[minTier]}${minTier === "B" ? " or better" : ""}`}
+      >
+        <MinTier tier={minTier} />
+      </Disclosure>
 
       <CacheMedia cacheId={c.id} isOwner={props.callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
 
@@ -246,6 +286,8 @@ export function DetailPanel(props: {
       <LogForm
         cacheId={c.id}
         cacheCode={c.code}
+        cacheLat={c.lat ?? null}
+        cacheLon={c.lon ?? null}
         callsign={props.callsign}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
@@ -522,17 +564,14 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
 
 function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null }) {
   const l = props.log;
-  const method = [
-    l.verifyMethod && `method: ${l.verifyMethod}`,
-    props.dist,
-    l.corroboratedBy && `via ${l.corroboratedBy}`,
-  ]
+  const tier: Tier = l.logType === "found" && l.verified ? ((l.tier ?? "C") as Tier) : "C";
+  const method = [l.logType === "found" && TIER_NAME[tier], props.dist, l.corroboratedBy && `via ${l.corroboratedBy}`]
     .filter(Boolean)
     .join(" · ");
   return (
     <div className="logrow">
       {l.logType === "found" ? (
-        <TierChip tier={(l.tier ?? "C") as Tier} title={l.verified ? `Verified · tier ${l.tier}` : "unverified"} />
+        <TierChip tier={tier} title={`${TIER_NAME[tier]} · Tier ${tier}`} />
       ) : (
         <Badge kind={l.logType}>{l.logType}</Badge>
       )}

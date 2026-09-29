@@ -70,7 +70,7 @@ export function App() {
           <Splash />
         ) : !active ? (
           <>
-            <Landing onRegister={() => setShowSignIn(true)} onLogin={() => setShowSignIn(true)} onExplore={onExplore} />
+            <Landing onSignIn={() => setShowSignIn(true)} onExplore={onExplore} />
             {showSignIn && (
               <SignIn
                 onDone={() => {

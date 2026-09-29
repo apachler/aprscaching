@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Operator data primitives (M8) — the trust-model made glanceable, in OUR palette (A=green /
+ * Operator data primitives — the trust-model made glanceable, in OUR palette (A=green /
  * B=blue / C=neutral; C is unverified, not an error). Token-driven, real semantics.
  */
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./Icon.js";
+import { TIER_NAME, TIER_DESC } from "./Badge.js";
 
 export type Tier = "A" | "B" | "C";
 
@@ -17,14 +18,18 @@ export function TierChip(props: { tier: Tier; lg?: boolean; title?: string }) {
   );
 }
 
-/** Minimum-verification-tier card: the chip + a one-line reason. */
-export function MinTier(props: { tier: Tier; desc: string }) {
+/** A cache's minimum verification: the tier a find there must reach to count, by name, with its meaning. */
+export function MinTier(props: { tier: Tier }) {
   return (
     <div className={`mintier ${props.tier}`}>
       <TierChip tier={props.tier} lg />
       <div className="mintier-t">
-        <b>Min. verification · Tier {props.tier}</b>
-        <p>{props.desc}</p>
+        <b>
+          {props.tier === "C"
+            ? "Every logged find counts"
+            : `Needs a ${TIER_NAME[props.tier]} find${props.tier === "B" ? " or better" : ""}`}
+        </b>
+        <p>{TIER_DESC[props.tier]}</p>
       </div>
       <Icon name="shield-check" size={20} className={`tcol ${props.tier}`} />
     </div>

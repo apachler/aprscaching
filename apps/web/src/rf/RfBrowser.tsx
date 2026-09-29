@@ -14,7 +14,7 @@ import { fieldStation } from "./fieldStation.js";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
-import { Row, Switch, EmptyState, Advanced, useToast, Ico, useConfirm } from "../ui/index.js";
+import { Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.forward"; // { url, secret } for the self-host (ingest-secret) path
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
@@ -115,7 +115,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           ? ingestPackets(packets, c.secretCfg.secret, c.secretCfg.url || undefined)
           : null;
     if (!send) {
-      toast("Configure gateway forwarding first (below).");
+      toast("Turn on forwarding to a gateway first (above).");
       return;
     }
     try {
@@ -269,13 +269,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       </p>
     );
 
+  const heardN = fieldStation.heardForSync().length;
+  // forwarding matters once there is something to forward: a live radio, or frames heard off-grid
+  const canForward = link != null || heardN > 0;
+
   return (
     <>
-      <p className="muted">
-        Decode RF here with no server — a KISS TNC (USB/BLE), a radio's audio through the soundcard (no TNC), or a
-        Meshtastic/LoRa node. Frames heard on your own radio are Tier C (no independent IGate); verification is
-        unchanged.
-      </p>
+      <p className="muted">Hear your own radio in this browser — no server needed.</p>
 
       <div className="row gap-2">
         {link ? (
@@ -314,69 +314,92 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
             )}
           </>
         )}
-        <span className="muted">
+        <span className="muted" role="status">
           {link ? `● live (${LINK_LABEL[link]}) · ${count} frame${count === 1 ? "" : "s"}` : "not connected"}
         </span>
       </div>
 
-      <Row
-        label="Forward to a gateway"
-        help={
-          mode === "signed"
-            ? "Signed with your device key (public gateway, no secret)"
-            : "With an ingest secret (self-host)"
-        }
-      >
-        <Switch
-          label="Forward to a gateway"
-          checked={fwdOn}
-          disabled={mode === "secret" && !secretCfg.secret}
-          onChange={(v) => {
-            void enableForward(v);
-          }}
-        />
-      </Row>
-      {mode === "secret" && !secretCfg.secret && (
-        <p className="muted fine">Enter the gateway's ingest secret (under Advanced below) to enable forwarding.</p>
-      )}
-      <Row label="Auth">
-        <div className="seg">
-          <button
-            className={mode === "signed" ? "on" : ""}
-            disabled={!signedIn}
-            title={signedIn ? undefined : "Sign in to forward under your own callsign"}
-            onClick={() => setMode("signed")}
+      <Disclosure label="What your radio can verify">
+        <p className="muted fine m-0">
+          A KISS TNC over USB or Bluetooth, a radio&apos;s audio through the soundcard, or a Meshtastic/LoRa node all
+          work. What this browser hears helps you see the band, but it never verifies a find: only this instance&apos;s
+          own receiving station can make a find Radio-verified.
+        </p>
+      </Disclosure>
+
+      {canForward ? (
+        <>
+          <Row
+            label="Forward to a gateway"
+            help={
+              mode === "signed"
+                ? "Signed with your device key (public gateway, no secret)"
+                : "With an ingest secret (self-host)"
+            }
           >
-            signed{signedIn ? ` (${props.callsign})` : " — sign in to enable"}
-          </button>
-          <button className={mode === "secret" ? "on" : ""} onClick={() => setMode("secret")}>
-            secret (self-host)
-          </button>
-        </div>
-      </Row>
-      {mode === "secret" && (
-        <Advanced label="Self-host gateway">
-          <label>
-            Gateway base URL{" "}
-            <input
-              className="mono"
-              defaultValue={secretCfg.url}
-              placeholder="https://your-gateway"
-              onBlur={(e) => saveSecret(e.target.value, secretCfg.secret)}
+            <Switch
+              label="Forward to a gateway"
+              checked={fwdOn}
+              onChange={(v) => {
+                void enableForward(v);
+              }}
             />
-          </label>
-          <label>
-            Ingest secret{" "}
-            <input
-              className="mono"
-              type="password"
-              defaultValue={secretCfg.secret}
-              placeholder="INGEST_SECRET"
-              onBlur={(e) => saveSecret(secretCfg.url, e.target.value)}
-            />
-          </label>
-          <p className="muted fine">Stored only in this browser.</p>
-        </Advanced>
+          </Row>
+          {fwdOn && (
+            <>
+              <Row label="Auth">
+                <div className="seg">
+                  <button
+                    className={mode === "signed" ? "on" : ""}
+                    aria-pressed={mode === "signed"}
+                    disabled={!signedIn}
+                    title={signedIn ? undefined : "Sign in to forward under your own callsign"}
+                    onClick={() => setMode("signed")}
+                  >
+                    signed{signedIn ? ` (${props.callsign})` : " — sign in to enable"}
+                  </button>
+                  <button
+                    className={mode === "secret" ? "on" : ""}
+                    aria-pressed={mode === "secret"}
+                    onClick={() => setMode("secret")}
+                  >
+                    secret (self-host)
+                  </button>
+                </div>
+              </Row>
+              {mode === "secret" && (
+                <>
+                  <label>
+                    Gateway base URL{" "}
+                    <input
+                      className="mono"
+                      defaultValue={secretCfg.url}
+                      placeholder="https://your-gateway"
+                      onBlur={(e) => saveSecret(e.target.value, secretCfg.secret)}
+                    />
+                  </label>
+                  <label>
+                    Ingest secret{" "}
+                    <input
+                      className="mono"
+                      type="password"
+                      defaultValue={secretCfg.secret}
+                      placeholder="INGEST_SECRET"
+                      onBlur={(e) => saveSecret(secretCfg.url, e.target.value)}
+                    />
+                  </label>
+                  <p className="muted fine">
+                    {secretCfg.secret
+                      ? "Stored only in this browser."
+                      : "Forwarding starts once the ingest secret is set. It is stored only in this browser."}
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </>
+      ) : (
+        <p className="muted fine">Connect a radio to forward what it hears to a gateway.</p>
       )}
 
       {link && (
@@ -476,7 +499,6 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       {(() => {
         const stations = fieldStation.liveStations();
         const inbox = fieldStation.inbox();
-        const heardN = fieldStation.heardForSync().length;
         return stations.length > 0 || inbox.length > 0 ? (
           <div className="field-station">
             <div className="row between">

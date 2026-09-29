@@ -43,7 +43,7 @@ export function DecoderPanel() {
         <div className="decoded">
           <div className="row between">
             <strong className="mono">{decoded.frame.src}</strong>
-            <Badge kind={decoded.frame.heardVia === "rf" ? "tierA" : undefined}>{decoded.frame.heardVia}</Badge>
+            <Badge>{decoded.frame.heardVia}</Badge>
           </div>
           <div className="muted">
             → {decoded.frame.dst} · {decoded.frame.path.join(" · ") || "(no path)"}

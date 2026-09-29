@@ -20,7 +20,7 @@ import { frameToPacket, type RfFrame, type RfLink, type TxFrame } from "./kiss.j
  *   WebAudioAfsk        — soundcard Bell-202 modem: mic → AudioContext → Afsk1200Rx → AX.25 frames.
  *   WebSerialMeshtastic — a Meshtastic/LoRa node over Web Serial: deframe → FromRadio → positions of
  *                         licensed nodes only, under their callsigns.
- * Both stay RX-only and Tier C (no independent IGate); send() is gated on callsign
+ * Both stay RX-only and Tier C (a browser is never an attested receiving site); send() is gated on callsign
  * control-verification. Chromium-only.
  */
 

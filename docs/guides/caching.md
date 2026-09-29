@@ -46,8 +46,9 @@ Tap a marker on the map, a row in **Nearby**, or a search result. The cache shee
 
 - the title, type, source (**APRScaching** or **imported · …**), code (`AC-1234`) and **by** the owner;
 - **Difficulty** and **Terrain** (1–5);
-- **Min. verification · Tier B** — the lowest tier a find needs to count as verified here;
+- how far away the cache is, once your location is known;
 - **Rating**, the **Hint** (tap to reveal), photos under **Media**;
+- **Verification · Location-verified or better** (tap to open) — what a find needs to count as verified here;
 - **Coordinates** with a copy button, the grid square, and **Navigate** to open your maps app
   (Google, Apple or OpenStreetMap);
 - **Copy link** and **▦ QR** to share it;
@@ -65,11 +66,16 @@ The result shows how well your find is verified:
 
 | Badge | Tier | Meaning |
 |---|---|---|
-| **Verified · RF** | A | Your APRS position was heard on the air near the cache, by a receiving station that isn't yours, on a believable track. Peer instances can also confirm this. |
-| **Verified · App** | B | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy). |
-| **Verified · C** · **Logged · unverified** | C | Only an internet (APRS-IS) position was available. The find is recorded but not confirmed. |
+| **Radio-verified** | A | Your APRS position was heard on the air near the cache, by a receiving station the instance runs and that isn't yours, on a believable track. Peer instances can also confirm this. |
+| **Location-verified** | B | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy). |
+| **Logged** | C | Nothing independent placed you at the cache — at most an internet (APRS-IS) position. The find is recorded but not verified. |
 
-If a cache requires a higher tier than your find reached, the find is recorded but shown as unverified.
+Under the badge, one line says why in plain words — for example how far your phone was from the cache. If a
+cache requires a higher tier than your find reached, the find is recorded as **Logged**.
+
+If your phone places you farther from the cache than it can verify, the app asks first: *"You're 34 km from
+the cache — log anyway?"* Each cache takes one find from each callsign, scored when you log it, so logging
+it again later shows **You already logged this** and leaves the first find as it was.
 Your find is signed with your device key (**signed with your device key ✍**); if you verified your
 callsign, it can also be **announced to APRS-IS**.
 

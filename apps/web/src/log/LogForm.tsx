@@ -1,22 +1,65 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { getInstance, registerKey, logFind, type LogResult, type AppGeo } from "../api.js";
+import { getInstance, registerKey, logFind, errorText, type LogResult, type AppGeo } from "../api.js";
 import { signAuthorship } from "../crypto.js";
-import { useFmt } from "../format.js";
-import { TierBadge, Ico } from "../ui/index.js";
+import { useFmt, type Formatters } from "../format.js";
+import { haversine } from "../map/geo.js";
+import { TierBadge, TIER_NAME, Ico, useConfirm } from "../ui/index.js";
 import type { LogType } from "@aprscaching/shared";
 
-/** One-tap log (the core action). The trust badge IS the feedback shown after the tap. */
+/**
+ * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
+ * accuracy, capped (the verify policy's `radiusM` and accuracy clamp). Farther than this, a find can only
+ * be Logged.
+ */
+const MATCH_RADIUS_M = 150;
+const MAX_ACCURACY_M = 200;
+const reachM = (g: AppGeo) => MATCH_RADIUS_M + Math.max(0, Math.min(g.accuracyM, MAX_ACCURACY_M));
+
+/** What placed (or failed to place) the finder at the cache, in words, for the result card. */
+function findWhy(r: LogResult, fmt: Formatters, geoAwayM: number | null, hadGeo: boolean): string {
+  const d = r.distanceM != null ? fmt.distance(r.distanceM) : null;
+  if (r.verified) {
+    if (r.tier === "A")
+      return `A receiving station heard your transmission on the air at the cache${
+        r.corroboratedBy ? `, confirmed by ${r.corroboratedBy}` : ""
+      }.`;
+    if (r.tier === "B")
+      return `Your device was ${d ?? "at the cache"}${d ? " from the cache" : ""} when you logged it.`;
+    return "This cache counts every logged find.";
+  }
+  const needs = /requires tier ([ABC])/.exec(r.reason ?? "")?.[1] as "A" | "B" | "C" | undefined;
+  if (needs && r.tier)
+    return `This cache needs a ${TIER_NAME[needs]} find. Yours was ${TIER_NAME[r.tier]}, so it is on record but does not count as verified.`;
+  if (r.method === "aprs_is")
+    return "Only an internet (APRS-IS) position placed you here. Anyone can send one, so it cannot verify a find.";
+  if (geoAwayM != null) return `Your device was ${fmt.distance(geoAwayM)} from the cache — too far to verify the find.`;
+  if (!hadGeo)
+    return "Your location was not available and no receiving station heard you here. Allow location access and log at the cache to verify a find.";
+  return "Nothing placed you at the cache when you logged it.";
+}
+
+/**
+ * One-tap log (the core action). A found is one per cache and callsign and is scored once, when it is
+ * logged: a find from far away is confirmed first, and the result says in words which tier it reached
+ * and why.
+ */
 export function LogForm(props: {
   cacheId: number;
   cacheCode: string;
+  cacheLat: number | null;
+  cacheLon: number | null;
   callsign: string;
   onLogged: () => void;
   onSignIn: () => void;
 }) {
   const fmt = useFmt();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<LogType | null>(null);
   const [result, setResult] = useState<LogResult | null>(null);
+  // the device reading sent with the find: how far from the cache it was, and whether there was one
+  const [geoAway, setGeoAway] = useState<number | null>(null);
+  const [hadGeo, setHadGeo] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -50,6 +93,23 @@ export function LogForm(props: {
     setErr(null);
     try {
       const appGeo = logType === "found" ? await getGeo() : undefined;
+      const away =
+        appGeo && props.cacheLat != null && props.cacheLon != null
+          ? haversine(appGeo.lat, appGeo.lon, props.cacheLat, props.cacheLon)
+          : null;
+      const far = appGeo != null && away != null && away > reachM(appGeo);
+      if (
+        far &&
+        !(await confirm({
+          title: "Log this find?",
+          message: `You're ${fmt.distance(away)} from the cache — log anyway? From here it is recorded as Logged, not verified, and each cache takes one find from you.`,
+          confirmLabel: "Log anyway",
+          cancelLabel: "Not yet",
+        }))
+      )
+        return;
+      setGeoAway(far ? away : null);
+      setHadGeo(appGeo != null);
       let author;
       try {
         const instance = await getInstance();
@@ -67,26 +127,25 @@ export function LogForm(props: {
       setNoteOpen(false);
       props.onLogged();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errorText(e));
     } finally {
       setBusy(null);
     }
   }
 
-  // the trust badge IS the feedback, shown after the tap (tap it for the "why")
-  function tierBadge(r: LogResult) {
-    if (r.logType !== "found") return null;
-    if (!r.verified) return <TierBadge verified={false} prefix="Logged" title={r.reason ?? ""} />;
-    const why = `Tier ${r.tier} · ${r.method ?? ""}${r.distanceM != null ? ` · ${fmt.distance(r.distanceM)}` : ""}${r.corroboratedBy ? ` · via ${r.corroboratedBy}` : ""}`;
-    return <TierBadge tier={r.tier} prefix="Verified" title={why} />;
-  }
-
   if (result) {
-    const verb = result.logType === "found" ? "Logged" : result.logType === "dnf" ? "Marked DNF" : "Note posted";
+    const found = result.logType === "found";
+    const verb = found
+      ? result.duplicate
+        ? "You already logged this"
+        : "Logged"
+      : result.logType === "dnf"
+        ? "Marked DNF"
+        : "Note posted";
     return (
-      <div className="logresult">
+      <div className="logresult" role="status">
         <div className="big">
-          {result.queued ? "Saved" : verb} {result.logType === "found" && result.verified ? "✓" : ""}
+          {result.queued ? "Saved" : verb} {found && result.verified && !result.duplicate ? "✓" : ""}
         </div>
         {result.queued ? (
           <div className="muted mt-1">
@@ -94,7 +153,18 @@ export function LogForm(props: {
             offline — will sync when you're back online
           </div>
         ) : (
-          <div className="tier">{tierBadge(result)}</div>
+          found && (
+            <>
+              <div className="tier">
+                <TierBadge tier={result.tier} verified={result.verified} letter />
+              </div>
+              <p className="logresult-why">
+                {result.duplicate
+                  ? "A cache takes one find from each callsign, and your first log stands as it was scored."
+                  : findWhy(result, fmt, geoAway, hadGeo)}
+              </p>
+            </>
+          )
         )}
         {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
         {result.signerKey && (
@@ -117,18 +187,11 @@ export function LogForm(props: {
               Add a note
             </button>
           ))}
-        <div className="mt-3">
-          <button
-            className="link"
-            onClick={() => {
-              setResult(null);
-              setNote("");
-              setNoteOpen(false);
-            }}
-          >
-            log again
+        {!found && (
+          <button className="link mt-3" onClick={() => setResult(null)}>
+            Back
           </button>
-        </div>
+        )}
       </div>
     );
   }
@@ -156,7 +219,11 @@ export function LogForm(props: {
           </div>
         </div>
       )}
-      {err && <p className="error">{err}</p>}
+      {err && (
+        <p className="error" role="alert">
+          {err}
+        </p>
+      )}
     </div>
   );
 }

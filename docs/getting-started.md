@@ -51,7 +51,8 @@ conformance suite.
 pnpm --filter @aprscaching/web dev
 ```
 
-The app talks to the gateway at `VITE_API_BASE` (default `http://127.0.0.1:8787`). Open the printed URL and
+The app talks to the gateway at `VITE_API_BASE` (the dev server defaults to `http://127.0.0.1:8787`; a
+production build without it uses its own origin). Open the printed URL and
 you can browse the map, hide a cache, and log a find. In-app geolocation (**Tier B**) needs HTTPS or
 `localhost` and the browser's location permission.
 
