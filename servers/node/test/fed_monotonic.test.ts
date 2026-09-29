@@ -22,7 +22,7 @@ const rec = (title: string, updatedAt: number) => ({
   type: "cache",
   id: "peer.net:cache:1",
   cursor: updatedAt,
-  data: { code: "PC-1", ownerCall: "OE8APR", title, type: "single", status: "active", updatedAt },
+  data: { code: "PC-1", ownerCall: "OE8APR", title, type: "traditional", status: "active", updatedAt },
 });
 
 describe("version-monotonic mirror upserts", () => {

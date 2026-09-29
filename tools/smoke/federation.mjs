@@ -97,7 +97,7 @@ await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OP
 const TITLE = "Federated Schlossberg " + now();
 const created = await call(PUB, "POST", "/api/caches", {
   title: TITLE,
-  type: "single",
+  type: "traditional",
   lat: 47.0735,
   lon: 15.4378,
   difficulty: 2,
@@ -190,7 +190,7 @@ await call(
 
 const sCache = await call(SUB, "POST", "/api/caches", {
   title: "Peer-Verified Summit " + t,
-  type: "single",
+  type: "traditional",
   lat: LAT,
   lon: LON,
   ownerCall: "OE8SUB",
@@ -266,7 +266,7 @@ ok("key registration accepted", reg.data?.ok === true && reg.data?.publicKey ===
 
 const sc = await call(PUB, "POST", "/api/caches", {
   title: "Signed Find " + now(),
-  type: "single",
+  type: "traditional",
   lat: 47.08,
   lon: 15.41,
   ownerCall: "OE8APR",
@@ -396,7 +396,7 @@ const blk = await call(
 ok("operator blocked the peer", blk.data?.ok === true && blk.data?.trust === "blocked", JSON.stringify(blk.data));
 const bCache = await call(SUB, "POST", "/api/caches", {
   title: "Blocked-Peer Summit " + now(),
-  type: "single",
+  type: "traditional",
   lat: LAT,
   lon: LON,
   ownerCall: "OE8SUB",
@@ -428,7 +428,7 @@ ok(
 );
 const rCache = await call(SUB, "POST", "/api/caches", {
   title: "Re-trusted Summit " + now(),
-  type: "single",
+  type: "traditional",
   lat: LAT,
   lon: LON,
   ownerCall: "OE8SUB",
@@ -460,7 +460,7 @@ await call(
 const T_TITLE = "Tombstone Cache " + now();
 const tCache = await call(PUB, "POST", "/api/caches", {
   title: T_TITLE,
-  type: "single",
+  type: "traditional",
   lat: 48.21,
   lon: 16.37,
   ownerCall: "TOMB1",
@@ -537,7 +537,13 @@ ok(
 // ---- gossip ping (push-to-pull) ----
 // publish a fresh cache on PUB, then ping SUB directly — it must pull immediately (no manual /sync)
 const G_TITLE = "Gossip Cache " + now();
-await call(PUB, "POST", "/api/caches", { title: G_TITLE, type: "single", lat: 47.09, lon: 15.44, ownerCall: "OE8APR" });
+await call(PUB, "POST", "/api/caches", {
+  title: G_TITLE,
+  type: "traditional",
+  lat: 47.09,
+  lon: 15.44,
+  ownerCall: "OE8APR",
+});
 const notif = await call(SUB, "POST", "/federation/notify", { instance: pubInstance });
 ok(
   "gossip notify is accepted (202, triggers a pull)",
@@ -604,7 +610,7 @@ const spokeBody = {
   code: "SP-0001",
   ownerCall: "OE0SPK",
   title: "Spoke Cache " + now(),
-  type: "single",
+  type: "traditional",
   status: "active",
   latE7: 475000000,
   lonE7: 160000000,
@@ -780,7 +786,7 @@ const HINT = "under the third rock from the bench";
 const mkScoped = (title, fedScope) =>
   call(PUB, "POST", "/api/caches", {
     title,
-    type: "single",
+    type: "traditional",
     lat: 47.31,
     lon: 15.31,
     ownerCall: "OE8APR",
