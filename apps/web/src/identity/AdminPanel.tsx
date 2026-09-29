@@ -16,6 +16,10 @@ import {
   getPorts,
   cotUrl,
   getAdminSetup,
+  listManualVerifications,
+  addManualVerification,
+  revokeManualVerification,
+  type ManualVerification,
   type SetupItem,
   type FedPeer,
   type ForwardPartner,
@@ -81,6 +85,11 @@ export function AdminPanel(props: {
           <SetupAdmin onDocs={props.onDocs} />
         </Group>
       )}
+      {show("verification", "verify", "callsign", "manual", "licence", "sysop") && (
+        <Group title="Callsign verification" status="manual" defaultOpen={false}>
+          <VerificationAdmin />
+        </Group>
+      )}
       {show("federation", "peers", "trust", "44net", "sync") && (
         <Group title="Federation" status="peers & trust" defaultOpen={false}>
           <FederationAdmin />
@@ -97,6 +106,157 @@ export function AdminPanel(props: {
         </Group>
       )}
     </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- manual callsign verification
+
+const CALL_RE = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
+
+/**
+ * Verify a callsign by hand for an operator no attested receiving site can hear. Each one carries a note
+ * saying how control of the licence was checked, is listed here, and can be revoked. Calls verified on
+ * the air or by the operator CLI are not listed and cannot be revoked from here.
+ */
+function VerificationAdmin() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const [rows, setRows] = useState<ManualVerification[] | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [call, setCall] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
+
+  const refresh = () => {
+    setLoadErr(false);
+    listManualVerifications()
+      .then((r) => setRows(r.verifications))
+      .catch(() => setLoadErr(true));
+  };
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const cs = call.trim().toUpperCase();
+  const callOk = CALL_RE.test(cs);
+  const noteOk = note.trim().length >= 3;
+  const submit = async () => {
+    if (!callOk || !noteOk) {
+      setFormErr(!callOk ? "Enter a valid callsign." : "Say how you checked control of the licence.");
+      return;
+    }
+    setSaving(true);
+    setFormErr(null);
+    try {
+      const r = await addManualVerification(cs, note.trim());
+      toast(`${r.callsign} verified`);
+      setCall("");
+      setNote("");
+      refresh();
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const revoke = async (v: ManualVerification) => {
+    if (
+      !(await confirmDialog({
+        title: `Revoke the verification of ${v.callsign}?`,
+        message: "The call becomes unverified: transmit and leaderboard credit close until it is verified again.",
+        confirmLabel: "Revoke",
+        danger: true,
+      }))
+    )
+      return;
+    try {
+      await revokeManualVerification(v.callsign);
+      toast(`${v.callsign} verification revoked`);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+
+  return (
+    <>
+      <p className="muted fine">
+        For operators out of range of every receiving site this instance attests. Verify only a call whose licence you
+        have checked yourself; the note records how.
+      </p>
+      <div className="partner-form">
+        <label>
+          Callsign
+          <input
+            className="mono"
+            placeholder="VK2ABC"
+            value={call}
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={!!formErr && !callOk}
+            onChange={(e) => setCall(e.target.value)}
+          />
+        </label>
+        <label>
+          How control was checked
+          <input
+            placeholder="licence seen on a video call"
+            value={note}
+            maxLength={200}
+            aria-invalid={!!formErr && !noteOk}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void submit();
+            }}
+          />
+        </label>
+        <div className="row end">
+          <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+            {saving ? "Verifying…" : "Verify callsign"}
+          </button>
+        </div>
+      </div>
+      {formErr && (
+        <p className="error fine" role="alert">
+          {formErr}
+        </p>
+      )}
+      <h4 className="set-subh">Verified by hand</h4>
+      {loadErr ? (
+        <ErrorState onRetry={refresh}>Couldn&apos;t load the manual verifications.</ErrorState>
+      ) : rows === null ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : rows.length === 0 ? (
+        <EmptyState>
+          No calls verified by hand. Use the form above for an operator no receiving site can hear.
+        </EmptyState>
+      ) : (
+        <ul className="logs">
+          {rows.map((v) => (
+            <li key={v.callsign}>
+              <span className="mono">{v.callsign}</span>
+              <span className="muted">
+                {" "}
+                · by <span className="mono">{v.verifiedBy ?? "?"}</span> · {fmt.date(v.verifiedAt)}
+                {v.held ? "" : " · no account yet"}
+              </span>
+              <button
+                className="link-btn danger"
+                aria-label={`Revoke the verification of ${v.callsign}`}
+                onClick={() => void revoke(v)}
+              >
+                Revoke
+              </button>
+              {v.note && <div className="comment">{v.note}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 

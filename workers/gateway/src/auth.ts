@@ -78,7 +78,7 @@ export const isWithdrawnCall = (c: string | null | undefined): boolean => {
 export const displayCall = (c: string): string => (isWithdrawnCall(c) ? WITHDRAWN : c);
 
 /** Base calls that name this instance or an erased identity, never a person: the erased-owner marker
- *  and the default service call the instance sends verification codes and BBS mail from. */
+ *  and the default service call that takes radio commands and sends BBS mail. */
 const RESERVED_CALLS = new Set([WITHDRAWN, "APRSCG"]);
 export const isReservedCall = (c: string): boolean => RESERVED_CALLS.has(baseOf(c));
 
@@ -406,7 +406,7 @@ export async function handleListCallsigns(req: Request, env: Env): Promise<Respo
 
 /**
  * POST /auth/callsigns {callsign} — add another base call to the signed-in account (unverified;
- * verify it via the APRS challenge). Does NOT change the active call. A base call can be held by
+ * verify it by an on-air VERIFY challenge). Does NOT change the active call. A base call can be held by
  * only one account, so a call already on another account is rejected.
  */
 export async function handleAddCallsign(req: Request, env: Env): Promise<Response> {

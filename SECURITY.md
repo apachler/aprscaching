@@ -34,8 +34,8 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
   (`workers/gateway/src/verify.ts`, `caches.ts`, `corroborate.ts`).
 - **Federation** — signature/replay/namespace attacks, tombstone forgery, peer impersonation or
   key-rotation bypass (`federation*.ts`, `tombstones.ts`).
-- **Auth & sessions** — WebAuthn/passkey flows, the magic-link path, session forgery, the APRS
-  control-verification challenge.
+- **Auth & sessions** — WebAuthn/passkey flows, the magic-link path, session forgery, callsign
+  control-verification (the on-air `VERIFY` challenge, the operator bootstrap, sysop manual verification).
 - **Ingest & parsers** — a single crafted packet that crashes or hangs the ingest/gateway
   (`packages/aprs`, `packages/packet`, `apps/ingest`).
 - **The tool-plugin sandbox** (`packages/tools`, `apps/web/src/tools/`) — sandbox escape or

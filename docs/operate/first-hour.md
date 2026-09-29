@@ -28,10 +28,17 @@ Where "set the env" appears below, that means your deployment's environment:
 
 ## 2. Name yourself operator
 
-Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, sign in with that
-callsign, and control-verify it (Settings → account → verify: the code arrives as an APRS message).
-The operator role needs the verified call — a sign-up under the name alone is not a sysop. The shield
-icon then reveals **Instance admin**; its **Setup** group is this checklist, live.
+Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, and sign in with that
+callsign. The operator role needs the call control-verified — a sign-up under the name alone is not a
+sysop, and **Settings → Account** says so. Confirm it with the operator CLI, which uses `INGEST_SECRET`
+and accepts only a call listed in `ADMIN_CALLSIGNS`:
+
+```bash
+BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+```
+
+This needs no receiving site, so it works before step 6. The shield icon then reveals **Instance admin**
+(reload the app); its **Setup** group is this checklist, live.
 Without `ADMIN_CALLSIGNS` there is no web sysop at all — the admin endpoints stay locked.
 
 ## 3. Fix your public identity
@@ -49,9 +56,12 @@ notifications where web push is unavailable.
 
 ## 5. Verify control of your callsign
 
-In **Settings → account**, verify your callsign over the air (an APRS message challenge). Receiving
-never needs it, but every transmit path is gated on control-verification — the APRS-IS passcode
-verifies nothing.
+Step 2 verified your call. Every other operator verifies theirs over the air: **Settings → Account →
+verify** shows a message such as `VERIFY 482913` to send to the service call, and the call is verified
+once a site listed in `FIRST_PARTY_SITES` (step 6) hears it on its own radio. Until you attest a site, no
+user can verify that way; a sysop can verify an out-of-range operator by hand under **Instance admin →
+Callsign verification**. Receiving never needs verification, but every transmit path is gated on it — the
+APRS-IS passcode verifies nothing.
 
 ## 6. Attest your RF sites (the Tier-A gate)
 

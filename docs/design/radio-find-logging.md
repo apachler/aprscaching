@@ -38,8 +38,8 @@ command runs — it only decides how far the message is trusted (its provenance)
 Meshtastic is out of scope: its nodes are identified by node ids, not callsigns, so a message cannot be tied
 to a verified callsign.
 
-The service call is the identity the gateway already sends from for callsign-verification codes and BBS
-forwarding: `BBS_CALL`, default `APRSCG`.
+The service call is the identity the gateway sends BBS forwarding from and to which callsign-verification
+messages are addressed: `BBS_CALL`, default `APRSCG`.
 
 ## Commands
 
@@ -49,6 +49,7 @@ forwarding: `BBS_CALL`, default `APRSCG`.
 | `DNF <code> [text]` | log a did-not-find |
 | `NOTE <code> <text>` | log a note |
 | `HELP` | the command syntax |
+| `VERIFY <code>` | complete the sender's callsign control-verification |
 
 Commands are case-insensitive; `<code>` is a cache code such as `AC-1234` (the dash is optional). The APRS
 message text limit (67 characters) and the MeshCom limit (150 bytes) bound the log text; longer logs are
@@ -85,6 +86,13 @@ scored separately and exactly as for an app log, at the time the message was sen
   is not their own — delivered by that site's own ingest box, never an APRS-IS copy — within the
   verification window before the message.
 - **Tier C** otherwise. A radio message carries no in-app device reading, so it never reaches Tier B.
+
+`VERIFY <code>` is stricter: it proves control of the licence, so only a copy heard directly at an attested
+site counts. A signed browser batch does not — the browser bridge runs on the sender's own computer — and
+neither does anything from APRS-IS or a tunnel. Those copies are dropped unanswered and cost no attempt, so
+nobody off the air can lock the sender's challenge. A heard copy is acked; a completed challenge is answered
+with `<CALL> verified`. It is handled before the other commands, needs no verified call (it is how one
+becomes verified), and is not recorded in `radio_commands`.
 
 ## Acknowledgements and replies
 
