@@ -605,8 +605,6 @@ lands with a regression test that fails without it.
 - [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
   key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
   signatures, and a "Running federation safely" guide.
-- [ ] **Drop the unprefixed signature forms** *(S)* — after the next release, verify rotation, registry
-  and ingest signatures only in their domain-prefixed form.
 
 ## Federation over RF (the wire contracts are in; the bindings land in this order)
 

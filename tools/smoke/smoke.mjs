@@ -527,7 +527,8 @@ const imsg = stableStringify({
   count: rfPkts.length,
   digest: idigest,
 });
-const isig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(imsg)));
+// domain-prefixed (acs-ing/1): the gateway verifies only the prefixed form
+const isig = b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode("acs-ing/1\n" + imsg)));
 const sIng = await fetch(`${BASE}/ingest`, {
   method: "POST",
   headers: {

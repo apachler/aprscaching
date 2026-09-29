@@ -17,7 +17,7 @@ import {
   stableStringify,
 } from "@aprscaching/shared";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
-import { importVerifyKey, fromB64, verifyDomainOrLegacy } from "./federation.js";
+import { importVerifyKey, fromB64, verifyDomain } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { sessionCallsign, sessionAccountId, accountHoldsCall, secretOk } from "./auth.js";
 
@@ -120,7 +120,7 @@ export async function verifySignedIngest(
   if (!(await isKeyRegistered(env, callsign, key))) return null; // key must belong to the callsign
   try {
     const digest = await sha256Hex(stableStringify(packets));
-    const ok = await verifyDomainOrLegacy(
+    const ok = await verifyDomain(
       await importVerifyKey(key),
       fromB64(sig),
       SIG_DOMAIN.ingest,

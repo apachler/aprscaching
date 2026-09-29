@@ -63,6 +63,6 @@ the design it arrives at is documented in the [federation guide](../guides/feder
 | Erasing an account does not tombstone mirrored callsign-key bindings or account moves | `account.ts`, `federation_sync.ts` | Fixed — key and move tombstones; local moves deleted; mirrors purge both |
 | Account moves carry no signed device-key migration proof (nothing reads them yet) | `account.ts` | Fixed — a move carries the mover's assertion; mirrors keep it only under a key known independently of the claiming instance |
 | The answerer's per-callsign rate limit is shared by all askers, and its negative cache ignores radius and exclusions | `corroborate.ts` | Fixed — limits and the negative memo are per asker and include radius and exclusions |
-| Standalone JSON signatures (rotation, registry, ingest) carry no domain prefix | `federation.ts`, `packages/shared` `canon.ts`, `tools/fedkey` | Fixed — `acs-rot/1`, `acs-reg/1`, `acs-ing/1`; the unprefixed form is still accepted for one release |
+| Standalone JSON signatures (rotation, registry, ingest) carry no domain prefix | `federation.ts`, `packages/shared` `canon.ts`, `tools/fedkey` | Fixed — `acs-rot/1`, `acs-reg/1`, `acs-ing/1`; only the prefixed form verifies |
 | 44net auto-admission relies on the DoH resolver's DNSSEC flag without saying so | `docs/reference/federation-wire.md` | Fixed — documented |
 | No "running federation safely" guidance for operators | `docs/guides/federation.md` | Fixed — "Running federation safely" section |

@@ -40,10 +40,25 @@ describe("signed ingest", () => {
     expect(await verifySignedIngest(req(), env, packets)).toEqual({ callsign: "OE8BRW" });
     expect(await verifySignedIngest(req(), env, packets)).toBeNull();
   });
+
+  it("refuses a batch signed without the ingest domain prefix", async () => {
+    const env = instanceEnv("a.example", await newFedKey());
+    const dev = await newFedKey();
+    await registerKey(env, "OE8BRW", dev);
+    const packets = [{ raw: "OE8BRW>APRS:!4704.00N/01526.00E-" }];
+    const at = nowS();
+    const digest = await sha256Hex(stableStringify(packets));
+    const sig = await sign(dev, ingestMessage({ callsign: "OE8BRW", at, count: 1, digest }));
+    const req = new Request("https://a.example/ingest", {
+      method: "POST",
+      headers: { "x-acs-callsign": "OE8BRW", "x-acs-key": dev.pub, "x-acs-sig": sig, "x-acs-at": String(at) },
+    });
+    expect(await verifySignedIngest(req, env, packets)).toBeNull();
+  });
 });
 
 describe("domain-separated standalone signatures", () => {
-  it("verifies a prefixed rotation and registry, and still the unprefixed form for one release", async () => {
+  it("verifies a prefixed rotation and registry, and refuses the unprefixed form", async () => {
     const a = await newFedKey();
     const b = await newFedKey();
     const at = nowS();
@@ -51,10 +66,11 @@ describe("domain-separated standalone signatures", () => {
     expect(
       await verifyRotationRecord({ key: b.pub, prevKey: a.pub, at, sig: await sign(a, SIG_DOMAIN.rotation + body) }),
     ).toBe(true);
-    expect(await verifyRotationRecord({ key: b.pub, prevKey: a.pub, at, sig: await sign(a, body) })).toBe(true);
+    expect(await verifyRotationRecord({ key: b.pub, prevKey: a.pub, at, sig: await sign(a, body) })).toBe(false);
     const entries = [{ instance: "x.example", key: "K" }];
     const reg = stableStringify({ at, entries });
     expect(await verifyRegistry({ entries, at, sig: await sign(a, SIG_DOMAIN.registry + reg) }, a.pub)).toBe(true);
+    expect(await verifyRegistry({ entries, at, sig: await sign(a, reg) }, a.pub)).toBe(false);
     // a signature made for one purpose never verifies for another
     expect(await verifyRegistry({ entries, at, sig: await sign(a, SIG_DOMAIN.rotation + reg) }, a.pub)).toBe(false);
   });
