@@ -236,8 +236,17 @@
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     border: 1px solid var(--hair);
     border-radius: var(--r-6);
-    overflow: hidden;
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
+  }
+  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
+     area of each button can reach past the bar */
+  .basemap-switch > button:first-child {
+    border-start-start-radius: calc(var(--r-6) - 1px);
+    border-end-start-radius: calc(var(--r-6) - 1px);
+  }
+  .basemap-switch > button:last-child {
+    border-start-end-radius: calc(var(--r-6) - 1px);
+    border-end-end-radius: calc(var(--r-6) - 1px);
   }
   .basemap-switch button {
     min-width: var(--hit);
@@ -280,8 +289,17 @@
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     border: 1px solid var(--hair);
     border-radius: var(--r-6);
-    overflow: hidden;
     backdrop-filter: blur(6px);
+  }
+  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
+     area of each button can reach past the bar */
+  .maptools-bar > button:first-child {
+    border-start-start-radius: calc(var(--r-6) - 1px);
+    border-end-start-radius: calc(var(--r-6) - 1px);
+  }
+  .maptools-bar > button:last-child {
+    border-start-end-radius: calc(var(--r-6) - 1px);
+    border-end-end-radius: calc(var(--r-6) - 1px);
   }
   .maptools-bar button {
     min-width: 38px;

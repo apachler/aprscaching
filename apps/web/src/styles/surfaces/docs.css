@@ -17,7 +17,7 @@
       position: sticky;
       top: 0;
       align-self: start;
-      max-height: calc(100dvh - 128px);
+      max-height: calc(100vh - 128px);
       overflow: auto;
       border-right: 1px solid var(--hair);
       padding-right: var(--sp-2);
@@ -28,6 +28,14 @@
     flex-direction: column;
     gap: var(--sp-0);
   }
+  @supports (height: 1dvh) {
+    @container panel (min-width: 40rem) {
+      .docs-nav {
+        max-height: calc(100dvh - 128px);
+      }
+    }
+  }
+
   .docs-navhead {
     margin: var(--sp-2) 0 var(--sp-0);
     font-size: 0.72rem;

@@ -76,19 +76,25 @@
     margin: 0;
     padding: var(--sp-1);
     list-style: none;
-    max-height: min(60dvh, 420px);
+    max-height: min(60vh, 420px);
     overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--hair);
     border-radius: var(--r-7);
     box-shadow: var(--elev-8);
   }
+  @supports (height: 1dvh) {
+    .search-pop {
+      max-height: min(60dvh, 420px);
+    }
+  }
+
   .search-opt {
     display: flex;
     align-items: center;
     gap: 9px;
     padding: var(--sp-3) var(--sp-4);
-    min-height: 40px;
+    min-height: var(--hit);
     border-radius: var(--r-sm);
     cursor: pointer;
     color: var(--ink);

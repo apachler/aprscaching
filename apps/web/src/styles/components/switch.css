@@ -20,9 +20,7 @@
     height: 18px;
     border-radius: 50%;
     background: var(--muted);
-    transition:
-      transform 0.16s ease,
-      background-color 0.16s ease;
+    transition: transform 0.16s ease; /* the knob colour switches instantly: no paint animation */
   }
   .sw.on {
     background: var(--accent);

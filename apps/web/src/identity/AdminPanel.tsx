@@ -71,6 +71,7 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
         </>
       }
       onClose={props.onClose}
+      density="compact"
     >
       <p className="muted">
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}

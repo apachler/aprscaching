@@ -16,6 +16,9 @@ export function Panel(props: {
   /** Dense workspace surfaces (packet terminal, BBS) fill the content area at ≥1024px instead of
    *  docking as a slim ~348px drawer — the map hides while the surface is active (see css.md). */
   wide?: boolean;
+  /** Density (ui-ux.md §6): compact tightens type and control spacing through the density tokens.
+   *  Wide Shack surfaces are always compact; the instance admin surface asks for it too. */
+  density?: "compact";
 }) {
   const ref = useRef<HTMLElement>(null);
   const { onClose } = props;
@@ -44,7 +47,7 @@ export function Panel(props: {
       tabIndex={-1}
       onKeyDown={onKeyDown}
       data-shell={props.wide ? "terminal" : undefined}
-      data-density={props.wide ? "compact" : undefined}
+      data-density={props.wide ? "compact" : props.density}
       className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}
     >
       <div className="row between">

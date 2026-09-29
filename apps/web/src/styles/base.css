@@ -31,9 +31,11 @@
     font-weight: 700;
   }
   /* buttons + inputs */
+  /* size and padding follow the density tokens, so a compact surface tightens every bare button */
   button {
     font: inherit;
-    padding: var(--sp-2) 11px;
+    font-size: var(--ctl-fs);
+    padding: var(--ctl-pad-y) var(--ctl-pad-x);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
     background: var(--surface-2);

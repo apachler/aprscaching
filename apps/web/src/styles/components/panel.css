@@ -40,12 +40,13 @@
     margin: var(--sp-7) 0 var(--sp-2);
     color: var(--heading);
   }
-  /* Shack apps are desktop-density (ui-ux.md §5) — on a narrow viewport show a one-line note.
-   CSS-gated via a viewport media query (no JS), free on desktop; the app still works either way. */
+  /* Shack apps are desktop-density (ui-ux.md §5) — while the panel is narrow (a phone sheet or a tablet
+   drawer) it shows a one-line note. A container query on the panel, so the note follows the slot, not
+   the viewport; the app still works either way. */
   .wide-hint {
     display: none;
   }
-  @media (max-width: 820px) {
+  @container panel (max-width: 40rem) {
     .wide-hint {
       display: block;
       margin: 0 0 var(--sp-4);

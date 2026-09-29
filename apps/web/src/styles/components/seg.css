@@ -30,7 +30,9 @@
     display: inline-flex;
     border: 1px solid var(--line);
     border-radius: var(--r-6);
-    overflow: hidden;
+  }
+  .seg.verify-methods {
+    overflow: hidden; /* wraps onto several rows; its buttons are already full-size targets */
   }
   .seg button {
     border: none;
@@ -39,6 +41,16 @@
     color: var(--muted);
     padding: 5px var(--sp-5);
     text-transform: capitalize;
+  }
+  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
+     area of each button can reach past the bar */
+  .seg:not(.verify-methods) > button:first-child {
+    border-start-start-radius: calc(var(--r-6) - 1px);
+    border-end-start-radius: calc(var(--r-6) - 1px);
+  }
+  .seg:not(.verify-methods) > button:last-child {
+    border-start-end-radius: calc(var(--r-6) - 1px);
+    border-end-end-radius: calc(var(--r-6) - 1px);
   }
   .seg button + button {
     border-left: 1px solid var(--line);

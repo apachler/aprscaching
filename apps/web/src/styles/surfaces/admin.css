@@ -40,7 +40,6 @@
     border: 1px solid var(--hair);
     border-radius: var(--r-6);
     background: var(--surface-2);
-    container-type: inline-size;
   }
   .partner-form label {
     display: grid;
@@ -53,7 +52,7 @@
     font: inherit;
     padding: 5px 7px;
   }
-  @container (min-width: 26rem) {
+  @container panel (min-width: 26rem) {
     .partner-form {
       grid-template-columns: 1fr 1fr;
     }
@@ -66,7 +65,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    container-type: inline-size;
+    container: setup / inline-size;
   }
   .setup-item {
     display: grid;
@@ -89,7 +88,7 @@
     color: var(--muted);
     overflow-wrap: anywhere;
   }
-  @container (min-width: 34rem) {
+  @container setup (min-width: 34rem) {
     .setup-item {
       grid-template-columns: auto minmax(9rem, 14rem) 1fr;
     }

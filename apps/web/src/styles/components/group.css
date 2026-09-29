@@ -2,7 +2,7 @@
 @layer components {
   /* subsection heading inside a settings group (e.g. Transports / RF / TAK under Connections & sources) */
   .set-subh {
-    margin: var(--sp-6) 0 var(--sp-2);
+    margin: var(--subh-mt) 0 var(--sp-2);
     font-size: var(--fs-sm);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -66,7 +66,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--sp-5);
-    padding: var(--sp-3) 0;
+    padding: var(--row-pad-y) 0;
     border-top: 1px solid var(--line);
   }
   .setrow:first-child {

@@ -43,7 +43,6 @@
     display: flex;
     border: 1px solid var(--hair);
     border-radius: var(--r-6);
-    overflow: hidden;
   }
   .tr-controls .seg button {
     min-height: 32px;
@@ -54,6 +53,16 @@
     font-weight: 600;
     font-size: var(--fs-sm);
     cursor: pointer;
+  }
+  /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
+     area of each button can reach past the bar */
+  .tr-controls .seg > button:first-child {
+    border-start-start-radius: calc(var(--r-6) - 1px);
+    border-end-start-radius: calc(var(--r-6) - 1px);
+  }
+  .tr-controls .seg > button:last-child {
+    border-start-end-radius: calc(var(--r-6) - 1px);
+    border-end-end-radius: calc(var(--r-6) - 1px);
   }
   .tr-controls .seg button + button {
     border-left: 1px solid var(--hair);

@@ -5,6 +5,12 @@
     display: flex;
     flex-direction: column;
   }
+  /* the shell spans the dynamic viewport, so it tracks the mobile browser's collapsing chrome */
+  @supports (height: 1dvh) {
+    .app {
+      height: 100dvh;
+    }
+  }
   /* shell = the row below the top bar: [nav rail] [docked panels] [map] [detail].
    It's flex at every size; panels float as bottom sheets / drawers by default and only become
    in-flow docked columns in the operator breakpoint (≥1024px). */
@@ -29,14 +35,16 @@
   .rail {
     display: none;
   } /* operator nav rail — revealed at ≥1024px */
-  /* top bar — dark chrome with the white wordmark */
+  /* top bar — dark chrome with the white wordmark; it grows by the top safe-area inset and keeps its
+     content clear of a notch or rounded corner (viewport-fit=cover) */
   .topbar {
-    flex: 0 0 var(--topbar-h);
+    flex: 0 0 calc(var(--topbar-h) + env(safe-area-inset-top));
     z-index: var(--z-topbar);
     display: flex;
     align-items: center;
     gap: var(--sp-4);
-    padding: 0 var(--sp-6);
+    padding: env(safe-area-inset-top) max(var(--sp-6), env(safe-area-inset-right)) 0
+      max(var(--sp-6), env(safe-area-inset-left));
     background: var(--topbar-bg);
     color: var(--chrome-ink);
     box-shadow: var(--elev-3);
@@ -238,7 +246,8 @@
     }
     .topbar {
       gap: var(--sp-3);
-      padding: 0 var(--sp-4);
+      padding: env(safe-area-inset-top) max(var(--sp-4), env(safe-area-inset-right)) 0
+        max(var(--sp-4), env(safe-area-inset-left));
     }
     .topbar .call input {
       width: 80px;
@@ -259,11 +268,12 @@
       right: 0;
       bottom: 0;
       z-index: var(--z-tabbar);
-      height: var(--tabbar-h);
+      /* the bar's own height plus the home-indicator inset, so the buttons keep the full --tabbar-h */
+      height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
       background: var(--topbar-bg);
       border-top: 1px solid var(--line);
       box-shadow: var(--elev-up);
-      padding-bottom: env(safe-area-inset-bottom);
+      padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
     .tabbar button {
       flex: 1;
@@ -316,12 +326,11 @@
     .panel.right {
       top: auto;
       bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
-      left: var(--sp-2);
-      right: var(--sp-2);
+      left: max(var(--sp-2), env(safe-area-inset-left));
+      right: max(var(--sp-2), env(safe-area-inset-right));
       width: auto;
       max-width: none;
       max-height: 74vh;
-      max-height: 74dvh;
       border-radius: var(--r-10) var(--r-10) 0 0;
       padding: var(--sp-6) var(--sp-6) var(--sp-8);
     }
@@ -336,7 +345,16 @@
     }
     .geo-banner {
       top: auto;
-      bottom: calc(var(--tabbar-h) + var(--sp-5));
+      bottom: calc(var(--tabbar-h) + var(--sp-5) + env(safe-area-inset-bottom));
+    }
+  }
+  @supports (height: 1dvh) {
+    @media (max-width: 680px) {
+      .panel,
+      .panel.left,
+      .panel.right {
+        max-height: 74dvh;
+      }
     }
   }
   /* first-run splash overlay */

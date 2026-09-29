@@ -7,7 +7,7 @@
     padding: var(--sp-3) 0 var(--sp-0);
   }
   .loadmore button {
-    min-height: 36px;
+    min-height: var(--hit);
   }
   .loadmore button[aria-busy="true"] {
     opacity: 0.6;

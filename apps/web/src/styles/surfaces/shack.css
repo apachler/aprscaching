@@ -56,7 +56,7 @@
     display: grid;
     gap: var(--sp-5);
   }
-  @container (min-width: 34rem) {
+  @container panel (min-width: 34rem) {
     .field-station .fs-cols {
       grid-template-columns: 1fr 1fr;
     }
