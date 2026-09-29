@@ -1,6 +1,10 @@
 # Home/Pi override: expose via Cloudflare Tunnel (no port-forwarding / CGNAT-friendly).
 # Up:  docker compose -f docker-compose.yml -f compose.home.yml up -d --build
 services:
+  gateway:
+    environment:
+      # every request arrives through the tunnel, so Cloudflare's cf-connecting-ip is the client
+      TRUST_CF: "1"
   caddy:
     ports: [] # no public ports; the tunnel reaches caddy on the internal network
   cloudflared:

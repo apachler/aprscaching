@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { issueSessionCookie } from "./auth.js";
+import { issueSessionCookie, unclaimableReason, authThrottled } from "./auth.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -27,6 +27,9 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     .trim()
     .toLowerCase();
   if (!EMAIL_RE.test(e)) return json({ error: "invalid email" }, { status: 400 });
+  // each start sends a mail: bound it per client address and per mailbox
+  const limited = await authThrottled(env, req, "email-start", e, { perIp: 20, perIdentity: 5, windowMs: 600_000 });
+  if (limited) return limited;
 
   const acct = await env.DB.prepare("SELECT account_id FROM accounts WHERE email = ?").bind(e).first();
   const purpose = acct ? "login" : "register";
@@ -36,8 +39,8 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
       .toUpperCase()
       .trim();
     if (cs.length < 3) return json({ error: "callsign required to register" }, { status: 400 });
-    const taken = await env.DB.prepare("SELECT 1 FROM accounts WHERE callsign = ?").bind(cs).first();
-    if (taken) return json({ error: "callsign already claimed — sign in with its email" }, { status: 409 });
+    const refused = await unclaimableReason(env, cs);
+    if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
   }
 
   const token = newToken();
@@ -90,23 +93,26 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     const id = crypto.randomUUID();
     const cs = (row.callsign ?? "").toUpperCase();
     if (cs.length < 3) return json({ error: "missing callsign for registration" }, { status: 400 });
-    // guard the race: callsign may have been claimed since `start`
-    const taken = await env.DB.prepare("SELECT 1 FROM accounts WHERE callsign = ?").bind(cs).first();
-    if (taken) return json({ error: "callsign already claimed" }, { status: 409 });
-    await env.DB.prepare(
-      "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-    )
-      .bind(cs, id, row.email, now)
-      .run();
-    await env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)")
-      .bind(id, cs, now)
-      .run();
-    // seed the held-callsign set with this call as the account's primary base call
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-    )
-      .bind(id, cs.split("-")[0], now)
-      .run();
+    // guard the race: the call (or its base, via another SSID) may have been claimed since `start`
+    const refused = await unclaimableReason(env, cs);
+    if (refused) return json({ error: refused }, { status: 409 });
+    try {
+      // seed the held-callsign set with this call as the account's primary base call; the unique
+      // base-call index makes a concurrent claim fail the whole batch
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
+        ).bind(id, cs.split("-")[0], now),
+        env.DB.prepare(
+          "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
+        ).bind(cs, id, row.email, now),
+        env.DB.prepare(
+          "INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)",
+        ).bind(id, cs, now),
+      ]);
+    } catch {
+      return json({ error: "callsign already claimed" }, { status: 409 });
+    }
     acct = { account_id: id, callsign: cs };
   }
 

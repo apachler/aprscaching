@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, secretOk, timingSafeEqual } from "./auth.js";
+import { sessionAccountId, accountHoldsCall, authThrottled, secretOk, timingSafeEqual } from "./auth.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 const CHALLENGE_TTL_SEC = 15 * 60; // a code is good for 15 minutes
 const MAX_ATTEMPTS = 5; // wrong guesses before the challenge locks
@@ -13,23 +14,45 @@ function sixDigitCode(): string {
 }
 const ingestOk = (req: Request, env: Env) => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
+/** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign.
+ *  Each start sends a message over APRS, so these bound how hard anyone can page a station. */
+const STARTS_PER_ACCOUNT = 10;
+const STARTS_PER_CALL = 5;
+const START_WINDOW_MS = 3_600_000;
+
 /** Start an APRS message-challenge: queue a one-time code to be sent to the callsign over APRS. */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
   // a challenge may be requested only by a signed-in account (the confirm is bound to
   // it) or the trusted backend (ingest secret — e.g. a CLI/LoTW flow). A public, unauthenticated
   // caller cannot farm codes or spam outbound APRS.
   const me = await sessionAccountId(req, env);
-  if (!me && !ingestOk(req, env)) return json({ error: "sign in to verify a callsign" }, { status: 401 });
+  const trusted = ingestOk(req, env);
+  if (!me && !trusted) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
   const cs = String(callsign ?? "").toUpperCase();
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
+  if (me && !trusted) {
+    // a session proves control only of a licence its account already holds
+    if (!(await accountHoldsCall(env, me.accountId, cs)))
+      return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
+    const t = Date.now();
+    if (
+      (await rateLimitedDurable(env, `aprs-start:acct:${me.accountId}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
+      (await rateLimitedDurable(env, `aprs-start:call:${cs}`, t, STARTS_PER_CALL, START_WINDOW_MS))
+    )
+      return json({ error: "too many verification codes requested — try again later" }, { status: 429 });
+  }
   const code = sixDigitCode();
   const now = Math.floor(Date.now() / 1000);
+  // A new challenge replaces any pending one but never revokes an existing verification: a verified
+  // call stays verified (and keeps its method) while the new code is outstanding.
   await env.DB.prepare(
     `INSERT INTO callsign_verifications (callsign, method, status, challenge, account_id, attempts, created_at)
      VALUES (?, 'aprs_msg', 'pending', ?, ?, 0, ?)
-     ON CONFLICT(callsign) DO UPDATE SET method='aprs_msg', status='pending', challenge=excluded.challenge,
-       account_id=excluded.account_id, attempts=0, created_at=excluded.created_at`,
+     ON CONFLICT(callsign) DO UPDATE SET
+       method = CASE WHEN callsign_verifications.status = 'verified' THEN callsign_verifications.method ELSE 'aprs_msg' END,
+       status = CASE WHEN callsign_verifications.status = 'verified' THEN 'verified' ELSE 'pending' END,
+       challenge=excluded.challenge, account_id=excluded.account_id, attempts=0, created_at=excluded.created_at`,
   )
     .bind(cs, code, me?.accountId ?? null, now)
     .run();
@@ -49,15 +72,25 @@ export async function confirmAprsChallenge(req: Request, env: Env): Promise<Resp
   if (!me && !trusted) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const { callsign, code } = (await req.json().catch(() => ({}))) as { callsign?: string; code?: string };
   const cs = String(callsign ?? "").toUpperCase();
+  // guesses from a session are throttled per address and per callsign on top of the per-code lockout,
+  // which a fresh start resets; the trusted backend confirms the codes it drove
+  if (!trusted) {
+    const limited = await authThrottled(env, req, "aprs-confirm", cs, {
+      perIp: 20,
+      perIdentity: 10,
+      windowMs: 600_000,
+    });
+    if (limited) return limited;
+  }
   const row = await env.DB.prepare(
     "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
   )
     .bind(cs)
     .first<{ challenge: string; account_id: string | null; attempts: number; created_at: number; status: string }>();
   const now = Math.floor(Date.now() / 1000);
-  // an active challenge only — and, for a browser session, one THIS account started (the trusted
-  // backend may confirm any pending challenge it drove).
-  if (!row || row.status !== "pending" || (me && !trusted && row.account_id !== me.accountId))
+  // an outstanding code only — and, for a browser session, one THIS account started (the trusted
+  // backend may confirm any pending challenge it drove). A used code is cleared, so it never replays.
+  if (!row || !row.challenge || row.status === "failed" || (me && !trusted && row.account_id !== me.accountId))
     return json({ verified: false, error: "no active challenge" }, { status: 400 });
   if (now - row.created_at > CHALLENGE_TTL_SEC)
     return json({ verified: false, error: "challenge expired — request a new code" }, { status: 400 });
@@ -65,14 +98,17 @@ export async function confirmAprsChallenge(req: Request, env: Env): Promise<Resp
     return json({ verified: false, error: "too many attempts — request a new code" }, { status: 429 });
   if (!timingSafeEqual(row.challenge ?? "", String(code ?? ""))) {
     await env.DB.prepare(
-      "UPDATE callsign_verifications SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= ? THEN 'failed' ELSE status END WHERE callsign = ?",
+      // wrong guesses lock the pending code; an already-verified call keeps its status
+      "UPDATE callsign_verifications SET attempts = attempts + 1, status = CASE WHEN attempts + 1 >= ? AND status <> 'verified' THEN 'failed' ELSE status END WHERE callsign = ?",
     )
       .bind(MAX_ATTEMPTS, cs)
       .run();
     return json({ verified: false }, { status: 400 });
   }
   await env.DB.batch([
-    env.DB.prepare("UPDATE callsign_verifications SET status='verified', verified_at=? WHERE callsign=?").bind(now, cs),
+    env.DB.prepare(
+      "UPDATE callsign_verifications SET status='verified', method='aprs_msg', verified_at=?, challenge=NULL WHERE callsign=?",
+    ).bind(now, cs),
     env.DB.prepare("UPDATE accounts SET verified=1, verify_method='aprs_msg', verified_at=? WHERE callsign=?").bind(
       now,
       cs,

@@ -414,7 +414,7 @@ describe("hardening", () => {
     expect(exp.logs).toHaveLength(1);
     const del = (await (await handleAccountDelete(req(), env, "OE8APR")).json()) as { tombstones: number };
     expect(del.tombstones).toBe(1);
-    expect(logs()[0]).toMatchObject({ logger_call: "WITHDRAWN", comment: null });
+    expect(logs()[0]).toMatchObject({ logger_call: expect.stringMatching(/^WITHDRAWN#/), comment: null });
   });
 
   it("erase succeeds when the base call and an SSID both hold a found for the same cache", async () => {
@@ -434,7 +434,7 @@ describe("hardening", () => {
       "OE8APR",
     );
     expect(res.status).toBe(200);
-    expect(logs().map((l) => l.logger_call)).toEqual(["WITHDRAWN"]);
+    expect(logs().map((l) => l.logger_call)).toEqual([expect.stringMatching(/^WITHDRAWN#/)]);
   });
 
   it("uppercase ACK and REJ to the service call are acks, not commands", async () => {

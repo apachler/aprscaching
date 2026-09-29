@@ -26,6 +26,8 @@ interface StageRow {
 /** Normalise an NFC/manual unlock code for comparison (trim + casefold; tag serials/text vary in case). */
 const normCode = (s: string) => s.trim().toLowerCase();
 
+/** The owner of a native cache. An erased owner's marker is returned as-is; `actor()` never yields it,
+ *  so no caller can match it. */
 async function ownerOf(env: Env, cacheId: number): Promise<string | null> {
   const r = await env.DB.prepare("SELECT owner_call FROM caches WHERE id=? AND source='native'")
     .bind(cacheId)

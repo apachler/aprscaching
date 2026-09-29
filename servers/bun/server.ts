@@ -17,6 +17,7 @@ import { execSync } from "node:child_process";
 import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
+import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { makeFetchGuard } from "./fetchguard.ts";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
@@ -109,9 +110,11 @@ const server = Bun.serve<WsData, undefined>({
       if (srv.upgrade(req, { data: { region } })) return undefined;
       return new Response("websocket upgrade failed", { status: 400 });
     }
-    // overwrite any client-supplied x-real-ip with the socket address (mirrors servers/node)
-    const fwd = new Request(req, { headers: new Headers(req.headers) });
-    fwd.headers.set("x-real-ip", srv.requestIP(req)?.address ?? "unknown");
+    // overwrite any client-supplied x-real-ip with the socket address and drop a client-sent
+    // cf-connecting-ip unless a Cloudflare edge is declared (mirrors servers/node)
+    const headers = new Headers(req.headers);
+    stampClientIp(headers, srv.requestIP(req)?.address, env);
+    const fwd = new Request(req, { headers });
     return handle(fwd, env, { waitUntil: (p) => void Promise.resolve(p).catch(() => {}) });
   },
   websocket: {
