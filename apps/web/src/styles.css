@@ -783,6 +783,34 @@ button.heart.on {
 .rendezvous {
   margin: 12px 0;
 }
+/* "Up for adoption" card in the cache detail: accent-tinted via color-mix, one card, no blur */
+.adopt-card {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--accent) 7%, transparent);
+}
+.adopt-card label.row {
+  gap: 8px;
+  min-height: 44px;
+}
+.adopt-note {
+  display: grid;
+  gap: 3px;
+}
+.adopt-note input {
+  font: inherit;
+  padding: 5px 7px;
+}
+/* pending requests nested under an offered cache (Instance admin → Cache adoption) */
+.logs.adopt-reqs {
+  margin: 6px 0 6px 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--hair);
+}
 .rdv-list {
   list-style: none;
   padding: 0;

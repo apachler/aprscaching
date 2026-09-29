@@ -26,7 +26,8 @@
     "./account": "./src/account.ts",
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",
-    "./ingest": "./src/ingest.ts"
+    "./ingest": "./src/ingest.ts",
+    "./adoption": "./src/adoption.ts"
   },
   "scripts": {
     "dev": "wrangler dev",

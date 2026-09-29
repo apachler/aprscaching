@@ -49,6 +49,7 @@ export function isFederatedWrite(method: string, p: string): boolean {
   return (
     p === "/api/caches" || // new cache
     /^\/api\/caches\/\d+\/logs$/.test(p) || // new find
+    /^\/api\/admin\/adoptions\/(\d+\/assign|requests\/\d+\/approve)$/.test(p) || // a cache changes owner
     p === "/keys/register" || // new callsign key
     /^\/api\/account\/[A-Za-z0-9-]+\/delete$/.test(p)
   ); // tombstones (delete propagation)

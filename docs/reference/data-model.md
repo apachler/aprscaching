@@ -35,6 +35,9 @@ The baseline groups into a handful of domains:
   - `0005_positions_transport` — how each stored position reached the gateway (`aprs-is`, `tnc`,
     `browser-rf`, `axudp`, `axip`, `meshcom`, `meshtastic`), derived from the ingest port. Display and
     statistics only: the verify engine never branches on it; rows stored earlier read `NULL`.
+  - `0014_cache_adoption` — cache adoption: standing offers (`cache_adoption_offers`), requests to adopt
+    (`cache_adoption_requests`) and the audit trail of every step (`cache_adoptions`). Ownership stays on
+    `caches.owner_call`.
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —
 live in `@aprscaching/shared` (Zod schemas) and are the source of truth for request/response shapes.

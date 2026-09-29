@@ -46,6 +46,9 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | GET · POST | `/api/caches/:id/media`, `/stages`, `/stages/:n/unlock` | Media gallery; stages (owner sets them with POST `/stages`) & staged unlock | public/actor |
 | DELETE · PUT | `/api/caches/:id/media/:mid` · `/api/caches/:id/stages/:n/media` | Remove a photo · set a stage's audio clue | actor (owner) |
 | GET | `/api/media/*` | Serve an uploaded photo or audio file | public |
+| GET | `/api/adoptions` | Caches up for adoption, with the sysop's public note and when the owner's notice ends | public |
+| GET · POST · DELETE | `/api/caches/:id/adoption` | The offer on a cache and your own request · request adoption (`{ inPlace, note? }`, needs a control-verified call) · the owner keeps the cache | public · session |
+| DELETE | `/api/caches/:id/adoption/request` | Withdraw your pending adoption request | session |
 
 ## Stations & the Shack
 
@@ -102,6 +105,10 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | GET | `/api/admin/whoami` | Whether the caller is an operator; `pending: "verify"` for the unconfirmed holder of an `ADMIN_CALLSIGNS` call |
 | GET · POST | `/api/admin/verifications` | List · add manual callsign verifications (`{ callsign, note }`) |
 | DELETE | `/api/admin/verifications/:call` | Revoke a manual verification |
+| GET · POST | `/api/admin/adoptions` | Withdrawn-owner caches, offers with their pending requests and the recent trail · offer a cache (`{ cacheId \| code, note }`) |
+| DELETE | `/api/admin/adoptions/:cacheId` | Withdraw an offer (cancels its pending requests) |
+| POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) |
+| POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
 | GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table · MHeard |
 | GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners |

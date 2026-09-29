@@ -20,6 +20,12 @@ import {
   addManualVerification,
   revokeManualVerification,
   type ManualVerification,
+  getAdminAdoptions,
+  offerForAdoption,
+  withdrawAdoptionOffer,
+  assignCacheOwner,
+  decideAdoptionRequest,
+  type AdminAdoptions,
   type SetupItem,
   type FedPeer,
   type ForwardPartner,
@@ -38,6 +44,7 @@ import {
   copyText,
   useConfirm,
   useToast,
+  Disclosure,
 } from "../ui/index.js";
 
 /**
@@ -88,6 +95,11 @@ export function AdminPanel(props: {
       {show("verification", "verify", "callsign", "manual", "licence", "sysop") && (
         <Group title="Callsign verification" status="manual" defaultOpen={false}>
           <VerificationAdmin />
+        </Group>
+      )}
+      {show("adoption", "adopt", "caches", "owner", "withdrawn", "assign", "orphan") && (
+        <Group title="Cache adoption" status="owners" defaultOpen={false}>
+          <AdoptionAdmin />
         </Group>
       )}
       {show("federation", "peers", "trust", "44net", "sync") && (
@@ -257,6 +269,415 @@ function VerificationAdmin() {
         </ul>
       )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------- cache adoption
+
+type AdoptCache = AdminAdoptions["withdrawn"][number];
+
+/**
+ * Hand caches to new owners. A withdrawn owner's cache (the owner erased their account) or an abandoned one
+ * is offered to the community with a public note; signed-in holders of a verified call ask for it here, and
+ * the sysop approves one — or assigns the cache straight to a verified call. An active owner is told of an
+ * offer and can keep the cache until the notice period ends.
+ */
+function AdoptionAdmin() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const [data, setData] = useState<AdminAdoptions | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [code, setCode] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const refresh = () => {
+    setLoadErr(false);
+    getAdminAdoptions()
+      .then(setData)
+      .catch(() => setLoadErr(true));
+  };
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const offerByCode = async () => {
+    if (!code.trim() || note.trim().length < 3) {
+      setFormErr(!code.trim() ? "Enter the cache code." : "Say why the cache is up for adoption.");
+      return;
+    }
+    setSaving(true);
+    setFormErr(null);
+    try {
+      await offerForAdoption({ code: code.trim() }, note.trim());
+      toast(`${code.trim().toUpperCase()} offered for adoption`);
+      setCode("");
+      setNote("");
+      refresh();
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  /** Run one row action with its own busy flag, a toast, and a refresh. */
+  const act = async (key: string, done: string, fn: () => Promise<unknown>) => {
+    setBusy(key);
+    try {
+      await fn();
+      toast(done);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const withdraw = async (c: AdoptCache) => {
+    if (
+      !(await confirmDialog({
+        title: `Withdraw the adoption offer on ${c.code}?`,
+        message: "The cache leaves the adoption list and every pending request on it is cancelled.",
+        confirmLabel: "Withdraw offer",
+        danger: true,
+      }))
+    )
+      return;
+    await act(`w${c.id}`, `Offer on ${c.code} withdrawn`, () => withdrawAdoptionOffer(c.id));
+  };
+  const decide = async (c: AdoptCache, r: { id: number; callsign: string }, d: "approve" | "decline") => {
+    if (
+      !(await confirmDialog({
+        title: d === "approve" ? `Hand ${c.code} to ${r.callsign}?` : `Decline ${r.callsign}'s request?`,
+        message:
+          d === "approve"
+            ? "The cache changes owner; its finds and logbook stay. Other requests on it are declined."
+            : "The requester is told their request was not taken up.",
+        confirmLabel: d === "approve" ? "Approve" : "Decline",
+        danger: d === "decline",
+      }))
+    )
+      return;
+    await act(`r${r.id}`, d === "approve" ? `${c.code} now belongs to ${r.callsign}` : "Request declined", () =>
+      decideAdoptionRequest(r.id, d),
+    );
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  return (
+    <>
+      <p className="muted fine">
+        Offer a cache whose owner has withdrawn or stopped looking after it. The note is public. An active owner is told
+        and can keep the cache for {data ? Math.round(data.noticeSec / 86_400) : 14} days; the new owner must hold a
+        control-verified call.
+      </p>
+      <div className="partner-form">
+        <label>
+          Cache code
+          <input
+            className="mono"
+            placeholder="AC-0042"
+            value={code}
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={!!formErr && !code.trim()}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </label>
+        <label>
+          Why it is up for adoption
+          <input
+            placeholder="owner inactive since 2024"
+            value={note}
+            maxLength={300}
+            aria-invalid={!!formErr && note.trim().length < 3}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void offerByCode();
+            }}
+          />
+        </label>
+        <div className="row end">
+          <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void offerByCode()}>
+            {saving ? "Offering…" : "Offer for adoption"}
+          </button>
+        </div>
+      </div>
+      {formErr && (
+        <p className="error fine" role="alert">
+          {formErr}
+        </p>
+      )}
+
+      {loadErr ? (
+        <ErrorState onRetry={refresh}>Couldn&apos;t load the adoption list.</ErrorState>
+      ) : data === null ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : (
+        <>
+          <h4 className="set-subh">Up for adoption</h4>
+          {data.offered.length === 0 ? (
+            <EmptyState>No cache is up for adoption. Offer one above, or from the withdrawn list below.</EmptyState>
+          ) : (
+            <ul className="logs">
+              {data.offered.map((c) => (
+                <li key={c.id}>
+                  <span className="mono">{c.code}</span> {c.title}
+                  <span className="muted">
+                    {" "}
+                    · owner <span className="mono">{c.ownerCall}</span> · offered by{" "}
+                    <span className="mono">{c.offeredBy}</span> {fmt.ago(c.offeredAt)}
+                  </span>{" "}
+                  {c.noticeEndsAt > now ? (
+                    <Badge kind="warn">notice until {fmt.date(c.noticeEndsAt)}</Badge>
+                  ) : (
+                    <Badge kind="found">ready</Badge>
+                  )}
+                  <div className="comment">{c.note}</div>
+                  {c.requests.length === 0 ? (
+                    <div className="comment muted">No requests yet.</div>
+                  ) : (
+                    <ul className="logs adopt-reqs">
+                      {c.requests.map((r) => (
+                        <li key={r.id}>
+                          <span className="mono">{r.callsign}</span>
+                          <span className="muted">
+                            {" "}
+                            · {r.inPlace ? "confirms it is in place" : "has not checked the site"} ·{" "}
+                            {fmt.ago(r.requestedAt)}
+                          </span>
+                          {r.note && <div className="comment">{r.note}</div>}
+                          <div className="row">
+                            <button
+                              disabled={busy !== null || c.noticeEndsAt > now}
+                              aria-busy={busy === `r${r.id}`}
+                              title={c.noticeEndsAt > now ? "The owner's notice period is still running" : undefined}
+                              onClick={() => void decide(c, r, "approve")}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="danger"
+                              disabled={busy !== null}
+                              onClick={() => void decide(c, r, "decline")}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="row">
+                    <AssignOwner cache={c} disabled={busy !== null || c.noticeEndsAt > now} onDone={refresh} />
+                    <button
+                      className="link-btn danger"
+                      disabled={busy !== null}
+                      aria-label={`Withdraw the adoption offer on ${c.code}`}
+                      onClick={() => void withdraw(c)}
+                    >
+                      Withdraw offer
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h4 className="set-subh">Withdrawn owners</h4>
+          {data.withdrawn.length === 0 ? (
+            <EmptyState>No cache is left by an erased account.</EmptyState>
+          ) : (
+            <ul className="logs">
+              {data.withdrawn.map((c) => (
+                <li key={c.id}>
+                  <span className="mono">{c.code}</span> {c.title} <Badge>{c.status}</Badge>
+                  <div className="row">
+                    <OfferWithdrawn cache={c} onDone={refresh} />
+                    <AssignOwner cache={c} disabled={busy !== null} onDone={refresh} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <Disclosure label={`Recent activity (${data.log.length})`}>
+            {data.log.length === 0 ? (
+              <EmptyState>Nothing has happened yet.</EmptyState>
+            ) : (
+              <ul className="logs">
+                {data.log.map((l) => (
+                  <li key={l.id}>
+                    <span className="mono">{l.code ?? `#${l.cacheId}`}</span>{" "}
+                    <Badge>{l.action.replace(/_/g, " ")}</Badge>
+                    <span className="muted">
+                      by <span className="mono">{l.actor}</span>
+                      {l.to && (
+                        <>
+                          {" "}
+                          · <span className="mono">{l.from ?? "?"}</span> to <span className="mono">{l.to}</span>
+                        </>
+                      )}{" "}
+                      · {fmt.date(l.at)}
+                    </span>
+                    {l.note && <div className="comment">{l.note}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Disclosure>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Offer one withdrawn-owner cache: a disclosure holding the public note and the confirm button. */
+function OfferWithdrawn(props: { cache: AdoptCache; onDone: () => void }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("The owner has withdrawn from the network.");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const submit = async () => {
+    if (note.trim().length < 3) {
+      setErr("Say why the cache is up for adoption.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      await offerForAdoption({ cacheId: props.cache.id }, note.trim());
+      toast(`${props.cache.code} offered for adoption`);
+      setOpen(false);
+      props.onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!open)
+    return (
+      <button aria-expanded={false} onClick={() => setOpen(true)}>
+        Offer…
+      </button>
+    );
+  return (
+    <div className="partner-form">
+      <label>
+        Public note
+        <input value={note} maxLength={300} aria-invalid={!!err} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <div className="row end">
+        <button onClick={() => setOpen(false)}>Cancel</button>
+        <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+          {saving ? "Offering…" : `Offer ${props.cache.code}`}
+        </button>
+      </div>
+      {err && (
+        <p className="error fine" role="alert">
+          {err}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Hand a cache straight to a call: the call must be held by an account and control-verified. */
+function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () => void }) {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const [open, setOpen] = useState(false);
+  const [call, setCall] = useState("");
+  const [note, setNote] = useState("");
+  const [activate, setActivate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const cs = call.trim().toUpperCase();
+  const submit = async () => {
+    if (!CALL_RE.test(cs) || note.trim().length < 3) {
+      setErr(!CALL_RE.test(cs) ? "Enter a valid callsign." : "Say why the cache changes owner.");
+      return;
+    }
+    if (
+      !(await confirmDialog({
+        title: `Make ${cs} the owner of ${props.cache.code}?`,
+        message: `The cache changes owner; its finds and logbook stay.${activate ? " It becomes active again." : " It keeps its status until the new owner edits it."}`,
+        confirmLabel: "Assign owner",
+        danger: true,
+      }))
+    )
+      return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await assignCacheOwner(props.cache.id, cs, note.trim(), activate);
+      toast(`${props.cache.code} now belongs to ${cs}`);
+      setOpen(false);
+      props.onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!open)
+    return (
+      <button
+        aria-expanded={false}
+        disabled={props.disabled}
+        title={props.disabled ? "The owner's notice period is still running" : undefined}
+        onClick={() => setOpen(true)}
+      >
+        Assign…
+      </button>
+    );
+  return (
+    <div className="partner-form">
+      <label>
+        New owner
+        <input
+          className="mono"
+          placeholder="VK2ABC"
+          value={call}
+          autoCapitalize="characters"
+          spellCheck={false}
+          aria-invalid={!!err && !CALL_RE.test(cs)}
+          onChange={(e) => setCall(e.target.value)}
+        />
+      </label>
+      <label>
+        Why it changes owner
+        <input
+          placeholder="asked by email, licence checked"
+          value={note}
+          maxLength={300}
+          aria-invalid={!!err && note.trim().length < 3}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      <label className="row">
+        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} /> The container is
+        confirmed in place: make the cache active
+      </label>
+      <div className="row end">
+        <button onClick={() => setOpen(false)}>Cancel</button>
+        <button className="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+          {saving ? "Assigning…" : "Assign owner"}
+        </button>
+      </div>
+      {err && (
+        <p className="error fine" role="alert">
+          {err}
+        </p>
+      )}
+    </div>
   );
 }
 

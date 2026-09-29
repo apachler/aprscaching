@@ -659,6 +659,100 @@ export function addManualVerification(
 export function revokeManualVerification(callsign: string): Promise<{ revoked: boolean }> {
   return call(`/api/admin/verifications/${encodeURIComponent(callsign)}`, { method: "DELETE" });
 }
+// ---- cache adoption ----
+/** A cache as the adoption endpoints serve it; `ownerCall` reads `WITHDRAWN` for an erased owner. */
+export interface AdoptionCache {
+  id: number;
+  code: string;
+  title: string;
+  type: string;
+  status: string;
+  lat: number | null;
+  lon: number | null;
+  ownerCall: string;
+  ownerWithdrawn: boolean;
+}
+/** A cache up for adoption, as the public list serves it. */
+export interface AdoptionListing extends AdoptionCache {
+  cacheId: number;
+  note: string;
+  offeredAt: number;
+  noticeEndsAt: number;
+}
+export function listAdoptions(): Promise<{ adoptions: AdoptionListing[] }> {
+  return call(`/api/adoptions`);
+}
+/** One cache's offer and the signed-in caller's own request. */
+export interface CacheAdoptionState {
+  offer: { note: string; offeredAt: number; noticeEndsAt: number } | null;
+  isOwner: boolean;
+  request: {
+    id: number;
+    status: "pending" | "approved" | "declined" | "cancelled";
+    callsign: string;
+    inPlace: boolean;
+    requestedAt: number;
+    decidedAt: number | null;
+  } | null;
+  canRequest: boolean;
+  reason: string | null;
+}
+export function getCacheAdoption(id: number): Promise<CacheAdoptionState> {
+  return call(`/api/caches/${id}/adoption`);
+}
+export function requestAdoption(id: number, inPlace: boolean, note?: string): Promise<unknown> {
+  return call(`/api/caches/${id}/adoption`, { method: "POST", body: JSON.stringify({ inPlace, note }) });
+}
+export function cancelAdoptionRequest(id: number): Promise<unknown> {
+  return call(`/api/caches/${id}/adoption/request`, { method: "DELETE" });
+}
+/** The owner keeps their cache: declines the adoption offer on it. */
+export function keepCache(id: number): Promise<unknown> {
+  return call(`/api/caches/${id}/adoption`, { method: "DELETE" });
+}
+/** The sysop's adoption overview. */
+export interface AdminAdoptions {
+  noticeSec: number;
+  withdrawn: AdoptionCache[];
+  offered: Array<
+    AdoptionCache & {
+      note: string;
+      offeredBy: string;
+      offeredAt: number;
+      noticeEndsAt: number;
+      requests: Array<{ id: number; callsign: string; inPlace: boolean; note: string | null; requestedAt: number }>;
+    }
+  >;
+  log: Array<{
+    id: number;
+    cacheId: number;
+    code: string | null;
+    action: string;
+    actor: string;
+    from: string | null;
+    to: string | null;
+    note: string | null;
+    at: number;
+  }>;
+}
+export function getAdminAdoptions(): Promise<AdminAdoptions> {
+  return call(`/api/admin/adoptions`);
+}
+export function offerForAdoption(target: { cacheId: number } | { code: string }, note: string): Promise<unknown> {
+  return call(`/api/admin/adoptions`, { method: "POST", body: JSON.stringify({ ...target, note }) });
+}
+export function withdrawAdoptionOffer(cacheId: number): Promise<unknown> {
+  return call(`/api/admin/adoptions/${cacheId}`, { method: "DELETE" });
+}
+export function assignCacheOwner(cacheId: number, callsign: string, note: string, activate: boolean): Promise<unknown> {
+  return call(`/api/admin/adoptions/${cacheId}/assign`, {
+    method: "POST",
+    body: JSON.stringify({ callsign, note, activate }),
+  });
+}
+export function decideAdoptionRequest(requestId: number, decision: "approve" | "decline"): Promise<unknown> {
+  return call(`/api/admin/adoptions/requests/${requestId}/${decision}`, { method: "POST", body: "{}" });
+}
 /** The Setup checklist: env-only settings as read-only statuses (never values) + DB-state probes. */
 export interface SetupItem {
   key: string;
