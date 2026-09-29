@@ -3,14 +3,14 @@
   /* opt-in ham profile card */
   .profile-card {
     display: flex;
-    gap: 12px;
+    gap: var(--sp-5);
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: var(--sp-4);
   }
   .profile-avatar {
     width: 56px;
     height: 56px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     object-fit: cover;
     flex: 0 0 auto;
     background: var(--surface-2);
@@ -18,27 +18,27 @@
   .profile-card .profile-name {
     font-weight: 700;
     color: var(--heading);
-    font-size: 16px;
+    font-size: var(--fs-xl);
   }
   .profile-card .profile-bio {
-    margin: 6px 0 4px;
+    margin: var(--sp-2) 0 var(--sp-1);
   }
   .profile-card .profile-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 2px;
+    gap: var(--sp-4);
+    margin-top: var(--sp-0);
   }
   /* leaderboard + profile */
   .board {
     list-style: none;
     padding: 0;
-    margin: 10px 0 0;
+    margin: var(--sp-4) 0 0;
   }
   .board li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-3);
     padding: 7px 0;
     border-top: 1px solid var(--line);
   }

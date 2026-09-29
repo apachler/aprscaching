@@ -26,10 +26,10 @@
   .docs-nav {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--sp-0);
   }
   .docs-navhead {
-    margin: var(--sp-2) 0 2px;
+    margin: var(--sp-2) 0 var(--sp-0);
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -41,7 +41,7 @@
     border: none;
     color: var(--ink);
     font: inherit;
-    padding: 5px 8px;
+    padding: 5px var(--sp-3);
     border-radius: var(--r-sm);
     cursor: pointer;
   }

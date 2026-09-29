@@ -6,12 +6,12 @@
   .tour-scrim {
     position: fixed;
     inset: 0;
-    z-index: 60;
+    z-index: var(--z-dialog);
     display: grid;
     align-items: end;
     justify-items: center;
-    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
-    background: color-mix(in oklch, black 50%, transparent);
+    padding: 0 var(--sp-7) calc(var(--sp-10) + env(safe-area-inset-bottom));
+    background: color-mix(in oklch, var(--shade) 50%, transparent);
     animation: tour-in 0.18s ease;
   }
   .tour-card {
@@ -19,21 +19,21 @@
     background: var(--surface);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 16px 18px;
-    box-shadow: 0 14px 44px var(--shadow);
+    border-radius: var(--r-9);
+    padding: var(--sp-7) var(--sp-8);
+    box-shadow: var(--elev-10);
   }
   .tour-card h3 {
-    margin: 4px 0 6px;
+    margin: var(--sp-1) 0 var(--sp-2);
     color: var(--heading);
   }
   .tour-stepn {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--muted);
   }
   .tour-actions {
-    margin-top: 14px;
-    gap: 8px;
+    margin-top: var(--sp-6);
+    gap: var(--sp-3);
   }
   @keyframes tour-in {
     from {
@@ -56,7 +56,7 @@
     anchor-name: --tour-target;
     outline: 2px solid var(--accent);
     outline-offset: 3px;
-    border-radius: 10px;
+    border-radius: var(--r-7);
   }
   @supports (anchor-name: --x) {
     /* An anchored step must show what it points at, so the scrim stops dimming and only keeps its
@@ -70,7 +70,7 @@
       position-area: block-end;
       position-try-fallbacks: flip-block, flip-inline;
       max-width: min(460px, calc(100vw - 32px));
-      margin: 10px;
+      margin: var(--sp-4);
     }
   }
 }

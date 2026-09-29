@@ -38,7 +38,7 @@
     background: none;
     border-radius: 0;
     padding: 0 1px;
-    margin-right: 6px;
+    margin-right: var(--sp-2);
     letter-spacing: 0.02em;
   }
   :where(:root[data-theme="phosphor"]) .badge::before {
@@ -94,8 +94,8 @@
   /* the panel header becomes a terminal title rule (┌─ style, drawn with a border not a glyph hack) */
   :where(:root[data-theme="phosphor"]) .panel > .row.between:first-child {
     border-bottom: 1px solid var(--frame);
-    padding-bottom: 6px;
-    margin-bottom: 8px;
+    padding-bottom: var(--sp-2);
+    margin-bottom: var(--sp-3);
   }
   :where(:root[data-theme="phosphor"]) .panel h2::before {
     content: "> ";
@@ -108,11 +108,11 @@
   :where(:root[data-theme="phosphor"]) .rail button.on::before {
     content: "▸";
     position: absolute;
-    left: 2px;
+    left: var(--sp-0);
     top: 50%;
     transform: translateY(-50%);
     color: var(--accent);
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   /* ─── Phosphor [data-shell="terminal"]: shack apps become bordered CRT windows ───
    Same DOM, same components — only presentation flips. The wide shack Panels (terminal, BBS,
@@ -128,9 +128,9 @@
    The corners sit at the window edges (title-bar ::before/::after); the flex spacer becomes the
    horizontal fill rule; the close ✕ is the top-right control. (bleeds to the frame; padding offset) */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child {
-    margin: -16px -16px 10px;
-    padding: 4px 10px;
-    gap: 8px;
+    margin: -16px -16px var(--sp-4);
+    padding: var(--sp-1) var(--sp-4);
+    gap: var(--sp-3);
     align-items: center;
     flex-wrap: nowrap;
     background: color-mix(in oklch, var(--accent) 12%, transparent);
@@ -147,7 +147,7 @@
     flex: 0 0 auto;
   }
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2 {
-    font-size: 14px;
+    font-size: var(--fs-base);
     letter-spacing: 0.04em;
     flex: 0 0 auto;
   }
@@ -172,14 +172,14 @@
   /* float the CRT window inside the shell on desktop so ALL FOUR borders (not just the flush edges) show */
   @media (min-width: 1024px) {
     :where(:root[data-theme="phosphor"]) .shell > .panel[data-shell="terminal"] {
-      margin: 8px;
+      margin: var(--sp-3);
     }
   }
   /* app tab / function rows → a terminal function bar (BBS tabs, packet channel bar) */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .bbs-tabs,
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-chanbar {
     border-bottom: 1px solid var(--hair);
-    padding-bottom: 8px;
+    padding-bottom: var(--sp-3);
   }
   /* the packet terminal already ships a status line + cmd input — make them read as the window's footer */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-status {
@@ -191,7 +191,7 @@
     align-self: center;
     color: var(--accent);
     font-family: var(--font-mono);
-    margin-right: 4px;
+    margin-right: var(--sp-1);
   }
   /* ─── CRT FX — opt-in scanline + phosphor glow ────────────────────────────────
    Off by default; enabled only when the user turns it on AND Phosphor is active (data-crt="on", set by
@@ -202,17 +202,17 @@
     content: "";
     position: fixed;
     inset: 0;
-    z-index: 2000;
+    z-index: var(--z-fx);
     pointer-events: none;
     background:
       repeating-linear-gradient(
         0deg,
-        color-mix(in oklch, black 22%, transparent) 0,
-        color-mix(in oklch, black 22%, transparent) 1px,
+        color-mix(in oklch, var(--shade) 22%, transparent) 0,
+        color-mix(in oklch, var(--shade) 22%, transparent) 1px,
         transparent 1px,
         transparent 3px
       ),
-      radial-gradient(ellipse at center, transparent 55%, color-mix(in oklch, black 42%, transparent) 100%);
+      radial-gradient(ellipse at center, transparent 55%, color-mix(in oklch, var(--shade) 42%, transparent) 100%);
     mix-blend-mode: multiply;
   }
   @media (prefers-reduced-motion: no-preference) {

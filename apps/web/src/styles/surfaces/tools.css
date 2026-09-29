@@ -3,34 +3,34 @@
   /* tools (plugins) panel */
   .tools-panel {
     display: grid;
-    gap: 10px;
+    gap: var(--sp-4);
   }
   .tools-list {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .tool-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--sp-4);
     border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 8px 10px;
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
   }
   .tool-meta {
     min-width: 0;
   }
   .tool-perms {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--muted);
     font-family: var(--font-mono);
   }
   .tool-sub {
     border-top: 1px dashed var(--line);
-    padding-top: 8px;
+    padding-top: var(--sp-3);
     display: grid;
-    gap: 6px;
+    gap: var(--sp-2);
   }
   .tool-sub textarea,
   .tool-sub input {
@@ -38,52 +38,52 @@
   }
   .tool-out {
     background: var(--surface-2);
-    border-radius: 8px;
-    padding: 8px;
-    font-size: 12px;
+    border-radius: var(--r-6);
+    padding: var(--sp-3);
+    font-size: var(--fs-sm);
     margin: 0;
     white-space: pre-wrap;
   }
   .tool-prompt {
     border: 1px solid var(--warn);
-    border-radius: 9px;
-    padding: 10px 12px;
+    border-radius: var(--r-md);
+    padding: var(--sp-4) var(--sp-5);
     background: color-mix(in oklch, var(--warn) 8%, transparent);
   }
   .tool-surfaces {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--muted);
     font-family: var(--font-mono);
   }
   .tool-surfaces .badge {
-    margin-right: 4px;
+    margin-right: var(--sp-1);
   }
   /* declarative tool panels (the `panel` capability) — a tool's typed nodes rendered by the host */
   .tool-panels {
     display: grid;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .tool-panel {
     border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 8px 10px;
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
     display: grid;
-    gap: 6px;
+    gap: var(--sp-2);
   }
   .tool-panel-h {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
   }
   .tp-text {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--fs-md);
   }
   .tp-kv {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    font-size: 13px;
+    gap: var(--sp-4);
+    font-size: var(--fs-md);
   }
   .tp-k {
     color: var(--muted);
@@ -94,12 +94,12 @@
   .tp-bar {
     display: grid;
     gap: 3px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .tp-track {
     display: block;
     height: 8px;
-    border-radius: 4px;
+    border-radius: var(--r-3);
     background: var(--surface-2);
     overflow: hidden;
   }
@@ -111,18 +111,18 @@
   .tp-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
   }
   .tp-table th {
     text-align: left;
     color: var(--muted);
-    font-size: 10.5px;
+    font-size: var(--fs-2xs-up);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 0 8px 3px 0;
+    padding: 0 var(--sp-3) 3px 0;
   }
   .tp-table td {
-    padding: 1px 8px 1px 0;
+    padding: 1px var(--sp-3) 1px 0;
     font-family: var(--font-mono);
   }
   .tp-muted {
@@ -155,7 +155,7 @@
     display: grid;
     grid-template-columns: repeat(var(--tp-cols, 1), 1ch);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.05;
     white-space: pre;
     color: var(--accent);
@@ -168,7 +168,7 @@
   }
   /* tool-contributed map markers (map surface) — a small tokened glyph */
   .tool-map-pin {
-    font-size: 16px;
+    font-size: var(--fs-xl);
     line-height: 1;
     cursor: default;
     text-shadow: 0 0 2px var(--surface);

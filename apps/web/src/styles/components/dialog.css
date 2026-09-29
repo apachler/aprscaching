@@ -4,30 +4,30 @@
   .confirm-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 60;
+    z-index: var(--z-dialog);
     background: color-mix(in oklch, var(--page-bg) 55%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: var(--sp-7);
   }
   .confirm-dialog {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 12px 40px var(--shadow);
-    padding: 16px;
+    border-radius: var(--r-lg);
+    box-shadow: var(--elev-9);
+    padding: var(--sp-7);
     width: 100%;
     max-width: 26rem;
   }
   .confirm-dialog h3 {
-    margin: 0 0 8px;
-    font-size: 15px;
+    margin: 0 0 var(--sp-3);
+    font-size: var(--fs-lg);
   }
   .confirm-body {
     color: var(--muted);
-    font-size: 13.5px;
-    margin-bottom: 14px;
+    font-size: var(--fs-md-up);
+    margin-bottom: var(--sp-6);
   }
   .confirm-actions {
     justify-content: flex-end;

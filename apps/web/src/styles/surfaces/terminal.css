@@ -6,7 +6,7 @@
   .packet-term {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--sp-3);
     min-width: 0;
   }
   /* channel bar — GP's numbered channel buttons (0 Monitor, 1..N), inline connect pushed to the right */
@@ -24,10 +24,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 12.5px;
-    padding: 4px 9px;
+    font-size: var(--fs-sm-up);
+    padding: var(--sp-1) 9px;
     border: 1px solid var(--line);
-    border-radius: 7px 0 0 7px;
+    border-radius: var(--r-sm) 0 0 var(--r-sm);
     background: var(--surface-2);
     cursor: pointer;
   }
@@ -44,11 +44,11 @@
   .pt-x {
     border: 1px solid var(--line);
     border-left: none;
-    border-radius: 0 7px 7px 0;
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
     background: var(--surface-2);
     color: var(--muted);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1;
     padding: 5px 7px;
     align-self: stretch;
@@ -58,7 +58,7 @@
   }
   .pt-cbtn .pt-count {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   .pt-ch-n {
     display: inline-block;
@@ -66,8 +66,8 @@
     text-align: center;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 4px;
-    font-size: 11px;
+    border-radius: var(--r-3);
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
   .pt-cbtn.on .pt-ch-n {
@@ -76,7 +76,7 @@
   }
   .pt-connect-inline {
     display: flex;
-    gap: 4px;
+    gap: var(--sp-1);
     margin-left: auto;
   }
   .pt-connect-inline input {
@@ -85,7 +85,7 @@
   .pt-fnbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--sp-4);
     align-items: center;
   }
   .pt-fnbar .pt-macros {
@@ -98,18 +98,18 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--line);
-    border-radius: 9px;
+    border-radius: var(--r-md);
     overflow: hidden;
   }
   .pt-out {
     margin: 0;
-    padding: 10px;
+    padding: var(--sp-4);
     min-height: 300px;
     max-height: 60vh;
     flex: 1;
     overflow-y: auto;
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
@@ -122,14 +122,14 @@
     font-style: italic;
   }
   .pt-status {
-    padding: 4px 8px;
+    padding: var(--sp-1) var(--sp-3);
     border-top: 1px solid var(--hair);
     background: var(--surface-2);
-    font-size: 11.5px;
+    font-size: var(--fs-xs-up);
     color: var(--muted);
   }
   .pt-cmd {
-    padding: 6px 8px;
+    padding: var(--sp-2) var(--sp-3);
   }
   .pt-cmd input {
     flex: 1;
@@ -138,16 +138,16 @@
   .pt-macros {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    padding: 0 8px 8px;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-3) var(--sp-3);
   }
   .pt-macro {
-    font-size: 11.5px;
-    padding: 2px 7px;
+    font-size: var(--fs-xs-up);
+    padding: var(--sp-0) 7px;
   }
   .pt-mon-out {
     background: var(--surface-2);
-    font-size: 11.5px;
+    font-size: var(--fs-xs-up);
     line-height: 1.4;
   }
   .pt-mon-tag {
@@ -155,7 +155,7 @@
   }
   .pt-ctext input {
     width: 100%;
-    margin-top: 6px;
+    margin-top: var(--sp-2);
   }
   .pt-tab.st-bbs {
     border-top: 2px solid var(--st-bbs);

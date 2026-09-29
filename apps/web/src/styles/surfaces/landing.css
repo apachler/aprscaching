@@ -9,11 +9,11 @@
     overflow-y: auto;
     background: var(--page-bg);
     color: var(--ink);
-    font-size: 15px;
+    font-size: var(--fs-lg);
   }
   .landing h2 {
-    margin: 6px 0 0;
-    font-size: clamp(22px, 3vw, 29px);
+    margin: var(--sp-2) 0 0;
+    font-size: var(--fs-landing-h2);
     letter-spacing: -0.01em;
     color: var(--ink);
     text-wrap: balance;
@@ -21,14 +21,14 @@
   .landing-eyebrow {
     margin: 0;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--accent);
   }
   .landing-lede {
-    margin: 10px 0 0;
+    margin: var(--sp-4) 0 0;
     color: var(--muted);
     max-width: 60ch;
   }
@@ -46,14 +46,14 @@
     background: linear-gradient(
       180deg,
       color-mix(in oklch, var(--brand) 78%, transparent),
-      color-mix(in oklch, var(--brand) 92%, black)
+      color-mix(in oklch, var(--brand) 92%, var(--shade))
     );
   }
   .landing-nav {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: var(--sp-8);
     max-width: 1080px;
     margin: 0 auto clamp(28px, 6vw, 56px);
   }
@@ -64,9 +64,9 @@
   }
   .landing-nav-links {
     display: none;
-    gap: 16px;
+    gap: var(--sp-7);
     margin-left: auto;
-    font-size: 13.5px;
+    font-size: var(--fs-md-up);
   }
   .landing-nav-links a {
     color: color-mix(in oklch, var(--chrome-ink) 85%, transparent);
@@ -102,8 +102,8 @@
     }
   }
   .landing-slogan {
-    margin: 8px 0 0;
-    font-size: clamp(34px, 6vw, 56px);
+    margin: var(--sp-3) 0 0;
+    font-size: var(--fs-landing-slogan);
     line-height: 1.06;
     font-weight: 750;
     letter-spacing: -0.02em;
@@ -114,40 +114,40 @@
     color: var(--accent);
   }
   .landing-sub {
-    margin: 14px 0 22px;
+    margin: var(--sp-6) 0 22px;
     max-width: 52ch;
-    font-size: 16px;
+    font-size: var(--fs-xl);
     color: color-mix(in oklch, var(--chrome-ink) 82%, transparent);
   }
   .landing-cta {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--sp-4);
     align-items: center;
   }
   .landing-cta button {
-    min-height: 44px;
-    padding: 0 18px;
-    border-radius: 10px;
+    min-height: var(--hit);
+    padding: 0 var(--sp-8);
+    border-radius: var(--r-7);
     font-weight: 600;
   }
   /* the packet-proof terminal — animates only opacity/transform, and not at all under reduced motion */
   .landing-term {
     position: relative;
-    background: color-mix(in oklch, black 62%, var(--surface));
+    background: color-mix(in oklch, var(--shade) 62%, var(--surface));
     border: 1px solid color-mix(in oklch, var(--chrome-ink) 22%, transparent);
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     overflow: hidden;
-    box-shadow: 0 18px 50px -22px var(--shadow);
+    box-shadow: var(--elev-hero);
   }
   .landing-term-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-6);
     border-bottom: 1px solid color-mix(in oklch, var(--chrome-ink) 18%, transparent);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--fs-2xs-up);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -160,11 +160,11 @@
     background: var(--tier-a);
   }
   .landing-term-body {
-    padding: 14px 16px 18px;
+    padding: var(--sp-6) var(--sp-7) var(--sp-8);
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
     line-height: 1.75;
-    color: color-mix(in oklch, var(--accent) 85%, white);
+    color: color-mix(in oklch, var(--accent) 85%, var(--tint));
     overflow-x: auto;
   }
   .landing-frame {
@@ -176,14 +176,14 @@
   .landing-stamp {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 12px;
-    padding: 5px 12px;
+    gap: var(--sp-2);
+    margin-top: var(--sp-5);
+    padding: 5px var(--sp-5);
     border: 1.5px solid var(--tier-a);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     color: var(--tier-a);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.12em;
   }
@@ -239,7 +239,7 @@
     list-style: none;
     counter-reset: landing-step;
     display: grid;
-    gap: 14px;
+    gap: var(--sp-6);
     margin: 22px 0 0;
     padding: 0;
   }
@@ -252,8 +252,8 @@
     counter-increment: landing-step;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
+    border-radius: var(--r-lg);
+    padding: var(--sp-8) var(--sp-9);
   }
   .landing-steps li::before {
     content: counter(landing-step);
@@ -261,18 +261,18 @@
     place-items: center;
     width: 30px;
     height: 30px;
-    border-radius: 8px;
+    border-radius: var(--r-6);
     background: var(--accent);
     color: var(--accent-ink);
     font-family: var(--font-mono);
     font-weight: 700;
-    margin-bottom: 12px;
+    margin-bottom: var(--sp-5);
   }
   .landing-steps h3,
   .landing-tier h3,
   .landing-feature h3 {
     margin: 0 0 5px;
-    font-size: 15.5px;
+    font-size: var(--fs-lg-up);
     color: var(--ink);
   }
   .landing-steps p,
@@ -280,7 +280,7 @@
   .landing-feature p {
     margin: 0;
     color: var(--muted);
-    font-size: 13.5px;
+    font-size: var(--fs-md-up);
   }
   .landing-steps code {
     font-family: var(--font-mono);
@@ -288,7 +288,7 @@
   }
   .landing-tiers {
     display: grid;
-    gap: 14px;
+    gap: var(--sp-6);
     margin-top: 22px;
   }
   @media (min-width: 760px) {
@@ -300,8 +300,8 @@
     background: var(--surface);
     border: 1px solid var(--line);
     border-left: 4px solid var(--tc);
-    border-radius: 12px;
-    padding: 18px 20px;
+    border-radius: var(--r-lg);
+    padding: var(--sp-8) var(--sp-9);
   }
   .landing-tier.tier-a {
     --tc: var(--tier-a);
@@ -314,19 +314,19 @@
   }
   .landing-tier-badge {
     display: inline-block;
-    margin-bottom: 10px;
-    padding: 3px 10px;
+    margin-bottom: var(--sp-4);
+    padding: 3px var(--sp-4);
     border: 1.5px solid var(--tc);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     color: var(--tc);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--fs-2xs-up);
     font-weight: 700;
     letter-spacing: 0.1em;
   }
   .landing-features {
     display: grid;
-    gap: 14px;
+    gap: var(--sp-6);
     margin-top: 22px;
   }
   @media (min-width: 620px) {
@@ -352,12 +352,12 @@
   .landing-feature {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
+    border-radius: var(--r-lg);
+    padding: var(--sp-8) var(--sp-9);
   }
   .landing-glyph {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--accent);
@@ -367,7 +367,7 @@
   }
   .landing-shots {
     display: grid;
-    gap: 14px;
+    gap: var(--sp-6);
     margin-top: 26px;
   }
   @media (min-width: 760px) {
@@ -378,23 +378,23 @@
   .landing-shots figure {
     margin: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .landing-shots img {
     width: 100%;
     height: auto;
     border: 1px solid var(--line);
-    border-radius: 10px;
-    box-shadow: 0 12px 32px -18px var(--shadow);
+    border-radius: var(--r-7);
+    box-shadow: var(--elev-shot);
   }
   .landing-shots figcaption {
     color: var(--muted);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
     text-align: center;
   }
   .landing-hosts {
     display: grid;
-    gap: 12px;
+    gap: var(--sp-5);
     grid-template-columns: repeat(2, 1fr);
     margin-top: 22px;
   }
@@ -405,24 +405,24 @@
   }
   .landing-host {
     display: grid;
-    gap: 2px;
+    gap: var(--sp-0);
     justify-items: center;
     text-align: center;
     border: 1px dashed var(--line);
-    border-radius: 10px;
-    padding: 16px 12px;
+    border-radius: var(--r-7);
+    padding: var(--sp-7) var(--sp-5);
   }
   .landing-host span {
     color: var(--muted);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
   }
   .landing-band {
     display: grid;
-    gap: 18px;
+    gap: var(--sp-8);
     align-items: center;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 16px;
+    border-radius: var(--r-10);
     padding: clamp(24px, 4vw, 40px);
   }
   @media (min-width: 820px) {
@@ -431,26 +431,26 @@
     }
   }
   .landing-band p {
-    margin: 8px 0 0;
+    margin: var(--sp-3) 0 0;
     color: var(--muted);
     max-width: 60ch;
   }
   .landing-band button {
-    min-height: 44px;
-    padding: 0 20px;
-    border-radius: 10px;
+    min-height: var(--hit);
+    padding: 0 var(--sp-9);
+    border-radius: var(--r-7);
     font-weight: 600;
   }
   .landing-footer {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 16px;
+    gap: var(--sp-3) var(--sp-7);
     justify-content: center;
     max-width: 1080px;
     margin: 0 auto;
-    padding: 20px 16px calc(28px + env(safe-area-inset-bottom));
+    padding: var(--sp-9) var(--sp-7) calc(var(--sp-11) + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
   }
   .landing-footer a {
     color: var(--muted);
@@ -463,7 +463,7 @@
   .landing-footer a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
-    border-radius: 3px;
+    border-radius: var(--r-2);
   }
   /* Phosphor: the hero drops the colour photo + teal wash for the near-black phosphor field
    (every surface is themed, incl. the landing); text goes phosphor via the shared tokens. */
@@ -472,7 +472,11 @@
     color: var(--ink);
   }
   :where(:root[data-theme="phosphor"]) .landing-hero::before {
-    background: radial-gradient(ellipse at 50% 42%, transparent 45%, color-mix(in oklch, black 55%, transparent));
+    background: radial-gradient(
+      ellipse at 50% 42%,
+      transparent 45%,
+      color-mix(in oklch, var(--shade) 55%, transparent)
+    );
   }
   :where(:root[data-theme="phosphor"]) .landing-sub {
     color: var(--muted);
@@ -480,8 +484,8 @@
   /* landing footer fineprint: trademark + non-affiliation notices */
   .landing-fineprint {
     flex-basis: 100%;
-    margin: 10px 0 0;
-    font-size: 11px;
+    margin: var(--sp-4) 0 0;
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
 }

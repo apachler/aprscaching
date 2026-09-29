@@ -1,10 +1,11 @@
-/* ---- design tokens (OKLCH) — dark field-console by default, light as an option ----
-   Per .claude/rules/css.md: theming is token-driven in an @layer, colours are OKLCH, and the
-   trust-tier / status palette derives from bases via color-mix() so brightness stays even across
-   hues (sunlight legibility). We keep an explicit [data-theme] layer (not light-dark() alone)
-   because the app exposes a Dark/Light/Auto switch the user can override — light-dark() can only
-   follow color-scheme, so the explicit override is load-bearing here. color-scheme is still set so
-   form controls / scrollbars match the active theme. */
+/* Design tokens — the one source for colour, type, spacing, radius, elevation, stacking, shell
+   geometry and density. Colours are OKLCH; tier and status tints derive from their bases with
+   color-mix() at the point of use, so brightness stays even across hues (sunlight legibility).
+
+   Themes are [data-theme] token sets on the root: "dark" (Modern, the default), "phosphor" (the
+   green-screen flip) and "light" (the light Modern palette). The app picks the theme explicitly, so an
+   attribute switch carries it rather than light-dark(), which can only follow color-scheme;
+   color-scheme is still set so form controls and scrollbars match. */
 @layer tokens {
   :root {
     color-scheme: dark light;
@@ -59,22 +60,129 @@
     --award-ink: oklch(0.86 0.14 95);
     --award-line: oklch(0.42 0.05 95);
 
-    /* spacing scale (the source of truth for the layout utilities below) */
+    /* spacing scale — padding, margin, gap and gutter offsets. Steps sit on a 2px grid; off-grid
+       1px optical nudges (3/5/7/9/11/13px) stay literal where they are used. */
+    --sp-0: 2px;
     --sp-1: 4px;
     --sp-2: 6px;
     --sp-3: 8px;
-    --sp-4: 12px;
-    --sp-5: 14px;
+    --sp-4: 10px;
+    --sp-5: 12px;
+    --sp-6: 14px;
+    --sp-7: 16px;
+    --sp-8: 18px;
+    --sp-9: 20px;
+    --sp-10: 24px;
+    --sp-11: 28px;
+    --sp-12: 32px;
+    --sp-13: 40px;
+    --sp-14: 48px;
 
-    /* corner radius scale — tokenised so the Phosphor flip can make terminals sharp in one swap */
-    --r-sm: 7px; /* buttons, inputs, chips */
-    --r-md: 9px; /* logform, list rows, small cards */
-    --r-lg: 12px; /* panels, sheets, big cards */
+    /* type scale — "-up" is the half step above its size */
+    --fs-3xs: 9px;
+    --fs-2xs: 10px;
+    --fs-2xs-up: 10.5px;
+    --fs-xs: 11px;
+    --fs-xs-up: 11.5px;
+    --fs-sm: 12px;
+    --fs-sm-up: 12.5px;
+    --fs-md: 13px;
+    --fs-md-up: 13.5px;
+    --fs-base: 14px; /* body text */
+    --fs-lg: 15px;
+    --fs-lg-up: 15.5px;
+    --fs-xl: 16px;
+    --fs-2xl: 17px;
+    --fs-3xl: 19px;
+    --fs-4xl: 20px; /* panel titles */
+    --fs-5xl: 22px;
+    --fs-landing-h2: clamp(22px, 3vw, 29px);
+    --fs-landing-slogan: clamp(34px, 6vw, 56px);
+
+    /* corner radius scale — tokenised so the Phosphor flip makes every corner sharp in one swap.
+       sm / md / lg are the named roles: buttons, inputs and chips / list rows and small cards /
+       panels, sheets and big cards. */
+    --r-1: 2px;
+    --r-2: 3px;
+    --r-3: 4px;
+    --r-4: 5px;
+    --r-5: 6px;
+    --r-sm: 7px;
+    --r-6: 8px;
+    --r-md: 9px;
+    --r-7: 10px;
+    --r-8: 11px;
+    --r-lg: 12px;
+    --r-9: 14px;
+    --r-10: 16px; /* bottom-sheet top corners */
+    --r-11: 20px;
+    --r-12: 24px;
     --r-pill: 999px;
+
+    /* elevation — soft drop shadows in the theme's --shadow colour (Phosphor turns it into a glow) */
+    --elev-1: 0 1px 4px var(--shadow); /* station pins */
+    --elev-2: 0 1px 5px var(--shadow); /* cache and spot pins */
+    --elev-3: 0 2px 10px var(--shadow); /* top bar */
+    --elev-4: 0 4px 14px var(--shadow); /* tab-bar action button */
+    --elev-5: 0 6px 20px var(--shadow); /* toasts, geofence banner */
+    --elev-6: 0 6px 24px var(--shadow); /* map spot card */
+    --elev-7: 0 8px 28px var(--shadow); /* floating panels */
+    --elev-8: 0 12px 32px var(--shadow); /* popovers */
+    --elev-9: 0 12px 40px var(--shadow); /* dialogs */
+    --elev-10: 0 14px 44px var(--shadow); /* tour card */
+    --elev-up: 0 -3px 14px var(--shadow); /* bottom tab bar, casting upward */
+    --elev-hero: 0 18px 50px -22px var(--shadow); /* landing terminal */
+    --elev-shot: 0 12px 32px -18px var(--shadow); /* landing screenshots */
+
+    /* stacking order, lowest first */
+    --z-splash: 4;
+    --z-topbar: 5;
+    --z-map-ui: 5; /* map overlays: coordinate readout, basemap switch, map tools */
+    --z-panel: 6;
+    --z-rail: 6;
+    --z-map-card: 6; /* spot card over the map */
+    --z-banner: 7; /* geofence prompt */
+    --z-tabbar: 8;
+    --z-toast: 9;
+    --z-popover: 40;
+    --z-dialog: 60; /* confirm dialog, tour */
+    --z-fx: 2000; /* CRT overlay, above everything and never interactive */
+
+    /* shell geometry */
+    --topbar-h: 50px;
+    --tabbar-h: 60px;
+    --rail-w: 64px;
+    --panel-w: 348px; /* floating drawer */
+    --dock-w: 340px; /* docked left column */
+    --dock-w-detail: 392px; /* docked right (detail) column */
+    --hit: 44px; /* minimum touch target */
+
+    /* density — comfortable is the default (cacher surfaces). [data-density="compact"] (Shack apps,
+       instance admin) swaps in the compact set below. */
+    --density-fs: var(--fs-base); /* running text of a surface */
+    --ctl-fs: 1em; /* button text; 1em inherits the surface size */
+    --ctl-pad-y: var(--sp-2);
+    --ctl-pad-x: 11px;
+    --row-pad-y: var(--sp-3); /* settings rows */
+    --subh-mt: var(--sp-6); /* settings sub-heading top margin */
+
+    /* achromatic mix partners for color-mix() darkening and lightening; hue "none" so a mix keeps
+       the other colour's hue */
+    --shade: oklch(0 0 none);
+    --tint: oklch(1 0 none);
 
     --font-brand: "Fredoka", system-ui, sans-serif;
     --font-ui: system-ui, sans-serif; /* body/UI text — Phosphor swaps this to the mono stack */
     --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+    --font-system: system-ui, sans-serif; /* the platform face, kept in every theme (placeholders, fine print) */
+  }
+  [data-density="compact"] {
+    --density-fs: var(--fs-md);
+    --ctl-fs: var(--fs-sm-up);
+    --ctl-pad-y: var(--sp-1);
+    --ctl-pad-x: 9px;
+    --row-pad-y: 3px;
+    --subh-mt: var(--sp-5);
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
@@ -162,9 +270,21 @@
     --shadow: oklch(0.86 0.19 145 / 0.2);
 
     /* terminals are sharp; all text is mono */
+    --r-1: 0px;
+    --r-2: 0px;
+    --r-3: 0px;
+    --r-4: 0px;
+    --r-5: 0px;
     --r-sm: 0px;
+    --r-6: 0px;
     --r-md: 0px;
+    --r-7: 0px;
+    --r-8: 0px;
     --r-lg: 1px;
+    --r-9: 1px;
+    --r-10: 1px;
+    --r-11: 1px;
+    --r-12: 1px;
     --r-pill: 2px;
     /* Phosphor prefers an authentic CP437/VGA face when one is present (installed locally, or a
        bundled `Px437 IBM VGA8` drop-in), then falls back to the reliable stack. Pure
@@ -181,7 +301,7 @@
     --glow: 0 0 0 1px color-mix(in oklch, var(--accent) 28%, transparent);
   }
 
-  /* ANSI 16-colour palette (BBS output) — modern theme; the Phosphor theme remaps these tokens */
+  /* ANSI 16-colour palette (BBS and tool output), shared by both themes */
   :root {
     --ansi-0: #2b2b2b;
     --ansi-1: #c0392b;

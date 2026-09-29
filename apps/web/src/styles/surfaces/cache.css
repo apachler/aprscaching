@@ -2,7 +2,7 @@
 @layer surfaces {
   .logs li.unseen {
     box-shadow: inset 3px 0 0 var(--accent);
-    padding-left: 8px;
+    padding-left: var(--sp-3);
   }
   .federated {
     color: var(--heading);
@@ -11,9 +11,9 @@
   .imported {
     background: var(--surface-2);
     border-left: 3px solid var(--beige);
-    padding: 6px 10px;
-    border-radius: 0 6px 6px 0;
-    font-size: 13px;
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: 0 var(--r-5) var(--r-5) 0;
+    font-size: var(--fs-md);
   }
   .imported a {
     color: var(--heading);
@@ -23,15 +23,15 @@
     border: none;
     background: none;
     color: var(--muted);
-    font-size: 15px;
-    padding: 2px 6px;
+    font-size: var(--fs-lg);
+    padding: var(--sp-0) var(--sp-2);
   }
   button.heart.on {
     color: var(--fav);
   }
   /* audio-cache stages */
   .stages {
-    margin: 12px 0;
+    margin: var(--sp-5) 0;
   }
   .nfc-unlock input {
     flex: 1;
@@ -39,21 +39,21 @@
   }
   /* living-cache rendezvous */
   .rendezvous {
-    margin: 12px 0;
+    margin: var(--sp-5) 0;
   }
   /* "Up for adoption" card in the cache detail: accent-tinted via color-mix, one card, no blur */
   .adopt-card {
     display: grid;
-    gap: 8px;
-    margin: 12px 0;
-    padding: 10px 12px;
+    gap: var(--sp-3);
+    margin: var(--sp-5) 0;
+    padding: var(--sp-4) var(--sp-5);
     border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
-    border-radius: 8px;
+    border-radius: var(--r-6);
     background: color-mix(in oklch, var(--accent) 7%, transparent);
   }
   .adopt-card label.row {
-    gap: 8px;
-    min-height: 44px;
+    gap: var(--sp-3);
+    min-height: var(--hit);
   }
   .adopt-note {
     display: grid;
@@ -66,20 +66,20 @@
   .rdv-list {
     list-style: none;
     padding: 0;
-    margin: 6px 0 0;
+    margin: var(--sp-2) 0 0;
     display: grid;
-    gap: 4px;
-    font-size: 13px;
+    gap: var(--sp-1);
+    font-size: var(--fs-md);
   }
   /* cache media gallery */
   .cache-media {
-    margin: 12px 0;
+    margin: var(--sp-5) 0;
   }
   .media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    gap: 8px;
-    margin-top: 6px;
+    gap: var(--sp-3);
+    margin-top: var(--sp-2);
   }
   .media-item {
     position: relative;
@@ -89,7 +89,7 @@
     width: 100%;
     height: 96px;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: var(--r-6);
     border: 1px solid var(--line);
   }
   .media-item audio {
@@ -97,35 +97,35 @@
   }
   .media-file {
     display: inline-block;
-    padding: 8px;
+    padding: var(--sp-3);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    font-size: 13px;
+    border-radius: var(--r-6);
+    font-size: var(--fs-md);
   }
   .media-del {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: var(--sp-1);
+    right: var(--sp-1);
     border: none;
     border-radius: 50%;
     width: 22px;
     height: 22px;
-    background: color-mix(in oklch, var(--bad) 80%, black);
+    background: color-mix(in oklch, var(--bad) 80%, var(--shade));
     color: var(--chrome-ink);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1;
   }
   ol.stagelist {
     list-style: none;
     padding: 0;
-    margin: 8px 0 0;
+    margin: var(--sp-3) 0 0;
   }
   ol.stagelist li {
     border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 10px;
-    margin-bottom: 8px;
+    border-radius: var(--r-md);
+    padding: var(--sp-4);
+    margin-bottom: var(--sp-3);
   }
   ol.stagelist li.open {
     border-left: 3px solid var(--accent);
@@ -141,10 +141,10 @@
   .activating-now {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 0 0 10px;
-    padding: 8px 11px;
-    border-radius: 9px;
+    gap: var(--sp-3);
+    margin: 0 0 var(--sp-4);
+    padding: var(--sp-3) 11px;
+    border-radius: var(--r-md);
     font-weight: 600;
     color: var(--heading);
     background: color-mix(in oklch, var(--warn) 16%, transparent);
@@ -174,14 +174,14 @@
     }
   }
   .cache-tags {
-    margin: 6px 0 2px;
+    margin: var(--sp-2) 0 var(--sp-0);
   }
   /* owner-gated 1–5 rating */
   .rating {
     border: 1px solid var(--line);
-    border-radius: 11px;
-    padding: 10px 13px;
-    margin: 0 0 14px;
+    border-radius: var(--r-8);
+    padding: var(--sp-4) 13px;
+    margin: 0 0 var(--sp-6);
   }
   .rating-h {
     display: flex;
@@ -189,39 +189,39 @@
     justify-content: space-between;
   }
   .rating-agg {
-    font-size: 14px;
+    font-size: var(--fs-base);
   }
   .rating-stars {
     display: flex;
     align-items: center;
-    gap: 2px;
-    margin-top: 6px;
+    gap: var(--sp-0);
+    margin-top: var(--sp-2);
   }
   .rating-stars .star {
     border: none;
     background: none;
     cursor: pointer;
-    font-size: 22px;
+    font-size: var(--fs-5xl);
     line-height: 1;
-    padding: 0 2px;
+    padding: 0 var(--sp-0);
     color: var(--muted);
   }
   .rating-stars .star.on {
     color: var(--warn);
   }
   .rating-stars .fine {
-    margin-left: 8px;
+    margin-left: var(--sp-3);
   }
   /* log form + logbook */
   .logform .geo {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--sp-1);
     margin: 0;
     white-space: nowrap;
   }
   .logform textarea {
-    margin: 8px 0;
+    margin: var(--sp-3) 0;
   }
   .logs {
     list-style: none;
@@ -229,22 +229,22 @@
     margin: 0;
   }
   .logs li {
-    padding: 8px 0;
+    padding: var(--sp-3) 0;
     border-top: 1px solid var(--line);
   }
   .logs .comment {
-    margin-top: 2px;
+    margin-top: var(--sp-0);
   }
   /* min-verification-tier card (kept neutral for C — unverified ≠ error) */
   .mintier {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 13px 14px;
-    border-radius: 11px;
+    gap: var(--sp-5);
+    padding: 13px var(--sp-6);
+    border-radius: var(--r-8);
     border: 1px solid var(--line);
     background: var(--surface-2);
-    margin: 14px 0;
+    margin: var(--sp-6) 0;
   }
   .mintier.A {
     border-color: color-mix(in oklch, var(--tier-a) 45%, var(--line));
@@ -260,11 +260,11 @@
   }
   .mintier-t b {
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--fs-md);
   }
   .mintier-t p {
-    margin: 2px 0 0;
-    font-size: 11.5px;
+    margin: var(--sp-0) 0 0;
+    font-size: var(--fs-xs-up);
     color: var(--muted);
   }
   /* difficulty / terrain segmented bars */
@@ -275,7 +275,7 @@
   .dtbars > span {
     flex: 1;
     height: 6px;
-    border-radius: 2px;
+    border-radius: var(--r-1);
     background: var(--line);
   }
   .dtbars > span.on {
@@ -284,17 +284,17 @@
   .detail-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-3);
     flex-wrap: wrap;
-    margin-bottom: 6px;
+    margin-bottom: var(--sp-2);
   }
   .detail-stats {
     display: flex;
-    gap: 18px;
-    padding: 14px 0;
+    gap: var(--sp-8);
+    padding: var(--sp-6) 0;
     border-top: 1px solid var(--hair);
     border-bottom: 1px solid var(--hair);
-    margin: 14px 0;
+    margin: var(--sp-6) 0;
   }
   .detail-stats > div {
     flex: 1;
@@ -318,23 +318,23 @@
   .logrow-h .call {
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--fs-md);
   }
   .logrow-when {
     margin-left: auto;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
   .logrow-method {
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--fs-2xs-up);
     color: var(--muted);
     margin-top: 5px;
   }
   .logrow-note {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
-    margin-top: 6px;
+    margin-top: var(--sp-2);
     line-height: 1.4;
   }
   .signed {
@@ -346,30 +346,30 @@
     line-height: 1.55;
   }
   .logbook-h {
-    margin: 16px 0 4px;
+    margin: var(--sp-7) 0 var(--sp-1);
   }
   /* coordinate block (label/value grid with a copy affordance) */
   .coordblock {
     border: 1px solid var(--line);
-    border-radius: 11px;
+    border-radius: var(--r-8);
     overflow: hidden;
-    margin: 0 0 14px;
+    margin: 0 0 var(--sp-6);
   }
   .coordblock-h {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 13px;
+    padding: var(--sp-4) 13px;
     border-bottom: 1px solid var(--hair);
     background: color-mix(in oklch, var(--surface-2) 60%, transparent);
   }
   .coordblock-g {
-    padding: 12px 13px;
+    padding: var(--sp-5) 13px;
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 8px 16px;
+    gap: var(--sp-3) var(--sp-7);
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
     line-height: 1.3;
   }
   .coordblock-g .k {
@@ -381,26 +381,26 @@
   /* navigate-to-cache (field hand-off + bearing) */
   .navcache {
     border-top: 1px solid var(--hair);
-    padding: 10px 13px;
+    padding: var(--sp-4) 13px;
   }
   .navcache-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--sp-2);
   }
   .navcache-body {
-    margin-top: 10px;
+    margin-top: var(--sp-4);
     display: grid;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .navcache-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 14px;
-    font-size: 13px;
+    gap: var(--sp-3) var(--sp-6);
+    font-size: var(--fs-md);
   }
   .navcache-bearing {
-    font-size: 13px;
+    font-size: var(--fs-md);
   }
   .navcache-bearing p {
     margin: 0;
@@ -415,40 +415,40 @@
   }
   /* share funnel: copy-link + printable QR on the cache detail */
   .sharecache {
-    margin: 10px 0;
+    margin: var(--sp-4) 0;
   }
   .qrbox {
     display: flex;
-    gap: 12px;
+    gap: var(--sp-5);
     align-items: center;
-    margin-top: 8px;
-    padding: 10px;
+    margin-top: var(--sp-3);
+    padding: var(--sp-4);
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--r-7);
     background: var(--surface-2);
   }
   .qrbox img {
     background: var(--qr-bg);
-    padding: 6px;
-    border-radius: 6px;
+    padding: var(--sp-2);
+    border-radius: var(--r-5);
     flex: none;
   }
   .qrbox .col {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--sp-1);
     min-width: 0;
   }
   /* finds-over-time sparkline on the cache detail */
   .findstrend {
-    margin: 10px 0;
+    margin: var(--sp-4) 0;
   }
   .sparkline {
     display: flex;
     align-items: flex-end;
-    gap: 2px;
+    gap: var(--sp-0);
     height: 34px;
-    margin-top: 4px;
+    margin-top: var(--sp-1);
   }
   .spark-bar {
     flex: 1;
@@ -464,15 +464,15 @@
   .logresult .big {
     font-family: var(--font-brand);
     font-weight: 700;
-    font-size: 19px;
+    font-size: var(--fs-3xl);
   }
   .logresult .tier {
     display: inline-block;
-    margin-top: 6px;
+    margin-top: var(--sp-2);
   }
   .logresult-why {
-    margin: 8px 0 0;
-    font-size: 13px;
+    margin: var(--sp-3) 0 0;
+    font-size: var(--fs-md);
     color: var(--muted);
     text-wrap: pretty;
   }

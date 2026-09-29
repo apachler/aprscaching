@@ -43,7 +43,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
         }
       >
         <button onClick={() => setProfile(null)}>← leaderboard</button>
-        <p className="mt-4">
+        <p className="mt-5">
           <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden
         </p>
         {profile.lastFind && <p className="muted">last find {fmt.date(profile.lastFind)}</p>}

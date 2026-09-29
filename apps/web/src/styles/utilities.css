@@ -10,11 +10,11 @@
   .mt-3 {
     margin-top: var(--sp-3);
   }
-  .mt-4 {
-    margin-top: var(--sp-4);
-  }
   .mt-5 {
     margin-top: var(--sp-5);
+  }
+  .mt-6 {
+    margin-top: var(--sp-6);
   }
   .m-0 {
     margin: 0;

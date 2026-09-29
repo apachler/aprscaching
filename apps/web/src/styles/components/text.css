@@ -19,6 +19,6 @@
     font-weight: 700;
   }
   .fine {
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
 }

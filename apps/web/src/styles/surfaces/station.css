@@ -2,33 +2,33 @@
 @layer surfaces {
   /* station telemetry/weather graphs (shack, lazy uPlot) */
   .station-graphs {
-    margin-top: 8px;
+    margin-top: var(--sp-3);
   }
   .graph-host {
     display: grid;
-    gap: 10px;
-    margin-top: 8px;
+    gap: var(--sp-4);
+    margin-top: var(--sp-3);
   }
   .station-graph {
     min-width: 0;
   }
   .station-graph .u-title {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-weight: 600;
   }
   .station-graph .u-legend {
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
   /* ---- track history + time-replay ---- */
   .trackreplay {
-    margin-top: 12px;
-    padding-top: 10px;
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
     border-top: 1px solid var(--line);
     display: grid;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .tr-head {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
@@ -36,23 +36,23 @@
   .tr-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--sp-2);
     align-items: center;
   }
   .tr-controls .seg {
     display: flex;
     border: 1px solid var(--hair);
-    border-radius: 8px;
+    border-radius: var(--r-6);
     overflow: hidden;
   }
   .tr-controls .seg button {
     min-height: 32px;
-    padding: 0 10px;
+    padding: 0 var(--sp-4);
     border: none;
     background: none;
     color: var(--ink-2);
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     cursor: pointer;
   }
   .tr-controls .seg button + button {
@@ -69,7 +69,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
   .tr-legend {
@@ -82,7 +82,7 @@
     height: 9px;
     border-radius: 50%;
     display: inline-block;
-    margin-left: 6px;
+    margin-left: var(--sp-2);
   }
   /* RF/app/IS colours ARE the trust tiers — key off the same tokens so they flip with the tier palette */
   .tr-legend i.rf,
@@ -109,7 +109,7 @@
   .tr-player {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-3);
   }
   .tr-player input[type="range"] {
     flex: 1;
@@ -120,23 +120,23 @@
     min-width: 38px;
     min-height: 34px;
     border: 1px solid var(--hair);
-    border-radius: 8px;
+    border-radius: var(--r-6);
     background: none;
     color: var(--ink);
     cursor: pointer;
   }
   .tr-now {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
   }
   .tr-via {
     font-weight: 700;
   }
   .tr-err {
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
     color: var(--bad);
   }
   .tr-empty {
-    font-size: 12.5px;
+    font-size: var(--fs-sm-up);
   }
 }

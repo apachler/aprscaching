@@ -4,14 +4,14 @@
   .card {
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
-    padding: 12px;
-    margin: 10px 0;
+    padding: var(--sp-5);
+    margin: var(--sp-4) 0;
     background: var(--surface-2);
   }
   .empty {
-    padding: 4px 0;
+    padding: var(--sp-1) 0;
   }
   .empty-action {
-    margin-top: 8px;
+    margin-top: var(--sp-3);
   }
 }

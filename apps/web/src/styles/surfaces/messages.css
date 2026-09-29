@@ -7,12 +7,12 @@
     padding: 0;
   }
   .msg-row {
-    padding: 8px 10px;
-    border-radius: 8px;
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-6);
     border: 1px solid transparent;
   }
   .msg-row + .msg-row {
-    margin-top: 4px;
+    margin-top: var(--sp-1);
   }
   .msg-row.mine {
     background: color-mix(in oklch, var(--accent) 12%, transparent);
@@ -21,10 +21,10 @@
   .msg-h {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--sp-2);
     font-size: 0.86rem;
   }
   .msg-body {
-    margin-top: 2px;
+    margin-top: var(--sp-0);
   }
 }

@@ -2,13 +2,13 @@
 @layer surfaces {
   .callsigns {
     list-style: none;
-    margin: 8px 0 0;
+    margin: var(--sp-3) 0 0;
     padding: 0;
   }
   .callsigns li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-3);
     padding: 7px 0;
     border-top: 1px solid var(--hair);
   }
@@ -24,7 +24,7 @@
     background: none;
     color: var(--ink);
     cursor: pointer;
-    padding: 2px 0;
+    padding: var(--sp-0) 0;
     text-align: left;
   }
   .cs-dot {
@@ -39,7 +39,7 @@
     background: var(--accent);
   }
   .cs-name {
-    font-size: 13.5px;
+    font-size: var(--fs-md-up);
   }
   .callsigns li.active .cs-name {
     font-weight: 600;
@@ -47,25 +47,25 @@
   .cs-pick:focus-visible {
     outline: 2px solid var(--heading);
     outline-offset: 2px;
-    border-radius: 6px;
+    border-radius: var(--r-5);
   }
   .verify-code {
     border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 10px 11px;
-    margin: 8px 0;
+    border-radius: var(--r-md);
+    padding: var(--sp-4) 11px;
+    margin: var(--sp-3) 0;
     background: var(--surface-2);
   }
   /* the exact message to transmit: label / value pairs, values in mono so they can be keyed in as shown */
   .verify-msg {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--sp-1) var(--sp-4);
+    gap: var(--sp-1) var(--sp-5);
     margin: var(--sp-3) 0;
   }
   .verify-msg dt {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     align-self: center;
   }
   .verify-msg dd {
@@ -81,7 +81,7 @@
   }
   .seg.verify-methods button {
     flex: 1 1 auto;
-    min-height: 44px;
+    min-height: var(--hit);
     text-transform: none;
   }
   /* held-callsign list (Account → callsigns) reuses the .setrow anatomy as a real <ul> */
@@ -93,6 +93,6 @@
   .cs-list .setrow-l {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--sp-2);
   }
 }

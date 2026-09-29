@@ -18,27 +18,27 @@
   button.icon {
     border: none;
     background: none;
-    font-size: 16px;
+    font-size: var(--fs-xl);
     color: var(--ink);
   }
   /* big one-tap primary (Log a find) + filter type chips */
   .log-primary {
     width: 100%;
-    font-size: 16px;
+    font-size: var(--fs-xl);
     padding: 11px;
   }
   .chip-btn {
-    border-radius: 14px;
-    font-size: 13px;
+    border-radius: var(--r-9);
+    font-size: var(--fs-md);
   }
   /* inline text-button (e.g. "remove" beside a list row) */
   .link-btn {
     background: none;
     border: 0;
-    padding: 0 2px;
-    margin-left: 8px;
+    padding: 0 var(--sp-0);
+    margin-left: var(--sp-3);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     cursor: pointer;
     text-decoration: underline;
   }
@@ -67,9 +67,9 @@
     background: none;
     color: var(--muted);
     cursor: pointer;
-    padding: 2px;
+    padding: var(--sp-0);
     display: inline-flex;
-    border-radius: 6px;
+    border-radius: var(--r-5);
   }
   .iconbtn:hover {
     color: var(--ink);

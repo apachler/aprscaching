@@ -4,12 +4,12 @@
   .toasts {
     position: absolute;
     left: 50%;
-    bottom: calc(76px + env(safe-area-inset-bottom));
+    bottom: calc(var(--tabbar-h) + var(--sp-7) + env(safe-area-inset-bottom));
     transform: translateX(-50%);
-    z-index: 9;
+    z-index: var(--z-toast);
     display: flex;
     flex-direction: column-reverse;
-    gap: 8px;
+    gap: var(--sp-3);
     align-items: center;
     pointer-events: none;
   }
@@ -17,10 +17,10 @@
     background: var(--surface-2);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 8px 15px;
-    font-size: 13px;
-    box-shadow: 0 6px 20px var(--shadow);
+    border-radius: var(--r-11);
+    padding: var(--sp-3) 15px;
+    font-size: var(--fs-md);
+    box-shadow: var(--elev-5);
     animation: toast-in 0.18s ease;
   }
   @keyframes toast-in {

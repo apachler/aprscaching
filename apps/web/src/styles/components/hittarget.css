@@ -26,8 +26,8 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: max(100%, 44px);
-      height: max(100%, 44px);
+      width: max(100%, var(--hit));
+      height: max(100%, var(--hit));
       transform: translate(-50%, -50%);
     }
   }

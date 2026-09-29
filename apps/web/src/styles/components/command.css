@@ -5,9 +5,9 @@
     margin: var(--sp-2) 0;
   }
   .cmd-l {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--muted);
-    margin-bottom: 2px;
+    margin-bottom: var(--sp-0);
   }
   .cmd-row {
     display: flex;
@@ -18,8 +18,8 @@
     flex: 1;
     min-width: 0;
     font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 8px 10px;
+    font-size: var(--fs-sm);
+    padding: var(--sp-3) var(--sp-4);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
     background: var(--surface);
@@ -28,6 +28,6 @@
   }
   .cmd-copy {
     flex: none;
-    min-height: 44px;
+    min-height: var(--hit);
   }
 }

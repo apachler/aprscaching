@@ -14,7 +14,7 @@
 
 @layer base {
   body {
-    font: 14px/1.5 var(--font-ui);
+    font: var(--fs-base)/1.5 var(--font-ui);
     color: var(--ink);
     background: var(--page-bg);
   }
@@ -34,7 +34,7 @@
   /* buttons + inputs */
   button {
     font: inherit;
-    padding: 6px 11px;
+    padding: var(--sp-2) 11px;
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
     background: var(--surface-2);
@@ -57,8 +57,8 @@
   }
   label {
     display: block;
-    margin: 8px 0;
-    font-size: 13px;
+    margin: var(--sp-3) 0;
+    font-size: var(--fs-md);
     color: var(--muted);
   }
   label input,

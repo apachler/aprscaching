@@ -2,7 +2,7 @@
 @layer components {
   .row {
     display: flex;
-    gap: 10px;
+    gap: var(--sp-4);
     align-items: center;
   }
   .row > label {
@@ -10,7 +10,7 @@
   }
   .row.end {
     justify-content: flex-end;
-    margin-top: 12px;
+    margin-top: var(--sp-5);
   }
   .row.between {
     justify-content: space-between;
