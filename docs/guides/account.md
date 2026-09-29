@@ -75,14 +75,23 @@ server over the internet, does not count.
 ARDC delegates `<call>.ampr.org` only to the licensed holder of the call, so a record only you can publish
 proves control.
 
-1. Tap **Get the record**. The app shows a TXT record, for example
+1. If you don't hold `<call>.ampr.org` yet, request it in the [ARDC portal](https://portal.ampr.org) under
+   **DNS → My subdomains**. ARDC reviews your licence before it grants the name.
+2. Tap **Get the record**. The app shows a TXT record, for example
    `_aprscaching.oe8apr.ampr.org TXT "v=acs1; verify=Q2x…"`.
-2. Publish it for your name at the ARDC portal, and wait until it is live in DNS.
-3. Tap **Check**. The instance looks the record up and verifies the call when it carries the current code.
+3. In the portal, under **DNS → My subdomains**, add a **TXT** record named `_aprscaching` to
+   `<call>.ampr.org`, with the value the app shows.
+4. Wait until it is live in DNS. The portal publishes changes to the ampr.org zone periodically, so a new
+   record can take hours to resolve; until then **Check** says the name is not published yet, and that
+   costs nothing.
+5. Tap **Check**. The instance looks the record up and verifies the call when it carries the current code.
 
-The code is valid for **48 hours**. The lookup counts only when the answer is DNSSEC-validated, so it can't
-be forged in transit — ampr.org must be DNSSEC-signed and the instance's resolver must validate it. While
-ampr.org is not DNSSEC-signed, **Check** says so, and you verify another way.
+The code is valid for **48 hours**. The answer has to be authentic, and the instance accepts it one of two
+ways. A DNSSEC-validated answer settles it on its own. Without DNSSEC, which is the case while ampr.org is not
+DNSSEC-signed, several independent public DNS resolvers (by default Cloudflare, Google and Quad9) must all return
+the same record carrying the code; if any of them sees something else, **Check** refuses. Publish the TXT
+record at that name itself, not as a CNAME: an answer through an alias does not count. An instance can
+require DNSSEC; there, **Check** refuses while ampr.org is unsigned, and you verify another way.
 
 ### LoTW certificate
 

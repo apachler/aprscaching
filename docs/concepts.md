@@ -84,8 +84,8 @@ it. A test proves no other transport value grants attestation or changes a find'
   instance's service call, and the call is verified only when an attested receiving site hears it on its own
   radio — a TNC, or a MeshCom node that heard it directly over LoRa. A copy over APRS-IS, an internet
   tunnel, the MeshCom server, a mesh relay or the browser radio bridge never counts. Off the air, the holder
-  publishes a code under their ARDC-delegated `<call>.ampr.org` name (counted only with a DNSSEC-validated
-  answer), or signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the
+  publishes a code under their ARDC-delegated `<call>.ampr.org` name (counted with a DNSSEC-validated
+  answer, or when several independent public resolvers return the same record), or signs a challenge with their ARRL LoTW callsign certificate, whose private key stays in the
   browser. The instance operator confirms their own call with the operator CLI, and a sysop may verify a
   call by hand, with a note, for someone out of range. Every verification records its method and who
   vouched. The APRS-IS passcode verifies nothing (it is a public hash); **licensing plus
