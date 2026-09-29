@@ -1,17 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * A D1-compatible adapter over better-sqlite3. Presents the same `SqlDatabase` surface the
- * gateway handlers use (prepare → bind → run/first/all, plus batch), so the *exact same*
- * business logic runs unchanged on Cloudflare D1 and on local SQLite.
+ * A D1-compatible adapter over a synchronous SQLite driver — better-sqlite3 here (makeD1), bun:sqlite
+ * in servers/bun (which reuses d1Over). Presents the same `SqlDatabase` surface the gateway handlers
+ * use (prepare → bind → run/first/all, plus batch), so the *exact same* business logic runs unchanged
+ * on Cloudflare D1 and on local SQLite.
  *
- * better-sqlite3 is synchronous; we wrap results in resolved Promises to match D1's async API.
+ * SQLite drivers are synchronous; results are wrapped in resolved Promises to match D1's async API.
  */
 import type BetterSqlite3 from "better-sqlite3";
 import type { SqlDatabase, SqlStatement, SqlResult } from "@aprscaching/gateway/runtime";
 
-type DB = BetterSqlite3.Database;
+/** One prepared statement, as a synchronous driver exposes it. */
+export interface SqliteStatement {
+  /** Does it return rows (a SELECT, a PRAGMA, a `… RETURNING` writer)? */
+  readonly reader: boolean;
+  all(...params: unknown[]): unknown[];
+  get(...params: unknown[]): unknown;
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+}
 
-/** D1 accepts null/number/string; better-sqlite3 rejects `undefined` and booleans. Real D1
+/** The synchronous SQLite driver the adapter runs on. */
+export interface SqliteDriver {
+  prepare(sql: string): SqliteStatement;
+  /** Run `fn` in one transaction, committing on return and rolling back on a throw. */
+  transaction<T>(fn: () => T): T;
+}
+
+/** D1 accepts null/number/string; the SQLite drivers reject `undefined` (and booleans). Real D1
  *  throws `D1_TYPE_ERROR` on an `undefined` bind — silently coercing it to null here would hide the bug
  *  on Node/Bun and let it 500 only on Workers. Throw the same way so parity failures surface in CI. */
 function norm(values: unknown[]): unknown[] {
@@ -27,7 +42,7 @@ const isDml = (sql: string): boolean => /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/
 
 class Stmt implements SqlStatement {
   constructor(
-    private db: DB,
+    private db: SqliteDriver,
     private sql: string,
     private params: unknown[] = [],
   ) {}
@@ -63,14 +78,22 @@ class Stmt implements SqlStatement {
   }
 }
 
-export function makeD1(db: DB): SqlDatabase {
+/** A D1-compatible database over any synchronous SQLite driver. */
+export function d1Over(db: SqliteDriver): SqlDatabase {
   return {
     prepare(query: string): SqlStatement {
       return new Stmt(db, query);
     },
     async batch<T = unknown>(statements: SqlStatement[]): Promise<SqlResult<T>[]> {
-      const txn = db.transaction((stmts: Stmt[]) => stmts.map((s) => s.execSync()));
-      return txn(statements as Stmt[]) as SqlResult<T>[];
+      return db.transaction(() => (statements as Stmt[]).map((s) => s.execSync())) as SqlResult<T>[];
     },
   };
+}
+
+/** A D1-compatible database over better-sqlite3. */
+export function makeD1(db: BetterSqlite3.Database): SqlDatabase {
+  return d1Over({
+    prepare: (sql) => db.prepare(sql) as SqliteStatement,
+    transaction: (fn) => db.transaction(fn)(),
+  });
 }

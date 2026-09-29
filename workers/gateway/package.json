@@ -27,7 +27,9 @@
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",
     "./ingest": "./src/ingest.ts",
-    "./adoption": "./src/adoption.ts"
+    "./adoption": "./src/adoption.ts",
+    "./rooms-core": "./src/rooms-core.ts",
+    "./migrate": "./src/migrate.ts"
   },
   "scripts": {
     "dev": "wrangler dev",
