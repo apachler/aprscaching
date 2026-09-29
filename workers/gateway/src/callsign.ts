@@ -37,6 +37,15 @@ import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } 
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { serviceCall } from "./radiolog.js";
 import { adminCalls } from "./admin.js";
+import { parseAttestedSites } from "./provenance.js";
+
+/**
+ * The receiving-site calls that can hear a `VERIFY` message: the attested sites, sorted. Site calls are
+ * public (they appear in every frame the site gates), so naming them to the holder discloses nothing.
+ */
+export function listeningSites(env: Env): string[] {
+  return [...parseAttestedSites(env.FIRST_PARTY_SITES)].sort();
+}
 
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
 export const CHALLENGE_TTL_SEC = 30 * 60;
@@ -82,6 +91,16 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
   // a session proves control only of a licence its account already holds
   if (!(await accountHoldsCall(env, me.accountId, cs)))
     return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
+  // Without an attested receiving site nothing can hear the reply, so a code would only run out.
+  const sites = listeningSites(env);
+  if (sites.length === 0)
+    return json(
+      {
+        error: "this instance has no receiving station yet — ask the operator, or use another method",
+        reason: "no_receiving_site",
+      },
+      { status: 409 },
+    );
   const t = Date.now();
   if (
     (await rateLimitedDurable(env, `aprs-start:acct:${me.accountId}`, t, STARTS_PER_ACCOUNT, START_WINDOW_MS)) ||
@@ -102,7 +121,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
   )
     .bind(cs, code, me.accountId, now)
     .run();
-  return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC });
+  return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC, sites });
 }
 
 /** How a call's control was proven. */
