@@ -85,6 +85,29 @@ describe("the email link needs a confirm step", () => {
     expect((await call(env, "POST", "/auth/email/verify", { token: t1 })).status).toBe(400);
   });
 
+  it("the confirm page keeps its own origin on the form POST while keeping the token off other sites", async () => {
+    // Under a no-referrer policy a browser sends `Origin: null` with the form POST, which the origin check
+    // refuses, so the button would never sign anyone in. `same-origin` sends the page's real origin to the
+    // gateway itself and no Referer (so no token) to any other site.
+    const env = authEnv();
+    const token = await start(env, "policy@example.test", "DL1POL");
+    const page = await serve(env)(
+      new Request(`${ORIGIN}/auth/email/verify?token=${token}`, { headers: { accept: "text/html" } }),
+    );
+    expect(page.headers.get("referrer-policy")).toBe("same-origin");
+    const html = await page.text();
+    expect(html).toContain("<meta name=referrer content=same-origin>");
+    expect(html).not.toContain("no-referrer");
+    const nullOrigin = await serve(env)(
+      new Request(`${ORIGIN}/auth/email/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", origin: "null" },
+        body: `token=${token}`,
+      }),
+    );
+    expect(nullOrigin.status).toBe(403);
+  });
+
   it("a cross-site POST of someone else's token is refused (login CSRF)", async () => {
     const env = authEnv();
     const token = await start(env, "attacker@example.test", "DL1ATK");
