@@ -1,44 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The APRS control-verification confirm requires a session or the trusted ingest secret, locks after
-// a few wrong guesses, and expires — without those, an unauthenticated, unthrottled endpoint matching
-// a Math.random 6-digit code lets ~10^6 guesses verify any callsign.
+// Callsign control-verification: a challenge is issued only to a signed-in holder, the operator
+// bootstrap needs the ingest secret, and only `VERIFY <code>` addressed to the service call is a
+// verification message. The end-to-end RF flow runs against SQLite in servers/node/test.
 import { describe, it, expect } from "vitest";
-import { startAprsChallenge, confirmAprsChallenge } from "../src/callsign.js";
+import { startAprsChallenge, handleOperatorVerify, parseVerifyMessage, verifyText } from "../src/callsign.js";
 import type { Env } from "../src/env.js";
 
-/** Tiny in-memory stand-in for the D1 surface these handlers touch. */
+/** A D1 stand-in that holds nothing: these paths must refuse before they touch a row. */
 function makeEnv(): Env {
-  const rows = new Map<string, Record<string, unknown>>();
   const db = {
-    prepare(sql: string) {
+    prepare() {
       return {
-        bind(...a: unknown[]) {
+        bind() {
           return {
             async run() {
-              if (/INSERT INTO callsign_verifications/.test(sql)) {
-                rows.set(String(a[0]), {
-                  callsign: a[0],
-                  challenge: a[1],
-                  account_id: a[2],
-                  attempts: 0,
-                  created_at: a[3],
-                  status: "pending",
-                });
-              } else if (/UPDATE callsign_verifications SET attempts/.test(sql)) {
-                // a = [MAX, cs]
-                const r = rows.get(String(a[1]));
-                if (r) {
-                  r.attempts = (r.attempts as number) + 1;
-                  if ((r.attempts as number) >= (a[0] as number)) r.status = "failed";
-                }
-              } else if (/INSERT INTO aprs_outbox/.test(sql)) {
-                /* ignore */
-              }
               return {};
             },
             async first() {
-              if (/FROM callsign_verifications/.test(sql)) return rows.get(String(a[0])) ?? null;
-              if (/FROM accounts WHERE callsign/.test(sql)) return { account_id: "acct-1" }; // session → account
               return null;
             },
             async all() {
@@ -52,64 +30,65 @@ function makeEnv(): Env {
       return [];
     },
   };
-  return { DB: db, INGEST_SECRET: "trusted-secret" } as unknown as Env;
+  return { DB: db, INGEST_SECRET: "trusted-secret", ADMIN_CALLSIGNS: "OE8APR" } as unknown as Env;
 }
 
-const ingestReq = (body: unknown) =>
-  new Request("http://gw/verify/aprs/confirm", {
+const req = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+  new Request("http://gw" + path, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-ingest-secret": "trusted-secret" },
-    body: JSON.stringify(body),
-  });
-const anonReq = (path: string, body: unknown) =>
-  new Request("http://gw/verify/aprs/" + path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
 
-async function readCode(env: Env): Promise<string> {
-  // pull the code the handler stored (the smoke reads it off the outbox; here off our map)
-  const r = await env.DB.prepare(
-    "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
-  )
-    .bind("OE8APR")
-    .first<{ challenge: string }>();
-  return r!.challenge;
-}
-
-describe("APRS verification is authenticated + throttled", () => {
-  it("rejects an anonymous start (no session, no ingest secret) with 401", async () => {
-    const res = await startAprsChallenge(anonReq("start", { callsign: "OE8APR" }), makeEnv());
+describe("callsign control-verification entry points", () => {
+  it("rejects an anonymous start with 401", async () => {
+    const res = await startAprsChallenge(req("/verify/aprs/start", { callsign: "OE8APR" }), makeEnv());
     expect(res.status).toBe(401);
   });
 
-  it("rejects an anonymous confirm with 401", async () => {
-    const res = await confirmAprsChallenge(anonReq("confirm", { callsign: "OE8APR", code: "123456" }), makeEnv());
+  it("does not start a challenge on the ingest secret alone", async () => {
+    const res = await startAprsChallenge(
+      req("/verify/aprs/start", { callsign: "OE8APR" }, { "x-ingest-secret": "trusted-secret" }),
+      makeEnv(),
+    );
     expect(res.status).toBe(401);
   });
 
-  it("verifies with the correct code over the trusted path", async () => {
-    const env = makeEnv();
-    await startAprsChallenge(ingestReq({ callsign: "OE8APR" }), env);
-    const code = await readCode(env);
-    const res = await confirmAprsChallenge(ingestReq({ callsign: "OE8APR", code }), env);
+  it("the operator bootstrap needs the ingest secret", async () => {
+    expect((await handleOperatorVerify(req("/verify/operator", { callsign: "OE8APR" }), makeEnv())).status).toBe(401);
+    const wrong = req("/verify/operator", { callsign: "OE8APR" }, { "x-ingest-secret": "nope" });
+    expect((await handleOperatorVerify(wrong, makeEnv())).status).toBe(401);
+  });
+
+  it("the operator bootstrap confirms only an ADMIN_CALLSIGNS call", async () => {
+    const other = req("/verify/operator", { callsign: "DL1AAA" }, { "x-ingest-secret": "trusted-secret" });
+    expect((await handleOperatorVerify(other, makeEnv())).status).toBe(403);
+    const own = req("/verify/operator", { callsign: "oe8apr-9" }, { "x-ingest-secret": "trusted-secret" });
+    const res = await handleOperatorVerify(own, makeEnv());
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { verified: boolean }).verified).toBe(true);
+    expect(await res.json()).toEqual({ verified: true, callsign: "OE8APR", method: "operator" });
+  });
+});
+
+describe("parseVerifyMessage", () => {
+  it.each([
+    ["VERIFY 482913", "482913"],
+    ["verify 482913", "482913"],
+    ["  Verify   482913 ", "482913"],
+    ["VERIFY", ""],
+  ])("%j → %j", (text, code) => expect(parseVerifyMessage(text)).toBe(code));
+
+  it.each(["FOUND AC-1234", "VERIFYING 1", "VERIFY 1 2", "please VERIFY 1"])("%j is not a verification", (text) =>
+    expect(parseVerifyMessage(text)).toBeNull(),
+  );
+
+  it("parses long blank padding in linear time", () => {
+    const t = Date.now();
+    expect(parseVerifyMessage(`verify${" ".repeat(200_000)}x${" ".repeat(200_000)}y`)).toBeNull();
+    expect(Date.now() - t).toBeLessThan(1000);
   });
 
-  it("locks the challenge after 5 wrong guesses (429), defeating brute force", async () => {
-    const env = makeEnv();
-    await startAprsChallenge(ingestReq({ callsign: "OE8APR" }), env);
-    const realCode = await readCode(env);
-    const wrong = realCode === "000000" ? "111111" : "000000";
-    for (let i = 0; i < 5; i++) {
-      const r = await confirmAprsChallenge(ingestReq({ callsign: "OE8APR", code: wrong }), env);
-      expect(r.status).toBe(400); // wrong code
-    }
-    // 6th attempt: locked, and even the CORRECT code no longer works
-    const locked = await confirmAprsChallenge(ingestReq({ callsign: "OE8APR", code: realCode }), env);
-    expect([400, 429]).toContain(locked.status);
-    expect(((await locked.json()) as { verified: boolean }).verified).toBe(false);
+  it("round-trips the text the start endpoint hands out", () => {
+    expect(parseVerifyMessage(verifyText("123456"))).toBe("123456");
   });
 });

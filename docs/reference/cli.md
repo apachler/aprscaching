@@ -1,7 +1,7 @@
 # Command-line tools
 
-Helper scripts under `deploy/` install and maintain an instance; those under `tools/` support key
-management, signing, and verification.
+Helper scripts under `deploy/` install and maintain an instance; those under `tools/` confirm the operator's
+callsign and support key management, signing, and verification.
 
 ## Instance operation — `deploy/`
 
@@ -13,6 +13,17 @@ deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in f
 ```
 
 See [Deployment](../operate/deployment.md) and [Running in Docker](../operate/docker.md).
+
+## Operator callsign — `tools/admin/` {#operator-callsign}
+
+```bash
+BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+```
+
+Confirms the operator's own callsign so the sysop role opens on a fresh instance. It posts to
+`/verify/operator` with `INGEST_SECRET`; the gateway accepts only a call listed in `ADMIN_CALLSIGNS` and
+marks it verified (method `operator`), including on the account that holds it. `BASE` defaults to
+`http://127.0.0.1:8787`. See [Administration](../operate/administration.md#operator-identity).
 
 ## Federation keys — `tools/fedkey/`
 

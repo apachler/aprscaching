@@ -156,6 +156,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
+  const [operatorPending, setOperatorPending] = useState(false); // operator's call not yet confirmed
   const [center, setCenter] = useState<[number, number] | null>(null); // map centre, for the coord readout
   const fmt = useMemo(() => makeFormatters(locSettings), [locSettings]);
   const applySettings = useCallback((s: LocaleSettings) => {
@@ -174,11 +175,18 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     if (!session.signedIn) {
       setSysop(false);
+      setOperatorPending(false);
       return;
     }
     adminWhoami()
-      .then((r) => setSysop(!!r.sysop))
-      .catch(() => setSysop(false));
+      .then((r) => {
+        setSysop(!!r.sysop);
+        setOperatorPending(r.pending === "verify");
+      })
+      .catch(() => {
+        setSysop(false);
+        setOperatorPending(false);
+      });
   }, [session.signedIn]);
   useEffect(() => {
     const onSync = () => setLocSettings(loadSettings());
@@ -1049,6 +1057,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                 map.current?.flyTo({ center: [lon, lat], zoom: Math.max(map.current.getZoom(), 12) })
               }
               session={session}
+              operatorPending={operatorPending}
               onSignIn={() => openOnly(() => ov.open("signin"))}
               onDocs={() => openOnly(() => ov.open("docs"))}
               onClose={() => ov.close()}

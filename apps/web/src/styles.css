@@ -463,6 +463,9 @@ label textarea {
 .m-0 {
   margin: 0;
 }
+.mb-0 {
+  margin-bottom: 0;
+}
 .ml-2 {
   margin-left: var(--sp-2);
 }
@@ -2688,6 +2691,23 @@ button.link:hover {
   padding: 10px 11px;
   margin: 8px 0;
   background: var(--surface-2);
+}
+/* the exact message to transmit: label / value pairs, values in mono so they can be keyed in as shown */
+.verify-msg {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-4);
+  margin: var(--sp-3) 0;
+}
+.verify-msg dt {
+  color: var(--muted);
+  font-size: 12px;
+  align-self: center;
+}
+.verify-msg dd {
+  margin: 0;
+  font-size: 1.05em;
+  overflow-wrap: anywhere;
 }
 .fine {
   font-size: 12px;

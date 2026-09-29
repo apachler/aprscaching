@@ -38,7 +38,7 @@ import {
   handleStationToCache,
   handleMeCache,
 } from "./stations_mine.js";
-import { startAprsChallenge, confirmAprsChallenge, aprsVerifyStatus } from "./callsign.js";
+import { startAprsChallenge, aprsVerifyStatus, handleOperatorVerify } from "./callsign.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import {
   handleWellKnown,
@@ -85,7 +85,7 @@ import {
   syncAllPeers,
   pushToHub,
 } from "./federation_sync.js";
-import { handleAdminWhoami } from "./admin.js";
+import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -365,6 +365,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
+  if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);
+  const adminVerif = /^\/api\/admin\/verifications\/([A-Za-z0-9-]{3,12})$/.exec(p);
+  if (adminVerif) return handleAdminVerifications(req, env, adminVerif[1]);
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
@@ -450,9 +453,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
   if (p === "/auth/logout" && m === "POST") return handleLogout();
 
-  // async callsign-control verification badge
+  // callsign control-verification: an RF challenge, the operator's bootstrap, and the badge status
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
-  if (p === "/verify/aprs/confirm" && m === "POST") return confirmAprsChallenge(req, env);
+  if (p === "/verify/operator" && m === "POST") return handleOperatorVerify(req, env);
   if (p === "/verify/aprs/status" && m === "GET") return aprsVerifyStatus(req, env);
 
   // caching REST

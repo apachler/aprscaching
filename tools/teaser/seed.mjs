@@ -284,24 +284,40 @@ for (const [title, call, logType, comment] of finders) {
 console.log("seeded", logged, "extra cache logs");
 
 // Verify OE8APR so the teaser chrome shows an ACTIVATED operator (the green check, not "unverified").
-// Dev-only, HTTP-only: register the account via the email dev-link (no mail provider → the link is
-// returned), then complete the APRS message-challenge by reading the one-time code back out of the
-// outbox (ingest-secret gated) — no real RF/TX. The tour signs in to this same account → verified=1.
+// Dev-only, HTTP-only: register the account via the email dev token (no mail provider → the token is
+// returned), start a verification challenge in its session, and ingest the `VERIFY <code>` message as
+// heard on the TNC of the attested site OE8XXX (the teaser gateway sets FIRST_PARTY_SITES=OE8XXX) —
+// no real RF/TX. The tour signs in to this same account → verified=1.
 {
   const CALL = "OE8APR",
     EMAIL = "oe8apr@teaser.local";
   const start = await j("POST", "/auth/email/start", { email: EMAIL, callsign: CALL });
-  if (start.data?.devLink) await fetch(start.data.devLink).catch(() => {}); // GET verify link → creates the account
-  await j("POST", "/verify/aprs/start", { callsign: CALL }); // queues a 6-digit code to the outbox
-  const ob = await j("GET", "/outbox"); // ingest-secret gated
-  const item = (ob.data?.items ?? []).find(
-    (x) => String(x.payload || "").includes(CALL) && /code \d{6}/.test(x.payload),
-  );
-  const code = item && (String(item.payload).match(/code (\d{6})/) || [])[1];
-  if (code) {
-    const conf = await j("POST", "/verify/aprs/confirm", { callsign: CALL, code });
-    console.log("verified operator OE8APR:", conf.data?.verified === true);
-  } else console.log("could not read challenge code from outbox — OE8APR stays unverified");
+  const vr = await fetch(API + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: start.data?.devToken }),
+  });
+  const cookie = (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+  const ch = await j("POST", "/verify/aprs/start", { callsign: CALL }, { cookie });
+  if (ch.ok) {
+    await j("POST", "/ingest", {
+      packets: [
+        {
+          src: `${CALL}-7`,
+          dst: "APRS",
+          path: ["WIDE1-1", "qAR", "OE8XXX"],
+          payload: `:${String(ch.data.to).padEnd(9)}:${ch.data.text}`,
+          kind: "message",
+          heardVia: "rf",
+          igateCall: "OE8XXX",
+          port: "kiss-tnc",
+          ts: now(),
+        },
+      ],
+    });
+    const st = await j("GET", `/verify/aprs/status?callsign=${CALL}`);
+    console.log("verified operator OE8APR:", st.data?.verified === true);
+  } else console.log("could not start a verification challenge — OE8APR stays unverified");
 }
 
 console.log("seed complete");

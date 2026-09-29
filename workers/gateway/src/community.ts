@@ -18,7 +18,7 @@ const DAY = 86400;
 const POINTS =
   "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
 // competitive credit requires proven control of the callsign (anti-gaming): the logger's callsign
-// must be control-verified (APRS message-challenge / LoTW). Personal profiles still show all finds.
+// must be control-verified (an on-air VERIFY heard at an attested site, the operator bootstrap, or a sysop). Personal profiles still show all finds.
 const VERIFIED_LOGGER = "AND l.logger_call IN (SELECT callsign FROM callsign_verifications WHERE status='verified')";
 
 function periodStart(period: string | null): number {

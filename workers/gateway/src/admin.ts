@@ -10,7 +10,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionCallsign, sessionAccountId, secretOk } from "./auth.js";
-import { isCallsignVerified } from "./callsign.js";
+import { isCallsignVerified, listSysopVerifications, sysopVerify, sysopRevoke } from "./callsign.js";
 
 /** The set of licensed calls allowed to administer this instance (uppercased). Empty ⇒ no web sysop. */
 export function adminCalls(env: Env): Set<string> {
@@ -66,8 +66,42 @@ export async function requireSysop(
   return json({ error: "instance-operator (sysop) access required" }, { status: 403 });
 }
 
-/** GET /api/admin/whoami — lets the web app decide whether to reveal the operator admin surface. */
+/**
+ * The session's call when it is listed in ADMIN_CALLSIGNS and held by the session's own account but not
+ * yet control-verified — the operator on a fresh instance, who still has to confirm the call.
+ */
+async function pendingOperatorCall(req: Request, env: Env): Promise<string | null> {
+  const admins = adminCalls(env);
+  if (admins.size === 0) return null;
+  const me = await sessionAccountId(req, env);
+  if (!me || !admins.has(me.callsign.toUpperCase())) return null;
+  const base = me.callsign.toUpperCase().split("-")[0]!;
+  const held = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id=? AND callsign=?")
+    .bind(me.accountId, base)
+    .first();
+  return held ? base : null;
+}
+
+/**
+ * GET /api/admin/whoami — lets the web app decide whether to reveal the operator admin surface. The
+ * unverified holder of an ADMIN_CALLSIGNS call is told what is missing (`pending: "verify"`); nobody
+ * else learns anything about the admin list.
+ */
 export async function handleAdminWhoami(req: Request, env: Env): Promise<Response> {
   const callsign = await sessionCallsign(req, env);
-  return json({ sysop: await isSysop(req, env), callsign, configured: adminCalls(env).size > 0 });
+  const sysop = await isSysop(req, env);
+  const pending = !sysop && (await pendingOperatorCall(req, env)) ? { pending: "verify" as const } : {};
+  return json({ sysop, callsign, configured: adminCalls(env).size > 0, ...pending });
+}
+
+/** /api/admin/verifications[/:callsign] — list, add and revoke sysop manual verifications. Sysop-only. */
+export async function handleAdminVerifications(req: Request, env: Env, callsign?: string): Promise<Response> {
+  const denied = await requireSysop(req, env);
+  if (denied) return denied;
+  const me = await sessionAccountId(req, env);
+  const m = req.method;
+  if (callsign === undefined && m === "GET") return listSysopVerifications(env);
+  if (callsign === undefined && m === "POST") return sysopVerify(req, env, me!.callsign);
+  if (callsign !== undefined && m === "DELETE") return sysopRevoke(env, callsign, me!.callsign);
+  return new Response("method not allowed", { status: 405 });
 }

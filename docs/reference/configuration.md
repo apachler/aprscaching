@@ -35,9 +35,9 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `ALLOW_DEV_TOKENS` | Return magic-link tokens in-band instead of emailing (dev/CI only — never production) | off |
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
-| `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and control-verify it (APRS message challenge) | — |
+| `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign)) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning | — |
-| `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) are addressed to | `APRSCG` |
+| `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to | `APRSCG` |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
 
 Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
@@ -48,7 +48,7 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `FIRST_PARTY_SITES` | Allowlist of receiving-site callsigns you operate and attest — the only Tier-A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way | — |
+| `FIRST_PARTY_SITES` | Allowlist of receiving-site callsigns you operate and attest — the only Tier-A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way | — |
 | `FED_CORROBORATION_QUORUM` | Distinct corroborating identities (registry operator, else signing key) required to promote a find to Tier A | `2` |
 | `DOH_URL` | DNS-over-HTTPS resolver for 44net peer onboarding (must return the DNSSEC AD flag) | Cloudflare |
 | `FED_ENDPOINTS` | This instance's typed transport endpoints (JSON array of `{transport,address,priority}`), published as `addresses` in both the descriptor and the registry self-entry | — |

@@ -7,10 +7,18 @@ users. This surface is separate from per-user settings and is gated server-side.
 
 `ADMIN_CALLSIGNS` (comma-separated licensed calls) names the instance operator(s). A signed-in account is a
 **sysop** when its active callsign is in that list, the account holds that call, and the call is
-**control-verified** (the APRS message challenge under Settings → account — the same proof transmit
-needs). Signing up under a listed call grants nothing until that verification succeeds, so the operator
-verifies their call once after first sign-in. `GET /api/admin/whoami` tells the web app whether to reveal
-the operator surface. Every operator write is enforced by `requireSysop` on the server — hiding a control in
+**control-verified** — the same proof transmit needs. Signing up under a listed call grants nothing until
+that verification succeeds, so the operator confirms their call once after first sign-in, with the operator
+CLI:
+
+```bash
+BASE=https://api.example.net INGEST_SECRET=… node tools/admin/verify-call.mjs OE8APR
+```
+
+It calls `POST /verify/operator` with the ingest secret, which verifies a call listed in `ADMIN_CALLSIGNS`
+(method `operator`) and nothing else. `GET /api/admin/whoami` tells the web app whether to reveal the operator
+surface; for the account that holds a listed call not yet confirmed it answers `pending: "verify"`, and
+**Settings → Account** tells that operator to run the CLI. Nobody else learns anything about the list. Every operator write is enforced by `requireSysop` on the server — hiding a control in
 the UI is never the gate. If `ADMIN_CALLSIGNS` is unset, the web operator surface is locked entirely (the
 operator-local ingest box can still act with `INGEST_SECRET`).
 
@@ -19,10 +27,25 @@ operator-local ingest box can still act with `INGEST_SECRET`).
     identically on every runtime (Worker, Node, Bun): the self-host servers forward the complete config-key
     set into the gateway, so each topology has the web sysop surface when the variable is set.
 
+## Callsign verification
+
+Users verify their own calls over the air: **Settings → Account → verify** gives them `VERIFY <code>` to send
+to the service call, and the call is verified (method `rf_heard`) only when a site in `FIRST_PARTY_SITES`
+hears the message on its own TNC or MeshCom node. A copy over APRS-IS, AXUDP/AXIP or a signed browser batch
+never counts. Without attested sites nobody can verify that way.
+
+For an operator out of range of every attested site, a sysop verifies the call by hand under **Instance
+admin → Callsign verification**: the callsign, and a required note saying how control of the licence was
+checked. The call is verified with method `sysop`, recording the sysop's call and the time; the list shows
+every manual verification, and **Revoke** returns a call to unverified. Revoking touches only manual
+verifications — a call verified on the air or by the operator CLI is neither listed nor revocable there.
+Both actions are logged in `account_events`.
+
 ## Operator-only surfaces
 
 Reached from the instance-admin panel (shown only to operators):
 
+- **Callsign verification** — verify a call by hand, list and revoke manual verifications (above).
 - **Federation** — the peer list with health and reputation, per-peer **trust** (`trusted` / `unvetted` /
   `blocked`), and a manual sync trigger. See [Federation](../guides/federation.md).
 - **FBB forwarding** — partner BBSes (callsign, protocol, intervals, time-bands, message types) and
