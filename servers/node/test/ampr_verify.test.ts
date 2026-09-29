@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Callsign control-verification through ampr.org DNS. ARDC delegates `<call>.ampr.org` only after
 // reviewing the holder's licence, so a code the holder publishes under that name proves control of the
-// call — but only when the answer is DNSSEC-validated: an unvalidated DNS answer can be spoofed on the
-// way, and a user's verification never trusts on first use.
+// call — provided the answer is authentic. A DNSSEC-validated answer (AD) from the validating resolver is
+// enough on its own; without it, every configured independent resolver that answers must return the same
+// TXT set carrying the code (at least two of them), and AMPR_REQUIRE_DNSSEC=1 turns that fallback off.
 import { describe, it, expect, afterEach } from "vitest";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup } from "./helpers/authflow.js";
@@ -13,33 +14,54 @@ afterEach(() => {
 });
 
 const DOH = "https://dns.example/dns-query";
-const env = () => authEnv({ DOH_URL: DOH });
+const R1 = "https://r1.example/dns-query";
+const R2 = "https://r2.example/resolve"; // the Google-style dialect: trailing dots, unquoted data
+const R3 = "https://r3.example:5053/dns-query";
+const RESOLVERS = [R1, R2, R3];
+const env = (extra: Record<string, unknown> = {}) =>
+  authEnv({ DOH_URL: DOH, AMPR_DNS_RESOLVERS: RESOLVERS.join(", "), ...extra });
 
 interface Doh {
   status?: number;
   ad?: boolean;
   txt?: string[];
+  /** Answer with a CNAME for the name first, then the TXT under the target name. */
+  cname?: string;
+  /** Owner name of the TXT records, when not the queried name. */
+  owner?: string;
 }
-/** Stub the DoH resolver; records every queried URL. */
-function stubDoh(answer: Doh | (() => Doh)): string[] {
+type Reply = Doh | "timeout" | "http-error";
+
+/** Stub every resolver: `answers` maps a resolver base URL to its reply; records every queried URL. */
+function stubDns(answers: Record<string, Reply>): string[] {
   const asked: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (!url.startsWith(DOH)) throw new Error(`unexpected fetch ${url}`);
+    const base = url.split("?")[0]!;
+    const a = answers[base];
+    if (a === undefined) throw new Error(`unexpected fetch ${url}`);
     asked.push(url);
-    const a = typeof answer === "function" ? answer() : answer;
-    const name = new URL(url).searchParams.get("name");
-    return new Response(
-      JSON.stringify({
-        Status: a.status ?? 0,
-        AD: a.ad ?? false,
-        Answer: (a.txt ?? []).map((t) => ({ name, type: 16, data: `"${t}"` })),
-      }),
-      { headers: { "content-type": "application/dns-json" } },
-    );
+    if (a === "timeout") throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    if (a === "http-error") return new Response("oops", { status: 502 });
+    const name = new URL(url).searchParams.get("name")!;
+    const google = base === R2;
+    const dn = (n: string) => (google ? `${n}.` : n);
+    const data = (t: string) => (google ? t : `"${t}"`);
+    const answer: { name: string; type: number; data: string }[] = [];
+    let owner = a.owner ?? name;
+    if (a.cname) {
+      answer.push({ name: dn(name), type: 5, data: dn(a.cname) });
+      owner = a.cname;
+    }
+    for (const t of a.txt ?? []) answer.push({ name: dn(owner), type: 16, data: data(t) });
+    return new Response(JSON.stringify({ Status: a.status ?? 0, AD: a.ad ?? false, Answer: answer }), {
+      headers: { "content-type": "application/dns-json" },
+    });
   }) as typeof fetch;
   return asked;
 }
+/** Every resolver (the validating one included) gives the same reply. */
+const everywhere = (a: Reply): Record<string, Reply> => Object.fromEntries([DOH, ...RESOLVERS].map((u) => [u, a]));
 
 async function started(e: Env, cs = "OE8APR") {
   const me = await emailSignup(e, `${cs.toLowerCase()}@example.test`, cs);
@@ -76,14 +98,15 @@ describe("starting an ampr.org DNS verification", () => {
   });
 });
 
-describe("checking the published record", () => {
-  it("verifies when the DNSSEC-validated TXT under ampr.org carries the current code", async () => {
+describe("a DNSSEC-validated answer", () => {
+  it("verifies on the validating resolver alone and records the proof as DNSSEC", async () => {
     const e = env();
     const { me, s } = await started(e);
-    const asked = stubDoh({ ad: true, txt: ["v=acs1; inst=oe.pub; key=" + "A".repeat(43), s.data.value] });
+    const asked = stubDns({ [DOH]: { ad: true, txt: ["v=acs1; inst=oe.pub; key=" + "A".repeat(43), s.data.value] } });
     const r = await check(e, me.cookie);
     expect(r.status).toBe(200);
-    expect(r.data).toMatchObject({ verified: true, callsign: "OE8APR", method: "ampr_dns" });
+    expect(r.data).toMatchObject({ verified: true, callsign: "OE8APR", method: "ampr_dns", proof: "dnssec" });
+    expect(asked).toHaveLength(1);
     const q = new URL(asked[0]!).searchParams;
     expect([q.get("name"), q.get("type")]).toEqual(["_aprscaching.oe8apr.ampr.org", "TXT"]);
     expect(await verified(e, "OE8APR")).toBe(true);
@@ -91,6 +114,7 @@ describe("checking the published record", () => {
       status: "verified",
       method: "ampr_dns",
       verified_by: "oe8apr.ampr.org",
+      note: "dnssec",
     });
     // the held call reads as verified through the one store
     const held = await e.DB.prepare(
@@ -101,34 +125,153 @@ describe("checking the published record", () => {
     expect((await check(e, me.cookie)).status).toBe(409);
   });
 
-  it("refuses an answer that is not DNSSEC-validated, whatever it carries", async () => {
+  it("refuses a validated answer that carries another code, and verifies once it carries the current one", async () => {
     const e = env();
     const { me, s } = await started(e);
-    stubDoh({ ad: false, txt: [s.data.value] });
-    const r = await check(e, me.cookie);
-    expect(r.status).toBe(422);
-    expect(r.data.error).toMatch(/DNSSEC/);
-    expect(await verified(e, "OE8APR")).toBe(false);
-  });
-
-  it("refuses when the name does not exist, or the record carries another code", async () => {
-    const e = env();
-    const { me, s } = await started(e);
-    stubDoh({ status: 3, ad: true });
-    const nx = await check(e, me.cookie);
-    expect(nx.status).toBe(422);
-    expect(nx.data.error).toMatch(/_aprscaching\.oe8apr\.ampr\.org/);
-    stubDoh({ ad: true, txt: ["v=acs1; verify=someoldcode0000000000"] });
+    stubDns({ [DOH]: { ad: true, txt: ["v=acs1; verify=someoldcode0000000000"] } });
     const wrong = await check(e, me.cookie);
     expect(wrong.status).toBe(422);
     expect(wrong.data.error).toMatch(/current code/);
     expect(await verified(e, "OE8APR")).toBe(false);
-    // the record, once it carries the code, still verifies
-    stubDoh({ ad: true, txt: [s.data.value] });
+    stubDns({ [DOH]: { ad: true, txt: [s.data.value] } });
     expect((await check(e, me.cookie)).status).toBe(200);
   });
 
-  it("a resolver failure is reported and verifies nothing", async () => {
+  it("refuses an answer that goes through a CNAME, validated or not", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({ [DOH]: { ad: true, cname: "proof.attacker.example", txt: [s.data.value] } });
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(422);
+    expect(r.data.error).toMatch(/CNAME/);
+    stubDns(everywhere({ cname: "proof.attacker.example", txt: [s.data.value] }));
+    expect((await check(e, me.cookie)).status).toBe(422);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+});
+
+describe("independent resolvers agreeing, without DNSSEC", () => {
+  it("verifies when every configured resolver returns the code, and records the proof as multi-resolver", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    const asked = stubDns(everywhere({ ad: false, txt: [s.data.value] }));
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(200);
+    expect(r.data).toMatchObject({ verified: true, method: "ampr_dns", proof: "3 resolvers" });
+    for (const u of RESOLVERS) expect(asked.some((a) => a.startsWith(u))).toBe(true);
+    expect(await row(e, "OE8APR")).toMatchObject({
+      status: "verified",
+      method: "ampr_dns",
+      verified_by: "oe8apr.ampr.org",
+      note: "3 resolvers: r1.example, r2.example, r3.example",
+    });
+  });
+
+  it("refuses when one resolver returns a different TXT set", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({
+      ...everywhere({ txt: [s.data.value] }),
+      [R3]: { txt: [s.data.value, "v=acs1; verify=someoneelse000000000"] },
+    });
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(422);
+    expect(r.data.error).toMatch(/resolvers disagree/);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("refuses when one resolver answers with a DNS error", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({ ...everywhere({ txt: [s.data.value] }), [R2]: { status: 2 } });
+    expect((await check(e, me.cookie)).status).toBe(422);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("refuses when only one resolver answered", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({ ...everywhere({ txt: [s.data.value] }), [R2]: "timeout", [R3]: "http-error" });
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(502);
+    expect(r.data.error).toMatch(/1 of 3/);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("a resolver that times out does not block two that answered and agree", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({ ...everywhere({ txt: [s.data.value] }), [R3]: "timeout" });
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(200);
+    expect(await row(e, "OE8APR")).toMatchObject({ note: "2 resolvers: r1.example, r2.example" });
+  });
+
+  it("refuses TXT records under another owner name", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns(everywhere({ owner: "_aprscaching.dl1aaa.ampr.org", txt: [s.data.value] }));
+    expect((await check(e, me.cookie)).status).toBe(422);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("with AMPR_REQUIRE_DNSSEC=1, refuses any answer that is not DNSSEC-validated and asks no other resolver", async () => {
+    const e = env({ AMPR_REQUIRE_DNSSEC: "1" });
+    const { me, s } = await started(e);
+    const asked = stubDns(everywhere({ ad: false, txt: [s.data.value] }));
+    const r = await check(e, me.cookie);
+    expect(r.status).toBe(422);
+    expect(r.data.error).toMatch(/DNSSEC/);
+    expect(asked.every((a) => a.startsWith(DOH))).toBe(true);
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("uses Cloudflare, Google and Quad9 when no resolvers are configured", async () => {
+    const e = authEnv({ DOH_URL: DOH });
+    const { me, s } = await started(e);
+    const defaults = [
+      "https://cloudflare-dns.com/dns-query",
+      "https://dns.google/resolve",
+      "https://dns.quad9.net:5053/dns-query",
+    ];
+    const asked = stubDns({
+      [DOH]: { txt: [s.data.value] },
+      ...Object.fromEntries(defaults.map((u) => [u, { txt: [s.data.value] }])),
+    });
+    expect((await check(e, me.cookie)).status).toBe(200);
+    for (const u of defaults) expect(asked.some((a) => a.startsWith(u))).toBe(true);
+  });
+});
+
+describe("checking before the record resolves", () => {
+  it("says the name is not published yet, and does not burn an attempt", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns(everywhere({ status: 3 }));
+    for (let i = 0; i < 6; i++) {
+      const nx = await check(e, me.cookie);
+      expect(nx.status).toBe(422);
+      expect(nx.data.error).toMatch(/not published yet/);
+      expect(nx.data.error).toMatch(/_aprscaching\.oe8apr\.ampr\.org/);
+    }
+    // the challenge is still open after more checks than the attempts cap
+    stubDns(everywhere({ txt: [s.data.value] }));
+    expect((await check(e, me.cookie)).status).toBe(200);
+  });
+
+  it("a record some resolvers do not see yet is not published everywhere, and costs no attempt", async () => {
+    const e = env();
+    const { me, s } = await started(e);
+    stubDns({ ...everywhere({ txt: [s.data.value] }), [R1]: { status: 3 } });
+    for (let i = 0; i < 6; i++) {
+      const r = await check(e, me.cookie);
+      expect(r.status).toBe(422);
+      expect(r.data.error).toMatch(/not published yet everywhere \(r1\.example/);
+    }
+    expect(await verified(e, "OE8APR")).toBe(false);
+  });
+
+  it("a resolver failure everywhere is reported and verifies nothing", async () => {
     const e = env();
     const { me } = await started(e);
     globalThis.fetch = (async () => new Response("oops", { status: 502 })) as typeof fetch;
@@ -140,11 +283,11 @@ describe("checking the published record", () => {
   it("needs an outstanding challenge of the same account, within its lifetime", async () => {
     const e = env();
     const me = await emailSignup(e, "owner@example.test", "OE8APR");
-    stubDoh({ ad: true, txt: ["v=acs1; verify=x"] });
+    stubDns(everywhere({ ad: true, txt: ["v=acs1; verify=x"] }));
     expect((await check(e, me.cookie)).status).toBe(409);
     const s = await call(e, "POST", "/verify/ampr/start", { callsign: "OE8APR" }, { cookie: me.cookie });
     await e.DB.prepare("UPDATE callsign_challenges SET created_at = created_at - 3 * 86400").run();
-    stubDoh({ ad: true, txt: [s.data.value] });
+    stubDns(everywhere({ ad: true, txt: [s.data.value] }));
     expect((await check(e, me.cookie)).status).toBe(409);
     expect((await call(e, "POST", "/verify/ampr/check", { callsign: "OE8APR" })).status).toBe(401);
   });
@@ -152,7 +295,7 @@ describe("checking the published record", () => {
   it("is rate limited per account", async () => {
     const e = env();
     const { me } = await started(e);
-    stubDoh({ ad: true, txt: [] });
+    stubDns(everywhere({ ad: true, txt: [] }));
     const codes: number[] = [];
     for (let i = 0; i < 12; i++) codes.push((await check(e, me.cookie)).status);
     expect(codes).toContain(429);

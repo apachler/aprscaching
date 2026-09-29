@@ -96,7 +96,9 @@ export interface Env {
   /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
   FED_ENDPOINTS?: string; // this instance's typed transport endpoints (JSON array of {transport,address,priority}) — published in the descriptor
-  DOH_URL?: string; // DNS-over-HTTPS resolver for 44net peer onboarding and ampr.org callsign verification (default cloudflare-dns.com; must return the DNSSEC AD flag)
+  DOH_URL?: string; // validating DNS-over-HTTPS resolver for 44net peer onboarding and the ampr.org DNSSEC check (default cloudflare-dns.com; must return the DNSSEC AD flag)
+  AMPR_DNS_RESOLVERS?: string; // comma-separated independent DoH resolvers (JSON API) that must agree on an unsigned ampr.org answer (default Cloudflare, Google, Quad9)
+  AMPR_REQUIRE_DNSSEC?: string; // "1": ampr.org callsign verification accepts only a DNSSEC-validated answer
   LOTW_CA_PEM?: string; // PEM certificate(s) of the ARRL LoTW CA(s) trusted for LoTW callsign verification; absent ⇒ that method is off
   COT_STREAM_INTERVAL_MS?: string; // SSE CoT feed poll cadence (default 15000; clamped 1s–2min)
   COT_STREAM_MAX_MS?: string; // SSE CoT feed max connection lifetime before the client reconnects (default 5min)
@@ -199,6 +201,8 @@ export const ENV_STRING_KEYS = [
   "FED_ENDPOINTS",
   "FED_ALLOW_PRIVATE",
   "DOH_URL",
+  "AMPR_DNS_RESOLVERS",
+  "AMPR_REQUIRE_DNSSEC",
   "COT_STREAM_INTERVAL_MS",
   "COT_STREAM_MAX_MS",
   "SPOTS_ENABLED",
