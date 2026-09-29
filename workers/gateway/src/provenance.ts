@@ -6,17 +6,23 @@
  * that boolean (never the transport), so the transport-vs-trust rule lives here and cannot leak into
  * trust branching: "transport convenience is not trust uplift."
  *
- * Attestation is default-deny — the operator must name the receiving sites they attest:
- *   - First-party attestation requires a non-empty operator allowlist (`FIRST_PARTY_SITES`). A
- *     position heard on RF (`heard_via = 'rf'`) with an RF-originated q-construct (qAR/qAO) whose
- *     gating IGate is on that list is first-party attested.
- *   - With no allowlist set, nothing is first-party attested. The APRS-IS firehose carries frames
- *     gated by arbitrary IGates, so a bare `qAR` is not proof this operator heard the frame — Tier A
- *     stays closed until the operator names their own sites.
- *   - Everything else (bare APRS-IS injection qAC/qAX, app geo, any tunnelled transport) → not
- *     attested → cannot reach Tier A.
- *   - The transport can only take attestation away, never grant it: a position recorded as arriving over
- *     an internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
+ * Attestation is default-deny, and it follows the path a frame took to reach the gateway:
+ *   - Only a frame the attested site's own receiver heard, delivered by that site's own ingest, is first-party
+ *     attested: a local TNC (KISS, AGWPE, WA8DED host mode → `tnc`) or a MeshCom node (`meshcom`) on the
+ *     operator's ingest box, whose writes need INGEST_SECRET (a signed batch records `browser-rf`, whatever
+ *     port it names). The ingest stamps a direct hearing with the site call as `igate_call`, the frame is
+ *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`). An on-air frame carries no q-construct of
+ *     its own; one that does must name an RF gate (qAR/qAO).
+ *   - An APRS-IS line is never attested, whatever it says: APRS-IS passcodes are public, so anyone can
+ *     inject `…,qAR,<attested site>`. A legacy row with no recorded transport reads as APRS-IS. A standalone
+ *     IGate visible only on APRS-IS therefore counts for nothing here — it must run the ingest box for its
+ *     hearings to reach Tier A.
+ *   - With no allowlist set, nothing is first-party attested — Tier A stays closed until the operator
+ *     names their own sites.
+ *   - A browser-bridge batch (`browser-rf`) is never attested. It is signed by the sender's own device key
+ *     and may carry only the signer's own frames, stored without a receiving site: it proves who sent the
+ *     batch, not that an independent site heard it.
+ *   - An internet tunnel (AXUDP, AXIP) or a licence-free carrier (Meshtastic) is never attested, whatever
  *     its `heard_via` and site claim — no receiver the operator runs heard it on amateur RF.
  */
 import { Transport as TransportEnum, type Transport, type Provenance } from "@aprscaching/shared";
@@ -52,6 +58,12 @@ export function parseAttestedSites(raw?: string | null): Set<string> {
   );
 }
 
+/**
+ * First-party on-air transports: the operator's own ingest box heard the frame on its own receiver. The
+ * only transports that can carry attestation.
+ */
+const ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom"]);
+
 /** Transports that never carry first-party RF evidence: internet tunnels and licence-free carriers. */
 const NEVER_ATTESTED: ReadonlySet<Transport> = new Set<Transport>(["axudp", "axip", "meshtastic"]);
 
@@ -72,7 +84,7 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
 /**
  * The transport to record for an ingested packet. A batch signed by an operator's device key came from
  * the browser RF bridge, whatever port it names. The verify engine never branches on it; its only effect
- * on trust is that {@link provenanceOf} refuses attestation to the tunnel and licence-free transports.
+ * on trust is through {@link provenanceOf}, which attests the on-air transports alone.
  */
 export function transportForPort(port: string, signed: boolean): Transport | null {
   if (signed) return "browser-rf";
@@ -81,7 +93,7 @@ export function transportForPort(port: string, signed: boolean): Transport | nul
 
 /**
  * How a stored position reached us: the recorded transport, else (legacy rows with no transport) the
- * app-geolocation marker or the APRS-IS feed. It feeds `firstPartyAttested` only as a veto.
+ * app-geolocation marker or the APRS-IS feed — so a legacy row is never attested.
  */
 function transportOf(p: RawProvenance): Transport {
   const stored = TransportEnum.safeParse(p.transport);
@@ -91,11 +103,10 @@ function transportOf(p: RawProvenance): Transport {
 }
 
 /**
- * Derive provenance for a stored position. `firstPartyAttested` requires a non-empty operator
- * allowlist (`attestedSites`) that names the gating IGate. An empty (or absent) allowlist attests
- * nothing: a bare firehose `qAR` never reaches Tier A (default-deny). Tier A opens only once the
- * operator explicitly names the receiving sites they stand behind. A tunnel or licence-free transport
- * vetoes attestation outright.
+ * Derive provenance for a stored position. `firstPartyAttested` requires an on-air transport (the
+ * operator's own TNC or MeshCom node), an RF hearing, and a receiving site named on the operator
+ * allowlist (`attestedSites`). An empty (or absent) allowlist attests nothing. An APRS-IS copy — a
+ * `qAR,<attested site>` line included — is never attested.
  */
 export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Provenance {
   const qConstruct = qConstructOf(p.path);
@@ -103,7 +114,7 @@ export function provenanceOf(p: RawProvenance, attestedSites?: Set<string>): Pro
   const rfOriginated = p.heard_via === "rf" && (!qConstruct || RF_QCONSTRUCT.test(qConstruct));
   const siteOk = !!attestedSites && attestedSites.size > 0 && !!igate && attestedSites.has(igate);
   const transport = transportOf(p);
-  const firstPartyAttested = rfOriginated && siteOk && !NEVER_ATTESTED.has(transport);
+  const firstPartyAttested = rfOriginated && siteOk && ON_AIR.has(transport) && !NEVER_ATTESTED.has(transport);
   return {
     transport,
     ...(qConstruct ? { qConstruct } : {}),

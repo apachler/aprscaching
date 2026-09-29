@@ -21,14 +21,25 @@ const LAT = 47.0707;
 const LON = 15.4395;
 const now = () => Math.floor(Date.now() / 1000);
 
-/** An answering instance that heard LOGGER on RF at (lat, lon) through an attested site. */
-async function answerer(instance: string, opts: { lat?: number; lon?: number; igate?: string; extra?: object } = {}) {
+/** An answering instance whose attested site's own TNC heard LOGGER on RF at (lat, lon). */
+async function answerer(
+  instance: string,
+  opts: { lat?: number; lon?: number; igate?: string; transport?: string; extra?: object } = {},
+) {
   const key = await newFedKey();
   const env = instanceEnv(instance, key, { FIRST_PARTY_SITES: opts.igate ?? SITE, ...(opts.extra ?? {}) });
   await env.DB.prepare(
-    "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source) VALUES (?, ?, ?, ?, 'rf', ?, 'aprs')",
+    "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, transport) VALUES (?, ?, ?, ?, 'rf', ?, ?, 'aprs', ?)",
   )
-    .bind(LOGGER, now() - 600, opts.lat ?? LAT, opts.lon ?? LON, opts.igate ?? SITE)
+    .bind(
+      LOGGER,
+      now() - 600,
+      opts.lat ?? LAT,
+      opts.lon ?? LON,
+      opts.igate ?? SITE,
+      opts.transport === "aprs-is" ? `WIDE1-1,qAR,${opts.igate ?? SITE}` : "WIDE1-1",
+      opts.transport ?? "tnc",
+    )
     .run();
   return { key, env, instance };
 }
@@ -101,6 +112,14 @@ describe("signed corroboration answers", () => {
     stubFetch({ "https://p1.example": serve(p1.env) });
     const ev = await queryPeerCorroboration(hub.env, query());
     expect(ev?.instance).toBe("p1.example");
+  });
+
+  it("never answers from an APRS-IS qAR copy naming the peer's attested site", async () => {
+    const hub = await asker({ FED_CORROBORATION_QUORUM: "1" });
+    const p1 = await answerer("p1.example", { transport: "aprs-is" });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    stubFetch({ "https://p1.example": serve(p1.env) });
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
   });
 
   const forgeries: Array<[string, (p1: { env: Env; key: FedKey }, evil: Env) => Serve]> = [

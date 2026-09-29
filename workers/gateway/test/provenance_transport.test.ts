@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The recorded transport is display data. Every ingest port maps to one transport, and legacy rows without
-// one keep the earlier derivation. The guard: a transport can only ever take attestation away — a tunnel
-// or licence-free carrier (AXUDP, AXIP, Meshtastic) is never first-party attested — and no other
-// transport value moves firstPartyAttested or a verification tier: Tier A stays gated on attestation alone.
+// Every ingest port maps to one transport, and legacy rows without one read as APRS-IS. The guard: only a
+// first-party on-air transport — a TNC or a MeshCom node on the operator's own ingest box, whose writes
+// need INGEST_SECRET — can carry first-party attestation. An APRS-IS line (a legacy row included) is never
+// attested, whatever q-construct and site it names, because an APRS-IS passcode is public and anyone can
+// inject `qAR,<site>`. A tunnel or licence-free carrier (AXUDP, AXIP, Meshtastic)
+// and the browser bridge are never attested either. Tier A stays gated on attestation alone.
 import { describe, it, expect } from "vitest";
 import { Transport } from "@aprscaching/shared";
 import { provenanceOf, parseAttestedSites, transportForPort, type RawProvenance } from "../src/provenance.js";
@@ -40,7 +42,7 @@ describe("transportOf on stored positions", () => {
     expect(provenanceOf({ heard_via: "aprs_is", transport: "meshcom" }).transport).toBe("meshcom");
   });
 
-  it("legacy rows (NULL) and unrecognised values keep the earlier derivation", () => {
+  it("legacy rows (NULL) and unrecognised values read as APRS-IS, or app for an app fix", () => {
     expect(provenanceOf({ heard_via: "rf", transport: null }).transport).toBe("aprs-is");
     expect(provenanceOf({ heard_via: "app" }).transport).toBe("app");
     expect(provenanceOf({ heard_via: "rf", transport: "carrier-pigeon" }).transport).toBe("aprs-is");
@@ -55,8 +57,9 @@ const IGATES = [null, "OE8XXX", "DB0ZZZ"];
 const SITE_SETS = [parseAttestedSites(""), parseAttestedSites("OE8XXX")];
 
 const NEVER_ATTESTED = new Set(["axudp", "axip", "meshtastic"]);
+const ON_AIR = new Set(["tnc", "meshcom"]);
 
-describe("trust guard: the transport never lifts attestation", () => {
+describe("trust guard: only the site's own on-air ingest is attested", () => {
   it("a tunnel or licence-free carrier is never attested, even heard as RF at an attested site", () => {
     const sites = parseAttestedSites("OE8XXX");
     for (const transport of NEVER_ATTESTED)
@@ -70,26 +73,40 @@ describe("trust guard: the transport never lifts attestation", () => {
     );
   });
 
-  it("every other transport leaves firstPartyAttested unchanged, across every other input", () => {
+  it("an APRS-IS line or a legacy row is never attested, whatever q-construct and site it names", () => {
+    const sites = parseAttestedSites("OE8XXX");
+    for (const transport of ["aprs-is", null, undefined])
+      for (const path of [null, "WIDE1-1", "WIDE1-1,qAR,OE8XXX", "WIDE2-1,qAO,OE8XXX"])
+        expect(provenanceOf({ heard_via: "rf", path, igate_call: "OE8XXX", transport }, sites).firstPartyAttested).toBe(
+          false,
+        );
+  });
+
+  it("attestation needs an on-air transport and the site rule, across every input", () => {
     let cases = 0;
+    let attested = 0;
     for (const heard_via of HEARD)
       for (const path of PATHS)
         for (const igate_call of IGATES)
           for (const sites of SITE_SETS) {
-            const baseline = provenanceOf({ heard_via, path, igate_call }, sites).firstPartyAttested;
+            // what the inputs alone allow, heard through the site's own TNC
+            const onAir = provenanceOf({ heard_via, path, igate_call, transport: "tnc" }, sites).firstPartyAttested;
             for (const transport of TRANSPORTS) {
-              const expected = NEVER_ATTESTED.has(transport ?? "") ? false : baseline;
-              expect(provenanceOf({ heard_via, path, igate_call, transport }, sites).firstPartyAttested).toBe(expected);
+              const got = provenanceOf({ heard_via, path, igate_call, transport }, sites).firstPartyAttested;
+              expect(got).toBe(ON_AIR.has(transport ?? "") ? onAir : false);
+              if (got) attested++;
               cases++;
             }
           }
     expect(cases).toBe(HEARD.length * PATHS.length * IGATES.length * SITE_SETS.length * TRANSPORTS.length);
+    expect(attested).toBeGreaterThan(0); // the guard is not vacuous
   });
 
   it("a find's tier depends on the transport only through attestation", () => {
     const cache: CacheRow = { id: 1, code: "AC-1", type: "traditional", lat: 47.07, lon: 15.42 };
     const sites = parseAttestedSites("OE8XXX");
     const now = 1_000_000;
+    let tierA = 0;
     for (const heard_via of ["rf", "aprs_is"] as const)
       for (const path of ["WIDE1-1,qAR,OE8XXX", "TCPIP*,qAC,T2TEST"])
         for (const igate_call of ["OE8XXX", "DB0ZZZ"]) {
@@ -112,11 +129,13 @@ describe("trust guard: the transport never lifts attestation", () => {
             });
             return [r.tier, r.verified, r.method];
           };
-          const baseline = run(undefined);
-          const unattested = run("axudp");
+          const onAir = run("tnc");
+          const unattested = run("aprs-is");
+          if (onAir[0] === "A") tierA++;
           for (const transport of TRANSPORTS)
-            expect(run(transport)).toEqual(NEVER_ATTESTED.has(transport ?? "") ? unattested : baseline);
+            expect(run(transport)).toEqual(ON_AIR.has(transport ?? "") ? onAir : unattested);
         }
+    expect(tierA).toBeGreaterThan(0); // Tier A is reachable through the on-air transports
     expect(DEFAULT_POLICY.minTier).toBe("B");
   });
 });

@@ -13,7 +13,8 @@ good it otherwise is. They are documented in `CLAUDE.md` and `.claude/rules/`; t
 
 - **Trust follows corroboration, not transport.** Tier A/B/C semantics in
   `workers/gateway/src/verify.ts` are sacred: a bare APRS-IS packet can never reach Tier B, and
-  Tier A needs an independently-gated, first-party-attested RF fix. *Transport ≠ trust.*
+  Tier A needs an independently heard, first-party-attested RF fix — heard by the attested site's own
+  receiver and delivered by its own ingest, never an APRS-IS copy. *Transport ≠ trust.*
 - **RF ingest is always operator-runnable** — never cloud-only. See `.claude/rules/ingest-locality.md`.
 - **AGPL §13 source link is launch-blocking.** Every instance exposes `/.well-known/source`; don't
   break it. If you run a *modified* public instance you must publish your source (set `SOURCE_REPO`).

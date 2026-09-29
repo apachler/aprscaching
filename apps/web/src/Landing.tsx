@@ -5,7 +5,7 @@ import { API_BASE } from "./api.js";
 /**
  * Marketing landing — the signed-out front door. The hero opens with the product's thesis: a live
  * APRS frame proving a find on the air, decoding into its Tier-A stamp (the packet uses our real
- * APZACG tocall and a qAR corroboration line). Below it: the three-step find flow, the A/B/C trust
+ * APZACG tocall and is heard directly by an attested receiving site). Below it: the three-step find flow, the A/B/C trust
  * tiers, the shack capability grid, the run-anywhere topologies, and the free-and-open band.
  * Register/Login open the callsign-led sign-in; Explore drops the visitor into the read-only
  * platform. The footer carries the canonical site-wide links (the Site map is the crawlable page).
@@ -53,10 +53,10 @@ export function Landing(props: { onRegister: () => void; onLogin: () => void; on
             </div>
             <div className="landing-term-body">
               <div className="landing-frame f1">
-                <span className="dim">1042Z</span> OE8APR-7&gt;APZACG,WIDE1-1,qAR,OE8XBM-10:
+                <span className="dim">1042Z</span> OE8APR-7&gt;APZACG,WIDE1-1:
               </div>
               <div className="landing-frame f2">&gt;Found AC-1042 via aprscaching.net</div>
-              <div className="landing-frame f3 dim">corroborated: qAR + OE8XBM-10 · track plausible</div>
+              <div className="landing-frame f3 dim">heard direct at OE8XBM-10 (attested site) · track plausible</div>
               <span className="landing-stamp">✓ TIER A · VERIFIED BY RADIO</span>
             </div>
           </div>

@@ -100,6 +100,12 @@ describe("isTrustedMessage", () => {
       isTrustedMessage(msg({ port: "aprs-is", path: ["WIDE1-1", "qAR", "OE8XXX-10"], igateCall: "OE8XXX-10" }), sites),
     ).toBe(false);
   });
+  it("a direct MeshCom hearing at an attested node is trusted", () => {
+    expect(isTrustedMessage(msg({ port: "meshcom" }), sites)).toBe(true);
+  });
+  it("a port the gateway does not know is not", () => {
+    expect(isTrustedMessage(msg({ port: "something-new" }), sites)).toBe(false);
+  });
   it("an internet-tunnelled port is not, whatever it claims", () => {
     expect(isTrustedMessage(msg({ port: "axudp" }), sites)).toBe(false);
   });
