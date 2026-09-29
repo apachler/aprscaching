@@ -131,7 +131,7 @@ describe("bulletins", () => {
     expect(row).toMatchObject({ bid: "7_a.example", subject: "Net tonight" });
   });
 
-  it("still accepts a bulletin frame under its old <id>_<instance> gid", async () => {
+  it("refuses a bulletin frame whose gid is outside the peer's namespace", async () => {
     const { a, hub } = await pair();
     const frame = await signFedRecord(a, {
       kind: "bulletin",
@@ -140,9 +140,10 @@ describe("bulletins", () => {
       v: 1000,
       at: 1000,
       signer: "a.example",
-      body: { fromCall: "OE8APR", toCall: "ALL", subject: "old", body: "legacy gid", postedAt: 1000 },
+      body: { fromCall: "OE8APR", toCall: "ALL", subject: "stray", body: "not namespaced", postedAt: 1000 },
     });
-    expect((await applyFedFrames(hub, [frame!])).applied).toBe(1);
+    expect((await applyFedFrames(hub, [frame!])).applied).toBe(0);
+    expect(await hub.DB.prepare("SELECT COUNT(*) AS n FROM bbs_messages").first<{ n: number }>()).toEqual({ n: 0 });
   });
 });
 

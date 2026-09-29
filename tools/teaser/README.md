@@ -63,6 +63,7 @@ One command, hermetic, against a fresh temp SQLite DB:
 | `compose.mjs` | Frames → captioned `.webm` via Chromium canvas + MediaRecorder (`HOLD`, `FADE` env knobs). |
 | `run-views.sh` | Re-run just the tour (all viewports) against already-running servers. |
 | `diag.mjs` | Minimal load/console diagnostic for one viewport (debugging). |
+| `shot-settings-dark.mjs` / `shot-activity-profile-nearby.mjs` / `shot-offline-queue.mjs` / `shot-mobile.mjs` | One-off stills (settings in dark mode; activity, profile, nearby and one-tap log; the offline log queue; the mobile map and sheet) against an already-served app on the port each script names. |
 
 ### What's automatic vs. maintained
 

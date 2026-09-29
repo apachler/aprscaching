@@ -56,7 +56,6 @@ export interface Env {
   FED_DISCOVER?: string; // if set, auto-add peers advertised by peers (transitive discovery)
   FED_CORROBORATION_QUORUM?: string; // distinct corroborating identities (registry operator, else signing key) required for Tier A (default 2)
   FED_AUTO_PROMOTE?: string; // confirmed-corroboration count to auto-promote an unvetted peer to trusted (0=off)
-  TOMBSTONE_TTL_DAYS?: string; // retention for delete tombstones before GC (default 180)
   PACKETS_TTL_HOURS?: string; // retention for the shack raw-packet ring (default 24)
   // ---- retention (days) for the diagnostic/telemetry tables (all optional) ----
   MESSAGES_TTL_DAYS?: string; // firehose message log (default 7)
@@ -174,7 +173,6 @@ export const ENV_STRING_KEYS = [
   "FED_DISCOVER",
   "FED_CORROBORATION_QUORUM",
   "FED_AUTO_PROMOTE",
-  "TOMBSTONE_TTL_DAYS",
   "PACKETS_TTL_HOURS",
   "MESSAGES_TTL_DAYS",
   "SENSOR_TTL_DAYS",

@@ -120,9 +120,8 @@ export const AuthorSig = z.object({
   signedAt: z.number().int(), // client authorship time the signature covers
 });
 
-/** A log entry against a cache (found/DNF/note/…). Verification only runs for `found`. */
+/** A log entry against a cache (found/DNF/note/…), posted to /api/caches/:id/logs. Verification only runs for `found`. */
 export const LogRequest = z.object({
-  cacheId: z.number().int().positive().optional(), // omitted when posted to /api/caches/:id/logs
   loggerCall: Callsign.optional(), // omitted by signed-in web (attributed to the session)
   logType: LogType.default("found"),
   comment: z.string().max(2000).optional(),
@@ -138,10 +137,6 @@ export const RegisterKeyRequest = z.object({
   label: z.string().max(64).optional(),
 });
 export type RegisterKeyRequest = z.infer<typeof RegisterKeyRequest>;
-
-/** Back-compat: the original find request (a `found` LogRequest without an explicit logType). */
-export const LogFindRequest = LogRequest;
-export type LogFindRequest = LogRequest;
 
 // ---- response shapes (worker maps D1 rows -> these camelCase DTOs) ----
 

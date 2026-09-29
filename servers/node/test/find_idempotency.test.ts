@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The partial unique index (migration 0008) makes a verified find idempotent per
+// The partial unique index idx_cache_logs_found_unique makes a verified find idempotent per
 // (cache_id, logger_call) — a racing/replayed found POST can't double-insert (and thus can't
 // double-count on the leaderboard). Runs against real SQLite so it exercises the actual index.
 import { describe, it, expect } from "vitest";

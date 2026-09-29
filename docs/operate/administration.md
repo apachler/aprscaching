@@ -276,4 +276,5 @@ expiry, source and import date, never a name or address — so it is outside exp
 replaces a register's rows and deletes calls it no longer lists.
 
 Positions are TTL'd; the retained record is public ham identifiers and APRS positions that are public by
-design on RF/APRS-IS. Set `TOMBSTONE_TTL_DAYS` for how long deletes are retained for peer convergence.
+design on RF/APRS-IS. Delete tombstones are kept permanently: they carry only PII-free global ids, and
+every mirror consults them so deleted data is never re-mirrored.

@@ -336,7 +336,7 @@ describe("peer-corroborated finds still need a plausible local track", () => {
   it("is refused when the logger's own local fix puts them hundreds of km away", async () => {
     const hub = await setup();
     await hub.env.DB.prepare(
-      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source) VALUES (?, ?, 52.52, 13.40, 'aprs_is', 'DB0XX', 'aprs')",
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES (?, ?, 52.52, 13.40, 'aprs_is', 'DB0XX', 'aprs', 'aprs-is')",
     )
       .bind(LOGGER, now() - 1100)
       .run();
@@ -350,7 +350,7 @@ describe("peer-corroborated finds still need a plausible local track", () => {
     await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
     stubFetch({ "https://p1.example": serve(p1.env) });
     await hub.env.DB.prepare(
-      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source) VALUES ('OE8CAR-9', ?, 48.2, 16.37, 'rf', ?, 'aprs')",
+      "INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, source, transport) VALUES ('OE8CAR-9', ?, 48.2, 16.37, 'rf', ?, 'aprs', 'aprs-is')",
     )
       .bind(now() - 700, SITE)
       .run();

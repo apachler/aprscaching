@@ -78,11 +78,8 @@ async function descriptorMatches(
       signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
     });
     if (!res.ok) return { checked: false, ok: true, detail: `descriptor unreachable (${res.status})` };
-    const wk = (await res.json()) as { instance?: string; publicKey?: string | null; publicKeys?: FedPublicKey[] };
-    const keys = activeFedKeys(
-      wk.publicKeys ?? (wk.publicKey ? [{ x: wk.publicKey }] : []),
-      Math.floor(Date.now() / 1000),
-    );
+    const wk = (await res.json()) as { instance?: string; publicKeys?: FedPublicKey[] };
+    const keys = activeFedKeys(Array.isArray(wk.publicKeys) ? wk.publicKeys : [], Math.floor(Date.now() / 1000));
     if (wk.instance !== expected.instance)
       return {
         checked: true,

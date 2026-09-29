@@ -455,12 +455,10 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
 }
 
 // ---------------------------------------------------------------- log (found/DNF/note/…)
-export async function handleLog(req: Request, env: Env, cacheIdFromPath?: number): Promise<Response> {
+export async function handleLog(req: Request, env: Env, cacheId: number): Promise<Response> {
   const parsed = LogRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error?.issues }, { status: 400 });
   const { comment, appGeo, logType } = parsed.data;
-  const cacheId = cacheIdFromPath ?? parsed.data.cacheId;
-  if (cacheId == null) return json({ error: "cacheId required" }, { status: 400 });
 
   // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
   // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
@@ -799,6 +797,3 @@ export async function commitPlainLog(
     .run();
   return Number(r.meta?.last_row_id) || undefined;
 }
-
-/** Back-compat alias for the original /api/logs/find route. */
-export const handleLogFind = handleLog;

@@ -64,6 +64,7 @@ pnpm lint && pnpm format:check      # CI also runs `pnpm lint:types` (type-aware
 pnpm --filter @aprscaching/aprs test                          # one package
 pnpm --filter @aprscaching/aprs exec vitest run test/foo.test.ts -t "name"   # one file / one test
 tools/dev/smoke.sh geofence                                   # one smoke suite
+tools/dev/smoke.sh federation                                 # two-instance federation e2e
 
 pnpm --filter @aprscaching/gateway migrate && pnpm dev:gateway   # wrangler dev on a local D1
 pnpm --filter @aprscaching/node-gateway dev                      # same app on Node + SQLite
@@ -72,7 +73,8 @@ pnpm dev:web
 ```
 `apps/web` has no vitest suite; its `test` is two guard scripts (no emoji, tour anchors resolve) and
 its real check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
-instances and runs only in CI — see `.github/workflows/ci.yml` for the exact env it wants.
+instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
+the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
 
 ## Architecture: one gateway, three runtimes
 - `workers/gateway/src/app.ts` exports a runtime-neutral `handle()` (plus `runScheduled` /
@@ -82,7 +84,7 @@ instances and runs only in CI — see `.github/workflows/ci.yml` for the exact e
   themselves: a D1-compatible shim over better-sqlite3 / `bun:sqlite` (`d1.ts`), an in-process
   `Rooms` for the `RegionRoom` Durable Object (live WebSocket fan-out), filesystem media for R2, and
   their own `migrate`. Fix behaviour in `workers/gateway`, never in one runtime's shim.
-- The schema lives once in `db/migrations/*.sql`; wrangler applies it to D1
+- The schema lives once in `db/migrations/*.sql` (one `0001_baseline.sql`; changes are new numbered files); wrangler applies it to D1
   (`migrations_dir = "../../db/migrations"`) and the Node/Bun servers apply it at boot.
 - CI proves parity by running the same `tools/smoke/*` suites against all three runtimes.
 - Tier A is default-deny: smoke/conformance runs need `FIRST_PARTY_SITES` naming the attested site,
@@ -150,6 +152,6 @@ old copy. Gather: `git log --oneline -25`; `ls db/migrations` + `ls docs`; `ls w
 gateway/src/app.ts` plus the regex segment-routes lower in `app.ts`; `pnpm -r test` + the three
 smoke suites for green status. Cover: what's built, the runtimes (Worker/D1 + Node/SQLite + Bun,
 tri-runtime CI), the trust model (tiers A/B/C vs account/callsign verification — keep them distinct),
-identity/auth (passkey + email, multiple base-call accounts), federation, schema (migrations
-0001–latest), the API surface, web-app structure, licensing, and the deferred items in `TODO.md`.
+identity/auth (passkey + email, multiple base-call accounts), federation, schema (the
+`0001_baseline.sql` domains plus any later migration), the API surface, web-app structure, licensing, and the deferred items in `TODO.md`.
 Keep it dense and current; flag what is NOT done.

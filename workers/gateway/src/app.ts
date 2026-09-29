@@ -212,7 +212,7 @@ export async function runScheduled(env: Env): Promise<void> {
   // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
   // Node runtime a single mega-DELETE stalls every request until it finishes. 40 × 5000 caps one
   // nightly run at 200k rows; any remainder simply ages into the next night. Range-scanned via
-  // idx_pos_source_ts (migration 0006).
+  // idx_pos_source_ts.
   for (let i = 0; i < 40; i++) {
     const r = await env.DB.prepare(
       "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ? LIMIT 5000)",
@@ -599,8 +599,6 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     return new Response("method not allowed", { status: 405 });
   }
 
-  // generalized + back-compat logging (cacheId in body)
-  if ((p === "/api/logs" || p === "/api/logs/find") && m === "POST") return handleLog(req, env);
   // radio commands: the signed-in player's FOUND/DNF/NOTE messages, and confirming a pending one
   if (p === "/api/radio/commands" && m === "GET") return handleRadioCommandsList(req, env);
   const radioDecision = /^\/api\/radio\/commands\/(\d+)\/(confirm|discard)$/.exec(p);

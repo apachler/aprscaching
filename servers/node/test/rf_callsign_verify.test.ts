@@ -5,17 +5,10 @@
 // copy of the message — proves control of the licence. The operator bootstraps their own call with the
 // operator secret, and a sysop may verify a call by hand, on the record.
 import { describe, it, expect } from "vitest";
-import Database from "better-sqlite3";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { migrate } from "../src/migrate.js";
 import { handleRadioMessage, type RadioMessage } from "@aprscaching/gateway/radiolog";
 import type { Env } from "@aprscaching/gateway/env";
 import { authEnv, call, emailSignup, operatorVerify, rfVerify } from "./helpers/authflow.js";
 
-const MIGRATIONS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../db/migrations");
 const SECRET = { "x-ingest-secret": "test-ingest-secret" };
 const OPERATOR = { "x-operator-secret": "test-operator-secret" };
 
@@ -389,47 +382,5 @@ describe("sysop manual verification", () => {
     );
     expect(again.status).toBe(409);
     expect(await row(env, "OE8APR")).toMatchObject({ method: "operator" });
-  });
-});
-
-describe("migration: verifications by an APRS-message code (aprs_msg) are reset", () => {
-  it("clears aprs_msg verifications and the held/account flags that mirrored them", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mig-"));
-    const all = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
-    const target = all.find((f) => /_rf_verification\.sql$/.test(f));
-    expect(target).toBeDefined();
-    for (const f of all) if (f < target!) fs.copyFileSync(path.join(MIGRATIONS, f), path.join(dir, f));
-    const db = new Database(":memory:");
-    migrate(db, dir);
-    db.exec(`
-      INSERT INTO accounts (callsign, account_id, verified, verify_method, verified_at, created_at)
-        VALUES ('OE8OLD-9', 'a-old', 1, 'aprs_msg', 1, 1), ('OE8KEP', 'a-kep', 1, 'lotw', 1, 1);
-      INSERT INTO account_callsigns (account_id, callsign, verified, method, verified_at, added_at)
-        VALUES ('a-old', 'OE8OLD', 1, 'aprs_msg', 1, 1), ('a-kep', 'OE8KEP', 1, 'lotw', 1, 1);
-      INSERT INTO callsign_verifications (callsign, method, status, verified_at)
-        VALUES ('OE8OLD', 'aprs_msg', 'verified', 1), ('OE8PND', 'aprs_msg', 'pending', NULL),
-               ('OE8KEP', 'lotw', 'verified', 1);
-      INSERT INTO callsign_keys (callsign, public_key, verified, created_at)
-        VALUES ('OE8OLD-7', 'k1', 1, 1), ('OE8KEP', 'k2', 1, 1);
-    `);
-    fs.copyFileSync(path.join(MIGRATIONS, target!), path.join(dir, target!));
-    expect(migrate(db, dir)).toEqual([target]);
-    const cv = db.prepare("SELECT callsign FROM callsign_verifications ORDER BY callsign").all();
-    expect(cv).toEqual([{ callsign: "OE8KEP" }]);
-    expect(db.prepare("SELECT callsign, verified, method FROM account_callsigns ORDER BY callsign").all()).toEqual([
-      { callsign: "OE8KEP", verified: 1, method: "lotw" },
-      { callsign: "OE8OLD", verified: 0, method: null },
-    ]);
-    expect(db.prepare("SELECT callsign, verified, verify_method FROM accounts ORDER BY callsign").all()).toEqual([
-      { callsign: "OE8KEP", verified: 1, verify_method: "lotw" },
-      { callsign: "OE8OLD-9", verified: 0, verify_method: null },
-    ]);
-    expect(db.prepare("SELECT callsign, verified FROM callsign_keys ORDER BY callsign").all()).toEqual([
-      { callsign: "OE8KEP", verified: 1 },
-      { callsign: "OE8OLD-7", verified: 0 },
-    ]);
-    // the sysop audit columns exist
-    db.prepare("SELECT verified_by, note FROM callsign_verifications").all();
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

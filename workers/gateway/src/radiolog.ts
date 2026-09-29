@@ -167,7 +167,7 @@ const HEARD_ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom
 export function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boolean {
   if (m.signed) return false;
   const transport = transportForPort(m.port, false);
-  if (!transport || !HEARD_ON_AIR.has(transport)) return false;
+  if (!HEARD_ON_AIR.has(transport)) return false;
   return provenanceOf(
     { heard_via: m.heardVia, igate_call: m.igateCall ?? null, path: m.path.join(","), transport },
     attestedSites,
