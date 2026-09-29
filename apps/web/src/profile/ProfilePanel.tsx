@@ -1,40 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
+import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
 import { RadioLogs } from "./RadioLogs.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
-  callsign: string;
-  verified: boolean;
-  map: maplibregl.Map | null;
   onShack: () => void;
   onMail: () => void;
   onSettings: () => void;
   onSignIn: () => void;
   onClose: () => void;
 }) {
+  const { callsign, verified } = usePlatform();
   const fmt = useFmt();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState(false);
   const [licence, setLicence] = useState<Licence | null>(null);
   const load = useCallback(() => {
     setError(false);
-    if (props.callsign.length >= 3)
-      getProfile(props.callsign)
+    if (callsign.length >= 3)
+      getProfile(callsign)
         .then(setProfile)
         .catch(() => setError(true));
     else setProfile(null);
     setLicence(null);
     // validity from public registers is a side note: a failed lookup simply shows no badge
-    if (props.callsign.length >= 3)
-      getLicence(props.callsign)
+    if (callsign.length >= 3)
+      getLicence(callsign)
         .then(setLicence)
         .catch(() => setLicence(null));
-  }, [props.callsign]);
+  }, [callsign]);
   useEffect(() => {
     load();
   }, [load]);
@@ -44,16 +42,16 @@ export function ProfilePanel(props: {
       title={
         <>
           <Ico e="👤 " />
-          <span className="mono">{props.callsign || "Profile"}</span>
+          <span className="mono">{callsign || "Profile"}</span>
         </>
       }
     >
-      {props.callsign.length < 3 ? (
+      {callsign.length < 3 ? (
         <>
           <p className="muted">Sign in with your callsign to claim and log your finds.</p>
-          <button className="primary" onClick={props.onSignIn}>
+          <Button variant="primary" onClick={props.onSignIn}>
             Sign in
-          </button>
+          </Button>
         </>
       ) : error ? (
         <ErrorState onRetry={load}>Couldn't load your profile — check your connection and retry.</ErrorState>
@@ -84,7 +82,7 @@ export function ProfilePanel(props: {
             </div>
           )}
           <p>
-            {props.verified ? (
+            {verified ? (
               <CallVerifiedBadge label="control-verified" title="You verified control of this callsign" />
             ) : (
               <>
@@ -141,7 +139,7 @@ export function ProfilePanel(props: {
         </>
       )}
 
-      {props.callsign.length >= 3 && <RadioLogs />}
+      {callsign.length >= 3 && <RadioLogs />}
 
       <Group title="Advanced — the Shack" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>

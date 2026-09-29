@@ -1,69 +1,71 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type * as maplibregl from "maplibre-gl";
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { Panel, Ico } from "../ui/index.js";
-import { appById, type ShackAppId } from "./apps.js";
-import { TerminalPanel } from "../packet/TerminalPanel.js";
-import { BbsPanel } from "../live/BbsPanel.js";
-import { DecoderPanel } from "./DecoderPanel.js";
-import { ToolsPanel } from "../tools/ToolsPanel.js";
-import { RigControl } from "./RigControl.js";
-import { RemoteControl } from "./RemoteControl.js";
-import { NodePanel } from "./NodePanel.js";
+import { usePlatform } from "../platform/PlatformContext.js";
+import { appById, type ShackApp, type ShackAppId, type ShackAppProps } from "./apps.js";
 
-/**
- * ShackAppSurface — renders the launched shack app in its OWN surface. Every shack app
- * opens this way (the drawer is a pure launcher). Terminal & BBS bring their own Panel chrome; the
- * rest are wrapped in a Panel using the app registry's title + wide flag. One component, one path.
- */
-export function ShackAppSurface(props: {
-  app: ShackAppId;
-  callsign: string;
-  verified: boolean;
-  map: maplibregl.Map | null;
-  onClose: () => void;
-}) {
-  const { app, callsign, verified, map, onClose } = props;
-  if (app === "terminal") return <TerminalPanel callsign={callsign} onClose={onClose} />;
-  if (app === "bbs") return <BbsPanel callsign={callsign} onClose={onClose} />;
+// One lazy component per app, created on its first launch and reused after.
+const loaded = new Map<ShackAppId, LazyExoticComponent<ComponentType<ShackAppProps>>>();
+const component = (app: ShackApp) => {
+  let c = loaded.get(app.id);
+  if (!c) loaded.set(app.id, (c = lazy(app.load)));
+  return c;
+};
 
-  const meta = appById(app);
-  const inner =
-    app === "decoder" ? (
-      <DecoderPanel />
-    ) : app === "tools" ? (
-      <ToolsPanel callsign={callsign} verified={verified} />
-    ) : app === "rig" ? (
-      <>
-        <p className="muted">
-          Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only
-          (no transmit).
-        </p>
-        <RigControl />
-      </>
-    ) : app === "remote" ? (
-      <RemoteControl callsign={callsign} verified={verified} map={map} />
-    ) : app === "node" ? (
-      <>
-        <p className="muted">
-          Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal
-          connects to it.
-        </p>
-        <NodePanel />
-      </>
-    ) : null;
-
+/** The app's Panel chrome, titled from the registry. */
+function AppPanel(props: { app: ShackApp; onClose: () => void; children: React.ReactNode }) {
   return (
     <Panel
       title={
         <>
-          <Ico e={meta ? `${meta.emoji} ` : ""} />
-          {meta?.title ?? "Shack"}
+          <Ico e={`${props.app.emoji} `} />
+          {props.app.title}
         </>
       }
-      onClose={onClose}
-      wide={meta?.wide}
+      onClose={props.onClose}
+      wide={props.app.wide}
     >
-      {inner}
+      {props.children}
     </Panel>
+  );
+}
+
+/**
+ * ShackAppSurface — renders the launched shack app in its OWN surface. Every shack app opens this way
+ * (the drawer is a pure launcher). An app's code loads on its first launch, with a skeleton in the
+ * app's Panel meanwhile. Apps with their own chrome (terminal, BBS) render bare; the rest are wrapped
+ * in a Panel titled from the registry.
+ */
+export function ShackAppSurface(props: { app: ShackAppId; onClose: () => void }) {
+  const { callsign, verified, map } = usePlatform();
+  const app = appById(props.app);
+  if (!app) return null;
+  const App = component(app);
+  const body = <App callsign={callsign} verified={verified} map={map} onClose={props.onClose} />;
+  const skeleton = (
+    <div className="skeleton" role="status" aria-label={`Loading ${app.label}…`}>
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+  // An app with its own chrome shows the skeleton in a registry-titled Panel until its Panel arrives.
+  if (app.ownChrome)
+    return (
+      <Suspense
+        fallback={
+          <AppPanel app={app} onClose={props.onClose}>
+            {skeleton}
+          </AppPanel>
+        }
+      >
+        {body}
+      </Suspense>
+    );
+  return (
+    <AppPanel app={app} onClose={props.onClose}>
+      {app.intro && <p className="muted">{app.intro}</p>}
+      <Suspense fallback={skeleton}>{body}</Suspense>
+    </AppPanel>
   );
 }

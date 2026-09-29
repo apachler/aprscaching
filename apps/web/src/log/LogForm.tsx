@@ -4,7 +4,7 @@ import { getInstance, registerKey, logFind, errorText, type LogResult, type AppG
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
-import { TierBadge, TIER_NAME, Ico, useConfirm } from "../ui/index.js";
+import { Button, TierBadge, TIER_NAME, Ico, useConfirm, Card } from "../ui/index.js";
 import type { LogType } from "@aprscaching/shared";
 
 /**
@@ -143,7 +143,7 @@ export function LogForm(props: {
         ? "Marked DNF"
         : "Note posted";
     return (
-      <div className="logresult" role="status">
+      <Card className="logresult" role="status">
         <div className="big">
           {result.queued ? "Saved" : verb} {found && result.verified && !result.duplicate ? "✓" : ""}
         </div>
@@ -192,15 +192,21 @@ export function LogForm(props: {
             Back
           </button>
         )}
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="logform">
-      <button className="primary log-primary" data-tour="log" disabled={!!busy} onClick={() => doLog("found")}>
+    <Card className="logform">
+      <Button
+        variant="primary"
+        className="log-primary"
+        data-tour="log"
+        disabled={!!busy}
+        onClick={() => doLog("found")}
+      >
         {busy === "found" ? "Logging…" : "✓ Log a find"}
-      </button>
+      </Button>
       <div className="row between mt-3">
         <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>
           {busy === "dnf" ? "…" : "Couldn't find it"}
@@ -224,6 +230,6 @@ export function LogForm(props: {
           {err}
         </p>
       )}
-    </div>
+    </Card>
   );
 }

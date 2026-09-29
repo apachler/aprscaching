@@ -1,28 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
 import { getStation, createStation, type StationDetail } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, Ico, useToast } from "../ui/index.js";
+import { Panel, Badge, ErrorState, Ico, useToast, Card } from "../ui/index.js";
 import { TrackReplay } from "../shack/TrackReplay.js";
 import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /**
  * StationPanel — the live-station inspector, opened when a station pin is tapped on the map. Shows the
  * station's symbol/roles/telemetry, track replay, weather + packet graphs, and lets you adopt it into
- * "my stations". Its own surface now (APRS functionality lives on the map + its detail sheet, not in
- * the shack).
+ * "my stations". It is its own surface: APRS functionality lives on the map and its detail sheet, not in
+ * the Shack.
  */
 export function StationPanel(props: {
-  callsign: string;
   picked: string;
-  map: maplibregl.Map | null;
   onFly: (lat: number, lon: number) => void;
   onClose: () => void;
 }) {
+  const { callsign, map } = usePlatform();
   const fmt = useFmt();
   const toast = useToast();
   const [station, setStation] = useState<StationDetail | null>(null);
@@ -65,7 +64,7 @@ export function StationPanel(props: {
       ) : !station ? (
         <p className="muted">Loading station…</p>
       ) : (
-        <div className="logform">
+        <Card className="logform">
           <div className="muted">
             {station.symbol ?? "—"} · last heard {fmt.ago(station.lastSeen)}
           </div>
@@ -104,7 +103,7 @@ export function StationPanel(props: {
             </div>
           )}
           <div className="row between mt-3">
-            {props.callsign.length >= 3 ? (
+            {callsign.length >= 3 ? (
               <button
                 onClick={async () => {
                   try {
@@ -122,10 +121,10 @@ export function StationPanel(props: {
             )}
             <button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</button>
           </div>
-          <TrackReplay map={props.map} callsign={station.callsign} />
+          <TrackReplay map={map} callsign={station.callsign} />
           <StationGraphs callsign={station.callsign} />
           <StationPackets callsign={station.callsign} />
-        </div>
+        </Card>
       )}
     </Panel>
   );

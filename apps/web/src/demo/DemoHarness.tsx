@@ -62,17 +62,7 @@ function AppShell({
         onDocs={noop}
       />
       <div className="shell">
-        <NavRail
-          active={active}
-          onMap={noop}
-          onNearby={noop}
-          onActivity={noop}
-          onMessages={noop}
-          onRanks={noop}
-          onShack={noop}
-          onProfile={noop}
-          onSettings={noop}
-        />
+        <NavRail active={active} onNav={noop} pinnedApps={[]} onLaunchApp={noop} sysop={false} />
         <div className="mapwrap">
           <div className="map" style={{ background: "var(--surface-2)" }} />
         </div>

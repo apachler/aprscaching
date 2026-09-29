@@ -14,7 +14,7 @@ import {
   type AmprChallenge,
   type VerifyMethods,
 } from "../api.js";
-import { Icon, copyText, useToast } from "../ui/index.js";
+import { Button, Icon, copyText, useToast, usePoll } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { signWithP12 } from "./lotw.js";
 
@@ -171,29 +171,27 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
   }
 
   // Poll until the receiving site hears the message or the code expires.
-  useEffect(() => {
-    if (!ch || state !== "waiting") return;
-    let stopped = false;
-    const tick = async () => {
+  usePoll(
+    (signal) => {
+      if (!ch) return;
       if (Date.now() / 1000 > ch.expiresAt) {
         setState("expired");
         return;
       }
-      try {
-        const r = await getVerifyStatus(callsign);
-        if (stopped) return;
-        setPollErr(false);
-        if (r.verified) onVerified();
-      } catch {
-        if (!stopped) setPollErr(true);
-      }
-    };
-    const id = window.setInterval(() => void tick(), POLL_MS);
-    return () => {
-      stopped = true;
-      window.clearInterval(id);
-    };
-  }, [ch, state, callsign, onVerified]);
+      getVerifyStatus(callsign).then(
+        (r) => {
+          if (signal.aborted) return;
+          setPollErr(false);
+          if (r.verified) onVerified();
+        },
+        () => {
+          if (!signal.aborted) setPollErr(true);
+        },
+      );
+    },
+    POLL_MS,
+    { enabled: !!ch && state === "waiting", immediate: false },
+  );
 
   if (!ch || state === "idle")
     return (
@@ -210,9 +208,9 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
           </p>
         )}
         <div className="row end">
-          <button className="primary" disabled={busy} onClick={() => void start()}>
+          <Button variant="primary" disabled={busy} onClick={() => void start()}>
             {busy ? "Starting…" : "Get a code"}
-          </button>
+          </Button>
         </div>
       </>
     );
@@ -248,9 +246,9 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
             Copy message
           </button>
         ) : (
-          <button className="primary" disabled={busy} onClick={() => void start()}>
+          <Button variant="primary" disabled={busy} onClick={() => void start()}>
             {busy ? "Starting…" : "Get a new code"}
-          </button>
+          </Button>
         )}
       </div>
     </>
@@ -325,14 +323,14 @@ function AmprDns(props: { callsign: string; onVerified: () => void }) {
             >
               Copy value
             </button>
-            <button className="primary" disabled={busy} onClick={() => void check()}>
+            <Button variant="primary" disabled={busy} onClick={() => void check()}>
               {busy ? "Checking…" : "Check"}
-            </button>
+            </Button>
           </>
         ) : (
-          <button className="primary" disabled={busy} onClick={() => void start()}>
+          <Button variant="primary" disabled={busy} onClick={() => void start()}>
             {busy ? "Starting…" : "Get the record"}
-          </button>
+          </Button>
         )}
       </div>
     </>
@@ -409,9 +407,9 @@ function LotwCert(props: { callsign: string; onVerified: () => void }) {
         </p>
       )}
       <div className="row end">
-        <button className="primary" disabled={busy || !file} onClick={() => void verify()}>
+        <Button variant="primary" disabled={busy || !file} onClick={() => void verify()}>
           {busy ? "Verifying…" : "Verify"}
-        </button>
+        </Button>
       </div>
     </>
   );

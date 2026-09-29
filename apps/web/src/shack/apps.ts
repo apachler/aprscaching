@@ -1,14 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Shack app registry — the launchable "apps" the shack drawer offers. Each has a dedicated
- * symbol so it can be launched from the shack AND pinned to the left nav rail. Some apps open a
- * dedicated wide surface (terminal, BBS); the rest open the shack focused on their config group.
+ * symbol so it can be launched from the shack AND pinned to the left nav rail, and each loads its
+ * code on first launch (`load`), so none of it weighs on the platform chunk.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import type * as maplibregl from "maplibre-gl";
 import type { IconName } from "../ui/index.js";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 
 export type ShackAppId = "terminal" | "bbs" | "tools" | "decoder" | "rig" | "remote" | "node";
+
+/** What a launched app receives; each app takes the subset it needs. */
+export interface ShackAppProps {
+  callsign: string;
+  verified: boolean;
+  map: maplibregl.Map | null;
+  onClose: () => void;
+}
 
 export interface ShackApp {
   id: ShackAppId;
@@ -25,6 +34,12 @@ export interface ShackApp {
    *  its NET/ROM node), so it's shown + openable ONLY to the instance operator (sysop). Everything without
    *  this flag is browser-direct / platform functionality any web user can run — the "field station". */
   sysop?: boolean;
+  /** The app brings its own Panel chrome; otherwise the surface wraps it in one titled from here. */
+  ownChrome?: boolean;
+  /** One muted line shown above the app inside its Panel. */
+  intro?: string;
+  /** Load the app's component (a separate chunk, fetched on first launch). */
+  load: () => Promise<{ default: ComponentType<ShackAppProps> }>;
 }
 
 // Every shack app opens its OWN surface (terminal/BBS/tools/decoder/node are wide workspaces;
@@ -43,6 +58,8 @@ export const SHACK_APPS: ShackApp[] = [
     emoji: "📻",
     title: "Packet terminal",
     wide: true,
+    ownChrome: true,
+    load: () => import("../packet/TerminalPanel.js").then((m) => ({ default: m.TerminalPanel })),
   },
   {
     id: "bbs",
@@ -52,6 +69,8 @@ export const SHACK_APPS: ShackApp[] = [
     emoji: "✉",
     title: "BBS",
     wide: true,
+    ownChrome: true,
+    load: () => import("../live/BbsPanel.js").then((m) => ({ default: m.BbsPanel })),
   },
   {
     id: "decoder",
@@ -61,6 +80,7 @@ export const SHACK_APPS: ShackApp[] = [
     emoji: "🔎",
     title: "Packet decoder",
     wide: true,
+    load: () => import("./DecoderPanel.js").then((m) => ({ default: m.DecoderPanel })),
   },
   {
     id: "tools",
@@ -70,6 +90,7 @@ export const SHACK_APPS: ShackApp[] = [
     emoji: "🧩",
     title: "Tools",
     wide: true,
+    load: () => import("../tools/ToolsPanel.js").then((m) => ({ default: m.ToolsPanel })),
   },
   {
     id: "rig",
@@ -78,6 +99,9 @@ export const SHACK_APPS: ShackApp[] = [
     blurb: "CAT — one-click tune (Web Serial)",
     emoji: "🎚",
     title: "Rig control (CAT)",
+    intro:
+      "Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).",
+    load: () => import("./RigControl.js").then((m) => ({ default: m.RigControl })),
   },
   {
     id: "node",
@@ -88,6 +112,9 @@ export const SHACK_APPS: ShackApp[] = [
     title: "NET/ROM node",
     wide: true,
     sysop: true,
+    intro:
+      "Run a NET/ROM node + connected-mode digipeater with the classic sysop command set. The packet terminal connects to it.",
+    load: () => import("./NodePanel.js").then((m) => ({ default: m.NodePanel })),
   },
   {
     id: "remote",
@@ -97,6 +124,7 @@ export const SHACK_APPS: ShackApp[] = [
     emoji: "🛰",
     title: "Remote control — your box",
     sysop: true,
+    load: () => import("./RemoteControl.js").then((m) => ({ default: m.RemoteControl })),
   },
 ];
 

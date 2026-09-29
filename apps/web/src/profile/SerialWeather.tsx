@@ -4,7 +4,7 @@ import { decodeUltimeter, type UltimeterReading } from "@aprscaching/aprs";
 import { WebSerialWeather, webSerialSupported } from "../rf/serialWeather.js";
 import { submitWxReading } from "../api.js";
 import { useFmt } from "../format.js";
-import { useToast, Ico } from "../ui/index.js";
+import { Button, useToast, Ico } from "../ui/index.js";
 
 /**
  * Browser-direct PWS over Web Serial: read a Peet Bros / Ultimeter station on USB in the
@@ -100,9 +100,9 @@ export function SerialWeather(props: { wxKey: string | null }) {
         {connected ? (
           <button onClick={disconnect}>Disconnect</button>
         ) : (
-          <button className="primary" onClick={connect} disabled={!props.wxKey}>
+          <Button variant="primary" onClick={connect} disabled={!props.wxKey}>
             Connect station
-          </button>
+          </Button>
         )}
       </div>
       {!props.wxKey && <p className="muted fine">Enable your weather station above first to get a push key.</p>}

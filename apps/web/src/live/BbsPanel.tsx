@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, ErrorState, Ico } from "../ui/index.js";
+import { Button, Panel, Badge, EmptyState, ErrorState, Ico } from "../ui/index.js";
 import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
@@ -227,9 +227,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
           <div className="comment bbs-read-body">{selected.body}</div>
         )}
         <div className="row end">
-          <button className="primary" onClick={() => reply(selected)}>
+          <Button variant="primary" onClick={() => reply(selected)}>
             Reply
-          </button>
+          </Button>
         </div>
       </article>
     );
@@ -329,9 +329,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
             Message <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={300} />
           </label>
           <div className="row end">
-            <button className="primary" onClick={send}>
+            <Button variant="primary" onClick={send}>
               Send
-            </button>
+            </Button>
           </div>
           <p className="muted">
             From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded

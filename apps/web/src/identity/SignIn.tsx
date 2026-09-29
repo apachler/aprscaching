@@ -10,7 +10,7 @@ import {
   ApiError,
   type Licence,
 } from "../api.js";
-import { Panel, Icon, LicenceBadge } from "../ui/index.js";
+import { Button, Panel, Icon, LicenceBadge } from "../ui/index.js";
 
 type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
 
@@ -97,9 +97,9 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
             />
           </label>
           <div className="row end">
-            <button className="primary" disabled={busy} onClick={check}>
+            <Button variant="primary" disabled={busy} onClick={check}>
               Continue
-            </button>
+            </Button>
           </div>
         </>
       ) : (
@@ -115,9 +115,14 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
           )}
 
           {probe.hasPasskey && canPasskey && (
-            <button className="primary log-primary" disabled={busy} onClick={() => run(() => loginPasskey(callsign))}>
+            <Button
+              variant="primary"
+              className="log-primary"
+              disabled={busy}
+              onClick={() => run(() => loginPasskey(callsign))}
+            >
               <Icon name="shield-check" size={18} /> Sign in with passkey
-            </button>
+            </Button>
           )}
           {!probe.exists && canPasskey && (
             <button

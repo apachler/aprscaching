@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import type * as maplibregl from "maplibre-gl";
 import {
   getInstance,
   getSource,
@@ -13,7 +12,7 @@ import {
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
-import { Panel, Group, Row, Advanced, Switch, Ico, Button, useConfirm, useToast } from "../ui/index.js";
+import { Panel, Group, Row, Advanced, Switch, Ico, Button, useConfirm, useToast, useLoad } from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../shack/Watchlist.js";
@@ -22,50 +21,38 @@ import { ProfileEditor } from "../profile/ProfileEditor.js";
 import { WeatherStation } from "../profile/WeatherStation.js";
 import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
-
-type Sess = {
-  callsign: string;
-  verified: boolean;
-  email: string | null;
-  signedIn: boolean;
-  signOut: () => void;
-  signOutEverywhere: () => Promise<void>;
-  refresh: () => void;
-};
+import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
 export function SettingsPanel(props: {
   settings: LocaleSettings;
   onApply: (s: LocaleSettings) => void;
-  callsign: string;
-  verified: boolean;
-  map: maplibregl.Map | null;
   onFly: (lat: number, lon: number) => void;
-  session: Sess;
   /** The account holds this instance's ADMIN_CALLSIGNS call but has not confirmed it with the operator CLI. */
   operatorPending?: boolean;
   onSignIn: () => void;
   onDocs?: () => void;
   onClose: () => void;
 }) {
+  const { callsign, verified, session } = usePlatform();
   const toast = useToast();
   const confirmDialog = useConfirm();
   const s = props.settings;
   const fmt = useFmt();
   const [gdpr, setGdpr] = useState<string | null>(null);
-  const [prefs, setPrefs] = useState<{ digest: boolean; hasEmail: boolean; pushConfigured: boolean } | null>(null);
+  const { data: prefs, setData: setPrefs } = useLoad(
+    () => (session.signedIn ? getNotifyPrefs() : Promise.resolve(undefined)),
+    [session.signedIn],
+  );
   const [pushState, setPushState] = useState<
     "loading" | "unsupported" | "off" | "on" | "denied" | "error" | "unconfigured"
   >("loading");
   useEffect(() => {
-    if (!props.session.signedIn) return;
-    getNotifyPrefs()
-      .then(setPrefs)
-      .catch(() => {});
+    if (!session.signedIn) return;
     (async () => {
       setPushState(!pushSupported() ? "unsupported" : (await pushSubscribed()) ? "on" : "off");
     })();
-  }, [props.session.signedIn]);
+  }, [session.signedIn]);
   async function togglePush() {
     if (pushState === "on") {
       await disablePush();
@@ -80,16 +67,16 @@ export function SettingsPanel(props: {
     setGdpr("Preparing your export…");
     try {
       const inst = await getInstance();
-      const auth = await signAccountAction("export", props.callsign, inst);
+      const auth = await signAccountAction("export", callsign, inst);
       if (!auth) {
         setGdpr("This browser can't sign (needs Ed25519). Try a recent Chrome/Firefox/Safari.");
         return;
       }
-      const data = await exportAccount(props.callsign, auth);
+      const data = await exportAccount(callsign, auth);
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
       const a = document.createElement("a");
       a.href = url;
-      a.download = `aprscaching-${props.callsign}.json`;
+      a.download = `aprscaching-${callsign}.json`;
       a.click();
       URL.revokeObjectURL(url);
       setGdpr("Export downloaded.");
@@ -100,7 +87,7 @@ export function SettingsPanel(props: {
   async function deleteData() {
     if (
       !(await confirmDialog({
-        title: `Permanently erase ${props.callsign}?`,
+        title: `Permanently erase ${callsign}?`,
         message:
           "Your finds are anonymised and your account, keys and personal data are deleted. This cannot be undone.",
         confirmLabel: "Erase everything",
@@ -111,12 +98,12 @@ export function SettingsPanel(props: {
     setGdpr("Erasing…");
     try {
       const inst = await getInstance();
-      const auth = await signAccountAction("delete", props.callsign, inst);
+      const auth = await signAccountAction("delete", callsign, inst);
       if (!auth) {
         setGdpr("This browser can't sign (needs Ed25519).");
         return;
       }
-      await deleteAccount(props.callsign, auth);
+      await deleteAccount(callsign, auth);
       setGdpr("Your account and personal data were erased.");
     } catch (e) {
       setGdpr((e as Error).message);
@@ -146,7 +133,7 @@ export function SettingsPanel(props: {
       </label>
 
       {match("Account callsign callsigns identity verify SSID licence sign in passkey email") && (
-        <AccountSettings session={props.session} onSignIn={props.onSignIn} operatorPending={!!props.operatorPending} />
+        <AccountSettings session={session} onSignIn={props.onSignIn} operatorPending={!!props.operatorPending} />
       )}
 
       {match("Display appearance theme units measurement") && (
@@ -180,33 +167,33 @@ export function SettingsPanel(props: {
         </Group>
       )}
 
-      {props.session.signedIn && match("profile display name locator grid bio links avatar contact public") && (
+      {session.signedIn && match("profile display name locator grid bio links avatar contact public") && (
         <Group title="Profile" defaultOpen={false}>
-          <ProfileEditor callsign={props.callsign} />
+          <ProfileEditor callsign={callsign} />
         </Group>
       )}
 
-      {props.session.signedIn &&
+      {session.signedIn &&
         match("weather station PWS home Ecowitt Weather Underground WU temperature wind rain sensor") && (
           <Group title="Home weather station" status="PWS" defaultOpen={false}>
-            <WeatherStation callsign={props.callsign} />
+            <WeatherStation callsign={callsign} />
           </Group>
         )}
 
-      {props.session.signedIn &&
+      {session.signedIn &&
         match("my stations operated callsign SSID digipeater igate node relay mountain remote location registry") && (
           <Group title="My stations" defaultOpen={false}>
-            <MyStations callsign={props.callsign} />
+            <MyStations callsign={callsign} />
           </Group>
         )}
 
-      {props.session.signedIn && match("my radio browser RF Web Serial BLE KISS TNC bridge station") && (
+      {session.signedIn && match("my radio browser RF Web Serial BLE KISS TNC bridge station") && (
         <Group title="My radio (browser)" status="RF bridge" defaultOpen={false}>
-          <ConnectionsSettings callsign={props.callsign} verified={props.verified} />
+          <ConnectionsSettings callsign={callsign} verified={verified} />
         </Group>
       )}
 
-      {props.session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (
+      {session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (
         <Group title="Notifications" defaultOpen={false}>
           <Row
             label="Email digest"
@@ -247,7 +234,7 @@ export function SettingsPanel(props: {
             <p className="muted error">Could not enable push. On iPhone, install the app to your home screen first.</p>
           )}
           <h4 className="set-subh">Watchlist</h4>
-          <Watchlist callsign={props.callsign} onFly={props.onFly} />
+          <Watchlist callsign={callsign} onFly={props.onFly} />
         </Group>
       )}
 
@@ -282,19 +269,19 @@ export function SettingsPanel(props: {
 
       {match("Your data export erase delete GDPR DSGVO privacy account") && (
         <Group title="Your data" status="GDPR" defaultOpen={false}>
-          {props.callsign.length < 3 ? (
+          {callsign.length < 3 ? (
             <p className="muted">Set your callsign (top bar) to export or erase your data.</p>
           ) : (
             <>
               <p className="muted">
-                Signed with your device key for <span className="mono">{props.callsign}</span>. Export gives you a full
-                copy; erase anonymises your finds and removes your account, keys and personal data.
+                Signed with your device key for <span className="mono">{callsign}</span>. Export gives you a full copy;
+                erase anonymises your finds and removes your account, keys and personal data.
               </p>
               <div className="row">
                 <button onClick={exportData}>Export my data</button>
-                <button className="danger" onClick={deleteData}>
+                <Button variant="danger" onClick={deleteData}>
                   Erase my account
-                </button>
+                </Button>
               </div>
               {gdpr && <p className="muted mt-2">{gdpr}</p>}
             </>
@@ -304,7 +291,7 @@ export function SettingsPanel(props: {
 
       {match("support donate donation supporter sponsor ledger transparency liberapay kofi patreon contribute") && (
         <Group title="Support the project" status="♥" defaultOpen={false}>
-          <SupportSettings signedIn={props.session.signedIn} />
+          <SupportSettings signedIn={session.signedIn} />
         </Group>
       )}
 
@@ -355,12 +342,7 @@ export function SettingsPanel(props: {
 
 /** AGPL §13: a visible link to the exact source this instance is running. */
 function SourceLink() {
-  const [src, setSrc] = useState<SourceInfo | null>(null);
-  useEffect(() => {
-    getSource()
-      .then(setSrc)
-      .catch(() => {});
-  }, []);
+  const { data: src } = useLoad<SourceInfo>(getSource, []);
   const short = src?.commit ? src.commit.slice(0, 8) : (src?.tag ?? null);
   return (
     <p className="muted fine">

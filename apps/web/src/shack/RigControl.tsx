@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { APRS_FREQ, type CatRig } from "@aprscaching/aprs";
 import { cat, catSupported, useCatConnected, type RigProfile } from "../rf/cat.js";
-import { useToast } from "../ui/index.js";
+import { Button, useToast } from "../ui/index.js";
 
 /**
  * Rig control: connect a transceiver over Web Serial CAT and one-click tune it — the
@@ -111,9 +111,9 @@ export function RigControl() {
             )}
           </div>
           <div className="row end">
-            <button className="primary" onClick={connect} disabled={busy}>
+            <Button variant="primary" onClick={connect} disabled={busy}>
               Connect rig
-            </button>
+            </Button>
           </div>
         </>
       ) : (
@@ -139,9 +139,9 @@ export function RigControl() {
             </button>
           </div>
           <div className="row end">
-            <button className="danger" onClick={() => cat.disconnect()}>
+            <Button variant="danger" onClick={() => cat.disconnect()}>
               Disconnect
-            </button>
+            </Button>
           </div>
         </>
       )}

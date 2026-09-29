@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getRadioCommands, decideRadioCommand, type RadioCommandRow } from "../api.js";
 import { useFmt } from "../format.js";
-import { Group, Badge, TierBadge, EmptyState, ErrorState, useConfirm, useToast } from "../ui/index.js";
+import { Button, Group, Badge, TierBadge, EmptyState, ErrorState, useConfirm, useToast } from "../ui/index.js";
 
 const STATUS_LABEL: Record<RadioCommandRow["status"], string> = {
   logged: "logged",
@@ -106,9 +106,9 @@ export function RadioLogs() {
               {c.reason && <div className="muted">{c.reason}</div>}
               {c.status === "pending" && (
                 <div className="row gap-2">
-                  <button className="primary" disabled={busy === c.id} onClick={() => void decide(c, "confirm")}>
+                  <Button variant="primary" disabled={busy === c.id} onClick={() => void decide(c, "confirm")}>
                     Confirm
-                  </button>
+                  </Button>
                   <button disabled={busy === c.id} onClick={() => void decide(c, "discard")}>
                     Discard
                   </button>

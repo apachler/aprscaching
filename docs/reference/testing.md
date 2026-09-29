@@ -27,8 +27,10 @@ pnpm --filter @aprscaching/packet test              # one workspace
 pnpm --filter @aprscaching/packet exec vitest run test/lzhuf.test.ts   # one file
 ```
 
-Two workspaces intentionally have no vitest: `servers/bun` is covered by the Bun **conformance**
-job (below), and `apps/web`'s gate is its typecheck + build plus the `no-emoji.mjs` guard.
+`servers/bun` intentionally has no vitest: the Bun **conformance** job (below) covers it. `apps/web`
+runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM: data loading,
+polling, navigation history) beside its typecheck + build and the `no-emoji.mjs` / `tour-anchors.mjs`
+guards.
 
 ## Conformance suites (runtime-agnostic)
 

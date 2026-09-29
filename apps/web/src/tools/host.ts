@@ -17,7 +17,7 @@ export function setToolTxVerified(v: boolean): void {
   txVerified = v;
 }
 
-const CHANGED = "acs:tools-changed"; // fired when a tool is enabled/disabled → surfaces re-read
+const CHANGED = "acs:tools-changed"; // a tool was enabled/disabled or replaced its panel/layer → surfaces re-read
 // beacon/TX feedback: the app-wide toast provider shows it whichever surface is open
 const toast = (msg: string) => {
   try {
@@ -27,12 +27,23 @@ const toast = (msg: string) => {
   }
 };
 
+let changePending = false;
+
 /** The single shared host. Built-ins are registered once; all OFF by default. */
 export const toolHost = new ToolHost({
   txGate: () => txVerified,
   onLog: (t, m) => console.log(`[tool:${t}]`, m),
   onBeacon: (t, s) => toast(`${t}: beacon every ${Math.round(s.intervalSec / 60)}min (TX-gated)`),
   transmit: (t, info) => toast(`${t} TX: ${info}`),
+  // A burst of panel/layer updates (a frame that several tools react to) coalesces into one re-read.
+  onChange: () => {
+    if (changePending) return;
+    changePending = true;
+    setTimeout(() => {
+      changePending = false;
+      notifyToolsChanged();
+    }, 0);
+  },
 });
 for (const t of builtinTools()) {
   try {
@@ -71,13 +82,15 @@ export function notifyToolsChanged(): void {
   }
 }
 
-/** Subscribe a component to tool enable/disable changes so it re-renders with the current contributions. */
+/** Call `cb` whenever the host's contributions change; returns the unsubscribe function. */
+export function onToolsChanged(cb: () => void): () => void {
+  window.addEventListener(CHANGED, cb);
+  return () => window.removeEventListener(CHANGED, cb);
+}
+
+/** Subscribe a component to tool changes so it re-renders with the current contributions. */
 export function useToolHost(): ToolHost {
   const [, force] = useReducer((n) => n + 1, 0);
-  useEffect(() => {
-    const h = () => force();
-    window.addEventListener(CHANGED, h);
-    return () => window.removeEventListener(CHANGED, h);
-  }, []);
+  useEffect(() => onToolsChanged(force), []);
   return toolHost;
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, type WatchEntry } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast } from "../ui/index.js";
+import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast, useLoad, usePoll } from "../ui/index.js";
 
 /**
  * Watchlist — watch callsigns and see in-app alerts when one is heard, especially near a
@@ -11,27 +11,16 @@ import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast } from
 export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: number) => void }) {
   const fmt = useFmt();
   const toast = useToast();
-  const [watching, setWatching] = useState<WatchEntry[]>([]);
-  const [unseen, setUnseen] = useState(0);
   const [input, setInput] = useState("");
   const signedIn = props.callsign.length >= 3;
 
   // Poll the lightweight summary (chips + unseen badge); the alerts list itself pages on demand so
   // "Load older" pages aren't clobbered by the interval.
-  const loadSummary = useCallback(() => {
-    if (!signedIn) return;
-    listWatch()
-      .then((r) => {
-        setWatching(r.watching);
-        setUnseen(r.unseen);
-      })
-      .catch(() => {});
-  }, [signedIn]);
-  useEffect(() => {
-    loadSummary();
-    const t = setInterval(loadSummary, 15000);
-    return () => clearInterval(t);
-  }, [loadSummary]);
+  const summary = useLoad(() => (signedIn ? listWatch() : Promise.resolve(undefined)), [signedIn]);
+  const loadSummary = summary.reload;
+  usePoll(loadSummary, 15000, { enabled: signedIn, immediate: false });
+  const watching: WatchEntry[] = summary.data?.watching ?? [];
+  const unseen = summary.data?.unseen ?? 0;
 
   const alerts = usePaged(
     (cursor) => getWatchAlerts(cursor).then((r) => ({ items: r.alerts, nextCursor: r.nextCursor, hasMore: r.hasMore })),
@@ -55,7 +44,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
   }
   async function clearSeen() {
     await markWatchSeen().catch(() => {});
-    setUnseen(0);
+    summary.setData((d) => (d ? { ...d, unseen: 0 } : d));
     alerts.reload();
   }
 

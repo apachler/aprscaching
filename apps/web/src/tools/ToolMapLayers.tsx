@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
-import { useToolHost } from "./host.js";
+import { toolHost, onToolsChanged } from "./host.js";
 
 /**
  * ToolMapLayers — the host renderer for `map`-capability tools. Enabled tools that target the
  * `map` surface contribute a declarative `MapLayerSpec` (points only, no MapLibre access); this syncs them
- * to markers on the shared map. Mounted once by Platform with the live map. Re-reads on tool changes +
- * ticks so a tool that mutates its layer from a background event still shows. Tokens, not raw colour.
+ * to markers on the shared map. Mounted once by Platform with the live map. Re-syncs on every tool change,
+ * including a layer a tool replaces from a background event. Tokens, not raw colour.
  */
 const TONE_VAR: Record<string, string> = {
   accent: "--accent",
@@ -19,7 +19,6 @@ const TONE_VAR: Record<string, string> = {
 };
 
 export function ToolMapLayers({ map }: { map: maplibregl.Map | null }) {
-  const host = useToolHost(); // re-renders on enable/disable
   const markers = useRef(new Map<string, maplibregl.Marker>());
 
   useEffect(() => {
@@ -27,7 +26,7 @@ export function ToolMapLayers({ map }: { map: maplibregl.Map | null }) {
     const store = markers.current; // stable Map; capture so the cleanup reads the same instance
     const sync = () => {
       const seen = new Set<string>();
-      for (const { tool, spec } of host.mapLayers()) {
+      for (const { tool, spec } of toolHost.mapLayers()) {
         spec.points.forEach((p, i) => {
           const key = `${tool}:${spec.id}:${i}`;
           seen.add(key);
@@ -53,13 +52,13 @@ export function ToolMapLayers({ map }: { map: maplibregl.Map | null }) {
         }
     };
     sync();
-    const id = setInterval(sync, 3000); // pick up background-mutated layers
+    const unsubscribe = onToolsChanged(sync);
     return () => {
-      clearInterval(id);
+      unsubscribe();
       for (const [, mk] of store) mk.remove();
       store.clear();
     };
-  }, [map, host]);
+  }, [map]);
 
   return null;
 }
