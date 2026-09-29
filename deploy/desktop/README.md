@@ -1,4 +1,4 @@
-# deploy/desktop — single-binary desktop app (Topology 0)
+# deploy/desktop — single-binary desktop app (the desktop topology)
 
 A self-contained executable (built with `bun build --compile`) bundling the **gateway + SPA +
 optional local ingest**. Download one file, run it: it starts a local server, opens your browser,

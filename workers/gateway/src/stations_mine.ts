@@ -297,7 +297,7 @@ export async function handleStationToCache(req: Request, env: Env, id: number): 
       : `${row.callsign}${row.description ? ` — ${row.description}` : ""}`.slice(0, 120);
   return createVia(req, env, {
     title,
-    type: living ? "aprs_living" : "single",
+    type: living ? "aprs_living" : "traditional",
     lat: row.lat,
     lon: row.lon,
     ...(living ? { stationCall: row.callsign } : {}),

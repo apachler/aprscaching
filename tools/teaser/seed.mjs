@@ -16,7 +16,7 @@ const j = (method, path, body, headers = {}) =>
 const CACHES = [
   {
     title: "Schlossberg Clock Tower",
-    type: "single",
+    type: "traditional",
     lat: 47.0735,
     lon: 15.4378,
     difficulty: 1.5,
@@ -27,7 +27,7 @@ const CACHES = [
   },
   {
     title: "Mur Riverwalk",
-    type: "two_stage",
+    type: "multi",
     lat: 47.07,
     lon: 15.43,
     difficulty: 2,

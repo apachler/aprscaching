@@ -18,5 +18,6 @@ export { TOUR_STEPS } from "./tourSteps.js";
 export { useModalDialog } from "./useModalDialog.js";
 export { ConfirmProvider, useConfirm, useChoice } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";
+export { CommandBlock } from "./CommandBlock.js";
 export { copyText } from "./clipboard.js";
 export { TierChip, MinTier, DtBars, Stat, VerifyPanel, VerifyRow, type Tier } from "./operator.js";

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # OCI Resource Manager stack: one Always-Free Ampere A1 VM running the all-in-one Docker stack
-# (Topology 2 — gateway + ingest + Caddy) via cloud-init. Published as a zip release artifact; the
+# (the self-host stack — gateway + ingest + Caddy) via cloud-init. Published as a zip release artifact; the
 # "Deploy to Oracle Cloud" button in README-stack.md points Resource Manager straight at it.
 #
 # Self-contained on purpose: the stack builds its own VCN/subnet/gateway and resolves the Ubuntu

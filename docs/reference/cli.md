@@ -6,7 +6,8 @@ callsign and support key management, signing, and verification.
 ## Instance operation — `deploy/`
 
 ```bash
-cd deploy && ./setup.sh                  # first-run wizard: callsign, passcode, filter, domain; writes .env with fresh INGEST_SECRET, OPERATOR_SECRET, SESSION_SECRET
+cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
+deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
 deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
@@ -14,16 +15,37 @@ deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in f
 
 See [Deployment](../operate/deployment.md) and [Running in Docker](../operate/docker.md).
 
+`setup.sh` keeps every value already in `.env` unless you confirm the change (or pass `--yes`), and never
+regenerates a secret that is set.
+
 ## Operator callsign — `tools/admin/` {#operator-callsign}
 
 ```bash
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
+docker compose exec gateway node tools/admin/verify-call.mjs OE8APR                   # Docker stack, from deploy/
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR   # from a checkout
 ```
 
-Confirms the operator's own callsign so the sysop role opens on a fresh instance. It posts to
-`/verify/operator` with `OPERATOR_SECRET` (`x-operator-secret`; refused while the gateway has none); the gateway accepts only a call listed in `ADMIN_CALLSIGNS` and
-marks it verified (method `operator`), including on the account that holds it. `BASE` defaults to
-`http://127.0.0.1:8787`. See [Administration](../operate/administration.md#operator-identity).
+Confirms the operator's own callsign so the sysop role opens on a fresh instance. Run it after signing in
+as that call — claiming a call clears a verification recorded while nobody held it. It posts to
+`/verify/operator` with `OPERATOR_SECRET` (`x-operator-secret`; refused while the gateway has none); the
+gateway accepts only a call listed in `ADMIN_CALLSIGNS` and marks it verified (method `operator`). `BASE`
+defaults to the gateway on this host, `http://127.0.0.1:$PORT` (`PORT` defaults to `8787`; the gateway
+container sets `8080` and carries `OPERATOR_SECRET`, so the Docker form needs neither). See
+[Administration](../operate/administration.md#operator-identity).
+
+## Sign-in link — `tools/admin/` {#signin-link}
+
+```bash
+docker compose exec gateway node tools/admin/signin-link.mjs OE8APR                   # Docker stack, from deploy/
+BASE=http://127.0.0.1:8787 OPERATOR_SECRET=… node tools/admin/signin-link.mjs OE8APR     # from a checkout
+```
+
+Prints a one-time sign-in link: the way in on an off-grid instance, where passkeys (no https origin) and
+email are unavailable. It posts to `/auth/operator-link` with `OPERATOR_SECRET`. The link is single-use,
+expires in 15 minutes, opens a confirm page (opening it signs nobody in), and signs in the account holding
+the call — or creates one, unverified, for a new call. It never verifies a callsign. On an instance where
+passkeys or email work, the gateway issues links only for `ADMIN_CALLSIGNS` calls. Run from the box itself,
+the link names `APP_URL`. See [Off-grid sign-in](../operate/first-hour.md#off-grid-sign-in).
 
 ## Licence registers — `tools/licence/` {#licence-registers}
 

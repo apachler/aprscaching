@@ -2,9 +2,11 @@
 import type { CacheType } from "@aprscaching/shared";
 import { BRAND } from "./brand.js";
 
-/** `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji). */
+/** `cog` = the CP437/ASCII marker glyph used when the Phosphor theme is active (no colour emoji);
+ *  `help` = the one line a hider reads when picking the type. */
 export interface TypeMeta {
   label: string;
+  help: string;
   color: string;
   glyph: string;
   cog: string;
@@ -12,34 +14,40 @@ export interface TypeMeta {
 
 /** Marker colour (brand palette) + short glyph per cache type (`glyph` modern, `cog` = Phosphor). */
 export const TYPE_META: Record<CacheType, TypeMeta> = {
-  single: { label: "Single", color: BRAND.green, glyph: "●", cog: "●" },
-  traditional: { label: "Traditional", color: BRAND.green, glyph: "◆", cog: "◊" },
-  two_stage: { label: "Two-stage", color: BRAND.blue, glyph: "②", cog: "2" },
-  multi: { label: "Multi", color: BRAND.blue, glyph: "Ⓜ", cog: "M" },
-  aprs_living: { label: "Living (APRS)", color: BRAND.blue, glyph: "✦", cog: "*" },
-  audio: { label: "Audio", color: BRAND.beige2, glyph: "♪", cog: "♪" },
-  virtual: { label: "Virtual", color: BRAND.blue, glyph: "◇", cog: "○" },
-  sota: { label: "SOTA summit", color: BRAND.grey, glyph: "▲", cog: "▲" },
-  pota: { label: "POTA park", color: BRAND.beige, glyph: "❂", cog: "♣" },
-  wwff: { label: "WWFF reserve", color: BRAND.greenDark, glyph: "❀", cog: "♠" },
-  bunker: { label: "Bunker", color: BRAND.grey, glyph: "▣", cog: "■" },
-  castle: { label: "Castle", color: BRAND.beige, glyph: "♜", cog: "#" },
+  traditional: {
+    label: "Traditional",
+    help: "One container at the pinned spot.",
+    color: BRAND.green,
+    glyph: "●",
+    cog: "●",
+  },
+  multi: {
+    label: "Multi-stage",
+    help: "Several stages; each one reveals where the next is.",
+    color: BRAND.blue,
+    glyph: "Ⓜ",
+    cog: "M",
+  },
+  aprs_living: {
+    label: "Living (APRS)",
+    help: "Moves with a beaconing APRS station — found by meeting it.",
+    color: BRAND.blue,
+    glyph: "✦",
+    cog: "*",
+  },
+  audio: { label: "Audio", help: "A stage unlocked by an audio clue.", color: BRAND.beige2, glyph: "♪", cog: "♪" },
+  virtual: { label: "Virtual", help: "A place to visit, with no container.", color: BRAND.blue, glyph: "◇", cog: "○" },
+  sota: { label: "SOTA summit", help: "A Summits on the Air summit.", color: BRAND.grey, glyph: "▲", cog: "▲" },
+  pota: { label: "POTA park", help: "A Parks on the Air park.", color: BRAND.beige, glyph: "❂", cog: "♣" },
+  wwff: { label: "WWFF reserve", help: "A WWFF nature reserve.", color: BRAND.greenDark, glyph: "❀", cog: "♠" },
+  bunker: { label: "Bunker", help: "A bunker landmark.", color: BRAND.grey, glyph: "▣", cog: "■" },
+  castle: { label: "Castle", help: "A castle landmark.", color: BRAND.beige, glyph: "♜", cog: "#" },
 };
 
-export const TYPE_ORDER: CacheType[] = [
-  "single",
-  "two_stage",
-  "multi",
-  "aprs_living",
-  "audio",
-  "virtual",
-  "traditional",
-  "sota",
-  "pota",
-];
+export const TYPE_ORDER: CacheType[] = ["traditional", "multi", "aprs_living", "audio", "virtual", "sota", "pota"];
 
 export function typeMeta(t: string): TypeMeta {
-  return TYPE_META[t as CacheType] ?? { label: t, color: BRAND.grey, glyph: "●", cog: "●" };
+  return TYPE_META[t as CacheType] ?? { label: t, help: "", color: BRAND.grey, glyph: "●", cog: "●" };
 }
 
 /** Pick the marker glyph for the active theme — Phosphor uses the CP437/ASCII `cog` variant. */

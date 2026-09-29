@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aprscaching desktop launcher — the single-binary, all-in-one Topology 0 entry (gateway + SPA).
+ * aprscaching desktop launcher — the single-binary, all-in-one desktop entry (gateway + SPA).
  * Compiled with `bun build --compile` (see build-exe.sh): one file that starts a local server,
  * serves the embedded SPA, keeps SQLite in the OS app-data dir, and opens the browser. RF comes from
  * the **browser (Web Serial/BLE)** — operator-local, per .claude/rules/ingest-locality.md; an

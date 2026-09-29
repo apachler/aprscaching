@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { changeCallsign, addCallsign, listCallsigns, type HeldCallsign } from "../api.js";
-import { Group, Badge, LicenceBadge, licenceLabel, Icon, Advanced, useConfirm, useToast } from "../ui/index.js";
+import { API_BASE, changeCallsign, addCallsign, listCallsigns, type HeldCallsign } from "../api.js";
+import {
+  Group,
+  Badge,
+  LicenceBadge,
+  licenceLabel,
+  Icon,
+  Advanced,
+  CommandBlock,
+  useConfirm,
+  useToast,
+} from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
 
 type Session = {
@@ -119,12 +129,7 @@ export function AccountSettings(props: {
   }
   return (
     <Group title="Account" status={active}>
-      {props.operatorPending && (
-        <p className="muted fine">
-          You&apos;re this instance&apos;s operator. Confirm <span className="mono">{active}</span> with the operator
-          CLI to open instance admin.
-        </p>
-      )}
+      {props.operatorPending && <OperatorVerify callsign={active} onDone={refresh} />}
       <ul className="cs-list">
         {held.map((c) => (
           <li key={c.callsign} className="setrow">
@@ -211,5 +216,27 @@ export function AccountSettings(props: {
         you control it. Only the verified tick means control-verified.
       </p>
     </Group>
+  );
+}
+
+/**
+ * The operator's first step after signing in: confirm the ADMIN_CALLSIGNS call with OPERATOR_SECRET on the
+ * gateway host. Shows the exact command for the Docker stack and for a plain checkout.
+ */
+function OperatorVerify(props: { callsign: string; onDone: () => void }) {
+  const script = `node tools/admin/verify-call.mjs ${props.callsign}`;
+  return (
+    <div>
+      <p className="muted fine">
+        You&apos;re this instance&apos;s operator. Confirm <span className="mono">{props.callsign}</span> with the
+        operator secret to open instance admin — run one of these on the gateway host:
+      </p>
+      <CommandBlock label="Docker stack (in deploy/)" command={`docker compose exec gateway ${script}`} />
+      <CommandBlock
+        label="From a checkout (OPERATOR_SECRET from your .env)"
+        command={`BASE=${API_BASE.replace(/\/+$/, "")} OPERATOR_SECRET=<operator secret> ${script}`}
+      />
+      <button onClick={props.onDone}>I&apos;ve run it — check again</button>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 #cloud-config
-# OCI Ampere A1 (Ubuntu) bootstrap: install Docker + start the all-in-one stack (Topology 2).
+# OCI Ampere A1 (Ubuntu) bootstrap: install Docker + start the self-host stack.
 # Rendered by main.tf through templatefile(): each dollar-brace placeholder below is substituted by
 # Terraform from the vars map, so a literal shell one would have to double its dollar to survive.
 package_update: true

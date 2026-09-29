@@ -5,10 +5,13 @@
 // request while OPERATOR_SECRET is unset on the gateway.
 //
 //   BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mjs OE8APR
+//   docker compose exec gateway node tools/admin/verify-call.mjs OE8APR     (from deploy/)
 //
-// BASE defaults to http://127.0.0.1:8787; OPERATOR_SECRET is required. Exits non-zero on failure.
+// BASE defaults to the gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787), so inside
+// the gateway container, which carries PORT and OPERATOR_SECRET, no variable is needed. OPERATOR_SECRET is
+// required. Exits non-zero on failure.
 
-const BASE = (process.env.BASE ?? "http://127.0.0.1:8787").replace(/\/+$/, "");
+const BASE = (process.env.BASE ?? `http://127.0.0.1:${process.env.PORT || 8787}`).replace(/\/+$/, "");
 const SECRET = process.env.OPERATOR_SECRET;
 const callsign = (process.argv[2] ?? "").trim().toUpperCase();
 

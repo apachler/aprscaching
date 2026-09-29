@@ -776,6 +776,8 @@ export interface SetupItem {
   key: string;
   label: string;
   group: "security" | "identity" | "trust" | "legal" | "delivery" | "data";
+  /** blocking = sign-in or ingest is broken; recommended = expected of a public instance; optional. */
+  level: "blocking" | "recommended" | "optional";
   status: "ok" | "warn" | "missing";
   source: "env" | "db";
   detail: string;

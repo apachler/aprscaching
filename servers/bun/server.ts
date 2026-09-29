@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * aprscaching bun-gateway — the Bun-runtime self-host / single-binary core (Topology 0).
+ * aprscaching bun-gateway — the Bun-runtime self-host / single-binary core (the desktop topology).
  *
  * Same handlers as the Cloudflare Worker and the Node server (imported from @aprscaching/gateway/app),
  * wired to: bun:sqlite via the D1-compatible shim (./d1.ts) · in-memory region rooms over Bun.serve
