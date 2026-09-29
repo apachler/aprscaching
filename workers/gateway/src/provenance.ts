@@ -14,8 +14,7 @@
  *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`). An on-air frame carries no q-construct of
  *     its own; one that does must name an RF gate (qAR/qAO).
  *   - An APRS-IS line is never attested, whatever it says: APRS-IS passcodes are public, so anyone can
- *     inject `…,qAR,<attested site>`. A legacy row with no recorded transport reads as APRS-IS. A standalone
- *     IGate visible only on APRS-IS therefore counts for nothing here — it must run the ingest box for its
+ *     inject `…,qAR,<attested site>`. A standalone IGate visible only on APRS-IS therefore counts for nothing here — it must run the ingest box for its
  *     hearings to reach Tier A.
  *   - With no allowlist set, nothing is first-party attested — Tier A stays closed until the operator
  *     names their own sites.
@@ -33,7 +32,7 @@ export interface RawProvenance {
   igate_call?: string | null;
   path?: string | null; // stored APRS path incl. the q-construct
   ts?: number;
-  transport?: string | null; // how the position reached the gateway (positions.transport); NULL on legacy rows
+  transport?: string | null; // how the position reached the gateway (positions.transport)
 }
 
 /** RF-originated q-constructs: the IGate is asserting it heard this frame on-air. */
@@ -67,7 +66,7 @@ const ON_AIR: ReadonlySet<Transport> = new Set<Transport>(["tnc", "meshcom"]);
 /** Transports that never carry first-party RF evidence: internet tunnels and licence-free carriers. */
 const NEVER_ATTESTED: ReadonlySet<Transport> = new Set<Transport>(["axudp", "axip", "meshtastic"]);
 
-/** Ingest port → transport. One table for every port a driver emits; an unknown port records nothing. */
+/** Ingest port → transport. One table for every port a driver emits; any other port records `unknown`. */
 const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
   "aprs-is": "aprs-is",
   "kiss-tnc": "tnc",
@@ -86,20 +85,15 @@ const PORT_TRANSPORT: Readonly<Record<string, Transport>> = {
  * the browser RF bridge, whatever port it names. The verify engine never branches on it; its only effect
  * on trust is through {@link provenanceOf}, which attests the on-air transports alone.
  */
-export function transportForPort(port: string, signed: boolean): Transport | null {
+export function transportForPort(port: string, signed: boolean): Transport {
   if (signed) return "browser-rf";
-  return PORT_TRANSPORT[port] ?? null;
+  return Object.hasOwn(PORT_TRANSPORT, port) ? PORT_TRANSPORT[port]! : "unknown";
 }
 
-/**
- * How a stored position reached us: the recorded transport, else (legacy rows with no transport) the
- * app-geolocation marker or the APRS-IS feed — so a legacy row is never attested.
- */
+/** How a stored position reached us. A value that names no known transport reads as `unknown`, never attested. */
 function transportOf(p: RawProvenance): Transport {
   const stored = TransportEnum.safeParse(p.transport);
-  if (stored.success) return stored.data;
-  if (p.heard_via === "app") return "app";
-  return "aprs-is";
+  return stored.success ? stored.data : "unknown";
 }
 
 /**

@@ -1,51 +1,38 @@
 # Data model
 
-The gateway's schema lives as ordered SQL migrations under `db/migrations/`, applied identically on every
-runtime (D1's `wrangler d1 migrations apply`, or the Node/Bun migration runner, which tracks applied files by
-name). The schema is **`0001_baseline.sql`** plus the numbered migrations listed below. To add schema, add
-the next-numbered `NNNN_name.sql` file — never edit an applied migration.
+The gateway's schema is one SQL file, **`db/migrations/0001_baseline.sql`**, applied identically on every
+runtime: `wrangler d1 migrations apply` on D1 (`migrations_dir` in `workers/gateway/wrangler.toml`), and the
+Node, Bun and desktop servers' migration runner at boot, which tracks applied files by name in
+`_migrations`. A schema change is a new, next-numbered `NNNN_name.sql` file applied on top; an applied file
+is never edited.
 
-Spatial lookups use a plain lat/lon index (D1 does not support rtree virtual tables). Firehose positions are
-TTL'd; the durable record is caches, finds, accounts, and keys — back those up.
+D1 forbids virtual tables (rtree, FTS), so spatial lookups use plain `(lat, lon)` indexes and search is
+LIKE-based. Firehose positions and the diagnostic tables are TTL'd; the durable record is caches, finds,
+accounts and keys — back those up.
 
 ## What the tables cover
 
-The baseline groups into a handful of domains:
+The baseline is grouped into commented sections, one per domain:
 
 | Domain | Holds |
 |--------|-------|
-| **Caching** | Caches, logbook, radio commands (logs sent as radio messages), ratings, favorites, staged/NFC unlocks, media, rendezvous, metadata & tags |
-| **Positions & stations** | The live station registry, firehose positions, telemetry & weather readings, the recent-packet ring |
-| **Accounts & identity** | Accounts, base callsigns, passkeys, device keys, callsign control-verification, profiles, preferences |
-| **Verification** | Corroboration state and the corroborating-IGate credit |
-| **Federation** | Mirrored remote caches/finds/keys, peers + trust + reputation, sync observability, tombstones, federation scope, account-moves, the relay queue |
-| **BBS & node** | Store-and-forward mail, bulletins, threads, FBB forwarding partners/rules/log, White Pages, the NET/ROM node table |
-| **Engagement** | Watchlists, saved map views, notifications, API keys, supporter recognition |
+| **Accounts & identity** | Accounts (active call, durable `account_id`, session generation, opt-in profile), held base calls, passkeys, magic-link tokens, callsign history, UI preferences, the lifecycle ledger, recognition flags, API keys |
+| **Callsign verification** | The single verification store (`callsign_verifications`), the in-session `ampr_dns` / `lotw` challenges, public licence-register validity, device signing keys |
+| **Caches & finds** | Caches (with the federation revision trigger), stages and unlocks, the logbook (tier, corroboration, the corroborating IGate, device signatures; one `found` per logger and cache), ratings, media, living-cache rendezvous, cache adoption |
+| **Community & notifications** | Achievements, favourites, watches, saved map views, the watchlist and its alerts, web-push subscriptions |
+| **Stations, positions & weather** | Position history (every row records its `transport`), the live station table, the raw-packet ring, the message log, port counters, weather readings, operated stations, PWS push keys |
+| **Radio commands, outbox & remote boxes** | The APRS-IS / CWOP outbox, commands sent as radio messages, the remote-box command queue, box ownership, pairing codes and reported capabilities |
+| **BBS & packet node** | Store-and-forward mail and bulletins with threads, delivery state, forward rules, White Pages, FBB partners and the forward log, the NET/ROM node table and MHeard |
+| **Federation** | Peers (endpoints, trust, pinned and accepted keys, per-feed cursors, sync health), the registry high-water mark, applied versions, the relay queue, mirrored caches/finds/keys, tombstones, account moves |
+| **Operations** | The transparency ledger, durable rate-limit counters |
 
-## Baseline and beyond
+`positions.transport` is how a position reached the gateway (`aprs-is`, `tnc`, `browser-rf`, `axudp`,
+`axip`, `meshcom`, `meshtastic`, or `unknown` for an ingest port the gateway does not know), derived from
+the ingest port. It is display and statistics data: the verify engine never branches on it, and only the
+on-air transports can carry first-party attestation.
 
-- `0001_baseline` establishes the whole 1.0 schema — caches, logs, positions, accounts, the Shack tables,
-  federation, BBS/node, and engagement — with internal section headers grouping it by domain.
-- Post-1.0 schema changes land as new `NNNN_name.sql` files applied on top of the baseline:
-  - `0002_federation_transports` — typed peer transport endpoints (see the
-    [federation wire reference](federation-wire.md));
-  - `0003_radio_commands` — logs sent as radio messages, including those waiting for the player's
-    confirmation;
-  - `0004_box_status` — what each ingest box can transmit, as it reports on its command poll;
-  - `0005_positions_transport` — how each stored position reached the gateway (`aprs-is`, `tnc`,
-    `browser-rf`, `axudp`, `axip`, `meshcom`, `meshtastic`), derived from the ingest port. Display and
-    statistics only: the verify engine never branches on it; rows stored earlier read `NULL`.
-  - `0012_verify_challenges` — outstanding challenges of the callsign control-verification methods that
-    complete in the signed-in session (`ampr_dns`, `lotw`), one per base call and method, bound to the
-    account that started it; covered by the account's data export and erasure.
-  - `0013_licence_registry` — callsign validity from public licence registers: callsign, source, status,
-    expiry and import date only (see [Licence registers](licence-sources.md)).
-  - `0014_cache_adoption` — cache adoption: standing offers (`cache_adoption_offers`), requests to adopt
-    (`cache_adoption_requests`) and the audit trail of every step (`cache_adoptions`). Ownership stays on
-    `caches.owner_call`.
-  - `0015_single_verification_store` — one store per identity fact. Every account holds the base call of
-    its active call in `account_callsigns` (backfilled for any account without a held-call row), and the
-    copies of the verification flag on `accounts`, `account_callsigns` and `callsign_keys` are dropped.
+Delete tombstones (`tombstones`, `remote_tombstones`) are kept permanently. They hold only PII-free global
+ids, and a mirror consults them on every upsert so deleted data is never re-mirrored.
 
 ## Identity: who holds a call, and whether it is verified
 

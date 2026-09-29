@@ -50,6 +50,7 @@ export const Transport = z.enum([
   "meshtastic", // Meshtastic via the MQTT bridge or the browser
   "hamnet-kiss", // KISS-over-IP from a HAMNET site — reserved, no listener sets it
   "first-party-rf", // reserved, no listener sets it; attestation is the firstPartyAttested flag, never a transport
+  "unknown", // an ingest port the gateway does not know; never attested
 ]);
 export type Transport = z.infer<typeof Transport>;
 

@@ -345,25 +345,6 @@ export async function resolvePeerKeys(opts: {
   return { ok: true, pin: current, accept };
 }
 
-/** Import a peer's ACTIVE published keys (falling back to a legacy single `publicKey`) for verifying its feed. */
-export async function importActiveKeys(
-  publicKeys: FedPublicKey[] | undefined,
-  fallback: string | null,
-  nowS: number,
-): Promise<CryptoKey[]> {
-  const xs =
-    Array.isArray(publicKeys) && publicKeys.length ? activeFedKeys(publicKeys, nowS) : fallback ? [fallback] : [];
-  const out: CryptoKey[] = [];
-  for (const x of xs) {
-    try {
-      out.push(await importVerifyKey(x));
-    } catch {
-      /* skip an unparseable key */
-    }
-  }
-  return out;
-}
-
 // ---- signed instance registry / namespace authority ----
 export interface RegistryEntry {
   instance: string;
@@ -662,7 +643,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     },
     sigAlg: "Ed25519",
     signed: !!fk,
-    publicKey: fk?.publicX ?? null, // current raw Ed25519 public key (base64url) — legacy single-key field
+    publicKey: fk?.publicX ?? null, // the current signing key (raw Ed25519, base64url): the key a peer pins
     publicKeyJwk: fk?.jwk ?? null,
     publicKeys: await instanceKeys(env), // current + previous keys + revocations, each {x,since?,until?,revoked?}
     rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // continuity proofs (new key signed by old)

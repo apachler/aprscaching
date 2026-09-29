@@ -175,11 +175,10 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 (supporter recognition; prefs are session-gated, confirm is x-operator-secret) · `/sitemap.xml` +
 `/api/sitemap` (JSON) + `/robots.txt` · `/feeds/*.xml` (RSS: activity, caches, bulletins, leaderboard,
 per-user) · `/badge/:call.svg` (embeddable network badge) · `/embed` + `/embed/qr.svg` (embeddable map +
-QR) · `DELETE /api/views/:id` (remove a saved view) · `POST /api/logs`, `/api/logs/find` (aliases of the
-find-log endpoints kept for API compatibility).
+QR) · `DELETE /api/views/:id` (remove a saved view).
 
 ## Scheduled tasks
 
-On a cron the gateway prunes TTL'd firehose positions, the raw-packet ring, tombstones and stale relay
+On a cron the gateway prunes TTL'd firehose positions, the raw-packet ring and stale relay
 queue entries; then pulls federation (`syncAllPeers`), runs push-to-hub and the relay spoke leg (both no-ops
 unless configured), and sends watch-alert email digests.

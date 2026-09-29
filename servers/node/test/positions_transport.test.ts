@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Positions record how they reached the gateway: migration 0005 on real SQLite, and the ingest storing
-// the transport for every ingest port (NULL for a port it does not know).
+// Every position records how it reached the gateway: the schema requires a transport, and the ingest
+// stores one for every ingest port (`unknown` for a port it does not know).
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { makeD1 } from "../src/d1.js";
@@ -13,15 +13,12 @@ import { fileURLToPath } from "node:url";
 const MIGRATIONS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../db/migrations");
 
 describe("positions.transport", () => {
-  it("the migration adds a nullable transport column; older rows read NULL", () => {
+  it("a position without a transport is refused", () => {
     const db = new Database(":memory:");
     migrate(db, MIGRATIONS);
-    const col = (db.prepare("PRAGMA table_info(positions)").all() as { name: string; notnull: number }[]).find(
-      (c) => c.name === "transport",
-    );
-    expect(col).toMatchObject({ name: "transport", notnull: 0 });
-    db.prepare("INSERT INTO positions (callsign, ts, lat, lon, heard_via) VALUES ('OE3OLD', 1, 47, 15, 'rf')").run();
-    expect(db.prepare("SELECT transport FROM positions").get()).toEqual({ transport: null });
+    expect(() =>
+      db.prepare("INSERT INTO positions (callsign, ts, lat, lon, heard_via) VALUES ('OE3NUL', 1, 47, 15, 'rf')").run(),
+    ).toThrow(/NOT NULL/);
   });
 
   it("the ingest stores the transport of each port", async () => {
@@ -55,7 +52,7 @@ describe("positions.transport", () => {
     expect(res.status).toBe(200);
     const rows = sqlite.prepare("SELECT callsign, transport FROM positions ORDER BY callsign").all() as {
       callsign: string;
-      transport: string | null;
+      transport: string;
     }[];
     expect(rows.map((r) => r.transport)).toEqual([
       "aprs-is",
@@ -66,7 +63,7 @@ describe("positions.transport", () => {
       "axip",
       "meshcom",
       "meshtastic",
-      null,
+      "unknown",
     ]);
   });
 });

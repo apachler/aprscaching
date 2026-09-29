@@ -62,7 +62,6 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
 | `FED_CORROBORATION_GRID_DEG` / `_TIME_BUCKET_SEC` / `_DIST_BUCKET_M` | Location/time coarsening of corroboration queries | `0.005` / `600` / `100` |
-| `TOMBSTONE_TTL_DAYS` | Retention of GDPR delete tombstones | `180` |
 | `PACKETS_TTL_HOURS` | Retention of the Shack raw-packet ring | `24` |
 | `MESSAGES_TTL_DAYS` / `SENSOR_TTL_DAYS` / `PORTSTATS_TTL_DAYS` / `ALERTS_TTL_DAYS` / `MHEARD_TTL_DAYS` | Retention of messages, telemetry/WX samples, port statistics, watch alerts, and the node MHeard list | built-in |
 

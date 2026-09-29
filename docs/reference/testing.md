@@ -69,10 +69,12 @@ cd ../.. && BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret OPERATOR_SECRET=d
 
 **Bun + bun:sqlite** — same env recipe as Node, started with `bun run servers/bun/server.ts`.
 
-**Two-instance federation** — the CI job `conformance-federation` in `.github/workflows/ci.yml` is
-the canonical recipe: keys from `tools/fedkey/genkey.mjs`, a signed registry from
-`tools/fedkey/signregistry.mjs`, a publisher on `:8801` and a subscriber hub on `:8802`, then
-`PUB=… SUB=… RELAY_SECRET=… node tools/smoke/federation.mjs`.
+**Two-instance federation** — `tools/dev/smoke.sh federation` runs it locally. It boots two throwaway
+Node/SQLite gateways on free ports with the environment of the CI job `conformance-federation`
+(`.github/workflows/ci.yml`): signing keys and a key history from `tools/fedkey/genkey.mjs`, a signed
+registry from `tools/fedkey/signregistry.mjs`, a publisher (`oe.pub`) and a subscriber hub (`oe.sub`), then
+runs `PUB=… SUB=… RELAY_SECRET=… node tools/smoke/federation.mjs` and tears both down. CI starts the same
+pair on the fixed ports `:8801` and `:8802`.
 
 ## Browser end-to-end
 

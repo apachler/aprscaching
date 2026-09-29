@@ -11,7 +11,8 @@
  *     operator config; frames are applied idempotently by global id on arrival.
  *
  * Endpoint selection: a peer row carries an ordered typed endpoint set (`endpoints` JSON); the
- * lowest-priority sync-capable endpoint wins, with the legacy `url` column as the https fallback.
+ * lowest-priority sync-capable endpoint wins. A peer without an endpoint set (a FED_PEERS URL, a
+ * discovered or submitted peer) is reached at its `url`, the https address it was added under.
  */
 import { trimTrailingSlashes } from "./fetchguard.js";
 import { parseEndpoints, type FedEndpoint, type FedTransportKind } from "@aprscaching/shared";
@@ -40,14 +41,14 @@ export interface PeerAddressing {
   endpoints?: string | null;
 }
 
-/** A peer's typed endpoint set, priority-ordered, with the legacy https `url` as the fallback. */
+/** A peer's typed endpoint set, priority-ordered; without one, its https `url`. */
 export function peerEndpoints(p: PeerAddressing): FedEndpoint[] {
   if (p.endpoints) {
     try {
       const list = parseEndpoints(JSON.parse(p.endpoints));
       if (list.length) return list;
     } catch {
-      /* malformed stored endpoints → fall back to the url column */
+      /* a malformed stored endpoint set leaves the url */
     }
   }
   // The url column is written by the operator (FED_PEERS, the admin surface) or by a path that already

@@ -53,19 +53,6 @@ instance is refused, and a descriptor that renames its instance is refused, so a
 another instance's namespace or trust. Instance ids are lowercase hostnames; an id with a `:` or other
 characters outside a hostname is refused.
 
-If an upgrade stops with *several non-blocked fed_peers rows claim one instance id*, the database already
-holds such a conflict. List the rows with
-
-```sql
-SELECT url, instance, trust, added_via, public_key FROM fed_peers
- WHERE instance IN (SELECT instance FROM fed_peers WHERE instance IS NOT NULL AND trust != 'blocked'
-                    GROUP BY instance HAVING COUNT(*) > 1)
- ORDER BY instance, url;
-```
-
-then keep the genuine peer (usually the one whose key you verified out of band) and set every other row to
-`blocked` (`POST /federation/peers/trust`, or `UPDATE fed_peers SET trust='blocked' WHERE url=…`) or delete it,
-and migrate again. The upgrade never picks a winner on its own, since the older row could be the impostor.
 To move a peer to a new URL, block or remove its old row first.
 
 Peers carry a reputation (`rep_confirmed` / `rep_failed`). Set `FED_AUTO_PROMOTE` to auto-promote an unvetted
@@ -159,7 +146,8 @@ you know (including `unvetted` ones).
 ## Privacy across the network
 
 GDPR deletions propagate as **signed, PII-free tombstones** that name only a global record id (never a
-callsign); consumers purge the mirrored rows and suppress re-mirroring. Account portability works the same
+callsign); consumers purge the mirrored rows and suppress re-mirroring. Tombstones are kept permanently on
+both sides: they hold only ids, and a mirror checks them on every upsert so deleted data never comes back. Account portability works the same
 way — a signed account-move record re-points attribution when a user migrates instances.
 
 ## Running federation safely
