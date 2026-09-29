@@ -164,7 +164,7 @@ async function submitFrames(
 
   const { applied, rejected } = await applyFrames(env, frames, {
     origin: instance,
-    keysFor: async () => [publicKey],
+    keysFor: () => Promise.resolve([publicKey]),
     mirrorOnly: true,
   });
   return json({ ok: true, applied, rejected });

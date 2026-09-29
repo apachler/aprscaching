@@ -345,7 +345,7 @@ async function syncFeed(
     applied = 0;
   // the origin is the verified serving peer, its frames verify under its active keys, and a page
   // carries only its own feed's type
-  const gate: FrameGate = { origin: instance, type: def.type, keysFor: async () => activeKeys };
+  const gate: FrameGate = { origin: instance, type: def.type, keysFor: () => Promise.resolve(activeKeys) };
   for (let page = 0; page < MAX_PAGES; page++) {
     const idParam = cursorId != null ? `&sinceId=${cursorId}` : "";
     const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=${PAGE_LIMIT}`);
@@ -359,12 +359,14 @@ async function syncFeed(
     for (const fb of pg.frames) {
       // each frame stands alone: a malformed or unappliable record is skipped, never a reason to
       // hold the cursor and replay the page forever
+      const skipped = (e: unknown) =>
+        console.warn(`federation: skipped a ${def.type} record from ${instance}: ${(e as Error).message}`);
       try {
         const { verdict, error } = await admitFrame(env, fb, gate);
         if (verdict === "applied") applied++;
-        else if (error) throw error;
+        else if (error) skipped(error);
       } catch (e) {
-        console.warn(`federation: skipped a ${def.type} record from ${instance}: ${(e as Error).message}`);
+        skipped(e);
       }
     }
     const next = pg.nextCursor ?? cursor;
