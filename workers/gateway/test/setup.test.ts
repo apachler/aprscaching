@@ -164,3 +164,50 @@ describe("GET /api/admin/setup — DB probes", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("GET /api/admin/setup — three levels", () => {
+  const blockingOpen = (items: SetupItem[]) => items.filter((i) => i.level === "blocking" && i.status !== "ok");
+
+  it("gives every item a level", async () => {
+    const items = await itemsOf(await get(baseEnv(), "OE8APR"));
+    for (const i of items) expect(["blocking", "recommended", "optional"]).toContain(i.level);
+    expect(find(items, "INGEST_SECRET").level).toBe("blocking");
+    expect(find(items, "SESSION_SECRET").level).toBe("blocking");
+    expect(find(items, "db:ingest").level).toBe("blocking");
+    expect(find(items, "OPERATOR").level).toBe("recommended");
+    expect(find(items, "VAPID").level).toBe("optional");
+    expect(find(items, "db:peers").level).toBe("optional");
+  });
+
+  it("a working https box with only the essentials has nothing blocking", async () => {
+    const env = baseEnv(
+      { APP_URL: "https://oe.example.net", OPERATOR_SECRET: "a-strong-operator-secret" },
+      { packets_recent: 12 },
+    );
+    const items = await itemsOf(await get(env, "OE8APR"));
+    expect(blockingOpen(items)).toEqual([]);
+  });
+
+  it("does not flag the passkey domain or instance id when both follow APP_URL", async () => {
+    const items = await itemsOf(await get(baseEnv({ APP_URL: "https://oe.example.net" }), "OE8APR"));
+    expect(find(items, "RP_ID")).toMatchObject({ status: "ok" });
+    expect(find(items, "RP_ID").detail).toContain("oe.example.net");
+    expect(find(items, "INSTANCE")).toMatchObject({ status: "ok" });
+    expect(find(items, "INSTANCE").detail).toContain("oe.example.net");
+  });
+
+  it("marks email blocking only when there is no way to sign in at all", async () => {
+    // no https origin, no email, no operator secret: nobody can sign in
+    const closed = await itemsOf(await get(baseEnv({ APP_URL: "http://192.168.1.10" }), "OE8APR"));
+    expect(find(closed, "EMAIL")).toMatchObject({ level: "blocking", status: "missing" });
+    // off-grid with the operator's sign-in link: email is optional
+    const offGrid = await itemsOf(
+      await get(baseEnv({ APP_URL: "http://192.168.1.10", OPERATOR_SECRET: "a-strong-operator-secret" }), "OE8APR"),
+    );
+    expect(find(offGrid, "EMAIL").level).toBe("optional");
+    expect(find(offGrid, "EMAIL").status).not.toBe("missing");
+    // a public https instance: passkeys work, email is recommended for recovery
+    const pub = await itemsOf(await get(baseEnv({ APP_URL: "https://oe.example.net" }), "OE8APR"));
+    expect(find(pub, "EMAIL")).toMatchObject({ level: "recommended", status: "warn" });
+  });
+});

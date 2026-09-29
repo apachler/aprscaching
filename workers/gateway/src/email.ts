@@ -9,9 +9,14 @@ import {
   sessionsEnabled,
   sessionUnavailable,
   holdCall,
+  baseHolder,
+  isRegistrableCall,
+  operatorSecretOk,
+  signInPaths,
 } from "./auth.js";
+import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
-import { gatewayBase } from "./sitemap.js";
+import { appBase, gatewayBase } from "./sitemap.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -20,9 +25,15 @@ import { gatewayBase } from "./sitemap.js";
  * account on first register. A GET never signs anyone in, so a page that makes a browser load someone
  * else's link cannot log the victim into the attacker's account. When no email provider is configured
  * (dev/CI), `start` returns the token in-band so headless flows and first-run can proceed without mail.
+ *
+ * The same token store and confirm step carry the operator-issued sign-in link (`handleOperatorLink`),
+ * the sign-in path of an instance with neither passkeys nor email.
  */
 
 const TTL_SEC = 15 * 60;
+/** The token purpose of an operator-issued link: it names a call, not a mailbox. */
+const OPERATOR_PURPOSE = "operator";
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function newToken(): string {
@@ -79,6 +90,54 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true")
     return json({ sent: false, purpose, devToken: token, devLink: link });
   return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
+}
+
+/**
+ * POST /auth/operator-link {callsign} with `x-operator-secret` — the operator mints a single-use sign-in
+ * link that expires in 15 minutes (`tools/admin/signin-link.mjs`). It opens the account holding the call's
+ * base call, or creates an unverified account for a new call; it never verifies a callsign. The link
+ * runs through the same confirm step as an email link, so opening it signs nobody in.
+ *
+ * Scope: on an off-grid instance (no passkey origin, no email) it serves every call, since it is the only
+ * way in. Where passkeys or email work it serves only ADMIN_CALLSIGNS calls, so a leaked operator secret
+ * cannot open a member's account there.
+ */
+export async function handleOperatorLink(req: Request, env: Env): Promise<Response> {
+  if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
+  if (!sessionsEnabled(env)) return sessionUnavailable();
+  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const cs = String(callsign ?? "")
+    .toUpperCase()
+    .trim();
+  if (!isRegistrableCall(cs)) return json({ error: "a valid, unreserved callsign is required" }, { status: 400 });
+  const base = baseCall(cs);
+  const paths = signInPaths(env);
+  const offGrid = !paths.passkeys && !paths.email;
+  const admin = [...adminCalls(env)].some((c) => baseCall(c) === base);
+  if (!offGrid && !admin)
+    return json(
+      { error: "this instance offers passkey or email sign-in, so an operator link serves only ADMIN_CALLSIGNS calls" },
+      { status: 403 },
+    );
+
+  const existing = (await baseHolder(env, base)) !== null;
+  const token = newToken();
+  await env.DB.prepare(
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, '', ?, ?, ?, 0)",
+  )
+    .bind(token, cs, OPERATOR_PURPOSE, Math.floor(Date.now() / 1000))
+    .run();
+  // A script on the box reaches the gateway over loopback, which no other device can open: the link then
+  // names the app origin. Reached on a public host (an API host beside a static app), it names that host.
+  const onLoopback = LOOPBACK_HOSTS.has(new URL(req.url).hostname);
+  const origin = onLoopback && env.APP_URL ? appBase(env) : gatewayBase(req, env);
+  console.log(`operator sign-in link issued for ${cs} (${existing ? "existing" : "new"} account)`);
+  return json({
+    link: `${origin}/auth/email/verify?token=${token}`,
+    callsign: cs,
+    account: existing ? "existing" : "new",
+    expiresIn: TTL_SEC,
+  });
 }
 
 const esc = (v: string) => v.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
@@ -155,37 +214,11 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(token).run();
   if (spent.meta?.changes === 0) return json({ error: "invalid or expired link" }, { status: 400 });
 
-  let acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
-    .bind(row.email)
-    .first<{ account_id: string; callsign: string }>();
-  if (!acct) {
-    // register: create the durable account + record the initial callsign (unverified control)
-    const id = crypto.randomUUID();
-    const cs = (row.callsign ?? "").toUpperCase();
-    if (cs.length < 3) return json({ error: "missing callsign for registration" }, { status: 400 });
-    // guard the race: the call (or its base, via another SSID) may have been claimed since `start`
-    const refused = await unclaimableReason(env, cs);
-    if (refused) return json({ error: refused }, { status: 409 });
-    try {
-      // seed the held-callsign set with this call as the account's primary base call; the unique
-      // base-call index makes a concurrent claim fail the whole batch
-      await env.DB.batch([
-        ...holdCall(env, id, baseCall(cs), true, now),
-        env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, created_at) VALUES (?, ?, ?, ?)").bind(
-          cs,
-          id,
-          row.email,
-          now,
-        ),
-        env.DB.prepare(
-          "INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)",
-        ).bind(id, cs, now),
-      ]);
-    } catch {
-      return json({ error: "callsign already claimed" }, { status: 409 });
-    }
-    acct = { account_id: id, callsign: cs };
-  }
+  const acct =
+    row.purpose === OPERATOR_PURPOSE
+      ? await operatorLinkAccount(env, row.callsign ?? "", now)
+      : await emailAccount(env, row.email, row.callsign, now);
+  if (acct instanceof Response) return acct;
 
   const cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
   // the confirm form → back into the app with the session set; an API client → JSON
@@ -195,6 +228,58 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
     { headers: { "set-cookie": cookie } },
   );
+}
+
+type Acct = { account_id: string; callsign: string };
+
+/** The account an email link signs in: the mailbox's account, or a new one registered under its call. */
+async function emailAccount(env: Env, email: string, callsign: string | null, now: number): Promise<Acct | Response> {
+  const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
+    .bind(email)
+    .first<Acct>();
+  return acct ?? createAccount(env, (callsign ?? "").toUpperCase(), email, now);
+}
+
+/** The account an operator link signs in: the holder of the call's base call, or a new one for the call. */
+async function operatorLinkAccount(env: Env, callsign: string, now: number): Promise<Acct | Response> {
+  const holder = await baseHolder(env, baseCall(callsign));
+  if (holder) {
+    const acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE account_id = ?")
+      .bind(holder)
+      .first<Acct>();
+    if (acct) return acct;
+  }
+  return createAccount(env, callsign.toUpperCase(), null, now);
+}
+
+/** Register a durable account under `cs` (unverified control), with an optional recovery email. */
+async function createAccount(env: Env, cs: string, email: string | null, now: number): Promise<Acct | Response> {
+  if (cs.length < 3) return json({ error: "missing callsign for registration" }, { status: 400 });
+  // guard the race: the call (or its base, via another SSID) may have been claimed since the link was issued
+  const refused = await unclaimableReason(env, cs);
+  if (refused) return json({ error: refused }, { status: 409 });
+  const id = crypto.randomUUID();
+  try {
+    // seed the held-callsign set with this call as the account's primary base call; the unique
+    // base-call index makes a concurrent claim fail the whole batch
+    await env.DB.batch([
+      ...holdCall(env, id, baseCall(cs), true, now),
+      env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, created_at) VALUES (?, ?, ?, ?)").bind(
+        cs,
+        id,
+        email,
+        now,
+      ),
+      env.DB.prepare("INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)").bind(
+        id,
+        cs,
+        now,
+      ),
+    ]);
+  } catch {
+    return json({ error: "callsign already claimed" }, { status: 409 });
+  }
+  return { account_id: id, callsign: cs };
 }
 
 /** Pluggable sender. Resend-compatible JSON API; returns false (dev mode) when unconfigured. */

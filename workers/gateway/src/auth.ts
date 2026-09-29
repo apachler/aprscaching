@@ -34,6 +34,39 @@ function rpId(env: Env): string | null {
     return null;
   }
 }
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+function appUrl(env: Env): URL | null {
+  try {
+    return env.APP_URL ? new URL(env.APP_URL) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The sign-in paths this instance offers. Passkeys need a secure-context origin (https, or http on the
+ * loopback host) named by APP_URL; email needs a configured provider; the operator-issued link needs
+ * OPERATOR_SECRET. An instance with neither passkeys nor email is off-grid: the operator's link is then
+ * the only way in, and it serves every account (see handleOperatorLink).
+ */
+export function signInPaths(env: Env): { passkeys: boolean; email: boolean; operatorLink: boolean } {
+  const u = appUrl(env);
+  const passkeys = !!u && (u.protocol === "https:" || (u.protocol === "http:" && LOOPBACK_HOSTS.has(u.hostname)));
+  return {
+    passkeys,
+    email: !!env.EMAIL_FROM && !!env.EMAIL_API_KEY,
+    operatorLink: !weakSecret(env.OPERATOR_SECRET),
+  };
+}
+
+/** A browser drops a `Secure` cookie set over plain http, so an instance whose declared origin is http
+ *  (an off-grid LAN box) issues its session cookie without the flag; every other instance keeps it. */
+function cookieFlags(env: Env): string {
+  return appUrl(env)?.protocol === "http:"
+    ? "HttpOnly; SameSite=Lax; Path=/"
+    : "HttpOnly; Secure; SameSite=Lax; Path=/";
+}
+
 function webauthnUnconfigured(): Response {
   return json(
     { error: "passkeys require APP_URL (and optionally RP_ID) to be configured on this instance" },
@@ -114,6 +147,9 @@ export function holdCall(env: Env, accountId: string, base: string, primary: boo
     ),
   ];
 }
+
+/** Can `cs` ever name an account: a well-formed call whose base is not reserved for this instance? */
+export const isRegistrableCall = (cs: string): boolean => REGISTRABLE_CALL.test(cs) && !isReservedCall(cs);
 
 /** Why `cs` cannot open a new account, or null when it can: a malformed or reserved call, or a base
  *  call some account already holds (an SSID never opens a second account on someone else's licence). */
@@ -570,7 +606,7 @@ export async function issueSessionCookie(env: Env, accountId: string, callsign: 
   if (!row) throw new Error("no such account");
   const token = await signSession(env, { accountId, gen: Number(row.session_gen), callsign: callsign.toUpperCase() });
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
-  return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${ttlDays * 86_400}`;
+  return `${SESSION_COOKIE}=${token}; ${cookieFlags(env)}; Max-Age=${ttlDays * 86_400}`;
 }
 
 /** GET /auth/session — "who am I": the signed-in callsign + verification + email, or null. */
@@ -583,11 +619,11 @@ export async function handleSession(req: Request, env: Env): Promise<Response> {
   return json({ callsign: me.callsign, verified: await isCallsignVerified(env, me.base), email: acct?.email ?? null });
 }
 
-const CLEAR_COOKIE = `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+const clearCookie = (env: Env) => `${SESSION_COOKIE}=; ${cookieFlags(env)}; Max-Age=0`;
 
 /** POST /auth/logout — clear the session cookie. */
-export function handleLogout(): Response {
-  return json({ ok: true }, { headers: { "set-cookie": CLEAR_COOKIE } });
+export function handleLogout(env: Env): Response {
+  return json({ ok: true }, { headers: { "set-cookie": clearCookie(env) } });
 }
 
 /** POST /auth/logout-all — end every session of the signed-in account, on every device. */
@@ -595,7 +631,7 @@ export async function handleLogoutAll(req: Request, env: Env): Promise<Response>
   const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   await endAllSessions(env, me.accountId);
-  return json({ ok: true }, { headers: { "set-cookie": CLEAR_COOKIE } });
+  return json({ ok: true }, { headers: { "set-cookie": clearCookie(env) } });
 }
 
 /** Invalidate every outstanding session of an account by moving it to the next generation. */
