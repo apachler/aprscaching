@@ -10,14 +10,16 @@ import type { Env } from "../src/env.js";
 
 const SECRET = "a-strong-ingest-secret-123";
 
-/** The signed-in operator's identity rows: the account holds its call, control-verified. */
+/** The signed-in operator's identity rows: the account holds its call. */
 function operatorRow(sql: string): Record<string, unknown> | null {
   if (sql.includes("SELECT session_gen FROM accounts")) return { session_gen: 0 };
-  if (sql.includes("FROM account_callsigns")) return { account_id: "acct-op", verified: 1 };
+  if (sql.includes("FROM account_callsigns")) return { account_id: "acct-op" };
   if (sql.startsWith("SELECT account_id FROM accounts")) return { account_id: "acct-op" };
-  if (sql.startsWith("SELECT status FROM callsign_verifications")) return { status: "verified" };
   return null;
 }
+/** The verification store: the operator's call is control-verified. */
+const verifiedRows = (sql: string) =>
+  sql.includes("FROM callsign_verifications") ? [{ callsign: "OE8APR", method: "operator", verified_at: 1 }] : [];
 
 /** Mock DB answering the checklist's COUNT probes (keyed on table name) + the session lookups. */
 const db = (counts: Record<string, number>) => ({
@@ -33,6 +35,9 @@ const db = (counts: Record<string, number>) => ({
           },
           async run() {
             return { meta: {} };
+          },
+          async all() {
+            return { results: verifiedRows(sql) };
           },
         };
       },
@@ -140,20 +145,17 @@ describe("GET /api/admin/setup — DB probes", () => {
     expect(find(fed, "db:peers").detail).toContain("2");
   });
 
-  it("reports the operator's own control-verification state", async () => {
-    const unverified = await itemsOf(await get(baseEnv(), "OE8APR"));
-    expect(find(unverified, "db:verify").status).toBe("warn");
-
-    const verified = await itemsOf(await get(baseEnv({}, { accounts: 1 }), "OE8APR"));
-    expect(find(verified, "db:verify").status).toBe("ok");
+  it("reports the operator's own control-verification state from the verification store", async () => {
+    const items = await itemsOf(await get(baseEnv(), "OE8APR"));
+    expect(find(items, "db:verify")).toMatchObject({ status: "ok", source: "db" });
   });
 
   it("a failing probe degrades to a warn, never a 500", async () => {
     const broken = baseEnv({
       DB: {
         prepare(sql: string) {
-          // identity lookups answer; every checklist probe fails
-          if (operatorRow(sql)) return db({}).prepare(sql);
+          // identity and verification lookups answer; every checklist probe fails
+          if (operatorRow(sql) || verifiedRows(sql).length) return db({}).prepare(sql);
           throw new Error("no such table");
         },
       } as unknown as Env["DB"],

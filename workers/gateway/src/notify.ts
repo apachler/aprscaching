@@ -14,8 +14,8 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId } from "./watch.js";
 import { sendEmail } from "./email.js";
+import { sessionIdentity } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -55,7 +55,7 @@ export function handlePushKey(_req: Request, env: Env): Response {
   return json({ key: env.VAPID_PUBLIC ?? null });
 }
 export async function handlePushSubscribe(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as {
     endpoint?: string;
@@ -71,7 +71,7 @@ export async function handlePushSubscribe(req: Request, env: Env): Promise<Respo
   return json({ ok: true }, { status: 201 });
 }
 export async function handlePushUnsubscribe(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { endpoint?: string };
   await env.DB.prepare("DELETE FROM push_subs WHERE account_id = ? AND endpoint = ?")
@@ -82,7 +82,7 @@ export async function handlePushUnsubscribe(req: Request, env: Env): Promise<Res
 
 // ---- email-digest preference ----
 export async function handleNotifyPrefs(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   if (req.method === "POST") {
     const b = (await req.json().catch(() => ({}))) as { digest?: boolean };

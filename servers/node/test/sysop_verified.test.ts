@@ -34,7 +34,7 @@ describe("sysop requires a held, control-verified ADMIN_CALLSIGNS call", () => {
     // a stray account row naming the admin call exactly, owned by someone else
     await env.DB.prepare("UPDATE accounts SET account_id='acct-evil' WHERE callsign='OE8APR'").run();
     await env.DB.prepare(
-      "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES ('OE8APR-1','acct-evil2','evil@example.test',0,1)",
+      "INSERT INTO accounts (callsign, account_id, email, created_at) VALUES ('OE8APR-1','acct-evil2','evil@example.test',1)",
     ).run();
     const login = await call(env, "POST", "/auth/email/start", { email: "op@example.test" });
     const ver = await call(env, "POST", "/auth/email/verify", { token: login.data.devToken });

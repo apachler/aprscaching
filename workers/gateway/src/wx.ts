@@ -12,10 +12,9 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign } from "./auth.js";
-import { sessionAccountId } from "./watch.js";
+import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
-import { encodeAprsWeather, type WxEncodeFields } from "@aprscaching/aprs";
+import { baseCall, encodeAprsWeather, type WxEncodeFields } from "@aprscaching/aprs";
 import { isCallsignVerified } from "./callsign.js";
 
 const WX_BEACON_MIN_SEC = 300; // throttle WX beacons to ≤ once / 5 min (cost + APRS etiquette)
@@ -171,7 +170,7 @@ export async function handleWxSubmit(req: Request, env: Env): Promise<Response> 
 
   // If this PWS opted into TX (and its callsign is control-verified), enqueue an APRS WX
   // beacon — to standard APRS-IS and/or to CWOP/NOAA — throttled. Never blocks the ingest ack.
-  await maybeBeaconWx(env, { key, station, baseCall: row.callsign.toUpperCase().split("-")[0]!, place, wx });
+  await maybeBeaconWx(env, { key, station, baseCall: baseCall(row.callsign), place, wx });
 
   return new Response("success\n", { headers: { "content-type": "text/plain" } }); // WU expects this body
 }
@@ -242,14 +241,14 @@ export function wxUrls(origin: string, station: string, key: string): { ecowittP
 
 /** GET/POST /api/wx/key — read or (re)issue the caller's home (<call>-13) PWS push key + URLs. */
 export async function handleWxKey(req: Request, env: Env): Promise<Response> {
-  const cs = await sessionCallsign(req, env);
+  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
   if (!cs) return json({ error: "sign in to set up a weather station" }, { status: 401 });
-  const base = cs.toUpperCase().split("-")[0]!;
+  const base = baseCall(cs);
   const station = `${base}-13`;
   if (req.method === "POST") {
     await env.DB.prepare("DELETE FROM wx_keys WHERE callsign = ? AND station_id IS NULL").bind(base).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, created_at) VALUES (?,?,?,?)")
-      .bind(makeWxKey(), base, await sessionAccountId(req, env), now())
+      .bind(makeWxKey(), base, (await sessionIdentity(req, env))?.accountId ?? null, now())
       .run();
   }
   const row = await env.DB.prepare(
@@ -278,9 +277,9 @@ export async function handleWxKey(req: Request, env: Env): Promise<Response> {
  * `stationId` targets a registry station's key; omitted targets the home <call>-13 key.
  */
 export async function handleWxTx(req: Request, env: Env): Promise<Response> {
-  const cs = await sessionCallsign(req, env);
+  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
   if (!cs) return json({ error: "sign in to manage weather TX" }, { status: 401 });
-  const base = cs.toUpperCase().split("-")[0]!;
+  const base = baseCall(cs);
   const body = (await req.json().catch(() => ({}))) as { stationId?: number; txIs?: boolean; txCwop?: boolean };
   const txIs = !!body.txIs,
     txCwop = !!body.txCwop;
@@ -292,7 +291,7 @@ export async function handleWxTx(req: Request, env: Env): Promise<Response> {
   // locate the caller's key row (home, or an owned registry station)
   let row: { key: string } | null;
   if (body.stationId != null) {
-    const acct = await sessionAccountId(req, env);
+    const acct = (await sessionIdentity(req, env))?.accountId ?? null;
     row = await env.DB.prepare(
       `SELECT wk.key AS key FROM wx_keys wk JOIN account_stations s ON s.id = wk.station_id
         WHERE wk.station_id = ? AND s.account_id = ?`,

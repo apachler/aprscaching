@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import {
   CreateCacheRequest,
@@ -22,15 +23,7 @@ import {
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import {
-  sessionCallsign,
-  sessionAccountId,
-  sessionIdentity,
-  accountHoldsCall,
-  isWithdrawnCall,
-  displayCall,
-  ingestSecretOk,
-} from "./auth.js";
+import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { coarsenConfig } from "./corroborate_privacy.js";
@@ -147,9 +140,6 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
 function ingestOk(req: Request, env: Env): boolean {
   return ingestSecretOk(req, env);
 }
-function baseCall(c: string): string {
-  return c.toUpperCase().split("-")[0] ?? "";
-}
 
 /**
  * The AUTHORISED acting callsign for a write (hide / log): a signed-in passkey session wins;
@@ -164,16 +154,6 @@ export async function actor(req: Request, env: Env, fallback?: string): Promise<
   if (s) return isWithdrawnCall(s) ? null : s.toUpperCase();
   if (ingestOk(req, env) && fallback && !isWithdrawnCall(fallback)) return fallback.toUpperCase();
   return null;
-}
-
-/**
- * Does the signed-in session's account hold the licence of `cs`? Cache ownership is call-based, and a
- * session names a call string: once that call's licence is held by another account (or by nobody), the
- * session must not act as the owner of the call's caches.
- */
-export async function sessionHoldsCall(req: Request, env: Env, cs: string): Promise<boolean> {
-  const me = await sessionAccountId(req, env);
-  return !!me && (await accountHoldsCall(env, me.accountId, cs));
 }
 
 interface RemoteCacheRow {
@@ -412,10 +392,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   // an erased owner's cache stays archived: nobody inherits it through the withdrawn marker
   if (isWithdrawnCall(existing.owner_call))
     return json({ error: "this cache's owner has withdrawn — it cannot be edited" }, { status: 403 });
-  const who = await actor(req, env, b.ownerCall);
-  if (!who || who !== existing.owner_call.toUpperCase())
-    return json({ error: "only the owner may edit this cache" }, { status: 403 });
-  if ((await sessionCallsign(req, env)) && !(await sessionHoldsCall(req, env, who)))
+  if (!(await mayActAsOwner(req, env, existing.owner_call, b.ownerCall)))
     return json({ error: "only the owner may edit this cache" }, { status: 403 });
 
   // merge: undefined keeps existing
@@ -770,30 +747,17 @@ export async function commitFind(
   if (result.verified) await awardFindBadges(env, loggerCall);
 
   // Cache-owner loop: tell the owner their cache was found (in-app alert + push), unless
-  // they found it themselves. Reuses the watchlist alert channel.
+  // they found it themselves (under any call their account holds). Reuses the watchlist alert channel.
   const ownerCall = (cache as { owner_call?: string }).owner_call;
-  if (ownerCall && baseCall(ownerCall) !== baseCall(loggerCall)) {
-    const ownerAcct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ?")
-      .bind(baseCall(ownerCall))
-      .first<{ account_id: string }>();
-    if (ownerAcct?.account_id) {
-      const detail = `${loggerCall} found ${cache.code}${result.verified ? ` · Tier ${result.tier}` : " · unverified"}`;
-      await env.DB.prepare(
-        "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
-      )
-        .bind(
-          ownerAcct.account_id,
-          loggerCall,
-          "cache_found",
-          detail,
-          cacheId,
-          cache.lat ?? null,
-          cache.lon ?? null,
-          now,
-        )
-        .run();
-      await pushAlert(env, ownerAcct.account_id);
-    }
+  const ownerAcct = ownerCall && !isWithdrawnCall(ownerCall) ? await baseHolder(env, baseCall(ownerCall)) : null;
+  if (ownerAcct && ownerAcct !== (await baseHolder(env, baseCall(loggerCall)))) {
+    const detail = `${loggerCall} found ${cache.code}${result.verified ? ` · Tier ${result.tier}` : " · unverified"}`;
+    await env.DB.prepare(
+      "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
+    )
+      .bind(ownerAcct, loggerCall, "cache_found", detail, cacheId, cache.lat ?? null, cache.lon ?? null, now)
+      .run();
+    await pushAlert(env, ownerAcct);
   }
 
   // Infrastructure loop: tell the operator whose IGate corroborated this find — their

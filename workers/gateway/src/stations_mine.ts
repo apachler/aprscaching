@@ -13,9 +13,9 @@
  *   POST   /api/my/stations/:id/wx-key   (re)issue the station's PWS key (weather role required)
  */
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
-import { sessionAccountId } from "./watch.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionIdentity } from "./auth.js";
 import { sanitizeBio } from "./profile.js";
 import { makeWxKey, wxUrls } from "./wx.js";
 import { isCallsignVerified } from "./callsign.js";
@@ -106,7 +106,7 @@ async function placeOnMap(
 
 /** GET list / POST create. */
 export async function handleMyStations(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your stations" }, { status: 401 });
 
   if (req.method === "POST") {
@@ -184,7 +184,7 @@ async function ownedStation(env: Env, acct: string, id: number): Promise<Station
 
 /** GET / PATCH / DELETE a single station. */
 export async function handleMyStation(req: Request, env: Env, id: number): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your stations" }, { status: 401 });
   const row = await ownedStation(env, acct, id);
   if (!row) return json({ error: "no such station" }, { status: 404 });
@@ -232,14 +232,14 @@ export async function handleMyStation(req: Request, env: Env, id: number): Promi
 
 /** GET / POST the weather PWS key for a weather-capable station. */
 export async function handleStationWxKey(req: Request, env: Env, id: number): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your stations" }, { status: 401 });
   const row = await ownedStation(env, acct, id);
   if (!row) return json({ error: "no such station" }, { status: 404 });
   if (!parseRoles(row.roles).includes("weather"))
     return json({ error: "give this station the weather role first" }, { status: 400 });
 
-  const base = row.callsign.split("-")[0]!;
+  const base = baseCall(row.callsign);
   if (req.method === "POST") {
     await env.DB.prepare("DELETE FROM wx_keys WHERE station_id = ?").bind(id).run();
     await env.DB.prepare("INSERT INTO wx_keys (key, callsign, account_id, station_id, created_at) VALUES (?,?,?,?,?)")
@@ -284,7 +284,7 @@ function createVia(req: Request, env: Env, body: Record<string, unknown>): Promi
  * the station's beacon. Owned by the signed-in operator.
  */
 export async function handleStationToCache(req: Request, env: Env, id: number): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to make a cache" }, { status: 401 });
   const row = await ownedStation(env, acct, id);
   if (!row) return json({ error: "no such station" }, { status: 404 });
@@ -317,9 +317,9 @@ export async function handleStationToCache(req: Request, env: Env, id: number): 
  * SSID heard (so the living-cache match works), else the base call.
  */
 export async function handleMeCache(req: Request, env: Env): Promise<Response> {
-  const cs = await sessionCallsign(req, env);
+  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
   if (!cs) return json({ error: "sign in to put yourself on the map" }, { status: 401 });
-  const base = cs.toUpperCase().split("-")[0]!;
+  const base = baseCall(cs);
   const beacon = await env.DB.prepare(
     "SELECT callsign, lat, lon FROM positions WHERE callsign = ? OR callsign LIKE ? ORDER BY ts DESC LIMIT 1",
   )

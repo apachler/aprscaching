@@ -8,7 +8,8 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, accountHoldsCall } from "./auth.js";
+import { baseCall } from "@aprscaching/aprs";
+import { sessionIdentity, accountHoldsCall } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 export type ChallengeMethod = "ampr_dns" | "lotw";
@@ -23,10 +24,6 @@ const COMPLETES_PER_ACCOUNT = 10;
 
 const CALL_RE = /^[A-Z0-9]{3,9}$/;
 const nowSec = () => Math.floor(Date.now() / 1000);
-
-/** The base call (no SSID) of a submitted callsign, uppercased. */
-export const baseCallOf = (c: unknown) =>
-  (typeof c === "string" ? c : "").replace(/\*$/, "").trim().toUpperCase().split("-")[0]!;
 
 /** A random URL-safe token of `bytes` random bytes. */
 export function randomToken(bytes = 16): string {
@@ -47,10 +44,10 @@ export interface Caller {
  * caller, or the error response to send.
  */
 export async function holderOf(req: Request, env: Env): Promise<Caller | Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
-  const cs = baseCallOf(body.callsign);
+  const cs = baseCall(typeof body.callsign === "string" ? body.callsign : "");
   if (!CALL_RE.test(cs)) return json({ error: "callsign required" }, { status: 400 });
   if (!(await accountHoldsCall(env, me.accountId, cs)))
     return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });

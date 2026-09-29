@@ -49,9 +49,15 @@ describe("handleUserTx — control-verification gate", () => {
             bind(...args: unknown[]) {
               return {
                 async first() {
-                  if (!sql.includes("callsign_verifications")) return null;
-                  sink.verifiedLookups.push(args[0]);
-                  return status ? { status } : null;
+                  return null;
+                },
+                // the verification store answers only verified rows
+                async all() {
+                  if (!sql.includes("callsign_verifications")) return { results: [] };
+                  sink.verifiedLookups.push(...args);
+                  return {
+                    results: status === "verified" ? args.map((c) => ({ callsign: c, method: "operator" })) : [],
+                  };
                 },
                 async run() {
                   if (sql.startsWith("INSERT INTO aprs_outbox")) sink.rows.push(args);

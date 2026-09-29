@@ -14,7 +14,7 @@
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { haversineMeters } from "@aprscaching/aprs";
+import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin } from "./federation_sync.js";
 import { parseAttestedSites, provenanceOf } from "./provenance.js";
@@ -83,11 +83,6 @@ function identityOf(operator: string | undefined, key: string): string {
 }
 function newNonce(): string {
   return hexOf(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
-}
-
-/** Base callsign without SSID, for the independence check (IGate must not be the logger). */
-function baseCall(c: string): string {
-  return c.split("-")[0]!.toUpperCase();
 }
 
 /**

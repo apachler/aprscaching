@@ -7,6 +7,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { displayCall } from "./auth.js";
+import { isCallsignVerified } from "./callsign.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { actor } from "./caches.js";
 import { RateRequest } from "@aprscaching/shared";
@@ -109,13 +110,12 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
       .all<{ badge: string; earnedAt: number }>()
   ).results;
   const acct = await env.DB.prepare(
-    `SELECT verified, tier, display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl,
+    `SELECT tier, display_name AS displayName, home_grid AS homeGrid, avatar_url AS avatarUrl,
             bio, links, public_contact AS publicContact, profile_public AS profilePublic
        FROM accounts WHERE callsign=?`,
   )
     .bind(cs)
     .first<{
-      verified: number;
       tier: string | null;
       displayName: string | null;
       homeGrid: string | null;
@@ -143,7 +143,7 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
   return json({
     callsign: cs,
     homeInstance: env.INSTANCE, // where this operator is homed
-    accountVerified: (acct?.verified ?? 0) === 1,
+    accountVerified: !!acct && (await isCallsignVerified(env, cs)),
     supporter: acct?.tier === "supporter", // recognition only; never gates anything
     finds: stat?.finds ?? 0,
     points: Math.round(stat?.points ?? 0),

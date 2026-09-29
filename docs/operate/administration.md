@@ -60,11 +60,17 @@ records its method (`callsign_verifications.method`) and who vouched (`verified_
 | `rf_heard` | `VERIFY <code>` sent to the service call, heard by a site in `FIRST_PARTY_SITES` on its own TNC, or by its MeshCom node directly over LoRa | the receiving site | attested sites |
 | `ampr_dns` | a code in `_aprscaching.<call>.ampr.org` TXT, looked up over `DOH_URL`; only a DNSSEC-validated answer counts | `<call>.ampr.org` | a validating resolver, and a DNSSEC-signed ampr.org |
 | `lotw` | a challenge signed with the user's LoTW callsign certificate, which must chain to a CA in `LOTW_CA_PEM` and name the call | the trusted CA's name | `LOTW_CA_PEM` |
-| `operator` | the operator CLI with the ingest secret, for an `ADMIN_CALLSIGNS` call | `operator` | — |
+| `operator` | the operator CLI with the operator secret, for an `ADMIN_CALLSIGNS` call | `operator` | — |
 | `sysop` | by hand, below | the sysop's call | — |
 
 On the air, a copy over APRS-IS, AXUDP/AXIP, the MeshCom server, a mesh relay or a signed browser batch
 never counts. Without attested sites nobody can verify that way.
+
+`callsign_verifications` is the one record of a verification: the session, the held-call list, device
+keys, transmitting and the sysop role all read it, so a revocation takes effect everywhere at once. A
+verification covers the base call and every SSID of it. Claiming a call nobody held starts it unverified —
+whatever was recorded for it before was for someone else — so verify a call (including your own operator
+call with the CLI) after its holder has signed up.
 
 The `ampr_dns` method refuses any answer that is not DNSSEC-validated and never falls back to trusting a
 first answer. While the ampr.org zone is not DNSSEC-signed (the `org` zone publishes no DS record for it),

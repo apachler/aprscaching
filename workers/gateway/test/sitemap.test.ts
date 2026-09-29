@@ -90,5 +90,8 @@ describe("sitemap (manifest-driven)", () => {
     expect(gatewayBase(proxied, env)).toBe("https://api.example");
     // no APP_URL: a self-hosted instance links to itself, not to the canonical public host
     expect(gatewayBase(new Request("http://192.168.1.10:8080/robots.txt"), {} as Env)).toBe("http://192.168.1.10:8080");
+    // a header raises the scheme of a proxied request, never lowers an https one
+    const lowered = new Request("https://api.example/robots.txt", { headers: { "x-forwarded-proto": "http" } });
+    expect(gatewayBase(lowered, env)).toBe("https://api.example");
   });
 });

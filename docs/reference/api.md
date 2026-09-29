@@ -138,7 +138,7 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
 | POST | `/auth/passkey/*`, `/auth/email/start`, `/auth/claim`, `/auth/logout` | Passkey + email sign-in, claim, sign-out. `/auth/claim` and passkey registration answer with a `licence` result for the call (nothing is stored) | public → session |
-| GET · POST | `/auth/email/verify` | The magic link: GET shows a confirm page (or `{ confirm: true }` to an API client) and never signs in; POST `{ token }` (JSON or the confirm form) spends the token and opens a session, and a JSON answer carries the call's `licence` result. A browser POST from another origin is refused | public → session |
+| GET · POST | `/auth/email/verify` | The magic link (on the gateway's own origin, which is `APP_URL` where the two share a host): GET shows a confirm page (or `{ confirm: true }` to an API client) and never signs in; POST `{ token }` (JSON or the confirm form) spends the token and opens a session, and a JSON answer carries the call's `licence` result. A browser POST from another origin is refused | public → session |
 | POST | `/auth/logout-all` | Sign out every session of the account, on every device | session |
 | GET/POST | `/auth/session`, `/auth/callsign(s)`, `/auth/profile` | Session + base-callsign management. `GET/POST /auth/callsigns` carry a `licence` result per call, beside `verified` | session |
 | POST | `/verify/aprs/start` | Start callsign control-verification: returns `{ code, to, text, expiresAt }`, the message to transmit; sends nothing. Completed when an attested site hears `text` on the air (a TNC, or a MeshCom node hearing it directly over LoRa) — method `rf_heard` | session (holds the call) |

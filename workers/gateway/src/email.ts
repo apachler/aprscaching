@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json, corsAllowlist } from "./app.js";
-import { issueSessionCookie, unclaimableReason, authThrottled, sessionsEnabled, sessionUnavailable } from "./auth.js";
+import {
+  issueSessionCookie,
+  unclaimableReason,
+  authThrottled,
+  sessionsEnabled,
+  sessionUnavailable,
+  holdCall,
+} from "./auth.js";
 import { licenceFor } from "./licence.js";
+import { gatewayBase } from "./sitemap.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -53,7 +62,10 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     .bind(token, e, cs, purpose, Math.floor(Date.now() / 1000))
     .run();
 
-  const link = `${appOrigin(req, env)}/auth/email/verify?token=${token}`;
+  // The link opens this gateway's confirm page. It names the gateway's own public origin, which is the
+  // app's origin wherever the two share a host; an app served from another host (a static site in front
+  // of an API host) does not route /auth/* to the gateway, so a link to it would open the app instead.
+  const link = `${gatewayBase(req, env)}/auth/email/verify?token=${token}`;
   const sent = await sendEmail(
     env,
     e,
@@ -158,12 +170,13 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
       // seed the held-callsign set with this call as the account's primary base call; the unique
       // base-call index makes a concurrent claim fail the whole batch
       await env.DB.batch([
-        env.DB.prepare(
-          "INSERT INTO account_callsigns (account_id, callsign, verified, is_primary, added_at) VALUES (?, ?, 0, 1, ?)",
-        ).bind(id, cs.split("-")[0], now),
-        env.DB.prepare(
-          "INSERT INTO accounts (callsign, account_id, email, verified, created_at) VALUES (?, ?, ?, 0, ?)",
-        ).bind(cs, id, row.email, now),
+        ...holdCall(env, id, baseCall(cs), true, now),
+        env.DB.prepare("INSERT INTO accounts (callsign, account_id, email, created_at) VALUES (?, ?, ?, ?)").bind(
+          cs,
+          id,
+          row.email,
+          now,
+        ),
         env.DB.prepare(
           "INSERT INTO callsign_history (account_id, callsign, set_at, verified) VALUES (?, ?, ?, 0)",
         ).bind(id, cs, now),

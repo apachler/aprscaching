@@ -7,12 +7,14 @@
  * out or has it removed.
  */
 import type { Env } from "./env.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { accountActionMessage } from "@aprscaching/shared";
 import { importVerifyKey, fromB64, serveFeed, type FeedServeDef } from "./federation.js";
 import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
-import { sessionIdentity, accountHoldsCall, WITHDRAWN } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, holdCall, unclaimableReason, WITHDRAWN } from "./auth.js";
+import { verificationOf, verificationsOf } from "./callsign.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
@@ -66,7 +68,7 @@ async function accountScope(
   env: Env,
   cs: string,
 ): Promise<{ accountId: string | null; email: string | null; calls: string[] }> {
-  const base = cs.split("-")[0]!;
+  const base = baseCall(cs);
   const anchor = await env.DB.prepare("SELECT account_id, email FROM accounts WHERE callsign=?")
     .bind(cs)
     .first<{ account_id: string | null; email: string | null }>();
@@ -110,19 +112,28 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
   const auth = await authorize(env, req, callsign, "export");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
+  // control-verification comes from its one store and is shown on the rows it concerns
+  const verification = await verificationOf(env, cs);
+  const verifiedFlag = verification ? 1 : 0;
+  const accountRow = await env.DB.prepare("SELECT callsign, created_at FROM accounts WHERE callsign=?")
+    .bind(cs)
+    .first<{ callsign: string; created_at: number }>();
   const data = {
     instance: instanceOf(env, req),
     callsign: cs,
     exportedAt: now(),
-    account: await env.DB.prepare(
-      "SELECT callsign, verified, verify_method, created_at, verified_at FROM accounts WHERE callsign=?",
-    )
-      .bind(cs)
-      .first(),
+    account: accountRow && {
+      callsign: accountRow.callsign,
+      verified: verifiedFlag,
+      verify_method: verification?.method ?? null,
+      created_at: accountRow.created_at,
+      verified_at: verification?.verifiedAt ?? null,
+    },
     caches: await rows(
       env,
-      "SELECT id, code, title, type, status, lat, lon, created_at FROM caches WHERE owner_call=?",
+      "SELECT id, code, title, type, status, lat, lon, created_at FROM caches WHERE owner_call=? OR owner_call LIKE ?",
       cs,
+      `${cs}-%`,
     ),
     logs: await rows(
       env,
@@ -135,7 +146,14 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
       "SELECT ts, lat, lon, heard_via, source FROM positions WHERE callsign=? ORDER BY ts",
       cs,
     ),
-    keys: await rows(env, "SELECT public_key, label, verified, created_at FROM callsign_keys WHERE callsign=?", cs),
+    keys: (
+      await rows(
+        env,
+        "SELECT callsign, public_key, label, created_at FROM callsign_keys WHERE callsign=? OR callsign LIKE ?",
+        cs,
+        `${cs}-%`,
+      )
+    ).map((k) => ({ ...(k as Record<string, unknown>), verified: verifiedFlag })),
     favorites: await rows(env, "SELECT cache_id FROM favorites WHERE callsign=?", cs),
     watches: await rows(env, "SELECT cache_id FROM watches WHERE callsign=?", cs),
     achievements: await rows(env, "SELECT badge, earned_at FROM achievements WHERE callsign=?", cs),
@@ -171,6 +189,27 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
   return json(data, { headers: { "content-disposition": `attachment; filename="aprscaching-${cs}.json"` } });
 }
 
+/** The held calls of an account, each with its control-verification from the store. */
+async function heldCallsExport(env: Env, accountId: string): Promise<Record<string, unknown>[]> {
+  const held = (
+    await env.DB.prepare("SELECT callsign, is_primary, added_at FROM account_callsigns WHERE account_id=?")
+      .bind(accountId)
+      .all<{ callsign: string; is_primary: number; added_at: number }>()
+  ).results;
+  const v = await verificationsOf(
+    env,
+    held.map((h) => h.callsign),
+  );
+  return held.map((h) => ({
+    callsign: h.callsign,
+    verified: v.has(h.callsign) ? 1 : 0,
+    method: v.get(h.callsign)?.method ?? null,
+    verified_at: v.get(h.callsign)?.verifiedAt ?? null,
+    is_primary: h.is_primary,
+    added_at: h.added_at,
+  }));
+}
+
 /** The account-scoped part of the export: every row keyed by the account or any call it holds.
  *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
 async function accountExport(env: Env, cs: string): Promise<Record<string, unknown>> {
@@ -180,11 +219,7 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
   const q = (sql: string, m: { sql: string; binds: string[] }) => rows(env, sql.replace("$CALLS", m.sql), ...m.binds);
   return {
     passkeys: await q("SELECT id, callsign, transports, created_at FROM credentials WHERE $CALLS", by("callsign")),
-    callsigns: await rows(
-      env,
-      "SELECT callsign, verified, method, verified_at, is_primary, added_at FROM account_callsigns WHERE account_id=?",
-      acct,
-    ),
+    callsigns: await heldCallsExport(env, acct),
     callsignHistory: await rows(
       env,
       "SELECT callsign, set_at, verified FROM callsign_history WHERE account_id=? ORDER BY set_at",
@@ -305,18 +340,21 @@ async function eraseCall(
       .bind(cs, `${cs}-%`)
       .all<{ id: number }>()
   ).results;
-  // the same for the callsign's key bindings and move announcements, which peers mirrored too
-  const keyIds = (await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=?").bind(cs).all<{ id: number }>())
-    .results;
+  // the same for the callsign's key bindings (an SSID's too) and move announcements, which peers mirrored
+  const keyIds = (
+    await env.DB.prepare("SELECT id FROM callsign_keys WHERE callsign=? OR callsign LIKE ?")
+      .bind(cs, `${cs}-%`)
+      .all<{ id: number }>()
+  ).results;
   const moveSeqs = (
     await env.DB.prepare("SELECT seq FROM account_moves WHERE callsign=?").bind(cs).all<{ seq: number }>()
   ).results;
-  // media uploaded to the caches this call owns, captured while owner_call still names it
+  // media uploaded to the caches this call (or an SSID of it) owns, captured while owner_call still names it
   const media = (
     await env.DB.prepare(
-      "SELECT m.id, m.media_key FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE c.owner_call=?",
+      "SELECT m.id, m.media_key FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE c.owner_call=? OR c.owner_call LIKE ?",
     )
-      .bind(cs)
+      .bind(cs, `${cs}-%`)
       .all<{ id: number; media_key: string }>()
   ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
@@ -334,11 +372,9 @@ async function eraseCall(
     ).bind(marker, cs, `${cs}-%`),
     // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
-    env.DB.prepare("UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=?").bind(
-      marker,
-      now(),
-      cs,
-    ),
+    env.DB.prepare(
+      "UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=? OR owner_call LIKE ?",
+    ).bind(marker, now(), cs, `${cs}-%`),
     env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=?").bind(marker, cs),
     // The adoption trail stays for the instance, anonymised: the person's calls become the marker and the
     // notes on rows naming them (which may describe them) are dropped.
@@ -352,7 +388,7 @@ async function eraseCall(
     env.DB.prepare("DELETE FROM cache_adoption_requests WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     ...media.map((m) => env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(m.id)),
     env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
-    env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=?").bind(cs),
+    env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
     env.DB.prepare("DELETE FROM account_moves WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM favorites WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM watches WHERE callsign=?").bind(cs),
@@ -447,20 +483,16 @@ export async function handleAccountBundle(req: Request, env: Env, callsign: stri
   const auth = await authorize(env, req, callsign, "migrate");
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
-  const acct = await env.DB.prepare("SELECT verified FROM accounts WHERE callsign=?")
-    .bind(cs)
-    .first<{ verified: number }>();
-  const keys = await rows(
-    env,
-    "SELECT public_key AS publicKey, label, verified FROM callsign_keys WHERE callsign=?",
-    cs,
+  const verified = !!(await verificationOf(env, cs));
+  const keys = (await rows(env, "SELECT public_key AS publicKey, label FROM callsign_keys WHERE callsign=?", cs)).map(
+    (k) => ({ ...(k as Record<string, unknown>), verified: verified ? 1 : 0 }),
   );
   return json({
     bundle: {
       v: 1,
       instance: instanceOf(env, req),
       callsign: cs,
-      verified: (acct?.verified ?? 0) === 1,
+      verified,
       keys,
       at: now(),
     },
@@ -510,17 +542,24 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
 
   const exists = await env.DB.prepare("SELECT callsign FROM accounts WHERE callsign=?").bind(cs).first();
   if (exists) return json({ error: "callsign already exists here" }, { status: 409 });
+  // the imported account holds its base call like every account; a licence held here already is not
+  // taken over by an import
+  const refused = await unclaimableReason(env, cs);
+  if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
+  const base = baseCall(cs);
 
   // The bundle is CLIENT-supplied and unsigned by any source instance — the device-key
   // assertion only proves the mover controls a key THEY put in the bundle, which says nothing about the
   // callsign. So we must NOT trust `bundle.verified` (that would let anyone import W1AW as "verified").
-  // The account + its keys land UNVERIFIED; the operator re-proves control on this instance via the APRS
-  // control-challenge. (A source-instance-signed bundle could restore verified status — a federation
-  // follow-on once cross-instance bundle signing exists.)
+  // The account + its keys land UNVERIFIED; the operator re-proves control on this instance.
+  const accountId = crypto.randomUUID();
   const stmts = [
-    env.DB.prepare(
-      "INSERT INTO accounts (callsign, account_id, verified, verify_method, created_at) VALUES (?, ?, 0, 'migrated', ?)",
-    ).bind(cs, crypto.randomUUID(), now()),
+    ...holdCall(env, accountId, base, true, now()),
+    env.DB.prepare("INSERT INTO accounts (callsign, account_id, created_at) VALUES (?, ?, ?)").bind(
+      cs,
+      accountId,
+      now(),
+    ),
     env.DB.prepare(
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'moved', ?, ?)",
     ).bind(cs, `from:${bundle.instance ?? "?"}`, now()),
@@ -534,10 +573,14 @@ export async function handleAccountImport(req: Request, env: Env): Promise<Respo
   for (const k of bundle.keys)
     stmts.push(
       env.DB.prepare(
-        "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, verified, created_at) VALUES (?,?,?, 0, ?)",
+        "INSERT OR IGNORE INTO callsign_keys (callsign, public_key, label, created_at) VALUES (?,?,?,?)",
       ).bind(cs, k.publicKey, k.label ?? null, now()),
     );
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch {
+    return json({ error: "callsign already held here" }, { status: 409 });
+  }
   return json({ ok: true, callsign: cs, importedKeys: bundle.keys.length, from: bundle.instance ?? null });
 }
 

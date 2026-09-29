@@ -65,8 +65,14 @@ network layer (that's the operator's edge/CDN concern).
   honoured only while that account exists at that generation and holds the call. Erasure, a callsign
   change and **Sign out everywhere** (`POST /auth/logout-all`) end every session of the account;
   `SESSION_EPOCH` ends every session on the instance.
-- **Sign-in needs a deliberate step.** Opening an email sign-in link shows a confirm page; only its POST
-  (same origin) spends the token, so a page cannot log a visitor into someone else's account.
+- **Sign-in needs a deliberate step.** Opening an email sign-in link shows the gateway's confirm page;
+  only its POST (same origin) spends the token, so a page cannot log a visitor into someone else's account.
+- **One record per identity fact.** `account_callsigns` alone says who holds a licence (one account per
+  base call) and `callsign_verifications` alone says whether its control is proven; every check reads
+  them, so no copy can disagree. A claim of a call nobody held starts unverified.
+- **Ownership follows the licence.** A cache, its stages and media, and a saved view belong to the
+  account holding the owner call's base call; a different account never acts as owner by presenting the
+  call string. Only the ingest plane acts for an owner without a session, naming that exact call.
 - **Credentialed CORS is allowlisted.** Only `APP_URL` and `CORS_ORIGINS` may send a session cookie
   cross-origin; with neither set, no origin can.
 - **A remote box belongs to the account that pairs it** with the one-time code the box prints; no
