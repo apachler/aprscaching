@@ -6,6 +6,11 @@ import {
   getCacheLogs,
   cacheShareUrl,
   cacheQrUrl,
+  getCacheAdoption,
+  requestAdoption,
+  cancelAdoptionRequest,
+  keepCache,
+  type CacheAdoptionState,
   type CacheDetail,
   type CacheRating,
   type Spot,
@@ -25,6 +30,7 @@ import {
   Stat,
   LoadMore,
   useToast,
+  useConfirm,
   copyText,
   type Tier,
 } from "../ui/index.js";
@@ -219,6 +225,8 @@ export function DetailPanel(props: {
 
       <CacheMedia cacheId={c.id} isOwner={props.callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />
 
+      {c.source === "native" && <AdoptionSection cacheId={c.id} code={c.code} onSignIn={props.onSignIn} />}
+
       {c.rendezvous.length > 0 && (
         <div className="rendezvous">
           <span className="ulabel">Rendezvous</span>
@@ -332,6 +340,144 @@ function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheR
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A cache up for adoption: the sysop's public note and the one action open to the viewer — ask to adopt it
+ * (a signed-in holder of a verified call), withdraw that request, or, for the owner, keep the cache.
+ * Renders nothing for a cache that is not offered and has no request from the viewer.
+ */
+function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () => void }) {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const [st, setSt] = useState<CacheAdoptionState | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [inPlace, setInPlace] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => {
+    setLoadErr(false);
+    getCacheAdoption(props.cacheId)
+      .then(setSt)
+      .catch(() => setLoadErr(true));
+  };
+  useEffect(() => {
+    setSt(null);
+    setErr(null);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.cacheId]);
+
+  const run = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+      toast(done);
+      load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const keep = async () => {
+    if (
+      !(await confirmDialog({
+        title: `Keep ${props.code}?`,
+        message: "The adoption offer ends and any pending requests on your cache are cancelled.",
+        confirmLabel: "Keep my cache",
+      }))
+    )
+      return;
+    await run(() => keepCache(props.cacheId), "You keep your cache");
+  };
+
+  if (loadErr) return null; // the rest of the detail stands on its own
+  if (!st) return null;
+  const pending = st.request?.status === "pending";
+  if (!st.offer && !pending) return null;
+  const noticeRunning = !!st.offer && st.offer.noticeEndsAt > Math.floor(Date.now() / 1000);
+  return (
+    <section className="adopt-card" aria-label="Up for adoption">
+      <div className="row between">
+        <span className="ulabel">Up for adoption</span>
+        {noticeRunning && <Badge kind="warn">owner notice until {fmt.date(st.offer!.noticeEndsAt)}</Badge>}
+      </div>
+      {st.offer && <p className="m-0">{st.offer.note}</p>}
+      {st.isOwner ? (
+        <>
+          <p className="muted fine">The sysop has offered your cache to the community. Keep it and the offer ends.</p>
+          <div className="row">
+            <button className="primary" disabled={busy} aria-busy={busy} onClick={() => void keep()}>
+              {busy ? "Keeping…" : "Keep my cache"}
+            </button>
+          </div>
+        </>
+      ) : pending ? (
+        <>
+          <p className="muted fine" role="status">
+            Your request as <span className="mono">{st.request!.callsign}</span> is waiting for the sysop.
+          </p>
+          <button
+            className="link-btn danger"
+            disabled={busy}
+            onClick={() => void run(() => cancelAdoptionRequest(props.cacheId), "Request withdrawn")}
+          >
+            Withdraw my request
+          </button>
+        </>
+      ) : st.canRequest ? (
+        <>
+          <label className="row">
+            <input type="checkbox" checked={inPlace} onChange={(e) => setInPlace(e.target.checked)} /> I have checked
+            that the container is in place
+          </label>
+          <label className="adopt-note">
+            <span className="muted fine">Note for the sysop (optional)</span>
+            <input value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <p className="muted fine">
+            {inPlace
+              ? "On approval the cache becomes yours and active again."
+              : "On approval the cache becomes yours and stays archived until you edit it."}
+          </p>
+          <div className="row">
+            <button
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() =>
+                void run(
+                  () => requestAdoption(props.cacheId, inPlace, note.trim() || undefined),
+                  "Request sent to the sysop",
+                )
+              }
+            >
+              {busy ? "Sending…" : "Request adoption"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className="muted fine">
+          {st.reason === "sign in to adopt a cache" ? (
+            <button className="link" onClick={props.onSignIn}>
+              Sign in to adopt this cache
+            </button>
+          ) : (
+            (st.reason ?? "").replace(/^./, (ch) => ch.toUpperCase())
+          )}
+          {st.reason?.startsWith("verify") && " — in Settings, under Account."}
+        </p>
+      )}
+      {err && (
+        <p className="error fine" role="alert">
+          {err}
+        </p>
+      )}
+    </section>
   );
 }
 

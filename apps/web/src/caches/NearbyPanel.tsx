@@ -1,14 +1,81 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { useFmt, useTheme } from "../format.js";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";
-import { Panel, EmptyState, Icon } from "../ui/index.js";
+import { Panel, EmptyState, ErrorState, Icon, Badge } from "../ui/index.js";
 import { saveArea } from "../offlineArea.js";
-import type { MapCache, StationSummary } from "../api.js";
+import { listAdoptions, type AdoptionListing, type MapCache, type StationSummary } from "../api.js";
 
-type Filter = "all" | "caches" | "stations";
+type Filter = "all" | "caches" | "stations" | "adopt";
+
+/**
+ * Caches the sysop has offered for adoption, instance-wide and nearest first. Most are archived, so they
+ * are off the map; the card opens the cache, where a signed-in holder of a verified call can ask for it.
+ */
+function AdoptionList(props: {
+  dist: (m: { lat: number | null; lon: number | null }) => number;
+  selectedId: number | null;
+  onPick: (id: number) => void;
+}) {
+  const fmt = useFmt();
+  const phosphor = useTheme() === "phosphor";
+  const [rows, setRows] = useState<AdoptionListing[] | null>(null);
+  const [err, setErr] = useState(false);
+  const load = () => {
+    setErr(false);
+    listAdoptions()
+      .then((r) => setRows(r.adoptions))
+      .catch(() => setErr(true));
+  };
+  useEffect(load, []);
+  if (err) return <ErrorState onRetry={load}>Couldn&apos;t load the caches up for adoption.</ErrorState>;
+  if (!rows)
+    return (
+      <p className="muted" role="status">
+        Loading…
+      </p>
+    );
+  const sorted = [...rows].sort((a, b) => props.dist(a) - props.dist(b));
+  return (
+    <>
+      <div className="ulabel cardsec">Up for adoption · {sorted.length}</div>
+      {sorted.length === 0 ? (
+        <EmptyState>No cache is up for adoption on this instance.</EmptyState>
+      ) : (
+        <ul className="cardlist">
+          {sorted.map((a) => {
+            const meta = typeMeta(a.type);
+            const d = props.dist(a);
+            return (
+              <li key={a.cacheId}>
+                <button
+                  className={`ccard${a.cacheId === props.selectedId ? " active" : ""}`}
+                  onClick={() => props.onPick(a.cacheId)}
+                >
+                  <span className="ccard-ico" style={{ ["--tc"]: meta.color } as CSSProperties}>
+                    {typeGlyph(meta, phosphor)}
+                  </span>
+                  <span className="ccard-b">
+                    <span className="ccard-name">{a.title}</span>
+                    <span className="ccard-sub">
+                      <span className="mono">{a.code}</span> · {a.note}
+                    </span>
+                    <span className="ccard-meta">
+                      <Badge>{a.status}</Badge>
+                      <span className="ccard-dist">{d === Infinity ? "" : fmt.distance(d)}</span>
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
 
 /** Nearby — caches (operator cards) + live stations, by distance from the map centre. */
 export function NearbyPanel(props: {
@@ -65,7 +132,10 @@ export function NearbyPanel(props: {
         {chip("all", "All")}
         {chip("caches", "Caches")}
         {chip("stations", "Stations")}
+        {chip("adopt", "Up for adoption")}
       </div>
+
+      {filter === "adopt" && <AdoptionList dist={dist} selectedId={props.selectedId} onPick={props.onPick} />}
 
       {showCaches && (
         <>

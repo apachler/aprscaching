@@ -26,6 +26,8 @@ describe("isFederatedWrite — which routes ping peers", () => {
     expect(isFederatedWrite("POST", "/api/caches/42/logs")).toBe(true);
     expect(isFederatedWrite("POST", "/keys/register")).toBe(true);
     expect(isFederatedWrite("POST", "/api/account/OE8APR/delete")).toBe(true);
+    expect(isFederatedWrite("POST", "/api/admin/adoptions/42/assign")).toBe(true);
+    expect(isFederatedWrite("POST", "/api/admin/adoptions/requests/7/approve")).toBe(true);
   });
   it("ignores reads, non-federated writes, and mirror/sync traffic", () => {
     expect(isFederatedWrite("GET", "/api/caches")).toBe(false);
@@ -33,5 +35,7 @@ describe("isFederatedWrite — which routes ping peers", () => {
     expect(isFederatedWrite("POST", "/federation/sync")).toBe(false);
     expect(isFederatedWrite("POST", "/federation/notify")).toBe(false);
     expect(isFederatedWrite("POST", "/api/account/OE8APR/export")).toBe(false);
+    expect(isFederatedWrite("POST", "/api/admin/adoptions")).toBe(false);
+    expect(isFederatedWrite("POST", "/api/admin/adoptions/requests/7/decline")).toBe(false);
   });
 });

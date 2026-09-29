@@ -87,6 +87,7 @@ import {
 } from "./federation_sync.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
+import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleFed44netAdd } from "./fed44net.js";
@@ -368,6 +369,15 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);
   const adminVerif = /^\/api\/admin\/verifications\/([A-Za-z0-9-]{3,12})$/.exec(p);
   if (adminVerif) return handleAdminVerifications(req, env, adminVerif[1]);
+  if (p === "/api/admin/adoptions") return handleAdminAdoptions(req, env);
+  const adminAdopt = /^\/api\/admin\/adoptions\/(\d+)(\/assign)?$/.exec(p);
+  if (adminAdopt) return handleAdminAdoptions(req, env, { cacheId: Number(adminAdopt[1]), assign: !!adminAdopt[2] });
+  const adminAdoptReq = /^\/api\/admin\/adoptions\/requests\/(\d+)\/(approve|decline)$/.exec(p);
+  if (adminAdoptReq)
+    return handleAdminAdoptions(req, env, {
+      requestId: Number(adminAdoptReq[1]),
+      decision: adminAdoptReq[2] as "approve" | "decline",
+    });
   if (p === "/federation/peers" && m === "GET") return handleFederationPeers(req, env);
   if (p === "/federation/peers/trust" && m === "POST") return handlePeerTrust(req, env); // operator promote/block
   if (p === "/federation/peers/44net" && m === "POST") return handleFed44netAdd(req, env); // ARDC-verified onboarding
@@ -544,6 +554,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
     if (stageOpMatch[3] === "unlock" && m === "POST") return handleUnlockStage(req, env, id, n);
     if (stageOpMatch[3] === "media" && m === "PUT") return handleStageMedia(req, env, id, n);
   }
+
+  // caches up for adoption, and one cache's offer + the caller's request
+  if (p === "/api/adoptions" && m === "GET") return handleAdoptionList(env);
+  const adoptMatch = /^\/api\/caches\/(\d+)\/adoption(\/request)?$/.exec(p);
+  if (adoptMatch) return handleCacheAdoption(req, env, Number(adoptMatch[1]), adoptMatch[2] ? "request" : null);
 
   // /api/caches/:id  and  /api/caches/:id/{logs,favorite,watch,rate}
   const cacheMatch = /^\/api\/caches\/(\d+)(\/logs|\/favorite|\/watch|\/rate)?$/.exec(p);
