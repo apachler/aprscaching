@@ -11,6 +11,7 @@ import {
   holdCall,
 } from "./auth.js";
 import { licenceFor } from "./licence.js";
+import { gatewayBase } from "./sitemap.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -61,7 +62,10 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
     .bind(token, e, cs, purpose, Math.floor(Date.now() / 1000))
     .run();
 
-  const link = `${appOrigin(req, env)}/auth/email/verify?token=${token}`;
+  // The link opens this gateway's confirm page. It names the gateway's own public origin, which is the
+  // app's origin wherever the two share a host; an app served from another host (a static site in front
+  // of an API host) does not route /auth/* to the gateway, so a link to it would open the app instead.
+  const link = `${gatewayBase(req, env)}/auth/email/verify?token=${token}`;
   const sent = await sendEmail(
     env,
     e,

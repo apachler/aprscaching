@@ -65,8 +65,8 @@ network layer (that's the operator's edge/CDN concern).
   honoured only while that account exists at that generation and holds the call. Erasure, a callsign
   change and **Sign out everywhere** (`POST /auth/logout-all`) end every session of the account;
   `SESSION_EPOCH` ends every session on the instance.
-- **Sign-in needs a deliberate step.** Opening an email sign-in link shows a confirm page; only its POST
-  (same origin) spends the token, so a page cannot log a visitor into someone else's account.
+- **Sign-in needs a deliberate step.** Opening an email sign-in link shows the gateway's confirm page;
+  only its POST (same origin) spends the token, so a page cannot log a visitor into someone else's account.
 - **One record per identity fact.** `account_callsigns` alone says who holds a licence (one account per
   base call) and `callsign_verifications` alone says whether its control is proven; every check reads
   them, so no copy can disagree. A claim of a call nobody held starts unverified.
