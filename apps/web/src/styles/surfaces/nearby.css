@@ -1,0 +1,148 @@
+/* Nearby list: cache cards and station rows. */
+@layer surfaces {
+  /* ---- Nearby: operator cache cards + station rows ---- */
+  .nearby-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 2px 0 12px;
+  }
+  .nearby-grid {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .cardsec {
+    padding: 2px 2px 8px;
+  }
+  .cardsec.top {
+    padding-top: 14px;
+  }
+  .cardlist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .ccard {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid var(--hair);
+    background: var(--surface-2);
+    overflow: hidden;
+    text-align: left;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+  }
+  .ccard:hover {
+    border-color: color-mix(in oklch, var(--brand) 40%, var(--line));
+  }
+  .ccard:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 1px;
+  }
+  .ccard.active {
+    border-color: color-mix(in oklch, var(--brand) 55%, var(--line));
+    background: color-mix(in oklch, var(--brand) 10%, var(--surface-2));
+  }
+  .ccard.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--brand);
+  }
+  .ccard-ico {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    background: color-mix(in oklch, var(--tc, var(--accent)) 20%, transparent);
+    color: var(--tc, var(--accent));
+  }
+  .ccard-b {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .ccard-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ccard-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ccard-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .dtpill {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    background: var(--field-bg);
+    padding: 3px 6px;
+    border-radius: 5px;
+  }
+  .ccard-dist {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .srow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--hair);
+    margin-bottom: 5px;
+  }
+  .srow-b {
+    flex: 1;
+    min-width: 0;
+  }
+  .srow-call {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  .srow-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .srow-heard {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+}

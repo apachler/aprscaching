@@ -1,0 +1,18 @@
+/* Density: compact type and control sizing for dense surfaces. */
+@layer components {
+  /* ---- density (ui-ux.md §6): compact is a surface-level switch, not per-component guesswork.
+   Shack workspaces (Panel wide ⇒ data-density="compact") tighten type + control padding. */
+  [data-density="compact"] {
+    font-size: 13px;
+  }
+  [data-density="compact"] button {
+    padding: 4px 9px;
+    font-size: 12.5px;
+  }
+  [data-density="compact"] .setrow {
+    padding-block: 3px;
+  }
+  [data-density="compact"] h4.set-subh {
+    margin-top: 12px;
+  }
+}

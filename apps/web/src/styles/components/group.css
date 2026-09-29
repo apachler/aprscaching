@@ -1,0 +1,102 @@
+/* Settings group primitive: collapsible group, setting rows, sub-headings and the Advanced disclosure. */
+@layer components {
+  /* subsection heading inside a settings group (e.g. Transports / RF / TAK under Connections & sources) */
+  .set-subh {
+    margin: 14px 0 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .set-subh:first-child {
+    margin-top: 0;
+  }
+  /* ---- settings/dense-config primitives (ui-ux.md §2) ---- */
+  .group {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    margin: 10px 0;
+    background: var(--surface-2);
+  }
+  .group-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 11px;
+  }
+  .group-toggle {
+    flex: 1;
+    border: none;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: var(--font-brand);
+    font-weight: 600;
+    font-size: 15px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 0;
+  }
+  .chev {
+    color: var(--muted);
+    transition: transform 0.15s ease;
+    display: inline-block;
+  }
+  .chev.open {
+    transform: rotate(90deg);
+  }
+  .group-status {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .group-body {
+    padding: 2px 12px 12px;
+  }
+  .group-reason {
+    margin: 0;
+    padding: 0 12px 12px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .setrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+  }
+  .setrow:first-child {
+    border-top: none;
+  }
+  .setrow-l {
+    min-width: 0;
+  }
+  .setrow-help {
+    font-size: 12px;
+    margin-top: 1px;
+  }
+  .setrow-c {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .adv-toggle {
+    border: none;
+    background: none;
+    color: var(--heading);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0 4px;
+  }
+  .adv-body {
+    padding: 2px 0 4px 6px;
+  }
+}

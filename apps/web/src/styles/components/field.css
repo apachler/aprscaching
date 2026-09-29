@@ -1,0 +1,49 @@
+/* Field helpers: inline checks, copy rows and the settings search box. */
+@layer components {
+  .inline-check {
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+  }
+  .inline-check input {
+    width: auto;
+  }
+  /* a read-only value paired with a copy button (PWS URLs, share links) */
+  .copyrow {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+  }
+  .copyrow input {
+    flex: 1;
+    min-width: 0;
+  }
+  .copyrow .iconbtn {
+    padding: 0 8px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  /* settings search box */
+  .srch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 4px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0 8px;
+    background: var(--field-bg);
+  }
+  .srch-ic {
+    color: var(--muted);
+  }
+  .srch input {
+    border: none;
+    background: none;
+    padding: 7px 0;
+  }
+  .srch input:focus {
+    outline: none;
+  }
+}

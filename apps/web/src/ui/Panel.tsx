@@ -2,8 +2,8 @@
 /**
  * Panel — the shared docked-drawer / bottom-sheet surface every overlay uses (ui-ux.md §3
  * "Drawer / side panel" + "Bottom sheet"). One header anatomy: title left, optional actions and a
- * close button right. Responsive docked↔sheet behaviour lives in styles.css (.panel is a query
- * container; the panel↔sheet swap is a viewport media query).
+ * close button right. `.panel` is a query container (styles/components/panel.css), so its contents
+ * adapt to the slot; the docked↔sheet swap is a viewport media query (styles/surfaces/shell.css).
  */
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 

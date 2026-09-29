@@ -2,7 +2,7 @@
 /**
  * Toast — transient, non-blocking confirmation (ui-ux.md §3, §7). A provider holds the queue and
  * exposes useToast(); the live region is announced to assistive tech. The entrance animates
- * transform/opacity only and is removed under prefers-reduced-motion (styles.css).
+ * transform/opacity only and is removed under prefers-reduced-motion (styles/components/toast.css).
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 

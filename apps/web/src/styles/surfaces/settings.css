@@ -1,0 +1,111 @@
+/* Settings surfaces: browser radio, operated stations, weather keys and serial weather. */
+@layer surfaces {
+  /* browser-direct RF live RX list (Web Serial KISS) — cap height, scroll within the shack group */
+  .rf-rx {
+    max-height: 320px;
+    overflow: auto;
+  }
+  /* gated transmit block (gated on callsign control-verification) — set apart from RX */
+  .tx-block {
+    border-top: 1px dashed var(--line);
+    margin-top: 10px;
+    padding-top: 8px;
+  }
+  .tx-block h5 {
+    margin: 8px 0 4px;
+  }
+  /* operated-stations registry (Settings → My stations) */
+  .station-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 8px 0;
+    overflow: hidden;
+  }
+  .station-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+  }
+  .station-head:hover {
+    background: color-mix(in oklch, var(--accent) 8%, transparent);
+  }
+  .station-head:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: -2px;
+  }
+  .station-call {
+    font-weight: 600;
+  }
+  .station-head .badges {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .station-body {
+    padding: 4px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .station-body fieldset.roles {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .station-body fieldset.roles legend {
+    padding: 0 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .role-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .wx-key {
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+    margin-top: 4px;
+  }
+  .wx-key h5 {
+    margin: 0 0 6px;
+  }
+  .wx-tx {
+    display: grid;
+    gap: 8px;
+  }
+  .wx-tx .row.between {
+    align-items: center;
+    gap: 12px;
+  }
+  .serial-wx {
+    display: grid;
+    gap: 8px;
+  }
+  .serial-wx .row {
+    align-items: center;
+    gap: 10px;
+  }
+  .serial-live {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--surface) 60%, transparent);
+    font-size: 12.5px;
+  }
+}

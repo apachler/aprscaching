@@ -1,0 +1,53 @@
+/* The app stylesheet. Plain CSS, no preprocessor: one entry importing one file per concern.
+
+   Cascade layers, lowest first:
+     reset       box sizing and root heights
+     base        element defaults (body, headings, form elements, the bare button)
+     vendor      MapLibre and uPlot (vendor/*.css, loaded with their lazy chunks); above the element
+                 defaults so their own controls keep their look, below everything the app styles
+     tokens      design tokens (tokens.css): colour, type, spacing, radius, elevation, z-index, density
+     components  ui primitives, one file each (components/)
+     surfaces    one file per area of the app (surfaces/); area rules win over the primitives they adapt
+     utilities   single-purpose helpers, last so a utility on an element always applies
+   The Phosphor theme (themes/phosphor.css) places each reskin in the layer of the rule it restyles. */
+@layer reset, base, vendor, tokens, components, surfaces, utilities;
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./base.css";
+@import "./components/text.css";
+@import "./components/data.css";
+@import "./components/button.css";
+@import "./components/layout.css";
+@import "./components/panel.css";
+@import "./components/group.css";
+@import "./components/field.css";
+@import "./components/seg.css";
+@import "./components/feedback.css";
+@import "./components/list.css";
+@import "./components/card.css";
+@import "./components/toast.css";
+@import "./components/command.css";
+@import "./components/switch.css";
+@import "./components/tour.css";
+@import "./components/dialog.css";
+@import "./components/hittarget.css";
+@import "./components/density.css";
+@import "./surfaces/shell.css";
+@import "./surfaces/cache.css";
+@import "./surfaces/map.css";
+@import "./surfaces/profile.css";
+@import "./surfaces/shack.css";
+@import "./surfaces/admin.css";
+@import "./surfaces/tools.css";
+@import "./surfaces/terminal.css";
+@import "./surfaces/station.css";
+@import "./surfaces/nearby.css";
+@import "./surfaces/search.css";
+@import "./surfaces/account.css";
+@import "./surfaces/settings.css";
+@import "./surfaces/bbs.css";
+@import "./surfaces/messages.css";
+@import "./surfaces/landing.css";
+@import "./surfaces/docs.css";
+@import "./themes/phosphor.css";
+@import "./utilities.css";

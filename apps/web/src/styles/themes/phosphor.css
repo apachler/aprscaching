@@ -1,0 +1,236 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   PHOSPHOR chrome reskins — PRESENTATION ONLY, scoped to [data-theme="phosphor"] via
+   :where() so specificity stays low and the Modern theme is completely untouched. The palette/font/
+   radius flip through tokens; this adds the terminal *character*: framed CRT
+   surfaces, bracketed badges, terminal load/input affordances. No DOM changes, no a11y regressions.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Element-level reskins sit in the base layer, after the element defaults they restyle. */
+@layer base {
+  /* buttons: terminal outline */
+  :where(:root[data-theme="phosphor"]) button {
+    border-color: var(--frame);
+  }
+  /* focused fields glow rather than draw a soft outline */
+  :where(:root[data-theme="phosphor"]) input:focus-visible,
+  :where(:root[data-theme="phosphor"]) select:focus-visible,
+  :where(:root[data-theme="phosphor"]) textarea:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+  /* a faint phosphor bloom on text — static text-shadow, cheap; skips inputs so field entry stays crisp */
+  :root[data-crt="on"][data-theme="phosphor"] body {
+    text-shadow: 0 0 2px color-mix(in oklch, var(--accent) 32%, transparent);
+  }
+}
+
+/* Primitive reskins sit in the components layer, after the primitives they restyle. */
+@layer components {
+  /* section labels read like terminal headings */
+  :where(:root[data-theme="phosphor"]) h4,
+  :where(:root[data-theme="phosphor"]) .ulabel {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  /* badges → bracketed tokens: [RF] [App] [unvetted] — no pill, colour carries the tier (+ the text) */
+  :where(:root[data-theme="phosphor"]) .badge {
+    background: none;
+    border-radius: 0;
+    padding: 0 1px;
+    margin-right: 6px;
+    letter-spacing: 0.02em;
+  }
+  :where(:root[data-theme="phosphor"]) .badge::before {
+    content: "[";
+  }
+  :where(:root[data-theme="phosphor"]) .badge::after {
+    content: "]";
+  }
+  /* pagination affordance → "-- Load more --" */
+  :where(:root[data-theme="phosphor"]) .loadmore button::before {
+    content: "-- ";
+  }
+  :where(:root[data-theme="phosphor"]) .loadmore button::after {
+    content: " --";
+  }
+  /* buttons: the Modern brightness-hover reads wrong on phosphor → a phosphor tint */
+  :where(:root[data-theme="phosphor"]) button:hover {
+    filter: none;
+    background: color-mix(in oklch, var(--accent) 15%, transparent);
+  }
+  :where(:root[data-theme="phosphor"]) button.primary {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--accent);
+  }
+  :where(:root[data-theme="phosphor"]) button.primary:hover {
+    background: color-mix(in oklch, var(--accent) 32%, transparent);
+  }
+}
+
+/* Surface reskins sit in the surfaces layer, after the surfaces they restyle. */
+@layer surfaces {
+  /* the phosphor hover tint for the bare surface buttons that reset the button background */
+  :where(:root[data-theme="phosphor"]) .tabbar button:hover,
+  :where(:root[data-theme="phosphor"]) .ccard:not(.active):hover,
+  :where(:root[data-theme="phosphor"]) button.heart:hover,
+  :where(:root[data-theme="phosphor"]) .pt-cbtn:not(.on):hover,
+  :where(:root[data-theme="phosphor"]) .pt-x:hover {
+    background: color-mix(in oklch, var(--accent) 15%, transparent);
+  }
+  :where(:root[data-theme="phosphor"]) .topbar button.primary:hover {
+    background: color-mix(in oklch, var(--accent) 32%, transparent);
+  }
+  /* framed "CRT window" surfaces — phosphor edge + faint glow instead of a soft drop-shadow */
+  :where(:root[data-theme="phosphor"]) .panel,
+  :where(:root[data-theme="phosphor"]) .card,
+  :where(:root[data-theme="phosphor"]) .group,
+  :where(:root[data-theme="phosphor"]) .logform,
+  :where(:root[data-theme="phosphor"]) .ccard,
+  :where(:root[data-theme="phosphor"]) .spot-card {
+    border-color: var(--frame);
+    box-shadow: var(--glow);
+  }
+  /* the panel header becomes a terminal title rule (┌─ style, drawn with a border not a glyph hack) */
+  :where(:root[data-theme="phosphor"]) .panel > .row.between:first-child {
+    border-bottom: 1px solid var(--frame);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+  :where(:root[data-theme="phosphor"]) .panel h2::before {
+    content: "> ";
+    color: var(--accent);
+  }
+  /* nav rail: the active destination gets a terminal cursor marker (paired with the existing .on tint) */
+  :where(:root[data-theme="phosphor"]) .rail button.on {
+    position: relative;
+  }
+  :where(:root[data-theme="phosphor"]) .rail button.on::before {
+    content: "▸";
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-size: 12px;
+  }
+  /* ─── Phosphor [data-shell="terminal"]: shack apps become bordered CRT windows ───
+   Same DOM, same components — only presentation flips. The wide shack Panels (terminal, BBS,
+   node, tools, decoder, rig, remote) get a phosphor frame + a full-width title bar; the app's own
+   status/command rows already read as a terminal. Scoped to the theme, so Modern is untouched. */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] {
+    border: 1px solid var(--accent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--accent) 22%, transparent),
+      0 0 18px color-mix(in oklch, var(--accent) 12%, transparent);
+  }
+  /* the panel header draws the window's TOP frame line — full width:  ┌─ Title ─────── ✕ ─┐
+   The corners sit at the window edges (title-bar ::before/::after); the flex spacer becomes the
+   horizontal fill rule; the close ✕ is the top-right control. (bleeds to the frame; padding offset) */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child {
+    margin: -16px -16px 10px;
+    padding: 4px 10px;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+    border-bottom: 1px solid var(--accent);
+  }
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child::before {
+    content: "┌─";
+    color: var(--accent);
+    flex: 0 0 auto;
+  }
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child::after {
+    content: "─┐";
+    color: var(--accent);
+    flex: 0 0 auto;
+  }
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2 {
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    flex: 0 0 auto;
+  }
+  /* drop the per-title corner glyphs + the general "> " caret — the title bar draws the frame */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::before,
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2::after {
+    content: "";
+    margin: 0;
+  }
+  /* the flex spacer becomes the ─── fill running to the right corner */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child .spacer {
+    flex: 1 1 auto;
+    align-self: center;
+    height: 0;
+    border-top: 1px solid var(--frame);
+  }
+  /* the title-bar close button reads as the window's ✕ control */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child .icon {
+    color: var(--accent);
+    flex: 0 0 auto;
+  }
+  /* float the CRT window inside the shell on desktop so ALL FOUR borders (not just the flush edges) show */
+  @media (min-width: 1024px) {
+    :where(:root[data-theme="phosphor"]) .shell > .panel[data-shell="terminal"] {
+      margin: 8px;
+    }
+  }
+  /* app tab / function rows → a terminal function bar (BBS tabs, packet channel bar) */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .bbs-tabs,
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-chanbar {
+    border-bottom: 1px solid var(--hair);
+    padding-bottom: 8px;
+  }
+  /* the packet terminal already ships a status line + cmd input — make them read as the window's footer */
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-status {
+    border-top: 1px solid var(--hair);
+    color: var(--muted);
+  }
+  :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-cmd::before {
+    content: "cmd>";
+    align-self: center;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    margin-right: 4px;
+  }
+  /* ─── CRT FX — opt-in scanline + phosphor glow ────────────────────────────────
+   Off by default; enabled only when the user turns it on AND Phosphor is active (data-crt="on", set by
+   resolveCrt). ONE cheap, static, compositor-friendly overlay layer (a repeating-linear-gradient +
+   vignette, pointer-events:none) — never a blur, per css.md. The optional flicker is gated behind
+   prefers-reduced-motion:no-preference, so reduce-motion users get a fully static, usable theme. */
+  :root[data-crt="on"] .app::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        color-mix(in oklch, black 22%, transparent) 0,
+        color-mix(in oklch, black 22%, transparent) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+      radial-gradient(ellipse at center, transparent 55%, color-mix(in oklch, black 42%, transparent) 100%);
+    mix-blend-mode: multiply;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :root[data-crt="on"] .app::after {
+      animation: crt-flicker 4s steps(60) infinite;
+    }
+    @keyframes crt-flicker {
+      0%,
+      96%,
+      100% {
+        opacity: 1;
+      }
+      97% {
+        opacity: 0.92;
+      }
+      98% {
+        opacity: 0.97;
+      }
+    }
+  }
+}

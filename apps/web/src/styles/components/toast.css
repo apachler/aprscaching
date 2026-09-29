@@ -1,0 +1,41 @@
+/* Transient confirmation toasts. */
+@layer components {
+  /* transient confirmation toasts — centred above the tab bar; animate transform/opacity only */
+  .toasts {
+    position: absolute;
+    left: 50%;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 9;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    align-items: center;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--surface-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 8px 15px;
+    font-size: 13px;
+    box-shadow: 0 6px 20px var(--shadow);
+    animation: toast-in 0.18s ease;
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toast {
+      animation: none;
+    }
+  }
+}

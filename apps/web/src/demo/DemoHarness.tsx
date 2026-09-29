@@ -18,7 +18,7 @@ import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
 import { installSerialSim } from "./simSerial.js";
 import { setToolEnabled } from "../tools/host.js";
-import "../styles.css";
+import "../styles/index.css";
 
 const ME = "OE8APR-7";
 const noop = () => {};

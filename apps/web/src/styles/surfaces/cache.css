@@ -1,0 +1,479 @@
+/* Cache detail: header chips, stats, rating, coordinates, navigation, sharing, media, stages, log form and logbook. */
+@layer surfaces {
+  .logs li.unseen {
+    box-shadow: inset 3px 0 0 var(--accent);
+    padding-left: 8px;
+  }
+  .federated {
+    color: var(--heading);
+    font-weight: 700;
+  }
+  .imported {
+    background: var(--surface-2);
+    border-left: 3px solid var(--beige);
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+  }
+  .imported a {
+    color: var(--heading);
+  }
+  /* favorite heart */
+  button.heart {
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 15px;
+    padding: 2px 6px;
+  }
+  button.heart.on {
+    color: var(--fav);
+  }
+  /* audio-cache stages */
+  .stages {
+    margin: 12px 0;
+  }
+  .nfc-unlock input {
+    flex: 1;
+    min-width: 0;
+  }
+  /* living-cache rendezvous */
+  .rendezvous {
+    margin: 12px 0;
+  }
+  /* "Up for adoption" card in the cache detail: accent-tinted via color-mix, one card, no blur */
+  .adopt-card {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--accent) 7%, transparent);
+  }
+  .adopt-card label.row {
+    gap: 8px;
+    min-height: 44px;
+  }
+  .adopt-note {
+    display: grid;
+    gap: 3px;
+  }
+  .adopt-note input {
+    font: inherit;
+    padding: 5px 7px;
+  }
+  .rdv-list {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+    display: grid;
+    gap: 4px;
+    font-size: 13px;
+  }
+  /* cache media gallery */
+  .cache-media {
+    margin: 12px 0;
+  }
+  .media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .media-item {
+    position: relative;
+    margin: 0;
+  }
+  .media-item img {
+    width: 100%;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .media-item audio {
+    width: 100%;
+  }
+  .media-file {
+    display: inline-block;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .media-del {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    background: color-mix(in oklch, var(--bad) 80%, black);
+    color: var(--chrome-ink);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+  }
+  ol.stagelist {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+  }
+  ol.stagelist li {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  ol.stagelist li.open {
+    border-left: 3px solid var(--accent);
+  }
+  ol.stagelist li.locked {
+    background: var(--surface-2);
+  }
+  ol.stagelist audio {
+    display: block;
+    width: 100%;
+    margin-top: var(--sp-2);
+  }
+  .activating-now {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font-weight: 600;
+    color: var(--heading);
+    background: color-mix(in oklch, var(--warn) 16%, transparent);
+    border: 1px solid color-mix(in oklch, var(--warn) 40%, transparent);
+  }
+  .activating-now .pulse {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--warn);
+    flex: 0 0 auto;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .activating-now .pulse {
+      animation: dot-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes dot-pulse {
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(0.7);
+      }
+    }
+  }
+  .cache-tags {
+    margin: 6px 0 2px;
+  }
+  /* owner-gated 1–5 rating */
+  .rating {
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    padding: 10px 13px;
+    margin: 0 0 14px;
+  }
+  .rating-h {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .rating-agg {
+    font-size: 14px;
+  }
+  .rating-stars {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 6px;
+  }
+  .rating-stars .star {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    padding: 0 2px;
+    color: var(--muted);
+  }
+  .rating-stars .star.on {
+    color: var(--warn);
+  }
+  .rating-stars .fine {
+    margin-left: 8px;
+  }
+  /* log form + logbook */
+  .logform .geo {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .logform textarea {
+    margin: 8px 0;
+  }
+  .logs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .logs li {
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+  }
+  .logs .comment {
+    margin-top: 2px;
+  }
+  /* min-verification-tier card (kept neutral for C — unverified ≠ error) */
+  .mintier {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    margin: 14px 0;
+  }
+  .mintier.A {
+    border-color: color-mix(in oklch, var(--tier-a) 45%, var(--line));
+    background: color-mix(in oklch, var(--tier-a) 12%, transparent);
+  }
+  .mintier.B {
+    border-color: color-mix(in oklch, var(--tier-b) 45%, var(--line));
+    background: color-mix(in oklch, var(--tier-b) 12%, transparent);
+  }
+  .mintier-t {
+    flex: 1;
+    min-width: 0;
+  }
+  .mintier-t b {
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .mintier-t p {
+    margin: 2px 0 0;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  /* difficulty / terrain segmented bars */
+  .dtbars {
+    display: flex;
+    gap: 3px;
+  }
+  .dtbars > span {
+    flex: 1;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .dtbars > span.on {
+    background: var(--accent);
+  }
+  .detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .detail-stats {
+    display: flex;
+    gap: 18px;
+    padding: 14px 0;
+    border-top: 1px solid var(--hair);
+    border-bottom: 1px solid var(--hair);
+    margin: 14px 0;
+  }
+  .detail-stats > div {
+    flex: 1;
+  }
+  /* logbook row, operator style */
+  .logrow {
+    display: flex;
+    gap: 11px;
+    padding: 11px 0;
+    border-top: 1px solid var(--hair);
+  }
+  .logrow-t {
+    flex: 1;
+    min-width: 0;
+  }
+  .logrow-h {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .logrow-h .call {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .logrow-when {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .logrow-method {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+  .logrow-note {
+    font-size: 12px;
+    color: var(--ink-2);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  .signed {
+    color: var(--tier-b);
+    display: inline-flex;
+  }
+  .desc {
+    color: var(--ink-2);
+    line-height: 1.55;
+  }
+  .logbook-h {
+    margin: 16px 0 4px;
+  }
+  /* coordinate block (label/value grid with a copy affordance) */
+  .coordblock {
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    overflow: hidden;
+    margin: 0 0 14px;
+  }
+  .coordblock-h {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--hair);
+    background: color-mix(in oklch, var(--surface-2) 60%, transparent);
+  }
+  .coordblock-g {
+    padding: 12px 13px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 16px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+  .coordblock-g .k {
+    color: var(--muted);
+  }
+  .coordblock-g .v {
+    color: var(--ink-2);
+  }
+  /* navigate-to-cache (field hand-off + bearing) */
+  .navcache {
+    border-top: 1px solid var(--hair);
+    padding: 10px 13px;
+  }
+  .navcache-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .navcache-body {
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+  }
+  .navcache-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-size: 13px;
+  }
+  .navcache-bearing {
+    font-size: 13px;
+  }
+  .navcache-bearing p {
+    margin: 0;
+  }
+  .navcache-arrow {
+    display: inline-block;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .navcache-arrow {
+      transition: transform 0.2s ease;
+    }
+  }
+  /* share funnel: copy-link + printable QR on the cache detail */
+  .sharecache {
+    margin: 10px 0;
+  }
+  .qrbox {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+  .qrbox img {
+    background: var(--qr-bg);
+    padding: 6px;
+    border-radius: 6px;
+    flex: none;
+  }
+  .qrbox .col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  /* finds-over-time sparkline on the cache detail */
+  .findstrend {
+    margin: 10px 0;
+  }
+  .sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 34px;
+    margin-top: 4px;
+  }
+  .spark-bar {
+    flex: 1;
+    min-width: 2px;
+    background: var(--accent);
+    border-radius: 1px 1px 0 0;
+    opacity: 0.85;
+  }
+  /* one-tap log result card */
+  .logresult {
+    text-align: center; /* a Card: the find result, centred */
+  }
+  .logresult .big {
+    font-family: var(--font-brand);
+    font-weight: 700;
+    font-size: 19px;
+  }
+  .logresult .tier {
+    display: inline-block;
+    margin-top: 6px;
+  }
+  .logresult-why {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+    text-wrap: pretty;
+  }
+}

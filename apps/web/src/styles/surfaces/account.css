@@ -1,0 +1,98 @@
+/* Account: held callsigns and callsign verification. */
+@layer surfaces {
+  .callsigns {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+  }
+  .callsigns li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 0;
+    border-top: 1px solid var(--hair);
+  }
+  .callsigns li:first-child {
+    border-top: none;
+  }
+  .cs-pick {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: none;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 2px 0;
+    text-align: left;
+  }
+  .cs-dot {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+  }
+  .cs-dot.on {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .cs-name {
+    font-size: 13.5px;
+  }
+  .callsigns li.active .cs-name {
+    font-weight: 600;
+  }
+  .cs-pick:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .verify-code {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 10px 11px;
+    margin: 8px 0;
+    background: var(--surface-2);
+  }
+  /* the exact message to transmit: label / value pairs, values in mono so they can be keyed in as shown */
+  .verify-msg {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--sp-1) var(--sp-4);
+    margin: var(--sp-3) 0;
+  }
+  .verify-msg dt {
+    color: var(--muted);
+    font-size: 12px;
+    align-self: center;
+  }
+  .verify-msg dd {
+    margin: 0;
+    font-size: 1.05em;
+    overflow-wrap: anywhere;
+  }
+  /* the verification-method choice: wraps on a narrow sheet, labels keep their own case */
+  .verify-methods {
+    display: flex;
+    flex-wrap: wrap;
+    margin: var(--sp-2) 0;
+  }
+  .seg.verify-methods button {
+    flex: 1 1 auto;
+    min-height: 44px;
+    text-transform: none;
+  }
+  /* held-callsign list (Account → callsigns) reuses the .setrow anatomy as a real <ul> */
+  .cs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .cs-list .setrow-l {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}

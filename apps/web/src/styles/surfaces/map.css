@@ -1,0 +1,359 @@
+/* Map surface: pins, spot markers and card, coordinate readout, basemap switch, map tools, geofence banner. */
+@layer surfaces {
+  .spot-filters {
+    margin-top: 8px;
+    display: grid;
+    gap: 8px;
+  }
+  .spot-filters .filter-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .spot-filters .filter-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--muted);
+    min-width: 3.5rem;
+  }
+  /* map pins */
+  .cache-pin {
+    width: 25px;
+    height: 25px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 2px solid var(--pin-edge);
+    box-shadow: 0 1px 5px var(--shadow);
+    cursor: pointer;
+    color: var(--pin-edge);
+    font-size: 12px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cache-pin > span {
+    transform: rotate(45deg);
+  }
+  .cache-pin.found::after {
+    content: "✓";
+    position: absolute;
+    right: -3px;
+    top: -3px;
+    transform: rotate(45deg);
+    background: var(--accent);
+    color: var(--accent-ink);
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    font-size: 9px;
+    line-height: 13px;
+    text-align: center;
+    border: 1px solid var(--pin-edge);
+  }
+  .beacon-pin {
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    filter: drop-shadow(0 1px 3px var(--shadow));
+  }
+  .cache-pin.mirrored {
+    border-style: dashed;
+    opacity: 0.9;
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent),
+      0 1px 5px var(--shadow);
+  }
+  /* live station pins (shack layer) */
+  button.station-pin {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    padding: 0;
+    border: 2px solid var(--pin-edge);
+    background: var(--pin-station);
+    color: var(--ink-tier);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px var(--shadow);
+  }
+  button.station-pin > span {
+    display: block;
+  }
+  /* operated stations carry a role glyph + brand colour (set inline); a touch larger + bolder to read */
+  button.station-pin.role {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  /* live activity spots — distinct amber marker + a tap card; cache "being activated now" */
+  button.spot-pin {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    padding: 0;
+    border: 2px solid var(--pin-edge);
+    background: var(--warn);
+    color: var(--ink-tier);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 5px var(--shadow);
+  }
+  button.spot-pin > span {
+    display: block;
+  }
+  button.spot-pin::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid var(--warn);
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button.spot-pin::after {
+      animation: spot-ring 2.2s ease-out infinite;
+    }
+    @keyframes spot-ring {
+      0% {
+        transform: scale(1);
+        opacity: 0.8;
+      }
+      100% {
+        transform: scale(2.3);
+        opacity: 0;
+      }
+    }
+  }
+  .spot-card {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 24px));
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: 0 6px 24px var(--shadow);
+  }
+  .spot-card-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .spot-card .spot-call {
+    font-size: 17px;
+    color: var(--heading);
+  }
+  .spot-card .spot-ref {
+    margin: 4px 0;
+  }
+  .spot-card .spot-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .spot-card .spot-comment {
+    margin: 8px 0 0;
+  }
+  .spot-card .spot-cta {
+    width: 100%;
+    margin-top: 10px;
+  }
+  /* ---- map coordinate / grid readout ---- */
+  .coordreadout {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 5;
+    display: flex;
+    gap: 1px;
+    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+    /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
+  }
+  .coordreadout > div {
+    padding: 7px 11px;
+  }
+  .coordreadout > div + div {
+    border-left: 1px solid var(--hair);
+  }
+  .coordreadout .crl {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .coordreadout .crv {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    margin-top: 3px;
+  }
+  /* keep the readout glanceable on narrow phones — drop MGRS so it can't collide with the tools */
+  @media (max-width: 560px) {
+    .coordreadout > div:nth-child(3) {
+      display: none;
+    }
+  }
+  /* phone layout: clear the bottom tab bar and stack the tools above the readout so the two
+   bottom chips never overlap each other (they share one row on wider screens) */
+  @media (max-width: 680px) {
+    .coordreadout {
+      bottom: calc(72px + env(safe-area-inset-bottom));
+    }
+    .maptools {
+      bottom: calc(126px + env(safe-area-inset-bottom));
+    }
+  }
+  /* field-navigation map tools: grid / rings / ruler toggles + readouts */
+  /* basemap layer switcher — top-right, opt-in raster */
+  .basemap-switch {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    z-index: 5;
+    display: flex;
+    gap: 1px;
+    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+    /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
+  }
+  .basemap-switch button {
+    min-width: 44px;
+    min-height: 32px;
+    border: none;
+    background: none;
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 10px;
+  }
+  .basemap-switch button + button {
+    border-left: 1px solid var(--hair);
+  }
+  .basemap-switch button:hover {
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+  }
+  .basemap-switch button.on {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--ink);
+  }
+  .basemap-switch button:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: -2px;
+  }
+  .maptools {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .maptools-bar {
+    display: flex;
+    gap: 1px;
+    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+    backdrop-filter: blur(6px);
+  }
+  .maptools-bar button {
+    min-width: 38px;
+    min-height: 38px;
+    border: none;
+    background: none;
+    color: var(--ink-2);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .maptools-bar button + button {
+    border-left: 1px solid var(--hair);
+  }
+  .maptools-bar button:hover {
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+  }
+  .maptools-bar button.on {
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--ink);
+  }
+  .maptools-bar button:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: -2px;
+  }
+  .maptools-bar button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: none;
+  }
+  .maptools-legend {
+    background: color-mix(in oklch, var(--surface) 88%, transparent);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-2);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
+  }
+  /* live geofence prompt banner */
+  .geo-banner {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100% - 24px);
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 9px 12px 9px 16px;
+    border-radius: 24px;
+    box-shadow: 0 6px 20px var(--shadow);
+    font-size: 14px;
+  }
+  .geo-banner .muted {
+    color: color-mix(in oklch, var(--accent-ink) 70%, transparent);
+  }
+  .geo-banner .spacer {
+    flex: 1;
+  }
+  .geo-banner button.primary {
+    background: var(--accent-ink);
+    color: var(--accent);
+    border-color: var(--accent-ink);
+  }
+  .geo-banner button.icon {
+    color: var(--accent-ink);
+  }
+}

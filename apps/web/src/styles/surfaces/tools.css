@@ -1,0 +1,176 @@
+/* Shack tools (plugins) and their declarative panels. */
+@layer surfaces {
+  /* tools (plugins) panel */
+  .tools-panel {
+    display: grid;
+    gap: 10px;
+  }
+  .tools-list {
+    display: grid;
+    gap: 8px;
+  }
+  .tool-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 8px 10px;
+  }
+  .tool-meta {
+    min-width: 0;
+  }
+  .tool-perms {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .tool-sub {
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+    display: grid;
+    gap: 6px;
+  }
+  .tool-sub textarea,
+  .tool-sub input {
+    width: 100%;
+  }
+  .tool-out {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 12px;
+    margin: 0;
+    white-space: pre-wrap;
+  }
+  .tool-prompt {
+    border: 1px solid var(--warn);
+    border-radius: 9px;
+    padding: 10px 12px;
+    background: color-mix(in oklch, var(--warn) 8%, transparent);
+  }
+  .tool-surfaces {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .tool-surfaces .badge {
+    margin-right: 4px;
+  }
+  /* declarative tool panels (the `panel` capability) — a tool's typed nodes rendered by the host */
+  .tool-panels {
+    display: grid;
+    gap: 8px;
+  }
+  .tool-panel {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 8px 10px;
+    display: grid;
+    gap: 6px;
+  }
+  .tool-panel-h {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tp-text {
+    margin: 0;
+    font-size: 13px;
+  }
+  .tp-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .tp-k {
+    color: var(--muted);
+  }
+  .tp-v {
+    font-family: var(--font-mono);
+  }
+  .tp-bar {
+    display: grid;
+    gap: 3px;
+    font-size: 12px;
+  }
+  .tp-track {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .tp-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+  .tp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .tp-table th {
+    text-align: left;
+    color: var(--muted);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0 8px 3px 0;
+  }
+  .tp-table td {
+    padding: 1px 8px 1px 0;
+    font-family: var(--font-mono);
+  }
+  .tp-muted {
+    color: var(--muted);
+  }
+  .tp-accent,
+  .tp-fill.tp-accent {
+    color: var(--accent);
+  }
+  .tp-ok {
+    color: var(--ok);
+  }
+  .tp-fill.tp-ok {
+    background: var(--ok);
+  }
+  .tp-warn {
+    color: var(--warn);
+  }
+  .tp-fill.tp-warn {
+    background: var(--warn);
+  }
+  .tp-bad {
+    color: var(--bad);
+  }
+  .tp-fill.tp-bad {
+    background: var(--bad);
+  }
+  /* CP437/ANSI cell grid (GP GIP) — a monospace grid; each cell one glyph, colour from the ANSI token. */
+  .tp-blocks {
+    display: grid;
+    grid-template-columns: repeat(var(--tp-cols, 1), 1ch);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.05;
+    white-space: pre;
+    color: var(--accent);
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .tp-blocks > span {
+    display: block;
+    text-align: center;
+  }
+  /* tool-contributed map markers (map surface) — a small tokened glyph */
+  .tool-map-pin {
+    font-size: 16px;
+    line-height: 1;
+    cursor: default;
+    text-shadow: 0 0 2px var(--surface);
+  }
+}

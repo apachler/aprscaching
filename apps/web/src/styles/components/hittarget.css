@@ -1,0 +1,34 @@
+/* Touch hit-target extension for small controls. */
+@layer components {
+  /* ---- field-use hit targets (ui-ux.md §7: ≥44px) ----
+   On coarse pointers every small control gets a 44px invisible hit extension; the visual density
+   stays as designed (the pseudo-element enlarges the interactive area, not the control). */
+  @media (pointer: coarse) {
+    .iconbtn,
+    .link-btn,
+    .sw,
+    .seg button,
+    .basemap-switch button,
+    .maptools-bar button,
+    .chip-btn,
+    button.icon {
+      position: relative;
+    }
+    .iconbtn::after,
+    .link-btn::after,
+    .sw::after,
+    .seg button::after,
+    .basemap-switch button::after,
+    .maptools-bar button::after,
+    .chip-btn::after,
+    button.icon::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}

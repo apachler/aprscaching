@@ -1,0 +1,60 @@
+/* Panel primitive: the docked drawer / bottom sheet container, its headings and the wide-app hint. */
+@layer components {
+  /* side panels — each is a query container so its contents adapt to the slot they occupy
+   (slim docked drawer vs wide tablet sheet), per css.md "responsive component layout MUST use
+   container queries". The panel↔sheet swap itself is viewport-coarse, so it stays a media query. */
+  .panel {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    width: 348px;
+    max-width: calc(100% - 24px);
+    z-index: 6;
+    overflow: auto;
+    padding: 16px;
+    container: panel / inline-size;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: 0 8px 28px var(--shadow);
+    outline: none; /* the drawer takes programmatic focus on open (Panel.tsx) — no ring on the container */
+  }
+  .panel.left {
+    left: 12px;
+  }
+  .panel.right {
+    right: 12px;
+  }
+  .panel h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel h3 {
+    margin: 6px 0;
+    font-size: 17px;
+  }
+  .panel h4 {
+    margin: 16px 0 6px;
+    color: var(--heading);
+  }
+  /* Shack apps are desktop-density (ui-ux.md §5) — on a narrow viewport show a one-line note.
+   CSS-gated via a viewport media query (no JS), free on desktop; the app still works either way. */
+  .wide-hint {
+    display: none;
+  }
+  @media (max-width: 820px) {
+    .wide-hint {
+      display: block;
+      margin: 0 0 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--hair);
+      border-radius: var(--r-sm);
+      background: color-mix(in oklch, var(--warn) 9%, transparent);
+    }
+  }
+}

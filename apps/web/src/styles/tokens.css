@@ -1,0 +1,214 @@
+/* ---- design tokens (OKLCH) — dark field-console by default, light as an option ----
+   Per .claude/rules/css.md: theming is token-driven in an @layer, colours are OKLCH, and the
+   trust-tier / status palette derives from bases via color-mix() so brightness stays even across
+   hues (sunlight legibility). We keep an explicit [data-theme] layer (not light-dark() alone)
+   because the app exposes a Dark/Light/Auto switch the user can override — light-dark() can only
+   follow color-scheme, so the explicit override is load-bearing here. color-scheme is still set so
+   form controls / scrollbars match the active theme. */
+@layer tokens {
+  :root {
+    color-scheme: dark light;
+
+    /* brand + chrome */
+    --brand: oklch(0.6 0.085 232); /* blue — chrome only */
+    --accent: oklch(0.73 0.18 128); /* green — the one primary-action accent */
+    --accent-ink: oklch(0.2 0.012 220); /* text on the green accent */
+    --beige: oklch(0.62 0.065 52);
+
+    /* neutrals (dark) */
+    --bg: oklch(0.22 0.012 220 / 0); /* page (transparent; the map is the hero) */
+    --surface: oklch(0.22 0.012 220); /* panels / sheets */
+    --surface-2: oklch(0.27 0.015 225); /* raised: buttons, logform, chips */
+    --field-bg: oklch(0.19 0.012 222); /* inputs */
+    --ink: oklch(0.94 0.006 220); /* primary text */
+    --muted: oklch(0.71 0.018 220); /* secondary text */
+    --line: oklch(0.33 0.016 222); /* borders */
+    --heading: oklch(0.74 0.078 228); /* h4 / links — a lighter teal on dark */
+    --topbar-bg: oklch(0.22 0.018 228); /* chrome */
+    --chip-bg: oklch(0.3 0.017 226);
+    --shadow: oklch(0 0 0 / 0.55);
+
+    /* trust tiers + status — bases; tint via color-mix(), never hand-maintained */
+    --tier-a: oklch(0.7 0.15 145); /* Radio-verified */
+    --tier-b: oklch(0.78 0.13 250); /* Location-verified */
+    --tier-c: oklch(0.72 0.04 250); /* Logged (unverified) */
+    --ok: oklch(0.74 0.17 145);
+    --warn: oklch(0.8 0.15 85);
+    --bad: oklch(0.66 0.19 27);
+
+    /* operator surfaces — denser console chrome, derived in the same OKLCH family.
+       Used by the nav rail, side panels and data chips; the core --surface/--ink stay as-is so
+       existing surfaces don't regress, and each surface opts in as it's restyled. */
+    --rail-bg: oklch(0.2 0.012 230); /* nav rail / top bar chrome */
+    --panel-2: oklch(0.185 0.01 225); /* operator side-panel background (darker than --surface) */
+    --hair: oklch(0.3 0.012 226); /* hairline divider */
+    --ink-2: oklch(0.8 0.012 220); /* bright data text (mono values) */
+    --ink-tier: oklch(0.18 0.02 245); /* near-black ink on a solid tier chip */
+
+    /* chrome + map surfaces that can't take the panel neutrals (they sit on dark chrome or the map).
+       Kept as tokens — not stray literals — so the Phosphor flip reskins them in one swap. */
+    --page-bg: oklch(0.17 0.012 220); /* body base painted behind the (transparent) map */
+    --chrome-ink: oklch(
+      1 0 0
+    ); /* ink/marks/overlays on the dark chrome (top bar, tab bar, search, landing, solid controls) */
+    --pin-edge: oklch(1 0 0); /* map-marker outline + glyph — white ring reads on any basemap */
+    --pin-station: oklch(0.86 0.012 230); /* default (roleless) station-pin fill */
+    --qr-bg: oklch(1 0 0); /* QR quiet zone — MUST stay light so codes scan (a token, not a stray literal) */
+    --fav: oklch(0.64 0.17 15); /* favourite heart */
+    --award-bg: oklch(0.3 0.05 95); /* recognition/award chip — gold family, derived in OKLCH */
+    --award-ink: oklch(0.86 0.14 95);
+    --award-line: oklch(0.42 0.05 95);
+
+    /* spacing scale (the source of truth for the layout utilities below) */
+    --sp-1: 4px;
+    --sp-2: 6px;
+    --sp-3: 8px;
+    --sp-4: 12px;
+    --sp-5: 14px;
+
+    /* corner radius scale — tokenised so the Phosphor flip can make terminals sharp in one swap */
+    --r-sm: 7px; /* buttons, inputs, chips */
+    --r-md: 9px; /* logform, list rows, small cards */
+    --r-lg: 12px; /* panels, sheets, big cards */
+    --r-pill: 999px;
+
+    --font-brand: "Fredoka", system-ui, sans-serif;
+    --font-ui: system-ui, sans-serif; /* body/UI text — Phosphor swaps this to the mono stack */
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: oklch(1 0 0 / 0);
+    --surface: oklch(1 0 0);
+    --surface-2: oklch(0.98 0.003 220);
+    --field-bg: oklch(1 0 0);
+    --ink: oklch(0.33 0.006 220);
+    --muted: oklch(0.56 0.009 220);
+    --line: oklch(0.92 0.004 220);
+    --accent-ink: oklch(1 0 0);
+    --heading: oklch(0.5 0.072 230);
+    --topbar-bg: oklch(0.6 0.085 232);
+    --chip-bg: oklch(0.96 0.004 220);
+    --shadow: oklch(0 0 0 / 0.16);
+    /* operator surfaces (light) */
+    --rail-bg: oklch(0.97 0.003 220);
+    --panel-2: oklch(0.99 0.002 220);
+    --hair: oklch(0.91 0.004 220);
+    --ink-2: oklch(0.4 0.008 220);
+    --ink-tier: oklch(0.99 0 0);
+    /* chrome/pins stay light-on-dark (top bar is blue, pins sit on the map) — only the page + award flip */
+    --page-bg: oklch(0.96 0.004 220);
+    --award-bg: oklch(0.96 0.05 95);
+    --award-ink: oklch(0.52 0.1 85);
+    --award-line: oklch(0.9 0.06 95);
+  }
+
+  /* ───────────────────────────────────────────────────────────────────────────────────────────
+     PHOSPHOR — the late-90s green-phosphor "flip". Selecting it IS the flip: a token swap,
+     no per-component rebuild. Green-phosphor base + a disciplined DOS accent set (cyan/amber/red) used
+     only where colour carries meaning (trust tiers, station types, TX/RX). Sharp corners, glow instead
+     of drop-shadow, mono for all text. Derived in OKLCH so brightness stays even (sunlight AA). The
+     [data-shell="terminal"] TUI transformation of the shack rides on top of this.
+     ─────────────────────────────────────────────────────────────────────────────────────────── */
+  :root[data-theme="phosphor"] {
+    color-scheme: dark;
+
+    /* phosphor base — near-black with a faint green cast */
+    --bg: oklch(0.15 0.02 155 / 0);
+    --page-bg: oklch(0.15 0.02 155);
+    --surface: oklch(0.19 0.028 155);
+    --surface-2: oklch(0.24 0.035 155);
+    --field-bg: oklch(0.16 0.024 155);
+    --ink: oklch(0.9 0.16 150); /* phosphor-green primary text */
+    --muted: oklch(0.7 0.1 150);
+    --line: oklch(0.42 0.08 150);
+    --heading: oklch(0.92 0.17 150);
+
+    /* accent = bright phosphor green (our own, AA on the black — not Phosphor's exact green) */
+    --accent: oklch(0.86 0.19 145);
+    --accent-ink: oklch(0.15 0.02 155);
+    --brand: oklch(0.8 0.12 195); /* cyan — chrome accent */
+    --beige: oklch(0.8 0.1 90);
+
+    /* chrome */
+    --topbar-bg: oklch(0.13 0.02 155);
+    --chip-bg: oklch(0.25 0.04 155);
+    --chrome-ink: oklch(0.9 0.16 150);
+    --rail-bg: oklch(0.13 0.02 155);
+    --panel-2: oklch(0.17 0.025 155);
+    --hair: oklch(0.36 0.07 150);
+    --ink-2: oklch(0.88 0.15 150);
+    --ink-tier: oklch(0.14 0.02 155);
+    --pin-station: oklch(0.8 0.11 150);
+    --fav: oklch(0.72 0.18 20);
+
+    /* trust tiers re-hued onto the phosphor ramp: A=green, B=cyan, C=dim green */
+    --tier-a: oklch(0.86 0.19 145);
+    --tier-b: oklch(0.82 0.12 195);
+    --tier-c: oklch(0.66 0.05 150);
+    --ok: oklch(0.86 0.19 145);
+    --warn: oklch(0.85 0.15 90); /* amber */
+    --bad: oklch(0.68 0.2 27); /* red */
+
+    /* recognition chip → amber phosphor */
+    --award-bg: oklch(0.24 0.05 95);
+    --award-ink: oklch(0.86 0.15 95);
+    --award-line: oklch(0.4 0.06 95);
+
+    /* elevation = phosphor glow, not a dark drop-shadow */
+    --shadow: oklch(0.86 0.19 145 / 0.2);
+
+    /* terminals are sharp; all text is mono */
+    --r-sm: 0px;
+    --r-md: 0px;
+    --r-lg: 1px;
+    --r-pill: 2px;
+    /* Phosphor prefers an authentic CP437/VGA face when one is present (installed locally, or a
+       bundled `Px437 IBM VGA8` drop-in), then falls back to the reliable stack. Pure
+       CSS, no web-font fetch on the field path: the fallbacks already render box-drawing + block glyphs,
+       and browsers skip any family that isn't available. */
+    --font-mono:
+      "Px437 IBM VGA8", "PxPlus IBM VGA8", "IBM VGA 8x16", "Perfect DOS VGA 437", "IBM Plex Mono", ui-monospace,
+      "SFMono-Regular", "Menlo", "Consolas", monospace;
+    --font-ui: var(--font-mono);
+    --font-brand: var(--font-mono);
+
+    /* theme-only knobs the terminal shell consumes (scanline is opt-in / off by default) */
+    --frame: color-mix(in oklch, var(--accent) 55%, transparent); /* box-drawing frame colour */
+    --glow: 0 0 0 1px color-mix(in oklch, var(--accent) 28%, transparent);
+  }
+
+  /* ANSI 16-colour palette (BBS output) — modern theme; the Phosphor theme remaps these tokens */
+  :root {
+    --ansi-0: #2b2b2b;
+    --ansi-1: #c0392b;
+    --ansi-2: #27ae60;
+    --ansi-3: #b8860b;
+    --ansi-4: #2e6fb8;
+    --ansi-5: #8e44ad;
+    --ansi-6: #1696a3;
+    --ansi-7: #bdc3c7;
+    --ansi-8: #5a5a5a;
+    --ansi-9: #e74c3c;
+    --ansi-10: #2ecc71;
+    --ansi-11: #f1c40f;
+    --ansi-12: #5dade2;
+    --ansi-13: #af7ac5;
+    --ansi-14: #48c9b0;
+    --ansi-15: #ffffff;
+    /* NAMES.GP station-type colours */
+    --st-bbs: var(--ansi-11);
+    --st-node: var(--ansi-12);
+    --st-digi: var(--ansi-10);
+    --st-dx: var(--ansi-13);
+    --st-wx: var(--ansi-14);
+    --st-igate: var(--ansi-6);
+    --st-service: var(--accent);
+    --st-cacher: var(--tier-a);
+    --st-beacon: var(--ansi-7);
+    --st-user: var(--muted);
+  }
+}
