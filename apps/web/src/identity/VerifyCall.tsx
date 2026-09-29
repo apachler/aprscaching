@@ -296,8 +296,11 @@ function AmprDns(props: { callsign: string; onVerified: () => void }) {
     <>
       <p className="muted fine">
         If ARDC has delegated <span className="mono">{props.callsign.toLowerCase()}.ampr.org</span> to you, publish a
-        TXT record there at the ARDC portal. It counts only when the answer is DNSSEC-validated, so ampr.org must be
-        DNSSEC-signed.
+        TXT record there at the ARDC portal (DNS → My subdomains).
+      </p>
+      <p className="muted fine">
+        Without DNSSEC, several public DNS resolvers must return the same record. The portal can take a while to publish
+        a new record, so check again later if it is not found yet.
       </p>
       {ch && (
         <dl className="verify-msg">

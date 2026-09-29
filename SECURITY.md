@@ -36,8 +36,9 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
   key-rotation bypass (`federation*.ts`, `tombstones.ts`).
 - **Auth & sessions** — WebAuthn/passkey flows, the magic-link path, session forgery, callsign
   control-verification: the on-air `VERIFY` challenge (APRS and MeshCom — any way to make a copy that no
-  attested site heard directly count), the ampr.org DNS method (anything that verifies without a
-  DNSSEC-validated answer, `verify_ampr.ts`), the LoTW certificate method (a signature, chain, date or
+  attested site heard directly count), the ampr.org DNS method (anything that verifies without
+  either a DNSSEC-validated answer or agreement of every answering independent resolver, or that follows an
+  alias out of the zone — `verify_ampr.ts`), the LoTW certificate method (a signature, chain, date or
   callsign check that can be bypassed, or a certificate parser crash — `verify_lotw.ts`, `x509.ts`), the
   operator bootstrap, and sysop manual verification.
 - **Ingest & parsers** — a single crafted packet that crashes or hangs the ingest/gateway
@@ -81,7 +82,14 @@ network layer (that's the operator's edge/CDN concern).
   run.
 - `LOTW_CA_PEM` decides whose certificates prove a callsign: put only the ARRL LoTW CA certificates in
   it, checked against a second independent copy. `DOH_URL` must name a DNSSEC-validating resolver you
-  trust, since its AD flag is what the ampr.org method relies on.
+  trust, since its AD flag is what the DNSSEC proofs rely on.
+- The ampr.org DNS method, while ampr.org is unsigned, rests on agreement between independent resolvers
+  (`AMPR_DNS_RESOLVERS`, by default Cloudflare, Google and Quad9): a forged record has to be planted in
+  several large, separately operated resolver caches at once, or on the path from all of them to ARDC's
+  name servers, and a single dissenting answer refuses. That is weaker than a signature, so each such
+  verification is marked in its note and can be re-checked or revoked. Once ARDC signs the zone, the
+  validating resolver returns AD and the method becomes cryptographic by itself; `AMPR_REQUIRE_DNSSEC=1`
+  demands that today.
 - Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`,
   VAPID keys, etc.) — use
   `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
