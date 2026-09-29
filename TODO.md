@@ -428,6 +428,15 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Future ideas (not yet built, still wanted)
 
+- [ ] **FCC ULS email verification** *(S/M · blocked on a data source)* — verify a US call by mailing a code
+  to the address the licensee gave the FCC, storing only `sha256(lowercased email)` per call. Blocked: the
+  public amateur bulk file (`data.fcc.gov/download/pub/uls/complete/l_amat.zip`, `EN.dat`) carries the
+  Email column (field 15 of the 30-field EN record) empty for every record, so there is nothing to import.
+  Needs a source that publishes the address, kept separate from the licence-validity registry importer.
+- [ ] **LoTW certificate revocation** *(S)* — consult LoTW's certificate status service (tqsllib queries
+  `https://lotw.arrl.org/lotw/crl?serial=`) before accepting a callsign certificate, so a replaced or
+  revoked certificate stops verifying.
+
 - [ ] **Retro read-only access** *(P3 · M)* — small Node daemons (raw TCP/TLS, not Workers) exposing
   caches-near / station info / leaderboard over **Finger**, **Gopher**, and **Gemini**. Fits the
   "it's a network" ham-retro aesthetic.

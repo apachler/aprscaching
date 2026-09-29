@@ -2737,6 +2737,17 @@ button.link:hover {
   font-size: 1.05em;
   overflow-wrap: anywhere;
 }
+/* the verification-method choice: wraps on a narrow sheet, labels keep their own case */
+.verify-methods {
+  display: flex;
+  flex-wrap: wrap;
+  margin: var(--sp-2) 0;
+}
+.verify-methods button {
+  flex: 1 1 auto;
+  min-height: 44px;
+  text-transform: none;
+}
 .fine {
   font-size: 12px;
 }

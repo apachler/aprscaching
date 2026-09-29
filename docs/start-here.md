@@ -29,10 +29,12 @@ Everything below happens in your web browser — on your phone or your computer.
    add an email address for recovery, or use **Email me a link** instead of a passkey.
 
     ![Sign in with your callsign](assets/shots/signin-mobile.webp){ width="280" loading=lazy }
-2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The app
-   shows an APRS message to send, such as `VERIFY 482913` to `APRSCG`. Transmit it from your radio within
-   30 minutes; your callsign is verified once this instance's own receiving station hears it on the air.
-   Details: [Your account](guides/account.md).
+2. **Verify your callsign.** Go to **Settings → Account** and tap **verify** next to your callsign. The
+   default is **On the air**: the app shows a message to send, such as `VERIFY 482913` to `APRSCG`. Transmit
+   it within 30 minutes as an APRS message from your radio or a MeshCom message from your node; your callsign
+   is verified once this instance's own receiving station hears it directly on the air. You can instead
+   publish a code under your `<call>.ampr.org` name, or sign with your ARRL LoTW callsign certificate — and
+   a sysop can verify you by hand. Details: [Your account](guides/account.md#verify-your-callsign).
 3. **Find a cache.** Browse the map, or tap **Nearby** for the closest caches. Tap one to open it: you see
    its description, difficulty and terrain, the hint, and **Navigate** to hand the coordinates to your maps
    app.
