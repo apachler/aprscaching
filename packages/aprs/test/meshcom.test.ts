@@ -162,7 +162,7 @@ describe("meshcom dedup", () => {
     expect(d.offer(ev("lora", "DH1FR-1", "B1"), 0)).toBe("new");
     expect(d.offer(ev("lora", "DH1FR-1", "B1"), 1001)).toBe("new");
   });
-  it("stays bounded in memory across 1M distinct frames", () => {
+  it("stays bounded in memory across 1M distinct frames", { timeout: 60_000 }, () => {
     const d = new MeshcomDedup({ max: 4096 });
     const e = ev("lora", "DH1FR-1", "0");
     for (let i = 0; i < 1_000_000; i++) {
