@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // One canonical account resolver. A session names its account and that account's session generation;
 // it resolves only while the account exists at that generation and holds the base of the session's call
-// (so an SSID maps to the same account). auth.ts owns the logic; watch.ts re-exports a bare-string
-// wrapper. This pins both to the same answer.
+// (so an SSID maps to the same account). Every caller uses it directly.
 import { describe, it, expect } from "vitest";
-import { sessionAccountId, sessionIdentity } from "../src/auth.js";
-import { sessionAccountId as watchAccountId } from "../src/watch.js";
+import { sessionIdentity } from "../src/auth.js";
 import type { Env } from "../src/env.js";
 import { sessionDb, sessionRequest } from "./sessiondb.js";
 
@@ -18,10 +16,6 @@ describe("sessionIdentity — one canonical resolver", () => {
     const env = envFor({ accountId: "acct-123", base: "OE8APR" });
     const me = await sessionIdentity(await sessionRequest(env, "acct-123", "OE8APR-7"), env);
     expect(me).toEqual({ accountId: "acct-123", callsign: "OE8APR-7", base: "OE8APR" });
-    expect(await sessionAccountId(await sessionRequest(env, "acct-123", "OE8APR-7"), env)).toEqual({
-      accountId: "acct-123",
-      callsign: "OE8APR-7",
-    });
   });
 
   it("resolves to nobody once another account holds the call", async () => {
@@ -37,15 +31,9 @@ describe("sessionIdentity — one canonical resolver", () => {
     expect(await sessionIdentity(req, envFor({ accountId: "acct-123", base: "OE8APR", gen: 1 }))).toBeNull();
   });
 
-  it("watch.ts returns the SAME account id (as a bare string) — no divergence", async () => {
-    const env = envFor({ accountId: "acct-123", base: "OE8APR" });
-    expect(await watchAccountId(await sessionRequest(env, "acct-123", "OE8APR-9"), env)).toBe("acct-123");
-  });
-
   it("returns null when signed out", async () => {
     const env = envFor({ accountId: "acct-123", base: "OE8APR" });
     const req = new Request("http://gw/api/whoami"); // no cookie
-    expect(await sessionAccountId(req, env)).toBeNull();
-    expect(await watchAccountId(req, env)).toBeNull();
+    expect(await sessionIdentity(req, env)).toBeNull();
   });
 });

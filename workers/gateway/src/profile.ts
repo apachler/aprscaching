@@ -9,7 +9,7 @@
  */
 import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
 
 const httpUrl = (u: unknown): string | null => {
@@ -50,7 +50,7 @@ const emailish = (u: unknown): string | null => {
 
 /** POST /auth/profile — replace the caller's profile from a full form payload. */
 export async function handleProfileUpdate(req: Request, env: Env): Promise<Response> {
-  const cs = await sessionCallsign(req, env);
+  const cs = (await sessionIdentity(req, env))?.callsign ?? null;
   if (!cs) return json({ error: "sign in to edit your profile" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 

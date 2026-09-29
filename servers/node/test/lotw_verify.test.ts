@@ -70,8 +70,11 @@ describe("LoTW certificate verification", () => {
     ).first<{ method: string; verified_by: string; note: string }>();
     expect(row).toMatchObject({ method: "lotw", verified_by: "Synthetic Test LoTW Root" });
     expect(row!.note).toMatch(/serial/);
-    const held = await env.DB.prepare("SELECT verified, method FROM account_callsigns WHERE callsign='OE8APR'").first();
-    expect(held).toEqual({ verified: 1, method: "lotw" });
+    // the held call reads as verified through the one store
+    const held = await env.DB.prepare(
+      "SELECT ac.callsign, v.method FROM account_callsigns ac JOIN callsign_verifications v ON v.callsign = ac.callsign AND v.status = 'verified' WHERE ac.callsign='OE8APR'",
+    ).first();
+    expect(held).toEqual({ callsign: "OE8APR", method: "lotw" });
     // the challenge is spent: a replay does not verify again
     expect(
       (

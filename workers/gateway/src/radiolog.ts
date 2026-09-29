@@ -29,14 +29,14 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId } from "./auth.js";
+import { sessionIdentity, baseHolder } from "./auth.js";
 import { provenanceOf, parseAttestedSites, transportForPort } from "./provenance.js";
-import { parseVerifyMessage, completeRfChallenge } from "./callsign.js";
+import { parseVerifyMessage, completeRfChallenge, isCallsignVerified } from "./callsign.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
-import { encodeAprsMessage } from "@aprscaching/aprs";
+import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -66,8 +66,6 @@ export type RadioCommand =
 
 /** The service call radio commands and `VERIFY` messages are addressed to — the identity BBS mail uses. */
 export const serviceCall = (env: Env): string => (env.BBS_CALL ?? "APRSCG").toUpperCase();
-
-const baseCall = (c: string) => c.replace(/\*$/, "").split("-")[0]!.toUpperCase();
 
 /** `ac1234`, `AC-1234`, `ac-1234` → `AC-1234`; anything that isn't letters followed by digits → null. */
 export function normalizeCacheCode(raw: string): string | null {
@@ -418,9 +416,9 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
     await reply(env, m, id, reason);
   };
 
-  const acct = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign = ? AND verified = 1")
-    .bind(baseCall(src))
-    .first<{ account_id: string }>();
+  // the log belongs to the account holding the sender's base call, and only once that call is verified
+  const holder = await baseHolder(env, baseCall(src));
+  const acct = holder && (await isCallsignVerified(env, src)) ? { account_id: holder } : null;
   if (!acct) return reject(`${baseCall(src)} is not a verified callsign here - verify it in the app`);
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ?").bind(parsed.code).first<CacheForLog>();
@@ -544,7 +542,7 @@ export async function expireRadioCommands(env: Env): Promise<void> {
 
 /** GET /api/radio/commands — the signed-in account's recent radio commands and the address to send to. */
 export async function handleRadioCommandsList(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   const rows = (
     await env.DB.prepare(
@@ -596,7 +594,7 @@ export async function handleRadioCommandDecision(
   id: number,
   decision: "confirm" | "discard",
 ): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   const r = await decideRadioCommand(env, me.accountId, id, decision);
   return json(r.body, { status: r.status });

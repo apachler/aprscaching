@@ -18,6 +18,8 @@ import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { displayCall } from "./auth.js";
+import { verificationsOf } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 
 const PROTOCOL = "aprscaching-federation/0.1";
@@ -68,8 +70,9 @@ interface KeyRow {
   id: number;
   callsign: string;
   public_key: string;
-  verified: number;
   created_at: number;
+  /** Whether the key's call is control-verified, from the verification store when the page is served. */
+  verified: boolean;
 }
 
 function cacheData(r: CacheRow) {
@@ -114,7 +117,7 @@ function findData(r: FindRow, instance: string) {
   };
 }
 function keyData(r: KeyRow) {
-  return { callsign: r.callsign, publicKey: r.public_key, verified: r.verified === 1, createdAt: r.created_at };
+  return { callsign: r.callsign, publicKey: r.public_key, verified: r.verified, createdAt: r.created_at };
 }
 
 // ---- canonical JSON + Ed25519 (WebCrypto) ----
@@ -766,12 +769,20 @@ export const FIND_FEED: FeedServeDef<FindRow> = {
 };
 export const KEY_FEED: FeedServeDef<KeyRow> = {
   type: "key",
-  selectRows: async (env, since, limit) =>
-    (
-      await env.DB.prepare("SELECT * FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?")
+  selectRows: async (env, since, limit) => {
+    const rows = (
+      await env.DB.prepare(
+        "SELECT id, callsign, public_key, created_at FROM callsign_keys WHERE id > ? ORDER BY id LIMIT ?",
+      )
         .bind(since, limit)
-        .all<KeyRow>()
-    ).results,
+        .all<Omit<KeyRow, "verified">>()
+    ).results;
+    const verified = await verificationsOf(
+      env,
+      rows.map((r) => r.callsign),
+    );
+    return rows.map((r) => ({ ...r, verified: verified.has(baseCall(r.callsign)) }));
+  },
   recordOf: (r, instance) => ({ id: `${instance}:key:${r.id}`, cursor: r.id, data: keyData(r) }),
 };
 

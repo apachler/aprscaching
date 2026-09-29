@@ -23,10 +23,17 @@
  *    note saying how; it is listed, revocable and logged in `account_events`.
  *
  * Every verification records its method, who vouched (`verified_by`) and, where useful, a note.
+ *
+ * `callsign_verifications` (status `verified`, keyed by base call) is the one record of a verification.
+ * Every surface that shows or gates on it — the session, the held calls, device keys and their
+ * federation feed, TX, the sysop role — reads it through {@link verificationOf} / {@link verificationsOf},
+ * so a verification or a revocation shows everywhere at once. A claim of a call nobody held starts
+ * unverified (`holdCall` in auth.ts clears what was recorded before).
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId, accountHoldsCall, timingSafeEqual, operatorSecretOk } from "./auth.js";
+import { baseCall } from "@aprscaching/aprs";
+import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { serviceCall } from "./radiolog.js";
 import { adminCalls } from "./admin.js";
@@ -42,7 +49,6 @@ function sixDigitCode(): string {
   return String(n);
 }
 
-const baseOf = (c: string) => c.replace(/\*$/, "").trim().toUpperCase().split("-")[0]!;
 const nowSec = () => Math.floor(Date.now() / 1000);
 
 /** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign. */
@@ -68,10 +74,10 @@ export function parseVerifyMessage(text: string): string | null {
  * holder transmits it from their own radio.
  */
 export async function startAprsChallenge(req: Request, env: Env): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in to verify a callsign" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const cs = baseOf(String(callsign ?? ""));
+  const cs = baseCall(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
   // a session proves control only of a licence its account already holds
   if (!(await accountHoldsCall(env, me.accountId, cs)))
@@ -99,48 +105,25 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
   return json({ code, to: serviceCall(env), text: verifyText(code), expiresAt: now + CHALLENGE_TTL_SEC });
 }
 
-/**
- * Mark a base call verified by `method`, and mirror it onto the held base call (`account_callsigns`) and
- * the account's active call (`accounts`) of `accountId` — or of whichever account holds the call when
- * no account is given — so a verified call keeps its status when the account switches between its calls.
- */
 /** How a call's control was proven. */
 export type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
 
+/** Mark a base call verified by `method`: the one write of a verification. Every SSID inherits it. */
 export async function markVerified(
   env: Env,
   cs: string,
   method: VerifyMethod,
-  f: { accountId?: string | null; by?: string | null; note?: string | null },
+  f: { by?: string | null; note?: string | null },
 ): Promise<void> {
   const now = nowSec();
-  const holder =
-    f.accountId ??
-    (
-      await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
-        .bind(cs)
-        .first<{ account_id: string }>()
-    )?.account_id ??
-    null;
-  const ops = [
-    env.DB.prepare(
-      `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
-       VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
-       ON CONFLICT(callsign) DO UPDATE SET status='verified', method=excluded.method, challenge=NULL, attempts=0,
-         verified_at=excluded.verified_at, verified_by=excluded.verified_by, note=excluded.note`,
-    ).bind(cs, method, now, now, f.by ?? null, f.note ?? null),
-  ];
-  if (holder) {
-    ops.push(
-      env.DB.prepare(
-        "UPDATE account_callsigns SET verified=1, method=?, verified_at=? WHERE account_id=? AND callsign=?",
-      ).bind(method, now, holder, cs),
-      env.DB.prepare(
-        "UPDATE accounts SET verified=1, verify_method=?, verified_at=? WHERE account_id=? AND (callsign=? OR callsign LIKE ?)",
-      ).bind(method, now, holder, cs, `${cs}-%`),
-    );
-  }
-  await env.DB.batch(ops);
+  await env.DB.prepare(
+    `INSERT INTO callsign_verifications (callsign, method, status, challenge, attempts, created_at, verified_at, verified_by, note)
+     VALUES (?, ?, 'verified', NULL, 0, ?, ?, ?, ?)
+     ON CONFLICT(callsign) DO UPDATE SET status='verified', method=excluded.method, challenge=NULL, attempts=0,
+       verified_at=excluded.verified_at, verified_by=excluded.verified_by, note=excluded.note`,
+  )
+    .bind(baseCall(cs), method, now, now, f.by ?? null, f.note ?? null)
+    .run();
 }
 
 /** What an on-air `VERIFY` did: completed the challenge, a wrong code, or nothing to answer. */
@@ -159,7 +142,7 @@ export async function completeRfChallenge(
   code: string,
   site: string | null,
 ): Promise<RfChallengeOutcome> {
-  const cs = baseOf(src);
+  const cs = baseCall(src);
   const row = await env.DB.prepare(
     "SELECT challenge, account_id, attempts, created_at, status FROM callsign_verifications WHERE callsign = ?",
   )
@@ -190,20 +173,51 @@ export async function completeRfChallenge(
     .bind(cs, row.challenge)
     .run();
   if ((claim.meta?.changes ?? 0) !== 1) return "none";
-  await markVerified(env, cs, "rf_heard", { accountId: row.account_id, by: site ? site.toUpperCase() : null });
+  await markVerified(env, cs, "rf_heard", { by: site ? site.toUpperCase() : null });
   return "verified";
 }
 
+/** A proven control of a base call: how, and when. */
+export interface Verification {
+  method: string | null;
+  verifiedAt: number | null;
+}
+
+/** Base calls per query, well under the bound-parameter limit of D1 and SQLite. */
+const VERIFY_BATCH = 90;
+
+/** The verification of each call's base call, keyed by base call; unverified calls are absent. */
+export async function verificationsOf(env: Env, calls: readonly string[]): Promise<Map<string, Verification>> {
+  const bases = [...new Set(calls.map(baseCall).filter((b) => b.length > 0))];
+  const out = new Map<string, Verification>();
+  for (let i = 0; i < bases.length; i += VERIFY_BATCH) {
+    const chunk = bases.slice(i, i + VERIFY_BATCH);
+    const rows = (
+      await env.DB.prepare(
+        `SELECT callsign, method, verified_at FROM callsign_verifications
+          WHERE status = 'verified' AND callsign IN (${chunk.map(() => "?").join(",")})`,
+      )
+        .bind(...chunk)
+        .all<{ callsign: string; method: string | null; verified_at: number | null }>()
+    ).results;
+    for (const r of rows) out.set(r.callsign, { method: r.method, verifiedAt: r.verified_at });
+  }
+  return out;
+}
+
+/** The verification of a call's base call, or null. */
+export async function verificationOf(env: Env, callsign: string): Promise<Verification | null> {
+  return (await verificationsOf(env, [callsign])).get(baseCall(callsign)) ?? null;
+}
+
+/** Is the base call of `callsign` control-verified? Every SSID inherits its base call's verification. */
 export async function isCallsignVerified(env: Env, callsign: string): Promise<boolean> {
-  const r = await env.DB.prepare("SELECT status FROM callsign_verifications WHERE callsign = ?")
-    .bind(callsign)
-    .first<{ status: string }>();
-  return r?.status === "verified";
+  return (await verificationOf(env, callsign)) !== null;
 }
 
 /** GET /verify/aprs/status?callsign= — control-verification state of a callsign's BASE call. */
 export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response> {
-  const cs = baseOf(new URL(req.url).searchParams.get("callsign") ?? "");
+  const cs = baseCall(new URL(req.url).searchParams.get("callsign") ?? "");
   if (cs.length < 3) return json({ verified: false });
   return json({ verified: await isCallsignVerified(env, cs) });
 }
@@ -216,9 +230,9 @@ export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response
 export async function handleOperatorVerify(req: Request, env: Env): Promise<Response> {
   if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const cs = baseOf(String(callsign ?? ""));
+  const cs = baseCall(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
-  const listed = [...adminCalls(env)].some((c) => baseOf(c) === cs);
+  const listed = [...adminCalls(env)].some((c) => baseCall(c) === cs);
   if (!listed) return json({ error: `${cs} is not listed in ADMIN_CALLSIGNS` }, { status: 403 });
   await markVerified(env, cs, "operator", { by: "operator" });
   return json({ verified: true, callsign: cs, method: "operator" });
@@ -255,7 +269,7 @@ export async function listSysopVerifications(env: Env): Promise<Response> {
  */
 export async function sysopVerify(req: Request, env: Env, sysopCall: string): Promise<Response> {
   const { callsign, note } = (await req.json().catch(() => ({}))) as { callsign?: string; note?: string };
-  const cs = baseOf(String(callsign ?? ""));
+  const cs = baseCall(String(callsign ?? ""));
   if (!CALL_RE.test(cs)) return json({ error: "a valid callsign is required" }, { status: 400 });
   const why = String(note ?? "").trim();
   if (why.length < NOTE_MIN || why.length > NOTE_MAX)
@@ -270,7 +284,7 @@ export async function sysopVerify(req: Request, env: Env, sysopCall: string): Pr
     .first<{ status: string; method: string | null }>();
   if (cur?.status === "verified")
     return json({ error: `${cs} is already verified (${cur.method ?? "unknown"})` }, { status: 409 });
-  const by = baseOf(sysopCall);
+  const by = baseCall(sysopCall);
   await markVerified(env, cs, "sysop", { by, note: why });
   await logEvent(env, cs, "sysop_verified", { by, note: why });
   return json({ verified: true, callsign: cs, method: "sysop", verifiedBy: by, note: why }, { status: 201 });
@@ -278,22 +292,12 @@ export async function sysopVerify(req: Request, env: Env, sysopCall: string): Pr
 
 /** DELETE /api/admin/verifications/:callsign — revoke a sysop verification (only that method). */
 export async function sysopRevoke(env: Env, callsign: string, sysopCall: string): Promise<Response> {
-  const cs = baseOf(callsign);
+  const cs = baseCall(callsign);
   const cur = await env.DB.prepare("SELECT 1 AS x FROM callsign_verifications WHERE callsign=? AND method='sysop'")
     .bind(cs)
     .first();
   if (!cur) return json({ error: `${cs} has no sysop verification` }, { status: 404 });
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=? AND method='sysop'").bind(cs),
-    env.DB.prepare(
-      "UPDATE account_callsigns SET verified=0, method=NULL, verified_at=NULL WHERE callsign=? AND method='sysop'",
-    ).bind(cs),
-    env.DB.prepare(
-      "UPDATE accounts SET verified=0, verify_method=NULL, verified_at=NULL WHERE (callsign=? OR callsign LIKE ?) AND verify_method='sysop'",
-    ).bind(cs, `${cs}-%`),
-    // device keys registered while the call counted as verified no longer carry that badge
-    env.DB.prepare("UPDATE callsign_keys SET verified=0 WHERE callsign=? OR callsign LIKE ?").bind(cs, `${cs}-%`),
-  ]);
-  await logEvent(env, cs, "sysop_revoked", { by: baseOf(sysopCall) });
+  await env.DB.prepare("DELETE FROM callsign_verifications WHERE callsign=? AND method='sysop'").bind(cs).run();
+  await logEvent(env, cs, "sysop_revoked", { by: baseCall(sysopCall) });
   return json({ revoked: true, callsign: cs });
 }

@@ -31,8 +31,6 @@ export function sessionDb(acct: SessionAccount, inner?: { prepare(sql: string): 
         return {
           bind: (v: unknown) => ({ first: async () => (v === acct.base ? { account_id: acct.accountId } : null) }),
         };
-      if (sql.startsWith("SELECT callsign, account_id FROM accounts WHERE callsign=? OR"))
-        return { bind: () => ({ first: async () => null }) };
       if (inner) return inner.prepare(sql);
       return {
         bind: () => ({ first: async () => null, run: async () => ({ meta: {} }), all: async () => ({ results: [] }) }),

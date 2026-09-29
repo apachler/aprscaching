@@ -82,6 +82,6 @@ export async function checkAmprChallenge(req: Request, env: Env): Promise<Respon
   const carries = ans.txts.some((t) => acsFields(t)?.get("verify") === code);
   if (!carries) return refuse(`${name} does not carry the current code — publish "${amprTxtValue(code)}"`);
   if (!(await spendChallenge(env, c, "ampr_dns", code))) return noChallenge();
-  await markVerified(env, c.cs, "ampr_dns", { accountId: c.accountId, by: host, note: name });
+  await markVerified(env, c.cs, "ampr_dns", { by: host, note: name });
   return json({ verified: true, callsign: c.cs, method: "ampr_dns" });
 }

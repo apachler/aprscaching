@@ -13,26 +13,17 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionAccountId as resolveAccount } from "./auth.js";
+import { baseCall } from "@aprscaching/aprs";
+import { sessionIdentity } from "./auth.js";
 import { pushAlert } from "./notify.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 
 const now = () => Math.floor(Date.now() / 1000);
-const base = (c: string) => c.toUpperCase().split("-")[0]!;
 const HEARD_THROTTLE_SEC = 3600; // at most one "heard" alert per watched call per hour
 const NEAR_CACHE_DEG = 0.0045; // ~500 m bounding box for the near-a-cache tie-in
 
-/**
- * The account id behind the current session, or null if signed out. A bare-string convenience over
- * the canonical resolver in auth.ts — the many watchlist/notify/wx/support callers key rows by
- * `account_id` alone and never need the active callsign.
- */
-export async function sessionAccountId(req: Request, env: Env): Promise<string | null> {
-  return (await resolveAccount(req, env))?.accountId ?? null;
-}
-
 export async function handleWatchList(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your watchlist" }, { status: 401 });
   const calls = (
     await env.DB.prepare("SELECT callsign, added_at AS addedAt FROM watch_calls WHERE account_id = ? ORDER BY callsign")
@@ -49,10 +40,10 @@ export async function handleWatchList(req: Request, env: Env): Promise<Response>
 }
 
 export async function handleWatchAdd(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your watchlist" }, { status: 401 });
   const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const cs = base(String(callsign ?? "").trim());
+  const cs = baseCall(String(callsign ?? "").trim());
   if (!/^[A-Z0-9]{3,}$/.test(cs)) return json({ error: "a valid callsign is required" }, { status: 400 });
   await env.DB.prepare("INSERT OR IGNORE INTO watch_calls (account_id, callsign, added_at) VALUES (?,?,?)")
     .bind(acct, cs, now())
@@ -61,16 +52,16 @@ export async function handleWatchAdd(req: Request, env: Env): Promise<Response> 
 }
 
 export async function handleWatchRemove(req: Request, env: Env, callsign: string): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your watchlist" }, { status: 401 });
   await env.DB.prepare("DELETE FROM watch_calls WHERE account_id = ? AND callsign = ?")
-    .bind(acct, base(callsign))
+    .bind(acct, baseCall(callsign))
     .run();
   return json({ ok: true });
 }
 
 export async function handleWatchAlerts(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to see your alerts" }, { status: 401 });
   const pg = parsePage(new URL(req.url), 50, 200);
   const ks = keyset(pg.cursor, "ts", "id");
@@ -91,7 +82,7 @@ export async function handleWatchAlerts(req: Request, env: Env): Promise<Respons
 }
 
 export async function handleWatchSeen(req: Request, env: Env): Promise<Response> {
-  const acct = await sessionAccountId(req, env);
+  const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in" }, { status: 401 });
   await env.DB.prepare("UPDATE watch_alerts SET seen = 1 WHERE account_id = ? AND seen = 0").bind(acct).run();
   return json({ ok: true });
@@ -105,7 +96,7 @@ export async function handleWatchSeen(req: Request, env: Env): Promise<Response>
 export async function recordWatchHeard(env: Env, heard: { src: string; lat: number; lon: number }[]): Promise<void> {
   if (!heard.length) return;
   const pos = new Map<string, { lat: number; lon: number }>();
-  for (const h of heard) pos.set(base(h.src), { lat: h.lat, lon: h.lon });
+  for (const h of heard) pos.set(baseCall(h.src), { lat: h.lat, lon: h.lon });
   const calls = [...pos.keys()];
   const watchers = (
     await env.DB.prepare(

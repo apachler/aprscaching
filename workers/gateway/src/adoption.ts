@@ -24,12 +24,12 @@
  */
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
+import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
-import { sessionAccountId, accountHoldsCall, baseHolder, isWithdrawnCall, displayCall } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, baseHolder, mayActAsOwner, isWithdrawnCall, displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { requireSysop } from "./admin.js";
 import { pushAlert } from "./notify.js";
-import { sessionHoldsCall } from "./caches.js";
 
 /** How long an offer on a cache with an active owner stands before the cache may change hands: time for
  *  the owner to see the alert and keep their cache. */
@@ -39,7 +39,6 @@ const NOTE_MIN = 3;
 const NOTE_MAX = 300;
 const CALL_RE = /^[A-Z0-9]{3,9}(-[A-Z0-9]{1,2})?$/;
 const nowSec = () => Math.floor(Date.now() / 1000);
-const baseOf = (c: string) => c.trim().toUpperCase().split("-")[0]!;
 
 interface CacheLite {
   id: number;
@@ -132,14 +131,14 @@ async function alertAccount(env: Env, accountId: string | null, c: CacheLite, ki
 
 /** The owner's account, for a cache whose owner is a person (not a withdrawn marker). */
 const ownerAccount = async (env: Env, c: CacheLite) =>
-  isWithdrawnCall(c.owner_call) ? null : baseHolder(env, baseOf(c.owner_call));
+  isWithdrawnCall(c.owner_call) ? null : baseHolder(env, baseCall(c.owner_call));
 
 /** The sysop's base call: the caller has passed requireSysop, so the session resolves. */
-const sysopCall = async (req: Request, env: Env) => baseOf((await sessionAccountId(req, env))!.callsign);
+const sysopCall = async (req: Request, env: Env) => baseCall((await sessionIdentity(req, env))!.callsign);
 
 /** Can the holder of `callsign` on `accountId` own a cache: the account holds the call and it is verified? */
 async function eligibleOwner(env: Env, accountId: string, callsign: string): Promise<boolean> {
-  return (await accountHoldsCall(env, accountId, callsign)) && (await isCallsignVerified(env, baseOf(callsign)));
+  return (await accountHoldsCall(env, accountId, callsign)) && (await isCallsignVerified(env, baseCall(callsign)));
 }
 
 /**
@@ -209,7 +208,7 @@ async function adopter(
   req: Request,
   env: Env,
 ): Promise<{ accountId: string; callsign: string; verified: boolean } | null> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me || isWithdrawnCall(me.callsign)) return null;
   const callsign = me.callsign.toUpperCase();
   return { accountId: me.accountId, callsign, verified: await eligibleOwner(env, me.accountId, callsign) };
@@ -239,19 +238,13 @@ export async function handleCacheAdoption(
   return new Response("method not allowed", { status: 405 });
 }
 
-async function isOwner(req: Request, env: Env, c: CacheLite, callsign: string | null): Promise<boolean> {
-  return (
-    !!callsign &&
-    !isWithdrawnCall(c.owner_call) &&
-    callsign === c.owner_call.toUpperCase() &&
-    (await sessionHoldsCall(req, env, callsign))
-  );
-}
+/** Does the signed-in session's account hold the owner call's licence? A withdrawn owner has none. */
+const isOwner = (req: Request, env: Env, c: CacheLite): Promise<boolean> => mayActAsOwner(req, env, c.owner_call);
 
 async function adoptionState(req: Request, env: Env, c: CacheLite): Promise<Response> {
   const offer = c.source === "native" ? await loadOffer(env, c.id) : null;
   const me = await adopter(req, env);
-  const owner = await isOwner(req, env, c, me?.callsign ?? null);
+  const owner = !!me && (await isOwner(req, env, c));
   const mine = me
     ? await env.DB.prepare(
         "SELECT * FROM cache_adoption_requests WHERE cache_id=? AND account_id=? ORDER BY id DESC LIMIT 1",
@@ -296,12 +289,12 @@ async function requestAdoption(req: Request, env: Env, c: CacheLite): Promise<Re
   if (!me) return json({ error: "sign in to adopt a cache" }, { status: 401 });
   if (!me.verified)
     return json(
-      { error: `verify ${baseOf(me.callsign)} to adopt a cache — control-verification required` },
+      { error: `verify ${baseCall(me.callsign)} to adopt a cache — control-verification required` },
       { status: 403 },
     );
   const offer = await loadOffer(env, c.id);
   if (!offer || c.source !== "native") return json({ error: "this cache is not up for adoption" }, { status: 409 });
-  if (await isOwner(req, env, c, me.callsign)) return json({ error: "you already own this cache" }, { status: 409 });
+  if (await isOwner(req, env, c)) return json({ error: "you already own this cache" }, { status: 409 });
   const b = (await req.json().catch(() => ({}))) as { inPlace?: unknown; note?: unknown };
   const n = noteOf(b.note, false);
   if ("error" in n) return json({ error: n.error }, { status: 400 });
@@ -326,7 +319,7 @@ async function requestAdoption(req: Request, env: Env, c: CacheLite): Promise<Re
 }
 
 async function cancelRequest(req: Request, env: Env, c: CacheLite): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
   const r = await env.DB.prepare(
     "SELECT * FROM cache_adoption_requests WHERE cache_id=? AND account_id=? AND status='pending'",
@@ -347,9 +340,9 @@ async function cancelRequest(req: Request, env: Env, c: CacheLite): Promise<Resp
 
 /** The active owner keeps the cache: the offer ends and its pending requests are cancelled. */
 async function ownerDeclines(req: Request, env: Env, c: CacheLite): Promise<Response> {
-  const me = await sessionAccountId(req, env);
+  const me = await sessionIdentity(req, env);
   if (!me) return json({ error: "sign in first" }, { status: 401 });
-  if (!(await isOwner(req, env, c, me.callsign.toUpperCase())))
+  if (!(await isOwner(req, env, c)))
     return json({ error: "only the owner may decline an adoption offer" }, { status: 403 });
   if (!(await loadOffer(env, c.id))) return json({ error: "this cache is not up for adoption" }, { status: 404 });
   const who = me.callsign.toUpperCase();
@@ -536,11 +529,11 @@ async function assign(req: Request, env: Env, cacheId: number): Promise<Response
   if (!CALL_RE.test(to)) return json({ error: "a valid callsign is required" }, { status: 400 });
   const n = noteOf(b.note, true);
   if ("error" in n) return json({ error: `${n.error}, saying why the cache changes owner` }, { status: 400 });
-  const holder = await baseHolder(env, baseOf(to));
-  if (!holder) return json({ error: `no account holds ${baseOf(to)}` }, { status: 404 });
+  const holder = await baseHolder(env, baseCall(to));
+  if (!holder) return json({ error: `no account holds ${baseCall(to)}` }, { status: 404 });
   if (!(await eligibleOwner(env, holder, to)))
     return json(
-      { error: `${baseOf(to)} is not control-verified — verify it before handing a cache to it` },
+      { error: `${baseCall(to)} is not control-verified — verify it before handing a cache to it` },
       { status: 403 },
     );
   if (to === c.owner_call.toUpperCase()) return json({ error: `${to} already owns ${c.code}` }, { status: 409 });
@@ -591,7 +584,7 @@ async function decideRequest(
   if (!(await loadOffer(env, c.id))) return json({ error: "this cache is not up for adoption" }, { status: 409 });
   // the licence may have moved, or its verification been revoked, since the request was made
   if (!(await eligibleOwner(env, r.account_id, r.callsign)))
-    return json({ error: `the requester no longer holds a control-verified ${baseOf(r.callsign)}` }, { status: 409 });
+    return json({ error: `the requester no longer holds a control-verified ${baseCall(r.callsign)}` }, { status: 409 });
   const blocked = await noticeBlocks(env, c);
   if (blocked) return json({ error: blocked }, { status: 409 });
   const others = (
