@@ -9,6 +9,9 @@ import { cborDecode as miniDecode, frameParts, signingBytes, decodePage } from "
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
+// Operator-level endpoints (callsign bootstrap, forwarding rules, donations) take OPERATOR_SECRET — the
+// ingest secret never reaches them.
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 
@@ -19,12 +22,18 @@ function ok(name, cond, detail = "") {
 }
 
 async function call(method, path, body, headers = {}) {
-  // The smoke acts as the trusted backend (it holds INGEST_SECRET), so writes that attribute an
-  // arbitrary RF/heard callsign go through the ingest-authorised path. Explicit headers still win
-  // (e.g. the bad-secret rejection tests). Web session gating is checked separately below.
+  // The smoke acts as the ingest box (it holds INGEST_SECRET), so writes that attribute an arbitrary
+  // RF/heard callsign go through the ingest-authorised path, and as the operator's scripts (it holds
+  // OPERATOR_SECRET). Explicit headers still win (e.g. the bad-secret rejection tests). Web session
+  // gating is checked separately below.
   const res = await fetch(BASE + path, {
     method,
-    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, ...headers },
+    headers: {
+      "content-type": "application/json",
+      "x-ingest-secret": SECRET,
+      ...(OPERATOR_SECRET ? { "x-operator-secret": OPERATOR_SECRET } : {}),
+      ...headers,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -246,8 +255,19 @@ ok("web hide without a session is rejected (401)", noAuthHide.status === 401, `s
 // (on its own cache, so the find count of the shared `id` cache is left untouched)
 const SESSCALL = "OE9SESS";
 const eStart = await call("POST", "/auth/email/start", { email: `s${now()}@example.com`, callsign: SESSCALL });
-const eVer = await fetch(`${BASE}/auth/email/verify?token=${eStart.data.devToken}`, {
-  headers: { accept: "application/json" },
+// opening the link only shows a confirm step — the token is spent by the POST that follows
+const eLink = await fetch(`${BASE}/auth/email/verify?token=${eStart.data.devToken}`, {
+  headers: { accept: "text/html" },
+});
+ok(
+  "email link GET shows a confirm step and signs nobody in",
+  eLink.status === 200 && !eLink.headers.get("set-cookie") && (await eLink.text()).includes('method="post"'),
+  String(eLink.status),
+);
+const eVer = await fetch(`${BASE}/auth/email/verify`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: eStart.data.devToken }),
 });
 const cookie = (eVer.headers.get("set-cookie") ?? "").split(";")[0];
 const sCache = await call("POST", "/api/caches", {
@@ -378,7 +398,11 @@ const addDup = await fetch(`${BASE}/auth/callsigns`, {
 ok("adding a call you already hold -> 409", addDup.status === 409, `status=${addDup.status}`);
 // a base call held by ANOTHER account is off-limits (both add and switch are rejected)
 const otherStart = await call("POST", "/auth/email/start", { email: `o${now()}@example.com`, callsign: "OE2OTHER" });
-await fetch(`${BASE}/auth/email/verify?token=${otherStart.data.devToken}`, { headers: { accept: "application/json" } });
+await fetch(`${BASE}/auth/email/verify`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: otherStart.data.devToken }),
+});
 const addOther = await fetch(`${BASE}/auth/callsigns`, {
   method: "POST",
   headers: { "content-type": "application/json", cookie: cookieB },
@@ -495,7 +519,15 @@ const b64u = (buf) => {
 };
 const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
-const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw });
+// a device key binds only through the holder's own session — the ingest secret registers nothing
+const regByIngest = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw });
+ok(
+  "key registration with the ingest secret alone is refused (401)",
+  regByIngest.status === 401,
+  String(regByIngest.status),
+);
+const dl1abcCookie = await signUp("DL1ABC");
+const reg = await call("POST", "/keys/register", { callsign: "DL1ABC", publicKey: pubRaw }, { cookie: dl1abcCookie });
 ok("key registration accepted", reg.data?.ok === true, JSON.stringify(reg.data));
 
 // A found is idempotent per (cache, logger). DL1ABC already found `id` above, so the
@@ -638,7 +670,7 @@ async function verifyCallsign(cs, cookie) {
   return isVerified(cs);
 }
 {
-  const cookie = await signUp("DL1ABC");
+  const cookie = dl1abcCookie;
   const outboxBefore = (await call("GET", "/outbox")).data?.items?.length ?? 0;
   const start = await call("POST", "/verify/aprs/start", { callsign: "DL1ABC" }, { cookie });
   ok(
@@ -688,8 +720,19 @@ async function verifyCallsign(cs, cookie) {
   ok("a MeshCom VERIFY heard directly by the attested node verifies the callsign", await isVerified("OE9MSH"));
 }
 ok(
-  "the operator bootstrap needs the ingest secret",
-  (await call("POST", "/verify/operator", { callsign: "DL1ABC" }, { "x-ingest-secret": "" })).status === 401,
+  "the operator bootstrap refuses a missing operator secret",
+  (await call("POST", "/verify/operator", { callsign: "DL1ABC" }, { "x-operator-secret": "" })).status === 401,
+);
+ok(
+  "the operator bootstrap refuses the ingest secret",
+  (
+    await call(
+      "POST",
+      "/verify/operator",
+      { callsign: "DL1ABC" },
+      { "x-operator-secret": "", "x-ingest-secret": SECRET },
+    )
+  ).status === 401,
 );
 const lb = await call("GET", "/api/leaderboard?metric=finds");
 ok(
@@ -1565,6 +1608,41 @@ const boxAck = await call("POST", "/api/box/smoke-box/commands/ack", {
 });
 ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, JSON.stringify(boxAck.data));
 const boxLog = await call("GET", "/api/box/smoke-box/log");
+// a signed-in operator controls a box only after pairing it with the code the box obtained
+{
+  const pc = await signUp("OE7PAIR");
+  const squat = await call(
+    "POST",
+    "/api/box/smoke-box/command",
+    { kind: "status" },
+    { cookie: pc, "x-ingest-secret": "" },
+  );
+  ok(
+    "an unpaired box refuses a session's command (no first-touch squatting)",
+    squat.status === 403,
+    String(squat.status),
+  );
+  const minted = await call("POST", "/api/box/smoke-box/pair", {});
+  ok(
+    "the box obtains a pairing code with its secret",
+    /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(minted.data?.code ?? ""),
+    JSON.stringify(minted.data),
+  );
+  const claimed = await call(
+    "POST",
+    "/api/box/smoke-box/claim",
+    { code: minted.data?.code },
+    { cookie: pc, "x-ingest-secret": "" },
+  );
+  ok("the pairing code links the box to the account", claimed.status === 200, JSON.stringify(claimed.data));
+  const own = await call(
+    "POST",
+    "/api/box/smoke-box/command",
+    { kind: "status" },
+    { cookie: pc, "x-ingest-secret": "" },
+  );
+  ok("the paired owner's session commands the box", own.status === 201, JSON.stringify(own.data));
+}
 ok(
   "the operator sees the box command log",
   boxLog.status === 200 && (boxLog.data?.commands ?? []).some((c) => c.status === "done"),
@@ -1573,8 +1651,10 @@ ok(
 
 // watchlist + alerts — fresh session, watch a call, hear it near the smoke cache
 const wStart = await call("POST", "/auth/email/start", { email: `w${now()}@example.com`, callsign: "OE9WL" });
-const wVer = await fetch(`${BASE}/auth/email/verify?token=${wStart.data?.devToken}`, {
-  headers: { accept: "application/json" },
+const wVer = await fetch(`${BASE}/auth/email/verify`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: wStart.data?.devToken }),
 });
 const wcookie = (wVer.headers.get("set-cookie") ?? "").split(";")[0];
 ok("watchlist requires a session (401)", (await fetch(`${BASE}/api/watch`)).status === 401);
@@ -1632,8 +1712,10 @@ ok(
 
 // save / share map views
 const vStart = await call("POST", "/auth/email/start", { email: `v${now()}@example.com`, callsign: "OE9VW" });
-const vVer = await fetch(`${BASE}/auth/email/verify?token=${vStart.data?.devToken}`, {
-  headers: { accept: "application/json" },
+const vVer = await fetch(`${BASE}/auth/email/verify`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: vStart.data?.devToken }),
 });
 const vcookie = (vVer.headers.get("set-cookie") ?? "").split(";")[0];
 ok(
@@ -1707,8 +1789,10 @@ ok(
 
 // editable ham profile
 const prStart = await call("POST", "/auth/email/start", { email: `p${now()}@example.com`, callsign: "OE9PROF" });
-const prVer = await fetch(`${BASE}/auth/email/verify?token=${prStart.data?.devToken}`, {
-  headers: { accept: "application/json" },
+const prVer = await fetch(`${BASE}/auth/email/verify`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ token: prStart.data?.devToken }),
 });
 const prcookie = (prVer.headers.get("set-cookie") ?? "").split(";")[0];
 ok(
@@ -1932,7 +2016,7 @@ ok(
 
 // supporter recognition + public ledger — recognition only, gates nothing
 ok(
-  "confirm a donation (ingest secret) marks supporter + ledgers it",
+  "confirm a donation (operator secret) marks supporter + ledgers it",
   (
     await call("POST", "/api/support/confirm", {
       callsign: "OE9PROF",

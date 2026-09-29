@@ -24,7 +24,7 @@ the **RF ingest always runs on the operator's own equipment** — a local proces
 
 ## Quick start per topology
 ```bash
-cp .env.example .env && ./setup.sh          # fill callsign/passcode/filter/domain
+cp .env.example .env && ./setup.sh          # fill callsign/passcode/filter/domain; generates INGEST_SECRET, OPERATOR_SECRET, SESSION_SECRET
 
 # 0) Single-binary desktop (no Node/Docker): build exes for all OSes from one machine:
 bash desktop/build-exe.sh v1.0.0

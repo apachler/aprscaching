@@ -20,7 +20,7 @@ export const BATCH = 1000;
  * credential can change without touching the import logic.
  * @param {string} secret
  */
-export const authHeaders = (secret) => ({ "content-type": "application/json", "x-ingest-secret": secret });
+export const authHeaders = (secret) => ({ "content-type": "application/json", "x-operator-secret": secret });
 
 /** A row outranks another when it is licensed and the other is not, then when it expires later (no expiry = latest). */
 const better = (
@@ -112,7 +112,7 @@ async function post(
       continue;
     }
     const data = await res.json().catch(() => null);
-    if (res.status === 401) throw new Error("refused: the secret does not match the gateway's INGEST_SECRET");
+    if (res.status === 401) throw new Error("refused: the secret does not match the gateway's OPERATOR_SECRET");
     if (!res.ok) throw new Error(`${url} answered ${res.status}: ${data?.error ?? "unexpected response"}`);
     return data;
   }

@@ -93,14 +93,18 @@ describe("corroboration abuse limits", () => {
   });
 
   it("clientIp trusts only unforgeable sources", () => {
-    expect(clientIp(new Request("http://x", { headers: { "cf-connecting-ip": "1.2.3.4" } }))).toBe("1.2.3.4");
+    expect(clientIp(new Request("http://x", { headers: { "cf-connecting-ip": "1.2.3.4" } }), {} as Env)).toBe(
+      "1.2.3.4",
+    );
     // a client-supplied XFF is IGNORED unless the operator declares a reverse proxy
-    expect(clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }))).toBe("unknown");
+    expect(clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }), {} as Env)).toBe(
+      "unknown",
+    );
     expect(
       clientIp(new Request("http://x", { headers: { "x-forwarded-for": "5.6.7.8, 9.9.9.9" } }), {
         TRUST_PROXY: "1",
       } as never),
     ).toBe("5.6.7.8");
-    expect(clientIp(new Request("http://x"))).toBe("unknown");
+    expect(clientIp(new Request("http://x"), {} as Env)).toBe("unknown");
   });
 });

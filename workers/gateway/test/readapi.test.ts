@@ -44,6 +44,17 @@ describe("public read API /api/v1", () => {
     expect(c.headers.get("retry-after")).toBe("60");
   });
 
+  it("keys the per-IP budget on x-forwarded-for when TRUST_PROXY=1 (behind a declared reverse proxy)", async () => {
+    const env = { API_RATE_ANON: "1", API_RATE_WINDOW_SEC: "60", TRUST_PROXY: "1" } as unknown as Env;
+    // two distinct clients behind the proxy: same socket address, different forwarded-for
+    const viaProxy = (xff: string) => ({ "x-real-ip": "10.0.0.1", "x-forwarded-for": xff });
+    const a = await handleApiV1(req("GET", "/spots", viaProxy("198.51.100.21")), env, "/spots");
+    const b = await handleApiV1(req("GET", "/spots", viaProxy("198.51.100.22")), env, "/spots");
+    expect([a.status, b.status]).toEqual([200, 200]); // separate buckets — not one shared proxy bucket
+    const c = await handleApiV1(req("GET", "/spots", viaProxy("198.51.100.21")), env, "/spots");
+    expect(c.status).toBe(429);
+  });
+
   it("unknown v1 path → 404 with a pointer to the index", async () => {
     const res = await handleApiV1(req("GET", "/nope"), {} as Env, "/nope");
     expect(res.status).toBe(404);

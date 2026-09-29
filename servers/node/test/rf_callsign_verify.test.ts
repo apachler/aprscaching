@@ -3,7 +3,7 @@
 // `VERIFY <code>` to the service call, and the call is verified only when a receiving site this instance
 // attests heard it on its own radio. APRS-IS is public, so nothing that travels over it — the code, or a
 // copy of the message — proves control of the licence. The operator bootstraps their own call with the
-// ingest secret, and a sysop may verify a call by hand, on the record.
+// operator secret, and a sysop may verify a call by hand, on the record.
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import fs from "node:fs";
@@ -17,6 +17,7 @@ import { authEnv, call, emailSignup, operatorVerify, rfVerify } from "./helpers/
 
 const MIGRATIONS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../db/migrations");
 const SECRET = { "x-ingest-secret": "test-ingest-secret" };
+const OPERATOR = { "x-operator-secret": "test-operator-secret" };
 
 const rfEnv = (extra: Record<string, unknown> = {}) => authEnv({ FIRST_PARTY_SITES: "OE8XXX", ...extra });
 
@@ -257,18 +258,20 @@ describe("a VERIFY message sent from a MeshCom node", () => {
 });
 
 describe("operator bootstrap", () => {
-  it("needs the ingest secret and an ADMIN_CALLSIGNS call", async () => {
+  it("needs the operator secret and an ADMIN_CALLSIGNS call", async () => {
     const env = rfEnv({ ADMIN_CALLSIGNS: "OE8APR" });
     const s = await emailSignup(env, "op@example.test", "OE8APR");
     expect((await call(env, "POST", "/verify/operator", { callsign: "OE8APR" })).status).toBe(401);
     expect(
-      (await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, { "x-ingest-secret": "wrong" })).status,
+      (await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, { "x-operator-secret": "wrong" })).status,
     ).toBe(401);
-    expect((await call(env, "POST", "/verify/operator", { callsign: "DL1AAA" }, SECRET)).status).toBe(403);
+    // the ingest secret sits on the ingest box and is not an operator credential
+    expect((await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, SECRET)).status).toBe(401);
+    expect((await call(env, "POST", "/verify/operator", { callsign: "DL1AAA" }, OPERATOR)).status).toBe(403);
     expect((await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, { cookie: s.cookie })).status).toBe(
       401,
     );
-    const ok = await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, SECRET);
+    const ok = await call(env, "POST", "/verify/operator", { callsign: "OE8APR" }, OPERATOR);
     expect(ok.status).toBe(200);
     expect(ok.data).toMatchObject({ verified: true, callsign: "OE8APR", method: "operator" });
     expect(await row(env, "OE8APR")).toMatchObject({ status: "verified", method: "operator" });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { getSession, logout, type Session } from "../api.js";
+import { getSession, logout, logoutAll, type Session } from "../api.js";
 
 /** The signed-in session (M9): identity comes from the server cookie, not localStorage. */
 export function useSession() {
@@ -22,6 +22,11 @@ export function useSession() {
     await logout().catch(() => {});
     setS({ callsign: null });
   }, []);
+  /** Sign out on every device; throws when the server refused, so the caller can say so. */
+  const signOutEverywhere = useCallback(async () => {
+    await logoutAll();
+    setS({ callsign: null });
+  }, []);
   return {
     callsign: s.callsign ?? "",
     verified: !!s.verified,
@@ -30,6 +35,7 @@ export function useSession() {
     loading,
     refresh,
     signOut,
+    signOutEverywhere,
   };
 }
 

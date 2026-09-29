@@ -8,7 +8,7 @@
  * WebSockets (./rooms.ts) · a filesystem MediaStore (./media.ts). Bun.serve speaks Web Request/
  * Response natively, so handle() is called directly with no http bridge.
  *
- * Run: `bun run servers/bun/server.ts`  (env: PORT, DB_PATH, MIGRATIONS_DIR, MEDIA_DIR, INGEST_SECRET, …)
+ * Run: `bun run servers/bun/server.ts`  (env: PORT, DB_PATH, MIGRATIONS_DIR, MEDIA_DIR, INGEST_SECRET, OPERATOR_SECRET, …)
  */
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,6 +18,7 @@ import { handle, runScheduled, runFrequentSync } from "@aprscaching/gateway/app"
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
+import { resolveSessionSecret } from "./secrets.ts";
 import { makeFetchGuard } from "./fetchguard.ts";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
@@ -33,16 +34,35 @@ const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(HERE, "../../db/migrat
 const MEDIA_DIR = process.env.MEDIA_DIR ?? join(HERE, "data/media");
 const INGEST_SECRET = process.env.INGEST_SECRET ?? "";
 
-// Boot guard: the session-signing key derives from this secret; booting with the
-// known default would let anyone forge a session cookie for any callsign (incl. the sysop).
+// Boot guard: the ingest box authenticates with INGEST_SECRET; the known default would let anyone post
+// packets and log finds as the ingest plane.
 if (!INGEST_SECRET || INGEST_SECRET === "change-me") {
   console.error(
     "FATAL: INGEST_SECRET is unset or still the 'change-me' default.\n" +
-      "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)\n" +
-      "  (optionally also SESSION_SECRET to decouple user sessions from the ingest credential)",
+      "  Set a strong secret, e.g.:  INGEST_SECRET=$(openssl rand -hex 24)",
   );
   process.exit(1);
 }
+// Boot guard: OPERATOR_SECRET is optional (unset closes the operator's machine paths), but a set value
+// must be strong and must not be the ingest secret — that would hand the ingest box operator rights.
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET;
+if (OPERATOR_SECRET !== undefined && OPERATOR_SECRET !== "") {
+  if (OPERATOR_SECRET === "change-me" || OPERATOR_SECRET === INGEST_SECRET) {
+    console.error(
+      "FATAL: OPERATOR_SECRET is the 'change-me' default or equal to INGEST_SECRET.\n" +
+        "  Set its own strong value, e.g.:  OPERATOR_SECRET=$(openssl rand -hex 24)  (or leave it unset)",
+    );
+    process.exit(1);
+  }
+}
+// Boot guard: sessions are signed with SESSION_SECRET only. Unset ⇒ generated once and kept beside the
+// database, so a single box needs no setup; a set value must be strong and its own.
+const SESSION = resolveSessionSecret(process.env, dirname(DB_PATH));
+if (!SESSION.ok) {
+  console.error(`FATAL: ${SESSION.error}\n  e.g.:  SESSION_SECRET=$(openssl rand -hex 32)`);
+  process.exit(1);
+}
+if (SESSION.source === "generated") console.log(`SESSION_SECRET generated and kept in ${dirname(DB_PATH)}`);
 
 // Boot guard: a registry whose authority key is not pinned cannot be verified, and federation
 // would otherwise run on whatever DNS says. Refuse to start instead of failing open.
@@ -91,6 +111,7 @@ const env: Env = {
   },
   INGEST_SECRET,
   ...stringEnvFrom(process.env), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway
+  SESSION_SECRET: SESSION.secret, // the resolved secret (env, kept file, or freshly generated)
   // AGPL §13 source: commit from env, else git (self-host-from-source) — the resolved value wins
   SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
 };

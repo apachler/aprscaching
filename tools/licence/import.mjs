@@ -3,7 +3,7 @@
 // @ts-check
 // Import public amateur licence registers into a gateway, for the callsign validity badge.
 //
-//   BASE=https://api.example.net INGEST_SECRET=… node tools/licence/import.mjs --source fcc
+//   BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc
 //   node tools/licence/import.mjs --source fcc,ised,acma,at,de
 //   node tools/licence/import.mjs --source all             # every register below
 //   node tools/licence/import.mjs --source de --file rufzeichenliste.pdf   # a file already on disk
@@ -25,14 +25,14 @@ const flag = (/** @type {string} */ name) => {
 
 if (args.includes("--list") || args.includes("--help")) {
   console.log(
-    "usage: BASE=<gateway> INGEST_SECRET=<secret> node tools/licence/import.mjs --source <ids|all> [--file <path>] [--dry-run]\n",
+    "usage: BASE=<gateway> OPERATOR_SECRET=<secret> node tools/licence/import.mjs --source <ids|all> [--file <path>] [--dry-run]\n",
   );
   for (const s of Object.values(SOURCES)) console.log(`  ${s.id.padEnd(5)} ${s.country}  ${s.name}`);
   process.exit(0);
 }
 
 const base = flag("--base") ?? process.env.BASE ?? "http://127.0.0.1:8787";
-const secret = process.env.INGEST_SECRET;
+const secret = process.env.OPERATOR_SECRET;
 const dryRun = args.includes("--dry-run");
 const file = flag("--file");
 const wanted = (flag("--source") ?? process.env.LICENCE_SOURCES ?? "").trim();
@@ -58,7 +58,7 @@ if (file && ids.length !== 1) {
   process.exit(2);
 }
 if (!dryRun && !secret) {
-  console.error("INGEST_SECRET is required to import (or pass --dry-run)");
+  console.error("OPERATOR_SECRET is required to import (or pass --dry-run)");
   process.exit(2);
 }
 

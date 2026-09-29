@@ -46,19 +46,38 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
   signature-verification bypass.
 - **Resource exhaustion** — unbounded growth or connection storms that take down a long-running box.
 
-Out of scope: findings that require a secret the operator already controls (e.g. `INGEST_SECRET`,
-`FED_PRIVATE_KEY`), self-inflicted misconfiguration, or volumetric DoS against a public instance's
+Out of scope: findings that require a secret the operator already controls (e.g. `OPERATOR_SECRET`,
+`SESSION_SECRET`, `FED_PRIVATE_KEY`), self-inflicted misconfiguration, or volumetric DoS against a public instance's
 network layer (that's the operator's edge/CDN concern).
 
 ## Hardening & running securely
 
-- The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, and
-  no session is minted on a weak secret. Set a strong secret (`openssl rand -hex 24`); on a shared
-  gateway also set a dedicated `SESSION_SECRET`.
+- **Three secrets, three planes.** `INGEST_SECRET` (the ingest box) authorises only ingest-plane writes;
+  it never registers a device key, verifies a callsign, reaches operator configuration or signs a
+  session. `OPERATOR_SECRET` (the operator's scripts, `x-operator-secret`) reaches instance-wide
+  configuration and is closed while unset. `SESSION_SECRET` alone signs sessions. A leaked ingest secret
+  therefore lets an attacker post packets as your ingest box — it does not hand over accounts or the
+  instance, and a finding that it does is in scope.
+- The Node/Bun servers **refuse to boot** with an unset or default (`change-me`) `INGEST_SECRET`, or an
+  `OPERATOR_SECRET`/`SESSION_SECRET` equal to it. Without `SESSION_SECRET` they generate one beside the
+  database; the Worker mints no session without it. Give an ingest box only `INGEST_SECRET`.
+- **Sessions are bound to the account.** A cookie names the account and its session generation and is
+  honoured only while that account exists at that generation and holds the call. Erasure, a callsign
+  change and **Sign out everywhere** (`POST /auth/logout-all`) end every session of the account;
+  `SESSION_EPOCH` ends every session on the instance.
+- **Sign-in needs a deliberate step.** Opening an email sign-in link shows a confirm page; only its POST
+  (same origin) spends the token, so a page cannot log a visitor into someone else's account.
+- **Credentialed CORS is allowlisted.** Only `APP_URL` and `CORS_ORIGINS` may send a session cookie
+  cross-origin; with neither set, no origin can.
+- **A remote box belongs to the account that pairs it** with the one-time code the box prints; no
+  account can claim a box id by touching it first.
+- The desktop app listens on `127.0.0.1` unless `HOST` says otherwise, and generates its secrets on first
+  run.
 - `LOTW_CA_PEM` decides whose certificates prove a callsign: put only the ARRL LoTW CA certificates in
   it, checked against a second independent copy. `DOH_URL` must name a DNSSEC-validating resolver you
   trust, since its AD flag is what the ampr.org method relies on.
-- Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, VAPID keys, etc.) — use
+- Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`,
+  VAPID keys, etc.) — use
   `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
   rotate anything it flags.
 - A full reliability/security hardening pass was completed ahead of going public — every finding

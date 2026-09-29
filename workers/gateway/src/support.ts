@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { secretOk } from "./auth.js";
+import { operatorSecretOk } from "./auth.js";
 /**
  * support.ts — supporter recognition + the public transparency ledger.
  *
@@ -19,7 +19,6 @@ import { sessionAccountId } from "./watch.js";
 const now = () => Math.floor(Date.now() / 1000);
 const BUCKETS = ["development", "hosting", "operation", "peer_reimbursement"] as const;
 type Bucket = (typeof BUCKETS)[number];
-const ingestOk = (req: Request, env: Env): boolean => secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
 
 export interface LedgerRow {
   ts: number;
@@ -131,10 +130,10 @@ export async function handleSupportPrefs(req: Request, env: Env): Promise<Respon
 /**
  * POST /api/support/confirm — the trusted-backend hook a payment webhook (or a manual confirm)
  * calls to record a donation: marks the donor's account a supporter (recognition) and appends a
- * public ledger entry. Gated by the ingest secret. NEVER changes any functional capability.
+ * public ledger entry. Gated by the operator secret. NEVER changes any functional capability.
  */
 export async function handleSupportConfirm(req: Request, env: Env): Promise<Response> {
-  if (!ingestOk(req, env)) return json({ error: "unauthorized" }, { status: 401 });
+  if (!operatorSecretOk(req, env)) return json({ error: "unauthorized" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as {
     callsign?: string;
     amountCents?: number;

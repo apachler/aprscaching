@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
-import { json } from "./app.js";
-import { issueSessionCookie, unclaimableReason, authThrottled } from "./auth.js";
+import { json, corsAllowlist } from "./app.js";
+import { issueSessionCookie, unclaimableReason, authThrottled, sessionsEnabled, sessionUnavailable } from "./auth.js";
 import { licenceFor } from "./licence.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
- * passkeys. `start` issues a one-time token and emails a link; `verify` consumes it and opens a
- * session (creating the account on first register). When no email provider is configured (dev/CI),
- * `start` returns the token in-band so headless flows and first-run can proceed without real mail.
+ * passkeys. `start` issues a one-time token and emails a link. Opening the link (GET) only shows a
+ * confirm step; the confirm (POST with the same token) consumes it and opens a session, creating the
+ * account on first register. A GET never signs anyone in, so a page that makes a browser load someone
+ * else's link cannot log the victim into the attacker's account. When no email provider is configured
+ * (dev/CI), `start` returns the token in-band so headless flows and first-run can proceed without mail.
  */
 
 const TTL_SEC = 15 * 60;
@@ -67,13 +69,66 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
   return json({ error: "email delivery is not configured on this instance" }, { status: 503 });
 }
 
-/** GET|POST /auth/email/verify — consume the token, open a session (create account on register). */
+const esc = (v: string) => v.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+
+/** The confirm step a browser sees when it opens the link: one button that POSTs the token back. */
+function confirmPage(token: string): Response {
+  return new Response(
+    `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=referrer content=no-referrer>
+<title>Sign in · aprscaching</title><style>
+:root{color-scheme:dark light}body{font:15px/1.5 system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem}
+h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height:44px;padding:.6rem 1.2rem;border-radius:10px}
+button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
+<h1>Sign in to aprscaching</h1>
+<p>Confirm that you want to sign in on this device.</p>
+<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${esc(token)}">
+<button type="submit">Sign in</button></form>
+<p class=m>Didn't request this? Close this page — nothing happens until you confirm.</p>`,
+    {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+      },
+    },
+  );
+}
+
+/** A browser POST must come from this gateway's own page or the configured app origins. A request with
+ *  no Origin header is a non-browser client (a script holding the token), which no page can forge. */
+function sameSiteOrigin(req: Request, env: Env): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) return true;
+  try {
+    const o = new URL(origin);
+    return o.host === new URL(req.url).host || corsAllowlist(env).has(o.origin);
+  } catch {
+    return false; // "null" (sandboxed/opaque) or garbage
+  }
+}
+
+/**
+ * GET /auth/email/verify?token= — the link target: a confirm page for a browser, `{ confirm: true }` for
+ * an API client. Never consumes the token.
+ * POST /auth/email/verify {token} (JSON or a form) — consume the token and open a session.
+ */
 export async function handleEmailVerify(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
-  let token = url.searchParams.get("token");
-  if (!token && req.method === "POST")
-    token = ((await req.json().catch(() => ({}))) as { token?: string }).token ?? null;
+  if (req.method === "GET") {
+    const token = url.searchParams.get("token");
+    if (!token) return json({ error: "missing token" }, { status: 400 });
+    if ((req.headers.get("accept") ?? "").includes("text/html")) return confirmPage(token);
+    return json({ confirm: true, method: "POST", path: "/auth/email/verify" });
+  }
+
+  if (!sameSiteOrigin(req, env)) return json({ error: "cross-site sign-in refused" }, { status: 403 });
+  const isForm = (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded");
+  const token = isForm
+    ? new URLSearchParams(await req.text().catch(() => "")).get("token")
+    : (((await req.json().catch(() => ({}))) as { token?: string }).token ?? null);
   if (!token) return json({ error: "missing token" }, { status: 400 });
+  if (!sessionsEnabled(env)) return sessionUnavailable();
 
   const row = await env.DB.prepare(
     "SELECT email, callsign, purpose, created_at, used FROM email_tokens WHERE token = ?",
@@ -84,7 +139,9 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (!row || row.used || now - row.created_at > TTL_SEC) {
     return json({ error: "invalid or expired link" }, { status: 400 });
   }
-  await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ?").bind(token).run();
+  // spend the token atomically: of two concurrent confirms only one sees the row still unused
+  const spent = await env.DB.prepare("UPDATE email_tokens SET used = 1 WHERE token = ? AND used = 0").bind(token).run();
+  if (spent.meta?.changes === 0) return json({ error: "invalid or expired link" }, { status: 400 });
 
   let acct = await env.DB.prepare("SELECT account_id, callsign FROM accounts WHERE email = ?")
     .bind(row.email)
@@ -117,11 +174,10 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     acct = { account_id: id, callsign: cs };
   }
 
-  const cookie = await issueSessionCookie(acct.callsign, env);
-  // a real browser hitting the GET link → redirect into the app with the session set; API → JSON
-  if (req.method === "GET" && (req.headers.get("accept") ?? "").includes("text/html")) {
-    return new Response(null, { status: 302, headers: { "set-cookie": cookie, location: appOrigin(req, env) + "/" } });
-  }
+  const cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
+  // the confirm form → back into the app with the session set; an API client → JSON
+  if (isForm)
+    return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: appOrigin(req, env) + "/" } });
   return json(
     { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
     { headers: { "set-cookie": cookie } },

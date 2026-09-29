@@ -22,9 +22,11 @@ services:
     environment:
       DB_PATH: /data/aprscaching.db
       PORT: "8080"
-      # The gateway refuses to boot without a real INGEST_SECRET (session keys derive from it) —
-      # without this passthrough the container restart policy would just crash-loop it.
+      # The gateway refuses to boot without a real INGEST_SECRET — without this passthrough the
+      # container restart policy would just crash-loop it. An empty SESSION_SECRET is generated on first
+      # start and kept in the data volume; an empty OPERATOR_SECRET closes the operator's machine paths.
       INGEST_SECRET: ${INGEST_SECRET}
+      OPERATOR_SECRET: ${OPERATOR_SECRET:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       INSTANCE: ${INSTANCE:-}
       APP_URL: ${APP_URL:-}
@@ -67,6 +69,9 @@ services:
       INGEST_URL: ${INGEST_URL:-http://gateway:8080/ingest}
       INGEST_SECRET: ${INGEST_SECRET}
       BATCH_MS: ${BATCH_MS:-2000}
+      # .env reaches this container too: blank the gateway-only secrets so the ingest box never holds them
+      OPERATOR_SECRET: ""
+      SESSION_SECRET: ""
     depends_on:
       gateway: { condition: service_healthy }
     restart: unless-stopped

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionIdentity } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
 
@@ -57,10 +57,13 @@ export function buildTxPayload(
 }
 
 export async function handleUserTx(req: Request, env: Env): Promise<Response> {
-  const callsign = (await sessionCallsign(req, env))?.toUpperCase();
-  if (!callsign) return json({ error: "sign in to transmit" }, { status: 401 });
-  if (!(await isCallsignVerified(env, callsign))) {
-    return json({ error: `verify ${callsign} to transmit — control-verification required` }, { status: 403 });
+  // The session resolves only while its account holds the call's base; control-verification lives on
+  // the BASE call, which every SSID of it inherits.
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to transmit" }, { status: 401 });
+  const callsign = me.callsign.toUpperCase();
+  if (!(await isCallsignVerified(env, me.base))) {
+    return json({ error: `verify ${me.base} to transmit — control-verification required` }, { status: 403 });
   }
   const built = buildTxPayload((await req.json().catch(() => ({}))) as UserTxBody);
   if (!built.ok) return json({ error: built.error }, { status: 400 });

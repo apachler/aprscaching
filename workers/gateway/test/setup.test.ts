@@ -12,6 +12,7 @@ const SECRET = "a-strong-ingest-secret-123";
 
 /** The signed-in operator's identity rows: the account holds its call, control-verified. */
 function operatorRow(sql: string): Record<string, unknown> | null {
+  if (sql.includes("SELECT session_gen FROM accounts")) return { session_gen: 0 };
   if (sql.includes("FROM account_callsigns")) return { account_id: "acct-op", verified: 1 };
   if (sql.startsWith("SELECT account_id FROM accounts")) return { account_id: "acct-op" };
   if (sql.startsWith("SELECT status FROM callsign_verifications")) return { status: "verified" };
@@ -42,6 +43,7 @@ const db = (counts: Record<string, number>) => ({
 const baseEnv = (over: Partial<Env> = {}, counts: Record<string, number> = {}): Env =>
   ({
     INGEST_SECRET: SECRET,
+    SESSION_SECRET: "a-strong-session-secret-456",
     ADMIN_CALLSIGNS: "OE8APR",
     DB: db(counts),
     ...over,
@@ -49,7 +51,7 @@ const baseEnv = (over: Partial<Env> = {}, counts: Record<string, number> = {}): 
 
 const get = async (env: Env, callsign: string | null) => {
   const headers: Record<string, string> = {};
-  if (callsign) headers.cookie = (await issueSessionCookie(callsign, env)).split(";")[0]!;
+  if (callsign) headers.cookie = (await issueSessionCookie(env, "acct-op", callsign)).split(";")[0]!;
   return handleAdminSetup(new Request("http://gw/api/admin/setup", { headers }), env);
 };
 
@@ -74,6 +76,7 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
   it("never echoes a secret value anywhere in the body", async () => {
     const env = baseEnv({
       SESSION_SECRET: "session-secret-value-789",
+      OPERATOR_SECRET: "operator-secret-value-321",
       FED_PRIVATE_KEY: "fed-key-material-abc",
       EMAIL_API_KEY: "re_email_key_xyz",
       EMAIL_FROM: "op@example.net",
@@ -84,6 +87,7 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
     for (const secret of [
       SECRET,
       "session-secret-value-789",
+      "operator-secret-value-321",
       "fed-key-material-abc",
       "re_email_key_xyz",
       "vapid-priv-material",
@@ -99,7 +103,8 @@ describe("GET /api/admin/setup — env items are statuses, never secret values",
   it("reports missing/warn states for an unconfigured instance", async () => {
     const items = await itemsOf(await get(baseEnv(), "OE8APR"));
     expect(find(items, "INGEST_SECRET").status).toBe("ok"); // strong secret in baseEnv
-    expect(find(items, "SESSION_SECRET").status).toBe("warn"); // derived from INGEST_SECRET
+    expect(find(items, "SESSION_SECRET").status).toBe("ok"); // a signed-in operator implies one
+    expect(find(items, "OPERATOR_SECRET").status).toBe("warn"); // operator scripts closed
     expect(find(items, "OPERATOR").status).toBe("missing"); // legal pages unconfigured
     expect(find(items, "FIRST_PARTY_SITES").status).toBe("warn"); // no Tier-A attestation
     expect(find(items, "FED_PRIVATE_KEY").status).toBe("warn"); // unsigned feeds

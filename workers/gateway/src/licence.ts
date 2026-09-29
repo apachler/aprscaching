@@ -19,7 +19,7 @@
  */
 import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
-import { secretOk } from "./auth.js";
+import { operatorSecretOk } from "./auth.js";
 import { readGate } from "./readapi.js";
 
 export type LicenceStatus = "licensed" | "expired" | "unconfirmed";
@@ -151,12 +151,12 @@ export async function handleLicenceSources(req: Request, env: Env): Promise<Resp
 // ---- import (operator machine) ----
 
 /**
- * The operator-machine credential for register imports. It is the ingest secret (`x-ingest-secret`):
- * the import tool runs where the operator's ingest runs, holding the same secret. Every import route
- * checks through this one helper.
+ * The credential for register imports: the operator secret (`x-operator-secret`). An import rewrites
+ * instance-wide data, so it is an operator action, never the ingest box's. Every import route checks
+ * through this one helper.
  */
 export function operatorMachineOk(req: Request, env: Env): boolean {
-  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+  return operatorSecretOk(req, env);
 }
 
 const SOURCE_ID = /^[a-z][a-z0-9_-]{0,23}$/;

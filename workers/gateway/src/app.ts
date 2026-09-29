@@ -20,6 +20,7 @@ import {
   handleClaim,
   handleSession,
   handleLogout,
+  handleLogoutAll,
   handleChangeCallsign,
   handleListCallsigns,
   handleAddCallsign,
@@ -70,7 +71,7 @@ import {
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
-import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog } from "./box.js";
+import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog, handleBoxPair, handleBoxClaim } from "./box.js";
 import {
   handleRelayEnqueue,
   handleRelayLease,
@@ -343,13 +344,15 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (watchDel && m === "DELETE") return handleWatchRemove(req, env, watchDel[1]!);
 
   // remote control of the operator's own ingest box — gateway-as-relay
-  const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log)$/.exec(p);
+  const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log|pair|claim)$/.exec(p);
   if (box) {
     const [boxId, op] = [box[1]!, box[2]!];
     if (op === "command" && m === "POST") return handleBoxEnqueue(req, env, boxId);
     if (op === "commands" && m === "GET") return handleBoxPoll(req, env, boxId);
     if (op === "commands/ack" && m === "POST") return handleBoxAck(req, env, boxId);
     if (op === "log" && m === "GET") return handleBoxLog(req, env, boxId);
+    if (op === "pair" && m === "POST") return handleBoxPair(req, env, boxId);
+    if (op === "claim" && m === "POST") return handleBoxClaim(req, env, boxId);
   }
 
   // federation rendezvous relay — a NAT'd spoke serves its feed via a hub, poll-based
@@ -470,6 +473,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/auth/callsigns" && m === "GET") return handleListCallsigns(req, env);
   if (p === "/auth/callsigns" && m === "POST") return handleAddCallsign(req, env);
   if (p === "/auth/logout" && m === "POST") return handleLogout();
+  if (p === "/auth/logout-all" && m === "POST") return handleLogoutAll(req, env);
 
   // callsign control-verification: an RF challenge, the operator's bootstrap, and the badge status
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
@@ -636,9 +640,9 @@ export function xml(body: string, init: ResponseInit = {}): Response {
 }
 
 /** The origins allowed to make *credentialed* (cookie-bearing) cross-origin requests —
- *  APP_URL plus any CORS_ORIGINS. Empty (unconfigured instance) reflects all origins;
- *  a configured instance (production sets APP_URL) is locked down. */
-function corsAllowlist(env: Env): Set<string> {
+ *  APP_URL plus any CORS_ORIGINS. An empty list allows none: an unconfigured instance serves only
+ *  non-credentialed CORS, so no third-party page can ride a signed-in user's cookie. */
+export function corsAllowlist(env: Env): Set<string> {
   const list = new Set<string>();
   const add = (u?: string) => {
     const s = u?.trim();
@@ -661,12 +665,21 @@ export function withCors(res: Response, req: Request, env: Env): Response {
   const origin = req.headers.get("Origin");
   if (!origin) return res;
   const h = new Headers(res.headers);
-  h.set("Access-Control-Allow-Origin", origin);
+  const allowed = corsAllowlist(env);
+  if (allowed.has(origin)) {
+    // an allowlisted app origin: reflect it and let the session cookie ride
+    h.set("Access-Control-Allow-Origin", origin);
+    h.set("Access-Control-Allow-Credentials", "true");
+  } else if (allowed.size > 0) {
+    // any other origin on a configured instance: readable (the public read API), never credentialed
+    h.set("Access-Control-Allow-Origin", origin);
+  } else {
+    // no allowlist at all: a wildcard, which browsers never combine with cookies
+    h.set("Access-Control-Allow-Origin", "*");
+  }
   h.set("Vary", "Origin");
   h.set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS");
   h.set("Access-Control-Allow-Headers", req.headers.get("Access-Control-Request-Headers") ?? "content-type");
   h.set("Access-Control-Max-Age", "86400");
-  const allowed = corsAllowlist(env);
-  if (allowed.size === 0 || allowed.has(origin)) h.set("Access-Control-Allow-Credentials", "true");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }

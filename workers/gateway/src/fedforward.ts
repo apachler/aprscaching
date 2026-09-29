@@ -40,12 +40,12 @@ export async function enqueueAcsfedBulletin(
 }
 
 /**
- * POST /federation/bbs/enqueue {types?, since?, limit?} — sysop or the operator's ingest box (the
- * forwarding scheduler triggers it on its own cadence). Packs the local records of the requested
+ * POST /federation/bbs/enqueue {types?, since?, limit?} — sysop or the operator secret (a scheduled job
+ * triggers it on the operator's own cadence). Packs the local records of the requested
  * feeds (default: all, tombstones first) into ONE bulletin addressed to the reserved category.
  */
 export async function handleFedBbsEnqueue(req: Request, env: Env): Promise<Response> {
-  const denied = await requireSysop(req, env, { allowIngest: true });
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
   if (denied) return denied;
   const b = (await req.json().catch(() => ({}))) as { types?: string[]; since?: number; limit?: number };
   const wanted = Array.isArray(b.types) && b.types.length ? new Set(b.types) : null;

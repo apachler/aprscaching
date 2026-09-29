@@ -7,12 +7,18 @@ export interface Env {
   TILES: ObjectStore;
   MEDIA?: MediaStore; // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
+  // The ingest-plane credential: the ingest box presents it (x-ingest-secret) to post packets, drain the
+  // outbox, deliver BBS mail, mirror the node table, log finds heard over APRS and poll remote commands.
+  // It authorises nothing operator-level and never signs a session.
   INGEST_SECRET: string;
-  // Dedicated session-signing secret. Optional: absent ⇒ derived from INGEST_SECRET
-  // (single-operator self-host convenience) — but that couples the ingest-box credential to user
-  // sessions, so shared gateways SHOULD set it. Sessions are refused entirely while the effective
-  // secret is unset/'change-me' (auth.ts weakSecret): a default deploy can never mint a forgeable
-  // admin cookie.
+  // The operator's machine credential (x-operator-secret) for instance-wide configuration — operator
+  // callsign verification, federation peer trust, FBB forwarding partners/rules — used by
+  // tools/admin/* and scripts. Unset ⇒ those machine paths are closed; a signed-in, verified sysop
+  // still administers the instance from the web.
+  OPERATOR_SECRET?: string;
+  // The session-signing secret. Required for sign-in: unset, weak ('change-me') or equal to
+  // INGEST_SECRET/OPERATOR_SECRET ⇒ no session is minted or honoured. The Node/Bun servers generate
+  // and persist one beside the database when it is not set in the environment.
   SESSION_SECRET?: string;
   // Server-side session lifetime in days (default 30) and an optional revocation epoch (unix
   // seconds): sessions minted before SESSION_EPOCH are rejected — rotate all sessions without
@@ -29,7 +35,7 @@ export interface Env {
 
   // ---- instance operator (sysop) — comma-separated licensed call(s) that may administer THIS instance
   // (federation, forwarding partners/rules, node routes, peer trust). Absent ⇒ no web sysop (admin
-  // endpoints locked; the ingest still uses INGEST_SECRET). The operator lists their own call, and the
+  // endpoints locked; OPERATOR_SECRET still reaches them from scripts). The operator lists their own call, and the
   // role applies once their account holds that call and has control-verified it.
   ADMIN_CALLSIGNS?: string;
 
@@ -145,6 +151,7 @@ export interface Env {
  * with the optional string fields above — one source of truth for both runtimes.
  */
 export const ENV_STRING_KEYS = [
+  "OPERATOR_SECRET",
   "SESSION_SECRET",
   "SESSION_TTL_DAYS",
   "SESSION_EPOCH",

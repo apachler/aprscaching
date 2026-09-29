@@ -7,8 +7,10 @@ import { licenceFor } from "./licence.js";
 
 /**
  * Identity = callsign + passkey (WebAuthn), with email magic-link recovery (email.ts). Passkey
- * ceremonies are verified in webauthn.ts (Web Crypto, runtime-agnostic). Sessions are a signed
- * (HMAC) cookie bound to the callsign of the durable account behind it.
+ * ceremonies are verified in webauthn.ts (Web Crypto, runtime-agnostic). A session is a signed (HMAC,
+ * keyed by SESSION_SECRET) cookie naming the durable account, its session generation and the active
+ * call; it is honoured only while that account still exists, holds the call, and has not moved on to a
+ * newer generation.
  */
 
 const SESSION_COOKIE = "acs";
@@ -179,7 +181,8 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
   let accountId: string;
   let pendingNew = false;
   if (existing) {
-    if ((await sessionCallsign(req, env)) !== cs)
+    const me = await sessionIdentity(req, env);
+    if (!me || me.accountId !== existing.account_id || me.callsign !== cs)
       return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
     accountId = existing.account_id;
   } else {
@@ -223,6 +226,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   const origins = authOrigins(env);
   const rp = rpId(env);
   if (!origins || !rp) return webauthnUnconfigured();
+  if (!sessionsEnabled(env)) return sessionUnavailable();
   const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -234,6 +238,7 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
   // account does not exist yet and is created below only once the ceremony verifies.
   let challenge: string;
   let pending: { a?: string; e?: string | null } = {};
+  let accountId: string | null;
   try {
     const j = JSON.parse(stashed) as { c: string; a?: string; e?: string | null };
     challenge = j.c;
@@ -269,6 +274,10 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       } catch {
         return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
       }
+      accountId = pending.a;
+    } else {
+      accountId = await accountIdOf(env, cs);
+      if (!accountId) return json({ error: "no pending registration" }, { status: 400 });
     }
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -284,9 +293,10 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       .run();
     return json(
       { ok: true, callsign: cs, licence: await licenceFor(env, cs) },
-      { headers: { "set-cookie": await issueSessionCookie(cs, env) } },
+      { headers: { "set-cookie": await issueSessionCookie(env, accountId, cs) } },
     );
   } catch (e) {
+    if (e instanceof SessionUnavailable) return sessionUnavailable();
     return json({ error: "registration failed: " + (e as Error).message }, { status: 400 });
   }
 }
@@ -320,6 +330,7 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
   const origins = authOrigins(env);
   const rp = rpId(env);
   if (!origins || !rp) return webauthnUnconfigured();
+  if (!sessionsEnabled(env)) return sessionUnavailable();
   const { callsign, credential } = (await req.json().catch(() => ({}))) as { callsign?: string; credential?: Cred };
   const cs = String(callsign ?? "")
     .toUpperCase()
@@ -345,39 +356,63 @@ export async function handlePasskeyLoginFinish(req: Request, env: Env): Promise<
       rpId: rp,
     });
     await env.DB.prepare("UPDATE credentials SET counter=? WHERE id=?").bind(r.newCounter, credential.id).run();
-    return json({ ok: true, callsign: cs }, { headers: { "set-cookie": await issueSessionCookie(cs, env) } });
+    const accountId = await accountIdOf(env, cs);
+    if (!accountId) return json({ error: "login failed: no account holds this callsign" }, { status: 400 });
+    return json(
+      { ok: true, callsign: cs },
+      { headers: { "set-cookie": await issueSessionCookie(env, accountId, cs) } },
+    );
   } catch (e) {
+    if (e instanceof SessionUnavailable) return sessionUnavailable();
     return json({ error: "login failed: " + (e as Error).message }, { status: 400 });
   }
 }
 
+/** The signed-in person as the session proves them: the durable account, the active call and its base. */
+export interface SessionIdentity {
+  accountId: string;
+  callsign: string;
+  base: string;
+}
+
 /**
- * Resolve the durable account behind the signed-in session — the single canonical resolver used
- * everywhere (`watch.ts` re-exports a bare-string wrapper over it). A person holds one or more BASE
- * calls in `account_callsigns` (the durable multi-call model), so that mapping is authoritative and
- * is consulted first; the `accounts` row (active-call anchor) is the fallback for a single-call
- * account without `account_callsigns` entries. A session whose own `accounts` row belongs to a
- * different account than the base call's holder resolves to nothing: the session names a call on
- * someone else's licence and must never land on the holder's account. Returns the account id + the
- * active callsign.
+ * Resolve the signed-in session — the single canonical resolver every authorisation decision uses. The
+ * cookie names an account, a session generation and a call; it resolves only while that account still
+ * exists at that generation and holds the call's base (a person holds one or more BASE calls in
+ * `account_callsigns`, the `accounts` row being the anchor of a single-call account). An erased
+ * account, a later holder of the same call, a sign-out-everywhere, and a callsign change all leave an
+ * older cookie resolving to nobody.
  */
+export async function sessionIdentity(req: Request, env: Env): Promise<SessionIdentity | null> {
+  const cookie = req.headers.get("cookie") ?? "";
+  const m = /(?:^|;\s*)acs=([^;]+)/.exec(cookie);
+  if (!m) return null;
+  const claims = await verifySession(m[1]!, env);
+  if (!claims) return null;
+  const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
+    .bind(claims.accountId)
+    .first<{ session_gen: number }>();
+  if (!row || Number(row.session_gen) !== claims.gen) return null;
+  const base = baseOf(claims.callsign);
+  if ((await baseHolder(env, base)) !== claims.accountId) return null;
+  return { accountId: claims.accountId, callsign: claims.callsign, base };
+}
+
+/** The account id + active call behind the session (see {@link sessionIdentity}). */
 export async function sessionAccountId(
   req: Request,
   env: Env,
 ): Promise<{ accountId: string; callsign: string } | null> {
-  const cur = await sessionCallsign(req, env);
-  if (!cur) return null;
-  const viaBase = await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
-    .bind(baseOf(cur))
-    .first<{ account_id: string }>();
-  const me = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
-    .bind(cur)
-    .first<{ account_id: string }>();
-  if (viaBase) {
-    if (me && me.account_id !== viaBase.account_id) return null;
-    return { accountId: viaBase.account_id, callsign: cur };
-  }
-  return me ? { accountId: me.account_id, callsign: cur } : null;
+  const me = await sessionIdentity(req, env);
+  return me ? { accountId: me.accountId, callsign: me.callsign } : null;
+}
+
+/** The durable account id anchored at a call (its `accounts` row). */
+async function accountIdOf(env: Env, cs: string): Promise<string | null> {
+  const row = await env.DB.prepare("SELECT account_id FROM accounts WHERE callsign=?")
+    .bind(cs)
+    .first<{ account_id: string | null }>();
+  return row?.account_id ?? null;
 }
 
 /**
@@ -495,48 +530,75 @@ export async function handleChangeCallsign(req: Request, env: Env): Promise<Resp
       now,
       held?.verified ?? 0,
     ),
+    // sessions that carried the old call end; this response carries the only session for the new one
+    env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(me.accountId),
   );
   await env.DB.batch(ops);
   return json(
     { ok: true, callsign: next, verified: !!held?.verified },
-    { headers: { "set-cookie": await issueSessionCookie(next, env) } },
+    { headers: { "set-cookie": await issueSessionCookie(env, me.accountId, next) } },
   );
 }
 
-/** Returns the signed-in callsign, or null. Used to attribute logs and gate announce. */
+/** The signed-in callsign, or null — {@link sessionIdentity} reduced to its call. */
 export async function sessionCallsign(req: Request, env: Env): Promise<string | null> {
-  const cookie = req.headers.get("cookie") ?? "";
-  const m = /(?:^|;\s*)acs=([^;]+)/.exec(cookie);
-  if (!m) return null;
-  return verifySession(m[1]!, env);
+  return (await sessionIdentity(req, env))?.callsign ?? null;
 }
 
-/** Set-Cookie header value for a session bound to a callsign (the durable account behind it). */
-export async function issueSessionCookie(callsign: string, env: Env): Promise<string> {
-  const token = await signSession(callsign.toUpperCase(), env);
+/** Thrown when this instance has no usable SESSION_SECRET: sign-in is closed, not silently weakened. */
+export class SessionUnavailable extends Error {
+  constructor() {
+    super(
+      "sessions are disabled: set SESSION_SECRET to a strong value of its own (not INGEST_SECRET, OPERATOR_SECRET or 'change-me')",
+    );
+  }
+}
+export function sessionUnavailable(): Response {
+  return json({ error: new SessionUnavailable().message }, { status: 503 });
+}
+
+/** Set-Cookie header value for a session bound to `accountId` at its current generation, acting as `callsign`. */
+export async function issueSessionCookie(env: Env, accountId: string, callsign: string): Promise<string> {
+  const row = await env.DB.prepare("SELECT session_gen FROM accounts WHERE account_id=?")
+    .bind(accountId)
+    .first<{ session_gen: number }>();
+  if (!row) throw new Error("no such account");
+  const token = await signSession(env, { accountId, gen: Number(row.session_gen), callsign: callsign.toUpperCase() });
   const ttlDays = Number(env.SESSION_TTL_DAYS ?? SESSION_TTL_DAYS_DEFAULT) || SESSION_TTL_DAYS_DEFAULT;
   return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${ttlDays * 86_400}`;
 }
 
 /** GET /auth/session — "who am I": the signed-in callsign + verification + email, or null. */
 export async function handleSession(req: Request, env: Env): Promise<Response> {
-  const callsign = await sessionCallsign(req, env);
-  if (!callsign) return json({ callsign: null });
-  const acct = await env.DB.prepare("SELECT verified, email FROM accounts WHERE callsign = ?")
-    .bind(callsign)
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ callsign: null });
+  const acct = await env.DB.prepare("SELECT verified, email FROM accounts WHERE account_id = ?")
+    .bind(me.accountId)
     .first<{ verified: number; email: string | null }>();
-  return json({ callsign, verified: !!acct?.verified, email: acct?.email ?? null });
+  return json({ callsign: me.callsign, verified: !!acct?.verified, email: acct?.email ?? null });
 }
+
+const CLEAR_COOKIE = `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 
 /** POST /auth/logout — clear the session cookie. */
 export function handleLogout(): Response {
-  return json(
-    { ok: true },
-    { headers: { "set-cookie": `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0` } },
-  );
+  return json({ ok: true }, { headers: { "set-cookie": CLEAR_COOKIE } });
 }
 
-// --- minimal signed session (HMAC). Replace with your preferred session strategy. ---
+/** POST /auth/logout-all — end every session of the signed-in account, on every device. */
+export async function handleLogoutAll(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in first" }, { status: 401 });
+  await endAllSessions(env, me.accountId);
+  return json({ ok: true }, { headers: { "set-cookie": CLEAR_COOKIE } });
+}
+
+/** Invalidate every outstanding session of an account by moving it to the next generation. */
+export async function endAllSessions(env: Env, accountId: string): Promise<void> {
+  await env.DB.prepare("UPDATE accounts SET session_gen = session_gen + 1 WHERE account_id=?").bind(accountId).run();
+}
+
+// --- signed session (HMAC over the account, its generation, the call and the mint time) ---
 
 /** Constant-time string compare — a `===` on a secret leaks how many leading
  *  characters matched via response timing. XOR-accumulate over the LONGER length so neither
@@ -555,16 +617,33 @@ export function secretOk(given: string | null | undefined, expected: string | un
   return timingSafeEqual(given ?? "", expected);
 }
 
+/** The ingest-plane credential: does the request carry the ingest box's INGEST_SECRET? */
+export function ingestSecretOk(req: Request, env: Env): boolean {
+  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+}
+
+/** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */
+export function operatorSecretOk(req: Request, env: Env): boolean {
+  return secretOk(req.headers.get("x-operator-secret"), env.OPERATOR_SECRET);
+}
+
 /** A session signed with a known/default secret is forgeable for ANY callsign —
  *  including ADMIN_CALLSIGNS. Never mint or honor sessions on such a key. */
 export function weakSecret(s: string | undefined): boolean {
   return !s || s === "change-me";
 }
-/** The session-signing secret: a dedicated SESSION_SECRET when configured, else derived from
- *  INGEST_SECRET (single-operator self-host convenience). Weak ⇒ null: no sessions at all. */
+/** The session-signing secret: SESSION_SECRET, and only when it is strong and distinct from the
+ *  machine credentials — whoever holds the ingest or operator secret must not be able to mint a
+ *  session. Anything else ⇒ null: no sessions at all. */
+/** Can this instance mint sessions at all? Sign-in endpoints check it before creating anything. */
+export function sessionsEnabled(env: Env): boolean {
+  return sessionSecret(env) != null;
+}
 function sessionSecret(env: Env): string | null {
-  if (env.SESSION_SECRET) return weakSecret(env.SESSION_SECRET) ? null : env.SESSION_SECRET;
-  return weakSecret(env.INGEST_SECRET) ? null : env.INGEST_SECRET + ":session";
+  const s = env.SESSION_SECRET;
+  if (weakSecret(s)) return null;
+  if (s === env.INGEST_SECRET || s === env.OPERATOR_SECRET) return null;
+  return s!;
 }
 async function key(env: Env): Promise<CryptoKey | null> {
   const raw = sessionSecret(env);
@@ -574,13 +653,16 @@ async function key(env: Env): Promise<CryptoKey | null> {
     "verify",
   ]);
 }
-async function signSession(callsign: string, env: Env): Promise<string> {
+interface SessionClaims {
+  accountId: string;
+  gen: number;
+  callsign: string;
+}
+const SESSION_VERSION = "v2";
+async function signSession(env: Env, c: SessionClaims): Promise<string> {
   const k = await key(env);
-  if (!k)
-    throw new Error(
-      "refusing to mint a session: INGEST_SECRET is unset or the 'change-me' default — set a strong secret (or a dedicated SESSION_SECRET)",
-    );
-  const payload = `${callsign}.${Date.now()}`;
+  if (!k) throw new SessionUnavailable();
+  const payload = [SESSION_VERSION, c.accountId, c.gen, c.callsign, Date.now()].join(".");
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
   return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
 }
@@ -598,18 +680,22 @@ export function sessionExpired(mintedAtMs: number, env: Env, nowMs: number): boo
   const epoch = Number(env.SESSION_EPOCH ?? 0);
   return epoch > 0 && mintedAtMs < epoch * 1000; // operator-revoked generation
 }
-async function verifySession(token: string, env: Env): Promise<string | null> {
+async function verifySession(token: string, env: Env): Promise<SessionClaims | null> {
   try {
     const k = await key(env);
-    if (!k) return null; // default secret ⇒ no session is ever valid
-    const [p, s] = token.split(".");
+    if (!k) return null; // no usable secret ⇒ no session is ever valid
+    const [p, sg] = token.split(".");
     const payload = atob(p!);
-    const sig = Uint8Array.from(atob(s!), (c) => c.charCodeAt(0));
+    const sig = Uint8Array.from(atob(sg!), (c) => c.charCodeAt(0));
     const ok = await crypto.subtle.verify("HMAC", k, sig, new TextEncoder().encode(payload));
     if (!ok) return null;
-    const [callsign, minted] = payload.split(".");
+    // a token without an account (any other shape) is never valid
+    const parts = payload.split(".");
+    if (parts.length !== 5 || parts[0] !== SESSION_VERSION) return null;
+    const [, accountId, gen, callsign, minted] = parts as [string, string, string, string, string];
+    if (!accountId || !callsign || !/^\d+$/.test(gen)) return null;
     if (sessionExpired(Number(minted), env, Date.now())) return null;
-    return callsign!;
+    return { accountId, gen: Number(gen), callsign };
   } catch {
     return null;
   }

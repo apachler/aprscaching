@@ -18,6 +18,8 @@ import {
 const PUB = process.env.PUB ?? "http://127.0.0.1:8801";
 const SUB = process.env.SUB ?? "http://127.0.0.1:8802";
 const SECRET = process.env.INGEST_SECRET ?? "change-me";
+// operator-level calls (sync trigger, peer trust) take OPERATOR_SECRET, never the ingest secret
+const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 const SUBMIT_SECRET = process.env.SUBMIT_SECRET ?? "submitsecret"; // SUB is started as a hub with this
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
@@ -29,7 +31,12 @@ function ok(name, cond, detail = "") {
 async function call(base, method, path, body, headers = {}) {
   const res = await fetch(base + path, {
     method,
-    headers: { "content-type": "application/json", "x-ingest-secret": SECRET, ...headers },
+    headers: {
+      "content-type": "application/json",
+      "x-ingest-secret": SECRET,
+      ...(OPERATOR_SECRET ? { "x-operator-secret": OPERATOR_SECRET } : {}),
+      ...headers,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -84,7 +91,7 @@ ok("descriptor addresses is an array", Array.isArray(pubWk.data?.addresses), JSO
 // /federation/sync reports describe ITS OWN pull, and a pull that started before the seed below
 // cannot contain it — awaiting one sync now leaves nothing in flight, and the periodic interval is
 // five minutes away. Without this the assertions below race the boot sync.
-await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 
 // seed the publisher: a cache + a verified find
 const TITLE = "Federated Schlossberg " + now();
@@ -106,7 +113,7 @@ await call(PUB, "POST", `/api/caches/${pid}/logs`, {
 });
 
 // trigger a pull-sync on the subscriber
-const sync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const sync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("subscriber sync ran", sync.data?.ok === true, JSON.stringify(sync.data));
 ok("sync mirrored >= 1 cache", (sync.data?.caches ?? 0) >= 1, JSON.stringify(sync.data));
 ok("sync mirrored >= 1 find", (sync.data?.finds ?? 0) >= 1, JSON.stringify(sync.data));
@@ -142,13 +149,13 @@ ok(
 );
 
 // idempotency: a second sync should not error and the cache stays single
-const sync2 = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const sync2 = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("re-sync is clean", sync2.data?.ok === true && (sync2.data?.errors ?? []).length === 0);
 const list2 = await call(SUB, "GET", "/api/caches?bbox=15,46,16,48");
 ok("no duplicate mirror after re-sync", (list2.data?.caches ?? []).filter((c) => c.title === TITLE).length === 1);
 
-// auth: sync requires the ingest secret (the call() default is overridden with an invalid one)
-const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": "" });
+// auth: sync requires the operator secret (the call() default is overridden with an invalid one)
+const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": "" });
 ok("sync with an invalid secret -> 401", noauth.status === 401, `status=${noauth.status}`);
 
 // ---- cross-instance verification (the network effect) ----
@@ -235,7 +242,26 @@ const signWith = async (priv, msg) => b64u(await crypto.subtle.sign("Ed25519", p
 const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const pubRaw = b64u(await crypto.subtle.exportKey("raw", kp.publicKey));
 
-const reg = await call(PUB, "POST", "/keys/register", { callsign: "OE8APR", publicKey: pubRaw, label: "device" });
+// a device key binds only through the holder's own session (email sign-in with a dev token)
+async function signUp(base, cs) {
+  const st = await call(base, "POST", "/auth/email/start", {
+    email: `${cs.toLowerCase()}+${now()}@example.test`,
+    callsign: cs,
+  });
+  const vr = await fetch(base + "/auth/email/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: st.data?.devToken }),
+  });
+  return (/(acs=[^;]+)/.exec(vr.headers.get("set-cookie") ?? "") ?? [])[1] ?? "";
+}
+const reg = await call(
+  PUB,
+  "POST",
+  "/keys/register",
+  { callsign: "OE8APR", publicKey: pubRaw, label: "device" },
+  { cookie: await signUp(PUB, "OE8APR") },
+);
 ok("key registration accepted", reg.data?.ok === true && reg.data?.publicKey === pubRaw, JSON.stringify(reg.data));
 
 const sc = await call(PUB, "POST", "/api/caches", {
@@ -314,7 +340,7 @@ ok(
   (keysFeed.data?.items ?? []).some((r) => r.data?.callsign === "OE8APR" && r.data?.publicKey === pubRaw),
 );
 
-const syncK = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const syncK = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("subscriber mirrors keys", (syncK.data?.keys ?? 0) >= 1, JSON.stringify(syncK.data));
 const peers2 = await call(SUB, "GET", "/federation/peers");
 ok(
@@ -339,15 +365,15 @@ const t401 = await call(
   "POST",
   "/federation/peers/trust",
   { url: PUB, trust: "blocked" },
-  { "x-ingest-secret": "" },
+  { "x-operator-secret": "" },
 );
-ok("trust change without the ingest secret -> 401", t401.status === 401, `status=${t401.status}`);
+ok("trust change without the operator secret -> 401", t401.status === 401, `status=${t401.status}`);
 const t400 = await call(
   SUB,
   "POST",
   "/federation/peers/trust",
   { url: PUB, trust: "bogus" },
-  { "x-ingest-secret": SECRET },
+  { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("an invalid trust level -> 400", t400.status === 400, `status=${t400.status}`);
 const t404 = await call(
@@ -355,7 +381,7 @@ const t404 = await call(
   "POST",
   "/federation/peers/trust",
   { url: "http://127.0.0.1:9", trust: "trusted" },
-  { "x-ingest-secret": SECRET },
+  { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("an unknown peer -> 404", t404.status === 404, `status=${t404.status}`);
 
@@ -365,7 +391,7 @@ const blk = await call(
   "POST",
   "/federation/peers/trust",
   { url: PUB, trust: "blocked" },
-  { "x-ingest-secret": SECRET },
+  { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("operator blocked the peer", blk.data?.ok === true && blk.data?.trust === "blocked", JSON.stringify(blk.data));
 const bCache = await call(SUB, "POST", "/api/caches", {
@@ -380,7 +406,7 @@ const blockedLog = await call(SUB, "POST", `/api/caches/${bCache.data?.cache?.id
   logType: "found",
 });
 ok("a blocked peer cannot grant Tier A", blockedLog.data?.tier !== "A", JSON.stringify(blockedLog.data));
-const blkSync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const blkSync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok(
   "a blocked peer is skipped on sync (no fetch, no error)",
   blkSync.data?.ok === true && (blkSync.data?.errors ?? []).length === 0,
@@ -393,7 +419,7 @@ const prom = await call(
   "POST",
   "/federation/peers/trust",
   { url: PUB, trust: "trusted" },
-  { "x-ingest-secret": SECRET },
+  { "x-operator-secret": OPERATOR_SECRET },
 );
 ok(
   "operator promoted the peer to trusted",
@@ -422,7 +448,13 @@ const accMsg = (action, cs, at) =>
   stableStringify({ v: 1, action, callsign: cs.toUpperCase(), instance: pubInstance, at });
 const tkp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const tpub = b64u(await crypto.subtle.exportKey("raw", tkp.publicKey));
-await call(PUB, "POST", "/keys/register", { callsign: "TOMB1", publicKey: tpub, label: "device" });
+await call(
+  PUB,
+  "POST",
+  "/keys/register",
+  { callsign: "TOMB1", publicKey: tpub, label: "device" },
+  { cookie: await signUp(PUB, "TOMB1") },
+);
 
 // TOMB1 owns a cache and logs a find on the publisher
 const T_TITLE = "Tombstone Cache " + now();
@@ -438,7 +470,7 @@ ok("publisher created a TOMB1-owned cache + find", tCache.status === 201, JSON.s
 
 // subscriber mirrors it onto its map
 const BBOXT = "16.2,48.0,16.6,48.4";
-await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 const mapBefore = await call(SUB, "GET", `/api/caches?bbox=${BBOXT}`);
 ok(
   "TOMB1 cache mirrored onto the subscriber map",
@@ -487,7 +519,7 @@ ok("tombstone frame verifies against the publisher key (domain-separated Ed25519
 
 // subscriber syncs → applies the tombstone (purges the mirrored find) + re-mirrors the now-archived
 // cache; the cache drops off the subscriber map
-const tsync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+const tsync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("subscriber applied >= 1 tombstone", (tsync.data?.tombstones ?? 0) >= 1, JSON.stringify(tsync.data));
 const mapAfter = await call(SUB, "GET", `/api/caches?bbox=${BBOXT}`);
 ok(
@@ -613,7 +645,7 @@ const promote = await call(
   "POST",
   "/federation/peers/trust",
   { url: "submit:oe.spoke", trust: "trusted" },
-  { "x-ingest-secret": SECRET },
+  { "x-operator-secret": OPERATOR_SECRET },
 );
 ok("the operator promotes the spoke", promote.status === 200, `status=${promote.status}`);
 const smap = await call(SUB, "GET", "/api/caches?bbox=15.5,47,16.5,48");
@@ -708,7 +740,13 @@ ok(
 );
 
 // demote the publisher to unvetted → its caches drop off the DEFAULT map, return only with includeUnvetted
-await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "unvetted" }, { "x-ingest-secret": SECRET });
+await call(
+  SUB,
+  "POST",
+  "/federation/peers/trust",
+  { url: PUB, trust: "unvetted" },
+  { "x-operator-secret": OPERATOR_SECRET },
+);
 const mDef = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
 ok(
   "an unvetted peer's caches are hidden from the default map",
@@ -723,7 +761,13 @@ ok(
 );
 
 // re-promote → back on the default map
-await call(SUB, "POST", "/federation/peers/trust", { url: PUB, trust: "trusted" }, { "x-ingest-secret": SECRET });
+await call(
+  SUB,
+  "POST",
+  "/federation/peers/trust",
+  { url: PUB, trust: "trusted" },
+  { "x-operator-secret": OPERATOR_SECRET },
+);
 const mRe = await call(SUB, "GET", `/api/caches?bbox=${GBBOX}`);
 ok(
   "re-promoting restores the cache to the default map",
@@ -820,8 +864,14 @@ ok("the move frame verifies against the publisher key (domain-separated Ed25519)
 
 // a mirror keeps a move only under a key it knows for the callsign independently of the instance
 // claiming the move — here the mover registered the same device key on the subscriber
-await call(SUB, "POST", "/keys/register", { callsign: "OE7MOV", publicKey: mpub, label: "dev" });
-const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-ingest-secret": SECRET });
+await call(
+  SUB,
+  "POST",
+  "/keys/register",
+  { callsign: "OE7MOV", publicKey: mpub, label: "dev" },
+  { cookie: await signUp(SUB, "OE7MOV") },
+);
+const msync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 ok("subscriber mirrors the account move", (msync.data?.moves ?? 0) >= 1, JSON.stringify(msync.data));
 const mpeers = await call(SUB, "GET", "/federation/peers");
 ok(

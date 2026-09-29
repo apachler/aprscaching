@@ -57,12 +57,12 @@ function peersDb() {
 }
 
 const envWith = (db: unknown): Env =>
-  ({ DB: db, INGEST_SECRET: "sysop-bypass-secret", DOH_URL: "https://dns.example/dns-query" }) as unknown as Env;
+  ({ DB: db, OPERATOR_SECRET: "sysop-bypass-secret", DOH_URL: "https://dns.example/dns-query" }) as unknown as Env;
 
 const post = (body: unknown) =>
   new Request("http://gw/federation/peers/44net", {
     method: "POST",
-    headers: { "content-type": "application/json", "x-ingest-secret": "sysop-bypass-secret" },
+    headers: { "content-type": "application/json", "x-operator-secret": "sysop-bypass-secret" },
     body: JSON.stringify(body),
   });
 

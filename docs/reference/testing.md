@@ -48,10 +48,11 @@ tri-runtime promise real:
 
 ```bash
 KEY=$(node tools/fedkey/genkey.mjs --raw)
-DB_PATH=/tmp/acs.db PORT=8787 INGEST_SECRET=devsecret ALLOW_DEV_TOKENS=1 \
+export INGEST_SECRET=devsecret OPERATOR_SECRET=devoperator SESSION_SECRET=devsession
+DB_PATH=/tmp/acs.db PORT=8787 ALLOW_DEV_TOKENS=1 \
   FIRST_PARTY_SITES=OE8XXX FED_PRIVATE_KEY="$KEY" \
   pnpm --filter @aprscaching/node-gateway start &
-BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret node tools/smoke/smoke.mjs
+BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs      # sends x-ingest-secret and x-operator-secret
 BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
 ```
 
@@ -60,10 +61,10 @@ BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
 ```bash
 cd workers/gateway
 CI=1 npx wrangler d1 migrations apply aprscaching --local
-printf 'INGEST_SECRET=devsecret\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\nFED_PRIVATE_KEY=%s\n' \
+printf 'INGEST_SECRET=devsecret\nOPERATOR_SECRET=devoperator\nSESSION_SECRET=devsession\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\nFED_PRIVATE_KEY=%s\n' \
   "$(node ../../tools/fedkey/genkey.mjs --raw)" > .dev.vars
 CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &
-cd ../.. && BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret node tools/smoke/smoke.mjs
+cd ../.. && BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret OPERATOR_SECRET=devoperator node tools/smoke/smoke.mjs
 ```
 
 **Bun + bun:sqlite** — same env recipe as Node, started with `bun run servers/bun/server.ts`.

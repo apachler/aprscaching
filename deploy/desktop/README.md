@@ -9,7 +9,7 @@ federation peer like any other instance.
 ## Files
 | File | Purpose |
 |---|---|
-| `launcher.ts` | entry point: run migrations → start gateway (`handle()`) → serve the embedded SPA → open browser → SQLite in app-data |
+| `launcher.ts` | entry point: run migrations → resolve secrets → start gateway (`handle()`) on `127.0.0.1` → serve the embedded SPA → open browser → SQLite in app-data |
 | `gen-assets.ts` | build step: embeds `apps/web/dist` + `db/migrations` into the binary (`import … with { type: "file" }`) → `assets.generated.ts` (gitignored) |
 | `db-bun-sqlite.ts` | re-exports the conformance-tested `bun:sqlite` adapter (`servers/bun/d1.ts`) |
 | `appdata.ts` | per-OS data directory resolver |
@@ -41,6 +41,23 @@ Double-click or `./aprscaching-linux-x64`. SQLite lives in:
 - Linux: `~/.local/share/aprscaching`
 
 Back that file up (`deploy/backup.sh`).
+
+## Network & secrets
+The app listens on **`127.0.0.1` only**, so nothing else on your network can reach it. To serve your
+LAN (a phone on the same Wi-Fi, an ingest box on a Pi), start it with `HOST=0.0.0.0` (or one LAN address);
+`PORT` picks the port (`8787`).
+
+On first run it generates three secrets and keeps them, owner-only, next to the database:
+
+| File | Variable | Used by |
+|---|---|---|
+| `ingest.secret` | `INGEST_SECRET` | an ingest box feeding this app (`INGEST_URL=http://<this machine>:8787/ingest`) |
+| `operator.secret` | `OPERATOR_SECRET` | `tools/admin/verify-call.mjs` and other operator scripts |
+| `session.secret` | `SESSION_SECRET` | signing sign-in sessions (deleting it signs everyone out) |
+
+Setting any of these variables in the environment overrides its file. Every other gateway setting
+(`ADMIN_CALLSIGNS`, `FIRST_PARTY_SITES`, `INSTANCE`, rate limits, …) is read from the environment the same way
+as on the Node and Bun servers. Back the secrets up with the database.
 
 ## Signing (for a smooth UX)
 Unsigned binaries trip macOS Gatekeeper and Windows SmartScreen.
