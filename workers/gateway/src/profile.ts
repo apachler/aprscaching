@@ -11,6 +11,7 @@ import type { Env } from "./env.js";
 import { json, asStr } from "./app.js";
 import { sessionIdentity } from "./auth.js";
 import { gridToLatLon } from "@aprscaching/shared";
+import { stripTags } from "./util/html.js";
 
 const httpUrl = (u: unknown): string | null => {
   const s = asStr(u).trim();
@@ -35,12 +36,16 @@ export function sanitizeLinks(raw: unknown): { label: string; url: string }[] {
 
 /** Plain text only — strip tags + control chars, cap length. */
 export function sanitizeBio(raw: unknown): string | null {
-  const s = asStr(raw)
-    .replace(/<[^>]*>/g, "")
+  const s = stripTags(asStr(raw))
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .trim()
     .slice(0, 500);
   return s || null;
+}
+
+/** A display name is one short line of text: tags and any stray angle bracket are removed. */
+export function sanitizeDisplayName(raw: unknown): string | null {
+  return stripTags(asStr(raw)).replace(/[<>]/g, "").trim().slice(0, 60) || null;
 }
 
 const emailish = (u: unknown): string | null => {
@@ -54,12 +59,7 @@ export async function handleProfileUpdate(req: Request, env: Env): Promise<Respo
   if (!cs) return json({ error: "sign in to edit your profile" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
-  const displayName =
-    asStr(b.displayName)
-      .replace(/<[^>]*>/g, "")
-      .replace(/[<>]/g, "")
-      .trim()
-      .slice(0, 60) || null;
+  const displayName = sanitizeDisplayName(b.displayName);
   const gridRaw = asStr(b.homeGrid).trim();
   if (gridRaw && !gridToLatLon(gridRaw)) return json({ error: "invalid Maidenhead locator" }, { status: 400 });
   const homeGrid = gridRaw ? gridRaw.toUpperCase() : null;

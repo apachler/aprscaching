@@ -9,16 +9,13 @@
  *   GET    /v/:slug            resolve a public view → { name, state, ownerCall, createdAt }
  */
 import { nowS } from "./util/time.js";
+import { randomString } from "./util/random.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, mayActAsOwner } from "./auth.js";
 
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
-function makeSlug(): string {
-  const b = new Uint8Array(8);
-  crypto.getRandomValues(b);
-  return [...b].map((x) => ALPHABET[x % 36]).join("");
-}
+const makeSlug = (): string => randomString(ALPHABET, 8);
 
 export async function handleViewCreate(req: Request, env: Env): Promise<Response> {
   const owner = (await sessionIdentity(req, env))?.callsign;

@@ -194,8 +194,24 @@ function fromCrlf(bytes: Uint8Array): string {
 
 /** Extract the flag characters from an FBB SID `[NAME-VERSION-FLAGS$]` (the `$` BID/MID marker aside). */
 export function sidFlags(sid: string): string {
-  const m = /\[[^\]]*-([^\]-]*)\]/.exec(sid.trim());
-  return (m?.[1] ?? "").replace(/\$/g, "").toUpperCase();
+  // The flags follow the last '-' inside the first bracket pair that has one. Scanned by index so a
+  // crafted SID of many brackets or dashes stays linear.
+  const s = sid.trim();
+  let from = 0;
+  for (;;) {
+    const open = s.indexOf("[", from);
+    if (open < 0) return "";
+    const close = s.indexOf("]", open + 1);
+    if (close < 0) return "";
+    const inner = s.slice(open + 1, close);
+    const dash = inner.lastIndexOf("-");
+    if (dash >= 0)
+      return inner
+        .slice(dash + 1)
+        .replace(/\$/g, "")
+        .toUpperCase();
+    from = close + 1;
+  }
 }
 
 /** True when a station's SID advertises compressed forwarding (the `B` flag). */

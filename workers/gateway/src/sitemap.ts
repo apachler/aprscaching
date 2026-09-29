@@ -14,12 +14,14 @@
 import type { Env } from "./env.js";
 import { json, xml } from "./app.js";
 import { SURFACES, SURFACE_GROUPS, FEEDS, type SurfaceGroup } from "@aprscaching/shared";
+import { escapeHtml } from "./util/html.js";
+import { trimEndChars } from "./util/text.js";
 
 const CANONICAL = "https://aprscaching.net";
 
 /** The public app origin (env override → canonical host), no trailing slash. Links into the app use it. */
 export function appBase(env: Env): string {
-  return (env.APP_URL || CANONICAL).replace(/\/+$/, "");
+  return trimEndChars(env.APP_URL || CANONICAL, "/");
 }
 
 /**
@@ -39,9 +41,8 @@ export function gatewayBase(req: Request, env: Env): string {
   return `${scheme}://${u.host}`;
 }
 
-export function xmlEscape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
-}
+/** XML text/attribute escape — the shared markup escape, which XML accepts as-is. */
+export const xmlEscape = escapeHtml;
 
 /** A deep-link URL for a surface: the map is the root, panels carry `?view=<key>`. */
 export function surfaceUrl(env: Env, view: string | null): string {

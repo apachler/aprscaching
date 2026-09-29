@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
 import { jsonSetting } from "./util/config.js";
+import { escapeHtml } from "./util/html.js";
 import { baseCall } from "@aprscaching/aprs";
 import { operatorSecretOk, sessionIdentity } from "./auth.js";
 /**
@@ -199,13 +200,12 @@ export async function handleSupportPage(_req: Request, env: Env): Promise<Respon
   const ledger = await ledgerSummary(env);
   const links = supportLinks(env);
   const supporters = await publicSupporters(env);
-  const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const bucketRows = BUCKETS.map(
     (b) =>
       `<tr><td>${b.replace("_", " ")}</td><td>${eur(ledger.buckets[b].inCents)}</td><td>${eur(ledger.buckets[b].outCents)}</td></tr>`,
   ).join("");
   const linkHtml = links.length
-    ? links.map((l) => `<a href="${esc(l.url)}" rel="noopener">${esc(l.label)}</a>`).join(" · ")
+    ? links.map((l) => `<a href="${escapeHtml(l.url)}" rel="noopener">${escapeHtml(l.label)}</a>`).join(" · ")
     : "<span class=m>Donation links are configured per instance.</span>";
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Support · aprscaching</title><style>
@@ -222,7 +222,7 @@ functionality</em>. No ads, no paywalls. This page is the public ledger.</p>
 <p>In ${eur(ledger.totalInCents)} · Out ${eur(ledger.totalOutCents)} · Balance <strong>${eur(ledger.balanceCents)}</strong></p>
 <table><tr><th>Bucket</th><th>In</th><th>Out</th></tr>${bucketRows}</table>
 <p class=m>Buckets: development, hosting, operation, and peer cost-reimbursement (internet-side only).</p></div>
-<div class=box><div class=big>Supporters</div><p>${supporters.length ? supporters.map(esc).join(" · ") : "<span class=m>Be the first — your callsign appears here if your profile is public.</span>"}</p></div>
+<div class=box><div class=big>Supporters</div><p>${supporters.length ? supporters.map(escapeHtml).join(" · ") : "<span class=m>Be the first — your callsign appears here if your profile is public.</span>"}</p></div>
 <p class=m><a href="/source" rel="noopener">Source code (AGPL-3.0)</a> · aprscaching is open source; funded work is public.</p>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }

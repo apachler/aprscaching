@@ -24,6 +24,10 @@
  */
 import { encodeAddress, decodeAddress, parseAddr, type Ax25Address } from "@aprscaching/ax25";
 import { encodeNetrom, decodeNetrom, type NrPacket } from "./netrom-wire.js";
+import { trimEndWhere } from "./trim.js";
+
+/** Alias padding: trailing whitespace and NULs. */
+const isPad = (c: string) => c === "\0" || /\s/.test(c);
 
 export const INP_RIF = 0xff; // RIF discriminator (first info byte)
 export const INP_EOP = 0x00; // end-of-options marker
@@ -86,7 +90,7 @@ export function decodeRif(info: Uint8Array): Rip[] | null {
       }
       const type = info[o + 1]!;
       const data = info.subarray(o + 2, o + len); // len includes the length+type bytes
-      if (type === INP_OPT_ALIAS) rip.alias = new TextDecoder().decode(data).replace(/[\s\0]+$/, "");
+      if (type === INP_OPT_ALIAS) rip.alias = trimEndWhere(new TextDecoder().decode(data), isPad);
       else if (type === INP_OPT_IP && data.length >= 5)
         rip.ip = { addr: [data[0]!, data[1]!, data[2]!, data[3]!], bits: data[4]! };
       o += len;
@@ -119,7 +123,7 @@ export function decodeL3rtt(info: Uint8Array): L3rtt | null {
   const s = new TextDecoder().decode(info);
   const m = /^L3RTT:(\d+)\s+(\S+)\s+(\S+)/.exec(s);
   if (!m) return null;
-  return { seq: Number(m[1]), origin: m[2]!, alias: m[3]!.replace(/[\s\0]+$/, "") };
+  return { seq: Number(m[1]), origin: m[2]!, alias: trimEndWhere(m[3]!, isPad) };
 }
 
 /**

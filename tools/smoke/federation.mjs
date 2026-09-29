@@ -155,8 +155,8 @@ const list2 = await call(SUB, "GET", "/api/caches?bbox=15,46,16,48");
 ok("no duplicate mirror after re-sync", (list2.data?.caches ?? []).filter((c) => c.title === TITLE).length === 1);
 
 // auth: sync requires the operator secret (the call() default is overridden with an invalid one)
-const noauth = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": "" });
-ok("sync with an invalid secret -> 401", noauth.status === 401, `status=${noauth.status}`);
+const badOperatorSync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": "" });
+ok("sync with an invalid secret -> 401", badOperatorSync.status === 401, `status=${badOperatorSync.status}`);
 
 // ---- cross-instance verification (the network effect) ----
 // The logger's RF position is heard only by the PUBLISHER's attested site OE8XXX, directly on its own

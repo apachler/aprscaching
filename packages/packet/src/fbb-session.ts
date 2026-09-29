@@ -18,6 +18,15 @@ import {
   sidHasCompression,
   type BinaryTransfer,
 } from "./fbb-binary.js";
+import { trimEndWhere } from "./trim.js";
+
+/** True when some line of `t` holds a '[' followed later by a ']' — the shape of an FBB SID. */
+function hasBracketPair(t: string): boolean {
+  return t.split(/[\n\r\u2028\u2029]/).some((l) => {
+    const open = l.indexOf("[");
+    return open >= 0 && l.lastIndexOf("]") > open;
+  });
+}
 
 export interface FbbMessage {
   type: "P" | "B";
@@ -182,11 +191,11 @@ export class FbbSession {
 
   /** Process one received line; returns lines to send + a `done` flag (disconnect after FQ). */
   feed(line: string): { out: string[]; done?: boolean } {
-    const raw = line.replace(/[\r\n]+$/, "");
+    const raw = trimEndWhere(line, (c) => c === "\r" || c === "\n");
     const t = raw.trim();
 
     if (this.phase === "await-sid") {
-      if (!/\[.*\]/.test(t)) return { out: [] }; // still waiting for their SID
+      if (!hasBracketPair(t)) return { out: [] }; // still waiting for their SID
       // Compression runs only when BOTH SIDs advertise the B flag.
       this.compressed = !!this.opts.compress && compressionAgreed(this.sid(), t);
       // Responder replies with its SID, then (as the peer proposed first) waits for proposals.
