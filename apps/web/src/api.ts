@@ -1047,6 +1047,43 @@ export function getVerifyStatus(callsign: string): Promise<{ verified: boolean }
   return call(`/verify/aprs/status?callsign=${encodeURIComponent(callsign)}`);
 }
 
+/** Which verification methods this instance offers (LoTW needs the operator's trusted LoTW CA). */
+export function getVerifyMethods(): Promise<{ methods: { rf_heard: boolean; ampr_dns: boolean; lotw: boolean } }> {
+  return call(`/verify/methods`);
+}
+
+/** An ampr.org DNS challenge: publish `record` (name, TXT, value) under the call's ampr.org name. */
+export interface AmprChallenge {
+  code: string;
+  name: string;
+  value: string;
+  record: string;
+  expiresAt: number;
+}
+export function startAmprVerify(callsign: string): Promise<AmprChallenge> {
+  return call(`/verify/ampr/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+/** Look the published record up; rejects with the server's reason when it does not verify. */
+export function checkAmprVerify(callsign: string): Promise<{ verified: boolean; method: string }> {
+  return call(`/verify/ampr/check`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+
+/** A LoTW challenge: the exact `message` to sign with the callsign certificate's key. */
+export interface LotwChallenge {
+  challenge: string;
+  message: string;
+  expiresAt: number;
+}
+export function startLotwVerify(callsign: string): Promise<LotwChallenge> {
+  return call(`/verify/lotw/start`, { method: "POST", body: JSON.stringify({ callsign }) });
+}
+export function completeLotwVerify(
+  callsign: string,
+  proof: { certificates: string[]; signature: string },
+): Promise<{ verified: boolean; method: string }> {
+  return call(`/verify/lotw/complete`, { method: "POST", body: JSON.stringify({ callsign, ...proof }) });
+}
+
 // ---- auth: session, passkey ceremonies, email magic-link ----
 export type Session = { callsign: string | null; verified?: boolean; email?: string | null };
 export function getSession(): Promise<Session> {

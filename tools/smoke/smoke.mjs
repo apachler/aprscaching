@@ -655,6 +655,38 @@ async function verifyCallsign(cs, cookie) {
   await verifyMessage("DL1ABC", start.data, true);
   ok("a VERIFY message heard on the TNC at the attested site verifies the callsign", await isVerified("DL1ABC"));
 }
+{
+  // MeshCom: a direct message to the service call counts only when the attested node (OE8XXX) heard it
+  // directly over LoRa; a copy relayed across the mesh names no gate and does not verify.
+  const cookie = await signUp("OE9MSH");
+  const start = await call("POST", "/verify/aprs/start", { callsign: "OE9MSH" }, { cookie });
+  const mesh = (extra) =>
+    call(
+      "POST",
+      "/ingest",
+      {
+        packets: [
+          {
+            src: "OE9MSH-1",
+            dst: "APRS",
+            path: [],
+            payload: `:${String(start.data?.to).padEnd(9)}:${start.data?.text}{012`,
+            kind: "message",
+            heardVia: "rf",
+            port: "meshcom",
+            rxCall: "OE8XXX",
+            ts: now(),
+            ...extra,
+          },
+        ],
+      },
+      { "x-ingest-secret": SECRET },
+    );
+  await mesh({ path: ["OE1XYZ-12"] });
+  ok("a MeshCom VERIFY relayed across the mesh does not verify the callsign", !(await isVerified("OE9MSH")));
+  await mesh({ igateCall: "OE8XXX" });
+  ok("a MeshCom VERIFY heard directly by the attested node verifies the callsign", await isVerified("OE9MSH"));
+}
 ok(
   "the operator bootstrap needs the ingest secret",
   (await call("POST", "/verify/operator", { callsign: "DL1ABC" }, { "x-ingest-secret": "" })).status === 401,

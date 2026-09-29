@@ -3,16 +3,26 @@
  * callsign.ts — callsign control-verification: proof that an account controls the licence it holds.
  * A verified base call (every SSID inherits it) gates transmitting and the sysop role.
  *
- * Control of a licence is proven by a transmission, never by reading a code: APRS-IS is a public feed,
- * so a code sent to a station over it is readable by anyone. The ways a call becomes verified:
+ * Control of a licence is never proven by reading a code back: APRS-IS is a public feed, so a code sent
+ * to a station over it is readable by anyone. A call becomes verified by a transmission heard on the
+ * air, by a credential from a body that reviewed the licence (ARDC, ARRL), or by the people who run the
+ * instance:
  *
  *  - `rf_heard` — the signed-in holder asks for a code ({@link startAprsChallenge}), transmits
  *    `VERIFY <code>` to the service call from the call or any SSID of it, and a receiving site this
  *    instance attests hears it on its own radio ({@link completeRfChallenge}, from radiolog.ts).
+ *    A MeshCom node on the operator's ingest box counts as such a site only for a message it heard
+ *    directly over LoRa; a copy relayed across the mesh or through the MeshCom server does not.
+ *  - `ampr_dns` — the holder publishes a code under their ARDC-delegated `<call>.ampr.org` name and the
+ *    DNSSEC-validated answer carries it (verify_ampr.ts).
+ *  - `lotw` — the holder signs a challenge with the key of their ARRL Logbook of The World callsign
+ *    certificate, which chains to a LoTW CA the operator trusts (verify_lotw.ts).
  *  - `operator` — the instance operator confirms an `ADMIN_CALLSIGNS` call with the ingest secret
  *    (`tools/admin/verify-call.mjs`), which bootstraps the sysop role on a fresh instance.
  *  - `sysop` — a sysop verifies a call by hand for someone out of range of every attested site, with a
  *    note saying how; it is listed, revocable and logged in `account_events`.
+ *
+ * Every verification records its method, who vouched (`verified_by`) and, where useful, a note.
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -94,10 +104,13 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
  * the account's active call (`accounts`) of `accountId` — or of whichever account holds the call when
  * no account is given — so a verified call keeps its status when the account switches between its calls.
  */
-async function markVerified(
+/** How a call's control was proven. */
+export type VerifyMethod = "rf_heard" | "ampr_dns" | "lotw" | "operator" | "sysop";
+
+export async function markVerified(
   env: Env,
   cs: string,
-  method: "rf_heard" | "operator" | "sysop",
+  method: VerifyMethod,
   f: { accountId?: string | null; by?: string | null; note?: string | null },
 ): Promise<void> {
   const now = nowSec();

@@ -31,6 +31,7 @@ const SCOPED: Array<[string, string]> = [
     "bbs_messages",
     "SELECT COUNT(*) AS n FROM bbs_messages WHERE type='P' AND (from_call='DL1GDP' OR to_call='DL1GDP')",
   ],
+  ["callsign_challenges", "SELECT COUNT(*) AS n FROM callsign_challenges WHERE account_id=?"],
   ["accounts", "SELECT COUNT(*) AS n FROM accounts WHERE account_id=?"],
 ];
 
@@ -86,6 +87,11 @@ async function seeded() {
     ],
     ["INSERT INTO white_pages (callsign, home_bbs, updated_at) VALUES ('DL1GDP', 'OE8XBM', ?)", t],
     [
+      "INSERT INTO callsign_challenges (callsign, method, account_id, challenge, created_at) VALUES ('DL1GDP', 'lotw', ?, 'n', ?)",
+      acct,
+      t,
+    ],
+    [
       "INSERT INTO bbs_messages (type, from_call, to_call, body, posted_at) VALUES ('P', 'OE8APR', 'DL1GDP', 'hi', ?)",
       t,
     ],
@@ -127,6 +133,7 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
       "entitlements",
       "apiKeys",
       "bbsMessages",
+      "verificationChallenges",
     ])
       expect(exp.data[key], key).toBeTruthy();
     expect(exp.data.passkeys).toHaveLength(1);

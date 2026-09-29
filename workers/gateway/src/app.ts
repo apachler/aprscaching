@@ -45,6 +45,8 @@ import {
   handleLicenceImport,
   handleLicenceImportFinish,
 } from "./licence.js";
+import { startAmprChallenge, checkAmprChallenge } from "./verify_ampr.js";
+import { startLotwChallenge, completeLotwChallenge, verifyMethods } from "./verify_lotw.js";
 import { outboxPending, outboxAck } from "./outbox.js";
 import {
   handleWellKnown,
@@ -473,6 +475,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/verify/aprs/start" && m === "POST") return startAprsChallenge(req, env);
   if (p === "/verify/operator" && m === "POST") return handleOperatorVerify(req, env);
   if (p === "/verify/aprs/status" && m === "GET") return aprsVerifyStatus(req, env);
+  if (p === "/verify/ampr/start" && m === "POST") return startAmprChallenge(req, env);
+  if (p === "/verify/ampr/check" && m === "POST") return checkAmprChallenge(req, env);
+  if (p === "/verify/lotw/start" && m === "POST") return startLotwChallenge(req, env);
+  if (p === "/verify/lotw/complete" && m === "POST") return completeLotwChallenge(req, env);
+  if (p === "/verify/methods" && m === "GET") return verifyMethods(env);
 
   // callsign validity from public licence registers — a flag beside the call, never a gate
   if (p === "/api/licence" && m === "GET") return handleLicenceSources(req, env);
