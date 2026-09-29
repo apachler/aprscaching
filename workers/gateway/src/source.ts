@@ -11,6 +11,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { trimEndChars } from "./util/text.js";
 
 const UPSTREAM_REPO = "https://github.com/apachler/aprscaching";
 
@@ -22,7 +23,7 @@ export function sourceInfo(env: Env): {
   license: string;
 } {
   return {
-    repo: (env.SOURCE_REPO ?? UPSTREAM_REPO).replace(/\/+$/, ""),
+    repo: trimEndChars(env.SOURCE_REPO ?? UPSTREAM_REPO, "/"),
     commit: env.SOURCE_COMMIT ?? null,
     tag: env.SOURCE_TAG ?? null,
     builtAt: env.SOURCE_BUILT_AT ? Number(env.SOURCE_BUILT_AT) || null : null,

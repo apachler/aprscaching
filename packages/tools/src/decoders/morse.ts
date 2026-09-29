@@ -58,9 +58,13 @@ const REV: Record<string, string> = Object.fromEntries(Object.entries(MORSE).map
 
 /** Decode "…. . .-.. .-.. ---" (letters space-separated, words by " / " or a double space) → text. */
 export function decodeMorse(input: string): string {
+  // Words split at every '/' (with its surrounding whitespace) and at every run of two or more
+  // whitespace characters. Splitting at '/' first keeps each split pattern unambiguous, so a long
+  // whitespace run is scanned once.
   return input
     .trim()
-    .split(/\s*\/\s*|\s{2,}/)
+    .split("/")
+    .flatMap((part) => part.trim().split(/\s{2,}/))
     .map((word) =>
       word
         .trim()

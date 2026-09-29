@@ -31,6 +31,7 @@
  * unverified (`holdCall` in auth.ts clears what was recorded before).
  */
 import { nowS } from "./util/time.js";
+import { randomInt } from "./util/random.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall } from "@aprscaching/aprs";
@@ -53,10 +54,9 @@ const CHALLENGE_TTL_SEC = 30 * 60;
 /** Wrong codes heard on air before the challenge locks. */
 export const MAX_ATTEMPTS = 5;
 
-/** A cryptographically-random 6-digit code (Math.random is predictable). */
+/** A uniformly random 6-digit code from the CSPRNG (Math.random is predictable). */
 function sixDigitCode(): string {
-  const n = (crypto.getRandomValues(new Uint32Array(1))[0]! % 900000) + 100000;
-  return String(n);
+  return String(randomInt(900_000) + 100_000);
 }
 
 /** Challenge starts a signed-in account may make per hour, across all its calls, and per callsign. */

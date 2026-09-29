@@ -15,6 +15,15 @@ const OPERATOR_SECRET = process.env.OPERATOR_SECRET ?? "";
 const now = () => Math.floor(Date.now() / 1000);
 let failures = 0;
 
+/** True when `u` is an absolute URL on github.com itself (a host match, not a substring match). */
+function isGithubUrl(u) {
+  try {
+    return new URL(String(u)).hostname === "github.com";
+  } catch {
+    return false;
+  }
+}
+
 function ok(name, cond, detail = "") {
   const pass = !!cond;
   console.log(`${pass ? "✓" : "✗"} ${name}${pass ? "" : `  — ${detail}`}`);
@@ -239,18 +248,18 @@ const dnf = await call("POST", `/api/caches/${id}/logs`, { loggerCall: "OE5XYZ",
 ok("DNF logged, unverified", dnf.data?.logged === true && dnf.data?.verified === false, JSON.stringify(dnf.data));
 
 // --- web logging/hiding is gated behind a session (the over-APRS path stays open via secret) ---
-const noAuthLog = await fetch(`${BASE}/api/caches/${id}/logs`, {
+const anonLogRes = await fetch(`${BASE}/api/caches/${id}/logs`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ loggerCall: "NOSESS", logType: "found" }),
 });
-ok("web log without a session is rejected (401)", noAuthLog.status === 401, `status=${noAuthLog.status}`);
-const noAuthHide = await fetch(`${BASE}/api/caches`, {
+ok("web log without a session is rejected (401)", anonLogRes.status === 401, `status=${anonLogRes.status}`);
+const anonHideRes = await fetch(`${BASE}/api/caches`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ title: "x", type: "traditional", lat: 47, lon: 15, ownerCall: "NOSESS" }),
 });
-ok("web hide without a session is rejected (401)", noAuthHide.status === 401, `status=${noAuthHide.status}`);
+ok("web hide without a session is rejected (401)", anonHideRes.status === 401, `status=${anonHideRes.status}`);
 // the genuine web path: register via email magic-link -> session cookie -> log attributed to it
 // (on its own cache, so the find count of the shared `id` cache is left untouched)
 const SESSCALL = "OE9SESS";
@@ -428,13 +437,13 @@ ok("unknown cache -> 404", missing.status === 404, `status=${missing.status}`);
 const srcDesc = await call("GET", "/.well-known/source");
 ok(
   "AGPL §13 source descriptor (repo + AGPL licence)",
-  /github\.com/.test(srcDesc.data?.repo ?? "") && srcDesc.data?.license === "AGPL-3.0-or-later",
+  isGithubUrl(srcDesc.data?.repo) && srcDesc.data?.license === "AGPL-3.0-or-later",
   JSON.stringify(srcDesc.data),
 );
 const srcRedir = await fetch(`${BASE}/source`, { redirect: "manual" });
 ok(
   "/source 302-redirects to the repo",
-  srcRedir.status === 302 && /github\.com/.test(srcRedir.headers.get("location") ?? ""),
+  srcRedir.status === 302 && isGithubUrl(srcRedir.headers.get("location")),
   `status=${srcRedir.status} loc=${srcRedir.headers.get("location")}`,
 );
 
@@ -605,15 +614,15 @@ const sIng = await fetch(`${BASE}/ingest`, {
   body: JSON.stringify({ packets: rfPkts }),
 });
 ok("signed browser ingest accepted without the shared secret", sIng.status === 200, String(sIng.status));
-const noAuthIngest = await fetch(`${BASE}/ingest`, {
+const unsignedIngestRes = await fetch(`${BASE}/ingest`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ packets: rfPkts }),
 });
 ok(
   "ingest with neither secret nor signature is rejected (401)",
-  noAuthIngest.status === 401,
-  String(noAuthIngest.status),
+  unsignedIngestRes.status === 401,
+  String(unsignedIngestRes.status),
 );
 // flip the first (fully-significant) base64url char so the signature is guaranteed to differ
 const badSig = (sig[0] === "A" ? "B" : "A") + sig.slice(1);
@@ -1158,8 +1167,12 @@ const accMsg = (action, cs, at) =>
 const signAct = async (action, cs, at) =>
   b64u(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(accMsg(action, cs, at))));
 
-const noAuth = await call("POST", "/api/account/DL1ABC/export", {});
-ok("account export without a signed action -> 401", noAuth.status === 401, `status=${noAuth.status}`);
+const unsignedExportRes = await call("POST", "/api/account/DL1ABC/export", {});
+ok(
+  "account export without a signed action -> 401",
+  unsignedExportRes.status === 401,
+  `status=${unsignedExportRes.status}`,
+);
 
 let aAt = now();
 const exp = await call("POST", "/api/account/DL1ABC/export", {
@@ -1475,12 +1488,13 @@ ok(
     Array.isArray(apiIdx.data?.endpoints),
   JSON.stringify(apiIdx.data?.rateLimits),
 );
-const apiKeyRes = await call("POST", "/api/v1/keys", { label: "smoke" });
-const apiKey = apiKeyRes.data?.key;
+const issueRes = await call("POST", "/api/v1/keys", { label: "smoke" });
+const apiKey = issueRes.data?.key;
 ok(
   "POST /api/v1/keys issues a free key",
-  apiKeyRes.status === 201 && typeof apiKey === "string" && apiKey.startsWith("acg_"),
-  JSON.stringify(apiKeyRes.data),
+  issueRes.status === 201 && typeof apiKey === "string" && apiKey.startsWith("acg_"),
+  // the issued key is a credential: report its shape, never its value
+  `status=${issueRes.status} key=${typeof apiKey === "string" ? "issued (value redacted)" : "missing"}`,
 );
 const v1caches = await call("GET", "/api/v1/caches?bbox=14,46,16,48", undefined, { authorization: "Bearer " + apiKey });
 ok(

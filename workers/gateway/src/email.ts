@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
+import { escapeHtml } from "./util/html.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, corsAllowlist } from "./app.js";
@@ -143,8 +144,6 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   });
 }
 
-const esc = (v: string) => v.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
-
 /**
  * The confirm step a browser sees when it opens the link: one button that POSTs the token back. The
  * `same-origin` referrer policy keeps the token-bearing URL from reaching any other site, while the form
@@ -161,7 +160,7 @@ h1{font-size:1.4rem}.m{opacity:.7}button{font:inherit;font-weight:600;min-height
 button:focus-visible{outline:2px solid currentColor;outline-offset:2px}</style>
 <h1>Sign in to aprscaching</h1>
 <p>Confirm that you want to sign in on this device.</p>
-<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${esc(token)}">
+<form method="post" action="/auth/email/verify"><input type="hidden" name="token" value="${escapeHtml(token)}">
 <button type="submit">Sign in</button></form>
 <p class=m>Didn't request this? Close this page — nothing happens until you confirm.</p>`,
     {

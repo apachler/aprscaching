@@ -11,9 +11,7 @@
 import type { Env } from "./env.js";
 import { appBase } from "./sitemap.js";
 import { qrSvg } from "./qr.js";
-
-const escAttr = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+import { escapeHtml } from "./util/html.js";
 
 /** Serialise JSON safely for embedding in an inline <script>. JSON.stringify does NOT
  *  escape `<`, `>`, `&`, or the line separators, so a raw value like `</script><script>…` breaks out
@@ -53,7 +51,7 @@ export function handleEmbed(req: Request, env: Env): Response {
 .acg-cta{position:absolute;left:8px;bottom:8px;z-index:2;background:#0b76b8;color:#fff;padding:6px 10px;border-radius:8px;text-decoration:none;font:600 13px system-ui}
 .maplibregl-popup-content{font:13px system-ui}</style></head>
 <body><div id="m"></div>
-<a class="acg-cta" id="cta" href="${escAttr(app)}" target="_blank" rel="noopener">Open in aprscaching →</a>
+<a class="acg-cta" id="cta" href="${escapeHtml(app)}" target="_blank" rel="noopener">Open in aprscaching →</a>
 <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
 <script>
 const CFG = ${cfg};
