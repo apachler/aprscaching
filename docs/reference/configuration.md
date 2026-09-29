@@ -29,12 +29,13 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `RP_ID` | WebAuthn relying-party id (registrable domain) | — |
 | `SESSION_TTL_DAYS` | Session cookie lifetime | `30` |
 | `SESSION_EPOCH` | Bump to invalidate every outstanding session (key-compromise recovery) | — |
-| `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy) | off |
+| `TRUST_PROXY` | Trust `x-forwarded-for` for rate-limit client identity (set only behind your own proxy; the Docker stack sets it, since Caddy is the only way in) | off |
+| `TRUST_CF` | Node/Bun only: keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel. The Worker always trusts it — there Cloudflare's edge sets it | off |
 | `CORS_ORIGINS` | Extra origins allowed for credentialed CORS (comma-separated) | — |
 | `ALLOW_DEV_TOKENS` | Return magic-link tokens in-band instead of emailing (dev/CI only — never production) | off |
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
-| `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop) | — |
+| `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and control-verify it (APRS message challenge) | — |
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning | — |
 | `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) are addressed to | `APRSCG` |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |

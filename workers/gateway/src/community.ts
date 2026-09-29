@@ -6,6 +6,7 @@
  */
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { displayCall } from "./auth.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { actor } from "./caches.js";
 import { RateRequest } from "@aprscaching/shared";
@@ -201,7 +202,7 @@ export async function handleActivity(req: Request, env: Env): Promise<Response> 
   ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
   return json({
-    activity: page.items.map((r: any) => ({ ...r, verified: r.verified === 1 })),
+    activity: page.items.map((r: any) => ({ ...r, loggerCall: displayCall(r.loggerCall), verified: r.verified === 1 })),
     nextCursor: page.nextCursor,
     hasMore: page.hasMore,
   });

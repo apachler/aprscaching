@@ -72,4 +72,5 @@ station, radio and notification groups appear as well.
 
 **Settings → Your data → Export my data** downloads a complete copy (`aprscaching-<CALL>.json`).
 **Erase my account** — after you confirm **Permanently erase …?** — removes your account, keys and personal
-data and anonymises your finds. Erasure also reaches instances that mirrored your records.
+data and anonymises your finds. It covers the whole account — every callsign it holds, with their SSIDs —
+and your passkeys stop working. Erasure also reaches instances that mirrored your records.

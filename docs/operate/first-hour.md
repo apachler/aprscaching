@@ -28,8 +28,10 @@ Where "set the env" appears below, that means your deployment's environment:
 
 ## 2. Name yourself operator
 
-Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, and sign in with that
-callsign. The shield icon reveals **Instance admin**; its **Setup** group is this checklist, live.
+Set `ADMIN_CALLSIGNS=OE8APR` (comma-separated for co-sysops), restart, sign in with that
+callsign, and control-verify it (Settings → account → verify: the code arrives as an APRS message).
+The operator role needs the verified call — a sign-up under the name alone is not a sysop. The shield
+icon then reveals **Instance admin**; its **Setup** group is this checklist, live.
 Without `ADMIN_CALLSIGNS` there is no web sysop at all — the admin endpoints stay locked.
 
 ## 3. Fix your public identity

@@ -10,9 +10,9 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { accountActionMessage } from "@aprscaching/shared";
 import { importVerifyKey, fromB64, serveFeed, type FeedServeDef } from "./federation.js";
-import { emitTombstones } from "./tombstones.js";
+import { emitTombstones, type TombstoneItem } from "./tombstones.js";
 import { isKeyRegistered } from "./keys.js";
-import { sessionCallsign } from "./auth.js";
+import { sessionCallsign, WITHDRAWN } from "./auth.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
@@ -58,6 +58,51 @@ const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
       .bind(...binds)
       .all()
   ).results;
+
+/** The account behind a callsign — its active-call anchor, else the holder of its base call — and
+ *  every base call that account holds (the callsign's own base first). */
+async function accountScope(
+  env: Env,
+  cs: string,
+): Promise<{ accountId: string | null; email: string | null; calls: string[] }> {
+  const base = cs.split("-")[0]!;
+  const anchor = await env.DB.prepare("SELECT account_id, email FROM accounts WHERE callsign=?")
+    .bind(cs)
+    .first<{ account_id: string | null; email: string | null }>();
+  const accountId =
+    anchor?.account_id ??
+    (
+      await env.DB.prepare("SELECT account_id FROM account_callsigns WHERE callsign=?")
+        .bind(base)
+        .first<{ account_id: string }>()
+    )?.account_id ??
+    null;
+  const email =
+    anchor?.email ??
+    (accountId
+      ? ((
+          await env.DB.prepare("SELECT email FROM accounts WHERE account_id=?")
+            .bind(accountId)
+            .first<{ email: string | null }>()
+        )?.email ?? null)
+      : null);
+  const held = accountId
+    ? (
+        await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id=?")
+          .bind(accountId)
+          .all<{ callsign: string }>()
+      ).results.map((r) => r.callsign.toUpperCase())
+    : [];
+  return { accountId, email, calls: [...new Set([base, ...held])] };
+}
+
+/** `col` names one of `calls` or an SSID of it — a SQL fragment plus its binds. */
+function anyCall(col: string, calls: string[]): { sql: string; binds: string[] } {
+  return {
+    sql: `(${calls.map(() => `${col}=? OR ${col} LIKE ?`).join(" OR ")})`,
+    binds: calls.flatMap((c) => [c, `${c}-%`]),
+  };
+}
 
 // ----------------------------------------------------- GDPR: export everything for a callsign
 export async function handleAccountExport(req: Request, env: Env, callsign: string): Promise<Response> {
@@ -120,8 +165,73 @@ export async function handleAccountExport(req: Request, env: Env, callsign: stri
     )
       .bind(cs)
       .first(),
+    ...(await accountExport(env, cs)),
   };
   return json(data, { headers: { "content-disposition": `attachment; filename="aprscaching-${cs}.json"` } });
+}
+
+/** The account-scoped part of the export: every row keyed by the account or any call it holds.
+ *  Secrets (passkey public keys, push keys, API key values beyond the owner's own) stay out. */
+async function accountExport(env: Env, cs: string): Promise<Record<string, unknown>> {
+  const { accountId, email, calls } = await accountScope(env, cs);
+  const acct = accountId ?? "";
+  const by = (col: string) => anyCall(col, calls);
+  const q = (sql: string, m: { sql: string; binds: string[] }) => rows(env, sql.replace("$CALLS", m.sql), ...m.binds);
+  return {
+    passkeys: await q("SELECT id, callsign, transports, created_at FROM credentials WHERE $CALLS", by("callsign")),
+    callsigns: await rows(
+      env,
+      "SELECT callsign, verified, method, verified_at, is_primary, added_at FROM account_callsigns WHERE account_id=?",
+      acct,
+    ),
+    callsignHistory: await rows(
+      env,
+      "SELECT callsign, set_at, verified FROM callsign_history WHERE account_id=? ORDER BY set_at",
+      acct,
+    ),
+    emailTokens: await rows(
+      env,
+      "SELECT callsign, purpose, created_at, used FROM email_tokens WHERE email=?",
+      email ?? "",
+    ),
+    watchCalls: await rows(env, "SELECT callsign, added_at FROM watch_calls WHERE account_id=?", acct),
+    watchAlerts: await rows(
+      env,
+      "SELECT callsign, kind, detail, cache_id, lat, lon, ts, seen FROM watch_alerts WHERE account_id=? ORDER BY ts",
+      acct,
+    ),
+    savedViews: await q("SELECT slug, name, state, public, created_at FROM saved_views WHERE $CALLS", by("owner_call")),
+    pushSubscriptions: await rows(env, "SELECT endpoint, topics, created_at FROM push_subs WHERE account_id=?", acct),
+    boxes: await rows(env, "SELECT box_id, created_at FROM boxes WHERE account_id=?", acct),
+    ratings: await q("SELECT cache_id, callsign, stars, ts FROM cache_ratings WHERE $CALLS", by("callsign")),
+    cacheMedia: await q(
+      "SELECT m.cache_id, m.kind, m.content_type, m.title, m.bytes, m.created_at FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE $CALLS",
+      by("c.owner_call"),
+    ),
+    rendezvous: await rows(
+      env,
+      `SELECT cache_a, cache_b, call_a, call_b, ts, lat, lon FROM rendezvous_log WHERE ${by("call_a").sql} OR ${by("call_b").sql}`,
+      ...by("call_a").binds,
+      ...by("call_b").binds,
+    ),
+    entitlements: await rows(env, "SELECT key, granted_at FROM entitlements WHERE account_id=?", acct),
+    apiKeys: await q(
+      "SELECT key, label, rate_tier, created_at, last_used_at FROM api_keys WHERE $CALLS",
+      by("owner_call"),
+    ),
+    whitePages: await q("SELECT callsign, home_bbs, updated_at FROM white_pages WHERE $CALLS", by("callsign")),
+    bbsMessages: await rows(
+      env,
+      `SELECT type, from_call, to_call, subject, body, posted_at, read_at FROM bbs_messages WHERE ${by("from_call").sql} OR (type='P' AND ${by("to_call").sql}) ORDER BY posted_at`,
+      ...by("from_call").binds,
+      ...by("to_call").binds,
+    ),
+    stationsOperated: await rows(
+      env,
+      "SELECT callsign, lat, lon, symbol, description, roles, created_at FROM account_stations WHERE account_id=?",
+      acct,
+    ),
+  };
 }
 
 // ----------------------------------------------------- GDPR: erase / anonymise a callsign's data
@@ -130,8 +240,41 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   if (!auth.ok) return auth.res;
   const cs = callsign.toUpperCase();
   const instance = instanceOf(env, req);
-  // Capture this callsign's federated find ids BEFORE anonymising — once logger_call becomes
-  // WITHDRAWN we can't find them, and peers mirrored them with the real call (PII). The finds feed is
+  // Erasure covers the whole person: every base call the account holds, then every account-scoped row.
+  const scope = await accountScope(env, cs);
+  const calls = [...new Set([cs, ...scope.calls])];
+  const tombstoned: TombstoneItem[] = [];
+  const mediaKeys: string[] = [];
+  for (const c of calls) {
+    const erased = await eraseCall(env, instance, c);
+    tombstoned.push(...erased.tombstones);
+    mediaKeys.push(...erased.mediaKeys);
+  }
+  await eraseAccount(env, scope.accountId, scope.email, calls);
+  // uploaded cache media leaves the object store too; best-effort, the index rows are already gone
+  for (const k of mediaKeys) {
+    try {
+      await env.MEDIA?.delete?.(k);
+    } catch {
+      /* the row is gone either way */
+    }
+  }
+  // emit PII-free find tombstones so the network purges the mirrored copies that still carry the call
+  const tombstones = await emitTombstones(env, instance, tombstoned);
+  return json({ ok: true, erased: cs, tombstones });
+}
+
+/** Anonymise and erase one callsign's records. Its finds, owned caches and messages are rewritten to a
+ *  withdrawn marker unique to this erasure (`WITHDRAWN#…` — the `#` keeps it unregistrable), so find
+ *  counts survive and two erased people never collide on a per-caller unique index. */
+async function eraseCall(
+  env: Env,
+  instance: string,
+  cs: string,
+): Promise<{ tombstones: TombstoneItem[]; mediaKeys: string[] }> {
+  const marker = `${WITHDRAWN}#${[...crypto.getRandomValues(new Uint8Array(5))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  // Capture this callsign's federated find ids BEFORE anonymising — once logger_call is the withdrawn
+  // marker we can't find them, and peers mirrored them with the real call (PII). The finds feed is
   // append-only by id, so an UPDATE never re-serves the anonymised row → a tombstone is the only way
   // to purge the pre-deletion copies on peers. Logs sent from an SSID (a radio find from OE8APR-7) are
   // the callsign's too.
@@ -146,26 +289,36 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
   const moveSeqs = (
     await env.DB.prepare("SELECT seq FROM account_moves WHERE callsign=?").bind(cs).all<{ seq: number }>()
   ).results;
+  // media uploaded to the caches this call owns, captured while owner_call still names it
+  const media = (
+    await env.DB.prepare(
+      "SELECT m.id, m.media_key FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE c.owner_call=?",
+    )
+      .bind(cs)
+      .all<{ id: number; media_key: string }>()
+  ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
     // One found per cache survives anonymisation: a find counts once per person, and two of the
     // person's founds (base call and an SSID) would collide on the one-found-per-logger index once
-    // both read WITHDRAWN. The dropped copies are tombstoned with the rest.
+    // both carry the same marker. The dropped copies are tombstoned with the rest.
     env.DB.prepare(
       `DELETE FROM cache_logs WHERE log_type='found' AND (logger_call=? OR logger_call LIKE ?)
          AND id NOT IN (SELECT MIN(id) FROM cache_logs WHERE log_type='found' AND (logger_call=? OR logger_call LIKE ?)
                         GROUP BY cache_id)`,
     ).bind(cs, `${cs}-%`, cs, `${cs}-%`),
     env.DB.prepare(
-      "UPDATE cache_logs SET logger_call='WITHDRAWN', comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=? OR logger_call LIKE ?",
-    ).bind(cs, `${cs}-%`),
+      "UPDATE cache_logs SET logger_call=?, comment=NULL, signer_key=NULL, author_sig=NULL WHERE logger_call=? OR logger_call LIKE ?",
+    ).bind(marker, cs, `${cs}-%`),
     // archive owned caches AND bump updated_at so the archival re-propagates through the caches feed
     // (peers re-mirror status='archived' → the cache drops off their maps); no cache tombstone needed.
-    env.DB.prepare("UPDATE caches SET owner_call='WITHDRAWN', status='archived', updated_at=? WHERE owner_call=?").bind(
+    env.DB.prepare("UPDATE caches SET owner_call=?, status='archived', updated_at=? WHERE owner_call=?").bind(
+      marker,
       now(),
       cs,
     ),
-    env.DB.prepare("UPDATE messages SET from_call='WITHDRAWN' WHERE from_call=?").bind(cs),
+    env.DB.prepare("UPDATE messages SET from_call=? WHERE from_call=?").bind(marker, cs),
+    ...media.map((m) => env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(m.id)),
     env.DB.prepare("DELETE FROM positions WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM callsign_keys WHERE callsign=?").bind(cs),
     env.DB.prepare("DELETE FROM account_moves WHERE callsign=?").bind(cs),
@@ -186,13 +339,70 @@ export async function handleAccountDelete(req: Request, env: Env, callsign: stri
       "INSERT OR REPLACE INTO account_events (callsign, action, detail, at) VALUES (?, 'deleted', NULL, ?)",
     ).bind(cs, now()),
   ]);
-  // emit PII-free find tombstones so the network purges the mirrored copies that still carry the call
-  const tombstones = await emitTombstones(env, instance, [
-    ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
-    ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
-    ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
-  ]);
-  return json({ ok: true, erased: cs, tombstones });
+  return {
+    tombstones: [
+      ...findIds.map((r) => ({ kind: "find" as const, targetId: `${instance}:find:${r.id}` })),
+      ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
+      ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
+    ],
+    mediaKeys: media.map((m) => m.media_key),
+  };
+}
+
+/** Erase every account-scoped row: sign-in material (passkeys, pending ceremonies, email links), the
+ *  held calls (freeing each base call), and the person's subscriptions, watches, views, boxes, keys,
+ *  ratings, directory entries and personal mail. Public bulletins stay, attributed to the marker. */
+async function eraseAccount(env: Env, accountId: string | null, email: string | null, calls: string[]): Promise<void> {
+  const by = (col: string) => anyCall(col, calls);
+  const del = (sql: string, ...cols: string[]) =>
+    env.DB.prepare(cols.reduce((q, col) => q.replace("$CALLS", by(col).sql), sql)).bind(
+      ...cols.flatMap((col) => by(col).binds),
+    );
+  const stmts = [
+    del("DELETE FROM credentials WHERE $CALLS", "callsign"),
+    del("DELETE FROM auth_challenges WHERE $CALLS", "callsign"),
+    del("DELETE FROM email_tokens WHERE $CALLS", "callsign"),
+    del("DELETE FROM saved_views WHERE $CALLS", "owner_call"),
+    del("DELETE FROM api_keys WHERE $CALLS", "owner_call"),
+    del("DELETE FROM cache_ratings WHERE $CALLS", "callsign"),
+    del("DELETE FROM rendezvous_log WHERE $CALLS OR $CALLS", "call_a", "call_b"),
+    del("DELETE FROM white_pages WHERE $CALLS", "callsign"),
+    del("DELETE FROM box_commands WHERE $CALLS", "callsign"),
+    del("DELETE FROM bbs_delivery WHERE $CALLS", "to_call"),
+    del(
+      "DELETE FROM bbs_delivery WHERE msg_id IN (SELECT id FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS))",
+      "from_call",
+      "to_call",
+    ),
+    del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
+    env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
+      WITHDRAWN,
+      ...by("from_call").binds,
+    ),
+  ];
+  if (email) stmts.push(env.DB.prepare("DELETE FROM email_tokens WHERE email=?").bind(email));
+  if (accountId)
+    for (const table of [
+      "account_callsigns",
+      "callsign_history",
+      "watch_calls",
+      "watch_alerts",
+      "push_subs",
+      "entitlements",
+      "wx_keys",
+      "account_stations",
+      "account_prefs",
+      "accounts",
+    ])
+      stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE account_id=?`).bind(accountId));
+  if (accountId)
+    stmts.push(
+      env.DB.prepare("DELETE FROM box_commands WHERE box_id IN (SELECT box_id FROM boxes WHERE account_id=?)").bind(
+        accountId,
+      ),
+      env.DB.prepare("DELETE FROM boxes WHERE account_id=?").bind(accountId),
+    );
+  await env.DB.batch(stmts);
 }
 
 // ----------------------------------------------------- portability: signed migration bundle (source)

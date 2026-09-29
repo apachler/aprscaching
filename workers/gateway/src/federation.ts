@@ -17,6 +17,7 @@
 import { fedFetch } from "./fetchguard.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
+import { displayCall } from "./auth.js";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 
 const PROTOCOL = "aprscaching-federation/0.1";
@@ -76,7 +77,7 @@ function cacheData(r: CacheRow) {
   // description too (location/title only). `local-only` caches are filtered out before this (CACHE_FEED).
   return {
     code: r.code,
-    ownerCall: r.owner_call,
+    ownerCall: displayCall(r.owner_call),
     title: r.title,
     type: r.type,
     status: r.status,
@@ -98,7 +99,7 @@ function findData(r: FindRow, instance: string) {
   return {
     cacheId: `${instance}:cache:${r.cache_id}`,
     cacheCode: r.cache_code,
-    loggerCall: r.logger_call,
+    loggerCall: displayCall(r.logger_call),
     ts: r.ts,
     logType: r.log_type,
     verified: r.verified === 1,

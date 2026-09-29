@@ -19,21 +19,24 @@ import {
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, fromB64, verifyDomainOrLegacy } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
-import { sessionCallsign, secretOk } from "./auth.js";
+import { sessionCallsign, sessionAccountId, accountHoldsCall, secretOk } from "./auth.js";
 
 export async function handleRegisterKey(req: Request, env: Env): Promise<Response> {
   const parsed = RegisterKeyRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
   // Registering a key BINDS it to a callsign, and account.ts authorises destructive
   // account actions (delete/bundle/move) by "any registered key" — so registration itself must be
-  // authenticated. A signed-in session registers for its own base call (any SSID of it); the
-  // trusted ingest daemon (shared secret) registers for the callsign it heard. Never an anonymous body.
+  // authenticated. A signed-in session registers for a base call its account holds (any SSID of
+  // it); the trusted ingest daemon (shared secret) registers for the callsign it heard. Never an
+  // anonymous body, and never a call on a licence the session's account does not hold.
   const session = await sessionCallsign(req, env);
-  const base = (c: string) => c.toUpperCase().split("-")[0] ?? "";
   let callsign: string;
   if (session) {
+    const me = await sessionAccountId(req, env);
+    if (!me) return json({ error: "sign in to register a device key" }, { status: 401 });
     callsign = (parsed.data.callsign ?? session).toUpperCase();
-    if (base(callsign) !== base(session)) return json({ error: "callsign is not yours" }, { status: 403 });
+    if (!(await accountHoldsCall(env, me.accountId, callsign)))
+      return json({ error: "callsign is not yours" }, { status: 403 });
   } else if (secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) && parsed.data.callsign) {
     callsign = parsed.data.callsign.toUpperCase();
   } else {

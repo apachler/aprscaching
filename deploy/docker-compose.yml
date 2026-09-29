@@ -28,6 +28,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       INSTANCE: ${INSTANCE:-}
       APP_URL: ${APP_URL:-}
+      # Caddy is the only way in and sets X-Forwarded-For itself, so the gateway keys per-IP rate
+      # limits on the forwarded client address rather than on Caddy's.
+      TRUST_PROXY: "1"
     volumes: ["data:/data"]
     restart: unless-stopped
     logging: *default-logging

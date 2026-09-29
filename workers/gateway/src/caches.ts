@@ -22,7 +22,7 @@ import {
 import { provenanceOf, parseAttestedSites } from "./provenance.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
-import { sessionCallsign, secretOk } from "./auth.js";
+import { sessionCallsign, secretOk, isWithdrawnCall, displayCall } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
 import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
 import { coarsenConfig } from "./corroborate_privacy.js";
@@ -80,7 +80,7 @@ function toSummary(r: CacheDbRow): CacheSummary {
   return {
     id: r.id,
     code: r.code,
-    ownerCall: r.owner_call,
+    ownerCall: displayCall(r.owner_call),
     title: r.title,
     type: r.type as CacheSummary["type"],
     status: r.status as CacheSummary["status"],
@@ -123,7 +123,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
   return {
     id: r.id,
     cacheId: r.cache_id,
-    loggerCall: r.logger_call,
+    loggerCall: displayCall(r.logger_call),
     ts: r.ts,
     logType: r.log_type as CacheLogEntry["logType"],
     verified: r.verified === 1,
@@ -152,8 +152,9 @@ function baseCall(c: string): string {
  */
 export async function actor(req: Request, env: Env, fallback?: string): Promise<string | null> {
   const s = await sessionCallsign(req, env);
-  if (s) return s.toUpperCase();
-  if (ingestOk(req, env) && fallback) return fallback.toUpperCase();
+  // the withdrawn marker names an erased identity, never someone acting now
+  if (s) return isWithdrawnCall(s) ? null : s.toUpperCase();
+  if (ingestOk(req, env) && fallback && !isWithdrawnCall(fallback)) return fallback.toUpperCase();
   return null;
 }
 
@@ -181,7 +182,7 @@ function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     globalId: `${instance}:cache:${r.id}`,
     id: r.id,
     code: r.code,
-    ownerCall: r.owner_call,
+    ownerCall: displayCall(r.owner_call),
     title: r.title,
     type: r.type as MapCache["type"],
     status: r.status as MapCache["status"],
@@ -390,6 +391,9 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   const existing = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   if (!existing) return json({ error: "no such cache" }, { status: 404 });
 
+  // an erased owner's cache stays archived: nobody inherits it through the withdrawn marker
+  if (isWithdrawnCall(existing.owner_call))
+    return json({ error: "this cache's owner has withdrawn — it cannot be edited" }, { status: 403 });
   const who = await actor(req, env, b.ownerCall);
   if (!who || who !== existing.owner_call.toUpperCase())
     return json({ error: "only the owner may edit this cache" }, { status: 403 });

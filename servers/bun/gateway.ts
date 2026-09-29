@@ -6,5 +6,6 @@
  * can't resolve — both in dev (`bun run`) and under `bun build --compile`.
  */
 export { handle, runScheduled, syncAllPeers } from "@aprscaching/gateway/app";
+export { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 export type { Env } from "@aprscaching/gateway/env";
 export type { LiveEnvelope } from "@aprscaching/gateway/live";
