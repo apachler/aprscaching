@@ -6,6 +6,8 @@
  * Runtime-neutral: the caller supplies the migrations (read from `db/migrations`, or embedded in the
  * desktop binary) and a two-method view of its SQLite driver.
  */
+import { nowS } from "./util/time.js";
+
 export interface Migration {
   name: string;
   sql: string;
@@ -29,7 +31,7 @@ export function migrate(db: MigrationTarget, migrations: Migration[]): string[] 
     db.exec("BEGIN");
     try {
       db.exec(m.sql);
-      db.query("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)", m.name, Math.floor(Date.now() / 1000));
+      db.query("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)", m.name, nowS());
       db.exec("COMMIT");
     } catch (e) {
       db.exec("ROLLBACK");

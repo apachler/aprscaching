@@ -4,7 +4,7 @@ import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
 import { randomChallenge, verifyRegistration, verifyAssertion } from "./webauthn.js";
-import { bytesToB64url, b64urlToBytes } from "./util/b64.js";
+import { bytesToB64, bytesToB64url, b64urlToBytes } from "./util/b64.js";
 import { rateLimitedDurable, clientIp } from "./corroborate_privacy.js";
 import { licenceFor } from "./licence.js";
 import { isCallsignVerified, verificationsOf } from "./callsign.js";
@@ -700,7 +700,7 @@ async function signSession(env: Env, c: SessionClaims): Promise<string> {
   if (!k) throw new SessionUnavailable();
   const payload = [SESSION_VERSION, c.accountId, c.gen, c.callsign, Date.now()].join(".");
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(payload));
-  return `${btoa(payload)}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+  return `${btoa(payload)}.${bytesToB64(new Uint8Array(sig))}`;
 }
 /** The cookie's Max-Age is only a client hint — enforce the lifetime server-side too,
  *  or a captured token stays valid until the signing secret rotates. Tunable via SESSION_TTL_DAYS;
@@ -722,7 +722,7 @@ async function verifySession(token: string, env: Env): Promise<SessionClaims | n
     if (!k) return null; // no usable secret ⇒ no session is ever valid
     const [p, sg] = token.split(".");
     const payload = atob(p!);
-    const sig = Uint8Array.from(atob(sg!), (c) => c.charCodeAt(0));
+    const sig = b64urlToBytes(sg!);
     const ok = await crypto.subtle.verify("HMAC", k, sig, new TextEncoder().encode(payload));
     if (!ok) return null;
     // a token without an account (any other shape) is never valid
