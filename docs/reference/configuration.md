@@ -35,6 +35,7 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `TRUST_CF` | Node/Bun only: keep Cloudflare's `cf-connecting-ip` as the rate-limit client identity. Set it only when the origin is reachable solely through Cloudflare (Tunnel, or proxied DNS with 80/443 firewalled to Cloudflare's ranges); otherwise a client-sent `cf-connecting-ip` is dropped. `compose.home.yml` sets it for the tunnel. The Worker always trusts it — there Cloudflare's edge sets it | off |
 | `CORS_ORIGINS` | Extra origins allowed for credentialed CORS (comma-separated). With neither `APP_URL` nor `CORS_ORIGINS` set, cross-origin requests get `Access-Control-Allow-Origin: *` and never credentials — a SPA served from another origin (e.g. `pnpm dev:web` on `http://localhost:5173`) needs its origin listed here | — |
 | `ALLOW_DEV_TOKENS` | Return magic-link tokens in-band instead of emailing (dev/CI only — never production: it hands a sign-in token to whoever asks). An off-grid instance signs members in with the operator's one-time link instead ([`signin-link.mjs`](cli.md#signin-link)) | off |
+| `OPERATOR_LINKS_FOR_ANY_CALL` | `1` lets the operator's one-time link ([`signin-link.mjs`](cli.md#signin-link)) serve every call on an instance that also offers passkeys or email, where it otherwise serves only `ADMIN_CALLSIGNS` calls. It is for an off-grid station whose owner signs in with a passkey on `http://localhost` and whose visitors on its hotspot have no other way in ([Visitors on the hotspot](../operate/first-hour.md#visitors-on-the-hotspot)). It widens what a leaked `OPERATOR_SECRET` reaches to every account, so leave it off on a shared or public instance | off |
 | `SOURCE_REPO` | AGPL §13 published-source URL — a public fork **must** set this | upstream |
 | `SOURCE_COMMIT` / `SOURCE_TAG` / `SOURCE_BUILT_AT` | Running-source descriptor | git HEAD |
 | `ADMIN_CALLSIGNS` | Comma-separated licensed calls that may administer this instance (sysop). The operator must also hold the call on their account and confirm it with `tools/admin/verify-call.mjs` (see [CLI](cli.md#operator-callsign)) | — |
@@ -46,6 +47,16 @@ Node/Bun servers also read plain runtime knobs that are not part of the gateway 
 (`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;
 `0` disables scheduled peer sync). The Node server also reads `WEB_DIST`: the built web app
 (`apps/web/dist`), which it then serves on the same origin as the API, for a box with no reverse proxy in front.
+
+The Node server can also listen for https itself, beside its plain port, for a station whose visitors reach
+it on a Wi-Fi hotspot with no proxy in front. Off unless `HTTPS_PORT` is set; the Bun server and the desktop
+app do not read these.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `HTTPS_PORT` | Port of the https listener. It runs the same gateway, web app and live socket as the plain port, and the links it builds from a request say `https`. With it set, the plain port answers a page load from another device (a `GET` that accepts HTML, for a web-app route) with a `302` to the same host on `HTTPS_PORT`; loopback requests, the API, `/auth`, `/ingest`, `/federation`, `/ws`, a request a declared proxy (`TRUST_PROXY=1`) carried over https, and `/pocket-ca.crt` are served where they arrive. An operator sign-in link may then name `https://<private IPv4 address>:<HTTPS_PORT>` (see `OPERATOR_LINKS_FOR_ANY_CALL`). The server refuses to boot when it is set without `TLS_CERT` and `TLS_KEY` | off |
+| `TLS_CERT` / `TLS_KEY` | PEM certificate (with any intermediate chain) and private key for `HTTPS_PORT`. `SIGHUP` reloads both without a restart — a certificate re-issued for a new hotspot address takes effect for new connections, and a file that fails to load keeps the previous one | — |
+| `TLS_CA_CERT` | A CA certificate served read-only at `/pocket-ca.crt` (`application/x-x509-ca-cert`) on both ports, so a visitor can download and install the station's CA before trusting it. Only that fixed path reads it; unset ⇒ the path is a `404` | — |
 The desktop app also reads `HOST` (`127.0.0.1`; set `0.0.0.0` or a LAN
 address to serve the local network) and `DATA_DIR`, and generates its `INGEST_SECRET`, `OPERATOR_SECRET`
 and `SESSION_SECRET` on first run into the data directory unless the environment sets them.
