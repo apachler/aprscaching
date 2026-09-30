@@ -10,6 +10,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
 import { haversineMeters } from "@aprscaching/aprs";
+import { StageUnlockRequest } from "@aprscaching/shared";
 
 interface StageRow {
   stage_no: number;
@@ -165,11 +166,10 @@ export async function handleGetStages(req: Request, env: Env, cacheId: number): 
 
 // ---- unlock a stage: reveal its coords once the prerequisite is met ----
 export async function handleUnlockStage(req: Request, env: Env, cacheId: number, stageNo: number): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as {
-    callsign?: string;
-    appGeo?: { lat: number; lon: number };
-    code?: string;
-  };
+  // `appGeo` is the device's own reading; the strict shape refuses anything that marks a typed coordinate
+  const parsed = StageUnlockRequest.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
+  const b = parsed.data;
   if (!b.callsign) return json({ error: "callsign required" }, { status: 400 });
   const cs = b.callsign.toUpperCase();
   if (stageNo <= 0) return json({ error: "stage 0 is the public start" }, { status: 400 });

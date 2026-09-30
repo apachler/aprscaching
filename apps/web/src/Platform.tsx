@@ -43,9 +43,10 @@ import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
-import { maidenhead, gridCenter, haversine } from "./map/geo.js";
+import { maidenhead, gridCenter, haversine, parseCoordinates } from "./map/geo.js";
 import { toMgrs } from "@aprscaching/aprs";
 import { MapTools } from "./map/MapTools.js";
+import { LocateControl } from "./map/LocateControl.js";
 import { BasemapSwitcher } from "./map/BasemapSwitcher.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
@@ -299,7 +300,6 @@ export default function Platform({ session, startTour }: { session: SessionState
     mapNode,
     { style: baseStyle, center: DEFAULT_CENTER, zoom: 9 },
     {
-      onGeolocate: (lat, lon) => setHere({ lat, lon }), // the cache sheet shows the distance
       onLoad: (m) => {
         setCenter([m.getCenter().lat, m.getCenter().lng]);
         void refreshRef.current();
@@ -614,12 +614,8 @@ export default function Platform({ session, startTour }: { session: SessionState
       flyTo(g[0], g[1], 10);
       return;
     }
-    const ll = q.match(/^(-?\d+(?:\.\d+)?)\s*[ ,]\s*(-?\d+(?:\.\d+)?)$/);
-    if (ll) {
-      const lat = +ll[1]!,
-        lon = +ll[2]!;
-      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) flyTo(lat, lon, 12);
-    }
+    const ll = parseCoordinates(q);
+    if (ll) flyTo(ll.lat, ll.lon, 12);
   }
 
   // enriched-search picks: a cache opens its detail + flies there; a station just flies to it
@@ -807,6 +803,8 @@ export default function Platform({ session, startTour }: { session: SessionState
                   </div>
                 </div>
               )}
+              {/* the viewer's own fix: the cache sheet shows the distance to it */}
+              <LocateControl map={map} onFix={(lat, lon) => setHere({ lat, lon })} />
               {ready && <BasemapSwitcher map={map} styleEpoch={styleEpoch} />}
               {ready && <MapTools map={map} home={home} target={target} styleEpoch={styleEpoch} />}
               {!ready && (

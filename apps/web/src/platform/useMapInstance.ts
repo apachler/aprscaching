@@ -15,8 +15,6 @@ export interface MapHandlers {
   /** The view settled after a pan/zoom. */
   onMoveEnd: (m: maplibregl.Map) => void;
   onClick: (m: maplibregl.Map, e: maplibregl.MapMouseEvent) => void;
-  /** The viewer's own fix, once they ask the map to locate them. */
-  onGeolocate: (lat: number, lon: number) => void;
 }
 
 /**
@@ -49,9 +47,7 @@ export function useMapInstance(
       hash: true,
     });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-    const locate = new maplibregl.GeolocateControl({ trackUserLocation: true });
-    locate.on("geolocate", (e) => h.current.onGeolocate(e.coords.latitude, e.coords.longitude));
-    m.addControl(locate, "top-left");
+    // the locate button joins this stack from LocateControl, driven by the app's own location helper
     m.on("load", () => h.current.onLoad(m));
     m.on("moveend", () => h.current.onMoveEnd(m));
     m.on("click", (e) => h.current.onClick(m, e));

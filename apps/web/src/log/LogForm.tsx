@@ -6,6 +6,8 @@ import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
 import { Button, TierBadge, TIER_NAME, Ico, useConfirm, Card } from "../ui/index.js";
 import type { LogType } from "@aprscaching/shared";
+import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
+import { LocateStatus, useLocate } from "../geo/useLocate.js";
 
 /**
  * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
@@ -63,24 +65,7 @@ export function LogForm(props: {
   const [err, setErr] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
-
-  // request the device fix (Tier-B path); resolve undefined if denied/unavailable so the tap still succeeds
-  function getGeo(): Promise<AppGeo | undefined> {
-    if (!navigator.geolocation) return Promise.resolve(undefined);
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (p) =>
-          resolve({
-            lat: p.coords.latitude,
-            lon: p.coords.longitude,
-            accuracyM: p.coords.accuracy ?? 9999,
-            ts: Math.floor(p.timestamp / 1000),
-          }),
-        () => resolve(undefined),
-        { enableHighAccuracy: true, timeout: 8000 },
-      );
-    });
-  }
+  const loc = useLocate();
 
   async function doLog(logType: LogType, comment?: string) {
     if (props.callsign.length < 3) {
@@ -92,7 +77,14 @@ export function LogForm(props: {
     setBusy(logType);
     setErr(null);
     try {
-      const appGeo = logType === "found" ? await getGeo() : undefined;
+      // The device's own reading is the in-app evidence (Tier B). A find without one still logs, and
+      // stays Tier C unless a receiving station heard it; a typed coordinate is never sent as evidence.
+      let appGeo: AppGeo | undefined;
+      if (logType === "found") {
+        const got = await loc.locate(EVIDENCE_MAX_AGE_MS);
+        if ("cancelled" in got) return;
+        appGeo = "fix" in got ? toAppGeo(got.fix) : undefined;
+      }
       const away =
         appGeo && props.cacheLat != null && props.cacheLon != null
           ? haversine(appGeo.lat, appGeo.lon, props.cacheLat, props.cacheLon)
@@ -163,6 +155,9 @@ export function LogForm(props: {
                   ? "A cache takes one find from each callsign, and your first log stands as it was scored."
                   : findWhy(result, fmt, geoAway, hadGeo)}
               </p>
+              {!result.verified && !hadGeo && (
+                <LocateStatus waiting={null} problem={loc.problem} onCancel={loc.cancel} />
+              )}
             </>
           )
         )}
@@ -205,8 +200,19 @@ export function LogForm(props: {
         disabled={!!busy}
         onClick={() => doLog("found")}
       >
-        {busy === "found" ? "Logging…" : "✓ Log a find"}
+        {busy === "found"
+          ? loc.waiting
+            ? `Locating… ${Math.floor(loc.waiting.elapsedMs / 1000)} s`
+            : "Logging…"
+          : "✓ Log a find"}
       </Button>
+      <LocateStatus
+        waiting={loc.waiting}
+        problem={loc.problem}
+        onCancel={loc.cancel}
+        onSkip={loc.skipWait}
+        skipLabel="Log without location"
+      />
       <div className="row between mt-3">
         <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>
           {busy === "dnf" ? "…" : "Couldn't find it"}

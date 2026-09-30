@@ -14,6 +14,8 @@ import { fieldStation } from "./fieldStation.js";
 import { ingestPackets, ingestSigned, registerKey } from "../api.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
+import { NAV_MAX_AGE_MS } from "../geo/location.js";
+import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { Button, Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
@@ -34,6 +36,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   const confirmDialog = useConfirm();
   const fmt = useFmt();
   const toast = useToast();
+  const loc = useLocate();
   const serialOk = webSerialSupported();
   const bleOk = webBluetoothSupported();
   const audioOk = webAudioSupported();
@@ -256,11 +259,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       return;
     await tx(encodeAprsMessage(msg.to, msg.text), `message to ${msg.to.toUpperCase()}`);
   }
-  function fillMyLocation() {
-    navigator.geolocation?.getCurrentPosition(
-      (p) => setBcn((b) => ({ ...b, lat: p.coords.latitude.toFixed(5), lon: p.coords.longitude.toFixed(5) })),
-      () => toast("Couldn't get your location"),
-    );
+  async function fillMyLocation() {
+    const got = await loc.locate(NAV_MAX_AGE_MS);
+    if ("fix" in got) setBcn((b) => ({ ...b, lat: got.fix.lat.toFixed(5), lon: got.fix.lon.toFixed(5) }));
   }
 
   if (!serialOk && !bleOk && !audioOk)
@@ -449,10 +450,16 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       value={bcn.lon}
                       onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))}
                     />
-                    <button onClick={fillMyLocation} title="Use my location" aria-label="Use my location">
+                    <button
+                      onClick={() => void fillMyLocation()}
+                      disabled={!!loc.waiting}
+                      title="Use my location"
+                      aria-label="Use my location"
+                    >
                       <Ico e="📍" c="@" />
                     </button>
                   </div>
+                  <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
                   <input
                     placeholder="comment (optional)"
                     aria-label="Beacon comment"

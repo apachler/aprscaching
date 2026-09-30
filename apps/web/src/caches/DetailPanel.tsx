@@ -19,6 +19,7 @@ import type { CacheLogEntry } from "@aprscaching/shared";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { useFmt, useTheme } from "../format.js";
 import { maidenhead, haversine } from "../map/geo.js";
+import { GLANCE_MAX_AGE_MS, isFresh, lastFix, locationSupport, requestFix } from "../geo/location.js";
 import {
   Button,
   Panel,
@@ -47,28 +48,27 @@ import { usePlatform } from "../platform/PlatformContext.js";
 type LatLon = { lat: number; lon: number };
 
 /**
- * Where the viewer is, when that is already known: the map's locate control, or — only when location
- * permission was granted before — a fresh reading. It never prompts; an unknown position shows nothing.
+ * Where the viewer is, when that is already known: the map's locate control, a recent reading, or —
+ * only when location permission was granted before — a new one. It never prompts; an unknown position
+ * shows nothing.
  */
 function useKnownPosition(from: LatLon | null | undefined): LatLon | null {
   const [pos, setPos] = useState<LatLon | null>(null);
   useEffect(() => {
-    if (from || !navigator.geolocation || !navigator.permissions) return;
-    let live = true;
+    if (from) return;
+    const known = lastFix();
+    if (known && isFresh(known, GLANCE_MAX_AGE_MS)) {
+      setPos({ lat: known.lat, lon: known.lon });
+      return;
+    }
+    if (locationSupport() || !navigator.permissions) return;
+    const ac = new AbortController();
     navigator.permissions
       .query({ name: "geolocation" })
-      .then((p) => {
-        if (!live || p.state !== "granted") return;
-        navigator.geolocation.getCurrentPosition(
-          (g) => live && setPos({ lat: g.coords.latitude, lon: g.coords.longitude }),
-          () => {},
-          { maximumAge: 60_000, timeout: 8000 },
-        );
-      })
+      .then((p) => (p.state === "granted" ? requestFix({ maxAgeMs: GLANCE_MAX_AGE_MS, signal: ac.signal }) : null))
+      .then((g) => g && !ac.signal.aborted && setPos({ lat: g.lat, lon: g.lon }))
       .catch(() => {});
-    return () => {
-      live = false;
-    };
+    return () => ac.abort();
   }, [from]);
   return from ?? pos;
 }

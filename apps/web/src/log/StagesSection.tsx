@@ -4,6 +4,8 @@ import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Ico } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
+import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
+import { LocateStatus, useLocate } from "../geo/useLocate.js";
 
 // Minimal WebNFC shapes (lib.dom doesn't ship them): just what we read off a tag.
 interface NfcRecord {
@@ -26,6 +28,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const loc = useLocate();
 
   const [loadErr, setLoadErr] = useState(false);
   const load = useCallback(() => {
@@ -66,22 +69,11 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
     setBusy(stageNo);
     setErr(null);
     const stage = stages.find((s) => s.stageNo === stageNo);
-    // geo stages need your live position; nfc stages a tag/code; open/audio unlock on request
-    if (stage?.unlock === "geo" && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          finish(stageNo, {
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            accuracyM: pos.coords.accuracy,
-            ts: Math.floor(Date.now() / 1000),
-          }),
-        () => {
-          setErr("Location permission needed to unlock this stage.");
-          setBusy(null);
-        },
-        { enableHighAccuracy: true, timeout: 10000 },
-      );
+    // geo stages take the device's own reading, stamped with its own time — never a typed coordinate
+    if (stage?.unlock === "geo") {
+      const got = await loc.locate(EVIDENCE_MAX_AGE_MS);
+      if ("fix" in got) finish(stageNo, toAppGeo(got.fix));
+      else setBusy(null);
     } else if (stage?.unlock === "nfc") {
       finish(stageNo, undefined, code.trim());
     } else {
@@ -210,6 +202,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
           </li>
         ))}
       </ol>
+      <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
       {err && <p className="error">{err}</p>}
     </div>
   );
