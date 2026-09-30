@@ -40,6 +40,8 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 | `DB_PATH` | `./data/aprscaching.db` | SQLite file (WAL mode) |
 | `MIGRATIONS_DIR` | `../../db/migrations` | the shared schema (same files D1 uses) |
 | `INGEST_SECRET` | *(required)* | bearer for `/ingest`, `/outbox` — the server refuses to boot when unset or `change-me` |
+| `MEDIA_DIR` | `./data/media` | uploaded cache media |
+| `WEB_DIST` | *(unset)* | the built SPA (`apps/web/dist`): set, the server serves it on the same origin as the API, so no reverse proxy is needed; unset, it serves only the API (Caddy serves the SPA in the Docker stack) |
 
 Migrations are applied automatically on boot and tracked in a `_migrations` table.
 
