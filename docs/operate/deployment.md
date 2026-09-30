@@ -18,6 +18,8 @@ verified, backed-up instance (mirrored live in the app under **Instance admin �
   the gateway.
 - **Desktop** — one executable, no Docker. Pick it to try the platform out, for a field day, or for a
   single operator off-grid.
+- **On a phone** — [Pocket](pocket.md) runs the Self-host gateway and ingest on an Android phone in Termux:
+  a field-day and demo station with its own hotspot and a MeshCom node, not an always-on server.
 - **Cloudflare split** — no server of your own to maintain for the gateway: Cloudflare runs it, and your
   own box runs only the RF ingest. D1 bills every row written, so the cost grows with your feed. It suits
   small regional feeds and operators who want no maintenance; big or global feeds belong on Self-host.
