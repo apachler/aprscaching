@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * qr.ts — a small, dependency-free QR encoder (byte mode, ECC level M, versions 1–6) rendering SVG.
- * Enough for cache deep-links / share URLs (v6-M holds 106 bytes). Pure + runtime-neutral.
+ * qr.ts — a small, dependency-free QR encoder (byte mode, ECC level M, versions 1–9) rendering SVG or
+ * terminal text. Enough for cache deep-links, share URLs and sign-in links (v9-M holds 180 bytes). Pure +
+ * runtime-neutral.
  *
- * Correctness: the Reed–Solomon core is unit-tested against the ISO/IEC 18004 worked example, and the
- * matrix against structural invariants (size, finder/timing patterns). Versions ≥7 (which need version
- * info blocks) are intentionally out of scope.
+ * Correctness: the Reed–Solomon core is unit-tested against the ISO/IEC 18004 worked example, the format
+ * and version information against the standard's published code words, and the matrix against structural
+ * invariants (size, finder/timing/alignment patterns).
  */
 
 // ---- GF(256), primitive polynomial 0x11d ----
@@ -56,14 +57,17 @@ const VERSIONS: VerSpec[] = [
   { ver: 4, blocks: [32, 32], ec: 18, remainder: 7, align: [6, 26] },
   { ver: 5, blocks: [43, 43], ec: 24, remainder: 7, align: [6, 30] },
   { ver: 6, blocks: [27, 27, 27, 27], ec: 16, remainder: 7, align: [6, 34] },
+  { ver: 7, blocks: [31, 31, 31, 31], ec: 18, remainder: 0, align: [6, 22, 38] },
+  { ver: 8, blocks: [38, 38, 39, 39], ec: 22, remainder: 0, align: [6, 24, 42] },
+  { ver: 9, blocks: [36, 36, 36, 37, 37], ec: 22, remainder: 0, align: [6, 26, 46] },
 ];
 const capacity = (v: VerSpec) => v.blocks.reduce((a, b) => a + b, 0);
 
-/** Encode a string (UTF-8, byte mode) into a boolean module matrix. Throws if too long for v6-M. */
+/** Encode a string (UTF-8, byte mode) into a boolean module matrix. Throws if too long for v9-M. */
 export function qrMatrix(text: string): boolean[][] {
   const bytes = [...new TextEncoder().encode(text)];
   const spec = VERSIONS.find((v) => capacity(v) >= bytes.length + 2 + Math.ceil(0 / 8)); // +2: mode+count headroom
-  if (!spec) throw new Error("data too long for QR v1–6 (max 106 bytes)");
+  if (!spec) throw new Error("data too long for QR v1–9 (max 180 bytes)");
 
   // ---- bitstream: mode(0100) + 8-bit count + data + terminator + byte-align + pad ----
   const bits: number[] = [];
@@ -121,19 +125,32 @@ export function qrMatrix(text: string): boolean[][] {
   finder(0, 0);
   finder(0, size - 7);
   finder(size - 7, 0);
+  // alignment patterns: every pairing of the centre positions except the three finder corners (those on
+  // the timing lines are drawn — they agree with the timing pattern where they cross it)
+  const last = spec.align.length - 1;
+  spec.align.forEach((r, i) =>
+    spec.align.forEach((c, j) => {
+      if ((i === 0 && j === 0) || (i === 0 && j === last) || (i === last && j === 0)) return;
+      for (let dr = -2; dr <= 2; dr++)
+        for (let dc = -2; dc <= 2; dc++) set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+    }),
+  );
   // timing patterns
   for (let i = 8; i < size - 8; i++) {
     if (m[6]![i] === null) set(6, i, i % 2 === 0);
     if (m[i]![6] === null) set(i, 6, i % 2 === 0);
   }
-  // alignment patterns
-  for (const r of spec.align)
-    for (const c of spec.align) {
-      if (m[r]![c] !== null) continue; // skip those overlapping finders
-      for (let dr = -2; dr <= 2; dr++)
-        for (let dc = -2; dc <= 2; dc++) set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
-    }
   set(size - 8, 8, true); // dark module
+  // version information (v7+): 6 version bits + a BCH(18,6) remainder, in a 6×3 block beside the top-right
+  // finder and its transpose beside the bottom-left one, least significant bit first
+  if (spec.ver >= 7) {
+    const info = versionInfo(spec.ver);
+    for (let i = 0; i < 18; i++) {
+      const dark = ((info >> i) & 1) === 1;
+      set(Math.floor(i / 3), size - 11 + (i % 3), dark);
+      set(size - 11 + (i % 3), Math.floor(i / 3), dark);
+    }
+  }
   // reserve format areas (set later) — mark as non-null with false so data skips them
   const reserveFormat = () => {
     for (let i = 0; i < 9; i++) {
@@ -197,21 +214,34 @@ export function qrMatrix(text: string): boolean[][] {
   return best!;
 }
 
-// format info: 5 bits (ECC level M = 0b00, mask 3 bits) → BCH(15,5), XOR mask 0x5412
-function placeFormat(m: boolean[][], reserved: boolean[][], mask: number, size: number): void {
+/** The 15-bit format information for ECC level M (0b00) and `mask`: BCH(15,5), XORed with 0x5412. */
+export function formatInfo(mask: number): number {
   const data = (0b00 << 3) | mask;
   let bch = data << 10;
   for (let i = 14; i >= 10; i--) if ((bch >> i) & 1) bch ^= 0b10100110111 << (i - 10);
-  const bits = ((data << 10) | (bch & 0x3ff)) ^ 0b101010000010010;
+  return ((data << 10) | (bch & 0x3ff)) ^ 0b101010000010010;
+}
+
+/** The 18-bit version information of a v7+ symbol: the version, then its BCH(18,6) remainder. */
+export function versionInfo(ver: number): number {
+  let rem = ver;
+  for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+  return (ver << 12) | (rem & 0xfff);
+}
+
+// Format information, least significant bit first: bits 0–7 run down column 8 beside the top-left finder
+// (skipping the timing row) and bits 8–14 along row 8 back towards the left edge; the second copy puts
+// bits 0–7 along row 8 from the right edge and bits 8–14 up column 8 from the dark module.
+function placeFormat(m: boolean[][], reserved: boolean[][], mask: number, size: number): void {
+  const bits = formatInfo(mask);
   const bit = (i: number) => ((bits >> i) & 1) === 1;
-  // top-left (around the corner) + duplicated near top-right / bottom-left
-  for (let i = 0; i <= 5; i++) m[8]![i] = bit(i);
-  m[8]![7] = bit(6);
+  for (let i = 0; i <= 5; i++) m[i]![8] = bit(i);
+  m[7]![8] = bit(6);
   m[8]![8] = bit(7);
-  m[7]![8] = bit(8);
-  for (let i = 9; i <= 14; i++) m[14 - i]![8] = bit(i);
-  for (let i = 0; i <= 7; i++) m[size - 1 - i]![8] = bit(i);
-  for (let i = 8; i <= 14; i++) m[8]![size - 15 + i] = bit(i);
+  m[8]![7] = bit(8);
+  for (let i = 9; i <= 14; i++) m[8]![14 - i] = bit(i);
+  for (let i = 0; i <= 7; i++) m[8]![size - 1 - i] = bit(i);
+  for (let i = 8; i <= 14; i++) m[size - 15 + i]![8] = bit(i);
   void reserved;
 }
 
@@ -252,4 +282,32 @@ export function qrSvg(text: string, opts: { size?: number; quiet?: number } = {}
     `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${dim} ${dim}" shape-rendering="crispEdges">` +
     `<rect width="${dim}" height="${dim}" fill="#fff"/><path d="${rects}" fill="#000"/></svg>`
   );
+}
+
+/**
+ * Render a QR for `text` as terminal text: two module rows per line in half-block characters, with a
+ * 4-module quiet zone. The light modules are the drawn ones, so the code reads the right way round on a
+ * dark terminal; phone scanners also read it inverted, on a light one.
+ */
+export function qrText(text: string): string {
+  const matrix = qrMatrix(text);
+  const n = matrix.length;
+  const quiet = 4;
+  const dim = n + quiet * 2;
+  const light = (r: number, c: number) => {
+    const rr = r - quiet;
+    const cc = c - quiet;
+    return rr < 0 || cc < 0 || rr >= n || cc >= n || !matrix[rr]![cc];
+  };
+  const lines: string[] = [];
+  for (let r = 0; r < dim; r += 2) {
+    let line = "";
+    for (let c = 0; c < dim; c++) {
+      const top = light(r, c);
+      const bottom = r + 1 < dim && light(r + 1, c);
+      line += top && bottom ? "█" : top ? "▀" : bottom ? "▄" : " ";
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
 }

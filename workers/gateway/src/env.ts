@@ -108,6 +108,10 @@ const ENV_STRING_KEYS = [
   "EMAIL_FROM", // sender address for magic-link mail; absent ⇒ dev mode
   "EMAIL_API_KEY", // Resend-style API key; absent ⇒ dev mode (no real send)
   "ALLOW_DEV_TOKENS", // "1"/"true" to return magic-link tokens in-band when email is unconfigured (dev/CI only); off ⇒ a mail-less instance fails closed
+  // "1": the operator's sign-in link (x-operator-secret) serves every call, not only ADMIN_CALLSIGNS, on
+  // an instance that also offers passkeys or email — an off-grid station whose visitors have no other way
+  // in. It widens what a leaked operator secret reaches to every account, so it is off by default.
+  "OPERATOR_LINKS_FOR_ANY_CALL",
 
   // ---- push notifications — web push is off unless VAPID keys are set; email digest needs EMAIL_* ----
   "VAPID_PUBLIC", // VAPID public key (base64url, uncompressed P-256 point)
@@ -139,6 +143,8 @@ export type Env = {
   INGEST_SECRET: string;
   /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */
   FED_FETCH_GUARD?: import("./fetchguard.js").FetchGuard;
+  /** Installed by the Node server while its https listener runs: that listener's port (visitor.ts). */
+  HTTPS_LISTENER_PORT?: string;
 } & { [K in (typeof ENV_STRING_KEYS)[number]]?: string };
 
 /** Build the string-config slice of Env from a process.env-like record (undefined keys omitted). */

@@ -8,11 +8,11 @@ are shared (`@aprscaching/gateway/app`); only the bindings differ:
 |---|---|---|
 | DB | D1 | SQLite (better-sqlite3) via a D1-compatible shim (`d1.ts`) |
 | Real-time | Durable Object `RegionRoom` | in-memory region rooms over `ws` (`rooms.ts`) |
-| HTTP | Workers runtime | `node:http` ↔ Web `Request`/`Response` bridge (`server.ts`) |
+| HTTP | Workers runtime | `node:http` (and optionally `node:https`) ↔ Web `Request`/`Response` bridge (`listen.ts`) |
 | Cron | `scheduled()` | `setInterval` nightly TTL |
 
 This is the **self-host story** for hams and clubs who want to run their own node and join the
-federated network (see ``) instead of standing up an island.
+federated network (see [Federation](../../docs/guides/federation.md)) instead of standing up an island.
 
 ## Run it
 
@@ -42,6 +42,14 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 | `INGEST_SECRET` | *(required)* | bearer for `/ingest`, `/outbox` — the server refuses to boot when unset or `change-me` |
 | `MEDIA_DIR` | `./data/media` | uploaded cache media |
 | `WEB_DIST` | *(unset)* | the built SPA (`apps/web/dist`): set, the server serves it on the same origin as the API, so no reverse proxy is needed; unset, it serves only the API (Caddy serves the SPA in the Docker stack) |
+| `HTTPS_PORT` | *(unset)* | an https listener beside `PORT`, with the same API, SPA and `/ws`; request-derived links say `https`. The plain port then redirects other devices' page loads there (never loopback, API, ingest or federation calls). Needs `TLS_CERT` + `TLS_KEY` or the server refuses to boot |
+| `TLS_CERT` / `TLS_KEY` | *(unset)* | PEM certificate (with chain) and key for `HTTPS_PORT`; `kill -HUP <pid>` of the node process reloads them without a restart |
+| `TLS_CA_CERT` | *(unset)* | a CA certificate served read-only at `/pocket-ca.crt` on both ports, for visitors to install |
+
+The https listener is for a station its visitors reach on its own Wi-Fi hotspot, with no proxy in front
+([Visitors on the hotspot](../../docs/operate/first-hour.md#visitors-on-the-hotspot)); behind Caddy or a
+tunnel, leave it off and let the proxy terminate TLS. Every setting is in the
+[configuration reference](../../docs/reference/configuration.md).
 
 Migrations are applied automatically on boot and tracked in a `_migrations` table.
 

@@ -4,28 +4,28 @@
  *
  * Same handlers as the Cloudflare Worker (imported from @aprscaching/gateway/app), wired to:
  *   • SQLite via a D1-compatible shim (d1.ts)   • in-memory region rooms over `ws` (rooms.ts)
- *   • a node:http <-> Web Request/Response bridge • a nightly TTL interval
+ *   • a node:http(s) <-> Web Request/Response bridge (listen.ts) • a nightly TTL interval
  *
  * Run: `pnpm --filter @aprscaching/node-gateway start`  (env: PORT, DB_PATH, INGEST_SECRET, OPERATOR_SECRET, …)
  * WEB_DIST (the built apps/web/dist) makes it serve the SPA on the same origin too, with no proxy in front.
+ * HTTPS_PORT with TLS_CERT/TLS_KEY adds an https listener beside the plain one (listen.ts); SIGHUP reloads
+ * its certificate.
  */
-import http from "node:http";
+import type https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
-import { WebSocketServer } from "ws";
-import { handle, isGatewayPath } from "@aprscaching/gateway/app";
+// listen.ts loads the gateway's app module, which must evaluate before any of its submodules below:
+// the gateway's modules import each other in a cycle that only resolves from app's side.
+import { createGatewayServer, readTls, reloadTls, tlsFromEnv } from "./listen.js";
 import { federationConfigError } from "@aprscaching/gateway/federation";
-import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { resolveServerSecrets } from "./secrets.js";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
-import { joinRoom } from "./rooms.js";
 import { makeFsMedia } from "./media.js";
-import { spaFile } from "./spa.js";
 import {
   fedSyncInterval,
   gitHead,
@@ -50,6 +50,14 @@ if (!SECRETS.ok) {
   process.exit(1);
 }
 if (SECRETS.sessionSource === "generated") console.log(`SESSION_SECRET generated and kept in ${path.dirname(DB_PATH)}`);
+
+// Boot guard: HTTPS_PORT needs its certificate and key; a half-configured listener must not boot as plain http.
+const TLS_CONFIG = tlsFromEnv(process.env);
+if (!TLS_CONFIG.ok) {
+  console.error(`FATAL: ${TLS_CONFIG.error}`);
+  process.exit(1);
+}
+const TLS = TLS_CONFIG.tls;
 
 // Boot guard: a registry whose authority key is not pinned cannot be verified, and federation
 // would otherwise run on whatever DNS says. Refuse to start instead of failing open.
@@ -81,88 +89,32 @@ const env: Env = {
 };
 guardFederationFetches(env);
 
-// ---- node:http <-> Web Request/Response ----
-const server = http.createServer(async (nreq, nres) => {
+// ---- listeners: plain http, and https beside it when HTTPS_PORT is set ----
+const TLS_CA_CERT = process.env.TLS_CA_CERT?.trim() || undefined;
+const listenerBase = { env, rooms, webDist: WEB_DIST, caCert: TLS_CA_CERT };
+let secure: https.Server | undefined;
+if (TLS) {
+  let pair: ReturnType<typeof readTls>;
   try {
-    const url = `http://${nreq.headers.host ?? "localhost"}${nreq.url ?? "/"}`;
-    const method = nreq.method ?? "GET";
-    if (WEB_DIST && (method === "GET" || method === "HEAD")) {
-      const pathname = new URL(url).pathname;
-      if (!isGatewayPath(pathname)) {
-        sendSpa(nres, spaFile(WEB_DIST, pathname), method);
-        return;
-      }
-    }
-    const headers = new Headers();
-    for (const [k, v] of Object.entries(nreq.headers)) {
-      if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
-      else if (v != null) headers.set(k, v);
-    }
-    // The socket address is the ONLY client identity we mint ourselves — overwrite any client-supplied
-    // x-real-ip, and drop a client-sent cf-connecting-ip unless a Cloudflare edge is declared (TRUST_CF).
-    stampClientIp(headers, nreq.socket.remoteAddress, env);
-    const hasBody = method !== "GET" && method !== "HEAD";
-    // readBody returns raw bytes — the gateway speaks JSON on most routes but BINARY on the
-    // federation wire (CBOR sync pages, beacon datagrams); a utf8 round-trip would corrupt those.
-    const request = new Request(url, { method, headers, body: hasBody ? await readBody(nreq) : undefined });
-    const response = await handle(request, env, { waitUntil: (p) => void p.catch(() => {}) });
-
-    nres.statusCode = response.status;
-    response.headers.forEach((value, key) => nres.setHeader(key, value));
-    // Server-Sent Events (the CoT push feed) are long-lived — pipe the body chunk-by-chunk instead
-    // of buffering to completion (which would hold every event until the stream closed, defeating SSE).
-    if (response.body && (response.headers.get("content-type") ?? "").includes("text/event-stream")) {
-      nreq.socket.setTimeout(0); // no idle timeout on a streaming connection
-      const reader = response.body.getReader();
-      nres.on("close", () => void reader.cancel().catch(() => {}));
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!nres.write(Buffer.from(value))) await new Promise((r) => nres.once("drain", r));
-      }
-      nres.end();
-    } else {
-      nres.end(Buffer.from(await response.arrayBuffer()));
-    }
+    pair = readTls(TLS);
   } catch (e) {
-    nres.statusCode = e instanceof BodyTooLarge ? 413 : 500;
-    nres.setHeader("content-type", "application/json");
-    nres.end(JSON.stringify({ error: (e as Error).message }));
+    console.error(`FATAL: cannot read TLS_CERT/TLS_KEY: ${(e as Error).message}`);
+    process.exit(1);
   }
-});
-
-/** One file of the built SPA, or a 404 when nothing in the build answers the path. */
-function sendSpa(nres: http.ServerResponse, f: ReturnType<typeof spaFile>, method: string): void {
-  if (!f) {
-    nres.statusCode = 404;
-    nres.setHeader("content-type", "text/plain; charset=utf-8");
-    nres.end("not found");
-    return;
-  }
-  nres.statusCode = 200;
-  nres.setHeader("content-type", f.contentType);
-  nres.setHeader("cache-control", f.cacheControl);
-  nres.setHeader("x-content-type-options", "nosniff");
-  if (method === "HEAD") {
-    nres.end();
-    return;
-  }
-  fs.createReadStream(f.file)
-    .on("error", () => nres.destroy())
-    .pipe(nres);
+  env.HTTPS_LISTENER_PORT = String(TLS.port);
+  secure = createGatewayServer({ ...listenerBase, tls: pair }) as https.Server;
+  secure.listen(TLS.port, () => console.log(`aprscaching node-gateway https on :${TLS.port}`));
+  // A re-issued certificate (a hotspot that came back on another address) loads without a restart.
+  process.on("SIGHUP", () => {
+    try {
+      reloadTls(secure!, TLS);
+      console.log("SIGHUP — TLS certificate reloaded");
+    } catch (e) {
+      console.error(`SIGHUP — TLS certificate not reloaded, the previous one stays: ${(e as Error).message}`);
+    }
+  });
 }
-
-// ---- websocket upgrade (region rooms) ----
-const wss = new WebSocketServer({ noServer: true });
-server.on("upgrade", (req, socket, head) => {
-  const u = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  if (u.pathname !== "/ws") {
-    socket.destroy();
-    return;
-  }
-  const region = u.searchParams.get("region") ?? "global";
-  wss.handleUpgrade(req, socket, head, (ws) => joinRoom(rooms, region, ws));
-});
+const server = createGatewayServer({ ...listenerBase, httpsPort: TLS?.port });
 
 server.listen(PORT, () =>
   console.log(
@@ -171,33 +123,6 @@ server.listen(PORT, () =>
 );
 
 startSchedules(env, fedSyncInterval(process.env));
-
-/** The bridge buffers the whole body BEFORE routing/auth, so without a ceiling one
- *  multi-GB anonymous POST OOMs the Pi. 20 MB clears every legitimate payload (the largest is a
- *  cache-media upload); past it the socket is destroyed and the request answered 413. */
-const BODY_MAX_BYTES = 20 * 1024 * 1024;
-class BodyTooLarge extends Error {
-  constructor() {
-    super("request body too large");
-  }
-}
-function readBody(req: http.IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let total = 0;
-    req.on("data", (c) => {
-      total += (c as Buffer).length;
-      if (total > BODY_MAX_BYTES) {
-        req.destroy();
-        reject(new BodyTooLarge());
-        return;
-      }
-      chunks.push(c as Buffer);
-    });
-    req.on("end", () => resolve(Uint8Array.from(Buffer.concat(chunks))));
-    req.on("error", reject);
-  });
-}
 
 // ---- 24/7 process resilience ----
 // One stray rejection must not kill an unattended gateway (there is no supervisor on a Pi by
@@ -209,6 +134,7 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`${signal} received — closing gateway`);
+  secure?.close();
   server.close(() => {
     try {
       sqlite.pragma("wal_checkpoint(TRUNCATE)");
