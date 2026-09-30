@@ -242,6 +242,36 @@ local_address_for() {
   return 1
 }
 
+# ---- 44Net -------------------------------------------------------------------------------------------
+# "name address" for this phone's 44Net address, e.g. the WireGuard app's tun0 with 44Net Connect: an
+# address in ARDC's amateur space, 44.0.0.0/9 or 44.128.0.0/10 (44.192.0.0/10 is not amateur space), on
+# any interface. Nothing when there is none.
+net44_address() {
+  local name cidr ip b
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    ip="${cidr%%/*}"
+    case "$ip" in 44.*) ;; *) continue ;; esac
+    IFS=. read -r _ b _ _ <<<"$ip"
+    [ "${b:-255}" -lt 192 ] || continue
+    printf '%s %s\n' "$name" "$ip"
+    return 0
+  done < <(list_ipv4)
+  return 1
+}
+# Whether $1 is a host name under ampr.org: lowercase labels of letters, digits and inner hyphens.
+valid_ampr_host() {
+  local host="$1" label labels
+  case "$host" in *.ampr.org) ;; *) return 1 ;; esac
+  [ "${#host}" -le 253 ] || return 1
+  IFS=. read -r -a labels <<<"$host"
+  for label in "${labels[@]}"; do
+    printf '%s' "$label" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' || return 1
+  done
+}
+# Whether the certificate in file $1 expires within $2 days (openssl answers from the file alone).
+cert_expires_within() { ! openssl x509 -checkend $(($2 * 86400)) -noout -in "$1" >/dev/null 2>&1; }
+
 # ---- https for visitors -----------------------------------------------------------------------------
 # The https port while the .env runs the https listener on tls.sh's certificate; empty otherwise (off,
 # or a certificate the operator manages without tls.sh).

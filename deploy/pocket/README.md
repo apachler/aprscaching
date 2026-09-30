@@ -11,7 +11,7 @@ stops background apps, and battery and heat are real limits.
 | `.env.pocket.example` | the settings `install.sh` starts from: gateway on port 8787, ingest to localhost, APRS-IS, short retention, federation off |
 | `start.sh` | starts the tmux session `aprscaching` (windows `gateway`, `ingest`, `logs`, `shell`, and `tls` with https on) with a wake lock, or attaches to it; `--no-attach`, `--gateway-only` |
 | `stop.sh` | stops the ingest and the gateway (SIGTERM, then SIGKILL after a grace period), closes the session, releases the wake lock |
-| `status.sh` | the processes (uptime, restarts), `/health`, the URLs other devices use on each network (the hotspot included, http and https), a warning on a joined Wi-Fi network, the https certificate, storage, database size, battery |
+| `status.sh` | the processes (uptime, restarts), `/health`, the URLs other devices use on each network (the hotspot included, http and https), a warning on a joined Wi-Fi network, the https certificate (and a warning 14 days before the ampr.org one expires), 44Net with its exposure warning, storage, database size, battery |
 | `update.sh` | runs `install.sh` for the current branch, then restarts both processes; the gateway migrates on start |
 | `backup.sh` | database snapshot, `.env` and media to shared storage, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
@@ -23,6 +23,7 @@ stops background apps, and battery and heat are real limits.
 | `extras/alerts.sh` | field alerts (off by default, `POCKET_ALERTS=1`): vibrate, and optionally speak the sender, for a new direct message to your call (Termux:API); `start.sh` runs it |
 | `extras/usb-kiss.sh` | a USB KISS TNC on OTG: `--list`, `--setup` (writes the `.env`), and the run loop `start.sh` keeps in the window `usb-kiss`; receive-only unless `USB_KISS_TX=1` and the operator's call is control-verified |
 | `extras/usb_kiss_bridge.py` | the bridge itself: libusb through `ctypes` on the fd `termux-usb` hands over, CDC-ACM, KISS over TCP on `127.0.0.1:8001` for one client, a transmit watchdog; `extras/test/` holds its tests |
+| `extras/ampr-cert.sh` | a Let's Encrypt certificate for the station's ampr.org name by manual DNS-01 with lego: prints the `_acme-challenge` TXT record, polls DNS until the portal publishes it, lets lego finish; `--use` serves it on the https port |
 | `extras/setup.sh` | home-screen shortcuts (Termux:Widget) and a daily backup while charging (Termux:API); `--remove` |
 | `extras/scheduled-backup.sh` | the job the scheduled backup runs: battery above 50 %, `backup.sh`, the time for `status.sh` |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
@@ -30,6 +31,7 @@ stops background apps, and battery and heat are real limits.
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 | `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`; CI runs it |
+| `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
 | `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the weekly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 
 Every script takes `--help`, and `--dir` / `--data-dir` (or `APRSCACHING_DIR` / `APRSCACHING_DATA`) when the
@@ -251,9 +253,11 @@ client-address header itself. The rate limits then count every visitor through t
 **WireGuard and 44Net Connect.** A licensed operator gets a fixed 44.x address from ARDC's 44Net Connect,
 carried over WireGuard, which works behind the carrier's NAT. Import the Connect configuration into the
 WireGuard app (F-Droid or the Play Store). Android runs it as the phone's VPN, so it covers the whole phone,
-and the gateway, which listens on every interface, answers on the 44.x address too. That address is
-reachable from the internet; read [44Net](../../docs/operate/44net.md), in particular who can reach you and
-what 44Net does and does not give you. **Unverified**: whether Android delivers inbound connections on the VPN
+and the gateway, which listens on every interface, answers on the 44.x address too. Who reaches it there
+depends on the tunnel's `AllowedIPs`: 44Net hosts only with a split tunnel, the whole internet with a full
+tunnel that also carries every app's traffic. [Pocket on 44Net](../../docs/operate/pocket.md#pocket-on-44net)
+has that choice, the exposure, federation and `extras/ampr-cert.sh` for https on the ampr.org name; read
+[44Net](../../docs/operate/44net.md) too. **Unverified**: whether Android delivers inbound connections on the VPN
 interface to Termux on every phone; test from another network before you rely on it.
 
 ## Backup
