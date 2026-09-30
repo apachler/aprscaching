@@ -57,21 +57,22 @@ interface Got {
   headers: http.IncomingHttpHeaders;
   body: string;
 }
+/** A fresh HTTPS agent that trusts only the test CA (no pooling, so every request makes its own handshake). */
+function trusting(caPath: string): https.Agent {
+  return new https.Agent({ ca: fs.readFileSync(caPath), keepAlive: false, maxCachedSessions: 0 });
+}
+
 function get(url: string, opts: { ca?: string; headers?: Record<string, string> } = {}): Promise<Got> {
   const u = new URL(url);
   const mod = u.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
-    const req = mod.request(
-      u,
-      { headers: opts.headers, ca: opts.ca ? fs.readFileSync(opts.ca) : undefined, agent: false },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c: Buffer) => chunks.push(c));
-        res.on("end", () =>
-          resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString() }),
-        );
-      },
-    );
+    const req = mod.request(u, { headers: opts.headers, agent: opts.ca ? trusting(opts.ca) : false }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () =>
+        resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString() }),
+      );
+    });
     req.on("error", reject);
     req.end();
   });
@@ -80,13 +81,10 @@ function get(url: string, opts: { ca?: string; headers?: Record<string, string> 
 /** The leaf certificate a TLS client is shown. */
 function peerFingerprint(port: number, ca: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const req = https.request(
-      { host: "127.0.0.1", port, path: "/health", ca: fs.readFileSync(ca), agent: false },
-      (res) => {
-        resolve((res.socket as import("node:tls").TLSSocket).getPeerCertificate().fingerprint256);
-        res.resume();
-      },
-    );
+    const req = https.request({ host: "127.0.0.1", port, path: "/health", agent: trusting(ca) }, (res) => {
+      resolve((res.socket as import("node:tls").TLSSocket).getPeerCertificate().fingerprint256);
+      res.resume();
+    });
     req.on("error", reject);
     req.end();
   });
