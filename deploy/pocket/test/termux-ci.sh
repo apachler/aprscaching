@@ -66,7 +66,9 @@ ok "install.sh in $(($(date +%s) - start)) s on $(uname -m), node $(node --versi
 bash "$DIR/deploy/pocket/start.sh" --no-attach --gateway-only --dir "$DIR" --data-dir "$DATA"
 curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null || fail "/health"
 ok "the gateway answers /health"
-curl -fsS --max-time 5 "http://127.0.0.1:$PORT/" | grep -qi "<html" || fail "the web app at /"
+# Read the page whole before matching: grep -q stops at the first match, and curl then fails its write.
+page="$(curl -fsS --max-time 5 "http://127.0.0.1:$PORT/")" || fail "the web app at /"
+grep -qi "<html" <<<"$page" || fail "the web app at / is not the web app"
 ok "the gateway serves the web app"
 out="$(bash "$DIR/deploy/pocket/status.sh" --data-dir "$DATA" 2>&1)" || true
 grep -q "gateway  running" <<<"$out" || fail "status.sh: $out"

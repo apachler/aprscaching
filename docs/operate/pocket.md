@@ -82,6 +82,34 @@ off:
 - **Heat:** the gateway, a hotspot and mobile data together warm the phone. Keep it out of direct sun, and
   on a charger for long sessions.
 
+## Extras: notification, shortcuts, scheduled backup
+
+Three optional add-ons, each from F-Droid (or each from GitHub). **Install every Termux app from the same
+source as Termux itself:** the apps share a signing key, and apps from different sources refuse to talk to
+each other. Open each app once after installing it, and grant the permissions it asks for (notifications
+for Termux:API).
+
+| Add-on | Gives the station |
+|---|---|
+| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
+| **Termux:Widget** | home-screen shortcuts |
+| **Termux:Boot** | start at boot ([above](#keep-it-running)) |
+
+Without an add-on, the scripts print one line saying what to install and work as before.
+
+- **Status notification.** With Termux:API, `start.sh` keeps one ongoing notification current every
+  minute: running or stopped, the stations heard in the last hour, when the MeshCom node was last heard,
+  whether APRS-IS delivers, and the battery. Its buttons are **Stop**, **Restart** and **Open map**; tapping
+  it opens the map. It reads the gateway's `/api/admin/station-status` with the station's `OPERATOR_SECRET`.
+  `stop.sh` removes it.
+- **Shortcuts.** `bash ~/aprscaching/deploy/pocket/extras/setup.sh --shortcuts` puts **Status**, **Start**,
+  **Stop**, **Open map** and **Backup** into `~/.shortcuts/`; add the Termux:Widget widget to the home
+  screen to tap them. Status opens a terminal with `status.sh`; the others run in the background and report
+  with a short toast.
+- **Scheduled backup.** `extras/setup.sh --scheduled-backup` registers `backup.sh` with Android's job
+  scheduler: once a day, only while the phone charges and the battery is above 50 %. `status.sh` shows the
+  last backup. `extras/setup.sh --remove` takes both back.
+
 ## Browsers on the phone
 
 | Browser | Map | Location | Passkeys (microG phone) | Web Bluetooth |

@@ -64,6 +64,7 @@ if have termux-wake-unlock; then
   termux-wake-unlock || true
   info "wake lock released"
 fi
+bash "$HERE/extras/notify.sh" --remove --dir "$DIR" --data-dir "$DATA" || true
 # Last: run from the session's own shell window, closing the session ends this script too.
 if session_exists; then
   info "closing tmux session $SESSION"
