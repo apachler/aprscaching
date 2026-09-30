@@ -9,6 +9,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 |---|---|
 | `setup.sh` | first-run wizard: writes `.env` (operator call, `APP_URL`, APRS-IS feed, site call, secrets, federation key); safe to re-run; `--non-interactive` for scripts |
 | `desktop/` | **Desktop** — single-binary app (Bun `--compile`); see `desktop/README.md` |
+| `pocket/` | the gateway and the ingest on an Android phone in Termux (a field-day station); see `pocket/README.md` |
 | `Dockerfile` | multi-arch (amd64+arm64) image for gateway + ingest |
 | `docker-compose.yml` | **Self-host** stack: gateway + ingest + Caddy |
 | `compose.home.yml` | self-host override: Cloudflare Tunnel ingress (no open ports) |
