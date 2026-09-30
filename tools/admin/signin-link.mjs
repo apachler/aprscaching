@@ -6,14 +6,14 @@
 // with OPERATOR_LINKS_FOR_ANY_CALL=1 (an off-grid station minting links for its hotspot visitors).
 //
 //   OPERATOR_SECRET=… node tools/admin/signin-link.mjs OE8APR
-//   OPERATOR_SECRET=… node tools/admin/signin-link.mjs --base https://192.168.43.1:8443 --qr OE8VIS
+//   OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.168.43.1:8443 --qr OE8VIS
 //   docker compose exec gateway node tools/admin/signin-link.mjs OE8APR     (from deploy/)
 //
 // The link is a bearer credential: hand it to the person it is for (on their screen, by QR, in person),
 // never over a channel others read. BASE is where this script reaches the gateway: it defaults to the
 // gateway on this host (http://127.0.0.1:$PORT, PORT defaulting to 8787).
 //
-//   --base <origin>  the origin the link names: APP_URL, or the station's https hotspot origin
+//   --link-origin <origin>  the origin the link names: APP_URL, or the station's https hotspot origin
 //                    (https://<its private IPv4 address>:<HTTPS_PORT>), the one a visitor's phone opens.
 //                    The gateway refuses any other origin. Default: APP_URL.
 //   --qr             also print the link as a QR code for a phone to scan.
@@ -24,7 +24,7 @@ const BASE = (process.env.BASE ?? `http://127.0.0.1:${process.env.PORT || 8787}`
 const SECRET = process.env.OPERATOR_SECRET;
 
 const USAGE =
-  "usage: BASE=<gateway url> OPERATOR_SECRET=<secret> node tools/admin/signin-link.mjs [--base <origin>] [--qr] <CALLSIGN>";
+  "usage: BASE=<gateway url> OPERATOR_SECRET=<secret> node tools/admin/signin-link.mjs [--link-origin <origin>] [--qr] <CALLSIGN>";
 
 let callsign = "";
 let linkBase;
@@ -33,8 +33,8 @@ const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === "--qr") qr = true;
-  else if (a === "--base") linkBase = args[++i];
-  else if (a.startsWith("--base=")) linkBase = a.slice("--base=".length);
+  else if (a === "--link-origin") linkBase = args[++i];
+  else if (a.startsWith("--link-origin=")) linkBase = a.slice("--link-origin=".length);
   else if (a.startsWith("-")) {
     console.error(`unknown option ${a}\n${USAGE}`);
     process.exit(2);

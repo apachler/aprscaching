@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// tools/admin/signin-link.mjs against a running gateway: `--base` names the origin the link carries (the
+// tools/admin/signin-link.mjs against a running gateway: `--link-origin` names the origin the link carries (the
 // gateway refuses any but APP_URL and the station's hotspot origin), and `--qr` prints it for a phone.
 import { describe, it, expect, afterAll } from "vitest";
 import { execFile } from "node:child_process";
@@ -39,8 +39,8 @@ async function run(...args: string[]): Promise<{ code: number; out: string; err:
 }
 
 describe("signin-link.mjs", () => {
-  it("names the hotspot origin with --base, and prints a QR with --qr", async () => {
-    const r = await run("--base", "https://192.168.43.1:8443", "--qr", "oe8vis");
+  it("names the hotspot origin with --link-origin, and prints a QR with --qr", async () => {
+    const r = await run("--link-origin", "https://192.168.43.1:8443", "--qr", "oe8vis");
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/^https:\/\/192\.168\.43\.1:8443\/auth\/email\/verify\?token=[0-9a-f]{64}$/m);
     const qr = r.out.split("\n").filter((l) => /^[█▀▄ ]+$/.test(l));
@@ -48,15 +48,15 @@ describe("signin-link.mjs", () => {
     expect(qr[0]).toBe("█".repeat(qr[0]!.length)); // the light quiet zone
   });
 
-  it("names APP_URL without --base", async () => {
-    const r = await run("--base=http://localhost:8787", "OE8VIS");
+  it("names APP_URL without --link-origin", async () => {
+    const r = await run("--link-origin=http://localhost:8787", "OE8VIS");
     expect(r.out).toMatch(/^http:\/\/localhost:8787\/auth\/email\/verify\?token=/m);
     const d = await run("OE8VIS");
     expect(d.out).toMatch(/^http:\/\/localhost:8787\/auth\/email\/verify\?token=/m);
   });
 
   it("fails on an origin the gateway refuses", async () => {
-    const r = await run("--base", "https://evil.test", "OE8VIS");
+    const r = await run("--link-origin", "https://evil.test", "OE8VIS");
     expect(r.code).toBe(1);
     expect(r.err).toContain("refused (400)");
   });

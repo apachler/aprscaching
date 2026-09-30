@@ -102,13 +102,13 @@ do not work at an IP address, so a visitor signs in with a one-time link the ope
 call:
 
 ```bash
-OPERATOR_SECRET=… node tools/admin/signin-link.mjs --base https://192.168.43.1:8443 --qr OE8VIS
+OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.168.43.1:8443 --qr OE8VIS
 ```
 
 - **The station opts in.** `OPERATOR_LINKS_FOR_ANY_CALL=1` lets the link serve a call outside
   `ADMIN_CALLSIGNS` on an instance that has passkeys; without it the gateway refuses. It also lets a leaked
   operator secret open any account, so it belongs only on a station the operator alone runs.
-- **The link names only the hotspot origin.** `--base` accepts `APP_URL`, or `https` at a private IPv4
+- **The link names only the hotspot origin.** `--link-origin` accepts `APP_URL`, or `https` at a private IPv4
   address (10/8, 172.16/12, 192.168/16) on `HTTPS_PORT` while that listener runs. Any other origin is
   refused.
 - **The session lives on that origin.** The visitor confirms on the hotspot origin and returns there; a page
