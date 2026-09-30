@@ -19,7 +19,8 @@ import { json } from "./app.js";
 import { encodeFedPayload, type FedRecord, type FedRecordKind } from "@aprscaching/shared";
 import { signRaw } from "./federation.js";
 import { fedSigningBytes, encodeFedFrame } from "@aprscaching/shared";
-import { CACHE_FEED, FIND_FEED, KEY_FEED, instanceOf, type FeedServeDef } from "./federation.js";
+import { CACHE_FEED, FIND_FEED, KEY_FEED, instanceOf, type FeedFilter, type FeedServeDef } from "./federation.js";
+import { parseBbox } from "./fedregion.js";
 import { TOMBSTONE_FEED } from "./tombstones.js";
 import { BULLETIN_FEED } from "./bbs.js";
 import { ACCOUNT_MOVE_FEED } from "./account.js";
@@ -95,12 +96,13 @@ export async function buildFedFrames(
   since: number,
   limit: number,
   sinceId?: number,
+  filter?: FeedFilter,
 ): Promise<{ frames: Uint8Array[]; nextCursor: number; nextId?: number } | null> {
   const def = FEED_FOR_TYPE[feedType];
   const kind = KIND_FOR_TYPE[feedType];
   if (!def || !kind) return { frames: [], nextCursor: since };
   const at = nowS();
-  const rows = await def.selectRows(env, since, limit, def.composite ? sinceId : undefined);
+  const rows = await def.selectRows(env, since, limit, def.composite ? sinceId : undefined, filter);
   let nextCursor = since;
   // a composite feed resumes after (cursor, id) of the last row; rows come ordered by that pair
   let nextId = def.composite ? (sinceId ?? -1) : undefined;
@@ -132,7 +134,8 @@ export async function buildFedFrames(
 /**
  * Serve one CBOR sync page. Unknown feed type → 404 (the same forward-compat contract as the JSON
  * feeds); an unsigned instance → 404 too, so a consumer falls back to the JSON surface — CBOR sync
- * exists only where every frame can carry a signature.
+ * exists only where every frame can carry a signature. `bbox=S,W,N,E` narrows the caches feed to a
+ * region (fedregion.ts); every other feed, deletes included, ignores it and travels whole.
  */
 export async function handleFedSync(req: Request, env: Env, feedType: string): Promise<Response> {
   if (!FEED_FOR_TYPE[feedType] || !KIND_FOR_TYPE[feedType]) return json({ error: "unknown feed" }, { status: 404 });
@@ -141,8 +144,15 @@ export async function handleFedSync(req: Request, env: Env, feedType: string): P
   const sinceIdRaw = u.searchParams.get("sinceId");
   const sinceId = sinceIdRaw != null && Number.isSafeInteger(Number(sinceIdRaw)) ? Number(sinceIdRaw) : undefined;
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 200) || 200, 1), 1000);
+  const bboxRaw = u.searchParams.get("bbox");
+  let filter: FeedFilter | undefined;
+  if (bboxRaw != null && feedType === "cache") {
+    const bbox = parseBbox(bboxRaw);
+    if (!bbox) return json({ error: "bbox must be S,W,N,E in decimal degrees" }, { status: 400 });
+    filter = { bbox };
+  }
   const instance = instanceOf(req, env);
-  const built = await buildFedFrames(env, instance, feedType, since, limit, sinceId);
+  const built = await buildFedFrames(env, instance, feedType, since, limit, sinceId, filter);
   if (!built) return json({ error: "instance is unsigned" }, { status: 404 });
   return new Response(
     encodeFedSyncPage(instance, built.nextCursor, built.frames.length < limit, built.frames, built.nextId) as BodyInit,

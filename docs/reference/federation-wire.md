@@ -78,6 +78,14 @@ Without `sinceId` a feed returns records at or after `since`; a consumer that do
 ignores it. Each frame on a page is applied on its own: a malformed or unappliable record is skipped
 and counted, and the cursor still moves past it.
 
+**Region filter.** `bbox=S,W,N,E` (decimal degrees; west greater than east crosses the antimeridian) narrows
+the `cache` feed to the caches inside the box; a malformed box is a 400. Every other feed ignores it, so
+deletes, keys and account moves always travel whole and a region never hides a delete. A publisher that
+serves the filter lists `sync-cache-bbox` in its descriptor's capabilities; a consumer sends a box only to
+such a publisher and pulls the whole feed elsewhere. A cursor is exact only for the box it was read under,
+so a consumer whose box changes (or goes away) reads the caches feed again from the start. A cache edited to
+move out of the box is not sent again; the consumer keeps its last copy until a delete or a whole-feed pull.
+
 The page envelope is unsigned — each record carries its own signature. This is the **only wire
 mirroring consumes**: a consumer pulls frames, verifies each under the peer's active keys, then runs
 the namespace/self-attestation/tombstone acceptance checks and the appliers. A signed instance

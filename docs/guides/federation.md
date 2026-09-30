@@ -131,7 +131,11 @@ confirmed accrues a contradiction and is penalised.
 ## Keeping mirrors fresh
 
 - **Pull sync** runs on a schedule and after a manual `POST /federation/sync`, negotiating which feeds a peer
-  supports and applying tombstones first so a delete suppresses a re-mirror.
+  supports and applying tombstones first so a delete suppresses a re-mirror. A manual pull can be narrowed to
+  some feeds and a page cap (`{"types":["cache","key"],"maxPages":10}`); deletes always come too, and the next
+  pass carries on where a capped one stopped.
+- **One region only.** `FED_SYNC_REGION=S,W,N,E` pulls only the caches inside that box from peers that filter
+  by region, for an instance that serves one area (a phone in the field). Deletes are never filtered.
 - **Gossip ping.** After a federated write an instance sends peers a `POST /federation/notify` "come pull
   from me," which triggers an incremental sync — freshness without a firehose. The endpoint is
   unauthenticated, so it only ever asks for a pull the instance would make anyway: a notify naming an

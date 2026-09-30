@@ -257,6 +257,10 @@ if [ -f "$newest" ]; then
   mtime="$(stat -c %Y "$newest" 2>/dev/null || echo 0)"
   if [ -z "$last" ] || [ "$mtime" -gt "$last" ]; then last="$mtime"; fi
 fi
+if [ -f "$RUN_DIR/last-sync" ]; then
+  read -r sync_at sync_what <"$RUN_DIR/last-sync" || true
+  info "last sync before a trip: $(human_duration $((NOW - ${sync_at:-NOW}))) ago (${sync_what:-?})"
+fi
 if [ -n "$last" ]; then
   info "last backup: $(human_duration $((NOW - last))) ago"
 else

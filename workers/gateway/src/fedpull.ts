@@ -29,6 +29,7 @@ import { decodeFedSyncPage } from "./fedsync.js";
 import { validEndpointAddress } from "@aprscaching/shared";
 import { type PeerRow, ours, seedPeers, listEnabledPeers } from "./fedpeers.js";
 import { SYNC_DEFS, type SyncDef, type FrameGate, admitFrame } from "./fedapply.js";
+import { bboxKey, parseBbox, SYNC_REGION_CAPABILITY } from "./fedregion.js";
 
 /** Most pages one pass reads (pull) or sends (push) per feed. */
 export const MAX_PAGES = 50;
@@ -38,6 +39,18 @@ const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 const PAGE_LIMIT = 500;
 /** Discovered peers, across all sources: the table never grows past this through discovery. */
 const MAX_DISCOVERED = 200;
+
+/**
+ * A narrower pull, for an operator who pays for every byte (a phone before a trip): only some feeds,
+ * at most some pages of each. It limits how far one pass reads, never what later passes see: a skipped
+ * feed keeps its cursor, and a capped feed carries on from where it stopped.
+ */
+interface PullOptions {
+  /** Feed types to pull. Deletes (tombstones) always come too, so a narrowed pull never misses one. */
+  types?: string[];
+  /** Pages per feed, 1 to MAX_PAGES. */
+  maxPages?: number;
+}
 
 /**
  * Sync a single peer by its instance id — the gossip-ping target. Only an enabled, non-blocked
@@ -60,8 +73,8 @@ type PeerSyncCounts = Awaited<ReturnType<typeof syncPeer>>;
  * arriving mid-pull gets a fresh pull after it (trailing-edge coalescing), never a concurrent one, so
  * the version checks and cursor writes of two pulls can't interleave.
  */
-function syncPeerCoalesced(env: Env, p: PeerRow): Promise<PeerSyncCounts> {
-  return coalesceRun(peerKey(env, p.url), () => syncPeer(env, p), peerCoalescer);
+function syncPeerCoalesced(env: Env, p: PeerRow, opts: PullOptions = {}): Promise<PeerSyncCounts> {
+  return coalesceRun(peerKey(env, p.url), () => syncPeer(env, p, opts), peerCoalescer);
 }
 
 async function syncOnePeer(env: Env, p: PeerRow): Promise<boolean> {
@@ -88,6 +101,8 @@ async function syncOnePeer(env: Env, p: PeerRow): Promise<boolean> {
 // pull. Sequential (awaited) calls are unaffected.
 type SyncResult = {
   peers: number;
+  /** Bytes of sync pages read, across every peer and feed. */
+  bytes: number;
   caches: number;
   finds: number;
   keys: number;
@@ -137,22 +152,18 @@ function peerKey(env: Env, url: string): object {
   return k;
 }
 
-export async function syncAllPeers(env: Env): Promise<SyncResult> {
-  return coalesceRun(env, () => syncAllPeersInner(env), syncCoalescer);
+/**
+ * Pull every enabled peer. A narrowed pull (`opts`) coalesces with a full one like any other caller:
+ * whichever pass runs, the cursors stay exact, so the next pass reads what this one left.
+ */
+export async function syncAllPeers(env: Env, opts: PullOptions = {}): Promise<SyncResult> {
+  return coalesceRun(env, () => syncAllPeersInner(env, opts), syncCoalescer);
 }
 
-async function syncAllPeersInner(env: Env): Promise<{
-  peers: number;
-  caches: number;
-  finds: number;
-  keys: number;
-  tombstones: number;
-  moves: number;
-  bulletins: number;
-  errors: string[];
-}> {
+async function syncAllPeersInner(env: Env, opts: PullOptions): Promise<SyncResult> {
   const peers = await listEnabledPeers(env);
-  let caches = 0,
+  let bytes = 0,
+    caches = 0,
     finds = 0,
     keys = 0,
     tombstones = 0,
@@ -161,7 +172,8 @@ async function syncAllPeersInner(env: Env): Promise<{
   const errors: string[] = [];
   for (const p of peers) {
     try {
-      const r = await syncPeerCoalesced(env, p);
+      const r = await syncPeerCoalesced(env, p, opts);
+      bytes += r.bytes;
       caches += r.caches;
       finds += r.finds;
       keys += r.keys;
@@ -176,13 +188,22 @@ async function syncAllPeersInner(env: Env): Promise<{
         .run();
     }
   }
-  return { peers: peers.length, caches, finds, keys, tombstones, moves, bulletins, errors };
+  return { peers: peers.length, bytes, caches, finds, keys, tombstones, moves, bulletins, errors };
 }
 
 async function syncPeer(
   env: Env,
   p: PeerRow,
-): Promise<{ caches: number; finds: number; keys: number; tombstones: number; moves: number; bulletins: number }> {
+  opts: PullOptions = {},
+): Promise<{
+  bytes: number;
+  caches: number;
+  finds: number;
+  keys: number;
+  tombstones: number;
+  moves: number;
+  bulletins: number;
+}> {
   // endpoint selection: the peer's typed endpoint set picks the sync transport (https, or plain
   // http on a 44net/HAMNET name); packet endpoints are forward-mode and never pulled from here
   const transport = syncTransportFor(p, (u, i) => fedFetch(env, u, i));
@@ -208,7 +229,8 @@ async function syncPeer(
   if (p.instance && p.instance !== wk.instance)
     throw new Error(`descriptor names instance ${wk.instance} but this peer is bound to ${p.instance} — refusing`);
   // never mirror ourselves
-  if (wk.instance === ours(env)) return { caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
+  if (wk.instance === ours(env))
+    return { bytes: 0, caches: 0, finds: 0, keys: 0, tombstones: 0, moves: 0, bulletins: 0 };
   // one live row per instance id: a second URL claiming a bound instance is an impostor or a stale
   // address, and the operator decides which (block or delete the other row)
   const holder = await env.DB.prepare(
@@ -280,14 +302,25 @@ async function syncPeer(
   // is the only mirror wire — a peer without it (or unsigned) simply has nothing verifiable to
   // mirror, and its feeds are skipped via the same 404 contract.
   const toSync = new Set(negotiateFeeds(wk, SYNC_DEFS, FED_PROTOCOL_VERSION).map((d) => d.type));
+  const wanted = opts.types ? new Set([...opts.types, "tombstone"]) : null;
+  // The caches feed narrows to FED_SYNC_REGION where the publisher filters by region; elsewhere it
+  // travels whole.
+  const region = parseBbox(env.FED_SYNC_REGION);
+  if (env.FED_SYNC_REGION && !region)
+    console.warn("federation: FED_SYNC_REGION is not S,W,N,E in decimal degrees; pulling every cache");
+  const feedOpts: FeedPullOptions = {
+    maxPages: Math.min(Math.max(1, opts.maxPages ?? MAX_PAGES), MAX_PAGES),
+    region: region && (wk.capabilities ?? []).includes(SYNC_REGION_CAPABILITY) ? bboxKey(region) : "",
+    bytes: 0,
+  };
   const counts: Record<string, number> = {};
   for (const def of SYNC_DEFS) {
     // iterate SYNC_DEFS to preserve the tombstones-first order
-    if (!toSync.has(def.type)) {
+    if (!toSync.has(def.type) || (wanted && !wanted.has(def.type))) {
       counts[def.type] = 0;
       continue;
     }
-    counts[def.type] = await syncFeed(env, transport, p, wk.instance, newActive, def);
+    counts[def.type] = await syncFeed(env, transport, p, wk.instance, newActive, def, feedOpts);
   }
   // observability: record a successful sync — time, count, cumulative total, per-feed breakdown
   // (surfaced via /federation/peers → last_counts)
@@ -299,6 +332,7 @@ async function syncPeer(
     .bind(nowS(), nowS(), total, JSON.stringify({ ...counts, encoding: "cbor" }), p.url)
     .run();
   return {
+    bytes: feedOpts.bytes,
     caches: counts.cache ?? 0,
     finds: counts.find ?? 0,
     keys: counts.key ?? 0,
@@ -332,6 +366,13 @@ export function negotiateFeeds<T extends { capability: string }>(
  * gracefully, never failing the whole sync. The origin is ALWAYS the verified serving peer
  * (wk.instance), never anything the payload claims — a peer inherits only its own namespace + trust.
  */
+/** How one feed is pulled: the page cap, the caches region ('' = whole), and the bytes read so far. */
+interface FeedPullOptions {
+  maxPages: number;
+  region: string;
+  bytes: number;
+}
+
 async function syncFeed(
   env: Env,
   transport: FedSyncTransport,
@@ -339,20 +380,36 @@ async function syncFeed(
   instance: string,
   activeKeys: string[],
   def: SyncDef,
+  opts: FeedPullOptions,
 ): Promise<number> {
   let cursor = (p[def.cursorCol] as number) ?? 0,
     cursorId = def.cursorIdCol ? (p[def.cursorIdCol] ?? null) : null,
     applied = 0;
+  // A cursor is exact only for the region it was read under: a new region (or none) reads the caches
+  // feed again from the start. Deletes are never filtered, so nothing stale survives a region change.
+  const region = def.type === "cache" ? opts.region : "";
+  if (def.type === "cache" && (p.caches_region ?? "") !== region) {
+    cursor = 0;
+    cursorId = null;
+    await env.DB.prepare("UPDATE fed_peers SET caches_cursor=0, caches_cursor_id=NULL, caches_region=? WHERE url=?")
+      .bind(region, p.url)
+      .run();
+    p.caches_region = region;
+  }
+  const regionParam = region ? `&bbox=${region}` : "";
   // the origin is the verified serving peer, its frames verify under its active keys, and a page
   // carries only its own feed's type
   const gate: FrameGate = { origin: instance, type: def.type, keysFor: () => Promise.resolve(activeKeys) };
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < opts.maxPages; page++) {
     const idParam = cursorId != null ? `&sinceId=${cursorId}` : "";
-    const res = await transport.get(`/federation/sync/${def.type}?since=${cursor}${idParam}&limit=${PAGE_LIMIT}`);
+    const res = await transport.get(
+      `/federation/sync/${def.type}?since=${cursor}${idParam}${regionParam}&limit=${PAGE_LIMIT}`,
+    );
     if (res.status === 404) return applied; // feed not served here → forward-compat skip
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} <- /federation/sync/${def.type}`);
     const body = await readCappedBody(res, MAX_PAGE_BYTES);
     if (!body) throw new Error(`/federation/sync/${def.type} page too large (over ${MAX_PAGE_BYTES} bytes)`);
+    opts.bytes += body.byteLength;
     const pg = decodeFedSyncPage(body);
     if (pg.frames.length > PAGE_LIMIT)
       throw new Error(`/federation/sync/${def.type} page has ${pg.frames.length} frames (asked for ${PAGE_LIMIT})`);
@@ -387,10 +444,35 @@ async function syncFeed(
 }
 
 // ---- endpoints ----
-/** POST /federation/sync — run a pull from every peer now (the scheduled sync runs the same). Operator-only. */
+/**
+ * POST /federation/sync — run a pull from every peer now (the scheduled sync runs the same). Operator-only.
+ * An optional JSON body narrows it: `{ types?: feed types, maxPages?: 1–MAX_PAGES }` (PullOptions).
+ */
 export async function handleFederationSync(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true });
   if (gate) return gate;
-  const summary = await syncAllPeers(env);
+  const raw = await req.text();
+  let body: { types?: unknown; maxPages?: unknown } = {};
+  if (raw.trim()) {
+    try {
+      body = JSON.parse(raw) as typeof body;
+    } catch {
+      return json({ error: "the body must be JSON" }, { status: 400 });
+    }
+  }
+  const known = new Set(SYNC_DEFS.map((d) => d.type));
+  const opts: PullOptions = {};
+  if (body.types !== undefined) {
+    if (!Array.isArray(body.types) || !body.types.every((t) => typeof t === "string" && known.has(t)))
+      return json({ error: `types must be a list of: ${[...known].join(", ")}` }, { status: 400 });
+    opts.types = body.types as string[];
+  }
+  if (body.maxPages !== undefined) {
+    const n = Number(body.maxPages);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_PAGES)
+      return json({ error: `maxPages must be 1–${MAX_PAGES}` }, { status: 400 });
+    opts.maxPages = n;
+  }
+  const summary = await syncAllPeers(env, opts);
   return json({ ok: true, ...summary });
 }

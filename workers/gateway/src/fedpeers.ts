@@ -24,6 +24,7 @@ export interface PeerRow {
   moves_cursor: number;
   bulletins_cursor: number;
   caches_cursor_id?: number | null;
+  caches_region?: string; // the region the caches cursor was read under ('' = the whole feed)
   bulletins_cursor_id?: number | null;
   enabled: number;
   trust: TrustLevel;
