@@ -49,11 +49,11 @@ async function asker(extra: Record<string, unknown> = {}) {
   return { key, env: instanceEnv("hub.example", key, extra) };
 }
 
-async function addPeer(env: Env, url: string, instance: string, key: FedKey, trust = "trusted") {
+async function addPeer(env: Env, url: string, instance: string, key: FedKey, trust = "trusted", operatorCall?: string) {
   await env.DB.prepare(
-    "INSERT INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via) VALUES (?, ?, ?, ?, ?, 'manual')",
+    "INSERT INTO fed_peers (url, instance, public_key, accept_keys, trust, added_via, operator_call) VALUES (?, ?, ?, ?, ?, 'manual', ?)",
   )
-    .bind(url, instance, key.pub, JSON.stringify([{ x: key.pub }]), trust)
+    .bind(url, instance, key.pub, JSON.stringify([{ x: key.pub }]), trust, operatorCall ?? null)
     .run();
 }
 
@@ -195,6 +195,41 @@ describe("quorum", () => {
     await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
     await addPeer(hub.env, "https://p2.example", "p2.example", p2.key);
     stubFetch({ "https://p1.example": serve(p1.env), "https://p2.example": serve(p2.env) });
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+  });
+});
+
+describe("quorum — 44net peers of one callsign", () => {
+  it("counts two instances ARDC verified under one callsign once", async () => {
+    const hub = await asker();
+    const home = await answerer("oe.home");
+    const pocket = await answerer("oe.pocket");
+    await addPeer(hub.env, "http://oe8apr.ampr.org", "oe.home", home.key, "trusted", "OE8APR");
+    await addPeer(hub.env, "http://pocket.oe8apr.ampr.org", "oe.pocket", pocket.key, "trusted", "OE8APR");
+    stubFetch({ "http://oe8apr.ampr.org": serve(home.env), "http://pocket.oe8apr.ampr.org": serve(pocket.env) });
+    expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
+  });
+
+  it("counts instances of two callsigns as two voices", async () => {
+    const hub = await asker();
+    const a = await answerer("oe.a");
+    const b = await answerer("oe.b");
+    await addPeer(hub.env, "http://oe8aaa.ampr.org", "oe.a", a.key, "trusted", "OE8AAA");
+    await addPeer(hub.env, "http://oe8bbb.ampr.org", "oe.b", b.key, "trusted", "OE8BBB");
+    stubFetch({ "http://oe8aaa.ampr.org": serve(a.env), "http://oe8bbb.ampr.org": serve(b.env) });
+    expect((await queryPeerCorroboration(hub.env, query()))?.corroborators).toBe(2);
+  });
+
+  it("a registry operator and the same verified callsign are one voice", async () => {
+    const authority = await newFedKey();
+    const p1 = await answerer("p1.example");
+    const p2 = await answerer("p2.example");
+    const { signedRegistry } = await import("./helpers/fedpeer.js");
+    const doc = await signedRegistry(authority, 100, [{ instance: "p1.example", key: p1.key.pub, operator: "OE8APR" }]);
+    const hub = await asker({ FED_REGISTRY: JSON.stringify(doc), FED_REGISTRY_KEY: authority.pub });
+    await addPeer(hub.env, "https://p1.example", "p1.example", p1.key);
+    await addPeer(hub.env, "http://pocket.oe8apr.ampr.org", "p2.example", p2.key, "trusted", "OE8APR");
+    stubFetch({ "https://p1.example": serve(p1.env), "http://pocket.oe8apr.ampr.org": serve(p2.env) });
     expect(await queryPeerCorroboration(hub.env, query())).toBeNull();
   });
 });

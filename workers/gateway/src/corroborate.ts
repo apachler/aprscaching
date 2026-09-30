@@ -42,8 +42,8 @@ const CORROBORATION_FANOUT = 16;
 
 export interface Evidence {
   instance: string;
-  /** Who stands behind this answer: its registry operator when there is one, else its signing key.
-   *  The quorum counts distinct identities, never self-reported instance names. */
+  /** Who stands behind this answer: its registry operator, else its ARDC-verified 44net call, else its
+   *  signing key. The quorum counts distinct identities, never self-reported instance names. */
   identity?: string;
   igateCall?: string;
   distanceM: number;
@@ -76,7 +76,10 @@ const hexOf = (buf: ArrayBuffer): string =>
 async function payloadHash(payload: Uint8Array<ArrayBuffer>): Promise<string> {
   return hexOf(await crypto.subtle.digest("SHA-256", payload));
 }
-/** A corroborator's identity for the quorum: its registry operator when known, else its signing key. */
+/**
+ * A corroborator's identity for the quorum: its registry operator when known, else the callsign ARDC
+ * verified when it was added over 44net, else its signing key.
+ */
 function identityOf(operator: string | undefined, key: string): string {
   return operator ? `operator:${operator.toUpperCase()}` : `key:${key}`;
 }
@@ -284,10 +287,10 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
 
 /**
  * Quorum decision (pure, testable): require corroboration from **≥ quorum DISTINCT
- * identities** before a find may reach Tier A. De-dupes by identity — the registry operator, else
- * the signing key — so one operator or one key answering under several instance ids is one voice
- * and no single party can mint Tier A; below quorum returns null. Returns the closest evidence,
- * annotated with how many independent identities corroborated.
+ * identities** before a find may reach Tier A. De-dupes by identity — the registry operator, else the
+ * ARDC-verified 44net call, else the signing key — so one operator or one key answering under several
+ * instance ids is one voice and no single party can mint Tier A; below quorum returns null. Returns the
+ * closest evidence, annotated with how many independent identities corroborated.
  */
 export function selectCorroboration(hits: Evidence[], quorum: number): Evidence | null {
   const need = Math.max(1, Math.floor(quorum) || 1);
@@ -526,7 +529,10 @@ export async function askPeers(
       try {
         const verdict = await acceptAnswer(new Uint8Array(await r.arrayBuffer()), {
           instance,
-          identity: identityOf(registry.get(instance)?.operator, peer.public_key ?? keys[0]!),
+          identity: identityOf(
+            registry.get(instance)?.operator ?? peer.operator_call ?? undefined,
+            peer.public_key ?? keys[0]!,
+          ),
           keys,
           nonce,
           queryHash: await payloadHash(decodeFedFrame(question).payload),

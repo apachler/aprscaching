@@ -339,7 +339,8 @@ a network change. Android runs one VPN at a time.
 - **The hotspot and a MeshCom node** stay on the phone's own networks. **Unverified:** that the hotspot and
   ExtUDP keep working with a full tunnel up on every phone; `status.sh` shows whether the node's listener
   still runs.
-- **Federation.** Publish the `_aprscaching` TXT record and add the 44net endpoint to `FED_ENDPOINTS` as in
+- **Federation.** Publish the `_aprscaching` TXT record (the phone's own, under its host, when your home
+  station already uses the callsign's) and add the 44net endpoint to `FED_ENDPOINTS` as in
   [44Net steps 3 and 4](44net.md#3-name-and-identity), then run the self-check under **Instance admin →
   Setup → 44Net**. The phone needs its own instance name (the [setup questions](#install)) and its own key;
   following your home instance works with or without the tunnel ([Your home instance as the hub](#your-home-instance-as-the-hub)).
@@ -403,13 +404,15 @@ the phone; it follows only what you name.
 
 **Corroboration.** A station vouches for finds only from receiving sites it attests (`FIRST_PARTY_SITES`), and
 a Pocket as installed attests none, so trusting it at home adds no voice to the corroboration quorum. If the
-phone attests a site of its own (a USB TNC, a MeshCom node), home and phone are one operator with two keys:
-without a registry entry naming that operator for both, a quorum counts them as two voices. Keep the quorum
-honest by leaving `FIRST_PARTY_SITES` unset on a phone that follows your home instance.
+phone attests a site of its own (a USB TNC, a MeshCom node), home and phone are one operator with two keys.
+A peer that added both over 44Net under your callsign counts them as one voice; one that added them any
+other way, without a registry entry naming you for both, counts two. Keep the quorum honest by leaving
+`FIRST_PARTY_SITES` unset on a phone that follows your home instance.
 
-**Directly over 44Net.** Two stations on 44Net can also follow each other directly by callsign (the **Add a
-peer by callsign (44net)** field under **Instance admin → Federation**, [44Net](44net.md#3-name-and-identity)), over plain http on their
-ampr.org names. The phone is reachable that way only while its tunnel is up, and with a split tunnel only
+**Directly over 44Net.** Two stations on 44Net can also follow each other directly by callsign or by host
+(the **Add a peer by callsign or host (44net)** field under **Instance admin → Federation**), over plain http
+on their ampr.org names. A phone beside your home station publishes its own record under a name such as
+`pocket.<call>.ampr.org` ([several instances under one callsign](44net.md#3-name-and-identity)). The phone is reachable that way only while its tunnel is up, and with a split tunnel only
 from 44Net; following your home instance (which the phone reaches itself) keeps working when it is not.
 
 ### If the phone is lost

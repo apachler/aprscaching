@@ -18,7 +18,8 @@ import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./aut
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
 import { budgetStatus } from "./budget.js";
-import { amprCallOf, configured44net } from "./fed44netcheck.js";
+import { amprCallOf } from "./fed44net.js";
+import { configured44net } from "./fed44netcheck.js";
 
 type WriteBudgetStatus = Awaited<ReturnType<typeof budgetStatus>>;
 

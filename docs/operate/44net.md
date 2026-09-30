@@ -64,8 +64,9 @@ each name; `@` is the subdomain apex.
 | Name | Type | Value | What it is for |
 |------|------|-------|----------------|
 | `<call>.ampr.org` | A | your 44.x Connect address | The host peers contact when the TXT record has no `host=` |
-| `<sub>.<call>.ampr.org` | A | your 44.x Connect address | The host peers contact when the TXT record names it with `host=` |
-| `_aprscaching.<call>.ampr.org` | TXT | `v=acs1; inst=<INSTANCE>; key=<federation public key>`, plus `; host=<sub>.<call>.ampr.org` when you publish under a subdomain | Your federation identity |
+| `<sub>.<call>.ampr.org` | A | your 44.x Connect address | The host peers contact when its own TXT record, or the callsign's `host=`, names it |
+| `_aprscaching.<call>.ampr.org` | TXT | `v=acs1; inst=<INSTANCE>; key=<federation public key>`, plus `; host=<sub>.<call>.ampr.org` when you publish under a subdomain | Your federation identity; peers add you by callsign |
+| `_aprscaching.<sub>.<call>.ampr.org` | TXT | `v=acs1; inst=<INSTANCE>; key=<federation public key>` | The identity of an instance under a subdomain; peers add it by that host. One per instance, so one callsign can run several |
 | `_aprscaching.<call>.ampr.org` | TXT | `v=acs1; verify=<code>` | Callsign verification only, while a challenge is open; it may sit beside the federation record |
 | — | AAAA | not used | Onboarding and the self-check use the A record |
 | `_acme-challenge.<host>` | TXT | the ACME DNS-01 token | Only for optional TLS by DNS-01 — see [TLS on the 44Net name](#tls-on-the-44net-name) |
@@ -100,6 +101,21 @@ _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=aprs.example.net; key=<federati
 Here `APP_URL` is `https://aprs.example.net`, so `inst=` is `aprs.example.net`, and `<call>.ampr.org`
 itself stays free for other uses. Peers that add this instance by callsign contact
 `http://aprscaching.<call>.ampr.org`.
+
+**Several instances under one callsign.** A home station and a Pocket each get a name and a record of their
+own:
+
+```
+<call>.ampr.org                      A    44.x.y.z
+_aprscaching.<call>.ampr.org         TXT  "v=acs1; inst=aprs.example.net; key=<home key>"
+pocket.<call>.ampr.org               A    44.x.y.w
+_aprscaching.pocket.<call>.ampr.org  TXT  "v=acs1; inst=oe8apr-pocket; key=<Pocket key>"
+```
+
+Peers add the home station by callsign and the Pocket by its host, `pocket.<call>.ampr.org`, in the same
+field under **Instance admin → Federation**. Both are recorded as instances of your callsign, so a peer's
+corroboration quorum counts them as one voice. A name that carries two federation records is ambiguous:
+the lookup lists them, and the peer's operator adds one by its host.
 
 **How long DNS takes.**
 
@@ -194,8 +210,11 @@ one-sentence fix:
 - the effective host (`host=`, else `<call>.ampr.org`) has an A record inside 44/8 — a missing record
   fails and names the record to add, an address outside 44/8 warns;
 - the `_aprscaching` TXT record parses as `v=acs1; inst=…; key=…` and matches this instance's
-  `INSTANCE` and current public key — otherwise it fails and prints the exact value to publish. A
-  `verify=` record at the same name does not count as the federation record;
+  `INSTANCE` and current public key — otherwise it fails and prints the exact value to publish. For an
+  endpoint under a subdomain the check reads its own `_aprscaching.<sub>.<call>.ampr.org` record first, then
+  the callsign's. A `verify=` record at the same name does not count as the federation record;
+- when both records carry a binding, whether the callsign's record sends peers to this host as another
+  instance or with another key — a warning; a callsign record for your other instance is information;
 - the instance's own descriptor lists the same 44net endpoint;
 - whether the DNS answer carried the DNSSEC AD flag — information only;
 - whether the effective host has an AAAA record — information only; onboarding uses the A record.
