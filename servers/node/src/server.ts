@@ -7,6 +7,7 @@
  *   • a node:http <-> Web Request/Response bridge • a nightly TTL interval
  *
  * Run: `pnpm --filter @aprscaching/node-gateway start`  (env: PORT, DB_PATH, INGEST_SECRET, OPERATOR_SECRET, …)
+ * WEB_DIST (the built apps/web/dist) makes it serve the SPA on the same origin too, with no proxy in front.
  */
 import http from "node:http";
 import fs from "node:fs";
@@ -14,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { WebSocketServer } from "ws";
-import { handle } from "@aprscaching/gateway/app";
+import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
@@ -24,6 +25,7 @@ import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
 import { joinRoom } from "./rooms.js";
 import { makeFsMedia } from "./media.js";
+import { spaFile } from "./spa.js";
 import {
   fedSyncInterval,
   gitHead,
@@ -38,6 +40,7 @@ const PORT = Number(process.env.PORT) || 8787; // a blank/NaN PORT must not bind
 const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.db");
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
+const WEB_DIST = process.env.WEB_DIST ? path.resolve(process.env.WEB_DIST) : undefined;
 
 // Boot guards: a strong INGEST_SECRET, an OPERATOR_SECRET of its own if set, and SESSION_SECRET from
 // the environment or generated once and kept beside the database (so a single box needs no setup).
@@ -83,6 +86,13 @@ const server = http.createServer(async (nreq, nres) => {
   try {
     const url = `http://${nreq.headers.host ?? "localhost"}${nreq.url ?? "/"}`;
     const method = nreq.method ?? "GET";
+    if (WEB_DIST && (method === "GET" || method === "HEAD")) {
+      const pathname = new URL(url).pathname;
+      if (!isGatewayPath(pathname)) {
+        sendSpa(nres, spaFile(WEB_DIST, pathname), method);
+        return;
+      }
+    }
     const headers = new Headers();
     for (const [k, v] of Object.entries(nreq.headers)) {
       if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
@@ -121,6 +131,27 @@ const server = http.createServer(async (nreq, nres) => {
   }
 });
 
+/** One file of the built SPA, or a 404 when nothing in the build answers the path. */
+function sendSpa(nres: http.ServerResponse, f: ReturnType<typeof spaFile>, method: string): void {
+  if (!f) {
+    nres.statusCode = 404;
+    nres.setHeader("content-type", "text/plain; charset=utf-8");
+    nres.end("not found");
+    return;
+  }
+  nres.statusCode = 200;
+  nres.setHeader("content-type", f.contentType);
+  nres.setHeader("cache-control", f.cacheControl);
+  nres.setHeader("x-content-type-options", "nosniff");
+  if (method === "HEAD") {
+    nres.end();
+    return;
+  }
+  fs.createReadStream(f.file)
+    .on("error", () => nres.destroy())
+    .pipe(nres);
+}
+
 // ---- websocket upgrade (region rooms) ----
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
@@ -133,7 +164,11 @@ server.on("upgrade", (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => joinRoom(rooms, region, ws));
 });
 
-server.listen(PORT, () => console.log(`aprscaching node-gateway listening on :${PORT}  (db: ${DB_PATH})`));
+server.listen(PORT, () =>
+  console.log(
+    `aprscaching node-gateway listening on :${PORT}  (db: ${DB_PATH})${WEB_DIST ? `  (web: ${WEB_DIST})` : ""}`,
+  ),
+);
 
 startSchedules(env, fedSyncInterval(process.env));
 
