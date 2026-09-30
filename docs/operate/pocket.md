@@ -45,6 +45,20 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     updates and restarts. The first run takes a few minutes; compiling `better-sqlite3` is the long part.
 3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
    `apt update && apt full-upgrade -y` first.
+4. After a first install `pocket.sh` offers the **setup questions**; they run any time with
+   `bash ~/aprscaching/deploy/pocket/wizard.sh`. With Termux:API they are Android dialogs, otherwise questions
+   in the terminal (`--text` forces those). Each shows the current value, and nothing is written until you
+   confirm the summary:
+
+    | Question | Writes |
+    |---|---|
+    | Your callsign, the base call | `ADMIN_CALLSIGNS` (the first entry) and `APRSIS_CALLSIGN` |
+    | Instance name, e.g. `oe8apr-pocket` | `INSTANCE`: the name other instances know the station by when it federates. It is set once: caches and finds carry the name they were made under, so a station that holds any keeps `localhost` |
+    | A MeshCom node now? | runs [`meshcom-setup.sh`](#a-meshcom-node) |
+    | Home-screen shortcuts, a daily backup while charging | runs `extras/setup.sh` ([Extras](#extras-notification-shortcuts-battery-saver-alerts-scheduled-backup)) |
+
+    Then it restarts a running station and opens **Instance admin** (`http://localhost:8787/?view=admin`),
+    whose Setup checklist covers the rest once you are signed in.
 
 The settings (`~/.aprscaching/.env`) suit a phone: the gateway on port 8787 on every interface, APRS-IS
 receive-only with an example filter to tune, short retention for the diagnostic tables, federation off.
