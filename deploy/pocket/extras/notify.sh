@@ -73,6 +73,7 @@ compose() {
     [ "$(printf '%s' "$battery" | json_field plugged)" = UNPLUGGED ] || line="$line, charging"
     body="$body · $line"
   fi
+  if [ -f "$SAVER_ENV" ]; then body="$body · battery saver on"; fi
   CONTENT="$body"
 }
 

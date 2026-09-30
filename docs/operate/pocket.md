@@ -82,7 +82,7 @@ off:
 - **Heat:** the gateway, a hotspot and mobile data together warm the phone. Keep it out of direct sun, and
   on a charger for long sessions.
 
-## Extras: notification, shortcuts, scheduled backup
+## Extras: notification, shortcuts, battery saver, scheduled backup
 
 Three optional add-ons, each from F-Droid (or each from GitHub). **Install every Termux app from the same
 source as Termux itself:** the apps share a signing key, and apps from different sources refuse to talk to
@@ -91,7 +91,7 @@ for Termux:API).
 
 | Add-on | Gives the station |
 |---|---|
-| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
+| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery saver, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
 | **Termux:Widget** | home-screen shortcuts |
 | **Termux:Boot** | start at boot ([above](#keep-it-running)) |
 
@@ -106,6 +106,13 @@ Without an add-on, the scripts print one line saying what to install and work as
   **Stop**, **Open map** and **Backup** into `~/.shortcuts/`; add the Termux:Widget widget to the home
   screen to tap them. Status opens a terminal with `status.sh`; the others run in the background and report
   with a short toast.
+- **Battery saver.** With Termux:API, `start.sh` also watches the battery. Below `POCKET_BATTERY_LOW`
+  percent (default 20) on battery, the station switches to a saver profile: APRS-IS narrowed to your own
+  call's packets (the connection stays up, almost no data flows), the raw packet log kept 2 hours; MeshCom
+  and every radio port stay on. It switches back when the phone charges or the battery is 10 points above
+  the threshold, and says so in a notification each time. The profile is an overlay,
+  `~/.aprscaching/battery-saver.env`, applied by restarting both processes; `POCKET_BATTERY_LOW=0` turns
+  the saver off.
 - **Scheduled backup.** `extras/setup.sh --scheduled-backup` registers `backup.sh` with Android's job
   scheduler: once a day, only while the phone charges and the battery is above 50 %. `status.sh` shows the
   last backup. `extras/setup.sh --remove` takes both back.
