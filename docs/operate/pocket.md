@@ -185,6 +185,48 @@ turn on **Search & filter → Live stations**: the node appears after its next b
 rules hold here unchanged — a direct hearing by your node counts toward Tier A only once its call is in
 `FIRST_PARTY_SITES`, which the scripts never set.
 
+## A USB TNC on the phone
+
+A KISS TNC on the phone's USB-C port (through an OTG adapter) feeds the ingest directly, so the phone logs
+**every** station the TNC hears, off-grid — the browser's Bluetooth path forwards only your own traffic
+unless it has the ingest secret. Android gives USB access per app: `termux-usb` (Termux:API) hands a file
+descriptor to `extras/usb_kiss_bridge.py`, which drives the TNC as a CDC-ACM serial port through libusb and
+serves KISS over TCP on `127.0.0.1:8001`, where the ingest connects.
+
+```bash
+pkg install termux-api python libusb
+bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --list
+bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup --baud 9600    # Android asks once for permission
+```
+
+`--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD`, `KISS_TNC_HOST=127.0.0.1` and `KISS_TNC_PORT` to the
+`.env`; `start.sh` then runs the bridge in the tmux window `usb-kiss`, which waits for the TNC and restarts
+the bridge when it is unplugged and plugged in again. Set `RF_SITE_CALL` to this station's call to name it
+as the receiving site. What the TNC hears is a local TNC's hearing like any other: it counts toward Tier A
+only once `RF_SITE_CALL` is in `FIRST_PARTY_SITES`, and your own receiver never corroborates your own finds.
+
+**Only CDC-ACM devices** work, since they need no driver of their own; the bridge refuses FTDI, Silicon Labs
+CP210x, WCH CH340 and Prolific chips by name.
+
+| TNC | USB | Status |
+|---|---|---|
+| A TNC or radio with a native USB CDC-ACM port (e.g. a KISS TNC on an ESP32-S3 or RP2040) | CDC-ACM | untested |
+| TNCs on an FTDI, CP210x or CH340 USB-serial chip | vendor-specific | incompatible (refused by name) |
+
+Only owner-tested entries are marked tested; report yours with the `status.sh` output.
+
+**Receive-only by default.** The bridge drops everything the ingest would send toward the radio. It passes
+KISS data frames only when all three hold: `USB_KISS_TX=1` in the `.env`, your callsign control-verified on
+this station, and the bridge started by `usb-kiss.sh` (which checks both). A watchdog then allows 6 frames a
+minute, 3 in a burst, each at most 330 bytes, and never the KISS "exit" command; `status.sh` and the station
+notification show "TX ON". The phone is then an automatic station under your licence — often unattended, in
+a pocket, able to crash or run flat. Read [Amateur-radio compliance](rf-regulatory.md) first, and enable
+the ingest's transmit features (digipeater, IGate, radio replies) deliberately, as on any ingest box.
+
+The bridge is written from the USB CDC-ACM class specification; prior art: [Termux_CDC_ACM](https://github.com/schuhumi/Termux_CDC_ACM)
+and pyusb's Termux file-descriptor work ([pyusb#287](https://github.com/pyusb/pyusb/pull/287), not merged, so
+the bridge calls libusb through Python's `ctypes` instead).
+
 ## Your radio in the browser
 
 The browser on the phone can connect a Bluetooth Low Energy KISS TNC (a Mobilinkd, for instance) through Web

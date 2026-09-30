@@ -1,0 +1,5 @@
+# The Pocket helpers in Python (the USB KISS bridge): what CI checks with ruff.
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "B", "UP"]

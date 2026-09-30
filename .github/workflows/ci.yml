@@ -28,6 +28,17 @@ jobs:
       # every gateway export has a user outside its own file (module-private code is not exported)
       - run: node tools/checks/dead-exports.mjs
 
+  pocket:
+    name: Pocket scripts (shellcheck, ruff, Python tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The phone-side scripts: bash (shellcheck ships on the runner) and the USB bridge in Python. Warning
+      # severity: info-level notes (SC2015 on the `[ … ] && [ … ] || die` guards) vary by shellcheck version.
+      - run: shellcheck -x -S warning deploy/pocket/*.sh deploy/pocket/extras/*.sh deploy/pocket/test/*.sh deploy/pocket/boot/*
+      - run: pipx run ruff check deploy/pocket/extras && pipx run ruff format --check deploy/pocket/extras
+      - run: cd deploy/pocket/extras && python3 -m unittest discover -s test -v
+
   lint-types:
     name: lint (type-aware, slow)
     runs-on: ubuntu-latest

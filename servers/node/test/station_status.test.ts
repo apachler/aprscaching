@@ -52,6 +52,18 @@ async function status(headers: Record<string, string>, query = ""): Promise<Resp
 }
 
 describe("station status", () => {
+  it("says whether the operator's call is control-verified", async () => {
+    let s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.operatorVerified).toBe(false);
+    sqlite
+      .prepare(
+        "INSERT INTO callsign_verifications (callsign, method, status, verified_at) VALUES ('OE8APR', 'operator', 'verified', ?)",
+      )
+      .run(now);
+    s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.operatorVerified).toBe(true);
+  });
+
   it("answers only the operator", async () => {
     expect((await status({})).status).toBe(403);
     expect((await status({ "x-operator-secret": "wrong" })).status).toBe(401);
