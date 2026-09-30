@@ -119,7 +119,17 @@ let tmp: string;
 // in the same port_stats bucket however long the suite takes.
 const HOUR = Math.floor(Date.now() / 1000 / 3600) * 3600 - 2 * 3600;
 
-type Pkt = { src: string; payload: string; port?: string; ts?: number; dst?: string };
+type Pkt = {
+  src: string;
+  payload: string;
+  port?: string;
+  ts?: number;
+  dst?: string;
+  heardVia?: string;
+  igateCall?: string;
+  path?: string[];
+  parsed?: Record<string, unknown>;
+};
 
 async function ingest(packets: Pkt[]): Promise<void> {
   const res = await handleIngest(
@@ -130,11 +140,12 @@ async function ingest(packets: Pkt[]): Promise<void> {
         packets: packets.map((p) => ({
           src: p.src,
           dst: p.dst ?? "APRS",
-          path: ["WIDE1-1", "qAR", "OE3XIG"],
+          path: p.path ?? ["WIDE1-1", "qAR", "OE3XIG"],
           payload: p.payload,
-          heardVia: "aprs_is",
-          igateCall: "OE3XIG",
+          heardVia: p.heardVia ?? "aprs_is",
+          igateCall: p.igateCall ?? "OE3XIG",
           port: p.port ?? "aprs-is",
+          ...(p.parsed ? { parsed: p.parsed } : {}),
           ts: p.ts ?? HOUR + 60,
         })),
       }),
@@ -373,6 +384,59 @@ describe("D1 rows written per ingested packet", () => {
   });
 });
 
+describe("D1 rows written per MeshCom packet", () => {
+  // A MeshCom position the operator's node heard directly: stored as an RF hearing like a TNC's, plus the
+  // node's state and its link for the map (meshcom.ts), which are rewritten only when a shown value
+  // changes or the interval passes.
+  const RX = "OE3MRX-12";
+  const mesh = (src: string, meta: Record<string, unknown> | null): Pkt => ({
+    src,
+    payload: POS,
+    port: "meshcom",
+    heardVia: "rf",
+    igateCall: RX,
+    path: [],
+    ...(meta
+      ? {
+          parsed: {
+            meshcom: {
+              srcType: "lora",
+              direct: true,
+              path: [src],
+              receiver: RX,
+              rssi: -100,
+              snr: 6,
+              hwId: 8,
+              firmware: "4.35t",
+              batt: 87,
+              ...meta,
+            },
+          },
+        }
+      : {}),
+  });
+
+  it("a MeshCom position heard directly, without metadata", async () => {
+    const t = await steady([mesh("OE3MC1", null)]);
+    expect(t.written.meshcom_nodes ?? 0).toBe(0);
+    expect(t.written.meshcom_links ?? 0).toBe(0);
+    expect(total(t)).toBe(12); // as a TNC's RF hearing
+  });
+
+  it("a MeshCom position heard directly, with metadata that changed nothing shown: no extra rows", async () => {
+    const t = await steady([mesh("OE3MC2", {})], [mesh("OE3MC2", { rssi: -101, batt: 85 })]);
+    expect(t.written.meshcom_nodes ?? 0).toBe(0);
+    expect(t.written.meshcom_links ?? 0).toBe(0);
+    expect(total(t)).toBe(12);
+  });
+
+  it("a MeshCom position once the interval has passed: its node row and link row", async () => {
+    const t = await steady([mesh("OE3MC3", {})], undefined, 600);
+    // each row and its time index
+    expect({ nodes: t.written.meshcom_nodes, links: t.written.meshcom_links }).toEqual({ nodes: 2, links: 2 });
+  });
+});
+
 describe("D1 rows written per ingested packet over the daily write budget", () => {
   /** Rows the ingest handed to the budget's counter with its live dispatch. */
   let counted = 0;
@@ -450,7 +514,16 @@ describe("D1 rows written by the nightly prune", () => {
       { src: "OE3PRB", payload: ":OE3XYZ   :prune me{13" },
       { src: "OE3PRC", payload: "_10090556c220s004g005t077r000p000P000h50b09900wRSW" },
     ]);
-    const rings = ["positions", "packets_recent", "messages", "sensor_readings", "port_stats", "node_mheard"];
+    const rings = [
+      "positions",
+      "packets_recent",
+      "messages",
+      "sensor_readings",
+      "port_stats",
+      "node_mheard",
+      "meshcom_nodes",
+      "meshcom_links",
+    ];
     const held: Record<string, number> = {};
     for (const r of rings) held[r] = (await raw.prepare(`SELECT COUNT(*) AS n FROM ${r}`).first<{ n: number }>())!.n;
     meter.take();

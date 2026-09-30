@@ -65,6 +65,9 @@ const ENV_STRING_KEYS = [
 
   // ---- retention of the diagnostic/telemetry tables (JSON; see retention.ts) ----
   "RETENTION",
+  "MESHCOM_META_MIN_S", // seconds between rewrites of a MeshCom node or link row when nothing shown changed (default 300)
+  "MESHCOM_NODE_TTL_DAYS", // MeshCom nodes not heard for this many days drop off the map (default 7)
+  "MESHCOM_LINK_TTL_HOURS", // MeshCom links not seen for this many hours are pruned (default 48)
 
   // ---- position storage: a fix is stored once its station moved or time passed (see downsample.ts) ----
   "POS_MIN_MOVE_M", // metres moved since the station's last stored fix (default 25; 0 stores every fix)

@@ -50,6 +50,8 @@ export interface MeshcomPosEvent extends EventBase {
   /** APRS symbol as table + code (e.g. `/#`). */
   symbol?: string;
   batt?: number;
+  /** The MeshCom hardware id of the sending device. */
+  hwId?: number;
 }
 
 export interface MeshcomMsgEvent extends EventBase {
@@ -149,6 +151,7 @@ export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): 
         locator: toMaidenhead(lat, lon),
         ...(symbol !== undefined ? { symbol } : {}),
         ...(d.batt !== undefined && d.batt >= 0 && d.batt <= 100 ? { batt: d.batt } : {}),
+        ...(d.hwId !== undefined && Number.isInteger(d.hwId) && d.hwId >= 0 && d.hwId <= 255 ? { hwId: d.hwId } : {}),
       },
     };
   }

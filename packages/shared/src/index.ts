@@ -12,3 +12,4 @@ export * from "./surfaces.js";
 export * from "./spots.js";
 export * from "./page.js";
 export * from "./basemap.js";
+export * from "./meshcom.js";
