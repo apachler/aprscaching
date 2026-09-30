@@ -29,6 +29,7 @@
     "./ingest": "./src/ingest.ts",
     "./adoption": "./src/adoption.ts",
     "./rooms-core": "./src/rooms-core.ts",
+    "./budget": "./src/budget.ts",
     "./migrate": "./src/migrate.ts"
   },
   "scripts": {

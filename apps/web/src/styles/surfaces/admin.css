@@ -1,5 +1,11 @@
 /* Instance admin: adoption requests, 44net onboarding, FBB partners, setup checklist. */
 @layer surfaces {
+  /* the D1 write-budget banner at the top of Instance admin: headline, the count, then what is being shed */
+  .budget-note {
+    display: grid;
+    gap: var(--sp-1);
+    margin-bottom: var(--sp-3);
+  }
   /* pending requests nested under an offered cache (Instance admin → Cache adoption) */
   .logs.adopt-reqs {
     margin: var(--sp-2) 0 var(--sp-2) var(--sp-5);

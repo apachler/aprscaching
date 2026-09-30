@@ -165,6 +165,47 @@ shows the rows actually written.
 This shape suits a small regional feed and an operator who wants no server to maintain. A large or
 global feed belongs on [Self-host](#self-host), where the cost is flat.
 
+#### Write budget
+
+The Worker keeps a daily budget of D1 rows written, `D1_DAILY_WRITE_BUDGET`: **1,500,000** by default (the
+Workers Paid allowance of 50 million a month, spread over 30 days). On Workers Free set it to **90000**, which
+leaves a margin under the 100,000-row daily limit for sign-ins and finds. `0` turns the guard off. The count
+covers every write the gateway makes, the nightly prune included, and starts again at 00:00 UTC, when
+Cloudflare's own daily limits reset.
+
+As the day's count nears the budget, the gateway stops storing the writes that matter least:
+
+| Level | From | What is no longer stored |
+|-------|------|--------------------------|
+| ok | — | nothing: everything is stored as configured |
+| warn | 80 % | the raw packet log (`packets_recent`), so the shack's raw packet view goes quiet (the Setup checklist's "Ingest feeding" line says why); a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6 (an hour by default) instead of every interval, so its last-heard time can trail by that much |
+| over | 100 % | also every fix and station update of a station nothing protects heard over APRS-IS, weather readings, messages that no protected call sends or receives, MHeard entries of stations your own receiver did not hear, and the hourly port counters |
+
+**Protected data is never throttled.** At every level the gateway stores every fix of a protected station and
+every fix heard directly on RF, every find and radio command (the message to the service call is still read as
+a command and kept), a message to or from a protected call, account and key data, watch alerts, and
+everything federation brings in, tombstones included. The nightly prune runs whatever the level: its deletes
+count toward the budget, but it only ever shrinks the tables. A fix that is not stored still reaches the live
+map, watch alerts and rendezvous.
+
+The sysop hears about each threshold once per UTC day: a banner at the top of **Instance admin** (with the
+count, which the Setup checklist's "D1 write budget" line also shows every day), and a line in the nightly
+email digest to the address of every account that holds a control-verified `ADMIN_CALLSIGNS` call, when
+email is configured. `GET /api/admin/setup` returns the same `budget: { used, budget, level, alerts }`
+(sysop only).
+
+The counter lives in the live-map Durable Object, which every Worker isolate shares, so reading the level
+costs no D1 query: the ingest hands each batch's written rows to it with the live dispatch it already sends,
+and gets the level back for the next batch. The object keeps the day's total in memory and writes it to its
+own storage at most once a minute, plus once for each alert raised or mailed: at most about 1,440 storage
+writes a day. SQLite-backed Durable Object storage is billed apart from D1, at the same rates (Workers Paid:
+50 million rows written a month included, then $1.00 per million; Workers Free: 100,000 a day —
+[Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), checked
+2026-09-30), so the counter's own writes are negligible. When the object restarts it resumes from the last
+stored total and may miss up to a minute of writes. On the Node and Bun runtimes the guard is off unless
+`D1_DAILY_WRITE_BUDGET` is set; there the count is kept in memory, starts again when the server restarts, and
+counts changed rows only (SQLite reports no index rows), so it runs low.
+
 ## Secrets every deployment sets
 
 !!! warning "Three distinct secrets"

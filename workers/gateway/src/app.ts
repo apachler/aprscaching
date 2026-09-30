@@ -93,6 +93,7 @@ import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleFederationSubmit, pushToHub } from "./fedpush.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
+import { meterWrites, flushWrites, runBudgetDigest } from "./budget.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
@@ -180,6 +181,7 @@ export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pa
 /** OPTIONS preflight + route + reflective CORS. The single entry both runtimes call. */
 export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
   applyDerivedDefaults(env);
+  meterWrites(env); // every D1 write counts toward the daily write budget, when one is set
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }), req, env);
   const res = await route(req, env, ctx);
   // gossip ping: a successful federated write coalesces into one "come pull" to our peers
@@ -194,6 +196,7 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
  */
 export async function runFrequentSync(env: Env): Promise<void> {
   applyDerivedDefaults(env);
+  meterWrites(env);
   try {
     await syncAllPeers(env);
   } catch (e) {
@@ -209,6 +212,7 @@ export async function runFrequentSync(env: Env): Promise<void> {
   } catch (e) {
     console.error("relay poll:", (e as Error).message);
   }
+  await flushWrites(env);
 }
 
 /**
@@ -217,6 +221,9 @@ export async function runFrequentSync(env: Env): Promise<void> {
  */
 export async function runScheduled(env: Env): Promise<void> {
   applyDerivedDefaults(env);
+  // The prune's deletes count toward the write budget like any write, but it runs whatever the level:
+  // it only ever shrinks the tables.
+  meterWrites(env);
   const now = nowS();
   // Prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
   // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
@@ -256,6 +263,12 @@ export async function runScheduled(env: Env): Promise<void> {
     await runDigests(env);
   } catch (e) {
     console.error("digests:", (e as Error).message);
+  }
+  // the sysops' write-budget alerts not yet mailed (the flush hands the job's writes to the counter)
+  try {
+    await runBudgetDigest(env);
+  } catch (e) {
+    console.error("write budget digest:", (e as Error).message);
   }
 }
 

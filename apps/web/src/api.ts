@@ -825,7 +825,20 @@ export interface SetupItem {
   source: "env" | "db";
   detail: string;
 }
-export function getAdminSetup(): Promise<{ items: SetupItem[] }> {
+/** One threshold (80 % or 100 %) of the daily D1 write budget crossed on one UTC day. */
+export interface WriteBudgetAlert {
+  day: string;
+  threshold: 80 | 100;
+  /** unix ms */
+  at: number;
+  used: number;
+  mailed: boolean;
+}
+/** The daily D1 write budget: today's count and level (`off` when the instance sets none). */
+export type WriteBudget =
+  | { level: "off"; budget: 0; used: null }
+  | { level: "ok" | "warn" | "over"; day: string; used: number; budget: number; alerts: WriteBudgetAlert[] };
+export function getAdminSetup(): Promise<{ items: SetupItem[]; budget: WriteBudget }> {
   return call(`/api/admin/setup`);
 }
 /** FBB forwarding routing rules (route token → partner). Sysop-gated. */

@@ -42,5 +42,8 @@ INSTANCE = "aprscaching.local"   # canonical federation instance id (use your do
 # metres or this many seconds passed; protected stations and RF hearings are always stored. 0 stores every fix.
 # POS_MIN_MOVE_M = "25"
 # POS_MIN_INTERVAL_S = "600"
+# Daily D1 write budget (docs/operate/deployment.md "Write budget"): near it the gateway sheds low-value writes
+# and alerts the sysop; protected data is always stored. Unset = 1500000 on the Worker. Workers Free: 90000. 0 = off.
+# D1_DAILY_WRITE_BUDGET = "90000"
 # Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
 #   wrangler secret put FED_PRIVATE_KEY

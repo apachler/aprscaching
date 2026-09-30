@@ -373,6 +373,74 @@ describe("D1 rows written per ingested packet", () => {
   });
 });
 
+describe("D1 rows written per ingested packet over the daily write budget", () => {
+  /** Rows the ingest handed to the budget's counter with its live dispatch. */
+  let counted = 0;
+  /** The same instance with its write budget spent: the live room answers `over` (budget.ts). */
+  function overBudget(): Env {
+    const over = () =>
+      new Response(
+        JSON.stringify({
+          day: new Date().toISOString().slice(0, 10),
+          used: 2_000_000,
+          budget: 1_500_000,
+          level: "over",
+          alerts: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    const room = {
+      fetch: async (req: Request) => {
+        if (new URL(req.url).pathname === "/dispatch")
+          counted += ((await req.json()) as { budget?: { add: number } }).budget?.add ?? 0;
+        return over();
+      },
+    };
+    return {
+      DB: meter.db,
+      INGEST_SECRET: "s",
+      D1_DAILY_WRITE_BUDGET: "1500000",
+      ROOMS: { idFromName: (n: string) => n, get: () => room },
+    } as unknown as Env;
+  }
+
+  it("a position fix from a moving station that nothing protects writes no rows", async () => {
+    const saved = env;
+    try {
+      await ingest([{ src: "OE3OVB", payload: POS }]); // under budget: the station exists
+      env = overBudget();
+      meter.take();
+      await ingest([{ src: "OE3OVB", payload: POS_MOVED, ts: HOUR + 61 }]);
+      expect(total(meter.take())).toBe(0);
+    } finally {
+      env = saved;
+    }
+  });
+
+  it("a position fix from a protected station is stored as under budget, and the raw ring is paused", async () => {
+    const saved = env;
+    try {
+      await raw
+        .prepare(
+          "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('acct-3','OE3OVP',1,1)",
+        )
+        .run();
+      await ingest([{ src: "OE3OVP", payload: POS }]);
+      env = overBudget();
+      meter.take();
+      counted = 0;
+      await ingest([{ src: "OE3OVP", payload: POS_MOVED, ts: HOUR + 61 }]);
+      const t = meter.take();
+      expect(t.written).toEqual({ positions: 4, stations: 2, account_stations: 0 });
+      expect(total(t)).toBe(6);
+      // the budget's counter is handed exactly the rows D1 reports written
+      expect(counted).toBe(6);
+    } finally {
+      env = saved;
+    }
+  });
+});
+
 describe("D1 rows written by the nightly prune", () => {
   it("costs one written row per row it removes", async () => {
     // Ingest a known mix, then run the nightly job 31 days later, when every default retention has lapsed
