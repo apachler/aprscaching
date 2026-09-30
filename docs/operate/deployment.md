@@ -61,6 +61,10 @@ configuration and asks how people reach it:
 - **LAN / off-grid** — plain http on the local network, no internet needed; members sign in with the
   operator's [one-time link](first-hour.md#off-grid-sign-in).
 
+A licensed operator can also give the box a static 44.x address over a 44Net Connect WireGuard tunnel —
+reachable without port forwarding, even behind CGNAT — and publish its federation identity under
+`<call>.ampr.org`: see [Run an instance on 44Net](44net.md).
+
 A public box may put Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`, `TRUST_CF=1`). Oracle
 Cloud users can start the same stack with the
 [one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip).
