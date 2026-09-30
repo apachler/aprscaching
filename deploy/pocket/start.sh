@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Start the Pocket station in the tmux session `aprscaching`, or attach to it when it already runs.
-# Windows: gateway (servers/node) · ingest (apps/ingest) · logs (both log files) · shell. The gateway and
-# the ingest run under supervise.sh, which restarts either one after a short backoff when it exits and
-# writes its output to ~/.aprscaching/logs/. A wake lock keeps the phone's CPU running while Termux is
-# in the background (termux-wake-lock; stop.sh releases it).
+# Windows: gateway (servers/node) · ingest (apps/ingest) · tls (with https on, tls.sh --watch) · logs
+# (both log files) · shell. The gateway and the ingest run under supervise.sh, which restarts either one
+# after a short backoff when it exits and writes its output to ~/.aprscaching/logs/. A wake lock keeps
+# the phone's CPU running while Termux is in the background (termux-wake-lock; stop.sh releases it).
 #
 #   bash ~/aprscaching/deploy/pocket/start.sh
 #   bash ~/aprscaching/deploy/pocket/start.sh --no-attach --gateway-only
 #
-# In the session: Ctrl-b then a window number (0-3) switches windows, Ctrl-b d detaches and leaves the
+# In the session: Ctrl-b then a window number switches windows, Ctrl-b d detaches and leaves the
 # station running. stop.sh stops it.
 #
 # Options:
@@ -88,11 +88,23 @@ ensure_window() {
   fi
 }
 
+# https for visitors (tls.sh): the certificate must cover the current addresses before the gateway loads
+# it, and the window tls keeps it current while the station runs.
+HTTPS="$(tls_port)"
+if [ -n "$HTTPS" ]; then
+  APRSCACHING_DIR="$DIR" APRSCACHING_DATA="$DATA" bash "$HERE/tls.sh" --renew --quiet ||
+    warn "the https certificate could not be renewed; see: bash $HERE/tls.sh --renew"
+fi
+
 step "Starting the station (tmux session $SESSION)"
 already=0
 session_exists && already=1
 ensure_window gateway "$(supervised gateway)"
 if [ "$INGEST" -eq 1 ]; then ensure_window ingest "$(supervised ingest)"; fi
+if [ -n "$HTTPS" ]; then
+  ensure_window tls "$(printf 'APRSCACHING_DIR=%s APRSCACHING_DATA=%s bash %s --watch' \
+    "$(q "$DIR")" "$(q "$DATA")" "$(q "$HERE/tls.sh")")"
+fi
 ensure_window logs "$(logs_cmd)"
 ensure_window shell
 [ "$already" -eq 0 ] || info "the session was running; missing windows added"

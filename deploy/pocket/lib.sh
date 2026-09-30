@@ -19,6 +19,11 @@ pocket_paths() {
   ENV_FILE="$DATA/.env"
   LOG_DIR="$DATA/logs"
   RUN_DIR="$DATA/run"
+  # https for visitors: tls.sh keeps its CA and the station certificate here.
+  TLS_DIR="$DATA/tls"
+  TLS_CA="$TLS_DIR/ca.crt"
+  TLS_LEAF="$TLS_DIR/station.crt"
+  TLS_LEAF_KEY="$TLS_DIR/station.key"
 }
 pocket_paths
 
@@ -121,6 +126,40 @@ kind_of() {
   esac
 }
 
+# True for an RFC 1918 address (10/8, 172.16/12, 192.168/16): the only addresses the station's https
+# certificate names, and the only ones a visitor's sign-in link may name.
+is_private_ipv4() {
+  local a b
+  IFS=. read -r a b _ _ <<<"$1"
+  case "$a" in
+    10) return 0 ;;
+    172) [ "${b:-0}" -ge 16 ] && [ "${b:-0}" -le 31 ] ;;
+    192) [ "${b:-}" = 168 ] ;;
+    *) return 1 ;;
+  esac
+}
+# "name address" for every private address other devices can reach this phone at: the hotspot, a joined
+# Wi-Fi, tethering, Ethernet. Mobile data is left out: its address sits behind the carrier's NAT and
+# changes often.
+local_ipv4() {
+  local name cidr ip
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    ip="${cidr%%/*}"
+    case "$(kind_of "$name" "$ip")" in loopback | mobile) continue ;; esac
+    is_private_ipv4 "$ip" || continue
+    printf '%s %s\n' "$name" "$ip"
+  done < <(list_ipv4)
+}
+
+# ---- https for visitors -----------------------------------------------------------------------------
+# The https port while the .env runs the https listener on tls.sh's certificate; empty otherwise (off,
+# or a certificate the operator manages without tls.sh).
+tls_port() {
+  [ "$(env_get TLS_CERT)" = "$TLS_LEAF" ] || return 0
+  env_get HTTPS_PORT
+}
+
 # ---- per-process state: $RUN_DIR/<name>.state holds KEY=VALUE lines written by supervise.sh ---------
 state_file() { printf '%s/%s.state' "$RUN_DIR" "$1"; }
 state_get() {
@@ -156,17 +195,19 @@ human_duration() {
   if [ "$d" -gt 0 ]; then printf '%dd %02d:%02d:%02d' "$d" "$h" "$m" "$s"; else printf '%02d:%02d:%02d' "$h" "$m" "$s"; fi
 }
 
-# Restart the supervised processes at once (each supervisor restarts its process on USR1). Fails when
-# none is running.
+# Restart one supervised process at once (its supervisor restarts it on USR1). Fails when it does not run.
+restart_proc() {
+  local sup
+  sup="$(state_get "$1" supervisor)"
+  is_ours "$sup" supervise.sh || return 1
+  kill -USR1 "$sup"
+  info "$1: restarting"
+}
+# Restart every supervised process. Fails when none is running.
 restart_station() {
-  local name sup restarted=1
+  local name restarted=1
   for name in "${POCKET_PROCS[@]}"; do
-    sup="$(state_get "$name" supervisor)"
-    if is_ours "$sup" supervise.sh; then
-      kill -USR1 "$sup"
-      info "$name: restarting"
-      restarted=0
-    fi
+    if restart_proc "$name"; then restarted=0; fi
   done
   return "$restarted"
 }
