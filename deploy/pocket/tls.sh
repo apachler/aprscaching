@@ -69,7 +69,7 @@ CA_DAYS=3650
 
 say() { [ "$QUIET" -eq 1 ] || info "$@"; }
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing." "Run deploy/pocket/install.sh first; it writes that file."
-have openssl || die "openssl is missing." "Install it with:  pkg install openssl"
+have openssl || die "openssl is missing." "Install it with:  pkg install openssl-tool"
 
 # ---- .env edits: the last assignment wins, so a key is removed before it is written once at the end --
 env_unset() {
