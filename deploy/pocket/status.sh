@@ -184,6 +184,11 @@ if [ -n "$meshcom" ]; then
 else
   info "MeshCom ExtUDP: off (MESHCOM_NODE unset)"
 fi
+usbdev="$(env_get USB_KISS_DEVICE)"
+if [ -n "$usbdev" ]; then
+  if [ -f "$RUN_DIR/usb-kiss.tx" ]; then mode="TRANSMIT ENABLED (watchdog on)"; else mode="receive-only"; fi
+  info "USB KISS TNC: $usbdev, $(env_get USB_KISS_BAUD) baud, $mode; the ingest reads it at $(env_get KISS_TNC_HOST):$(env_get KISS_TNC_PORT)"
+fi
 aprsis="$(env_get APRSIS_HOST)"
 if [ -n "$aprsis" ]; then
   info "APRS-IS: $aprsis:$(env_get APRSIS_PORT) filter $(env_get APRSIS_FILTER) (needs a data connection)"

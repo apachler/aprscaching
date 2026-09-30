@@ -20,6 +20,8 @@ stops background apps, and battery and heat are real limits.
 | `extras/notify.sh` | the ongoing status notification with Stop, Restart and Open map (Termux:API); `start.sh` runs it |
 | `extras/battery.sh` | the battery saver: below `POCKET_BATTERY_LOW` % on battery, APRS-IS narrowed to your own call and a 2-hour raw log, back when charging or 10 points higher (Termux:API); `start.sh` runs it |
 | `extras/alerts.sh` | field alerts (off by default, `POCKET_ALERTS=1`): vibrate, and optionally speak the sender, for a new direct message to your call (Termux:API); `start.sh` runs it |
+| `extras/usb-kiss.sh` | a USB KISS TNC on OTG: `--list`, `--setup` (writes the `.env`), and the run loop `start.sh` keeps in the window `usb-kiss`; receive-only unless `USB_KISS_TX=1` and the operator's call is control-verified |
+| `extras/usb_kiss_bridge.py` | the bridge itself: libusb through `ctypes` on the fd `termux-usb` hands over, CDC-ACM, KISS over TCP on `127.0.0.1:8001` for one client, a transmit watchdog; `extras/test/` holds its tests |
 | `extras/setup.sh` | home-screen shortcuts (Termux:Widget) and a daily backup while charging (Termux:API); `--remove` |
 | `extras/scheduled-backup.sh` | the job the scheduled backup runs: battery above 50 %, `backup.sh`, the time for `status.sh` |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
