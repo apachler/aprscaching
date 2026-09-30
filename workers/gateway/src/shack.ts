@@ -10,6 +10,7 @@ import { json } from "./app.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";
+import { sessionIdentity } from "./auth.js";
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -120,13 +121,18 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
   const cs = callsign.toUpperCase();
   const st = await env.DB.prepare(
     `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
-            s.comment, s.last_seen AS lastSeen, a.roles AS roles
+            s.comment, s.last_seen AS lastSeen, a.roles AS roles, a.account_id AS owner
        FROM stations s LEFT JOIN account_stations a ON a.callsign = s.callsign WHERE s.callsign = ?`,
   )
     .bind(cs)
-    .first<{ roles: string | null }>();
+    .first<{ roles: string | null; owner: string | null }>();
   if (!st) return json({ error: "unknown station" }, { status: 404 });
-  const stRoles = rolesArr(st.roles);
+  const { owner, ...station } = st;
+  const stRoles = rolesArr(station.roles);
+  // Whether the station is in an operator's registry, and whether that registry is the viewer's own, so
+  // the panel offers "Add to my stations" only where adding can succeed. The owner's id never leaves.
+  const registered = owner != null;
+  const mine = registered && (await sessionIdentity(req, env))?.accountId === owner;
 
   const track = (
     await env.DB.prepare(
@@ -146,7 +152,9 @@ export async function handleStation(req: Request, env: Env, callsign: string): P
     .bind(cs)
     .first<{ n: number }>();
 
-  return json({ station: { ...st, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0 } });
+  return json({
+    station: { ...station, roles: stRoles, track, wx: wx ?? null, packets: pc?.n ?? 0, registered, mine },
+  });
 }
 
 /**
