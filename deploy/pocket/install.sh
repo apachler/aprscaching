@@ -44,7 +44,7 @@ NEXT_STEPS=1
 # The packages the steps below need. nodejs-lts ships corepack (the pinned pnpm) and headers node-gyp can
 # build against; clang brings lld and the llvm tools (ar, ld); python and make drive node-gyp. tmux,
 # openssh and termux-api serve running the station (a tmux session, ssh from a PC, battery status).
-PACKAGES=(nodejs-lts git python make clang curl tmux openssh termux-api)
+PACKAGES=(nodejs-lts git python make clang curl openssl-tool tmux openssh termux-api)
 
 usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; }
 

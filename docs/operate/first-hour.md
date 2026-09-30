@@ -96,7 +96,8 @@ How it is kept safe:
 A station that is its own Wi-Fi hotspot (a phone or a field box) keeps `APP_URL=http://localhost:8787`, so
 the owner signs in with a passkey on the station itself. Visitors join the hotspot and open the station
 over https: the Node server's own listener on `HTTPS_PORT`, with a certificate for the station's hotspot
-address ([configuration](../reference/configuration.md)). Their browser warns until they install the
+address ([configuration](../reference/configuration.md)); on a phone, `deploy/pocket/tls.sh` sets it all up and
+keeps the certificate current as the hotspot address changes. Their browser warns until they install the
 station's CA from `http://<station address>:8787/pocket-ca.crt`, or they click through the warning. Passkeys
 do not work at an IP address, so a visitor signs in with a one-time link the operator mints for their
 call:

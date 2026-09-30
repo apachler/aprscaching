@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Show the state of the Pocket station: the tmux session, the gateway and the ingest (running, uptime,
 # restarts), the gateway's /health, the networks it listens on with the URL other devices use on each
-# (the hotspot included), storage, and the battery. Changes nothing.
+# (the hotspot included, and its https URL when tls.sh turned https on), storage, and the battery.
+# Changes nothing.
 #
 #   bash ~/aprscaching/deploy/pocket/status.sh
 #
@@ -36,6 +37,7 @@ pocket_paths
 [ -f "$ENV_FILE" ] || warn "$ENV_FILE is missing: run deploy/pocket/install.sh first."
 PORT="$(gateway_port)"
 BASE="$(gateway_base)"
+HTTPS="$(tls_port)"
 NOW="$(date +%s)"
 
 human_bytes() { awk -v b="${1:-0}" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;while(b>=1024&&i<5){b/=1024;i++};printf (i==1?"%d %s":"%.1f %s"),b,u[i]}'; }
@@ -84,9 +86,12 @@ fi
 # ---- networks ----------------------------------------------------------------------------------------
 wifi_detect
 step "Networks (the gateway listens on every interface, port $PORT)"
-info "$(printf '%-12s %-19s %-28s %s' "this phone" "127.0.0.1" "http://localhost:$PORT" "a browser on the phone")"
+row() { info "$(printf '%-12s %-19s %-30s %s' "$@")"; }
+row "this phone" "127.0.0.1" "http://localhost:$PORT" "a browser on the phone"
 wlan_seen=0
 found=0
+hotspot_ip=""
+uncovered=""
 while read -r name cidr; do
   [ -n "${name:-}" ] || continue
   ip="${cidr%%/*}"
@@ -95,7 +100,7 @@ while read -r name cidr; do
   found=1
   url="http://$ip:$PORT"
   case "$kind" in
-    hotspot) note="hotspot: devices on it use this URL" ;;
+    hotspot) note="hotspot: devices on it use this URL"; [ -n "$hotspot_ip" ] || hotspot_ip="$ip" ;;
     wifi-client) note="Wi-Fi client${WIFI_SSID:+ of $WIFI_SSID}" ;;
     wlan) note="Wi-Fi (the hotspot, or a network this phone joined)"; wlan_seen=1 ;;
     usb-tether) note="USB tethering" ;;
@@ -108,7 +113,19 @@ while read -r name cidr; do
   if [ "$url" != "-" ]; then
     if health_ok "$url" 2; then note="answers; $note"; else note="no answer; $note"; fi
   fi
-  info "$(printf '%-12s %-19s %-28s %s' "$name" "$cidr" "$url" "$note")"
+  row "$name" "$cidr" "$url" "$note"
+  # The https URL: named by the certificate (tls.sh records the addresses it issued for), and checked
+  # against the station CA.
+  if [ -n "$HTTPS" ] && [ "$url" != "-" ] && is_private_ipv4 "$ip"; then
+    if ! grep -qxF "$ip" "$TLS_DIR/station.ips" 2>/dev/null; then
+      row "" "" "https://$ip:$HTTPS" "not in the certificate yet"
+      uncovered="$uncovered $ip"
+    elif curl -fsS -o /dev/null --max-time 2 --cacert "$TLS_CA" "https://$ip:$HTTPS/health" 2>/dev/null; then
+      row "" "" "https://$ip:$HTTPS" "answers with the station certificate"
+    else
+      row "" "" "https://$ip:$HTTPS" "no answer"
+    fi
+  fi
 done < <(list_ipv4)
 [ "$found" -eq 1 ] || info "no other interface found (ip and ifconfig gave no IPv4 address)"
 if [ -n "$WIFI_IP" ]; then
@@ -117,6 +134,28 @@ if [ -n "$WIFI_IP" ]; then
 elif [ "$wlan_seen" -eq 1 ]; then
   info "if a wlan address above belongs to a Wi-Fi network this phone joined, everyone on that network"
   info "can reach port $PORT (install Termux:API to tell a joined network from the hotspot)."
+fi
+
+# ---- https for visitors -----------------------------------------------------------------------------
+step "https for visitors"
+if [ -n "$HTTPS" ]; then
+  names="$(paste -sd ' ' "$TLS_DIR/station.ips" 2>/dev/null || true)"
+  until="$(openssl x509 -enddate -noout -in "$TLS_LEAF" 2>/dev/null | cut -d= -f2 || true)"
+  info "port $HTTPS; the certificate names ${names:-?}; valid until ${until:-?}"
+  if [ -n "$uncovered" ]; then
+    warn "the certificate does not name:$uncovered yet. The tls window adds a new address within 30 s;" \
+      "without it, run: bash $HERE/tls.sh --renew"
+  fi
+  if session_exists && ! tmux list-windows -t "=$SESSION" -F '#{window_name}' | grep -qxF tls; then
+    warn "no tls window: a new hotspot address is not added to the certificate until start.sh runs again"
+  fi
+  fp="$(openssl x509 -fingerprint -sha256 -noout -in "$TLS_CA" 2>/dev/null | cut -d= -f2 || true)"
+  info "visitors install the station CA from http://${hotspot_ip:-<hotspot address>}:$PORT/pocket-ca.crt"
+  info "(SHA-256 ${fp:-?}), or accept the browser's warning once"
+elif [ -n "$(env_get HTTPS_PORT)" ]; then
+  info "port $(env_get HTTPS_PORT), with a certificate tls.sh does not manage ($(env_get TLS_CERT))"
+else
+  info "off; turn it on with:  bash $HERE/tls.sh"
 fi
 
 # ---- ingest inputs -----------------------------------------------------------------------------------
@@ -168,3 +207,6 @@ fi
 step "Sign in"
 info "a browser on this phone: http://localhost:$PORT"
 info "without a passkey, a one-time link:  bash $HERE/signin-link.sh <CALL>"
+if [ -n "$HTTPS" ]; then
+  info "a visitor on the hotspot:  bash $HERE/signin-link.sh --hotspot <THEIR CALL>   (prints a QR code)"
+fi
