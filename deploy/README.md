@@ -1,7 +1,7 @@
 # deploy/
 
-Provisioning assets for the three deployment topologies — **desktop**, **self-host** and **Cloudflare**
-(below). Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
+Provisioning assets for the three deployment shapes — **Self-host** (recommended), **Desktop** and
+**Cloudflare split** (below). Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
 browser (Web Serial/BLE); the gateway/core is the variable.
 
 ## Files
@@ -12,22 +12,19 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 | `Dockerfile` | multi-arch (amd64+arm64) image for gateway + ingest |
 | `docker-compose.yml` | **Self-host** stack: gateway + ingest + Caddy |
 | `compose.home.yml` | self-host override: Cloudflare Tunnel ingress (no open ports) |
-| `compose.ingest-only.yml` | operator RF box → a remote gateway (the **Cloudflare** topology, or any gateway elsewhere) |
+| `compose.ingest-only.yml` | operator RF box → a remote gateway (the **Cloudflare split**, or any gateway elsewhere) |
 | `.env.example` | all config with sane defaults |
 | `Caddyfile` | TLS + SPA + reverse proxy |
 | `cloudflared/config.yml` | named-tunnel ingress (alternative to `TUNNEL_TOKEN`) |
 | `systemd/*.service` | bare-metal alternative to Docker |
 | `oci/main.tf`, `oci/schema.yaml`, `oci/cloud-init.yaml`, `oci/README-stack.md` | OCI one-click self-host stack (published per release by `scripts/build-oci-stack.sh`) |
-| `cloudflare/deploy-cf.sh` | **Cloudflare** one-shot (D1/R2/Worker/Pages) |
+| `cloudflare/deploy-cf.sh` | **Cloudflare split** one-shot (D1/R2/Worker/Pages) |
 | `cloudflare/cache-rules.sh` | self-host behind Cloudflare's CDN: cache/bypass rules |
-| `backup.sh` | SQLite snapshot → object storage (cron) |
+| `backup.sh` | SQLite snapshot → object storage (cron); the Cloudflare split uses D1 Time Travel instead |
 
-## Quick start per topology
+## Quick start per shape
 ```bash
-# Desktop (no Node/Docker): build executables for every OS from one machine
-bash desktop/build-exe.sh v1.0.0
-
-# Self-host (a Pi, mini-PC or VM): the wizard asks how people reach the box —
+# Self-host, recommended (a Pi, mini-PC or VM): the wizard asks how people reach the box —
 #   Caddy with TLS · a Cloudflare Tunnel · the LAN only (off-grid) — and prints the next commands
 ./setup.sh
 docker compose up -d --build                                            # Caddy with TLS, or LAN
@@ -35,7 +32,10 @@ docker compose -f docker-compose.yml -f compose.home.yml up -d --build  # Cloudf
 #   optional CDN in front of a public box: restrict 80/443 to Cloudflare's ranges, set TRUST_CF=1, then
 CF_API_TOKEN=… CF_ZONE_ID=… ./cloudflare/cache-rules.sh
 
-# Cloudflare (Worker + D1 + R2 + Pages) with the RF ingest on your own box
+# Desktop (no Node/Docker): build executables for every OS from one machine
+bash desktop/build-exe.sh v1.0.0
+
+# Cloudflare split (Worker + D1 + R2 + Pages) with the RF ingest on your own box
 ./cloudflare/deploy-cf.sh
 INGEST_URL=https://api.example.net/ingest docker compose -f compose.ingest-only.yml up -d --build
 ```
@@ -52,9 +52,18 @@ feed like this — the RF ingest itself always stays on the operator's own equip
 on a schedule.
 
 ## Backups
-- **Desktop and self-host (SQLite):** `backup.sh` takes a consistent `.backup` snapshot, gzips it, and
-  uploads to `BACKUP_DIR` / an OCI bucket / any S3-compatible endpoint (see `.env.example`). Cron it.
-- **Cloudflare (D1):** `backup.sh` does not apply — D1 is exported with
-  `wrangler d1 export aprscaching --remote --output backup-$(date +%F).sql` (cron it on any box with
-  a Cloudflare API token), and Cloudflare's D1 Time Travel provides 30-day point-in-time restore as
-  the second layer. R2 media should be replicated with `rclone` or an R2 lifecycle rule.
+- **Self-host and Desktop (SQLite):** `backup.sh` takes a consistent `.backup` snapshot, gzips it, and
+  uploads to `BACKUP_DIR` / an OCI bucket / any S3-compatible endpoint (see `.env.example`). Cron it, and
+  include `MEDIA_DIR` (uploaded cache media) in the host backup.
+- **Cloudflare split (D1 + R2):** `backup.sh` does not apply. D1 Time Travel is always on and restores the
+  database to any minute of the last 30 days on Workers Paid (7 days on Workers Free), per
+  https://developers.cloudflare.com/d1/reference/time-travel/ (checked 2026-09-30):
+  `npx wrangler d1 time-travel info aprscaching --timestamp=2026-09-29T03:00:00Z` shows the bookmark for a
+  moment, and `npx wrangler d1 time-travel restore aprscaching --timestamp=2026-09-29T03:00:00Z` restores it
+  (run from `workers/gateway`; it overwrites the database in place and prints the bookmark that undoes it).
+  For history beyond the window, cron
+  `npx wrangler d1 export aprscaching --remote --output backup-$(date +%F).sql` on any box with a Cloudflare
+  API token. R2 media (`aprscaching-media`) is not covered by Time Travel and needs its own plan — e.g. a
+  nightly `rclone sync` from R2's S3-compatible endpoint, or `npx wrangler r2 object get
+  aprscaching-media/<key> --remote --file <key>` for single objects. Details:
+  `docs/operate/deployment.md` → Backups.

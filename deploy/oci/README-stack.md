@@ -1,7 +1,7 @@
 # OCI one-click (Resource Manager stack)
 
 One Always-Free Ampere A1 VM running the all-in-one stack — gateway, ingest and Caddy — brought up by
-cloud-init. This is the self-host topology with the setup done for you.
+cloud-init. This is the Self-host shape with the setup done for you.
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
 

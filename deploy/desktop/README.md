@@ -1,4 +1,4 @@
-# deploy/desktop — single-binary desktop app (the desktop topology)
+# deploy/desktop — single-binary desktop app (the Desktop shape)
 
 A self-contained executable (built with `bun build --compile`) bundling the **gateway + SPA +
 optional local ingest**. Download one file, run it: it starts a local server, opens your browser,
@@ -70,4 +70,4 @@ Unsigned binaries trip macOS Gatekeeper and Windows SmartScreen.
 ## Caveats
 "One exe" = **one binary per OS/arch** (cross-built from a single machine), ~50–100 MB each (the Bun
 runtime is inside). The desktop app is a single-user local instance — for shared/always-on use, see
-the other topologies in `deploy/`.
+the Self-host and Cloudflare split shapes in `deploy/`.

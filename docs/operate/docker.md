@@ -2,7 +2,7 @@
 
 The `deploy/` directory ships a complete Docker stack: one multi-arch image (amd64 + arm64) that
 contains the Node gateway, the ingest, and the built web app, plus compose files for the common
-topologies. Everything below runs from a plain `git clone` — no host Node/pnpm install needed.
+deployment shapes. Everything below runs from a plain `git clone` — no host Node/pnpm install needed.
 
 ## The image
 
@@ -16,7 +16,7 @@ docker build -f deploy/Dockerfile -t aprscaching:local .
 
 ## Full stack (gateway + ingest + web + TLS)
 
-This is the [self-host](deployment.md#self-host) topology: one box, any VM, VPS, Pi or mini-PC.
+This is the [Self-host](deployment.md#self-host) shape — the recommended one: one box, any VM, VPS, Pi or mini-PC.
 
 ```bash
 cd deploy
@@ -80,7 +80,7 @@ on it.
 
 ### The operator RF box for a remote gateway
 
-In the [Cloudflare](deployment.md#cloudflare) topology — or beside any gateway on another host — only the
+In the [Cloudflare split](deployment.md#cloudflare-split) — or beside any gateway on another host — only the
 ingest runs locally (the RF ingest is always operator-local):
 
 ```bash
@@ -118,7 +118,8 @@ is only the container's own interface, and the published port exposes it on your
   gateway boot (forward-only, tracked in `_migrations`).
 - **Backup:** cron `deploy/backup.sh` — a consistent SQLite `.backup` snapshot, gzipped, uploaded
   to a directory / OCI bucket / any S3-compatible endpoint (see `deploy/.env.example`). It exits
-  non-zero if no destination is configured, so a misconfigured cron cannot silently no-op.
+  non-zero if no destination is configured, so a misconfigured cron cannot silently no-op. The
+  Cloudflare split backs up with D1 Time Travel instead — see [Backups](deployment.md#backups).
 - **Logs:** `docker compose logs -f gateway` (rotation is capped by the compose logging options).
 
 ## Standalone images

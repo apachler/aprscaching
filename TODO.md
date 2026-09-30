@@ -202,7 +202,7 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 - [ ] **Capacitor mobile shell** *(P3 · L)* — reuse the web app in a native iOS/Android wrapper for
   USB-serial / BLE-KISS and background operation. A build/sign/store pipeline, not a headless code core.
-  The deployment topologies it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).
+  The deployment shapes it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).
 
 ## Growth & community (owner-decided slate; keeps the game-first orientation and the open/recognition-only style)
 
@@ -618,6 +618,23 @@ lands with a regression test that fails without it.
 - [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
   key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
   signatures, and a "Running federation safely" guide.
+- [ ] **Federation safe-mode defaults in `setup.sh` and the one-click stacks** *(P2 · S)* — the gateway's
+  own defaults are already safe: discovery off, `FED_AUTO_PROMOTE=0`, `FED_CORROBORATION_QUORUM=2`, a
+  registry refused without a pinned `FED_REGISTRY_KEY`, and 44net peers admitted `unvetted`. What the
+  provisioning still lacks is to write that posture out: `deploy/setup.sh`, the OCI stack and
+  `deploy/.env.example` set only `FED_PRIVATE_KEY`, so a sysop never sees the knobs, and enabling a hub
+  (`FED_SUBMIT_SECRET`) leaves `FED_SUBMIT_INSTANCES` at "any non-self". The wizard and the stacks write
+  discovery off, auto-promotion off, quorum ≥ 2 and an explicit `FED_SUBMIT_INSTANCES` whenever the hub is
+  on, ask for the registry authority key before any `FED_REGISTRY`/`FED_REGISTRY_DNS`, and never place a
+  44net peer in `FED_PEERS` (which starts `trusted`). Waits for the next federation-hardening round, so the
+  written defaults match its final settings. See
+  [`docs/reference/federation-operations.md`](docs/reference/federation-operations.md#running-federation-safely).
+- [ ] **Self-host recipe on a 44net/HAMNET address** *(P3 · S)* — a Self-host walkthrough for a box reached
+  on amateur IP space: plain HTTP inside the network (no public TLS), what federation signatures protect
+  (record origin and integrity, corroboration answers bound to their question) and what they do not (a
+  confidential channel, or a find's Tier A — that still needs the corroboration quorum), and onboarding
+  peers through the `_aprscaching.<call>.ampr.org` DNS TXT record. Follows the safe-mode defaults above and belongs with the
+  44net/HAMNET networking work that follows them.
 
 ## Federation over RF (the wire contracts are in; the bindings land in this order)
 
@@ -688,7 +705,7 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
 
 ## Deferred by design (reserved seams, opened on demand)
 
-- [ ] **CI depth & deploy topologies** (next release) — boot the `deploy/` compose topologies in CI
+- [ ] **CI depth & deployment shapes** (next release) — boot the `deploy/` compose stacks in CI
   (full stack + ingest-only: `docker compose up`, wait for the gateway healthcheck, smoke `/health`
   + the SPA) beyond the current tri-runtime conformance (Node / Worker / Bun), and exercise the
   federation push-to-hub **rendezvous relay's** corroboration path. Also: full telnet-mode FBB
