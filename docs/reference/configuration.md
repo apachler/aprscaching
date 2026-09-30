@@ -64,6 +64,8 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `FED_CORROBORATION_REQUIRE_KNOWN` | `1`: answer corroboration questions only from known, non-blocked peers (verified by their key) | off |
 | `FED_REVEAL_IGATE` | Include the exact IGate in corroboration answers, and accept it in answers received (both peers opt in) | off |
 | `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays`, `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default | `24` h / `7` / `30` / `7` / `30` / `7` d |
+| `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](../operate/deployment.md#cost-on-d1). `0` stores every fix | `25` |
+| `POS_MIN_INTERVAL_S` | Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix | `600` |
 
 ## Gateway — federation
 

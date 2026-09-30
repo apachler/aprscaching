@@ -65,6 +65,10 @@ const ENV_STRING_KEYS = [
   // ---- retention of the diagnostic/telemetry tables (JSON; see retention.ts) ----
   "RETENTION",
 
+  // ---- position storage: a fix is stored once its station moved or time passed (see downsample.ts) ----
+  "POS_MIN_MOVE_M", // metres moved since the station's last stored fix (default 25; 0 stores every fix)
+  "POS_MIN_INTERVAL_S", // seconds since the station's last stored fix (default 600; 0 stores every fix)
+
   // ---- callsign verification ----
   "DOH_URL", // validating DNS-over-HTTPS resolver for 44net peer onboarding and the ampr.org DNSSEC check (default cloudflare-dns.com; must return the DNSSEC AD flag)
   "AMPR_DNS_RESOLVERS", // comma-separated independent DoH resolvers (JSON API) that must agree on an unsigned ampr.org answer (default Cloudflare, Google, Quad9)
