@@ -9,6 +9,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
+import { lastSeenLagS } from "./downsample.js";
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -58,6 +59,9 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 7 * 86400);
   const limit = Math.min(Math.max(Number(u.searchParams.get("limit") ?? 500) || 500, 1), 2000);
   const bb = bbox(u);
+  // a stationary station's last_seen refreshes once per position-storage interval (downsample.ts):
+  // the window reaches back that much further, so a station still beaconing is never dropped from it
+  const since = nowS() - maxAge - lastSeenLagS(env);
   const rows = (
     await env.DB.prepare(
       `SELECT s.callsign, s.lat, s.lon, s.symbol, s.course, s.speed_kn AS speedKn, s.altitude_m AS altitudeM,
@@ -66,7 +70,7 @@ export async function handleStations(req: Request, env: Env): Promise<Response> 
       WHERE s.lat IS NOT NULL AND s.last_seen >= ?${bb.sql}
       ORDER BY s.last_seen DESC LIMIT ?`,
     )
-      .bind(nowS() - maxAge, ...bb.binds, limit)
+      .bind(since, ...bb.binds, limit)
       .all<{ roles: string | null }>()
   ).results;
   return json({ stations: rows.map((r) => ({ ...r, roles: rolesArr(r.roles) })) });

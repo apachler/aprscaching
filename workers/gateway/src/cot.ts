@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * cot.ts — M6 interop: a Cursor-on-Target (CoT) bridge so TAK clients (ATAK/WinTAK/iTAK) can
+ * cot.ts — interop: a Cursor-on-Target (CoT) bridge so TAK clients (ATAK/WinTAK/iTAK) can
  * consume our live APRS station registry. CoT is an open MITRE schema; we map each station to an
  * <event> and return a snapshot <events> document over a bbox. Pure builder + a thin handler so the
  * mapping is conformance-tested on both runtimes.
@@ -8,6 +8,7 @@
 import { nowS } from "./util/time.js";
 import { escapeHtml } from "./util/html.js";
 import type { Env } from "./env.js";
+import { lastSeenLagS } from "./downsample.js";
 
 interface CotStation {
   callsign: string;
@@ -58,8 +59,18 @@ export function cotType(symbol: string | null): string {
   }
 }
 
+/** How long a station stays live on a TAK map after its last beacon. */
+const COT_STALE_SEC = 300;
+
+/**
+ * The stale span for this instance: a stationary station's `last_seen` refreshes only once per
+ * position-storage interval (downsample.ts), so the span adds that interval — a station beaconing
+ * steadily never goes stale between two stored fixes.
+ */
+const staleSecFor = (env: Env) => COT_STALE_SEC + lastSeenLagS(env);
+
 /** Build a single CoT <event> for a station. `now` = current unix seconds. */
-export function stationToCotEvent(s: CotStation, now: number, staleSec = 300): string {
+export function stationToCotEvent(s: CotStation, now: number, staleSec = COT_STALE_SEC): string {
   const hae = s.altitudeM != null ? s.altitudeM.toFixed(1) : UNK.toFixed(1);
   const detail: string[] = [`<contact callsign="${escapeHtml(s.callsign)}"/>`];
   if (s.course != null || s.speedKn != null)
@@ -115,8 +126,9 @@ async function cotStations(
 export async function handleCot(req: Request, env: Env, now: number): Promise<Response> {
   const u = new URL(req.url);
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 86400);
-  const rows = await cotStations(env, "last_seen >= ?", now - maxAge, parseBbox(u), "DESC", 2000);
-  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<events>${rows.map((r) => stationToCotEvent(r, now)).join("")}</events>`;
+  const rows = await cotStations(env, "last_seen >= ?", now - maxAge - lastSeenLagS(env), parseBbox(u), "DESC", 2000);
+  const stale = staleSecFor(env);
+  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<events>${rows.map((r) => stationToCotEvent(r, now, stale)).join("")}</events>`;
   return new Response(body, { headers: { "content-type": "application/xml; charset=utf-8" } });
 }
 
@@ -139,6 +151,7 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
   const u = new URL(req.url);
   const bbox = parseBbox(u);
   const maxAge = Math.min(Math.max(Number(u.searchParams.get("maxAge") ?? 3600) || 3600, 60), 86400);
+  const stale = staleSecFor(env);
   const enc = new TextEncoder();
   let closed = false;
   const stop = () => {
@@ -158,8 +171,8 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
       void (async () => {
         const startedMs = Date.now();
         // snapshot of currently-active stations
-        const snap = await cotStations(env, "last_seen >= ?", now - maxAge, bbox, "DESC", 2000);
-        for (const r of snap) send(`event: cot\ndata: ${stationToCotEvent(r, now)}\n\n`);
+        const snap = await cotStations(env, "last_seen >= ?", now - maxAge - lastSeenLagS(env), bbox, "DESC", 2000);
+        for (const r of snap) send(`event: cot\ndata: ${stationToCotEvent(r, now, stale)}\n\n`);
         send(`: snapshot ${snap.length}\n\n`);
         let cursor = now; // deltas = stations heard strictly after connect
         while (!closed && Date.now() - startedMs < COT_STREAM_MAX_MS) {
@@ -168,7 +181,7 @@ export function handleCotStream(req: Request, env: Env, now: number): Response {
           const tick = nowS();
           const rows = await cotStations(env, "last_seen > ?", cursor, bbox, "ASC", 500);
           for (const r of rows) {
-            send(`event: cot\ndata: ${stationToCotEvent(r, tick)}\n\n`);
+            send(`event: cot\ndata: ${stationToCotEvent(r, tick, stale)}\n\n`);
             if (r.lastSeen > cursor) cursor = r.lastSeen;
           }
           send(`: ping ${tick}\n\n`);

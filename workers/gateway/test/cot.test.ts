@@ -3,7 +3,7 @@
 // SSE push feed which streams the current snapshot then pushes deltas. The stream is a ReadableStream
 // (Workers/Bun stream it natively; the Node shell pipes text/event-stream) so we can read it here.
 import { describe, it, expect } from "vitest";
-import { stationToCotEvent, cotType, handleCotStream } from "../src/cot.js";
+import { stationToCotEvent, cotType, handleCot, handleCotStream } from "../src/cot.js";
 import type { Env } from "../src/env.js";
 
 const station = (over: Record<string, unknown> = {}) => ({
@@ -36,10 +36,33 @@ describe("CoT event builder", () => {
     expect(xml).not.toContain("</detail></detail>");
   });
 
+  it("a station stays live on TAK until its next stored beacon is due", () => {
+    const stale = (xml: string) => /stale="([^"]+)"/.exec(xml)![1];
+    expect(stale(stationToCotEvent(station(), 2000))).toBe(new Date((1000 + 300) * 1000).toISOString());
+    expect(stale(stationToCotEvent(station(), 2000, 900))).toBe(new Date((1000 + 900) * 1000).toISOString());
+  });
+
   it("maps symbols to coarse CoT types", () => {
     expect(cotType("/_")).toBe("a-f-G-I-U-T"); // weather
     expect(cotType("/O")).toBe("a-f-A"); // aircraft (balloon)
     expect(cotType(null)).toBe("a-f-G-U-C"); // generic friendly
+  });
+});
+
+describe("CoT snapshot (/api/cot)", () => {
+  const db = {
+    prepare: () => ({ bind: () => ({ all: async () => ({ results: [station()] }) }) }),
+  };
+  const stale = async (extra: Record<string, string>) => {
+    const res = await handleCot(new Request("http://gw/api/cot"), { DB: db, ...extra } as unknown as Env, 2000);
+    return /stale="([^"]+)"/.exec(await res.text())![1];
+  };
+  const at = (s: number) => new Date(s * 1000).toISOString();
+
+  it("allows for the position-storage interval: a stationary station's last_seen trails its beacons by up to it", async () => {
+    expect(await stale({})).toBe(at(1000 + 300 + 600));
+    expect(await stale({ POS_MIN_INTERVAL_S: "1200" })).toBe(at(1000 + 300 + 1200));
+    expect(await stale({ POS_MIN_INTERVAL_S: "0" })).toBe(at(1000 + 300));
   });
 });
 

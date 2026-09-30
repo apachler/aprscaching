@@ -10,16 +10,27 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { requireIngestOrOperator } from "./admin.js";
 
-/** Upsert a per-port MHeard entry (best-effort; called from ingest). */
+/**
+ * Upsert the per-port MHeard entries for a batch (best-effort; called from ingest). A station heard
+ * several times on one port in the batch is one upsert that adds all its hearings to the count.
+ */
 export async function recordMheard(env: Env, calls: { src: string; port: string }[]): Promise<void> {
   if (!calls.length) return;
   const ts = nowS();
+  const heard = new Map<string, { callsign: string; port: string; n: number }>();
+  for (const c of calls) {
+    const callsign = c.src.toUpperCase();
+    const key = `${callsign}\n${c.port}`;
+    const h = heard.get(key);
+    if (h) h.n++;
+    else heard.set(key, { callsign, port: c.port, n: 1 });
+  }
   await env.DB.batch(
-    calls.map((c) =>
+    [...heard.values()].map((h) =>
       env.DB.prepare(
-        `INSERT INTO node_mheard (callsign, port, last_heard, count) VALUES (?,?,?,1)
-       ON CONFLICT(callsign, port) DO UPDATE SET last_heard=excluded.last_heard, count=count+1`,
-      ).bind(c.src.toUpperCase(), c.port, ts),
+        `INSERT INTO node_mheard (callsign, port, last_heard, count) VALUES (?,?,?,?)
+       ON CONFLICT(callsign, port) DO UPDATE SET last_heard=excluded.last_heard, count=count+excluded.count`,
+      ).bind(h.callsign, h.port, ts, h.n),
     ),
   );
 }

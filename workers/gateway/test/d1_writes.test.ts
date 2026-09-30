@@ -15,11 +15,13 @@
  *    positions, messages);
  *  - on an UPDATE or an upsert that updates, the row plus each index whose columns the SET list names,
  *    whether or not the value changed;
- *  - an UPDATE that matches nothing costs nothing.
+ *  - an UPDATE that matches nothing costs nothing, and so does an upsert whose DO UPDATE ... WHERE is false.
  * A DELETE reports one row per deleted row: the index entries it removes are not counted.
  *
  * Each packet kind is measured in steady state (the station, the port and the hourly counter bucket
  * already exist, which is the common case on a live feed); a first-heard station is measured separately.
+ * The measured packet follows the warm-up one by a second, so a fix from a station nothing protects that
+ * has not moved is not stored (downsample.ts); the cases say which fixes are stored and why.
  * The rows written by BBS delivery, watch alerts, rendezvous and radio commands depend on held mail,
  * watchers and opted-in caches; none exist here, so those paths read and write nothing.
  */
@@ -143,11 +145,11 @@ async function ingest(packets: Pkt[]): Promise<void> {
   expect(res.status).toBe(200);
 }
 
-/** Ingest once to warm the station, port and bucket, then measure a second, later packet of the same kind. */
-async function steady(first: Pkt[], again: Pkt[] = first): Promise<Tally> {
+/** Ingest once to warm the station, port and bucket, then measure a later packet of the same kind. */
+async function steady(first: Pkt[], again: Pkt[] = first, after = 1): Promise<Tally> {
   await ingest(first);
   meter.take();
-  await ingest(again.map((p) => ({ ...p, ts: (p.ts ?? HOUR + 60) + 1 })));
+  await ingest(again.map((p) => ({ ...p, ts: (p.ts ?? HOUR + 60) + after })));
   return meter.take();
 }
 
@@ -191,17 +193,23 @@ const POS = "!4704.41N/01526.27E>mobile";
 const POS_MOVED = "!4704.61N/01526.57E>mobile";
 
 describe("D1 rows written per ingested packet", () => {
-  it("a position fix from a station heard before", async () => {
+  it("a position fix from a station that has not moved is not stored", async () => {
     const t = await steady([{ src: "OE3POS", payload: POS }]);
+    expect(t.written).toEqual({ packets_recent: 4, node_mheard: 2, port_stats: 1 });
+    expect(total(t)).toBe(7);
+  });
+
+  it("a position fix from a station that has not moved, once the interval has passed", async () => {
+    const t = await steady([{ src: "OE3INT", payload: POS }], undefined, 600);
     expect(t.written).toEqual({
       packets_recent: 4,
       positions: 4,
-      stations: 2,
+      stations: 1,
       account_stations: 0,
       node_mheard: 2,
       port_stats: 1,
     });
-    expect(total(t)).toBe(13);
+    expect(total(t)).toBe(12);
   });
 
   it("a position fix from a moving station", async () => {
@@ -217,13 +225,62 @@ describe("D1 rows written per ingested packet", () => {
     expect(total(t)).toBe(13);
   });
 
-  it("a position fix from a registered logger station", async () => {
+  it("a position fix heard directly on RF, from a station that has not moved", async () => {
+    const t = await steady([{ src: "OE3RF", payload: POS, port: "kiss-tnc" }]);
+    expect(t.written).toEqual({
+      packets_recent: 4,
+      positions: 4,
+      stations: 1,
+      account_stations: 0,
+      node_mheard: 2,
+      port_stats: 1,
+    });
+    expect(total(t)).toBe(12);
+  });
+
+  it("a position fix from a protected station that has not moved", async () => {
+    await raw
+      .prepare(
+        "INSERT INTO account_callsigns (account_id, callsign, is_primary, added_at) VALUES ('acct-2','OE3ACC',1,1)",
+      )
+      .run();
+    const t = await steady([{ src: "OE3ACC-9", payload: POS }]);
+    expect(t.written).toEqual({
+      packets_recent: 4,
+      positions: 4,
+      stations: 1,
+      account_stations: 0,
+      node_mheard: 2,
+      port_stats: 1,
+    });
+    expect(total(t)).toBe(12);
+  });
+
+  it("a position fix from a registered station that has not moved leaves its registry row alone", async () => {
     await raw
       .prepare(
         "INSERT INTO account_stations (account_id, callsign, lat, lon, created_at, updated_at) VALUES ('acct-1','OE3LOG',47,15,1,1)",
       )
       .run();
     const t = await steady([{ src: "OE3LOG", payload: POS }]);
+    expect(t.written).toEqual({
+      packets_recent: 4,
+      positions: 4,
+      stations: 1,
+      account_stations: 0,
+      node_mheard: 2,
+      port_stats: 1,
+    });
+    expect(total(t)).toBe(12);
+  });
+
+  it("a position fix that moves a registered station updates its registry row", async () => {
+    await raw
+      .prepare(
+        "INSERT INTO account_stations (account_id, callsign, lat, lon, created_at, updated_at) VALUES ('acct-1','OE3LGM',47,15,1,1)",
+      )
+      .run();
+    const t = await steady([{ src: "OE3LGM", payload: POS }], [{ src: "OE3LGM", payload: POS_MOVED }]);
     expect(t.written).toEqual({
       packets_recent: 4,
       positions: 4,
@@ -263,20 +320,12 @@ describe("D1 rows written per ingested packet", () => {
     expect(total(t)).toBe(9);
   });
 
-  it("a weather report with a position", async () => {
+  it("a weather report with a position, from a station that has not moved", async () => {
     const t = await steady([
       { src: "OE3WXP", payload: "@092345z4704.41N/01526.27E_220/004g005t077r000p000P000h50b09900" },
     ]);
-    expect(t.written).toEqual({
-      packets_recent: 4,
-      sensor_readings: 2,
-      positions: 4,
-      stations: 2,
-      account_stations: 0,
-      node_mheard: 2,
-      port_stats: 1,
-    });
-    expect(total(t)).toBe(15);
+    expect(t.written).toEqual({ packets_recent: 4, sensor_readings: 2, node_mheard: 2, port_stats: 1 });
+    expect(total(t)).toBe(9);
   });
 
   it("a telemetry frame", async () => {
@@ -299,16 +348,28 @@ describe("D1 rows written per ingested packet", () => {
       { src: "OE3BD", payload: POS, port: "kiss-tnc" },
       { src: "OE3BE", payload: "T#005,199,000,255,073,123,01100001", port: "kiss-tnc" },
     ];
+    // the three fixes have not moved: the two APRS-IS ones are not stored, the TNC hearing is
     const t = await steady(batch);
     expect(t.written).toEqual({
       packets_recent: 20,
-      positions: 12,
-      stations: 6,
+      positions: 4,
+      stations: 1,
       account_stations: 0,
       node_mheard: 10,
       port_stats: 2,
     });
-    expect(total(t)).toBe(50);
+    expect(total(t)).toBe(37);
+  });
+
+  it("a station heard twice in one batch counts once in MHeard", async () => {
+    const t = await steady([
+      { src: "OE3TWO", payload: ">on the air" },
+      { src: "OE3TWO", payload: ">still on the air" },
+    ]);
+    expect(t.written).toEqual({ packets_recent: 8, node_mheard: 2, port_stats: 1 });
+    expect(total(t)).toBe(11);
+    const row = await raw.prepare("SELECT count FROM node_mheard WHERE callsign = 'OE3TWO'").first<{ count: number }>();
+    expect(row?.count).toBe(4);
   });
 });
 

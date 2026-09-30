@@ -38,5 +38,9 @@ crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-s
 # For local `wrangler dev`, put both in workers/gateway/.dev.vars (gitignored).
 INSTANCE = "aprscaching.local"   # canonical federation instance id (use your domain in prod)
 # FED_PEERS = "https://peer.example/"          # advertised peer instances
+# Position storage (docs/operate/deployment.md "Cost on D1"): a fix is stored once its station moved this many
+# metres or this many seconds passed; protected stations and RF hearings are always stored. 0 stores every fix.
+# POS_MIN_MOVE_M = "25"
+# POS_MIN_INTERVAL_S = "600"
 # Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
 #   wrangler secret put FED_PRIVATE_KEY

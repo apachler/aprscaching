@@ -15,8 +15,15 @@ import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, serviceCall, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 import { transportForPort } from "./provenance.js";
-
-/** Base call (no SSID, no digipeat `*`), uppercased — the licence identity behind a callsign. */
+import {
+  downsamplePolicy,
+  heardDirectly,
+  lastStoredFixes,
+  protectedStations,
+  worthStoring,
+  type StoredFix,
+} from "./downsample.js";
+import type { Transport } from "@aprscaching/shared";
 
 /** Position-bearing decoded data (position/object/item/weather with a fix). */
 function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
@@ -83,7 +90,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const packets = signerBase ? body.data.packets.filter((p) => baseCall(p.src) === signerBase) : body.data.packets;
 
   const stmts: SqlStatement[] = [];
+  // every fix heard, for the live fan-out and the per-station hooks; `fixes` decides what is persisted
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
+  const fixes: { p: (typeof packets)[number]; fix: NonNullable<ReturnType<typeof fixOf>>; transport: Transport }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
@@ -157,6 +166,34 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const fix = fixOf(p);
     if (!fix) continue;
     positions.push({ src: p.src, lat: fix.lat, lon: fix.lon, symbol: fix.symbol, course: fix.course });
+    fixes.push({ p, fix, transport: transportForPort(p.port, signer != null) });
+  }
+
+  // Which fixes to persist: a directly heard RF fix and every fix of a protected station always; any
+  // other fix once its station has moved or the interval has passed (downsample.ts). A fix that is not
+  // stored still reaches the live map, watch alerts, rendezvous and BBS delivery below.
+  // If the protection or last-fix read fails, every fix is stored: a lookup error never costs a fix.
+  const policy = downsamplePolicy(env);
+  let thinned = new Set<(typeof fixes)[number]>();
+  let lastStored = new Map<string, StoredFix>();
+  if (policy.enabled) {
+    try {
+      const thinnable = fixes.filter((f) => !heardDirectly(f.p.heardVia, f.transport));
+      const shielded = await protectedStations(env, [...new Set(thinnable.map((f) => baseCall(f.p.src)))], now);
+      const open = thinnable.filter((f) => !shielded.has(baseCall(f.p.src)));
+      lastStored = await lastStoredFixes(env, [...new Set(open.map((f) => f.p.src))]);
+      thinned = new Set(open);
+    } catch (e) {
+      console.error("position storage lookup:", (e as Error).message);
+      thinned = new Set();
+    }
+  }
+  let persisted = 0;
+  for (const f of fixes) {
+    const { p, fix } = f;
+    if (thinned.has(f) && !worthStoring(lastStored.get(p.src), { ...fix, ts: p.ts }, policy)) continue;
+    lastStored.set(p.src, { lat: fix.lat, lon: fix.lon, ts: p.ts }); // later fixes in this batch compare with it
+    persisted++;
     // A signed browser batch may NOT assert an independent IGate (no self-corroboration to Tier A),
     // so its fixes are stored IGate-less + tagged 'browser-rf'; trusted backends keep their IGate.
     const igate = trusted ? (p.igateCall ?? null) : null;
@@ -177,7 +214,27 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.speedKn ?? null,
         fix.altitudeM ?? null,
         fix.course ?? null,
-        transportForPort(p.port, signer != null),
+        f.transport,
+      ),
+    );
+    // The station row in two statements, so a station that has not moved never rewrites its geo index:
+    // the UPDATE refreshes an unmoved row without naming lat/lon, and the upsert inserts a new station or
+    // moves one whose position changed (its WHERE skips an unmoved row). Exactly one of them writes.
+    stmts.push(
+      env.DB.prepare(
+        `UPDATE stations SET last_seen = ?, symbol = ?, course = ?, speed_kn = ?, altitude_m = ?,
+           comment = COALESCE(?, comment)
+         WHERE callsign = ? AND lat IS ? AND lon IS ?`,
+      ).bind(
+        p.ts,
+        fix.symbol ?? null,
+        fix.course ?? null,
+        fix.speedKn ?? null,
+        fix.altitudeM ?? null,
+        fix.comment ?? null,
+        p.src,
+        fix.lat,
+        fix.lon,
       ),
     );
     stmts.push(
@@ -186,7 +243,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
          VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(callsign) DO UPDATE SET lat=excluded.lat, lon=excluded.lon, last_seen=excluded.last_seen,
            symbol=excluded.symbol, course=excluded.course, speed_kn=excluded.speed_kn,
-           altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)`,
+           altitude_m=excluded.altitude_m, comment=COALESCE(excluded.comment, stations.comment)
+         WHERE stations.lat IS NOT excluded.lat OR stations.lon IS NOT excluded.lon`,
       ).bind(
         p.src,
         fix.lat,
@@ -201,14 +259,11 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ),
     );
     // Keep a registered operated-station's location live: if this callsign is in someone's registry,
-    // an APRS position fix updates its stored coordinates.
+    // an APRS position fix that moves it updates its stored coordinates (an unmoved one writes nothing).
     stmts.push(
-      env.DB.prepare("UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ?").bind(
-        fix.lat,
-        fix.lon,
-        p.ts,
-        p.src,
-      ),
+      env.DB.prepare(
+        "UPDATE account_stations SET lat = ?, lon = ?, updated_at = ? WHERE callsign = ? AND (lat IS NOT ? OR lon IS NOT ?)",
+      ).bind(fix.lat, fix.lon, p.ts, p.src, fix.lat, fix.lon),
     );
   }
   // per-transport RX counters, bucketed by hour (port_stats)
@@ -272,5 +327,6 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   for (const p of positions) envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course));
   await dispatchLive(env, envelopes);
 
-  return json({ ok: true, stored: positions.length });
+  // `stored` counts the fixes accepted (live, watch, rendezvous); `persisted` those written to positions
+  return json({ ok: true, stored: positions.length, persisted });
 }
