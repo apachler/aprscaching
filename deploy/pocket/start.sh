@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start the Pocket station in the tmux session `aprscaching`, or attach to it when it already runs.
-# Windows: gateway (servers/node) · ingest (apps/ingest) · tls (with https on, tls.sh --watch) · logs
-# (both log files) · shell. The gateway and the ingest run under supervise.sh, which restarts either one
+# Windows: gateway (servers/node) · ingest (apps/ingest) · tls (with https on, tls.sh --watch) · notify
+# (with Termux:API, extras/notify.sh) · logs (both log files) · shell. The gateway and the ingest run under supervise.sh, which restarts either one
 # after a short backoff when it exits and writes its output to ~/.aprscaching/logs/. A wake lock keeps
 # the phone's CPU running while Termux is in the background (termux-wake-lock; stop.sh releases it).
 #
@@ -104,6 +104,13 @@ if [ "$INGEST" -eq 1 ]; then ensure_window ingest "$(supervised ingest)"; fi
 if [ -n "$HTTPS" ]; then
   ensure_window tls "$(printf 'APRSCACHING_DIR=%s APRSCACHING_DATA=%s bash %s --watch' \
     "$(q "$DIR")" "$(q "$DATA")" "$(q "$HERE/tls.sh")")"
+fi
+# The station notification (extras/notify.sh) when the Termux:API app answers.
+if have termux-notification && termux_api_ready; then
+  ensure_window notify "$(printf 'APRSCACHING_DIR=%s APRSCACHING_DATA=%s bash %s' \
+    "$(q "$DIR")" "$(q "$DATA")" "$(q "$HERE/extras/notify.sh")")"
+elif ! session_exists || ! tmux list-windows -t "=$SESSION" -F '#{window_name}' | grep -qxF notify; then
+  termux_api_hint "the station notification"
 fi
 ensure_window logs "$(logs_cmd)"
 ensure_window shell

@@ -30,6 +30,7 @@
     "./adoption": "./src/adoption.ts",
     "./rooms-core": "./src/rooms-core.ts",
     "./budget": "./src/budget.ts",
+    "./station_status": "./src/station_status.ts",
     "./migrate": "./src/migrate.ts"
   },
   "scripts": {

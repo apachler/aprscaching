@@ -89,6 +89,32 @@ termux_api() {
   if have timeout; then timeout 8 "$@" 2>/dev/null; else "$@" 2>/dev/null; fi
 }
 
+# Whether the Termux:API app answers: the package's commands exist and the app replies in time (a missing
+# app, or one never opened since install, leaves them hanging). Checked once per script run.
+TERMUX_API_STATE=""
+termux_api_ready() {
+  if [ -z "$TERMUX_API_STATE" ]; then
+    if [ -n "$(termux_api termux-battery-status)" ]; then TERMUX_API_STATE=yes; else TERMUX_API_STATE=no; fi
+  fi
+  [ "$TERMUX_API_STATE" = yes ]
+}
+# The one line a script prints when a feature needs Termux:API and it is not there.
+termux_api_hint() {
+  info "$1: needs the Termux:API app (from the same source as Termux: F-Droid or GitHub) and" \
+    "pkg install termux-api"
+}
+
+# GET the operator's station summary (/api/admin/station-status) from the local gateway, with the
+# OPERATOR_SECRET from the .env; empty output when the gateway does not answer.
+station_status() {
+  local secret
+  secret="$(env_get OPERATOR_SECRET)"
+  [ -n "$secret" ] || return 1
+  # The header comes from a file descriptor, so the secret never shows in the process list.
+  curl -fsS --max-time 5 -H @<(printf 'x-operator-secret: %s\n' "$secret") \
+    "$(gateway_base)/api/admin/station-status${1:+?since=$1}" 2>/dev/null
+}
+
 # ---- networks ----------------------------------------------------------------------------------------
 # One field of a JSON object on stdin (node is always there; jq may not be).
 json_field() {
