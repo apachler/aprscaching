@@ -45,7 +45,7 @@ const MAX_DISCOVERED = 200;
  * at most some pages of each. It limits how far one pass reads, never what later passes see: a skipped
  * feed keeps its cursor, and a capped feed carries on from where it stopped.
  */
-export interface PullOptions {
+interface PullOptions {
   /** Feed types to pull. Deletes (tombstones) always come too, so a narrowed pull never misses one. */
   types?: string[];
   /** Pages per feed, 1 to MAX_PAGES. */
