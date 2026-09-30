@@ -44,7 +44,9 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
 (`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;
-`0` disables scheduled peer sync). The desktop app also reads `HOST` (`127.0.0.1`; set `0.0.0.0` or a LAN
+`0` disables scheduled peer sync). The Node server also reads `WEB_DIST`: the built web app
+(`apps/web/dist`), which it then serves on the same origin as the API, for a box with no reverse proxy in front.
+The desktop app also reads `HOST` (`127.0.0.1`; set `0.0.0.0` or a LAN
 address to serve the local network) and `DATA_DIR`, and generates its `INGEST_SECRET`, `OPERATOR_SECRET`
 and `SESSION_SECRET` on first run into the data directory unless the environment sets them.
 
