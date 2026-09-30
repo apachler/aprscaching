@@ -1005,9 +1005,14 @@ function TxtRecordBody() {
       }),
     [],
   );
+  const zone = `${call.trim().toLowerCase()}.ampr.org`;
+  // a 44net endpoint on a subdomain of the call's zone is named with host=, so peers contact it there
+  const sub = desc?.addresses?.find(
+    (a) => a.transport === "44net" && a.address.toLowerCase().endsWith(`.${zone}`),
+  )?.address;
   const record =
     desc?.signed && desc.publicKey && call.trim()
-      ? `_aprscaching.${call.trim().toLowerCase()}.ampr.org  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}"`
+      ? `_aprscaching.${zone}  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}${sub ? `; host=${sub.toLowerCase()}` : ""}"`
       : null;
   if (error)
     return <div className="comment error">Couldn't load this instance's descriptor — close and reopen to retry.</div>;
@@ -1037,7 +1042,8 @@ function TxtRecordBody() {
       {record && <div className="comment mono">{record}</div>}
       <div className="comment">
         Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
-        (portal.ampr.org) — other instances can then add you by callsign, verified.
+        (portal.ampr.org) — other instances can then add you by callsign, verified. Portal changes publish within about
+        an hour.
       </div>
     </>
   );

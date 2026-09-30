@@ -684,6 +684,8 @@ export function getFedDescriptor(): Promise<{
   publicKey: string | null;
   aprsCall: string | null;
   operator: string | null;
+  /** the typed transport endpoints this instance publishes (FED_ENDPOINTS) */
+  addresses?: { transport: string; address: string }[];
 }> {
   return call(`/.well-known/aprscaching`);
 }
