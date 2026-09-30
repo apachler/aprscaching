@@ -1239,11 +1239,6 @@ export function addCallsign(
   return call(`/auth/callsigns`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 
-/** Is a platform passkey usable here? (WebAuthn present + secure context.) */
-export function passkeySupported(): boolean {
-  return typeof window !== "undefined" && !!window.PublicKeyCredential && window.isSecureContext;
-}
-
 export async function registerPasskey(callsign: string, email?: string): Promise<{ ok: boolean; callsign: string }> {
   const o = await call<any>(`/auth/passkey/register/begin`, {
     method: "POST",
