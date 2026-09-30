@@ -63,6 +63,9 @@ release. Listed in start order — the first two have outside dependencies and l
 
 These are blocked on physical radio, a real peer, or a network no CI runner has — not on code.
 
+- [ ] **Pocket with a Bluetooth TNC in the phone's browser** — Web Bluetooth in Brave (enabled in
+  `brave://flags`) with a BLE KISS TNC, and Termux:Boot autostart, are not yet tested on a phone; the
+  "tested on" table in [`docs/operate/pocket.md`](docs/operate/pocket.md) records what is.
 - [ ] **Owned-RF Tier A** — genuine Tier-A corroboration needs a receiver *you* operate and attest for.
   The provenance seam is built and Tier A is designed-for; standing up the RF site is hardware, not code.
   Its amateur-IP reachability is a 44Net Connect address
@@ -202,6 +205,16 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 ## Native packaging
 
+- [x] **Pocket: a station on an Android phone** — the gateway and the ingest in Termux, without root:
+  one-command install, supervised processes, https for hotspot visitors, a MeshCom node on the hotspot or a
+  router, backup, and a weekly install check in `termux/termux-docker`
+  ([`docs/operate/pocket.md`](docs/operate/pocket.md)). A field-day and demo station, not a server.
+- [ ] **Watch: Bun on Android** — no official Android build (oven-sh/bun#28924), so Pocket runs the Node
+  gateway rather than the desktop binary. Once Bun ships one, the desktop binary could run on a phone.
+- [ ] **Watch: Android background limits** — Pocket relies on a wake lock, Termux battery "Unrestricted",
+  and, where needed, *Disable child process restrictions* (Android 14+). A new Android release that tightens
+  background work, or removes that developer option, needs the keep-alive advice in the Pocket guide
+  re-tested.
 - [ ] **Capacitor mobile shell** *(P3 · L)* — reuse the web app in a native iOS/Android wrapper for
   USB-serial / BLE-KISS and background operation. A build/sign/store pipeline, not a headless code core.
   The deployment shapes it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).
