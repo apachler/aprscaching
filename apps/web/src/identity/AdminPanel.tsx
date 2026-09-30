@@ -6,7 +6,10 @@ import {
   setPeerTrust,
   add44netPeer,
   getFedDescriptor,
+  ApiError,
+  type Fed44netCandidate,
   type Fed44netResult,
+  type Fed44netTarget,
   listForwardPartners,
   saveForwardPartner,
   deleteForwardPartner,
@@ -899,78 +902,111 @@ function FederationAdmin() {
   );
 }
 
+/** A typed callsign or host: a name with a dot is a host in a callsign's ampr.org zone. */
+function targetOf(value: string): Fed44netTarget | null {
+  const v = value.trim();
+  if (!v) return null;
+  return v.includes(".") ? { host: v.toLowerCase() } : { callsign: v.toUpperCase() };
+}
+
 /**
  * 44net verified onboarding. ARDC's portal reviews a licence before delegating `<call>.ampr.org`,
- * so adding a peer by callsign resolves its `_aprscaching` TXT binding: DNSSEC-validated bindings
- * admit in one click, anything else shows the resolved key for an explicit operator confirm (a
- * trust-on-first-use pin). The disclosure underneath emits this instance's OWN TXT record to paste
- * into the ARDC portal so other operators can add us the same way.
+ * so adding a peer by callsign, or by a host in that zone, resolves its `_aprscaching` TXT binding:
+ * DNSSEC-validated bindings admit in one click, anything else shows the resolved key for an explicit
+ * operator confirm (a trust-on-first-use pin). A name with several bindings lists them to add one by
+ * its host. The disclosure underneath emits this instance's OWN TXT record to paste into the ARDC
+ * portal so other operators can add us the same way.
  */
 function Fed44netWizard(props: { onAdmitted: () => void }) {
   const toast = useToast();
-  const [callsign, setCallsign] = useState("");
+  const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<Fed44netResult | null>(null);
+  const [pending, setPending] = useState<{ target: Fed44netTarget; result: Fed44netResult } | null>(null);
+  const [candidates, setCandidates] = useState<Fed44netCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (confirm: boolean) => {
-    const cs = (pending?.resolved?.callsign ?? callsign).trim();
-    if (!cs) return;
+  const submit = async (target: Fed44netTarget | null, confirm: boolean) => {
+    if (!target) return;
     setBusy(true);
     setError(null);
+    setCandidates([]);
     try {
-      const r = await add44netPeer(cs, confirm);
-      if (r.requiresConfirm) setPending(r);
+      const r = await add44netPeer(target, confirm);
+      if (r.requiresConfirm) setPending({ target, result: r });
       else if (r.ok) {
         setPending(null);
-        setCallsign("");
-        toast(`Peer ${r.peer?.instance ?? cs} admitted (${r.admitted === "dnssec" ? "DNSSEC-verified" : "pinned"})`);
+        setValue("");
+        const name = "host" in target ? target.host : target.callsign;
+        toast(`Peer ${r.peer?.instance ?? name} admitted (${r.admitted === "dnssec" ? "DNSSEC-verified" : "pinned"})`);
         props.onAdmitted();
       }
     } catch (e) {
       setPending(null);
       setError((e as Error).message);
+      const found = e instanceof ApiError ? (e.data as { candidates?: Fed44netCandidate[] }).candidates : undefined;
+      if (Array.isArray(found)) setCandidates(found);
     } finally {
       setBusy(false);
     }
   };
+  const resolved = pending?.result.resolved;
 
   return (
     <div className="fed44net">
       <div className="row">
         <input
-          placeholder="Add a peer by callsign (44net)"
-          value={callsign}
+          placeholder="Add a peer by callsign or host (44net)"
+          value={value}
           onChange={(e) => {
-            setCallsign(e.target.value.toUpperCase());
+            setValue(e.target.value.includes(".") ? e.target.value : e.target.value.toUpperCase());
             setPending(null);
+            setCandidates([]);
             setError(null);
           }}
-          onKeyDown={(e) => e.key === "Enter" && !busy && !pending && void submit(false)}
-          aria-label="Peer callsign on 44net"
+          onKeyDown={(e) => e.key === "Enter" && !busy && !pending && void submit(targetOf(value), false)}
+          aria-label="Peer callsign or host on 44net"
         />
-        <Button variant="primary" disabled={busy || !callsign.trim() || !!pending} onClick={() => void submit(false)}>
+        <Button
+          variant="primary"
+          disabled={busy || !value.trim() || !!pending}
+          onClick={() => void submit(targetOf(value), false)}
+        >
           {busy && !pending ? "Resolving…" : "Look up"}
         </Button>
       </div>
       <div className="comment">
-        Resolves the peer's ARDC-verified <span className="mono">&lt;call&gt;.ampr.org</span> binding.
+        Resolves the peer's ARDC-verified binding: a callsign reads <span className="mono">&lt;call&gt;.ampr.org</span>,
+        a host such as <span className="mono">pocket.&lt;call&gt;.ampr.org</span> reads that host's own record.
       </div>
       {error && <div className="comment error">{error}</div>}
-      {pending?.resolved && (
+      {candidates.length > 0 && (
+        <ul className="fed44net-candidates">
+          {candidates.map((c) => (
+            <li key={`${c.instance} ${c.host}`} className="row">
+              <span className="mono">{c.host}</span> · <span className="mono">{c.instance}</span>
+              <button disabled={busy} onClick={() => void submit({ host: c.host }, false)}>
+                Add by host
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {pending && resolved && (
         <div className="confirmbox">
           <div>
-            <Badge kind="warn">no DNSSEC</Badge> <span className="mono">{pending.resolved.host}</span> ·{" "}
-            <span className="mono">{pending.resolved.instance}</span>
+            <Badge kind="warn">no DNSSEC</Badge> <span className="mono">{resolved.host}</span> ·{" "}
+            <span className="mono">{resolved.instance}</span>
           </div>
-          <div className="comment mono">key {pending.resolved.publicKey.slice(0, 16)}…</div>
+          <div className="comment mono">key {resolved.publicKey.slice(0, 16)}…</div>
           <div className="comment">
             The resolver could not DNSSEC-validate this binding
-            {pending.descriptorChecked ? " (the live descriptor matches it)" : " and the peer was not reachable"} —
-            confirming pins this key for the peer.
+            {pending.result.descriptorChecked
+              ? " (the live descriptor matches it)"
+              : " and the peer was not reachable"}{" "}
+            — confirming pins this key for the peer.
           </div>
           <div className="row">
-            <Button variant="primary" disabled={busy} onClick={() => void submit(true)}>
+            <Button variant="primary" disabled={busy} onClick={() => void submit(pending.target, true)}>
               Confirm &amp; pin
             </Button>
             <button disabled={busy} onClick={() => setPending(null)}>
@@ -1006,13 +1042,14 @@ function TxtRecordBody() {
     [],
   );
   const zone = `${call.trim().toLowerCase()}.ampr.org`;
-  // a 44net endpoint on a subdomain of the call's zone is named with host=, so peers contact it there
-  const sub = desc?.addresses?.find(
-    (a) => a.transport === "44net" && a.address.toLowerCase().endsWith(`.${zone}`),
-  )?.address;
+  // a 44net endpoint on a subdomain of the call's zone publishes its own record, so one callsign can run
+  // several instances; peers add it by that host
+  const sub = desc?.addresses
+    ?.find((a) => a.transport === "44net" && a.address.toLowerCase().endsWith(`.${zone}`))
+    ?.address.toLowerCase();
   const record =
     desc?.signed && desc.publicKey && call.trim()
-      ? `_aprscaching.${zone}  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}${sub ? `; host=${sub.toLowerCase()}` : ""}"`
+      ? `_aprscaching.${sub ?? zone}  TXT  "v=acs1; inst=${desc.instance}; key=${desc.publicKey}"`
       : null;
   if (error)
     return <div className="comment error">Couldn't load this instance's descriptor — close and reopen to retry.</div>;
@@ -1042,8 +1079,8 @@ function TxtRecordBody() {
       {record && <div className="comment mono">{record}</div>}
       <div className="comment">
         Paste this TXT into your <span className="mono">&lt;call&gt;.ampr.org</span> DNS at the ARDC portal
-        (portal.ampr.org) — other instances can then add you by callsign, verified. Portal changes publish within about
-        an hour.
+        (portal.ampr.org) — other instances can then add you by {sub ? <span className="mono">{sub}</span> : "callsign"}
+        , verified. Portal changes publish within about an hour.
       </div>
     </>
   );

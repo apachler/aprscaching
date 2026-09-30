@@ -32,6 +32,7 @@ export interface PeerRow {
   endpoints?: string | null; // typed endpoint set (JSON) — see fedtransport.ts
   accept_keys?: string | null; // verified key set (JSON [{x, until?}]) — see resolvePeerKeys
   verified_via?: string | null; // identity attestation, e.g. 'ardc-lot' (never a data-trust input)
+  operator_call?: string | null; // the ARDC-verified base call of a 44net peer; the quorum's operator
 }
 
 /** This instance's id — the namespace no peer may write into. */

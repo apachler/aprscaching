@@ -5,11 +5,18 @@
  * externally-verified callsign↔person binding. A peer advertises its federation identity in DNS:
  *
  *   _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>[; host=<name>]"
+ *   _aprscaching.<host>           TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>"
  *
- * The peer is contacted at `http://<call>.ampr.org`, or at `host=` when the record names one. `host=` must
- * be `<call>.ampr.org` itself or a name under it: a TXT in one callsign's zone must not point federation
- * traffic at a third party, so any other host rejects the whole record. It moves where the peer is
- * reached, never who it is (the callsign), its key pin or its trust.
+ * A peer is added by callsign (the first record) or by host (the second, for a `<host>` under
+ * `<call>.ampr.org`), so one callsign can run several instances — a home station and a Pocket — each under its
+ * own name. The peer is contacted at the name whose record was read, or at `host=` when the record names one.
+ * `host=` must be `<call>.ampr.org` itself or a name under it: a TXT in one callsign's zone must not point
+ * federation traffic at a third party, so any other host rejects the whole record. It moves where the peer
+ * is reached, never who it is (the callsign), its key pin or its trust. More than one valid record at a name
+ * is ambiguous: the operator is shown the candidates and adds one by its host.
+ *
+ * Every instance added under one callsign records that callsign as its operator, so the corroboration
+ * quorum counts them as one voice (corroborate.ts).
  *
  * Onboarding cross-checks four facts: the name exists under ampr.org (ARDC reviewed the licence),
  * the TXT binds an instance id + signing key, the peer's descriptor verifies under that key (checked
@@ -33,7 +40,7 @@ const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
 
 interface Resolved44net {
   callsign: string; // base call, uppercased
-  host: string; // where the peer is contacted: host= from the TXT, else <call>.ampr.org
+  host: string; // where the peer is contacted: host= from the TXT, else the name whose record was read
   instance: string;
   publicKey: string; // b64url raw Ed25519 from the TXT
   dnssec: boolean; // the resolver validated the chain (AD flag)
@@ -46,19 +53,37 @@ const HOST_LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
  * hostname (labels of 1–63 letters, digits and inner hyphens, 253 characters at most, no trailing dot);
  * otherwise null.
  */
-export function hostInZone(value: string, zone: string): string | null {
+function hostInZone(value: string, zone: string): string | null {
   const host = value.toLowerCase();
   if (host.length > 253 || !host.split(".").every((l) => HOST_LABEL_RE.test(l))) return null;
   return host === zone || host.endsWith(`.${zone}`) ? host : null;
 }
 
+/** The base call whose ARDC zone holds `address`, when it is `<call>.ampr.org` or a name under it. */
+export function amprCallOf(address: string): string | null {
+  const m = /(?:^|\.)([a-z0-9]{3,9})\.ampr\.org$/.exec(address.toLowerCase());
+  return m && hostInZone(address, amprNames(m[1]!).host) ? m[1]!.toUpperCase() : null;
+}
+
 /**
- * Parse the `v=acs1; inst=…; key=…[; host=…]` TXT payload found under `callsign`'s zone. Returns null for
- * anything else, including a `host=` outside `<call>.ampr.org`.
+ * A host an operator typed, lowercased and without one trailing dot, with the base call of the zone it lies
+ * in; null for anything but `<call>.ampr.org` or a valid name under it.
+ */
+export function host44net(value: string): { callsign: string; host: string } | null {
+  const host = value.trim().toLowerCase().replace(/\.$/, "");
+  const callsign = amprCallOf(host);
+  return callsign && BASE_CALL_RE.test(callsign) ? { callsign, host } : null;
+}
+
+/**
+ * Parse the `v=acs1; inst=…; key=…[; host=…]` TXT payload found at `_aprscaching.<recordHost>`, a name in
+ * `callsign`'s zone (the zone itself by default). Returns null for anything else, including a `host=`
+ * outside `<call>.ampr.org`.
  */
 export function parse44netTxt(
   txt: string,
   callsign: string,
+  recordHost?: string,
 ): { instance: string; publicKey: string; host: string } | null {
   const fields = acsFields(txt);
   if (!fields) return null;
@@ -67,28 +92,55 @@ export function parse44netTxt(
   if (!instance || !publicKey || !/^[A-Za-z0-9_-]{40,50}$/.test(publicKey)) return null; // 32-byte key, b64url
   const zone = amprNames(callsign).host;
   const declared = fields.get("host");
-  const host = declared === undefined ? zone : hostInZone(declared, zone);
+  const host = declared === undefined ? (recordHost ?? zone) : hostInZone(declared, zone);
   if (!host) return null;
   return { instance, publicKey, host };
 }
 
-/**
- * Resolve a callsign's federation TXT via DNS-over-HTTPS (doh.ts); the answer carries the resolver's
- * DNSSEC-validated AD flag.
- */
+/** More than one valid binding at one name: the operator picks one and adds it by its host. */
+class AmbiguousBinding extends Error {
+  constructor(
+    name: string,
+    readonly candidates: { instance: string; host: string }[],
+  ) {
+    super(`${name} carries ${candidates.length} aprscaching records: add one of them by its host`);
+  }
+}
+
+/** Read the binding at `_aprscaching.<recordHost>` through DNS-over-HTTPS (doh.ts), with the AD flag. */
+async function resolveAt(env: Env, callsign: string, recordHost: string): Promise<Resolved44net> {
+  const name = `_aprscaching.${recordHost}`;
+  const ans = await resolveTxt(env, name);
+  if (ans.status !== 0) throw new Error(`no ${name} TXT record (DNS status ${ans.status})`);
+  const found = new Map<string, { instance: string; publicKey: string; host: string }>();
+  for (const txt of ans.txts) {
+    const parsed = parse44netTxt(txt, callsign, recordHost);
+    if (parsed) found.set(`${parsed.instance} ${parsed.publicKey} ${parsed.host}`, parsed);
+  }
+  const bindings = [...found.values()];
+  if (bindings.length > 1)
+    throw new AmbiguousBinding(
+      name,
+      bindings.map(({ instance, host }) => ({ instance, host })),
+    );
+  if (bindings[0]) return { callsign, ...bindings[0], dnssec: ans.dnssec };
+  throw new Error(
+    `no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…", with any host= under ${amprNames(callsign).host})`,
+  );
+}
+
+/** Resolve a callsign's federation TXT at `_aprscaching.<call>.ampr.org`. */
 export async function resolve44net(env: Env, callsign: string): Promise<Resolved44net> {
   const cs = callsign.trim().toUpperCase();
   if (!BASE_CALL_RE.test(cs)) throw new Error("a base callsign is required (letters/digits, no SSID)");
-  const { name } = amprNames(cs);
-  const ans = await resolveTxt(env, name);
-  if (ans.status !== 0) throw new Error(`no ${name} TXT record (DNS status ${ans.status})`);
-  for (const txt of ans.txts) {
-    const parsed = parse44netTxt(txt, cs);
-    if (parsed) return { callsign: cs, ...parsed, dnssec: ans.dnssec };
-  }
-  throw new Error(
-    `no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…", with any host= under ${amprNames(cs).host})`,
-  );
+  return resolveAt(env, cs, amprNames(cs).host);
+}
+
+/** Resolve one host's federation TXT at `_aprscaching.<host>`, for a host in its callsign's ampr.org zone. */
+export async function resolve44netHost(env: Env, value: string): Promise<Resolved44net> {
+  const named = host44net(value);
+  if (!named) throw new Error("the host must be <call>.ampr.org or a name under it");
+  return resolveAt(env, named.callsign, named.host);
 }
 
 /**
@@ -125,19 +177,23 @@ async function descriptorMatches(
 }
 
 /**
- * POST /federation/peers/44net — sysop-only. Body { callsign, confirm? }. Resolves the callsign's
- * federation TXT, cross-checks the descriptor, and admits the peer as `unvetted` when the binding is
+ * POST /federation/peers/44net — sysop-only. Body { callsign | host, confirm? }. Resolves the callsign's or
+ * the host's federation TXT (409 with `candidates` when it is ambiguous), cross-checks the descriptor, and admits the peer as `unvetted` when the binding is
  * DNSSEC-validated OR the operator confirms; otherwise returns the resolved binding for a one-click
  * confirm. A `blocked` peer is never resurrected by re-adding.
  */
 export async function handleFed44netAdd(req: Request, env: Env): Promise<Response> {
   const gate = await requireSysop(req, env, { allowOperatorSecret: true }); // same gate as the peer-trust surface
   if (gate) return gate;
-  const body = (await req.json().catch(() => ({}))) as { callsign?: string; confirm?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { callsign?: string; host?: string; confirm?: boolean };
+  const host = String(body.host ?? "").trim();
+  if (host && String(body.callsign ?? "").trim())
+    return json({ error: "give a callsign or a host, not both" }, { status: 400 });
   let resolved: Resolved44net;
   try {
-    resolved = await resolve44net(env, String(body.callsign ?? ""));
+    resolved = host ? await resolve44netHost(env, host) : await resolve44net(env, String(body.callsign ?? ""));
   } catch (e) {
+    if (e instanceof AmbiguousBinding) return json({ error: e.message, candidates: e.candidates }, { status: 409 });
     return json({ error: (e as Error).message }, { status: 400 });
   }
   const url = `http://${resolved.host}`; // amateur IP space: plain http; authenticity is in signatures
@@ -168,16 +224,17 @@ export async function handleFed44netAdd(req: Request, env: Env): Promise<Respons
     { transport: "44net", address: resolved.host, priority: 10, verifiedVia: "ardc-lot" },
   ]);
   await env.DB.prepare(
-    `INSERT INTO fed_peers (url, instance, public_key, trust, added_via, verified_via, endpoints, approved_at)
-     VALUES (?,?,?, 'unvetted', '44net', 'ardc-lot', ?, ?)
+    `INSERT INTO fed_peers (url, instance, public_key, trust, added_via, verified_via, endpoints, approved_at, operator_call)
+     VALUES (?,?,?, 'unvetted', '44net', 'ardc-lot', ?, ?, ?)
      ON CONFLICT(url) DO UPDATE SET
-       instance     = COALESCE(fed_peers.instance, excluded.instance),
-       public_key   = COALESCE(fed_peers.public_key, excluded.public_key),
-       verified_via = 'ardc-lot',
-       endpoints    = excluded.endpoints,
+       instance      = COALESCE(fed_peers.instance, excluded.instance),
+       public_key    = COALESCE(fed_peers.public_key, excluded.public_key),
+       verified_via  = 'ardc-lot',
+       endpoints     = excluded.endpoints,
+       operator_call = excluded.operator_call,
        trust        = fed_peers.trust`, // an existing tier (incl. 'blocked') is never changed by re-adding
   )
-    .bind(url, resolved.instance, resolved.publicKey, endpoints, nowS())
+    .bind(url, resolved.instance, resolved.publicKey, endpoints, nowS(), resolved.callsign)
     .run();
   return json(
     {

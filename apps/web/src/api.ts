@@ -715,13 +715,18 @@ export interface Fed44netResult {
   descriptorChecked?: boolean;
   error?: string;
 }
+/** Who to add over 44net: a callsign (`_aprscaching.<call>.ampr.org`) or a host in its zone (`_aprscaching.<host>`). */
+export type Fed44netTarget = { callsign: string } | { host: string };
+/** The bindings an ambiguous 44net lookup found, carried by its 409 refusal; each is added by its host. */
+export type Fed44netCandidate = { instance: string; host: string };
 /**
  * Operator: add a peer by its ARDC-verified `<call>.ampr.org` binding (sysop-gated). A
  * DNSSEC-validated binding admits directly; otherwise the response carries the resolved binding and
- * a second call with `confirm: true` pins it.
+ * a second call with `confirm: true` pins it. A name carrying several bindings is refused with 409 and
+ * `candidates`.
  */
-export function add44netPeer(callsign: string, confirm = false): Promise<Fed44netResult> {
-  return call(`/federation/peers/44net`, { method: "POST", body: JSON.stringify({ callsign, confirm }) });
+export function add44netPeer(target: Fed44netTarget, confirm = false): Promise<Fed44netResult> {
+  return call(`/federation/peers/44net`, { method: "POST", body: JSON.stringify({ ...target, confirm }) });
 }
 
 /** The instance's federation descriptor — instance id + signing key, used to compose DNS records. */

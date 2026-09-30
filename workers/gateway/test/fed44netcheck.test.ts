@@ -157,8 +157,48 @@ describe("check44net — the effective host and its A record", () => {
     expect(dns.asked).not.toContain("A oe8apr.ampr.org");
     expect(line(r.lines, "txt")).toMatchObject({ status: "fail" });
     expect(line(r.lines, "txt")!.fix).toBe(
-      `Publish TXT ${TXT_NAME} "v=acs1; inst=oe.pub; key=${KEY}; host=${sub}" in the 44Net Portal (changes there publish within about an hour).`,
+      `Publish TXT _aprscaching.${sub} "v=acs1; inst=oe.pub; key=${KEY}" (peers add you by host), or TXT ${TXT_NAME} "v=acs1; inst=oe.pub; key=${KEY}; host=${sub}" (peers add you by callsign) in the 44Net Portal (changes there publish within about an hour).`,
     );
+  });
+
+  it("reads the endpoint's own record first: a per-host binding passes", async () => {
+    const sub = "pocket.oe8apr.ampr.org";
+    const dns = fakeDns({ [`TXT _aprscaching.${sub}`]: ok([GOOD_TXT], true), [`A ${sub}`]: ok(["44.143.9.9"]) });
+    const r = (await check44net(descriptor(sub), dns))!;
+    expect(dns.asked.indexOf(`TXT _aprscaching.${sub}`)).toBeLessThan(dns.asked.indexOf(`TXT ${TXT_NAME}`));
+    expect(r.host).toBe(sub);
+    expect(line(r.lines, "txt")).toMatchObject({
+      status: "pass",
+      detail: expect.stringContaining(`_aprscaching.${sub}`),
+    });
+    expect(line(r.lines, "descriptor")?.status).toBe("pass");
+    expect(line(r.lines, "dnssec")?.detail).toMatch(/DNSSEC-validated/);
+    expect(line(r.lines, "callsign")).toBeUndefined();
+  });
+
+  it("warns when the callsign's record sends peers to this host with another binding", async () => {
+    const sub = "pocket.oe8apr.ampr.org";
+    const dns = fakeDns({
+      [`TXT _aprscaching.${sub}`]: ok([GOOD_TXT]),
+      [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.old; key=${OTHER_KEY}; host=${sub}`]),
+      [`A ${sub}`]: ok(["44.143.9.9"]),
+    });
+    const r = (await check44net(descriptor(sub), dns))!;
+    expect(line(r.lines, "txt")?.status).toBe("pass");
+    expect(line(r.lines, "callsign")).toMatchObject({ status: "warn", fix: expect.stringMatching(/^Make .*\.$/) });
+  });
+
+  it("a callsign record for another instance of the same call is information, not a problem", async () => {
+    const sub = "pocket.oe8apr.ampr.org";
+    const dns = fakeDns({
+      [`TXT _aprscaching.${sub}`]: ok([GOOD_TXT]),
+      [`TXT ${TXT_NAME}`]: ok([`v=acs1; inst=oe.home; key=${OTHER_KEY}`]),
+      [`A ${sub}`]: ok(["44.143.9.9"]),
+    });
+    const r = (await check44net(descriptor(sub), dns))!;
+    expect(line(r.lines, "callsign")).toMatchObject({ status: "info" });
+    expect(line(r.lines, "callsign")!.detail).toContain("oe.home");
+    expect(r.lines.filter((l) => l.status === "fail" || l.status === "warn")).toEqual([]);
   });
 
   it("the callsign comes from a subdomain endpoint too", async () => {
