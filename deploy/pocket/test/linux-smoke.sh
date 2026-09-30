@@ -181,8 +181,13 @@ printf '#!/bin/sh\necho %s\n' "'{\"supplicant_state\":\"COMPLETED\",\"ip\":\"192
   >"$WORK/bin/termux-wifi-connectioninfo"
 chmod +x "$WORK/bin/termux-wifi-connectioninfo"
 printf '1: lo inet 127.0.0.1/8\n5: wlan0 inet 192.168.1.183/24\n7: wlan1 inet 192.168.43.1/24\n' >"$WORK/ifaces"
-out="$(bash "$HERE/meshcom-setup.sh" --no-write 2>&1)" || true
-CHECK="meshcom-setup.sh: the hotspot first while it is on" check grep -q -- "--setowngw 192.168.43.1" <<<"$out"
+CHECK="meshcom-setup.sh: both up, no terminal: refuses to guess" check not bash "$HERE/meshcom-setup.sh" --no-write >/dev/null 2>&1
+out="$(bash "$HERE/meshcom-setup.sh" --hotspot --no-write 2>&1)" || true
+CHECK="meshcom-setup.sh: both up, --hotspot" check grep -q -- "--setowngw 192.168.43.1" <<<"$out"
+if have script; then
+  out="$(printf 'w\n192.168.1.61\n\n' | script -qc "bash $(printf '%q' "$HERE/meshcom-setup.sh") --no-write" /dev/null 2>&1)" || true
+  CHECK="meshcom-setup.sh: both up, asks and takes the Wi-Fi" check grep -q -- "--extudpip 192.168.1.183" <<<"$out"
+fi
 printf '1: lo inet 127.0.0.1/8\n5: wlan0 inet 192.168.1.183/24\n' >"$WORK/ifaces"
 CHECK="meshcom-setup.sh: on a router the node's reserved address is required" check not bash "$HERE/meshcom-setup.sh" --yes >/dev/null 2>&1
 out="$(bash "$HERE/meshcom-setup.sh" --node-ip 192.168.1.60 --yes 2>&1)" || true

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Set up a MeshCom node that sends everything it handles to the ingest over ExtUDP (UDP 1799). The node
-# joins a network the phone is on: the phone's own hotspot, or, with the hotspot off, the Wi-Fi network
-# (a router) the phone has joined. This script
+# joins a network the phone is on: the phone's own hotspot, or the Wi-Fi network (a router) the phone has
+# joined. This script
 #
-#   1. finds that network on the phone: the hotspot when it is on, else the joined Wi-Fi (read at run
-#      time; the hotspot's subnet differs between phones);
+#   1. finds that network on the phone: the one that is up, or, with both up, the one the operator picks
+#      (read at run time; the hotspot's subnet differs between phones);
 #   2. on the hotspot, suggests a fixed address for the node high in its subnet, away from the phone's own
 #      address and from the devices the phone currently sees; on a router, takes the address the router
 #      reserves for the node (its DHCP server stays in charge of the network);
@@ -22,8 +22,8 @@
 # hotspot from a joined Wi-Fi needs the Termux:API app and package; without them, the script asks.
 #
 # Options:
-#   --hotspot            use the phone's hotspot, even when the phone has joined a Wi-Fi network too
-#   --wifi               use the Wi-Fi network the phone has joined, even when the hotspot is on
+#   --hotspot            use the phone's hotspot without asking when a joined Wi-Fi is up too
+#   --wifi               use the Wi-Fi network the phone has joined without asking when the hotspot is up too
 #   --call CALL-SSID     the node's callsign, e.g. OE8APR-12   (asked when missing on a terminal)
 #   --node-ip ADDR       the node's address: on the hotspot instead of the suggested one; on a router the
 #                        address the router reserves for the node
@@ -108,9 +108,21 @@ elif [ "$MODE" = wifi ]; then
   [ -n "$wifi_cidr" ] || die "the phone has not joined a Wi-Fi network (or Termux:API is missing)." \
     "Join the router's Wi-Fi, or name the phone's address on it with --ip ADDR/PREFIX."
   HOTSPOT="$wifi_cidr"
+elif [ -z "$MODE" ] && [ "$sure" -eq 1 ] && [ -n "$wifi_cidr" ]; then
+  # Both are up: the operator decides which network the node joins.
+  wifi_name="the Wi-Fi network${WIFI_SSID:+ $WIFI_SSID}"
+  [ "$TTY" -eq 1 ] || die "both the hotspot (${spots[0]}) and $wifi_name ($wifi_cidr) are up." \
+    "Pass --hotspot or --wifi to choose the one the node joins."
+  info "both are up: the hotspot (${spots[0]}) and $wifi_name ($wifi_cidr)"
+  answer="$(ask "which one does the node join: the hotspot (h) or the Wi-Fi network (w)?" h)"
+  case "$answer" in
+    w | W) MODE=wifi HOTSPOT="$wifi_cidr" ;;
+    *) MODE=hotspot HOTSPOT="${spots[0]}" ;;
+  esac
 elif [ "${#spots[@]}" -eq 1 ] && { [ "$MODE" = hotspot ] || [ "$sure" -eq 1 ]; }; then
   MODE=hotspot
   HOTSPOT="${spots[0]}"
+  [ -n "$wifi_cidr" ] || info "the hotspot is up, no Wi-Fi network joined; using the hotspot"
 elif [ "${#spots[@]}" -gt 1 ]; then
   [ "$TTY" -eq 1 ] || die "several addresses could be the hotspot: ${spots[*]}" "Name the hotspot with --ip ADDR/PREFIX."
   info "several addresses could be the hotspot (a joined Wi-Fi looks the same without Termux:API):"
@@ -127,7 +139,7 @@ elif [ "${#spots[@]}" -eq 1 ]; then
 elif [ "$MODE" != hotspot ] && [ -n "$wifi_cidr" ]; then
   MODE=wifi
   HOTSPOT="$wifi_cidr"
-  info "the hotspot is off; using the Wi-Fi network ${WIFI_SSID:-the phone has joined} (--hotspot to wait for the hotspot)"
+  info "the hotspot is off; using the Wi-Fi network${WIFI_SSID:+ $WIFI_SSID} the phone has joined"
 else
   [ "$TTY" -eq 1 ] || die "neither a hotspot nor a joined Wi-Fi network found." \
     "Turn the hotspot on or join the router's Wi-Fi, or name the address with --ip ADDR/PREFIX."

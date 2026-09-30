@@ -16,7 +16,7 @@ stops background apps, and battery and heat are real limits.
 | `backup.sh` | database snapshot, `.env` and media to shared storage, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
 | `restart.sh` | restarts the gateway, the ingest or both in the running station (after editing the `.env`, or once the hotspot is on for a MeshCom node) |
-| `meshcom-setup.sh` | a MeshCom node on the hotspot, or on the router the phone has joined while the hotspot is off: finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
+| `meshcom-setup.sh` | a MeshCom node on the hotspot or on the router the phone has joined (asks when both are up): finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
@@ -155,14 +155,15 @@ bash ~/aprscaching/deploy/pocket/meshcom-setup.sh
 4. It writes `MESHCOM_NODE=<node address>=<node call>` to the `.env`, keeping any other node, and restarts
    the ingest. The ingest log then shows `[meshcom] listening udp/1799 on <phone> for <node>`.
 
-**Through a router instead.** With the hotspot off and the phone joined to a Wi-Fi network, the script uses
-that network: the node joins the router's Wi-Fi too, and the router's DHCP server stays in charge of the
-addresses. It prints only `--setssid`, `--setpwd`, `--extudpip <the phone>` and `--extudp on`, and asks for
-the address the router reserves for the node (`--node-ip`). Reserve an address for the phone as well, since
-the node sends to it; Android keeps one random MAC address per network, and a network set to use the device
-MAC keeps it for certain. `--hotspot` and `--wifi` choose when both are up; the hotspot comes first.
-Telling the hotspot from a joined Wi-Fi needs Termux:API; without it the script asks. On a router, everyone
-on the network reaches the station and could send datagrams in the node's name, so use a router you control.
+**Through a router instead.** With the phone joined to a Wi-Fi network, the script can use that network. It
+uses whichever of the two is up; with both up it asks which one the node joins (`--hotspot` or `--wifi`
+answer without asking). On a router the node joins the router's Wi-Fi, and the router's DHCP server stays
+in charge of the addresses. The script prints only `--setssid`, `--setpwd`, `--extudpip <the phone>` and
+`--extudp on`, and asks for the address the router reserves for the node (`--node-ip`). Reserve an address
+for the phone as well, since the node sends to it; Android keeps one random MAC address per network, and a
+network set to use the device MAC keeps it for certain. Telling the hotspot from a joined Wi-Fi needs
+Termux:API; without it the script asks. On a router, everyone on the network reaches the station and could
+send datagrams in the node's name, so use a router you control.
 
 The MeshCom listener binds the phone's address on the node's subnet when the ingest starts. Turn the hotspot
 on (or join the router's Wi-Fi) before `start.sh`; brought up later, `status.sh` says so, and
