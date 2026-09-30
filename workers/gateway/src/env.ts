@@ -97,6 +97,10 @@ const ENV_STRING_KEYS = [
   "SPOTS_USER_AGENT", // User-Agent sent to spot upstreams (default names APRScaching + the repo)
   "SPOTS_RECEPTION_URLS", // JSON {pskreporter?,dxcluster?,rbn?}: endpoints of the reception networks (each off unless set)
 
+  // ---- the embeddable map widget (/embed) ----
+  "BASEMAP_STYLE", // MapLibre style URL, or "offline" for the self-contained grid (default: OpenFreeMap liberty)
+  "BASEMAP_HOSTS", // extra comma-separated origins the style loads tiles, glyphs or sprites from
+
   // ---- identity & auth — all optional; absent ⇒ dev mode (email token returned in-band) ----
   "APP_URL", // app origin for magic-link redirects, e.g. "https://aprscaching.net"
   "CORS_ORIGINS", // extra comma-separated origins allowed credentialed CORS (beyond APP_URL)
