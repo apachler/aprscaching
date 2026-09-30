@@ -91,6 +91,7 @@ import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotify
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleFederationSubmit, pushToHub } from "./fedpush.js";
+import { pruneMeshcom } from "./meshcom.js";
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
@@ -261,6 +262,7 @@ export async function runScheduled(env: Env): Promise<void> {
   ]);
   // radio commands nobody confirmed within the pending window expire
   await expireRadioCommands(env);
+  await pruneMeshcom(env, now);
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.

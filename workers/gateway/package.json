@@ -34,6 +34,7 @@
     "./budget": "./src/budget.ts",
     "./station_status": "./src/station_status.ts",
     "./tombstones": "./src/tombstones.ts",
+    "./meshcom": "./src/meshcom.ts",
     "./migrate": "./src/migrate.ts"
   },
   "scripts": {

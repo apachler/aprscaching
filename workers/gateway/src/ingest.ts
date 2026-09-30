@@ -4,7 +4,8 @@ import { ingestSecretOk } from "./auth.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
-import { IngestBatch } from "@aprscaching/shared";
+import { IngestBatch, sanitizeMeshcomMeta } from "@aprscaching/shared";
+import { meshcomStatements, type MeshcomObservation } from "./meshcom.js";
 import { baseCall, decodeAprs } from "@aprscaching/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { deliverHeld, bbsOnAck } from "./bbs.js";
@@ -111,6 +112,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
+  const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
@@ -124,6 +126,12 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
 
     if (heardDirectly(p.heardVia, transportForPort(p.port, signer != null))) direct.push(p);
+
+    // MeshCom metadata from the operator's own ingest only, sanitised again here: never from a signed batch
+    if (trusted && p.port === "meshcom") {
+      const meta = sanitizeMeshcomMeta((p.parsed as { meshcom?: unknown } | undefined)?.meshcom);
+      if (meta) meshcom.push({ src: p.src, ts: p.ts, meta });
+    }
 
     // weather -> sensor_readings (latest reading per station+ts); observational, so shed over budget
     if (data.kind === "weather" && !essential) {
@@ -311,6 +319,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       ).bind(port, bucket, rx),
     );
   }
+  // the MeshCom map layer's node state and links are display only, so they pause with the other
+  // diagnostics once the write budget passes 80 %
+  if (!shedding) stmts.push(...meshcomStatements(env, meshcom));
   if (stmts.length) await env.DB.batch(stmts);
 
   // BBS: confirm deliveries that were acked, and (re)deliver held mail to stations just heard
