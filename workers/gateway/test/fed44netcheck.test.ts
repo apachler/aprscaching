@@ -310,7 +310,12 @@ describe("GET /api/admin/setup/44net", () => {
     expect(line(body.lines, "a")?.status).toBe("pass");
     expect(line(body.lines, "descriptor")?.status).toBe("pass");
     expect(sql).toEqual([]); // no peer rows, no trust state
-    expect(fetched.every((u) => u.startsWith("https://dns.example/dns-query?"))).toBe(true); // no self-fetch, no probe
+    expect(
+      fetched.every((u) => {
+        const url = new URL(u);
+        return url.origin === "https://dns.example" && url.pathname === "/dns-query";
+      }),
+    ).toBe(true); // no self-fetch, no probe
   });
 
   it("a resolver outage answers 200 with warnings", async () => {

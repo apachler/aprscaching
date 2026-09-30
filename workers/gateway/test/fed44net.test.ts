@@ -217,7 +217,7 @@ describe("handleFed44netAdd — admission policy", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(fetched).toContain("http://aprscaching.oe8apr.ampr.org/.well-known/aprscaching");
-    expect(fetched.some((u) => u.startsWith("http://oe8apr.ampr.org"))).toBe(false);
+    expect(fetched.some((u) => new URL(u).hostname === "oe8apr.ampr.org")).toBe(false);
     expect(body.peer).toEqual({
       url: "http://aprscaching.oe8apr.ampr.org",
       instance: "oe.pub",
