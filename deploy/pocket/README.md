@@ -16,7 +16,7 @@ stops background apps, and battery and heat are real limits.
 | `backup.sh` | database snapshot, `.env` and media to shared storage, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
 | `restart.sh` | restarts the gateway, the ingest or both in the running station (after editing the `.env`, or once the hotspot is on for a MeshCom node) |
-| `wizard.sh` | the setup questions after install, in Android dialogs (Termux:API) or the terminal: callsign, instance name (set once), a MeshCom node, shortcuts, the scheduled backup; shows the current values, writes nothing until the summary is confirmed, then opens Instance admin; `--text`, `--dry-run` |
+| `wizard.sh` | the setup questions after install, in Android dialogs (Termux:API) or the terminal: callsign, instance name (set once), a MeshCom node, shortcuts, the scheduled backup, the home instance to follow and push to (with a signing key of the station's own); shows the current values, writes nothing until the summary is confirmed, then opens Instance admin; `--text`, `--dry-run` |
 | `meshcom-setup.sh` | a MeshCom node on the hotspot or on the router the phone has joined (asks when both are up): finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
 | `extras/notify.sh` | the ongoing status notification with Stop, Restart and Open map (Termux:API); `start.sh` runs it |
 | `extras/battery.sh` | the battery saver: below `POCKET_BATTERY_LOW` % on battery, APRS-IS narrowed to your own call and a 2-hour raw log, back when charging or 10 points higher (Termux:API); `start.sh` runs it |
@@ -31,7 +31,7 @@ stops background apps, and battery and heat are real limits.
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
-| `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`; CI runs it |
+| `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`, the home instance; CI runs it |
 | `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
 | `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the weekly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 

@@ -13,7 +13,9 @@
 #     is set once: records carry the name they were made under, so a station that already holds caches
 #     or finds keeps its name;
 #   - whether to set up a MeshCom node now (meshcom-setup.sh);
-#   - home-screen shortcuts and a daily backup while charging (extras/setup.sh).
+#   - home-screen shortcuts and a daily backup while charging (extras/setup.sh);
+#   - your home instance, to follow it (FED_PEERS) and, with its submit secret, push this station's records
+#     to it (FED_HUB_URL, FED_SUBMIT_SECRET); a signing key (FED_PRIVATE_KEY) is made when there is none.
 # Then it restarts a running station and opens Instance admin in the browser, where the Setup checklist
 # covers the rest.
 #
@@ -109,6 +111,9 @@ valid_instance() {
   done
 }
 
+# An instance URL: http(s)://host[:port], lowercase host, no path.
+valid_url() { printf '%s' "$1" | grep -Eq '^https?://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$'; }
+
 # Whether the database already holds caches or finds: those carry the instance name they were made under.
 db_has_records() {
   local db
@@ -179,6 +184,24 @@ else
   confirm "A daily backup while the phone charges (needs the Termux:API app)?" yes && BACKUP=1
 fi
 
+# ---- home instance -----------------------------------------------------------------------------------
+HOME_URL=""
+SUBMIT=""
+if [ -n "$(env_get FED_HUB_URL)" ]; then
+  info "home instance: $(env_get FED_HUB_URL)"
+elif [ -z "$INST" ]; then
+  info "home instance: a station named localhost cannot federate"
+elif confirm "Connect to your home instance (follow it, and push this station's records to it)?" no; then
+  while :; do
+    HOME_URL="$(ask "Home instance URL, e.g. https://aprs.example.net" "" | tr '[:upper:]' '[:lower:]')"
+    HOME_URL="${HOME_URL%/}"
+    if valid_url "$HOME_URL"; then break; fi
+    warn "'$HOME_URL' is not an instance URL: https://name, or http://name on a LAN or 44Net"
+    [ "$UI" = text ] || [ -n "$HOME_URL" ] || cancelled
+  done
+  SUBMIT="$(ask "The home instance's FED_SUBMIT_SECRET (empty: follow it only)" "")"
+fi
+
 # ---- summary -----------------------------------------------------------------------------------------
 step "Summary"
 changes=()
@@ -187,6 +210,9 @@ if [ "$INST" != "$CUR_INST" ]; then changes+=("instance name $INST"); fi
 [ "$MESHCOM" -eq 0 ] || changes+=("MeshCom node setup")
 [ "$SHORTCUTS" -eq 0 ] || changes+=("home-screen shortcuts")
 [ "$BACKUP" -eq 0 ] || changes+=("daily backup while charging")
+if [ -n "$HOME_URL" ]; then
+  if [ -n "$SUBMIT" ]; then changes+=("home instance $HOME_URL: follow it and push to it"); else changes+=("home instance $HOME_URL: follow it"); fi
+fi
 if [ "${#changes[@]}" -eq 0 ]; then
   info "nothing to change"
 else
@@ -213,6 +239,23 @@ if [ "$INST" != "$CUR_INST" ]; then
   set_value INSTANCE "$INST"
   restart=1
 fi
+if [ -n "$HOME_URL" ]; then
+  peers="$(env_get FED_PEERS)"
+  case ",$peers," in *",$HOME_URL,"*) ;; *) set_value FED_PEERS "${peers:+$peers,}$HOME_URL" ;; esac
+  if [ -n "$SUBMIT" ]; then
+    set_value FED_HUB_URL "$HOME_URL"
+    set_value FED_SUBMIT_SECRET "$SUBMIT"
+  fi
+  # The station signs what it sends and what it asks with a key of its own, never the home instance's.
+  if [ -z "$(env_get FED_PRIVATE_KEY)" ]; then
+    if [ "$DRY" -eq 1 ]; then
+      info "[dry-run] FED_PRIVATE_KEY=<a new signing key>"
+    else
+      env_set FED_PRIVATE_KEY "$(node "$DIR/tools/fedkey/genkey.mjs" --raw)"
+    fi
+  fi
+  restart=1
+fi
 common=(--dir "$DIR" --data-dir "$DATA")
 if [ "$MESHCOM" -eq 1 ]; then
   step "MeshCom node"
@@ -227,6 +270,12 @@ fi
 if [ "$restart" -eq 1 ] && session_exists; then
   step "Restarting the station"
   if [ "$DRY" -eq 1 ]; then info "[dry-run] restart the station"; else restart_station || true; fi
+fi
+
+if [ -n "$HOME_URL" ] && [ -n "$SUBMIT" ]; then
+  step "On the home instance"
+  info "Add $INST to FED_SUBMIT_INSTANCES there (when it keeps an allowlist). After this station's first push it"
+  info "is listed under Instance admin -> Federation as unvetted: promote it there once."
 fi
 
 # ---- hand over ---------------------------------------------------------------------------------------
