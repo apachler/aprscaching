@@ -97,7 +97,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | GET · POST | `/federation/peers` · `/peers/trust` | Peer list + health · set trust | sysop or x-operator-secret |
 | POST | `/federation/peers/44net` | Add a peer by ARDC-verified `<call>.ampr.org` binding (DNSSEC auto-admits, else confirm) | sysop or x-operator-secret |
 | GET | `/federation/sync/:type` | CBOR sync page of signed fedwire frames (the canonical wire; see the federation wire format) | public |
-| POST | `/federation/sync` | Pull from all peers | sysop or x-operator-secret |
+| POST | `/federation/sync` | Pull from all peers; an optional JSON body `{types?, maxPages?}` narrows it to some feeds (deletes always come too) and a page cap. Answers the counts and the bytes read | sysop or x-operator-secret |
 | POST | `/federation/corroborate` | Cross-instance corroboration query | public (rate-limited; `x-fed-secret` if configured) |
 | POST | `/federation/notify` | Gossip "come pull" ping | public |
 | POST | `/federation/submit` | Hub accepts a spoke's signed records | x-fed-secret (`FED_SUBMIT_SECRET`) |

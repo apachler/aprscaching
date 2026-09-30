@@ -24,7 +24,8 @@ stops background apps, and battery and heat are real limits.
 | `extras/usb-kiss.sh` | a USB KISS TNC on OTG: `--list`, `--setup` (writes the `.env`), and the run loop `start.sh` keeps in the window `usb-kiss`; receive-only unless `USB_KISS_TX=1` and the operator's call is control-verified |
 | `extras/usb_kiss_bridge.py` | the bridge itself: libusb through `ctypes` on the fd `termux-usb` hands over, CDC-ACM, KISS over TCP on `127.0.0.1:8001` for one client, a transmit watchdog; `extras/test/` holds its tests |
 | `extras/ampr-cert.sh` | a Let's Encrypt certificate for the station's ampr.org name by manual DNS-01 with lego: prints the `_acme-challenge` TXT record, polls DNS until the portal publishes it, lets lego finish; `--use` serves it on the https port |
-| `extras/setup.sh` | home-screen shortcuts (Termux:Widget) and a daily backup while charging (Termux:API); `--remove` |
+| `extras/sync-now.sh` | sync before a trip: a narrowed pull from the federation peers (caches, deletes, keys; finds with `--finds`; `--pages` per feed), on Wi-Fi only unless `--mobile`; reports the records and bytes, in a notification too |
+| `extras/setup.sh` | home-screen shortcuts (Termux:Widget, Sync before trip among them) and a daily backup while charging (Termux:API); `--remove` |
 | `extras/scheduled-backup.sh` | the job the scheduled backup runs: battery above 50 %, `backup.sh`, the time for `status.sh` |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
