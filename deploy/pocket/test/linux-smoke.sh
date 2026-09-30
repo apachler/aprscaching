@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Exercise the Pocket scripts on a Linux box with tmux: pocket.sh (piped into bash, as on the phone) on
 # an installed checkout, recovery of a killed gateway, status, backup, https for visitors (tls.sh, with a
-# stand-in `ip` that reports a hotspot address), a MeshCom node (meshcom-setup.sh), restart.sh and stop. The Termux-only commands (termux-wake-lock, termux-battery-status, …) are
-# stand-ins on PATH, and tmux runs on its own socket, so an existing tmux session is not touched.
+# stand-in `ip` that reports a hotspot address), a MeshCom node (meshcom-setup.sh), restart.sh, the Termux
+# add-ons (notification, shortcuts, scheduled backup) and stop. The Termux-only commands (termux-wake-lock,
+# termux-battery-status, …) are stand-ins on PATH, and tmux runs on its own socket, so an existing tmux
+# session is not touched.
 #
 #   bash deploy/pocket/install.sh --allow-non-termux --dir ~/pocket-test --data-dir ~/pocket-test-data --port 8951 --call N0CALL
 #   bash deploy/pocket/test/linux-smoke.sh --dir ~/pocket-test --data-dir ~/pocket-test-data
@@ -202,12 +204,45 @@ bash "$HERE/restart.sh" gateway >/dev/null
 CHECK="restart.sh gateway: healthy again" check wait_health 30
 CHECK="restart.sh gateway: a new process" check test "$(proc_pid gateway)" != "$gw"
 
+# ---- the Termux add-ons, with stand-ins that record how they are called
+for cmd in termux-notification termux-notification-remove termux-toast termux-job-scheduler; do
+  printf '#!/bin/sh\nprintf "%%s\\n" "%s $*" >>"%s/api-calls"\n' "$cmd" "$WORK" >"$WORK/bin/$cmd"
+  chmod +x "$WORK/bin/$cmd"
+done
+bash "$HERE/start.sh" --no-attach >/dev/null 2>&1
+CHECK="start.sh: the notify window with Termux:API" check grep -qxF notify <<<"$(tmux list-windows -t "=$SESSION" -F '#{window_name}')"
+: >"$WORK/api-calls"
+bash "$HERE/extras/notify.sh" --once
+call="$(grep -m1 '^termux-notification ' "$WORK/api-calls" || true)"
+CHECK="notify.sh: an ongoing notification with the station's id" check grep -q -- "--id aprscaching --ongoing" <<<"$call"
+CHECK="notify.sh: running, stations heard, battery" check grep -qE "aprscaching: running.*stations heard in the last hour.*battery 80%" <<<"$call"
+CHECK="notify.sh: Stop, Restart and Open map" check grep -qE "button1 Stop.*button2 Restart.*button3 Open map" <<<"$call"
+CHECK="station-status: operator secret required" check test "$(curl -s -o /dev/null -w '%{http_code}' "$(gateway_base)/api/admin/station-status")" = 403
+
+export APRSCACHING_SHORTCUTS_DIR="$WORK/shortcuts" APRSCACHING_BACKUP_DIR="$WORK/backups"
+bash "$HERE/extras/setup.sh" --shortcuts --scheduled-backup >/dev/null
+CHECK="extras/setup.sh: five shortcuts" check test "$(find "$WORK/shortcuts" -type f -perm -u+x | wc -l)" -eq 5
+CHECK="extras/setup.sh: background shortcuts under tasks/" check test -x "$WORK/shortcuts/tasks/aprscaching Start"
+CHECK="extras/setup.sh: a daily job while charging" check grep -qE "termux-job-scheduler --job-id 4287 --script .* --period-ms 86400000 --charging true" "$WORK/api-calls"
+job="$RUN_DIR/scheduled-backup-job.sh"
+bash "$job" && ok_backup=1 || ok_backup=0
+CHECK="scheduled backup: runs and records the time" check test "$ok_backup" = 1 -a -s "$RUN_DIR/last-backup"
+out="$(bash "$HERE/status.sh" 2>&1)" || true
+CHECK="status.sh: the last backup" check grep -q "last backup: 00:00:0" <<<"$out"
+printf '#!/bin/sh\necho %s\n' "'{\"percentage\":30,\"plugged\":\"PLUGGED_AC\"}'" >"$WORK/bin/termux-battery-status"
+rm -f "$RUN_DIR/last-backup"
+bash "$job"
+CHECK="scheduled backup: skipped below 50 % battery" check test ! -e "$RUN_DIR/last-backup"
+bash "$HERE/extras/setup.sh" --remove >/dev/null
+CHECK="extras/setup.sh --remove: shortcuts gone, job cancelled" check test -z "$(find "$WORK/shortcuts" -type f)" -a -n "$(grep -- '--cancel --job-id 4287' "$WORK/api-calls")"
+
 gw="$(proc_pid gateway)"
 bash "$HERE/stop.sh" >/dev/null
 CHECK="stop.sh: the session is gone" check not session_exists
 CHECK="stop.sh: the gateway is gone" check not alive "$gw"
 CHECK="stop.sh: no /health" check not health_ok "$(gateway_base)" 2
 CHECK="stop.sh: wake lock released" check grep -qx termux-wake-unlock "$WORK/calls"
+CHECK="stop.sh: the notification removed" check grep -q "^termux-notification-remove aprscaching" "$WORK/api-calls"
 
 [ "$fails" -eq 0 ] || die "$fails check(s) failed"
 echo "all checks passed"

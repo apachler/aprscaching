@@ -93,6 +93,7 @@ import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleFederationSubmit, pushToHub } from "./fedpush.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
+import { handleStationStatus } from "./station_status.js";
 import { meterWrites, flushWrites, runBudgetDigest } from "./budget.js";
 import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from "./adoption.js";
 import { handleFederationTombstones } from "./tombstones.js";
@@ -400,6 +401,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
+  if (p === "/api/admin/station-status" && m === "GET") return handleStationStatus(req, env);
   if (p === "/api/admin/setup/44net" && m === "GET") return handleFed44netCheck(req, env); // read-only DNS self-check
   if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);
   const adminVerif = /^\/api\/admin\/verifications\/([A-Za-z0-9-]{3,12})$/.exec(p);

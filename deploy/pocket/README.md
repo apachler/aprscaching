@@ -17,6 +17,9 @@ stops background apps, and battery and heat are real limits.
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
 | `restart.sh` | restarts the gateway, the ingest or both in the running station (after editing the `.env`, or once the hotspot is on for a MeshCom node) |
 | `meshcom-setup.sh` | a MeshCom node on the hotspot or on the router the phone has joined (asks when both are up): finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
+| `extras/notify.sh` | the ongoing status notification with Stop, Restart and Open map (Termux:API); `start.sh` runs it |
+| `extras/setup.sh` | home-screen shortcuts (Termux:Widget) and a daily backup while charging (Termux:API); `--remove` |
+| `extras/scheduled-backup.sh` | the job the scheduled backup runs: battery above 50 %, `backup.sh`, the time for `status.sh` |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |

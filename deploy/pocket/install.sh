@@ -455,4 +455,7 @@ Done. Next steps:
        bash $DIR/deploy/pocket/signin-link.sh ${CALL:-<CALL>}
   3. Exempt Termux from battery optimisation in Android's settings, and back the station up with
        bash $DIR/deploy/pocket/backup.sh      (after termux-setup-storage)
+  4. Optional, with Termux:Widget and Termux:API from the same source as Termux: home-screen shortcuts
+     and a daily backup while charging:
+       bash $DIR/deploy/pocket/extras/setup.sh
 EOF
