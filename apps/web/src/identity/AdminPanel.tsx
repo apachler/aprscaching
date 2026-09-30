@@ -16,6 +16,8 @@ import {
   getPorts,
   cotUrl,
   getAdminSetup,
+  run44netCheck,
+  type Net44CheckLine,
   listManualVerifications,
   addManualVerification,
   revokeManualVerification,
@@ -770,6 +772,14 @@ function SetupAdmin(props: {
           ))}
         </ul>
       </Disclosure>
+      {items.some((i) => i.key === "44net") && (
+        <>
+          <h4 className="set-subh">44Net</h4>
+          <Disclosure label="Check what peers find in DNS">
+            <Net44Check />
+          </Disclosure>
+        </>
+      )}
       <p className="muted fine">
         Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
         <span className="mono">deploy/.env</span>, the systemd unit, or{" "}
@@ -780,6 +790,45 @@ function SetupAdmin(props: {
       </p>
       <button onClick={refresh} disabled={loading}>
         {loading ? "Checking…" : "Re-check"}
+      </button>
+    </>
+  );
+}
+
+const NET44_BADGE: Record<Net44CheckLine["status"], { kind?: string; text: string }> = {
+  pass: { kind: "found", text: "ok" },
+  warn: { kind: "warn", text: "check" },
+  fail: { kind: "dnf", text: "fail" },
+  info: { text: "info" },
+};
+
+/**
+ * The 44Net self-check's body: mounts on open, so the DNS lookups run only when the operator asks. The
+ * server only reads DNS and its own descriptor; nothing here or there changes peers or trust.
+ */
+function Net44Check() {
+  const { data, error, loading, reload } = useLoad(() => run44netCheck(), []);
+  if (error) return <ErrorState onRetry={reload}>{error}</ErrorState>;
+  if (!data) return <EmptyState>Looking up this instance's 44Net names…</EmptyState>;
+  if (!data.applicable) return <EmptyState>No 44net endpoint in FED_ENDPOINTS.</EmptyState>;
+  return (
+    <>
+      <ul className="setup-list">
+        {data.lines.map((l) => (
+          <li key={l.id} className="setup-item">
+            <Badge kind={NET44_BADGE[l.status].kind}>{NET44_BADGE[l.status].text}</Badge>
+            <span className="setup-name">{l.label}</span>
+            <span className="setup-detail">{l.detail}</span>
+            {l.fix && <span className="setup-fix">{l.fix}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="muted fine">
+        Read-only: DNS lookups through <span className="mono">DOH_URL</span> and this instance's own descriptor. It does
+        not test whether peers can reach you.
+      </p>
+      <button onClick={reload} disabled={loading}>
+        {loading ? "Checking…" : "Check again"}
       </button>
     </>
   );

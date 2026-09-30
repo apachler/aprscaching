@@ -98,6 +98,7 @@ import { handleAdoptionList, handleCacheAdoption, handleAdminAdoptions } from ".
 import { handleFederationTombstones } from "./tombstones.js";
 import { handleFederationNotify, notifyPeers, isFederatedWrite } from "./gossip.js";
 import { handleFed44netAdd } from "./fed44net.js";
+import { handleFed44netCheck } from "./fed44netcheck.js";
 import { handleFedSync } from "./fedsync.js";
 import { handleFedBbsEnqueue } from "./fedforward.js";
 import { handleBeaconEmit, handleBeaconRx, handleFramesRx } from "./fedbeacon.js";
@@ -399,6 +400,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/bulletins" && m === "GET") return serveFeed(req, env, BULLETIN_FEED);
   if (p === "/api/admin/whoami" && m === "GET") return handleAdminWhoami(req, env);
   if (p === "/api/admin/setup" && m === "GET") return handleAdminSetup(req, env);
+  if (p === "/api/admin/setup/44net" && m === "GET") return handleFed44netCheck(req, env); // read-only DNS self-check
   if (p === "/api/admin/verifications") return handleAdminVerifications(req, env);
   const adminVerif = /^\/api\/admin\/verifications\/([A-Za-z0-9-]{3,12})$/.exec(p);
   if (adminVerif) return handleAdminVerifications(req, env, adminVerif[1]);

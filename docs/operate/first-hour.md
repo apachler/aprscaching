@@ -43,6 +43,13 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 8. **Join the network.** Add the peers you know to `FED_PEERS` and ask their operators to add yours — see
    [Federation → Joining the network](../guides/federation.md#joining-the-network).
 
+9. **44Net** (only with a `44net` endpoint in `FED_ENDPOINTS`). Under **Instance admin → Setup → 44Net**,
+   open *Check what peers find in DNS*. It reads the A record of the host peers contact (inside
+   44.0.0.0/8), the `_aprscaching.<call>.ampr.org` TXT (it shows the exact value to publish, with `host=`
+   when your endpoint is a name under `<call>.ampr.org`), and whether the descriptor lists the same 44net
+   endpoint; DNSSEC and any AAAA record are shown as information. Changes in the 44Net Portal publish within
+   about an hour. The check reads DNS only: it neither tests reachability nor changes peers or trust.
+
 Other members verify their calls themselves (**You → Verify callsign**): over the air once your RF site
 hears them, by `ampr.org` DNS, or with a LoTW certificate. A sysop can verify an out-of-range member by
 hand under **Instance admin → Callsign verification**.

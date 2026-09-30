@@ -841,6 +841,20 @@ export type WriteBudget =
 export function getAdminSetup(): Promise<{ items: SetupItem[]; budget: WriteBudget }> {
   return call(`/api/admin/setup`);
 }
+/** One line of the 44Net self-check; `fix` is set on every warn and fail. */
+export interface Net44CheckLine {
+  id: "endpoint" | "a" | "txt" | "descriptor" | "dnssec" | "aaaa";
+  status: "pass" | "warn" | "fail" | "info";
+  label: string;
+  detail: string;
+  fix?: string;
+}
+/** The read-only 44Net self-check: what peers find in DNS when they add this instance by callsign. */
+export function run44netCheck(): Promise<
+  { applicable: false } | { applicable: true; callsign: string | null; host: string; lines: Net44CheckLine[] }
+> {
+  return call(`/api/admin/setup/44net`);
+}
 /** FBB forwarding routing rules (route token → partner). Sysop-gated. */
 export interface ForwardRuleRow {
   id: number;
