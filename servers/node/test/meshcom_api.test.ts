@@ -100,6 +100,8 @@ describe("GET /api/meshcom/nodes", () => {
     await seed(e);
     const box = await call(e, "GET", "/api/meshcom/nodes?bbox=15.0,46.9,15.6,47.2");
     expect(box.data.nodes.map((n: { callsign: string }) => n.callsign).sort()).toEqual([RX, "OE8XYZ-1"].sort());
+    const picked = await call(e, "GET", "/api/meshcom/nodes?call=oe8xyz-1");
+    expect(picked.data.nodes.map((n: { callsign: string }) => n.callsign)).toEqual(["OE8XYZ-1"]);
     const one = await call(e, "GET", "/api/meshcom/nodes?limit=1");
     expect(one.data.nodes).toHaveLength(1);
     const bad = await call(e, "GET", "/api/meshcom/nodes?bbox=nope&limit=99999");

@@ -205,22 +205,23 @@ interface NodeRow {
   receiver: string | null;
 }
 
-/** GET /api/meshcom/nodes — MeshCom nodes with a known position, as the operator's node(s) heard them. */
+/** GET /api/meshcom/nodes — MeshCom nodes with a known position, as the operator's node(s) heard them; `call` picks one. */
 export async function handleMeshcomNodes(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const maxAge = clampInt(u.searchParams.get("maxAge"), 86400, 60, 7 * 86400);
   const limit = clampInt(u.searchParams.get("limit"), 500, 1, 1000);
   const bb = mapBbox(u);
+  const call = u.searchParams.get("call")?.trim().toUpperCase() || null;
   const exact = (await sessionIdentity(req, env)) !== null;
   const rows = (
     await env.DB.prepare(
       `SELECT n.callsign, s.lat, s.lon, s.symbol, n.last_heard, n.hw_id, n.firmware, n.batt, n.last_via,
               n.last_rssi, n.last_snr, n.quality, n.receiver
          FROM meshcom_nodes n JOIN stations s ON s.callsign = n.callsign
-        WHERE s.lat IS NOT NULL AND n.last_heard >= ?${bb ? " AND s.lat BETWEEN ? AND ? AND s.lon BETWEEN ? AND ?" : ""}
+        WHERE s.lat IS NOT NULL AND n.last_heard >= ?${bb ? " AND s.lat BETWEEN ? AND ? AND s.lon BETWEEN ? AND ?" : ""}${call ? " AND n.callsign = ?" : ""}
         ORDER BY n.last_heard DESC LIMIT ?`,
     )
-      .bind(nowS() - maxAge, ...(bb ? [bb[1], bb[3], bb[0], bb[2]] : []), limit)
+      .bind(nowS() - maxAge, ...(bb ? [bb[1], bb[3], bb[0], bb[2]] : []), ...(call ? [call] : []), limit)
       .all<NodeRow>()
   ).results;
   return json({

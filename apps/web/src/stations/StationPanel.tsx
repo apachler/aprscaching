@@ -8,6 +8,7 @@ import { Panel, Badge, ErrorState, Ico, useToast, Card } from "../ui/index.js";
 import { TrackReplay } from "../shack/TrackReplay.js";
 import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
+import { MeshcomSection } from "../meshcom/MeshcomSection.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /**
@@ -126,6 +127,7 @@ export function StationPanel(props: {
             )}
             <button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</button>
           </div>
+          <MeshcomSection callsign={station.callsign} />
           <TrackReplay map={map} callsign={station.callsign} />
           <StationGraphs callsign={station.callsign} />
           <StationPackets callsign={station.callsign} />

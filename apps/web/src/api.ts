@@ -217,6 +217,53 @@ export function getSpots(
   return call(`/api/spots?${q.toString()}`);
 }
 
+// ---- MeshCom layer: nodes and links as this instance's MeshCom node(s) heard them ----
+export type MeshcomVia = "direct" | "relayed" | "server" | "node";
+export interface MeshcomNode {
+  callsign: string;
+  lat: number;
+  lon: number;
+  symbol: string | null;
+  lastHeard: number;
+  via: MeshcomVia;
+  receiver: string | null;
+  hwId: number | null;
+  firmware: string | null;
+  quality: "strong" | "usable" | "weak" | null;
+  battLevel: "high" | "medium" | "low" | null;
+  /** Exact figures, for signed-in members only. */
+  batt?: number | null;
+  rssi?: number | null;
+  snr?: number | null;
+}
+export interface MeshcomLink {
+  from: string;
+  to: string;
+  kind: "direct" | "relay";
+  lastSeen: number;
+  samples: number;
+  receiver: string | null;
+  fromLat: number;
+  fromLon: number;
+  toLat: number;
+  toLon: number;
+  quality: "strong" | "usable" | "weak" | null;
+  rssi?: number | null;
+  snr?: number | null;
+}
+export function getMeshcomNodes(
+  bbox: BBox | null,
+  opts: { call?: string } = {},
+): Promise<{ exact: boolean; nodes: MeshcomNode[] }> {
+  const q = new URLSearchParams();
+  if (bbox) q.set("bbox", bbox.join(","));
+  if (opts.call) q.set("call", opts.call);
+  return call(`/api/meshcom/nodes?${q.toString()}`);
+}
+export function getMeshcomLinks(bbox: BBox): Promise<{ exact: boolean; links: MeshcomLink[] }> {
+  return call(`/api/meshcom/links?bbox=${bbox.join(",")}`);
+}
+
 // ---- shack: live stations + packet inspector ----
 export function getStations(bbox: BBox): Promise<{ stations: StationSummary[] }> {
   return call(`/api/stations?bbox=${bbox.join(",")}`);
@@ -397,7 +444,7 @@ export function markWatchSeen(): Promise<{ ok: boolean }> {
 export interface MapViewState {
   center?: [number, number];
   zoom?: number;
-  layers?: { spots?: boolean; stations?: boolean };
+  layers?: { spots?: boolean; stations?: boolean; meshcom?: boolean; meshcomLinks?: boolean };
   filters?: { types: string[]; q: string };
   spotFilters?: { bands: string[]; modes: string[]; sources: string[] };
   selected?: number | null;
