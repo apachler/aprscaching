@@ -45,5 +45,9 @@ INSTANCE = "aprscaching.local"   # canonical federation instance id (use your do
 # Daily D1 write budget (docs/operate/deployment.md "Write budget"): near it the gateway sheds low-value writes
 # and alerts the sysop; protected data is always stored. Unset = 1500000 on the Worker. Workers Free: 90000. 0 = off.
 # D1_DAILY_WRITE_BUDGET = "90000"
+# The embeddable map widget (/embed) loads MapLibre from the Pages site at APP_URL; its basemap is BASEMAP_STYLE
+# (a MapLibre style URL, or "offline" for the self-contained grid; unset = OpenFreeMap liberty).
+# APP_URL = "https://aprscaching.example"
+# BASEMAP_STYLE = "offline"
 # Signed federation feeds: generate a key (node tools/fedkey/genkey.mjs) then:
 #   wrangler secret put FED_PRIVATE_KEY

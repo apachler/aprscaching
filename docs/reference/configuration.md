@@ -97,6 +97,8 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `EMAIL_FROM` / `EMAIL_API_KEY` | Sender address and API key of a Resend-compatible email provider, for sign-in links and the watch-alert digest. Absent ⇒ no mail is sent: members sign in with passkeys, or off-grid with the operator's link | — |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` / `VAPID_SUBJECT` | Web-push keys (absent ⇒ push off) | — |
 | `OKAPI_BASE` / `OKAPI_KEY` | OpenCaching import node + consumer key | — |
+| `BASEMAP_STYLE` | Basemap of the embeddable map widget (`/embed`): a MapLibre style URL, or `offline` for the self-contained grid, which loads nothing from outside the instance. The widget's content-security policy lets it fetch only from this gateway and the style's origin. A value that is neither `offline` nor an http(s) URL counts as `offline`. The web app's own basemap is the build-time `VITE_BASEMAP` / `VITE_BASEMAP_STYLE` | OpenFreeMap `liberty` |
+| `BASEMAP_HOSTS` | Extra origins the `BASEMAP_STYLE` style loads tiles, glyphs or sprites from, comma-separated (`https://tiles.example.net,https://fonts.example.net`), for a style that spreads them over several hosts | — |
 | `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL | — |
 
 ## Licence-register import
