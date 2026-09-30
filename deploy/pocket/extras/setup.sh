@@ -54,6 +54,7 @@ if [ "$REMOVE" -eq 1 ]; then
   for n in "${NAMES[@]}"; do rm -f "$SC_DIR/$n"; done
   info "shortcuts removed from $SC_DIR"
   cancel_job
+  rm -f "$RUN_DIR/scheduled-backup-job.sh"
   info "scheduled backup cancelled"
   exit 0
 fi
