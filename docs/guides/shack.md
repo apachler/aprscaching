@@ -27,9 +27,11 @@ Your radio connection itself — receiving, forwarding and transmitting APRS —
 
 ## Live stations
 
-Turn on **Search & filter → Live layers → Live stations** to see APRS stations on the map as they are heard.
-Moving stations show a heading arrow. Tap a station for its page: symbol, speed and course, altitude,
-recent track, weather, and its raw packets.
+Turn on **Search & filter → Live layers → Live stations** to see APRS stations on the map as they are heard;
+the browser remembers the switch. Moving stations show a heading arrow. Tap a station for its page: symbol,
+speed and course, altitude, recent track, weather, and its raw packets. Signed in, **+ Add to my stations**
+puts it in your stations; a station already there shows **In your stations**, and one another operator
+registered says so.
 
 ## Packet decoder
 

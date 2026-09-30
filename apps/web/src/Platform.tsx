@@ -103,6 +103,8 @@ const baseStyle = (): string | StyleSpecification =>
   document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
 
 const NONE: never[] = []; // a layer that is off draws no markers
+/** localStorage key remembering the live-stations layer switch in this browser. */
+const STATIONS_KEY = "acs.layer.stations";
 
 const bboxOf = (m: maplibregl.Map): BBox => {
   const b = m.getBounds();
@@ -165,7 +167,21 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [includeUnvetted, setIncludeUnvetted] = useState(false);
   const includeUnvettedRef = useRef(includeUnvetted);
   includeUnvettedRef.current = includeUnvetted;
-  const [stationsOn, setStationsOn] = useState(false);
+  // The live-stations layer stays opt-in; once turned on, this browser remembers it across reloads.
+  const [stationsOn, setStationsOn] = useState(() => {
+    try {
+      return localStorage.getItem(STATIONS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(STATIONS_KEY, stationsOn ? "1" : "0");
+    } catch {
+      // storage blocked (private window): the layer simply resets on reload
+    }
+  }, [stationsOn]);
   const [stations, setStations] = useState<StationSummary[]>([]);
   // live activity spots — opt-in overlay, off by default like raster layers
   const [spotsOn, setSpotsOn] = useState(false);
