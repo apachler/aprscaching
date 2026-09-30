@@ -566,7 +566,11 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
 function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null }) {
   const l = props.log;
   const tier: Tier = l.logType === "found" && l.verified ? ((l.tier ?? "C") as Tier) : "C";
-  const method = [l.logType === "found" && TIER_NAME[tier], props.dist, l.corroboratedBy && `via ${l.corroboratedBy}`]
+  const method = [
+    l.logType === "found" && TIER_NAME[tier],
+    props.dist,
+    l.corroboratedBy && `via ${l.corroboratedBy}${l.corroboratedLaterAt ? ", confirmed later" : ""}`,
+  ]
     .filter(Boolean)
     .join(" · ");
   return (

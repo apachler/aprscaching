@@ -220,6 +220,10 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
   on the osmocom-sdr list is not merged), and Direwolf needs ALSA or OSS headers that Termux lacks. Revisit
   when librtlsdr opens by file descriptor and Direwolf builds in Termux (or is packaged); then measure CPU,
   battery and heat over 30 minutes before offering it ([`docs/operate/pocket.md`](docs/operate/pocket.md)).
+- [ ] **A later-corroborated find on mirrors** — a find lifted to Tier A by the later corroboration attempt
+  keeps its first tier on instances that already mirrored it: the finds feed pages by log id and carries each
+  log once. Re-serving a changed find needs a revision on the finds feed, like the caches feed's
+  (updated-at cursor, versioned records).
 - [ ] **Watch: DNS-PERSIST-01** — Let's Encrypt's standing DNS authorisation (one TXT record per name and
   ACME account, no new record per renewal) is not in production: it waits on an open point in the IETF
   draft. Once it ships, the ampr.org certificate ([`docs/operate/44net.md`](docs/operate/44net.md#tls-on-the-44net-name))

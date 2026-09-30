@@ -26,7 +26,8 @@ import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
 import { maybeAnnounceFind } from "./announce.js";
-import { queryPeerCorroboration, corroboratorIgate } from "./corroborate.js";
+import { askPeers, corroboratorIgate } from "./corroborate.js";
+import { scheduleRetry, type RetryPlan } from "./corroborate_retry.js";
 import { COARSEN } from "./corroborate_privacy.js";
 import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
@@ -75,6 +76,7 @@ interface LogDbRow {
   distance_m: number | null;
   comment: string | null;
   corroborated_by: string | null;
+  corroborated_later_at?: number | null;
   signer_key: string | null;
 }
 
@@ -134,6 +136,7 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
     distanceM: r.distance_m,
     comment: r.comment,
     corroboratedBy: r.corroborated_by,
+    corroboratedLaterAt: r.corroborated_later_at ?? null,
     signerKey: r.signer_key,
   };
 }
@@ -576,6 +579,8 @@ export interface FindScore {
   corroboratedBy: string | null;
   /** IGate credited on the corroborator board for a Tier-A find. */
   corrIgate: string | null;
+  /** Set when the find missed Tier A only because trusted peers could not be reached: ask them later. */
+  retry?: RetryPlan;
 }
 
 /**
@@ -653,6 +658,7 @@ export async function scoreFind(
   // cache is asked about where its station last was, not where it started. A hit upgrades the find
   // to Tier A only if the logger's own local track could have been there.
   let corroboratedBy: string | null = null;
+  let retry: RetryPlan | undefined;
   const lastStation = cacheStationPositions?.find((p) => p.ts <= at + 60);
   const point =
     cache.type === "aprs_living"
@@ -663,7 +669,7 @@ export async function scoreFind(
         ? { lat: cache.lat, lon: cache.lon }
         : null;
   if (result.tier !== "A" && point) {
-    const ev = await queryPeerCorroboration(env, {
+    const query = {
       callsign: loggerCall,
       lat: point.lat,
       lon: point.lon,
@@ -671,7 +677,13 @@ export async function scoreFind(
       since,
       until: at,
       excludeIgates: [...loggerOwnIgates],
-    });
+    };
+    const asked = await askPeers(env, query);
+    const ev = asked.winner;
+    // Short of quorum only because trusted peers were not reached, and no trusted peer said no: the
+    // same question goes to those peers again later (corroborate_retry.ts).
+    if (!ev && !asked.denied && asked.unreachable.length)
+      retry = { query, unreachable: asked.unreachable, hits: asked.hits };
     if (ev && plausiblePresence({ ...point, ts: ev.ts }, lp.results, DEFAULT_POLICY, COARSEN.timeBucketSec)) {
       corroboratedBy = ev.instance;
       result.tier = "A";
@@ -689,7 +701,7 @@ export async function scoreFind(
     result.verified && result.tier === "A"
       ? corroboratorIgate({ method: result.method, matchedIgate, peerIgate, loggerCall })
       : null;
-  return { result, corroboratedBy, corrIgate };
+  return { result, corroboratedBy, corrIgate, ...(retry && result.tier !== "A" && { retry }) };
 }
 
 /**
@@ -738,6 +750,7 @@ export async function commitFind(
   if ((ins.meta?.changes ?? 1) === 0) return { duplicate: true };
   const logId = Number(ins.meta?.last_row_id) || undefined;
   const now = nowS();
+  if (score.retry && logId) await scheduleRetry(env, logId, at, score.retry);
 
   // award find badges (idempotent; counts verified finds inside)
   if (result.verified) await awardFindBadges(env, loggerCall);
