@@ -91,7 +91,7 @@ import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotify
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleFederationSubmit, pushToHub } from "./fedpush.js";
-import { pruneMeshcom } from "./meshcom.js";
+import { pruneMeshcom, handleMeshcomNodes, handleMeshcomLinks } from "./meshcom.js";
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
@@ -544,6 +544,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // shack: packet inspector + live station registry
   if (p === "/api/decode" && m === "POST") return handleDecode(req);
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
+  if (p === "/api/meshcom/nodes" && m === "GET") return handleMeshcomNodes(req, env);
+  if (p === "/api/meshcom/links" && m === "GET") return handleMeshcomLinks(req, env);
   const seriesMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/series$/.exec(p);
   if (seriesMatch && m === "GET") return handleStationSeries(req, env, seriesMatch[1]!);
   const pktMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/packets$/.exec(p);
