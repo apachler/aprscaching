@@ -152,10 +152,44 @@ if [ -n "$HTTPS" ]; then
   fp="$(openssl x509 -fingerprint -sha256 -noout -in "$TLS_CA" 2>/dev/null | cut -d= -f2 || true)"
   info "visitors install the station CA from http://${hotspot_ip:-<hotspot address>}:$PORT/pocket-ca.crt"
   info "(SHA-256 ${fp:-?}), or accept the browser's warning once"
+elif [ "$(env_get TLS_CERT)" = "$TLS_DIR/ampr.crt" ]; then
+  info "port $(env_get HTTPS_PORT), the certificate for $(cat "$TLS_DIR/ampr.host" 2>/dev/null || echo "the ampr.org name")" \
+    "(extras/ampr-cert.sh); hotspot visitors by address see a name warning"
 elif [ -n "$(env_get HTTPS_PORT)" ]; then
   info "port $(env_get HTTPS_PORT), with a certificate tls.sh does not manage ($(env_get TLS_CERT))"
 else
   info "off; turn it on with:  bash $HERE/tls.sh"
+fi
+# The ampr.org certificate renews only by hand (a DNS record per renewal): warn two weeks ahead.
+if [ -f "$TLS_DIR/ampr.crt" ]; then
+  ampr_host="$(cat "$TLS_DIR/ampr.host" 2>/dev/null || true)"
+  ampr_until="$(openssl x509 -enddate -noout -in "$TLS_DIR/ampr.crt" 2>/dev/null | cut -d= -f2 || true)"
+  if cert_expires_within "$TLS_DIR/ampr.crt" 14; then
+    warn "the certificate for ${ampr_host:-the ampr.org name} expires ${ampr_until:-soon}; renew it:" \
+      "bash $HERE/extras/ampr-cert.sh --host ${ampr_host:-<name>.ampr.org}"
+  else
+    info "ampr.org certificate${ampr_host:+ for $ampr_host}: valid until ${ampr_until:-?}"
+  fi
+elif [ -n "$(env_get TLS_CERT)" ] && [ "$(env_get TLS_CERT)" != "$TLS_LEAF" ] && cert_expires_within "$(env_get TLS_CERT)" 14; then
+  warn "the certificate in $(env_get TLS_CERT) expires within 14 days"
+fi
+
+# ---- 44Net -------------------------------------------------------------------------------------------
+step "44Net"
+if n44="$(net44_address)"; then
+  read -r n44_if n44_ip <<<"$n44"
+  info "up: $n44_ip on $n44_if"
+  # The gateway listens on every interface, the tunnel included, and 44Net Connect filters nothing.
+  warn "the station answers on $n44_ip wherever the tunnel routes from (with a full tunnel, the whole" \
+    "internet): http port $PORT${HTTPS:+ and https $HTTPS}. Anything else listening in Termux (sshd on" \
+    "8022) is reachable there too."
+  if grep -q 44net <<<"$(env_get FED_ENDPOINTS)"; then
+    info "federation over 44Net: check it in Instance admin -> Setup -> 44Net"
+  fi
+elif grep -q 44net <<<"$(env_get FED_ENDPOINTS)"; then
+  warn "FED_ENDPOINTS names a 44net endpoint, but no 44Net address is up: turn on the WireGuard tunnel"
+else
+  info "not connected (the WireGuard app with 44Net Connect gives the phone a 44.x address)"
 fi
 
 # ---- ingest inputs -----------------------------------------------------------------------------------

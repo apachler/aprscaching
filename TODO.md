@@ -220,6 +220,10 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
   on the osmocom-sdr list is not merged), and Direwolf needs ALSA or OSS headers that Termux lacks. Revisit
   when librtlsdr opens by file descriptor and Direwolf builds in Termux (or is packaged); then measure CPU,
   battery and heat over 30 minutes before offering it ([`docs/operate/pocket.md`](docs/operate/pocket.md)).
+- [ ] **Watch: DNS-PERSIST-01** — Let's Encrypt's standing DNS authorisation (one TXT record per name and
+  ACME account, no new record per renewal) is not in production: it waits on an open point in the IETF
+  draft. Once it ships, the ampr.org certificate ([`docs/operate/44net.md`](docs/operate/44net.md#tls-on-the-44net-name))
+  can renew without a portal edit each time; lego already has `--dns-persist`.
 - [ ] **Watch: FTDI, CP210x and CH340 TNCs on Pocket** — the USB KISS bridge drives only CDC-ACM devices;
   these chips need a userspace driver of their own over libusb. Worth doing when a common TNC needs it.
 - [ ] **Capacitor mobile shell** *(P3 · L)* — reuse the web app in a native iOS/Android wrapper for

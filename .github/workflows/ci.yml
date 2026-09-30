@@ -39,6 +39,7 @@ jobs:
       - run: pipx run ruff check deploy/pocket/extras && pipx run ruff format --check deploy/pocket/extras
       - run: cd deploy/pocket/extras && python3 -m unittest discover -s test -v
       - run: bash deploy/pocket/test/wizard-test.sh
+      - run: bash deploy/pocket/test/net44-test.sh
 
   lint-types:
     name: lint (type-aware, slow)
