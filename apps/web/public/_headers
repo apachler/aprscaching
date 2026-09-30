@@ -1,0 +1,5 @@
+# Response headers for Cloudflare Pages; the other hosts ignore this file.
+# The embed widget, served by the API host, loads MapLibre from the app origin as a module script and a
+# module worker. Both are CORS requests, so the vendored copy is open to every origin.
+/vendor/*
+  Access-Control-Allow-Origin: *

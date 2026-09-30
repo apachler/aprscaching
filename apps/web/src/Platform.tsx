@@ -39,6 +39,7 @@ import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import { setToolTxVerified, feedHeard } from "./tools/host.js";
 import { ToolMapLayers } from "./tools/ToolMapLayers.js";
 import type { CacheType } from "@aprscaching/shared";
+import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
@@ -92,7 +93,7 @@ const DEFAULT_CENTER: [number, number] = [15.42, 47.07]; // Graz, OE
 const STYLE: string | StyleSpecification =
   import.meta.env.VITE_BASEMAP === "offline"
     ? buildGraticuleStyle()
-    : ((import.meta.env.VITE_BASEMAP_STYLE as string | undefined) ?? "https://tiles.openfreemap.org/styles/liberty");
+    : ((import.meta.env.VITE_BASEMAP_STYLE as string | undefined) ?? DEFAULT_BASEMAP_STYLE);
 
 /** The base map style for the active theme: Phosphor always uses its keyless phosphor graticule so the
  *  map matches the terminal chrome; Modern uses the configured basemap. */

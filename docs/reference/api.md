@@ -188,7 +188,8 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 (supporter recognition; prefs are session-gated, confirm is x-operator-secret) · `/sitemap.xml` +
 `/api/sitemap` (JSON) + `/robots.txt` · `/feeds/*.xml` (RSS: activity, caches, bulletins, leaderboard,
 per-user) · `/badge/:call.svg` (embeddable network badge) · `/embed` + `/embed/qr.svg` (embeddable map +
-QR) · `DELETE /api/views/:id` (remove a saved view).
+QR; the map takes `?cache=` or `?bbox=`, loads MapLibre from the instance's web app and its basemap from
+[`BASEMAP_STYLE`](configuration.md#gateway-read-api-spots-emailpush)) · `DELETE /api/views/:id` (remove a saved view).
 
 ## Scheduled tasks
 

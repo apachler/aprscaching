@@ -85,6 +85,10 @@ own box with `compose.ingest-only.yml` and `INGEST_URL` pointing at the Worker. 
 APRS-IS-only feed the same way, never the RF bridge. Back it up with D1 Time Travel and a copy of the R2
 media — see [Backups](#backups).
 
+Set the Worker's `APP_URL` to the Pages site. The embeddable map widget (`/embed`) is served by the Worker
+but loads MapLibre from the web app's build at `APP_URL`; the build's `_headers` file lets Pages serve that
+copy to the Worker's origin.
+
 Cost scales with rows written — see the cost table below.
 
 #### Cost on D1
