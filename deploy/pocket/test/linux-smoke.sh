@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Exercise the Pocket process scripts on a Linux box with tmux: start, recovery of a killed gateway,
-# status, backup and stop. The Termux-only commands (termux-wake-lock, termux-battery-status, …) are
+# Exercise the Pocket scripts on a Linux box with tmux: pocket.sh (piped into bash, as on the phone) on
+# an installed checkout, recovery of a killed gateway, status, backup and stop. The Termux-only commands (termux-wake-lock, termux-battery-status, …) are
 # stand-ins on PATH, and tmux runs on its own socket, so an existing tmux session is not touched.
 #
 #   bash deploy/pocket/install.sh --allow-non-termux --dir ~/pocket-test --data-dir ~/pocket-test-data --port 8951 --call N0CALL
@@ -62,8 +62,14 @@ wait_health() {
 proc_pid() { state_get "$1" pid; }
 not() { ! "$@"; }
 
-bash "$HERE/start.sh" --no-attach >/dev/null
-CHECK="start.sh: the gateway answers /health" check wait_health 60
+# pocket.sh fetches install.sh from <APRSCACHING_RAW>/<branch>/…; point it at this checkout's copy.
+mkdir -p "$WORK/raw/local/deploy/pocket"
+ln -s "$DIR/deploy/pocket/install.sh" "$WORK/raw/local/deploy/pocket/install.sh"
+out="$(APRSCACHING_RAW="file://$WORK/raw" bash -s -- --allow-non-termux --branch local --no-update \
+  <"$HERE/pocket.sh" 2>&1)" || printf '%s\n' "$out" | tail -n 20 >&2
+CHECK="pocket.sh: the gateway answers /health" check wait_health 60
+CHECK="pocket.sh: prints the local URL" check grep -q "on this phone: *http://localhost:" <<<"$out"
+CHECK="pocket.sh: prints a sign-in link" check grep -q "/auth/email/verify?token=" <<<"$out"
 CHECK="start.sh: four windows" check test "$(tmux list-windows -t "=$SESSION" | wc -l)" -eq 4
 CHECK="start.sh: wake lock taken" check grep -qx termux-wake-lock "$WORK/calls"
 

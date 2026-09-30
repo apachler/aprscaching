@@ -67,6 +67,58 @@ termux_api() {
   if have timeout; then timeout 8 "$@" 2>/dev/null; else "$@" 2>/dev/null; fi
 }
 
+# ---- networks ----------------------------------------------------------------------------------------
+# One field of a JSON object on stdin (node is always there; jq may not be).
+json_field() {
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const v=JSON.parse(s)[process.argv[1]];if(v!==undefined&&v!==null)process.stdout.write(String(v))}catch{}})' "$1"
+}
+# "name addr/prefix" per IPv4 address, from ip or, without it, ifconfig (net-tools and toybox formats).
+list_ipv4() {
+  if have ip && ip -4 -o addr show >/dev/null 2>&1; then
+    ip -4 -o addr show | awk '{sub(/@.*/, "", $2); print $2, $4}'
+  elif have ifconfig; then
+    ifconfig 2>/dev/null | awk '
+      /^[^ \t]/ { name = $1; sub(/:$/, "", name) }
+      /inet / {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "inet") { a = $(i + 1) } else if ($i ~ /^addr:/) { a = substr($i, 6) }
+        }
+        sub(/^addr:/, "", a)
+        if (a != "") print name, a
+        a = ""
+      }'
+  fi
+}
+# The Wi-Fi network this phone has joined as a client (WIFI_IP, WIFI_SSID), from Termux:API; empty when
+# not joined or when Termux:API is missing.
+WIFI_IP=""
+WIFI_SSID=""
+wifi_detect() {
+  local wifi
+  wifi="$(termux_api termux-wifi-connectioninfo)" || return 0
+  [ "$(printf '%s' "$wifi" | json_field supplicant_state)" = "COMPLETED" ] || return 0
+  WIFI_IP="$(printf '%s' "$wifi" | json_field ip)"
+  WIFI_SSID="$(printf '%s' "$wifi" | json_field ssid)"
+  [ "$WIFI_IP" != "0.0.0.0" ] || WIFI_IP=""
+}
+# What an interface name usually is on Android. The Wi-Fi client address, when known, tells the client
+# apart from a hotspot that shares the wlan prefix. Call wifi_detect first.
+kind_of() {
+  local name=$1 ip=$2
+  if [ -n "$WIFI_IP" ] && [ "$ip" = "$WIFI_IP" ]; then echo "wifi-client"; return; fi
+  case "$name" in
+    lo) echo "loopback" ;;
+    ap* | swlan* | softap* | wigig*) echo "hotspot" ;;
+    wlan*) if [ -n "$WIFI_IP" ]; then echo "hotspot"; else echo "wlan"; fi ;;
+    rndis* | usb* | ncm*) echo "usb-tether" ;;
+    bt-pan* | bnep*) echo "bt-tether" ;;
+    rmnet* | ccmni* | seth* | pdp* | v4-* | clat*) echo "mobile" ;;
+    tun* | wg* | ppp* | ipsec*) echo "vpn" ;;
+    eth* | en*) echo "ethernet" ;;
+    *) echo "other" ;;
+  esac
+}
+
 # ---- per-process state: $RUN_DIR/<name>.state holds KEY=VALUE lines written by supervise.sh ---------
 state_file() { printf '%s/%s.state' "$RUN_DIR" "$1"; }
 state_get() {
@@ -100,4 +152,19 @@ human_duration() {
   d=$((s / 86400)) h=$((s % 86400 / 3600)) m=$((s % 3600 / 60))
   s=$((s % 60))
   if [ "$d" -gt 0 ]; then printf '%dd %02d:%02d:%02d' "$d" "$h" "$m" "$s"; else printf '%02d:%02d:%02d' "$h" "$m" "$s"; fi
+}
+
+# Restart the supervised processes at once (each supervisor restarts its process on USR1). Fails when
+# none is running.
+restart_station() {
+  local name sup restarted=1
+  for name in "${POCKET_PROCS[@]}"; do
+    sup="$(state_get "$name" supervisor)"
+    if is_ours "$sup" supervise.sh; then
+      kill -USR1 "$sup"
+      info "$name: restarting"
+      restarted=0
+    fi
+  done
+  return "$restarted"
 }

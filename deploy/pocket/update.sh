@@ -90,16 +90,7 @@ fi
 
 # Each supervisor restarts its process at once on USR1; new code and migrations load on that start.
 step "Restarting the gateway and the ingest"
-restarted=0
-for name in "${POCKET_PROCS[@]}"; do
-  sup="$(state_get "$name" supervisor)"
-  if is_ours "$sup" supervise.sh; then
-    kill -USR1 "$sup"
-    info "$name: restarting"
-    restarted=1
-  fi
-done
-if [ "$restarted" -eq 0 ]; then
+if ! restart_station; then
   info "the station is not running; start it with: bash $DIR/deploy/pocket/start.sh"
   exit 0
 fi

@@ -6,6 +6,7 @@ stops background apps, and battery and heat are real limits.
 
 | File | Purpose |
 |---|---|
+| `pocket.sh` | the one-command install: upgrades Termux with `apt`, runs `install.sh` from the same branch, starts the station and prints its URLs and a one-time sign-in link; safe to re-run |
 | `install.sh` | installs the Termux packages, clones or updates `~/aprscaching`, installs only what the gateway, the ingest and the web build need, compiles better-sqlite3 for Android, builds the web app, writes `~/.aprscaching/.env` on the first run and starts the gateway once to apply the migrations; safe to re-run |
 | `.env.pocket.example` | the settings `install.sh` starts from (gateway on port 8787, ingest to localhost) |
 | `start.sh` | starts the tmux session `aprscaching` (windows `gateway`, `ingest`, `logs`, `shell`) with a wake lock, or attaches to it; `--no-attach`, `--gateway-only` |
@@ -16,7 +17,7 @@ stops background apps, and battery and heat are real limits.
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
-| `test/linux-smoke.sh` | checks start, recovery, status, backup and stop on a Linux box with tmux (not part of CI) |
+| `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup and stop on a Linux box with tmux (not part of CI) |
 
 Every script takes `--help`, and `--dir` / `--data-dir` (or `APRSCACHING_DIR` / `APRSCACHING_DATA`) when the
 checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
@@ -24,7 +25,24 @@ checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
 ## Install
 
 Use Termux from [F-Droid](https://f-droid.org/packages/com.termux/) or its
-[GitHub releases](https://github.com/termux/termux-app/releases), then in Termux:
+[GitHub releases](https://github.com/termux/termux-app/releases), then in Termux, one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
+```
+
+`pocket.sh` upgrades Termux (`apt update && apt full-upgrade`, after `termux-change-repo` when no mirror is
+chosen yet and a terminal is attached), runs `install.sh` from the same branch with the options passed on, starts the station and
+prints its URLs (on the phone and on the hotspot) and a one-time sign-in link. The link is the way in where
+a passkey does not work, e.g. in Firefox or on a phone without Google services. Running it again upgrades,
+updates and restarts the station; `bash pocket.sh --help` lists the options (`--branch`,
+`--gateway-only`, `--no-start`, and every `install.sh` option).
+
+It upgrades with `apt`, not `pkg`: `pkg` itself runs `curl`, and a half-upgraded Termux (a new `curl`
+against an older OpenSSL) stops `curl` with `cannot locate symbol "SSL_…"` until the upgrade completes.
+If that already stops the `curl` above, run `apt update && apt full-upgrade -y` first.
+
+The steps one by one, with `install.sh` alone:
 
 ```bash
 apt update && apt full-upgrade -y   # bring every package to one consistent version first
@@ -33,10 +51,7 @@ curl -fsSLO https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/p
 bash install.sh --call <YOURCALL>
 ```
 
-Upgrade with `apt`, not `pkg`: `pkg` itself runs `curl`, and a half-upgraded Termux (a new `curl` against an
-older OpenSSL) stops `curl` with `cannot locate symbol "SSL_…"` until the upgrade completes.
-
-`bash install.sh --help` lists the options (another branch or repository, a web build copied from a PC,
+`bash install.sh --help` lists its options (another branch or repository, a web build copied from a PC,
 a dry run).
 
 ## Run
