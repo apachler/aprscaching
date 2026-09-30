@@ -17,11 +17,11 @@ import type { Env } from "./env.js";
 import { DEFAULT_POLICY } from "./verify.js";
 
 /** Store a fix once the station has moved this far (metres) since its last stored fix. */
-export const POS_MIN_MOVE_M_DEFAULT = 25;
+const POS_MIN_MOVE_M_DEFAULT = 25;
 /** Store a fix once this long (seconds) has passed since the station's last stored fix. */
-export const POS_MIN_INTERVAL_S_DEFAULT = 600;
+const POS_MIN_INTERVAL_S_DEFAULT = 600;
 
-export interface DownsamplePolicy {
+interface DownsamplePolicy {
   /** false ⇒ every fix is stored */
   enabled: boolean;
   moveM: number;
@@ -138,9 +138,4 @@ export async function protectedStations(env: Env, bases: string[], now: number):
       .all<{ base: string }>()
   ).results;
   return new Set(rows.map((r) => r.base));
-}
-
-/** Whether every fix of `baseCall` is stored ({@link protectedStations}); one base call, one read. */
-export async function isProtectedStation(env: Env, baseCall: string, now: number): Promise<boolean> {
-  return (await protectedStations(env, [baseCall], now)).has(baseCall);
 }
