@@ -9,23 +9,25 @@ import { runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import type { Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
+import { serveRoom } from "@aprscaching/gateway/budget";
 import type { RoomNamespace } from "@aprscaching/gateway/runtime";
 import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { makeFetchGuard } from "./fetchguard.js";
 
-/** The `ROOMS` binding: /ingest's live dispatch lands in the in-memory rooms; the WS upgrade is the server's. */
+/**
+ * The `ROOMS` binding: /ingest's live dispatch and the write budget land in the in-memory rooms, with the
+ * Durable Object's endpoints (budget.ts serveRoom); the WS upgrade is the server's.
+ */
 export function roomNamespace(rooms: RoomsCore): RoomNamespace {
   return {
     idFromName: (n) => n,
     get: (id) => ({
-      fetch: async (req: Request) => {
-        if (req.method === "POST") {
-          const { envelopes } = (await req.json()) as { envelopes: LiveEnvelope[] };
-          rooms.dispatch(String(id), envelopes);
-          return new Response(null, { status: 204 });
-        }
-        return new Response("expected websocket upgrade", { status: 426 });
-      },
+      fetch: (req: Request) =>
+        serveRoom(
+          req,
+          (envelopes) => rooms.dispatch(String(id), envelopes as LiveEnvelope[]),
+          () => rooms.budgetCounter,
+        ),
     }),
   };
 }

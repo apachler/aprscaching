@@ -17,6 +17,9 @@ import { requireSysop } from "./admin.js";
 import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
+import { budgetStatus } from "./budget.js";
+
+type WriteBudgetStatus = Awaited<ReturnType<typeof budgetStatus>>;
 
 export interface SetupItem {
   /** Stable id: the env key for env-sourced items, `db:<probe>` for runtime state. */
@@ -252,11 +255,13 @@ function envItems(env: Env): SetupItem[] {
 }
 
 /** Runtime-state probes — each names the existing surface that manages it. */
-async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> {
+async function dbItems(env: Env, callsign: string | null, budget: WriteBudgetStatus): Promise<SetupItem[]> {
   const now = nowS();
   const items: SetupItem[] = [];
 
   const rx = await count(env, "SELECT COUNT(*) AS n FROM packets_recent WHERE ts > ?", now - 3600);
+  // from 80 % of the write budget the raw packet log is paused, so an empty log says nothing about the ingest
+  const paused = budget.level === "warn" || budget.level === "over";
   items.push({
     key: "db:ingest",
     level: "blocking",
@@ -266,7 +271,27 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
     source: "db",
     detail: rx
       ? `${rx} packet${rx === 1 ? "" : "s"} heard in the last hour`
-      : "no packets in the last hour — check the ingest box (INGEST_URL + INGEST_SECRET) or the browser RF bridge",
+      : paused
+        ? "the D1 write budget has paused the raw packet log, so ingest activity cannot be checked here"
+        : "no packets in the last hour — check the ingest box (INGEST_URL + INGEST_SECRET) or the browser RF bridge",
+  });
+
+  items.push({
+    key: "D1_DAILY_WRITE_BUDGET",
+    level: "optional",
+    label: "D1 write budget",
+    group: "data",
+    status: paused ? "warn" : "ok",
+    source: "env",
+    detail:
+      budget.used === null
+        ? "off — every write is stored as configured"
+        : `${budget.used.toLocaleString("en")} of ${budget.budget.toLocaleString("en")} rows written today (UTC)` +
+          (budget.level === "over"
+            ? " — over budget: only protected data is stored"
+            : budget.level === "warn"
+              ? " — past 80 %: the raw packet log is paused and unprotected stations store fewer fixes"
+              : ""),
   });
 
   const peers = await count(env, "SELECT COUNT(*) AS n FROM fed_peers WHERE enabled = 1");
@@ -322,11 +347,16 @@ async function dbItems(env: Env, callsign: string | null): Promise<SetupItem[]> 
   return items;
 }
 
-/** GET /api/admin/setup — the operator's configuration checklist (sysop-gated, statuses only). */
+/**
+ * GET /api/admin/setup — the operator's configuration checklist (sysop-gated, statuses only), plus the
+ * D1 write budget's `{ used, budget, level, alerts }` for the admin banner.
+ */
 export async function handleAdminSetup(req: Request, env: Env): Promise<Response> {
   const guard = await requireSysop(req, env);
   if (guard) return guard;
   const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
   applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values
-  return json({ items: [...envItems(env), ...(await dbItems(env, callsign))] });
+  // the write budget's counter: today's count, level and alerts, which the admin banner shows
+  const budget = await budgetStatus(env);
+  return json({ items: [...envItems(env), ...(await dbItems(env, callsign, budget))], budget });
 }
