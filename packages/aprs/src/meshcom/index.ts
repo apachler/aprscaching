@@ -5,3 +5,4 @@ export * from "./normalize.js";
 export * from "./dedup.js";
 export * from "./encode.js";
 export * from "./aprs.js";
+export * from "./hardware.js";

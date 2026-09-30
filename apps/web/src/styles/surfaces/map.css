@@ -92,6 +92,53 @@
     font-size: var(--fs-md);
     font-weight: 700;
   }
+  /* MeshCom nodes: the station pin with a MeshCom ring and an "M" tag, so the difference never rests on
+     colour alone; a node heard only through the MeshCom server gets a dashed ring instead */
+  /* no position here: maplibre positions the marker absolutely, which also anchors the tag below */
+  button.station-pin.meshcom {
+    box-shadow:
+      0 0 0 2px var(--meshcom),
+      var(--elev-1);
+  }
+  button.station-pin.meshcom::after {
+    content: "M";
+    position: absolute;
+    top: -8px;
+    right: -9px;
+    padding: 1px 2px;
+    border-radius: 3px;
+    background: var(--meshcom);
+    color: var(--pin-edge);
+    font: 700 9px/1 var(--font-mono);
+  }
+  button.station-pin.meshcom.via-server {
+    box-shadow: var(--elev-1);
+    outline: 2px dashed var(--meshcom);
+    outline-offset: 1px;
+  }
+  /* a switch that belongs to the one above it (MeshCom links under MeshCom) */
+  .row.between.sub {
+    padding-inline-start: var(--sp-5);
+  }
+  /* bottom-left, above the coordinate readout, where it covers the least map */
+  .mc-legend {
+    position: absolute;
+    left: var(--sp-5);
+    bottom: calc(var(--sp-5) + 72px + env(safe-area-inset-bottom));
+    z-index: var(--z-map-ui);
+    max-width: min(92vw, 20rem);
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .mc-legend .mc-key {
+    display: inline-block;
+    width: 18px;
+    border-top: 3px solid var(--meshcom);
+    vertical-align: middle;
+  }
+  .mc-legend .mc-key.relay {
+    border-top-style: dashed;
+  }
   /* live activity spots — distinct amber marker + a tap card; cache "being activated now" */
   button.spot-pin {
     position: relative;
@@ -222,6 +269,9 @@
     }
     .maptools {
       bottom: calc(126px + env(safe-area-inset-bottom));
+    }
+    .mc-legend {
+      bottom: calc(var(--tabbar-h) + var(--sp-5) + 72px + env(safe-area-inset-bottom));
     }
   }
   /* field-navigation map tools: grid / rings / ruler toggles + readouts */

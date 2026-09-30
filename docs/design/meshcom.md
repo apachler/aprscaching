@@ -74,6 +74,9 @@ LAN, not through a TNC.
 | Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`). Stored positions carry no port, so `transportOf()` in `workers/gateway/src/provenance.ts` does not distinguish it; trust does not depend on it either way | built |
 | Positions | `kind:"position"` with `parsed.lat/lon` → live map, MHeard, `GET /api/ports` | built |
 | Messages | a direct message → the messages log (`shack.ts`); the Messages surface shows it | built |
+| Node and link store | `meshcom_nodes` and `meshcom_links` (`workers/gateway/src/meshcom.ts`): per node the latest device, firmware, battery, way of hearing, receiver and a rolling signal average; per link the last direct hearing or relay leg. Written only from the operator's own attested MeshCom port, when something shown changes or `MESHCOM_META_MIN_S` has passed; pruned nightly, skipped while the write budget sheds. Display only: never touches the A/B/C find tiers | built |
+| Read API | `GET /api/meshcom/nodes` and `GET /api/meshcom/links` ([API](../reference/api.md)): buckets for visitors, exact battery, RSSI and SNR for signed-in members | built |
+| Map | a MeshCom layer (on by default) marks nodes with an "M" tag, dashed when heard only via the server; a links sub-layer (off by default) draws the last 24 hours of links, solid for direct, dashed for relay legs, wider for a stronger signal, fainter with age; the station panel shows how the node was heard, its device, battery and signal, and links to its page on [MeshMap](https://meshmap.oevsv.at/). Device names come from a table of the firmware's hardware ids (`packages/aprs/src/meshcom/hardware.ts`) | built |
 | Telemetry | `tele` → the observational weather path (`sensor_readings`); never touches the A/B/C find tiers. The firmware reports an absent sensor as `0`, so the mapping needs a per-field presence rule | planned |
 
 ### Callsigns and paths

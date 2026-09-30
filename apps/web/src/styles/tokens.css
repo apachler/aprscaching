@@ -54,6 +54,8 @@
     ); /* ink/marks/overlays on the dark chrome (top bar, tab bar, search, landing, solid controls) */
     --pin-edge: oklch(1 0 0); /* map-marker outline + glyph — white ring reads on any basemap */
     --pin-station: oklch(0.86 0.012 230); /* default (roleless) station-pin fill */
+    --meshcom: oklch(0.55 0.16 350); /* MeshCom ring, tag and links */
+    --meshcom-map: #b0417f; /* the same hue for maplibre paint, which takes no CSS colour functions */
     --qr-bg: oklch(1 0 0); /* QR quiet zone — MUST stay light so codes scan (a token, not a stray literal) */
     --fav: oklch(0.64 0.17 15); /* favourite heart */
     --award-bg: oklch(0.3 0.05 95); /* recognition/award chip — gold family, derived in OKLCH */
@@ -251,6 +253,8 @@
     --ink-2: oklch(0.88 0.15 150);
     --ink-tier: oklch(0.14 0.02 155);
     --pin-station: oklch(0.8 0.11 150);
+    --meshcom: oklch(0.86 0.17 110);
+    --meshcom-map: #c8e05a;
     --fav: oklch(0.72 0.18 20);
 
     /* trust tiers re-hued onto the phosphor ramp: A=green, B=cyan, C=dim green */

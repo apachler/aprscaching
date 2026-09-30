@@ -7,6 +7,8 @@ import {
   listCaches,
   getCache,
   getStations,
+  getMeshcomNodes,
+  getMeshcomLinks,
   getSpots,
   resolveView,
   getProfile,
@@ -16,6 +18,8 @@ import {
   type MapCache,
   type BBox,
   type StationSummary,
+  type MeshcomNode,
+  type MeshcomLink,
   type Spot,
   type MapViewState,
   type SearchHitCache,
@@ -83,7 +87,8 @@ import { useLiveSocket } from "./platform/useLiveSocket.js";
 import { useLogQueue } from "./platform/useLogQueue.js";
 import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
 import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
-import { useCacheMarkers, useStationMarkers, useSpotMarkers } from "./platform/markerLayers.js";
+import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
+import { MeshcomLinks } from "./meshcom/MeshcomLinks.js";
 // The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
 const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
@@ -105,6 +110,29 @@ const baseStyle = (): string | StyleSpecification =>
 const NONE: never[] = []; // a layer that is off draws no markers
 /** localStorage key remembering the live-stations layer switch in this browser. */
 const STATIONS_KEY = "acs.layer.stations";
+/** The MeshCom layer (on unless switched off) and its links (off unless switched on), per browser. */
+const MESHCOM_KEY = "acs.layer.meshcom";
+const MESHCOM_LINKS_KEY = "acs.layer.meshcomLinks";
+
+/** A remembered layer switch; `fallback` when this browser never set it or storage is blocked. */
+function useLayerPref(key: string, fallback: boolean) {
+  const [on, setOn] = useState(() => {
+    try {
+      const v = localStorage.getItem(key);
+      return v == null ? fallback : v === "1";
+    } catch {
+      return fallback;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+      // storage blocked (private window): the layer resets on reload
+    }
+  }, [key, on]);
+  return [on, setOn] as const;
+}
 
 const bboxOf = (m: maplibregl.Map): BBox => {
   const b = m.getBounds();
@@ -183,6 +211,13 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
   }, [stationsOn]);
   const [stations, setStations] = useState<StationSummary[]>([]);
+  // MeshCom: nodes on the map by default where the instance has any; links only when asked for
+  const [meshcomOn, setMeshcomOn] = useLayerPref(MESHCOM_KEY, true);
+  const [meshcomLinksOn, setMeshcomLinksOn] = useLayerPref(MESHCOM_LINKS_KEY, false);
+  const [meshcomNodes, setMeshcomNodes] = useState<MeshcomNode[]>([]);
+  const [meshcomLinks, setMeshcomLinks] = useState<MeshcomLink[]>([]);
+  const meshcomRef = useRef({ on: meshcomOn, links: meshcomLinksOn });
+  meshcomRef.current = { on: meshcomOn, links: meshcomLinksOn };
   // live activity spots — opt-in overlay, off by default like raster layers
   const [spotsOn, setSpotsOn] = useState(false);
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -392,18 +427,20 @@ export default function Platform({ session, startTour }: { session: SessionState
     return {
       center: c ? [c.lng, c.lat] : undefined,
       zoom: mapRef.current?.getZoom(),
-      layers: { spots: spotsOn, stations: stationsOn },
+      layers: { spots: spotsOn, stations: stationsOn, meshcom: meshcomOn, meshcomLinks: meshcomLinksOn },
       filters,
       spotFilters,
       selected: selectedId,
     };
-  }, [spotsOn, stationsOn, filters, spotFilters, selectedId, mapRef]);
+  }, [spotsOn, stationsOn, meshcomOn, meshcomLinksOn, filters, spotFilters, selectedId, mapRef]);
   const applyView = useCallback(
     (s: MapViewState) => {
       if (s.center && s.zoom != null) mapRef.current?.flyTo({ center: s.center, zoom: s.zoom });
       if (s.layers) {
         setSpotsOn(!!s.layers.spots);
         setStationsOn(!!s.layers.stations);
+        if (s.layers.meshcom !== undefined) setMeshcomOn(!!s.layers.meshcom);
+        if (s.layers.meshcomLinks !== undefined) setMeshcomLinksOn(!!s.layers.meshcomLinks);
       }
       if (s.filters) setFilters(s.filters as typeof filters);
       if (s.spotFilters) setSpotFilters(s.spotFilters);
@@ -412,7 +449,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         setSelectedId(s.selected);
       }
     },
-    [closeAll, mapRef],
+    [closeAll, mapRef, setMeshcomOn, setMeshcomLinksOn],
   );
   const viewLinked = useRef(false);
   useEffect(() => {
@@ -450,7 +487,18 @@ export default function Platform({ session, startTour }: { session: SessionState
     onMessage: (raw) => {
       const msg = raw as { type?: string } & Record<string, unknown>;
       if (msg.type === "near_cache") setNearPrompt(msg as unknown as GeofencePrompt);
-      else if (msg.type === "station" && stationsOnRef.current) {
+      else if (msg.type === "station" && meshcomRef.current.on) {
+        // a MeshCom node that moved follows its live position; its details refresh with the map
+        const st = msg as unknown as StationSummary;
+        setMeshcomNodes((prev) =>
+          prev.some((n) => n.callsign === st.callsign)
+            ? prev.map((n) =>
+                n.callsign === st.callsign ? { ...n, lat: st.lat, lon: st.lon, lastHeard: st.lastSeen } : n,
+              )
+            : prev,
+        );
+      }
+      if (msg.type === "station" && stationsOnRef.current) {
         const st = msg as unknown as StationSummary;
         setStations((prev) => {
           const next = prev.filter((p) => p.callsign !== st.callsign);
@@ -494,6 +542,14 @@ export default function Platform({ session, startTour }: { session: SessionState
         console.error(e);
       }
     }
+    if (meshcomRef.current.on) {
+      try {
+        setMeshcomNodes((await getMeshcomNodes(bbox)).nodes);
+        if (meshcomRef.current.links) setMeshcomLinks((await getMeshcomLinks(bbox)).links);
+      } catch (e) {
+        console.error(e);
+      }
+    }
     if (spotsOnRef.current) {
       try {
         setSpots((await getSpots(bbox, spotFiltersRef.current)).spots);
@@ -526,8 +582,22 @@ export default function Platform({ session, startTour }: { session: SessionState
       setRemote(c);
     } else if (c.id != null) openCache(c.id);
   });
-  useStationMarkers(map, stationsOn ? stations : NONE, phosphor, (call) => openView({ kind: "station", call }));
+  // a MeshCom node draws once, as a MeshCom pin, while that layer is on
+  const meshcomCalls = useMemo(() => new Set(meshcomNodes.map((n) => n.callsign)), [meshcomNodes]);
+  const stationPins = useMemo(
+    () => (!stationsOn ? NONE : meshcomOn ? stations.filter((s) => !meshcomCalls.has(s.callsign)) : stations),
+    [stationsOn, meshcomOn, stations, meshcomCalls],
+  );
+  useStationMarkers(map, stationPins, phosphor, (call) => openView({ kind: "station", call }));
+  useMeshcomMarkers(map, meshcomOn ? meshcomNodes : NONE, phosphor, (call) => openView({ kind: "station", call }));
   useSpotMarkers(map, spotsOn ? spots : NONE, setPickedSpot);
+
+  // ---- MeshCom layer and its links (toggled from Search & filter) ----
+  useEffect(() => {
+    if (!meshcomOn) setMeshcomNodes([]);
+    if (!meshcomOn || !meshcomLinksOn) setMeshcomLinks([]);
+    if (meshcomOn) void refresh();
+  }, [meshcomOn, meshcomLinksOn, refresh]);
 
   // ---- live APRS stations layer (toggled from Search & filter) ----
   useEffect(() => {
@@ -734,6 +804,10 @@ export default function Platform({ session, startTour }: { session: SessionState
                 setSpotsOn={setSpotsOn}
                 stationsOn={stationsOn}
                 setStationsOn={setStationsOn}
+                meshcomOn={meshcomOn}
+                setMeshcomOn={setMeshcomOn}
+                meshcomLinksOn={meshcomLinksOn}
+                setMeshcomLinksOn={setMeshcomLinksOn}
                 spotFilters={spotFilters}
                 setSpotFilters={setSpotFilters}
                 getViewState={getViewState}
@@ -823,6 +897,9 @@ export default function Platform({ session, startTour }: { session: SessionState
               {/* the viewer's own fix: the cache sheet shows the distance to it */}
               <LocateControl map={map} onFix={(lat, lon) => setHere({ lat, lon })} />
               {ready && <BasemapSwitcher map={map} styleEpoch={styleEpoch} />}
+              {ready && meshcomOn && meshcomLinksOn && (
+                <MeshcomLinks map={map} links={meshcomLinks} styleEpoch={styleEpoch} />
+              )}
               {ready && <MapTools map={map} home={home} target={target} styleEpoch={styleEpoch} />}
               {mapFailed && (
                 <div className="map-unavailable" role="status">
