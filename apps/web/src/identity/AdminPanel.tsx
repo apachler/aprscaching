@@ -27,6 +27,7 @@ import {
   decideAdoptionRequest,
   type AdminAdoptions,
   type SetupItem,
+  type WriteBudget,
   type FedPeer,
   type ForwardPartner,
   type ForwardRuleRow,
@@ -59,6 +60,8 @@ import { usePlatform } from "../platform/PlatformContext.js";
  */
 export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () => void }) {
   const { callsign, map } = usePlatform();
+  // one status request feeds both the write-budget banner and the Setup checklist
+  const setup = useLoad(() => getAdminSetup(), []);
   // group filter (ui-ux.md §2: settings pages with >3 groups are searchable)
   const [q, setQ] = useState("");
   const show = (...words: string[]) => !q.trim() || words.some((w) => w.toLowerCase().includes(q.trim().toLowerCase()));
@@ -77,6 +80,7 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
         Operator-only. These settings govern the whole instance, not your account — you see this because{" "}
         <span className="mono">{callsign}</span> is configured as an operator.
       </p>
+      {setup.data && <WriteBudgetBanner budget={setup.data.budget} onDocs={props.onDocs} />}
       <label className="srch">
         <span className="srch-ic">⌕</span>
         <input
@@ -89,7 +93,7 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
 
       {show("setup", "checklist", "install", "secrets", "wizard") && (
         <Group title="Setup" status="first-install checklist" defaultOpen={true}>
-          <SetupAdmin onDocs={props.onDocs} />
+          <SetupAdmin setup={setup} onDocs={props.onDocs} />
         </Group>
       )}
       {show("verification", "verify", "callsign", "manual", "licence", "sysop") && (
@@ -691,8 +695,44 @@ function SetupRow(props: { item: SetupItem }) {
  * Recommended for a public instance, and Optional (collapsed). Runtime-writable state (peers,
  * partners, trust) lives in the sibling admin groups; each DB row says where it is managed.
  */
-function SetupAdmin(props: { onDocs: (slug: string) => void }) {
-  const { data: items, error, loading, reload: refresh } = useLoad(() => getAdminSetup().then((r) => r.items), []);
+/**
+ * The daily D1 write budget's banner: shown once today's writes crossed 80 % of the budget, and saying what
+ * the instance stops storing at each level. Nothing is shown below 80 % or when the instance sets no budget.
+ */
+function WriteBudgetBanner(props: { budget: WriteBudget; onDocs: (slug: string) => void }) {
+  const b = props.budget;
+  if (b.level !== "warn" && b.level !== "over") return null;
+  const over = b.level === "over";
+  const pct = Math.floor((b.used / b.budget) * 100);
+  const since = b.alerts.find((a) => a.day === b.day && a.threshold === (over ? 100 : 80));
+  return (
+    <div className={over ? "inline-note budget-note bad" : "inline-note budget-note"} role="status">
+      <strong>
+        D1 writes at {pct} % of today's budget
+        {since && ` since ${new Date(since.at).toISOString().slice(11, 16)} UTC`}
+      </strong>
+      <span className="mono">
+        {b.used.toLocaleString()} of {b.budget.toLocaleString()} rows
+      </span>
+      <p className="m-0">
+        {over
+          ? "Only protected stations, RF hearings, finds, accounts and federation data are stored; other stations reach the live map without being saved."
+          : "The raw packet log is paused and stations nothing protects store fewer fixes."}{" "}
+        The count starts again at 00:00 UTC.{" "}
+        <button className="link-btn" onClick={() => props.onDocs("operate/deployment")}>
+          About the write budget
+        </button>
+      </p>
+    </div>
+  );
+}
+
+function SetupAdmin(props: {
+  setup: { data?: { items: SetupItem[] }; error: string | null; loading: boolean; reload: () => void };
+  onDocs: (slug: string) => void;
+}) {
+  const { error, loading, reload: refresh } = props.setup;
+  const items = props.setup.data?.items;
 
   if (error) return <ErrorState onRetry={refresh}>{error}</ErrorState>;
   if (!items) return <EmptyState>Checking this instance's configuration…</EmptyState>;

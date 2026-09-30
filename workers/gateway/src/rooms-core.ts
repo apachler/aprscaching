@@ -11,9 +11,13 @@
  * A half-open client (a phone that lost coverage) keeps its TCP socket up but never reads. The
  * ping/pong sweep reaps it, and a client whose send queue backs up is dropped before its buffer can
  * exhaust the process.
+ *
+ * The rooms also hold the daily write budget's counter (budget.ts), in memory: the guard is opt-in on a
+ * self-host runtime, and a restart starts the day's count again from zero.
  */
 import { Subscribe } from "@aprscaching/shared";
 import { deliveriesFor, type LiveEnvelope } from "./live.js";
+import { BudgetCounter, memoryBudgetStore } from "./budget.js";
 
 const HEARTBEAT_MS = 30_000;
 /** Bytes queued to one client past which it is not draining and is dropped. */
@@ -46,6 +50,8 @@ interface State {
 
 export class RoomsCore {
   private rooms = new Map<string, Map<RoomSocket, State>>();
+  /** The daily D1 write budget's counter, as the Durable Object keeps it on Cloudflare. */
+  readonly budgetCounter = new BudgetCounter(memoryBudgetStore());
 
   /** `heartbeatMs: 0` runs no timer (the caller sweeps). */
   constructor(opts: { heartbeatMs?: number } = {}) {

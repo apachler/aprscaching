@@ -12,9 +12,10 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
 import { haversineMeters } from "@aprscaching/aprs";
+import { dispatchBudget, settleDispatch } from "./budget.js";
 
 const GEOFENCE_RADIUS_M = 150;
-const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
+export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
 
 export interface LiveEnvelope {
   station?: StationDelta;
@@ -86,17 +87,18 @@ export async function envelopeForPosition(
 
 /** Send envelopes to the region room (DO on Workers, in-memory rooms on Node) via its fetch entry. */
 export async function dispatchLive(env: Env, envelopes: LiveEnvelope[], region = LIVE_REGION): Promise<void> {
-  if (!envelopes.length) return;
+  // the global room also keeps the write budget: the pending written rows ride along (budget.ts)
+  const budget = region === LIVE_REGION ? dispatchBudget(env) : null;
+  if (!envelopes.length && !budget) return;
   const room = env.ROOMS.get(env.ROOMS.idFromName(region));
-  await room
+  const res = await room
     .fetch(
       new Request("https://room/dispatch", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ envelopes }),
+        body: JSON.stringify({ envelopes, ...(budget ? { budget } : {}) }),
       }),
     )
-    .catch(() => {
-      /* room unavailable; live is best-effort */
-    });
+    .catch(() => null); // room unavailable; live is best-effort
+  await settleDispatch(env, budget, res);
 }

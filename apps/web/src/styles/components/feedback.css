@@ -9,6 +9,11 @@
     color: var(--ink);
     font-size: var(--fs-md);
   }
+  /* the stronger variant: a condition already costing the user something (tinted from --bad, not --warn) */
+  .inline-note.bad {
+    border-left-color: var(--bad);
+    background: color-mix(in oklch, var(--bad) 12%, transparent);
+  }
   /* loading skeleton: placeholder bars while a surface's code or data arrives; opacity-only pulse */
   .skeleton {
     display: grid;

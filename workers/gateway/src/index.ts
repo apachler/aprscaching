@@ -2,6 +2,7 @@
 import type { Env } from "./env.js";
 import type { ExecCtx, MediaStore } from "./runtime.js";
 import { handle, runScheduled, runFrequentSync } from "./app.js";
+import { applyWorkerDefaults } from "./budget.js";
 export { RegionRoom } from "./room.js";
 export { handle, runScheduled, runFrequentSync, json } from "./app.js";
 
@@ -23,10 +24,13 @@ function adaptR2(bucket: any): MediaStore | undefined {
 }
 
 export default {
+  // The Worker's own defaults (the D1 write budget is on here, off on Node/Bun) are applied only in this
+  // entry, which the self-host servers never load.
   fetch(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
-    return handle(req, { ...env, MEDIA: adaptR2((env as any).MEDIA) }, ctx);
+    return handle(req, applyWorkerDefaults({ ...env, MEDIA: adaptR2((env as any).MEDIA) }), ctx);
   },
   scheduled(event: { cron?: string }, env: Env): Promise<void> {
+    applyWorkerDefaults(env);
     // The two crons do different work. Only the nightly `0 4` cron runs the full TTL/rollup/digest
     // job; the frequent `*/15` cron does the cheap federation sync. Running the full job 96×/day would
     // burn D1 rows-read cost and diverge the digest cadence from Node/Bun.

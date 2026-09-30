@@ -68,6 +68,8 @@ const ENV_STRING_KEYS = [
   // ---- position storage: a fix is stored once its station moved or time passed (see downsample.ts) ----
   "POS_MIN_MOVE_M", // metres moved since the station's last stored fix (default 25; 0 stores every fix)
   "POS_MIN_INTERVAL_S", // seconds since the station's last stored fix (default 600; 0 stores every fix)
+  // ---- the daily D1 write budget: sheds low-value writes as the day's count nears it (see budget.ts) ----
+  "D1_DAILY_WRITE_BUDGET", // rows/day; Worker default 1500000 (free plan: 90000); Node/Bun: off unless set; 0 = off
 
   // ---- callsign verification ----
   "DOH_URL", // validating DNS-over-HTTPS resolver for 44net peer onboarding and the ampr.org DNSSEC check (default cloudflare-dns.com; must return the DNSSEC AD flag)
