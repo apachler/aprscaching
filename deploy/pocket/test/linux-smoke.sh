@@ -133,7 +133,11 @@ CHECK="signin-link.sh --hotspot: a link at the hotspot origin" check grep -q "ht
 CHECK="signin-link.sh --hotspot: a QR code" check grep -q "█" <<<"$out"
 
 gw="$(proc_pid gateway)"
-sed -i 's/192\.168\.43\.1/192.168.44.1/g' "$WORK/ifaces"
+issued="$(openssl x509 -noout -serial -in "$TLS_LEAF")"
+printf '1: lo inet 127.0.0.1/8 scope host lo\n' >"$WORK/ifaces"
+sleep 4
+CHECK="tls.sh --watch: the hotspot turned off keeps the certificate" check test "$(openssl x509 -noout -serial -in "$TLS_LEAF")" = "$issued"
+printf '1: lo inet 127.0.0.1/8 scope host lo\n9: ap0 inet 192.168.44.1/24 scope global ap0\n' >"$WORK/ifaces"
 renewed() {
   local i
   for ((i = 0; i < 20; i++)); do

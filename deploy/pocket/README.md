@@ -113,10 +113,11 @@ bash ~/aprscaching/deploy/pocket/signin-link.sh --hotspot OE8VIS # per visitor: 
   Termux). It is name-constrained to private and loopback addresses, so a visitor who installs it trusts it
   for nothing on the internet.
 - **A certificate for the phone's addresses**: `127.0.0.1`, `localhost` and every private address other
-  devices reach (the hotspot, a joined Wi-Fi, tethering; not mobile data), valid 30 days. Android gives the
-  hotspot a new address each time it is turned on; the tmux window `tls` notices within 30 s, issues the
-  certificate again and hands it to the running gateway without a restart. `start.sh` renews before the
-  gateway starts, and a certificate with less than 7 days left is renewed too.
+  devices reach (the hotspot, a joined Wi-Fi, tethering; not mobile data), valid 30 days. The hotspot's
+  address depends on the phone: some keep it, others pick a new one when the hotspot or the phone restarts.
+  When a new address appears, the tmux window `tls` issues the certificate again within 30 s and hands it
+  to the running gateway without a restart. `start.sh` renews before the gateway starts, and a certificate
+  with less than 7 days left is renewed too.
 - **The `.env`** gets `HTTPS_PORT=8443` (`--port` to change), `TLS_CERT`, `TLS_KEY`, `TLS_CA_CERT` and
   `OPERATOR_LINKS_FOR_ANY_CALL=1`. `APP_URL` stays `http://localhost:8787`, so the station on the phone works
   as before. A page load from another device on port 8787 is redirected to https.

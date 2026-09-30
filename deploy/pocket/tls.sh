@@ -7,8 +7,8 @@
 #   - the CA is made once in ~/.aprscaching/tls (P-256, name-constrained to private and loopback
 #     addresses, so even a visitor who installs it trusts it for nothing on the internet);
 #   - the station certificate names 127.0.0.1, localhost and every private address the phone has (the
-#     hotspot, a joined Wi-Fi, tethering; not mobile data), is valid 30 days, and is issued again when an
-#     address appears or goes, or when it has less than 7 days left;
+#     hotspot, a joined Wi-Fi, tethering; not mobile data), is valid 30 days, and is issued again when a
+#     new address appears, or when it has less than 7 days left;
 #   - the .env gets HTTPS_PORT, TLS_CERT, TLS_KEY, TLS_CA_CERT (served at /pocket-ca.crt) and
 #     OPERATOR_LINKS_FOR_ANY_CALL=1, so signin-link.sh --hotspot can sign a visitor in under their own call.
 #
@@ -26,7 +26,7 @@
 #
 # Options:
 #   --port N             the https port                 (default 8443, or the one already set)
-#   --renew              issue the station certificate again when the addresses changed or it expires
+#   --renew              issue the station certificate again when it lacks a current address or expires
 #                        within 7 days, then reload it in the gateway
 #   --force              with --renew: issue it again in any case
 #   --watch              --renew every 30 s (APRSCACHING_TLS_WATCH_S) until https is turned off
@@ -124,11 +124,17 @@ EOF
 # The addresses the certificate should name, one per line, sorted.
 wanted_ips() { { echo 127.0.0.1; local_ipv4 | awk '{print $2}'; } | sort -u; }
 
+# A certificate that still names every current address stays: an address that went away (the hotspot
+# turned off) is left in it, so turning the hotspot back on at the same address changes nothing. The
+# 7-day renewal drops the addresses no longer in use.
 needs_renew() {
+  local ip
   [ "$FORCE" -eq 0 ] || return 0
   [ -f "$TLS_LEAF" ] && [ -f "$TLS_LEAF_KEY" ] && [ -f "$TLS_IPS" ] || return 0
   openssl x509 -checkend "$RENEW_BEFORE" -noout -in "$TLS_LEAF" >/dev/null 2>&1 || return 0
-  [ "$(cat "$TLS_IPS")" = "$1" ] || return 0
+  while read -r ip; do
+    [ -z "$ip" ] || grep -qxF "$ip" "$TLS_IPS" || return 0
+  done <<<"$1"
   return 1
 }
 
