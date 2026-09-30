@@ -1,0 +1,34 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Termux:Boot script: starts the Pocket station when the phone boots. Termux:Boot (from F-Droid, opened
+# once after installing) runs the scripts in ~/.termux/boot/ at boot. Install this one with
+#
+#   mkdir -p ~/.termux/boot
+#   cp ~/aprscaching/deploy/pocket/boot/start-aprscaching ~/.termux/boot/
+#   chmod +x ~/.termux/boot/start-aprscaching
+#
+# The copy only calls start.sh in the checkout, so updates reach it without copying again. It takes a
+# wake lock, waits for the system to settle (APRSCACHING_BOOT_DELAY seconds, default 30), then runs
+# start.sh --no-attach; its output goes to ~/.aprscaching/logs/boot.log. Remove the file from
+# ~/.termux/boot/ to stop starting at boot.
+#
+# Options:
+#   -h, --help
+set -euo pipefail
+
+case "${1:-}" in
+  -h | --help)
+    awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"
+    exit 0 ;;
+esac
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+export PATH="$PREFIX/bin:$PATH"
+DIR="${APRSCACHING_DIR:-$HOME/aprscaching}"
+DATA="${APRSCACHING_DATA:-$HOME/.aprscaching}"
+mkdir -p "$DATA/logs"
+exec >>"$DATA/logs/boot.log" 2>&1
+printf '%(%Y-%m-%d %H:%M:%S)T boot: starting\n' -1
+
+if command -v termux-wake-lock >/dev/null 2>&1; then termux-wake-lock || true; fi
+sleep "${APRSCACHING_BOOT_DELAY:-30}"
+exec bash "$DIR/deploy/pocket/start.sh" --no-attach --dir "$DIR" --data-dir "$DATA"
