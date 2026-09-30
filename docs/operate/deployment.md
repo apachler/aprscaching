@@ -102,38 +102,59 @@ update writes. Cloudflare's price list ([D1 pricing](https://developers.cloudfla
 counter of workerd's local D1 (`workers/gateway/test/d1_writes.test.ts`). They are the steady state: a station
 and port already heard.
 
+The gateway stores a position fix only when it says something new: the station has moved at least
+`POS_MIN_MOVE_M` (25 m) since its last stored fix, or `POS_MIN_INTERVAL_S` (10 min) has passed. Every fix of a
+**protected** station is stored, because verification reads them: a call an account holds or has verified
+(any SSID), a registered station, a call with a find open (a find logged or a radio command sent in the last
+30 minutes, or a radio command still pending), and the station of a living cache. So is every fix heard
+directly on RF by your own TNC or MeshCom node, whatever the callsign. A fix that is not stored still reaches
+the live map, watch alerts and rendezvous. A station that has not moved leaves its map position and registry
+entry unrewritten.
+
 | Packet | Written on ingest | Written by the nightly prune | Total |
 |--------|-------------------|------------------------------|-------|
-| Position fix | 12 | 2 | 14 |
-| Position fix of a registered station | 13 | 2 | 15 |
-| Weather report with a position | 14 | 3 | 17 |
+| Position fix, not stored (a station nothing protects that has not moved) | 6 | 1 | 7 |
+| Position fix, stored, the station has not moved (protected, heard on RF, or the interval passed) | 11 | 2 | 13 |
+| Position fix, stored, the station has moved | 12 | 2 | 14 |
+| Position fix of a registered station that has moved | 13 | 2 | 15 |
+| Position fix of a registered station that has not moved | 11 | 2 | 13 |
+| Weather report with a position, not stored | 8 | 2 | 10 |
+| Weather report with a position, stored | 13–14 | 3 | 16–17 |
 | Weather report without a position | 8 | 2 | 10 |
 | Message | 9 | 2 | 11 |
 | Status, telemetry, anything else | 6 | 1 | 7 |
 
 Every packet writes its row in the raw-packet ring (4 rows: the row, two indexes and the ID counter) and
-its MHeard entry (2). A position fix adds the position history (4) and the station's latest position (2). A
-station heard for the first time costs 2 more. On top of the per-packet rows, each ingest batch adds 1 row
-per port for the hourly RX counter. The ingest posts a batch every 1.5 s (`BATCH_MS`), so this adds at most
-57,600 rows per day for each port. The nightly prune writes 1 row for each row it deletes.
+its MHeard entry (2; a station heard several times in one batch writes it once). A stored position fix adds
+the position history (4) and the station's latest position (1 when it has not moved, 2 when the position
+index changes too). A station heard for the first time costs 2 more. On top of the per-packet rows, each
+ingest batch adds 1 row per port for the hourly RX counter. The ingest posts a batch every 1.5 s
+(`BATCH_MS`), so this adds at most 57,600 rows per day for each port. The nightly prune writes 1 row for each
+row it deletes.
 
 **Rows per day and per month.** The table below assumes a typical feed: 65 % position fixes, 10 % weather
-with a position, 2 % weather without one, 3 % messages and 20 % other packets. That comes to about 13 rows
-written per packet, counter rows and prune included. It covers the ingest only; sign-ins, finds and federation
-add their own writes on top.
+with a position, 2 % weather without one, 3 % messages and 20 % other packets. It also assumes that half of
+the position and weather fixes are not stored. A busy APRS-IS feed is mostly stations nothing protects —
+digipeaters, IGates, weather stations, parked trackers — and many of them beacon from the same spot more
+often than every 10 minutes; the protected stations (your own members and their finds) are a small share of
+it. Your feed may thin more or less than that: a station beaconing every 10 minutes or slower is always
+stored. The assumptions come to about 10 rows written per packet, counter rows and prune included; storing
+every fix (`0`) makes it about 12. The table covers the ingest only; sign-ins, finds and federation add their
+own writes on top.
 
 | Feed | Packets per day | Rows written per day | Rows written per 30 days | Workers Free | Workers Paid per month |
 |------|-----------------|----------------------|--------------------------|--------------|------------------------|
-| 0.1 packets/s | 8,640 | ~118,000 | ~3.5 million | over the daily limit | $5 |
-| 0.5 packets/s | 43,200 | ~580,000 | ~17 million | over | $5 |
-| 1 packet/s | 86,400 | ~1.1 million | ~34 million | over | $5 |
-| 2 packets/s (the default filter, assumed) | 172,800 | ~2.3 million | ~68 million | over | ~$23 |
-| 5 packets/s | 432,000 | ~5.6 million | ~167 million | over | ~$122 |
-| 20 packets/s | 1.7 million | ~22 million | ~662 million | over | ~$617 |
+| 0.1 packets/s | 8,640 | ~96,000 | ~2.9 million | at the daily limit | $5 |
+| 0.5 packets/s | 43,200 | ~480,000 | ~14 million | over | $5 |
+| 1 packet/s | 86,400 | ~930,000 | ~28 million | over | $5 |
+| 2 packets/s (the default filter, assumed) | 172,800 | ~1.8 million | ~54 million | over | ~$9 |
+| 5 packets/s | 432,000 | ~4.4 million | ~133 million | over | ~$88 |
+| 20 packets/s | 1.7 million | ~17.5 million | ~526 million | over | ~$481 |
 
-The Free plan fits a feed of up to about 0.08 packets/s (about 7,000 packets a day): a single RF port or a
-very small filter. Workers Paid covers about 1.5 packets/s within its included 50 million rows; every
-further packet per second costs about $34 a month.
+The Free plan fits a feed of up to about 0.1 packets/s (about 9,000 packets a day): a single RF port or a
+very small filter. Workers Paid covers about 1.8 packets/s within its included 50 million rows; every
+further packet per second costs about $26 a month. Raising `POS_MIN_INTERVAL_S` or `POS_MIN_MOVE_M` thins
+the unprotected stations further; `0` in either stores every fix.
 
 The default filter in `.env.example`, `r/47.07/15.42/300`, is every station within 300 km of Graz. Its rate
 in the table above is an assumption, not a measurement. Measure your own feed: `GET /api/ports` returns
