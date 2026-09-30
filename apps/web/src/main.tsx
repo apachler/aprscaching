@@ -2,6 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
+import { ErrorBoundary } from "./ui/index.js";
 import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext } from "./format.js";
 
 // Apply the saved theme to <html> before first paint so a Phosphor user doesn't flash the modern
@@ -21,16 +22,20 @@ if (demo) {
   import("./demo/DemoHarness.js").then(({ DemoHarness }) =>
     root.render(
       <React.StrictMode>
-        <FormatContext.Provider value={makeFormatters(loadSettings())}>
-          <DemoHarness which={demo} />
-        </FormatContext.Provider>
+        <ErrorBoundary>
+          <FormatContext.Provider value={makeFormatters(loadSettings())}>
+            <DemoHarness which={demo} />
+          </FormatContext.Provider>
+        </ErrorBoundary>
       </React.StrictMode>,
     ),
   );
 } else {
   root.render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 }

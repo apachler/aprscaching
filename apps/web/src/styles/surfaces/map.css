@@ -447,4 +447,23 @@
     flex: 1;
     margin: 0;
   }
+  /* in place of a map the browser cannot draw (no WebGL2): the reason and the way on */
+  .map-unavailable {
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-map-ui);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-5);
+    padding: var(--sp-6);
+    background: var(--surface);
+    text-align: center;
+  }
+  .map-unavailable .inline-note {
+    max-width: 30rem;
+    margin: 0;
+    text-align: start;
+  }
 }
