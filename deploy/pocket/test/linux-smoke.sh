@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exercise the Pocket scripts on a Linux box with tmux: pocket.sh (piped into bash, as on the phone) on
 # an installed checkout, recovery of a killed gateway, status, backup, https for visitors (tls.sh, with a
-# stand-in `ip` that reports a hotspot address) and stop. The Termux-only commands (termux-wake-lock, termux-battery-status, …) are
+# stand-in `ip` that reports a hotspot address), a MeshCom node (meshcom-setup.sh), restart.sh and stop. The Termux-only commands (termux-wake-lock, termux-battery-status, …) are
 # stand-ins on PATH, and tmux runs on its own socket, so an existing tmux session is not touched.
 #
 #   bash deploy/pocket/install.sh --allow-non-termux --dir ~/pocket-test --data-dir ~/pocket-test-data --port 8951 --call N0CALL
@@ -155,6 +155,31 @@ CHECK="tls.sh --disable: the gateway is back on plain http" check wait_health 60
 sleep 3
 CHECK="tls.sh --disable: no https" check not curl -fsS -o /dev/null --max-time 2 -k "https://127.0.0.1:$HP/health" 2>/dev/null
 CHECK="tls.sh --disable: the tls window closed" check not grep -qxF tls <<<"$(tmux list-windows -t "=$SESSION" -F '#{window_name}')"
+
+# ---- a MeshCom node on the hotspot (the stand-in `ip` reports the hotspot 192.168.43.1/24)
+printf '1: lo inet 127.0.0.1/8 scope host lo\n9: ap0 inet 192.168.43.1/24 scope global ap0\n' >"$WORK/ifaces"
+ing="$(state_get ingest restarts)"
+out="$(bash "$HERE/meshcom-setup.sh" --call n0call-12 --ssid FieldKit --yes 2>&1)" || true
+CHECK="meshcom-setup.sh: a fixed address high in the hotspot subnet" check grep -q -- "--setownip 192.168.43.254" <<<"$out"
+CHECK="meshcom-setup.sh: the phone as the node's gateway" check grep -q -- "--setowngw 192.168.43.1" <<<"$out"
+CHECK="meshcom-setup.sh: the hotspot's mask" check grep -q -- "--setownms 255.255.255.0" <<<"$out"
+CHECK="meshcom-setup.sh: ExtUDP to the phone" check grep -q -- "--extudpip 192.168.43.1" <<<"$out"
+CHECK="meshcom-setup.sh: the hotspot name" check grep -q -- "--setssid FieldKit" <<<"$out"
+CHECK="meshcom-setup.sh: MESHCOM_NODE written" check test "$(env_get MESHCOM_NODE)" = "192.168.43.254=N0CALL-12"
+sleep 2
+CHECK="meshcom-setup.sh: the ingest restarted" check test "$(state_get ingest restarts)" -gt "$ing"
+bash "$HERE/meshcom-setup.sh" --node-ip 192.168.43.50 --yes >/dev/null 2>&1 || true
+CHECK="meshcom-setup.sh: a new address replaces the node's entry" check test "$(env_get MESHCOM_NODE)" = "192.168.43.50=N0CALL-12"
+bash "$HERE/meshcom-setup.sh" --yes >/dev/null 2>&1 || true
+CHECK="meshcom-setup.sh: a configured node keeps its address and call" check test "$(env_get MESHCOM_NODE)" = "192.168.43.50=N0CALL-12"
+CHECK="meshcom-setup.sh: an address outside the subnet is refused" check not bash "$HERE/meshcom-setup.sh" --call N0CALL-12 --node-ip 10.0.0.5 --yes >/dev/null 2>&1
+out="$(bash "$HERE/status.sh" 2>&1)" || true
+CHECK="status.sh: the MeshCom node" check grep -q "MeshCom ExtUDP: UDP 1799, nodes 192.168.43.50=N0CALL-12" <<<"$out"
+
+gw="$(proc_pid gateway)"
+bash "$HERE/restart.sh" gateway >/dev/null
+CHECK="restart.sh gateway: healthy again" check wait_health 30
+CHECK="restart.sh gateway: a new process" check test "$(proc_pid gateway)" != "$gw"
 
 gw="$(proc_pid gateway)"
 bash "$HERE/stop.sh" >/dev/null

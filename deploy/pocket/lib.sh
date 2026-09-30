@@ -57,6 +57,23 @@ env_load() {
   set +a
 }
 
+# Edit the .env in place: the last assignment wins, so a key is removed before it is written once at the
+# end. The file stays readable by Termux only.
+env_unset() {
+  local tmp="$ENV_FILE.tmp.$$" key
+  cp -p "$ENV_FILE" "$tmp"
+  for key in "$@"; do
+    grep -vE "^$key=" "$tmp" >"$tmp.2" || true
+    mv -f "$tmp.2" "$tmp"
+  done
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$ENV_FILE"
+}
+env_set() {
+  env_unset "$1"
+  printf '%s=%s\n' "$1" "$2" >>"$ENV_FILE"
+}
+
 gateway_port() {
   local p
   p="$(env_get PORT)"
@@ -150,6 +167,42 @@ local_ipv4() {
     is_private_ipv4 "$ip" || continue
     printf '%s %s\n' "$name" "$ip"
   done < <(list_ipv4)
+}
+
+# "name address/prefix" for each interface that may be the phone's hotspot. Termux:API tells a joined
+# Wi-Fi apart from the hotspot (call wifi_detect first); without it every wlan address is a candidate.
+hotspot_candidates() {
+  local name cidr
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    is_private_ipv4 "${cidr%%/*}" || continue
+    case "$(kind_of "$name" "${cidr%%/*}")" in hotspot | wlan) printf '%s %s\n' "$name" "$cidr" ;; esac
+  done < <(list_ipv4)
+}
+
+# IPv4 arithmetic for the hotspot subnet: dotted quad <-> integer, and the netmask of a prefix length.
+ip_to_int() {
+  local a b c d
+  IFS=. read -r a b c d <<<"$1"
+  printf '%s' $(((a << 24) | (b << 16) | (c << 8) | d))
+}
+int_to_ip() { printf '%s.%s.%s.%s' $((($1 >> 24) & 255)) $((($1 >> 16) & 255)) $((($1 >> 8) & 255)) $(($1 & 255)); }
+prefix_mask() { int_to_ip $(((0xffffffff << (32 - $1)) & 0xffffffff)); }
+# The phone's own address on the subnet of $1 (the address a listener for that node binds), or nothing.
+local_address_for() {
+  local name cidr ip prefix mask
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    ip="${cidr%%/*}"
+    prefix="${cidr#*/}"
+    [ "$prefix" != "$cidr" ] || prefix=32
+    mask=$(((0xffffffff << (32 - prefix)) & 0xffffffff))
+    if [ $(($(ip_to_int "$ip") & mask)) -eq $(($(ip_to_int "$1") & mask)) ]; then
+      printf '%s' "$ip"
+      return 0
+    fi
+  done < <(list_ipv4)
+  return 1
 }
 
 # ---- https for visitors -----------------------------------------------------------------------------
