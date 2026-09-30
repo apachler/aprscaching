@@ -71,6 +71,8 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
 | GET | `/api/stations`, `/api/stations/:call`, `/:call/series`, `/:call/packets` | Live registry, detail, telemetry series, raw packets | public |
+| GET | `/api/meshcom/nodes?bbox=&maxAge=&limit=` | MeshCom nodes with a known position as this instance's node(s) heard them: how (`direct`, `relayed`, `server`, `node`), device, firmware, a signal-quality and battery bucket; signed-in members also get the exact battery, RSSI and SNR (`exact: true`). `bbox` is `minLon,minLat,maxLon,maxLat`; `maxAge` ≤ 7 d (default 1 d); `limit` ≤ 1000 | public |
+| GET | `/api/meshcom/links?bbox=&maxAge=&limit=` | Links between MeshCom nodes whose both ends have a known position (`direct`, or a `relay` leg), with a quality bucket; exact averages for signed-in members. `maxAge` ≤ 48 h (default 24 h) | public |
 | POST | `/api/decode` | Decode a raw TNC2 line | public |
 | GET | `/api/ports` · `/api/messages` | Transport status · APRS message log | public |
 | POST | `/api/tx/aprs` | Gated user APRS TX | session (verified callsign) |
