@@ -82,7 +82,7 @@ off:
 - **Heat:** the gateway, a hotspot and mobile data together warm the phone. Keep it out of direct sun, and
   on a charger for long sessions.
 
-## Extras: notification, shortcuts, battery saver, scheduled backup
+## Extras: notification, shortcuts, battery saver, alerts, scheduled backup
 
 Three optional add-ons, each from F-Droid (or each from GitHub). **Install every Termux app from the same
 source as Termux itself:** the apps share a signing key, and apps from different sources refuse to talk to
@@ -91,7 +91,7 @@ for Termux:API).
 
 | Add-on | Gives the station |
 |---|---|
-| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery saver, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
+| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery saver, field alerts, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
 | **Termux:Widget** | home-screen shortcuts |
 | **Termux:Boot** | start at boot ([above](#keep-it-running)) |
 
@@ -113,6 +113,14 @@ Without an add-on, the scripts print one line saying what to install and work as
   the threshold, and says so in a notification each time. The profile is an overlay,
   `~/.aprscaching/battery-saver.env`, applied by restarting both processes; `POCKET_BATTERY_LOW=0` turns
   the saver off.
+- **Field alerts** (off by default). With `POCKET_ALERTS=1` in the `.env`, a new direct message to your call
+  (any SSID of `ADMIN_CALLSIGNS`, from MeshCom or APRS) makes the phone vibrate within 15 seconds;
+  `POCKET_ALERTS_SPEAK=1` also says who it is from ("Message from O E 8 X Y Z"). The message itself is
+  read out only with `POCKET_ALERTS_SPEAK_BODY=1`: it may be private, and the phone speaks to everyone
+  around it. Each message is announced once, also across restarts.
+- **Your position.** The phone's GPS reaches the station through the browser: the map's location button,
+  and a find's device location, which is what can make it app-corroborated (Tier B). No script reads the
+  GPS on its own.
 - **Scheduled backup.** `extras/setup.sh --scheduled-backup` registers `backup.sh` with Android's job
   scheduler: once a day, only while the phone charges and the battery is above 50 %. `status.sh` shows the
   last backup. `extras/setup.sh --remove` takes both back.
