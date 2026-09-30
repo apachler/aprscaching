@@ -5,6 +5,7 @@
 # writes ~/.aprscaching/.env on the first run and starts the gateway once to apply the migrations.
 # Safe to re-run: it updates the checkout, keeps an existing .env and skips work that is already done.
 #
+#   apt update && apt full-upgrade -y     # first: a half-upgraded Termux breaks curl (and pkg, which uses it)
 #   curl -fsSLO https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/install.sh
 #   bash install.sh --call OE8APR
 #   bash install.sh --call OE8APR --branch dev
