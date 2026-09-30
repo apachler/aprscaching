@@ -215,6 +215,13 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
   and, where needed, *Disable child process restrictions* (Android 14+). A new Android release that tightens
   background work, or removes that developer option, needs the keep-alive advice in the Pocket guide
   re-tested.
+- [ ] **Watch: an RTL-SDR on Pocket** — not supported: neither `rtl-sdr` nor `direwolf` is a Termux package,
+  librtlsdr cannot open a dongle from the file descriptor `termux-usb` hands over (the `rtlsdr_open_fd` patch
+  on the osmocom-sdr list is not merged), and Direwolf needs ALSA or OSS headers that Termux lacks. Revisit
+  when librtlsdr opens by file descriptor and Direwolf builds in Termux (or is packaged); then measure CPU,
+  battery and heat over 30 minutes before offering it ([`docs/operate/pocket.md`](docs/operate/pocket.md)).
+- [ ] **Watch: FTDI, CP210x and CH340 TNCs on Pocket** — the USB KISS bridge drives only CDC-ACM devices;
+  these chips need a userspace driver of their own over libusb. Worth doing when a common TNC needs it.
 - [ ] **Capacitor mobile shell** *(P3 · L)* — reuse the web app in a native iOS/Android wrapper for
   USB-serial / BLE-KISS and background operation. A build/sign/store pipeline, not a headless code core.
   The deployment shapes it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).

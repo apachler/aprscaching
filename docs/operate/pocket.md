@@ -227,6 +227,26 @@ The bridge is written from the USB CDC-ACM class specification; prior art: [Term
 and pyusb's Termux file-descriptor work ([pyusb#287](https://github.com/pyusb/pyusb/pull/287), not merged, so
 the bridge calls libusb through Python's `ctypes` instead).
 
+## An RTL-SDR on the phone: not supported
+
+An RTL-SDR dongle with Direwolf would make the phone an RF receiver without a TNC. On Termux today this
+does not work, for three independent reasons (checked in the `termux/termux-docker` image and upstream, as
+of September 2026):
+
+| Piece | State |
+|---|---|
+| Packages | Neither `rtl-sdr` nor `direwolf` is a Termux package. |
+| rtl-sdr from source | Builds (`rtl_fm`, `rtl_tcp`, `rtl_sdr`, `rtl_power`; `rtl_adsb` fails because Android's C library has no `pthread_cancel`). It **cannot open the dongle**: librtlsdr finds devices by scanning the USB bus, which Android forbids an app without root, and it has no call that takes the file descriptor `termux-usb` hands over. A patch adding one (`rtlsdr_open_fd`) was posted to the osmocom-sdr list and not merged. |
+| Direwolf from source | Does not build unmodified: it needs ALSA or OSS sound headers, which Termux does not ship. Reading audio only from stdin (`rtl_fm … \| direwolf -r 24000 -`) would need a patch. |
+| CPU, battery, heat | Not measured: nothing runs far enough to measure. |
+
+Were it to work, an SDR would be one more local receiver: what it hears counts toward Tier A only once
+`RF_SITE_CALL` is in `FIRST_PARTY_SITES`, and your own receiver never corroborates your own finds.
+
+Pocket therefore installs neither. For RF on the phone use a TNC — [on USB](#a-usb-tnc-on-the-phone), or
+[over Bluetooth in the browser](#your-radio-in-the-browser) — or a MeshCom node; for an SDR receiver run
+`rtl_fm | direwolf` on a Raspberry Pi as the station's [ingest box](rf-ingest.md).
+
 ## Your radio in the browser
 
 The browser on the phone can connect a Bluetooth Low Energy KISS TNC (a Mobilinkd, for instance) through Web
