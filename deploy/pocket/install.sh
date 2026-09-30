@@ -23,6 +23,7 @@
 #   --skip-pkg           do not run pkg (the tools are installed already)
 #   --allow-non-termux   run outside Termux (a Linux box, to test the steps)
 #   --dry-run            print the steps and commands without changing anything
+#   --no-next-steps      leave out the closing "next steps" (update.sh runs this script)
 #   -h, --help
 set -euo pipefail
 
@@ -38,13 +39,14 @@ FORCE_SQLITE=0
 PKG=1
 ALLOW_NON_TERMUX=0
 DRY=0
+NEXT_STEPS=1
 
 # The packages the steps below need. nodejs-lts ships corepack (the pinned pnpm) and headers node-gyp can
 # build against; clang brings lld and the llvm tools (ar, ld); python and make drive node-gyp. tmux,
 # openssh and termux-api serve running the station (a tmux session, ssh from a PC, battery status).
 PACKAGES=(nodejs-lts git python make clang curl tmux openssh termux-api)
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,12 +62,16 @@ while [ $# -gt 0 ]; do
     --skip-pkg) PKG=0 ;;
     --allow-non-termux) ALLOW_NON_TERMUX=1 ;;
     --dry-run) DRY=1 ;;
+    --no-next-steps) NEXT_STEPS=0 ;;
     -h | --help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
 done
 
+# The processes run from their package directories, so every path written to the .env is absolute.
+case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
+case "$DATA" in /*) ;; *) DATA="$PWD/$DATA" ;; esac
 ENV_FILE="$DATA/.env"
 LOG_DIR="$DATA/logs"
 
@@ -424,18 +430,21 @@ else
 fi
 
 # ---- 11. next steps ----------------------------------------------------------------------------------
+[ "$NEXT_STEPS" -eq 1 ] || exit 0
+# The port the .env names: a kept .env may differ from --port.
+shown_port="$( { grep -E '^PORT=' "$ENV_FILE" 2>/dev/null || true; } | tail -n 1 | cut -d= -f2-)"
+PORT="${shown_port:-$PORT}"
 cat <<EOF
 
 Done. Next steps:
-  1. Start the gateway (one Termux session; keep it open):
-       set -a; . $ENV_FILE; set +a
-       cd $DIR/servers/node && node --import tsx src/server.ts
-  2. Start the ingest (a second Termux session: swipe from the left edge, NEW SESSION):
-       set -a; . $ENV_FILE; set +a
-       cd $DIR/apps/ingest && node --import tsx src/index.ts
-  3. Open http://localhost:$PORT in Chrome on this phone and sign in (a passkey works on localhost).
-     Without one, mint a one-time link in a third session:
-       set -a; . $ENV_FILE; set +a; node $DIR/tools/admin/signin-link.mjs ${CALL:-<CALL>}
-  4. Keep Termux alive while the station runs: termux-wake-lock, and exempt Termux from battery
-     optimisation in Android's settings.
+  1. Start the station: the gateway and the ingest in the tmux session "aprscaching", each restarted
+     when it exits, with a wake lock (Ctrl-b d leaves the session running; stop.sh stops it):
+       bash $DIR/deploy/pocket/start.sh
+     Without a MeshCom node or APRS-IS, add --gateway-only. status.sh shows the processes, the URLs
+     other devices use (the hotspot included), storage and the battery.
+  2. Open http://localhost:$PORT in Chrome on this phone and sign in (a passkey works on localhost).
+     Without one, mint a one-time link:
+       bash $DIR/deploy/pocket/signin-link.sh ${CALL:-<CALL>}
+  3. Exempt Termux from battery optimisation in Android's settings, and back the station up with
+       bash $DIR/deploy/pocket/backup.sh      (after termux-setup-storage)
 EOF

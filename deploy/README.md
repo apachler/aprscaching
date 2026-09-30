@@ -56,6 +56,8 @@ on a schedule.
 - **Self-host and Desktop (SQLite):** `backup.sh` takes a consistent `.backup` snapshot, gzips it, and
   uploads to `BACKUP_DIR` / an OCI bucket / any S3-compatible endpoint (see `.env.example`). Cron it, and
   include `MEDIA_DIR` (uploaded cache media) in the host backup.
+- **Pocket (Termux on a phone):** `pocket/backup.sh` writes the snapshot, the `.env` and the media to the
+  phone's shared storage and keeps the newest seven (see `pocket/README.md`).
 - **Cloudflare split (D1 + R2):** `backup.sh` does not apply. D1 Time Travel is always on and restores the
   database to any minute of the last 30 days on Workers Paid (7 days on Workers Free), per
   https://developers.cloudflare.com/d1/reference/time-travel/ (checked 2026-09-30):

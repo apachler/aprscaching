@@ -273,6 +273,9 @@ baseline global feed, but that is never the only way to get RF in. See
   snapshot, gzips it, and uploads it to `BACKUP_DIR`, an OCI bucket or any S3-compatible endpoint (see
   `deploy/.env.example`); it exits non-zero when no destination is set. Uploaded cache media is stored as files (`MEDIA_DIR`),
   not in the database — include that directory in your host backup.
+- **Pocket (Termux on a phone):** `deploy/pocket/backup.sh` takes the same kind of consistent snapshot
+  (SQLite's online backup, through better-sqlite3) and writes it, with the `.env` and the media, to the
+  phone's shared storage, keeping the newest seven; `--no-env` leaves the secrets out.
 - **Cloudflare split (D1 + R2):** `backup.sh` does not apply. D1 has **Time Travel**, a point-in-time restore
   that is always on and costs nothing extra: any minute of the last **30 days on Workers Paid** (7 days on
   Workers Free) — per Cloudflare's
