@@ -18,8 +18,8 @@ community-driven, and that's on purpose.
 
 ## What to include
 
-- Which runtime/topology (browser PWA, Node self-host, Bun desktop binary, Cloudflare Worker, the Pi
-  ingest box) and version/commit.
+- Which deployment shape (Self-host, Desktop or Cloudflare split) and runtime (browser PWA, Node, the Bun
+  desktop binary, the Cloudflare Worker, the Pi ingest box), and the version/commit.
 - What you expected vs. what happened, and the smallest reproduction you can manage.
 - Relevant logs — but scrub secrets (`INGEST_SECRET`, `FED_PRIVATE_KEY`, tokens, callsign passcodes).
 
