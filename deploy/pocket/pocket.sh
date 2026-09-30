@@ -15,6 +15,7 @@
 #   2. install.sh from the same branch, with the options below passed on.
 #   3. start.sh --no-attach, then the station's URLs and a one-time sign-in link (the way in where a
 #      passkey does not work, e.g. Firefox, or a phone without Google services).
+#   4. after a first install, on a terminal, the setup questions (wizard.sh).
 #
 # bash pocket.sh --help lists the options; any option it does not know goes to install.sh.
 # APRSCACHING_RAW (default https://raw.githubusercontent.com/apachler/aprscaching) is where install.sh is
@@ -108,6 +109,8 @@ main() {
   fi
 
   # ---- 2. install.sh -------------------------------------------------------------------------------
+  local first_install=0
+  [ -f "$data/.env" ] || first_install=1
   # install.sh asks for the callsign only on a terminal stdin, which a piped run does not have: ask here.
   if [ -z "$call" ] && [ ! -f "$data/.env" ]; then
     if tty_ok; then
@@ -172,6 +175,21 @@ main() {
       note "no link; mint one later with: bash $dir/deploy/pocket/signin-link.sh $call"
   else
     note "sign in later with: bash $dir/deploy/pocket/signin-link.sh <CALL>"
+  fi
+
+  # ---- 4. setup questions --------------------------------------------------------------------------
+  # After a first install, on a terminal: the wizard asks the rest (instance name, MeshCom, shortcuts,
+  # backup) and opens Instance admin. It can run any time later.
+  if [ "$first_install" -eq 1 ] && tty_ok; then
+    local answer=""
+    printf '\n    Answer a few setup questions now (instance name, MeshCom node, shortcuts, backup)? [Y/n] ' >/dev/tty
+    IFS= read -r answer </dev/tty || true
+    case "$answer" in
+      n* | N*) note "later: bash $dir/deploy/pocket/wizard.sh" ;;
+      *) bash "$dir/deploy/pocket/wizard.sh" --dir "$dir" --data-dir "$data" </dev/tty || true ;;
+    esac
+  else
+    note "setup questions any time: bash $dir/deploy/pocket/wizard.sh"
   fi
 }
 
