@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import {
-  claim,
-  registerPasskey,
-  loginPasskey,
-  emailStart,
-  passkeySupported,
-  errorText,
-  ApiError,
-  type Licence,
-} from "../api.js";
+import { claim, registerPasskey, loginPasskey, emailStart, errorText, ApiError, type Licence } from "../api.js";
 import { Button, Panel, Icon, LicenceBadge } from "../ui/index.js";
+import { PASSKEY_PROBLEM_TEXT, passkeyProblem } from "./passkeySupport.js";
 
 type Probe = { exists: boolean; hasPasskey: boolean; licence?: Licence } | null;
 
@@ -23,7 +15,8 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const callsign = cs.toUpperCase().trim();
-  const canPasskey = passkeySupported();
+  const noPasskey = passkeyProblem();
+  const canPasskey = noPasskey === null;
 
   async function check() {
     if (callsign.length < 3) {
@@ -176,8 +169,10 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
           {err}
         </p>
       )}
-      {!canPasskey && !probe && (
-        <p className="muted fine mt-3">Passkeys need a secure (https) context; email sign-in works anywhere.</p>
+      {noPasskey && !sent && (
+        <p className="muted fine mt-3" role="note">
+          {PASSKEY_PROBLEM_TEXT[noPasskey]}
+        </p>
       )}
     </Panel>
   );

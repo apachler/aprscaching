@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createCache, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
-import { maidenhead } from "../map/geo.js";
+import { maidenhead, parseCoordinates } from "../map/geo.js";
+import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
+import { LocateStatus, useLocate } from "../geo/useLocate.js";
 import { Button, Panel, Row, Switch, Advanced } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprscaching/shared";
 import { usePlatform } from "../platform/PlatformContext.js";
@@ -43,9 +45,10 @@ export function HidePanel(props: {
   const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [locating, setLocating] = useState(false);
-  const [locErr, setLocErr] = useState<string | null>(null);
-  const canLocate = typeof navigator !== "undefined" && !!navigator.geolocation;
+  const loc = useLocate();
+  const canLocate = locationSupport() !== "unsupported";
+  const [typed, setTyped] = useState("");
+  const [typedErr, setTypedErr] = useState(false);
 
   // the latest callbacks, so the one-shot auto-locate below never pins with a stale closure
   const placeRef = useRef(props.onPlace);
@@ -53,32 +56,32 @@ export function HidePanel(props: {
   const hasDraft = useRef(!!props.draft);
   hasDraft.current = !!props.draft;
 
-  function locate(auto = false) {
-    if (!navigator.geolocation) return;
-    setLocating(true);
-    setLocErr(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setLocating(false);
-        // a pin the hider already dropped by hand wins over a late automatic fix
-        if (auto && hasDraft.current) return;
-        placeRef.current(+p.coords.latitude.toFixed(6), +p.coords.longitude.toFixed(6));
-      },
-      (e) => {
-        setLocating(false);
-        if (!auto || e.code !== e.PERMISSION_DENIED)
-          setLocErr(
-            e.code === e.PERMISSION_DENIED
-              ? "Location access is blocked — allow it in the browser, or tap the map instead."
-              : "Couldn't get a location fix — tap the map instead.",
-          );
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+  async function locate(auto = false) {
+    const got = await loc.locate(NAV_MAX_AGE_MS);
+    if (!("fix" in got)) {
+      // an automatic attempt stays quiet when location is blocked: the map and the typed field remain
+      if (auto && "problem" in got && got.problem === "denied") loc.clearProblem();
+      return;
+    }
+    // a pin the hider already dropped by hand wins over a late automatic fix
+    if (auto && hasDraft.current) return;
+    placeRef.current(+got.fix.lat.toFixed(6), +got.fix.lon.toFixed(6));
   }
+  // on a phone the hider usually stands at the spot: start from the device fix, once, on open
+  const autoLocate = useRef(locate);
   useEffect(() => {
-    if (touchFirst() && !hasDraft.current) locate(true);
+    if (touchFirst() && !hasDraft.current) void autoLocate.current(true);
   }, []);
+
+  // A hider places the cache; a typed coordinate proves nothing and is not asked to.
+  function placeTyped() {
+    const c = parseCoordinates(typed);
+    setTypedErr(!c);
+    if (!c) return;
+    loc.cancel();
+    props.onPlace(+c.lat.toFixed(6), +c.lon.toFixed(6));
+    setTyped("");
+  }
 
   const ready = !!props.draft && title.trim().length > 0 && callsign.length >= 3;
 
@@ -123,9 +126,7 @@ export function HidePanel(props: {
     <Panel side="left" title="Hide a cache">
       <h4 className="set-subh">Location</h4>
       <p className="muted" role="status" aria-live="polite">
-        {locating ? (
-          "Getting your location…"
-        ) : props.draft ? (
+        {props.draft ? (
           <>
             Pin at{" "}
             <code>
@@ -134,17 +135,49 @@ export function HidePanel(props: {
             · grid <code>{maidenhead(props.draft.lat, props.draft.lon, 10)}</code> — drag it to adjust.
           </>
         ) : (
-          <>Tap or click the map to drop the cache location{canLocate ? ", or use your location" : ""}.</>
+          <>Tap or click the map to drop the cache location{canLocate ? ", use your location" : ""}, or type it.</>
         )}
       </p>
-      {locErr && <p className="error">{locErr}</p>}
+      <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
       {canLocate && (
         <div className="row">
-          <button type="button" disabled={locating} onClick={() => locate()}>
-            {locating ? "Locating…" : "Use my location"}
+          <button type="button" disabled={!!loc.waiting} onClick={() => void locate()}>
+            {loc.waiting ? "Locating…" : "Use my location"}
           </button>
         </div>
       )}
+      <form
+        className="row coord-entry"
+        onSubmit={(e) => {
+          e.preventDefault();
+          placeTyped();
+        }}
+      >
+        <label>
+          Coordinates
+          <input
+            value={typed}
+            inputMode="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="47.07355, 15.43785 or JN77rb"
+            aria-invalid={typedErr || undefined}
+            aria-describedby="hide-coord-help"
+            onChange={(e) => {
+              setTyped(e.target.value);
+              setTypedErr(false);
+            }}
+          />
+        </label>
+        <button type="submit" disabled={!typed.trim()}>
+          Place pin
+        </button>
+      </form>
+      <p id="hide-coord-help" className={typedErr ? "error fine" : "muted fine"}>
+        {typedErr
+          ? "Not a coordinate. Type decimal degrees (lat, lon) or a Maidenhead locator."
+          : "Decimal degrees (lat, lon) or a Maidenhead locator."}
+      </p>
       <h4 className="set-subh">Basics</h4>
       <label>
         Title

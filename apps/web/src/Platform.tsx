@@ -43,9 +43,10 @@ import { DEFAULT_BASEMAP_STYLE } from "@aprscaching/shared";
 import type { StyleSpecification } from "maplibre-gl";
 import type { SessionState } from "./identity/useSession.js";
 import { SignIn } from "./identity/SignIn.js";
-import { maidenhead, gridCenter, haversine } from "./map/geo.js";
+import { maidenhead, gridCenter, haversine, parseCoordinates } from "./map/geo.js";
 import { toMgrs } from "@aprscaching/aprs";
 import { MapTools } from "./map/MapTools.js";
+import { LocateControl } from "./map/LocateControl.js";
 import { BasemapSwitcher } from "./map/BasemapSwitcher.js";
 import { NavRail } from "./NavRail.js";
 import { SettingsPanel } from "./identity/SettingsPanel.js";
@@ -81,6 +82,7 @@ import { TabBar } from "./platform/TabBar.js";
 import { useLiveSocket } from "./platform/useLiveSocket.js";
 import { useLogQueue } from "./platform/useLogQueue.js";
 import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
+import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers } from "./platform/markerLayers.js";
 // The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
 const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
@@ -295,11 +297,10 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // ---- the map ----
   const refreshRef = useRef<() => Promise<void>>(async () => {});
-  const { map, mapRef } = useMapInstance(
+  const { map, mapRef, mapFailed } = useMapInstance(
     mapNode,
     { style: baseStyle, center: DEFAULT_CENTER, zoom: 9 },
     {
-      onGeolocate: (lat, lon) => setHere({ lat, lon }), // the cache sheet shows the distance
       onLoad: (m) => {
         setCenter([m.getCenter().lat, m.getCenter().lng]);
         void refreshRef.current();
@@ -460,8 +461,8 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   const refresh = useCallback(async () => {
     const m = mapRef.current;
-    if (!m) return;
-    const bbox = bboxOf(m);
+    if (!m && !mapFailed) return;
+    const bbox = m ? bboxOf(m) : fallbackBbox(location.hash, DEFAULT_CENTER);
     subscribeLive(bbox);
     try {
       setCaches((await listCaches(bbox, includeUnvettedRef.current)).caches);
@@ -484,7 +485,7 @@ export default function Platform({ session, startTour }: { session: SessionState
         console.error(e);
       }
     }
-  }, [subscribeLive, mapRef]);
+  }, [subscribeLive, mapRef, mapFailed]);
   refreshRef.current = refresh;
 
   // re-fetch the map when the unvetted-network toggle flips
@@ -614,12 +615,8 @@ export default function Platform({ session, startTour }: { session: SessionState
       flyTo(g[0], g[1], 10);
       return;
     }
-    const ll = q.match(/^(-?\d+(?:\.\d+)?)\s*[ ,]\s*(-?\d+(?:\.\d+)?)$/);
-    if (ll) {
-      const lat = +ll[1]!,
-        lon = +ll[2]!;
-      if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) flyTo(lat, lon, 12);
-    }
+    const ll = parseCoordinates(q);
+    if (ll) flyTo(ll.lat, ll.lon, 12);
   }
 
   // enriched-search picks: a cache opens its detail + flies there; a station just flies to it
@@ -807,9 +804,19 @@ export default function Platform({ session, startTour }: { session: SessionState
                   </div>
                 </div>
               )}
+              {/* the viewer's own fix: the cache sheet shows the distance to it */}
+              <LocateControl map={map} onFix={(lat, lon) => setHere({ lat, lon })} />
               {ready && <BasemapSwitcher map={map} styleEpoch={styleEpoch} />}
               {ready && <MapTools map={map} home={home} target={target} styleEpoch={styleEpoch} />}
-              {!ready && (
+              {mapFailed && (
+                <div className="map-unavailable" role="status">
+                  <p className="inline-note bad">{NO_WEBGL_TEXT}</p>
+                  <Button variant="primary" onClick={() => openView(panel("nearby"))}>
+                    Open the Nearby list
+                  </Button>
+                </div>
+              )}
+              {!ready && !mapFailed && (
                 <div className="splash">
                   <img src={ASSET.wordmark} alt="APRScaching" />
                 </div>

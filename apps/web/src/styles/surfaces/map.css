@@ -374,4 +374,96 @@
   .geo-banner button.icon {
     color: var(--accent-ink);
   }
+
+  /* ---- the locate button (in MapLibre's top-left control stack) and the viewer's dot ---- */
+  .maplibregl-ctrl-group button.locate-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    /* MapLibre's control stack is white in every theme: near-black ink, like its own glyphs */
+    color: var(--ink-tier);
+  }
+  .maplibregl-ctrl-group button.locate-btn[data-mode="follow"] {
+    color: var(--accent-ink);
+    background: var(--accent);
+  }
+  /* blocked for this site: a struck-through look, so the state reads without the colour */
+  .maplibregl-ctrl-group button.locate-btn[data-blocked] {
+    color: var(--bad);
+    opacity: 0.8;
+  }
+  .maplibregl-ctrl-group button.locate-btn[data-blocked]::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    transform: rotate(-45deg);
+  }
+  .maplibregl-ctrl-group button.locate-btn[data-mode="background"] {
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .maplibregl-ctrl-group button.locate-btn:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: -2px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .maplibregl-ctrl-group button.locate-btn[data-mode="waiting"] svg {
+      animation: locate-wait 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes locate-wait {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0.3;
+      }
+    }
+  }
+  .user-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--pin-edge);
+    box-shadow: var(--elev-2);
+  }
+  /* the locate progress / problem line, stacked under the locate button */
+  .map-locate-slot {
+    max-width: min(22rem, calc(100vw - 2 * var(--sp-5)));
+  }
+  .map-locate-status {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    color: var(--ink);
+    border: 1px solid var(--hair);
+    border-radius: var(--r-6);
+    /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
+  }
+  .map-locate-status > :first-child {
+    flex: 1;
+    margin: 0;
+  }
+  /* in place of a map the browser cannot draw (no WebGL2): the reason and the way on */
+  .map-unavailable {
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-map-ui);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-5);
+    padding: var(--sp-6);
+    background: var(--surface);
+    text-align: center;
+  }
+  .map-unavailable .inline-note {
+    max-width: 30rem;
+    margin: 0;
+    text-align: start;
+  }
 }
