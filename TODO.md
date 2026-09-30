@@ -213,10 +213,10 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
   field alerts, a scheduled backup, a USB KISS TNC through `termux-usb`, 44Net status and https on the ampr.org
   name, a pre-trip sync with a region filter, and the home-instance hub
   ([`docs/operate/pocket.md`](docs/operate/pocket.md)). Phone tests of each are recorded in its "Tested on" table.
-- [ ] **Per-host 44Net records** — `_aprscaching.<host>` records so one callsign can publish several
-  instances (a home station and a Pocket) under names in its zone. Held back: the corroboration quorum counts
-  a peer by its registry operator, else its key, so two directly added instances of one callsign would count
-  as two voices. It needs the ARDC-verified call recorded on 44net peers and counted as the operator first.
+- [x] **Per-host 44Net records** — `_aprscaching.<host>` records so one callsign publishes several instances
+  (a home station and a Pocket), added by host; an ambiguous name lists its candidates. The ARDC-verified
+  callsign is recorded on 44net peers and counts as the operator, so the corroboration quorum hears one voice
+  per callsign ([`docs/operate/44net.md`](docs/operate/44net.md#3-name-and-identity)).
 - [ ] **Watch: Bun on Android** — no official Android build (oven-sh/bun#28924), so Pocket runs the Node
   gateway rather than the desktop binary. Once Bun ships one, the desktop binary could run on a phone.
 - [ ] **Watch: Android background limits** — Pocket relies on a wake lock, Termux battery "Unrestricted",

@@ -31,6 +31,14 @@
     border-radius: var(--r-6);
     background: color-mix(in oklch, var(--warn) 8%, transparent);
   }
+  /* the bindings an ambiguous lookup found, each added by its host */
+  .fed44net-candidates {
+    display: grid;
+    gap: var(--sp-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
   .fed44net .disclosure-body {
     display: grid;
     gap: var(--sp-2);
