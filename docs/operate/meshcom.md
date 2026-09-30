@@ -130,7 +130,8 @@ set up, the node acks the message and confirms the verification.
 
 ## What you see
 
-- **Map** — MeshCom stations' positions, like any other station.
+- **Map** — MeshCom stations' positions, marked as MeshCom nodes, with how your node heard them and the
+  links it heard; see [MeshCom on the map](../guides/caching.md#meshcom-on-the-map).
 - **Message log** — direct messages between callsigns.
 - **Port monitor** — every MeshCom frame on the `meshcom` port, including group and broadcast text, which
   stays out of the message log because it is addressed to no one in particular.

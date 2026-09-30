@@ -4,6 +4,7 @@ import { useTheme } from "../format.js";
 import { Panel, useToast, Ico } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
 import { saveView, type MapViewState } from "../api.js";
+import { MESHMAP_ATTRIBUTION, meshmapUrl } from "../meshcom/meshcomView.js";
 import type { CacheType } from "@aprscaching/shared";
 
 export interface SpotFilters {
@@ -25,6 +26,10 @@ export function FilterPanel(props: {
   setSpotsOn: (v: boolean) => void;
   stationsOn: boolean;
   setStationsOn: (v: boolean) => void;
+  meshcomOn: boolean;
+  setMeshcomOn: (v: boolean) => void;
+  meshcomLinksOn: boolean;
+  setMeshcomLinksOn: (v: boolean) => void;
   spotFilters: SpotFilters;
   setSpotFilters: (f: SpotFilters) => void;
   getViewState: () => MapViewState;
@@ -98,6 +103,36 @@ export function FilterPanel(props: {
         </label>
         <Switch label="Live stations" checked={props.stationsOn} onChange={props.setStationsOn} />
       </div>
+      <div className="row between">
+        <label>
+          MeshCom
+          <span className="muted block">
+            MeshCom nodes as this station's MeshCom node heard them, marked with an M; a dashed ring means heard only
+            through the MeshCom server. This browser remembers it.
+          </span>
+        </label>
+        <Switch label="MeshCom" checked={props.meshcomOn} onChange={props.setMeshcomOn} />
+      </div>
+      {props.meshcomOn ? (
+        <div className="row between sub">
+          <label>
+            MeshCom links
+            <span className="muted block">
+              Who the node heard directly or through relays in the last 24 hours: its own view, not the whole network.
+            </span>
+          </label>
+          <Switch label="MeshCom links" checked={props.meshcomLinksOn} onChange={props.setMeshcomLinksOn} />
+        </div>
+      ) : (
+        <p className="muted fine">Turn MeshCom on to show its links.</p>
+      )}
+      <p className="muted fine">
+        The whole MeshCom network:{" "}
+        <a href={meshmapUrl()} target="_blank" rel="noopener noreferrer">
+          Open MeshMap
+        </a>{" "}
+        ({MESHMAP_ATTRIBUTION})
+      </p>
       <div className="row between">
         <label>
           Activity spots

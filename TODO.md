@@ -517,6 +517,11 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
   - a browser-direct Web Serial/BLE path, after reading the node's serial and BLE protocols from the
     MIT firmware.
+  - **MeshCom on the map** — done: the node and link store, `/api/meshcom/nodes` and `/links`, the map
+    layer, the links sub-layer and the station panel section
+    ([guide](docs/guides/caching.md#meshcom-on-the-map)). A network-wide feed from the MeshCom servers is
+    not pursued (owner decision): the map shows what the operator's own node(s) heard and links to MeshMap
+    for the rest.
   - **Caches on the MeshCom map** ([research](docs/design/meshcom-tdeck-map.md)) — display only, never
     find evidence. Watch: T-Deck Plus screen-rendering stall, MeshCom-Firmware #1131.
     - [ ] **`CACHES` bot command** *(P2 · M)* — a MeshCom operator sends `CACHES [grid]` to the bot call

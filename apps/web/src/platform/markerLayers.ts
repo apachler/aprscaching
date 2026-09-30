@@ -7,7 +7,8 @@
  */
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { MapCache, StationSummary, Spot } from "../api.js";
+import type { MapCache, MeshcomNode, StationSummary, Spot } from "../api.js";
+import { nodePinClass, nodeTitle } from "../meshcom/meshcomView.js";
 import { typeMeta } from "../cacheTypes.js";
 import { roleMeta } from "../stationRoles.js";
 import { aprsGlyph } from "../aprsGlyph.js";
@@ -54,7 +55,8 @@ export function useCacheMarkers(
         el = existing.getElement();
         // keep the class + glyph in sync if a cache flips mirrored↔native or the theme flips
         if (c.type !== "aprs_living") {
-          el.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
+          // toggle, never assign: className would drop the maplibregl-marker classes that position the pin
+          el.classList.toggle("mirrored", !!c.mirrored);
           const span = el.querySelector("span");
           if (span) span.textContent = phosphor ? meta.cog : meta.glyph;
         }
@@ -148,6 +150,49 @@ export function useStationMarkers(
     }
     prune(markers.current, seen);
   }, [map, stations, phosphor, pick]);
+}
+
+/**
+ * MeshCom node pins: the station's APRS symbol in a station pin with a MeshCom ring and an "M" tag, so the
+ * difference does not rest on colour; a node heard only via the MeshCom server gets a dashed ring.
+ */
+export function useMeshcomMarkers(
+  map: maplibregl.Map | null,
+  nodes: MeshcomNode[],
+  phosphor: boolean,
+  onPick: (callsign: string) => void,
+): void {
+  const markers = useRef(new Map<string, maplibregl.Marker>());
+  const pick = useLatest(onPick);
+  useEffect(() => {
+    if (!map) return;
+    const seen = new Set<string>();
+    for (const n of nodes) {
+      seen.add(n.callsign);
+      let mk = markers.current.get(n.callsign);
+      if (!mk) {
+        const btn = document.createElement("button");
+        btn.className = nodePinClass(n);
+        btn.innerHTML = "<span></span>";
+        btn.onclick = (ev) => {
+          ev.stopPropagation();
+          pick.current(n.callsign);
+        };
+        mk = new maplibregl.Marker({ element: btn, anchor: "center" }).setLngLat([n.lon, n.lat]).addTo(map);
+        markers.current.set(n.callsign, mk);
+      } else {
+        mk.setLngLat([n.lon, n.lat]);
+      }
+      const el = mk.getElement();
+      // toggle, never assign: className would drop the maplibregl-marker classes that position the pin
+      el.classList.toggle("via-server", n.via === "server");
+      el.title = nodeTitle(n);
+      el.setAttribute("aria-label", nodeTitle(n));
+      const aprs = aprsGlyph(n.symbol);
+      (el.querySelector("span") as HTMLElement).textContent = aprs ? (phosphor ? aprs.cog : aprs.glyph) : "•";
+    }
+    prune(markers.current, seen);
+  }, [map, nodes, phosphor, pick]);
 }
 
 /** Activity-spot pins: an opt-in overlay with its own marker class. */
