@@ -430,6 +430,15 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 
 ## Future ideas (not yet built, still wanted)
 
+- [ ] **How a station was heard, on the map** *(P2 · M)* — the station panel and the pins name no
+  transport: MeshCom shows only as `meshcom` in a station's raw packets, and track replay says RF or IS.
+  Show a "Heard via" line and a badge (APRS-IS, RF on a TNC, MeshCom direct with the receiving node,
+  MeshCom relayed), and let the Nearby list filter by it. The gateway stores the transport per position
+  and the receiving node per packet; the stations query, `StationSummary`, the live `StationDelta` and
+  `envelopeForPosition` carry neither yet. MeshCom's relayed hearings and its server copies reach the
+  gateway alike (`aprs_is`); telling them apart needs the ingest to pass the distinction on. The node's own
+  firmware, hardware and battery reach only the ingest log. Display only: no tier changes.
+
 - [ ] **FCC ULS email verification** *(S/M · blocked on a data source)* — verify a US call by mailing a code
   to the address the licensee gave the FCC, storing only `sha256(lowercased email)` per call. Blocked: the
   public amateur bulk file (`data.fcc.gov/download/pub/uls/complete/l_amat.zip`, `EN.dat`) carries the

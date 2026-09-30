@@ -360,6 +360,10 @@ export interface StationDetail extends StationSummary {
   track: StationTrackPoint[];
   wx: WxReading | null;
   packets: number;
+  /** In an operator's registry of stations (anyone's). */
+  registered: boolean;
+  /** In the signed-in viewer's own registry. */
+  mine: boolean;
 }
 
 // ---- operated-stations registry: the operator's own stations ----

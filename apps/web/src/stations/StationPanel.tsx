@@ -103,11 +103,18 @@ export function StationPanel(props: {
             </div>
           )}
           <div className="row between mt-3">
-            {callsign.length >= 3 ? (
+            {callsign.length < 3 ? (
+              <span />
+            ) : station.mine ? (
+              <Badge>In your stations</Badge>
+            ) : station.registered ? (
+              <span className="muted">Registered by another operator</span>
+            ) : (
               <button
                 onClick={async () => {
                   try {
                     await createStation({ callsign: station.callsign });
+                    setStation({ ...station, registered: true, mine: true });
                     toast(`${station.callsign} added to your stations`);
                   } catch (e) {
                     toast((e as Error).message);
@@ -116,8 +123,6 @@ export function StationPanel(props: {
               >
                 + Add to my stations
               </button>
-            ) : (
-              <span />
             )}
             <button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</button>
           </div>

@@ -93,7 +93,7 @@ export function FilterPanel(props: {
         <label>
           Live stations
           <span className="muted block">
-            Plot live APRS stations on the map; tap a pin to inspect. Off by default; opt-in.
+            Plot live APRS stations on the map; tap a pin to inspect. Off by default; this browser remembers it.
           </span>
         </label>
         <Switch label="Live stations" checked={props.stationsOn} onChange={props.setStationsOn} />
