@@ -51,7 +51,7 @@ the call, and transmitting and the sysop role check verification on every reques
 !!! warning
     `ADMIN_CALLSIGNS` is security-critical and env-only — it must never be settable at runtime. It works
     identically on every runtime (Worker, Node, Bun): the self-host servers forward the complete config-key
-    set into the gateway, so each topology has the web sysop surface when the variable is set.
+    set into the gateway, so every deployment shape has the web sysop surface when the variable is set.
 
 ## Callsign verification
 

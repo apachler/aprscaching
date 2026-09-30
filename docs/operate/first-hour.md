@@ -1,8 +1,8 @@
 # Your first hour as sysop
 
 From "it starts" to a working, verified, backed-up instance, in order. The commands are for the Docker stack
-([Running in Docker](docker.md)), run from `deploy/`; the [desktop app](deployment.md#desktop) generates its
-secrets itself, and the [Cloudflare](deployment.md#cloudflare) setup takes them as `wrangler secret`s.
+([Running in Docker](docker.md)), run from `deploy/`; the [Desktop](deployment.md#desktop) app generates its
+secrets itself, and the [Cloudflare split](deployment.md#cloudflare-split) takes them as `wrangler secret`s.
 
 The same checklist runs live **in the app** under **Instance admin → Setup**: *Blocking* items mean sign-in or
 ingest is broken, *Recommended* ones are expected of a public instance, and *Optional* ones stay collapsed.
@@ -34,7 +34,8 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
 6. **Make it public-ready** — the *Recommended* items:
     - `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `OPERATOR_EMAIL` for `/imprint` and `/privacy`;
     - `EMAIL_FROM` + `EMAIL_API_KEY`, so members without a passkey can sign in and recover;
-    - a nightly `deploy/backup.sh` cron (`wrangler d1 export` on Cloudflare);
+    - a nightly `deploy/backup.sh` cron (on the Cloudflare split: D1 Time Travel plus a copy of the R2 media —
+      [Backups](deployment.md#backups));
     - `SOURCE_REPO` pointing at your published fork if you changed the code (AGPL §13).
 7. **Attest your RF site.** `setup.sh` names it on both sides; with a second ingest box, add its
    `RF_SITE_CALL` to `FIRST_PARTY_SITES`. Only frames a listed site's own receiver heard directly reach
@@ -52,7 +53,7 @@ The [Configuration reference](../reference/configuration.md) lists every key.
 !!! note "What the Setup page never writes"
     Secrets and the operator list are environment-only: a compromised session must not be able to rewrite
     them, and the server reports only whether each is set and healthy, never its value. Set them in
-    `deploy/.env` (Docker), the systemd unit's `EnvironmentFile`, or `wrangler secret put` (Cloudflare), and
+    `deploy/.env` (Docker), the systemd unit's `EnvironmentFile`, or `wrangler secret put` (Cloudflare split), and
     restart. Peers, trust and forwarding partners are managed on the sysop surfaces.
 
 ## Off-grid sign-in

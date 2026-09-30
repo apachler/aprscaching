@@ -28,12 +28,13 @@ feed, never the RF bridge — `.claude/rules/ingest-locality.md`). packages/aprs
 Worker, Node, Bun, browser). packages/shared = zod contracts.
 
 ## Deployment
-Three topologies (`deploy/`): **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations
-embedded) · **Self-host** — the Docker stack (gateway + ingest + Caddy) on a Pi, mini-PC or VM, reached through
-Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind Cloudflare's CDN · **Cloudflare** —
-Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`). **Tri-runtime, all CI-conformance-green:**
-Node+SQLite (self-host, `servers/node`) · CF Worker+D1 (Cloudflare, `workers/gateway`) · Bun+`bun:sqlite`
-(desktop, `servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every topology
+Three shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker stack (gateway + ingest + Caddy)
+on a Pi, mini-PC or VM, reached through Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind
+Cloudflare's CDN · **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations embedded) ·
+**Cloudflare split** — Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`) plus the operator's
+ingest-only box. **Tri-runtime, all CI-conformance-green:**
+Node+SQLite (Self-host, `servers/node`) · CF Worker+D1 (Cloudflare split, `workers/gateway`) · Bun+`bun:sqlite`
+(Desktop, `servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every shape
 (local `apps/ingest` / `compose.ingest-only.yml` *or* browser Web Serial/BLE). `deploy/setup.sh` writes a
 self-host `.env` in one step (`--non-interactive` for scripts); `INSTANCE` and `RP_ID` default to `APP_URL`'s
 host. Every instance MUST expose the AGPL §13 Source link + back up its DB; the rest of `deploy/` is

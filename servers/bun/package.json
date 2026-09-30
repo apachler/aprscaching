@@ -4,7 +4,7 @@
   "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
-  "description": "Bun-runtime self-host / single-binary core (the desktop topology): the gateway on Bun + bun:sqlite.",
+  "description": "Bun-runtime self-host / single-binary core (the Desktop shape): the gateway on Bun + bun:sqlite.",
   "scripts": {
     "start": "bun run server.ts",
     "dev": "bun --watch server.ts",

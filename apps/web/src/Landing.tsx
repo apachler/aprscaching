@@ -7,7 +7,7 @@ import { Button } from "./ui/index.js";
  * Marketing landing — the signed-out front door. The hero opens with the product's thesis: a live
  * APRS frame proving a find on the air, decoding into its Tier-A stamp (the packet uses our real
  * APZACG tocall and is heard directly by an attested receiving site). Below it: the three-step find flow, the A/B/C trust
- * tiers, the shack capability grid, the run-anywhere topologies, and the free-and-open band.
+ * tiers, the shack capability grid, the run-anywhere deployment shapes, and the free-and-open band.
  * One call to action opens the callsign-led sign-in (which creates the account for a new call); Explore
  * drops the visitor into the read-only
  * platform. The footer carries the canonical site-wide links (the Site map is the crawlable page).
@@ -250,8 +250,8 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
             <span>Docker, batteries included</span>
           </div>
           <div className="landing-host">
-            <strong>Cloudflare</strong>
-            <span>serverless edge core</span>
+            <strong>Cloudflare split</strong>
+            <span>managed core, your own RF box</span>
           </div>
         </div>
       </section>

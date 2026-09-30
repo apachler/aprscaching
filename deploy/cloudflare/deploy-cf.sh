@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Cloudflare topology one-shot: managed Cloudflare core (Worker + D1 + R2 + Pages). Requires wrangler + CF auth.
+# Cloudflare split one-shot: managed Cloudflare core (Worker + D1 + R2 + Pages). Requires wrangler + CF auth.
 # API_BASE = the public URL the deployed Worker answers on (workers.dev or your custom domain) —
 # it is baked into the SPA build as VITE_API_BASE, so the Pages site talks to YOUR gateway.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
