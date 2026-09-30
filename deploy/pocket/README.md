@@ -21,6 +21,7 @@ stops background apps, and battery and heat are real limits.
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
+| `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the weekly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 
 Every script takes `--help`, and `--dir` / `--data-dir` (or `APRSCACHING_DIR` / `APRSCACHING_DATA`) when the
 checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
@@ -259,4 +260,6 @@ any app with storage permission: `--no-env` leaves them out. `--dest DIR`, `--ke
 `--no-media` (media is included up to 50 MiB by default), and `--restore FILE`, which stops the station,
 keeps the current database in `~/.aprscaching/before-restore-<time>/` and starts it again.
 
-The operator guide is `docs/operate/pocket.md`.
+The operator guide is [Pocket: a station on an Android phone](../../docs/operate/pocket.md), and
+`test/termux-ci.sh` (run weekly by `.github/workflows/pocket-termux.yml`) installs and starts Pocket in the
+`termux/termux-docker` image.

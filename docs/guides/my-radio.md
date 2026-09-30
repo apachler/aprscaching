@@ -6,7 +6,8 @@ install. The browser decodes what your radio hears, shows it live, and can pass 
 ## What you need
 
 - **A Chromium-based browser** — Chrome, Edge, Brave or Opera — on a computer or an Android phone, and the
-  site opened over `https://`. Firefox and Safari (and every browser on iPhone/iPad) cannot talk to USB or
+  site opened over `https://` (or at `http://localhost`, as on a [Pocket](../operate/pocket.md) phone). Brave
+  ships Web Bluetooth switched off: enable *Web Bluetooth API* in `brave://flags`. Firefox and Safari (and every browser on iPhone/iPad) cannot talk to USB or
   Bluetooth radios; there, use a [ingest box](../operate/rf-ingest.md) instead.
 - **One of these:**
 

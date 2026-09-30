@@ -70,6 +70,7 @@ nav:
       - Deployment: operate/deployment.md
       - Running in Docker: operate/docker.md
       - Run an instance on 44Net: operate/44net.md
+      - "Pocket: a station on a phone": operate/pocket.md
       - Your first hour as sysop: operate/first-hour.md
       - "Connect a radio: quick starts": operate/quickstarts.md
       - RF ingest & transports: operate/rf-ingest.md

@@ -1,0 +1,206 @@
+# Pocket: a station on an Android phone
+
+**Pocket** runs a complete aprscaching station on one Android phone, in [Termux](https://termux.dev), without
+root: the gateway (Node and SQLite) serves the map and the web app, and the ingest feeds it from APRS-IS and a
+MeshCom node. It is a station for field days, demos and hikes — not a 24/7 server. Android stops background
+apps, and battery and heat are real limits; for an always-on station, use [Self-host](deployment.md#self-host).
+
+```
+MeshCom node (T-Deck, T-Beam) ──Wi-Fi──▶ the phone's hotspot, or a router ── ExtUDP, UDP 1799 ──▶
+Termux: tmux ─┬─ ingest   (MeshCom listener; APRS-IS while there is a data connection)
+              └─ gateway  (SQLite) on port 8787, and https on 8443 for visitors
+A browser on the phone ── http://localhost:8787 ── Web Bluetooth ── a BLE KISS TNC (your own traffic)
+Visitors on the hotspot ── https://<hotspot address>:8443
+Optional, with a data connection: a Cloudflare Tunnel, or WireGuard with 44Net Connect
+```
+
+The scripts are in `deploy/pocket/`; each takes `--help`, and the
+[README](https://github.com/apachler/aprscaching/blob/dev/deploy/pocket/README.md) lists every option.
+
+## What it is and isn't
+
+| It is | It isn't |
+|---|---|
+| A whole station in a pocket: map, caches, finds, live stations, messages, off-grid | An always-on public server |
+| The same gateway and ingest as every other shape; only scripts and settings are Pocket's own | A fork, a native app, or a Play Store app |
+| Runnable without root and without Google services | A way to run Docker or the desktop binary on a phone |
+| A MeshCom and APRS-IS station; your own BLE TNC through the browser | A trusted receiver by default: trust tiers work as on any instance |
+
+## Install
+
+1. Install **Termux from [F-Droid](https://f-droid.org/packages/com.termux/)** or its
+   [GitHub releases](https://github.com/termux/termux-app/releases). The Play Store build is a different,
+   older line; do not mix the two. Also install **Termux:API** from the same source: the scripts use it for
+   the battery, the Wi-Fi name and telling the hotspot apart from a joined Wi-Fi.
+2. In Termux, one command installs and starts everything:
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
+    ```
+
+    It upgrades Termux first (`apt-get update && apt-get dist-upgrade`, choosing a mirror with
+    `termux-change-repo` when none is set), installs the packages, clones the repository to `~/aprscaching`,
+    compiles `better-sqlite3` for Android, builds the web app, writes `~/.aprscaching/.env` with new secrets,
+    starts the station and prints its addresses and a one-time sign-in link. Running it again upgrades,
+    updates and restarts. The first run takes a few minutes; compiling `better-sqlite3` is the long part.
+3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
+   `apt update && apt full-upgrade -y` first.
+
+The settings (`~/.aprscaching/.env`) suit a phone: the gateway on port 8787 on every interface, APRS-IS
+receive-only with an example filter to tune, short retention for the diagnostic tables, federation off.
+Every key is in [configuration](../reference/configuration.md).
+
+## Run it
+
+```bash
+bash ~/aprscaching/deploy/pocket/start.sh      # the tmux session "aprscaching"; Ctrl-b d leaves it running
+bash ~/aprscaching/deploy/pocket/status.sh     # processes, addresses, certificate, MeshCom, storage, battery
+bash ~/aprscaching/deploy/pocket/restart.sh    # both processes, or: restart.sh gateway | ingest
+bash ~/aprscaching/deploy/pocket/stop.sh
+bash ~/aprscaching/deploy/pocket/update.sh     # pull, install, restart
+```
+
+The gateway and the ingest each run in a restart loop: 5 s after an exit, backing off to 30 s on quick
+repeated failures. Their logs are in `~/.aprscaching/logs/`, rotated by size.
+
+**Sign in.** Open `http://localhost:8787` in a browser on the phone. A passkey works where the phone's
+passkey provider accepts it; on a phone without Google Play services (microG), passkeys work only on https
+origins, so use the one-time link: `bash ~/aprscaching/deploy/pocket/signin-link.sh <YOURCALL>`.
+
+## Keep it running
+
+Android stops background work. On the tested phone, these were enough for the station to run with the screen
+off:
+
+- `start.sh` takes a **wake lock** (`termux-wake-lock`; `stop.sh` releases it).
+- **Battery:** Settings → Apps → Termux → Battery → **Unrestricted**.
+- Where Android still kills the processes (`status.sh` shows the restarts climbing), turn on **Disable child
+  process restrictions** in the developer options (Android 14 and later). It switches off Android's limit on
+  processes an app starts in the background, the phantom process killer.
+- **Termux:Boot** (F-Droid) starts the station after a reboot: copy
+  `deploy/pocket/boot/start-aprscaching` to `~/.termux/boot/`.
+- **Heat:** the gateway, a hotspot and mobile data together warm the phone. Keep it out of direct sun, and
+  on a charger for long sessions.
+
+## Browsers on the phone
+
+| Browser | Map | Location | Passkeys (microG phone) | Web Bluetooth |
+|---|---|---|---|---|
+| **Brave** | works | works out of the box | no passkey offered; use the one-time link | off by default: `brave://flags` → *Web Bluetooth API* → Enabled |
+| **Firefox** | works | needs Settings → Site permissions → Location → **Ask to allow** | "Operation is not supported"; use the one-time link | not supported |
+| **Cromite** | needs WebGL allowed for the site | crashes the browser | no passkey offered | — |
+| Chrome | works | works | works with Google Play services | works |
+
+Brave is the recommended browser on a phone without Google services. Without WebGL, the app shows a notice
+and works without the map.
+
+## Visitors over https
+
+A visitor's browser grants location and keeps a sign-in only on a secure origin; `http://localhost` is one
+on the phone itself, `http://<hotspot address>:8787` is not. One command gives the gateway an https listener:
+
+```bash
+bash ~/aprscaching/deploy/pocket/tls.sh
+bash ~/aprscaching/deploy/pocket/signin-link.sh --hotspot <THEIR CALL>   # per visitor: a link and a QR code
+```
+
+- The station makes **its own CA** once, name-constrained to private and loopback addresses, so a visitor
+  who installs it trusts it for nothing on the internet. The station certificate names the phone's private
+  addresses (hotspot, joined Wi-Fi, tethering), is valid 30 days, and is issued again within 30 s when a new
+  address appears (the tmux window `tls`) — without restarting the gateway.
+- Visitors accept the certificate warning once, or install the CA from
+  `http://<hotspot address>:8787/pocket-ca.crt` (`status.sh` prints its fingerprint). Chrome and Brave trust
+  an installed CA; Firefox for Android only with *Use third party CA certificates* in its secret settings.
+- `tls.sh` also sets `OPERATOR_LINKS_FOR_ANY_CALL=1`, so the operator's link can sign in any call. Keep
+  `OPERATOR_SECRET` to yourself, and run `tls.sh --disable` before anyone else operates the station.
+- A visitor's account starts unverified and logs finds only under the visitor's own call.
+
+## A MeshCom node
+
+A MeshCom node sends everything it handles to the ingest over ExtUDP. It joins the phone's **hotspot** (off
+grid, flight mode is fine) or the **router** the phone has joined:
+
+```bash
+bash ~/aprscaching/deploy/pocket/meshcom-setup.sh
+```
+
+The script finds the network — it asks when both the hotspot and a Wi-Fi are up — prints the commands to
+enter on the node, writes `MESHCOM_NODE` and restarts the ingest. It never sends anything to the node.
+
+- **On the hotspot** the node gets a fixed address high in the hotspot's subnet (`--setownip`, `--setowngw`,
+  `--setownms`, then `--extudpip <the phone>` and `--extudp on`).
+- **On a router** the router hands out the addresses: reserve one for the node and one for the phone in its
+  DHCP settings; the script prints only `--setssid`, `--setpwd`, `--extudpip` and `--extudp on`.
+- The node needs MeshCom firmware 4.35t built on or after 2026-09-25, or newer.
+- The listener binds the phone's address on the node's network when the ingest starts: bring the hotspot or
+  the Wi-Fi up first, or run `restart.sh ingest` afterwards (`status.sh` says when).
+
+To check the data flow: `grep -F '[meshcom]' ~/.aprscaching/logs/ingest.log` shows the listener and, every
+10 minutes, a counters line; `curl -s http://127.0.0.1:8787/api/ports` counts `meshcom` packets. On the map,
+turn on **Search & filter → Live stations**: the node appears after its next beacon, and its page's
+**Raw packets** name the `meshcom` port. MeshCom in general is on the [MeshCom](meshcom.md) page; its trust
+rules hold here unchanged — a direct hearing by your node counts toward Tier A only once its call is in
+`FIRST_PARTY_SITES`, which the scripts never set.
+
+## Your radio in the browser
+
+The browser on the phone can connect a Bluetooth Low Energy KISS TNC (a Mobilinkd, for instance) through Web
+Bluetooth — see [Your radio in the browser](../guides/my-radio.md). In Brave, enable *Web Bluetooth API* in
+`brave://flags` first. What the browser forwards to the station depends on how it signs in:
+
+- **signed (YOURCALL)** forwards only your own station's packets (any SSID of your call); everything else
+  your radio hears stays in the browser.
+- **secret (self-host)** — paste the station's `INGEST_SECRET` (`grep INGEST_SECRET ~/.aprscaching/.env`)
+  with the gateway base URL `http://localhost:8787`: then everything your radio hears is forwarded. The
+  secret stays in the page's memory and is asked for again after a reload.
+
+Either way, what the browser forwards is **Tier C** — never evidence for a find. The browser session ends
+when the page closes; for a TNC heard around the clock, other routes feed the same station: a MeshCom node,
+APRS-IS, or a KISS-over-TCP TNC the ingest connects to ([RF ingest](rf-ingest.md)).
+
+## Reaching it from the internet
+
+Mobile networks put the phone behind the carrier's NAT: without help, the station is reachable only on its
+hotspot and on a Wi-Fi it has joined. Two optional routes, both off by default:
+
+- **Cloudflare Tunnel** — `pkg install cloudflared`, a named tunnel from the Cloudflare dashboard with its
+  public hostname pointing at `http://localhost:8787`, and `APP_URL=https://<your hostname>` in the `.env`.
+  Leave `TRUST_CF` unset: the hotspot stays a direct way in.
+- **WireGuard and 44Net Connect** — the WireGuard app carries a fixed 44.x address for the whole phone, and
+  the gateway answers on it, reachable from the internet; read [44Net](44net.md) first. **Unverified:**
+  whether every Android phone delivers inbound connections on the VPN to Termux.
+
+The [README](https://github.com/apachler/aprscaching/blob/dev/deploy/pocket/README.md#reaching-the-station-from-the-internet)
+has the commands.
+
+## Backup
+
+```bash
+termux-setup-storage                                  # once: allow Termux to write to shared storage
+bash ~/aprscaching/deploy/pocket/backup.sh            # to ~/storage/shared/aprscaching-backups/
+```
+
+A consistent snapshot of the database taken while the gateway runs, with the `.env`, `session.secret` and
+media; the newest 7 are kept. Shared storage is readable by any app with storage permission: `--no-env`
+leaves the secrets out. `backup.sh --restore FILE` puts one back. The station CA stays on the phone; a station
+restored elsewhere makes a new one.
+
+## Tested on
+
+| Phone | Android | Termux | Node | Result |
+|---|---|---|---|---|
+| SHIFTphone 8 (SHIFTOS-L, microG, no Google services) | 15 | 0.118.3 (F-Droid) | 24.18.0 | install (`better-sqlite3` compiled in 2 min 35 s); restart after a killed gateway; 45 min screen off with Termux battery unrestricted and the child-process limit on, nothing killed; backup; https for a visitor on the hotspot with location; a MeshCom node through the home router and on the hotspot in flight mode |
+
+The weekly `pocket-termux` workflow installs and starts Pocket in the `termux/termux-docker` image on
+aarch64, the phones' architecture, with everything built inside Termux, and on x86_64 with the web app built
+on the runner and handed in with `--web-dist`: Rolldown, the web build's bundler, has Android builds for arm
+only, so an x86 Android device (a Chromebook, an emulator) takes its web build from a PC. The image has no
+Android underneath, so it proves the install and the scripts, not the phone's background limits.
+
+## Alternatives, not supported
+
+[Podroid](https://github.com/ExTV/Podroid) runs Podman and Docker in an Alpine Linux VM on Android, and
+Android's own **Linux Terminal** (a Debian VM under *Developer options → Linux development environment*,
+first on Pixel phones) runs ordinary Linux software. Either could run the Docker stack or the desktop binary,
+but neither is tested here: the VM's network sits behind the phone, the hotspot and Bluetooth are not the VM's
+own, and the phone still stops background work. Pocket uses Termux, which runs on the phone itself.

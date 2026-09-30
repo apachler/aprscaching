@@ -317,6 +317,11 @@ else
     mkdir -p "$LOG_DIR"
     if ! (cd "$DIR" && pnpm_ --filter @aprscaching/web exec vite build) >"$LOG_DIR/web-build.log" 2>&1; then
       tail -n 20 "$LOG_DIR/web-build.log" >&2
+      # Rolldown, the bundler, ships native builds for Android on arm64 and 32-bit arm only: an x86 Android
+      # (a Chromebook, an emulator) cannot build the web app itself.
+      case "$(uname -m)" in
+        x86_64 | i686) info "Rolldown, the web build's bundler, has no build for Android on $(uname -m)." ;;
+      esac
       die "the web build failed (log: $LOG_DIR/web-build.log)." \
         "Build it on a PC instead (pnpm --filter @aprscaching/web build), copy apps/web/dist to the phone" \
         "and run this script again with --web-dist PATH."
