@@ -56,6 +56,7 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     | Instance name, e.g. `oe8apr-pocket` | `INSTANCE`: the name other instances know the station by when it federates. It is set once: caches and finds carry the name they were made under, so a station that holds any keeps `localhost` |
     | A MeshCom node now? | runs [`meshcom-setup.sh`](#a-meshcom-node) |
     | Home-screen shortcuts, a daily backup while charging | runs `extras/setup.sh` ([Extras](#extras-notification-shortcuts-battery-saver-alerts-scheduled-backup)) |
+    | Connect to your home instance? Its URL, and its submit secret | `FED_PEERS`, `FED_HUB_URL`, `FED_SUBMIT_SECRET`, and a signing key of the station's own (`FED_PRIVATE_KEY`) when there is none ([Your home instance as the hub](#your-home-instance-as-the-hub)) |
 
     Then it restarts a running station and opens **Instance admin** (`http://localhost:8787/?view=admin`),
     whose Setup checklist covers the rest once you are signed in.
@@ -324,7 +325,8 @@ a network change. Android runs one VPN at a time.
   still runs.
 - **Federation.** Publish the `_aprscaching` TXT record and add the 44net endpoint to `FED_ENDPOINTS` as in
   [44Net steps 3 and 4](44net.md#3-name-and-identity), then run the self-check under **Instance admin →
-  Setup → 44Net**. The phone needs its own instance name (the [setup questions](#install)) and its own key.
+  Setup → 44Net**. The phone needs its own instance name (the [setup questions](#install)) and its own key;
+  following your home instance works with or without the tunnel ([Your home instance as the hub](#your-home-instance-as-the-hub)).
 - **https on the 44Net name.** A browser grants passkeys and location only to https. For members who open
   the station by its ampr.org name, `extras/ampr-cert.sh` obtains a Let's Encrypt certificate with a
   DNS-01 record you add in the ARDC portal:
@@ -363,6 +365,52 @@ bash ~/aprscaching/deploy/pocket/extras/sync-now.sh --finds    # finds too
   in a test.
 - It reports what arrived and the bytes it took, in the terminal and in a notification; `status.sh` shows
   the last sync. The Termux:Widget shortcut **Sync before trip** runs it (`extras/setup.sh --shortcuts`).
+
+### Your home instance as the hub
+
+The simplest network for a Pocket station is your own instance at home: the phone follows it, and pushes
+what it records out in the field back to it. The phone needs no inbound connection, so this works behind a
+carrier's NAT. The [setup questions](#install) set it up; by hand, in the phone's `.env`:
+
+```bash
+INSTANCE=oe8apr-pocket                     # its own name, set once
+FED_PRIVATE_KEY=<node ~/aprscaching/tools/fedkey/genkey.mjs --raw>   # its own key, never the home one's
+FED_PEERS=https://aprs.example.net         # follow the home instance
+FED_HUB_URL=https://aprs.example.net       # push this station's records to it
+FED_SUBMIT_SECRET=<the home instance's FED_SUBMIT_SECRET>
+```
+
+On the home instance, `FED_SUBMIT_SECRET` enables pushes and `FED_SUBMIT_INSTANCES` (when set) must list
+`oe8apr-pocket`. The phone's first push registers it there as `unvetted`: its caches arrive, hidden on the
+map by default, until you promote it once under **Instance admin → Federation**. Leave `FED_DISCOVER` unset on
+the phone; it follows only what you name.
+
+**Corroboration.** A station vouches for finds only from receiving sites it attests (`FIRST_PARTY_SITES`), and
+a Pocket as installed attests none, so trusting it at home adds no voice to the corroboration quorum. If the
+phone attests a site of its own (a USB TNC, a MeshCom node), home and phone are one operator with two keys:
+without a registry entry naming that operator for both, a quorum counts them as two voices. Keep the quorum
+honest by leaving `FIRST_PARTY_SITES` unset on a phone that follows your home instance.
+
+**Directly over 44Net.** Two stations on 44Net can also follow each other directly by callsign (the **Add a
+peer by callsign (44net)** field under **Instance admin → Federation**, [44Net](44net.md#3-name-and-identity)), over plain http on their
+ampr.org names. The phone is reachable that way only while its tunnel is up, and with a split tunnel only
+from 44Net; following your home instance (which the phone reaches itself) keeps working when it is not.
+
+### If the phone is lost
+
+The phone holds the station's key, the home instance's submit secret and a signed-in browser. On the home
+instance:
+
+1. **Change `FED_SUBMIT_SECRET`** and restart: the lost phone can push nothing more. Hand the new secret only
+   to the replacement.
+2. **Sign out everywhere** in your account settings, if you signed in to the home instance from the phone.
+3. Decide about what the phone pushed before: it stays as it is, or **block** the phone under **Instance admin →
+   Federation**, which hides everything it sent, the genuine records too.
+
+A replacement phone starts fresh: install Pocket, answer the setup questions (a **new instance name and a new
+key**, since the lost key is no longer yours alone), and sync from home — what the lost phone pushed is on the
+home instance already. Do not restore a backup of the lost phone onto it: the backup carries the old name and
+key.
 
 ## Backup
 

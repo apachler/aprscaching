@@ -38,7 +38,7 @@ mkdir -p "$WORK/nobin"
 
 # ---- 1. first run in the terminal: callsign, suggested instance name, no extras -----------------------
 fresh 1
-text_run 'oe8apr\n\nn\nn\nn\ny\n'
+text_run 'oe8apr\n\nn\nn\nn\nn\ny\n'
 check "first run: callsign" "$(val ADMIN_CALLSIGNS)" OE8APR
 check "first run: APRS-IS login follows the callsign" "$(val APRSIS_CALLSIGN)" OE8APR
 check "first run: suggested instance name" "$(val INSTANCE)" oe8apr-pocket
@@ -46,7 +46,7 @@ case "$OUT" in *"?view=admin"*) pass "first run: hands over to Instance admin" ;
 
 # ---- 2. invalid answers are asked again --------------------------------------------------------------
 fresh 2
-text_run 'OE8APR-12\nxy\nOE8APR\nBad_Name\nlocalhost\nOE8APR.ampr.org.\nn\nn\nn\ny\n'
+text_run 'OE8APR-12\nxy\nOE8APR\nBad_Name\nlocalhost\nOE8APR.ampr.org.\nn\nn\nn\nn\ny\n'
 check "validation: SSID and short call refused, then accepted" "$(val ADMIN_CALLSIGNS)" OE8APR
 check "validation: instance name lowercased, trailing dot dropped" "$(val INSTANCE)" oe8apr.ampr.org
 case "$OUT" in *"'OE8APR-12' is not a base callsign"*) pass "validation: SSID named" ;; *) fail "validation: SSID warning missing" ;; esac
@@ -54,7 +54,7 @@ case "$OUT" in *"'localhost' is not an instance name"*) pass "validation: localh
 
 # ---- 3. a rerun shows the current values and keeps them ---------------------------------------------
 before="$(cat "$DATA/.env")"
-text_run '\nn\nn\nn\n'
+text_run '\nn\nn\nn\nn\n'
 check "rerun: .env unchanged" "$(cat "$DATA/.env")" "$before"
 case "$OUT" in *"[OE8APR]"*) pass "rerun: current callsign shown" ;; *) fail "rerun: current callsign not shown" ;; esac
 case "$OUT" in *"instance name: oe8apr.ampr.org (set once"*) pass "rerun: instance name kept, not asked" ;; *) fail "rerun: instance name asked again" ;; esac
@@ -62,7 +62,7 @@ case "$OUT" in *"nothing to change"*) pass "rerun: nothing to change" ;; *) fail
 
 # ---- 4. a new callsign on a rerun keeps further admin calls ------------------------------------------
 sed -i 's/^ADMIN_CALLSIGNS=.*/ADMIN_CALLSIGNS=OE8APR,OE8XYZ/' "$DATA/.env"
-text_run 'oe8abc\nn\nn\nn\ny\n'
+text_run 'oe8abc\nn\nn\nn\nn\ny\n'
 check "new call: first admin call replaced, others kept" "$(val ADMIN_CALLSIGNS)" OE8ABC,OE8XYZ
 
 # ---- 5. cancelling changes nothing -------------------------------------------------------------------
@@ -75,14 +75,14 @@ check "cancel: .env unchanged" "$(cat "$DATA/.env")" "$before"
 fresh 5b
 before="$(cat "$DATA/.env")"
 status=0
-text_run 'OE8APR\n\nn\nn\nn\nn\n' || status=$?
+text_run 'OE8APR\n\nn\nn\nn\nn\nn\n' || status=$?
 check "declined summary: exit status" "$status" 1
 check "declined summary: .env unchanged" "$(cat "$DATA/.env")" "$before"
 
 # ---- 6. --dry-run writes nothing ---------------------------------------------------------------------
 fresh 6
 before="$(cat "$DATA/.env")"
-text_run 'OE8APR\n\nn\ny\ny\ny\n' --dry-run
+text_run 'OE8APR\n\nn\ny\ny\nn\ny\n' --dry-run
 check "dry-run: .env unchanged" "$(cat "$DATA/.env")" "$before"
 case "$OUT" in *"[dry-run] ADMIN_CALLSIGNS=OE8APR"*"[dry-run] bash"*"extras/setup.sh --shortcuts --scheduled-backup"*) pass "dry-run: prints the changes" ;; *) fail "dry-run: output: $OUT" ;; esac
 
@@ -109,7 +109,8 @@ printf '{"code":-1,"text":""}' >"$QUEUE/02"
 printf '{"code":0,"text":"no"}' >"$QUEUE/03"
 printf '{"code":0,"text":"no"}' >"$QUEUE/04"
 printf '{"code":0,"text":"no"}' >"$QUEUE/05"
-printf '{"code":0,"text":"yes"}' >"$QUEUE/06"
+printf '{"code":0,"text":"no"}' >"$QUEUE/06"
+printf '{"code":0,"text":"yes"}' >"$QUEUE/07"
 OUT="$(PATH="$BIN:$PATH" bash "$WIZARD" --dir "$ROOT" --data-dir "$DATA" </dev/null 2>&1)"
 check "dialogs: callsign" "$(val ADMIN_CALLSIGNS)" OE7XYZ
 check "dialogs: empty answer takes the suggestion" "$(val INSTANCE)" oe7xyz-pocket
@@ -122,6 +123,24 @@ status=0
 OUT="$(PATH="$BIN:$PATH" bash "$WIZARD" --dir "$ROOT" --data-dir "$DATA" </dev/null 2>&1)" || status=$?
 check "dialogs: Cancel ends the wizard" "$status" 1
 check "dialogs: Cancel changes nothing" "$(cat "$DATA/.env")" "$before"
+
+# ---- 8. the home instance: follow it and push to it, with a key of the station's own ------------------
+fresh 9
+text_run 'OE8APR\n\nn\nn\nn\ny\nftp://home\nHTTPS://Home.Example.net/\ns3cret\ny\n'
+check "home: followed" "$(val FED_PEERS)" https://home.example.net
+check "home: pushed to" "$(val FED_HUB_URL)" https://home.example.net
+check "home: submit secret" "$(val FED_SUBMIT_SECRET)" s3cret
+case "$(val FED_PRIVATE_KEY)" in ?????????????????????*) pass "home: a signing key made" ;; *) fail "home: no signing key" ;; esac
+case "$OUT" in *"'ftp://home' is not an instance URL"*) pass "home: a bad URL is asked again" ;; *) fail "home: bad URL accepted" ;; esac
+case "$OUT" in *"Add oe8apr-pocket to FED_SUBMIT_INSTANCES"*) pass "home: says what to do there" ;; *) fail "home: no hint for the home instance" ;; esac
+key="$(val FED_PRIVATE_KEY)"
+text_run '\nn\nn\nn\n'
+check "home: a rerun keeps the key" "$(val FED_PRIVATE_KEY)" "$key"
+case "$OUT" in *"home instance: https://home.example.net"*) pass "home: a rerun shows it" ;; *) fail "home: not shown on a rerun" ;; esac
+fresh 10
+text_run 'OE8APR\n\nn\nn\nn\ny\nhttp://10.0.0.5:8787\n\ny\n'
+check "home, follow only: FED_PEERS" "$(val FED_PEERS)" http://10.0.0.5:8787
+check "home, follow only: no push" "$(val FED_HUB_URL)" ""
 
 # ---- 8. a station holding records keeps its instance name --------------------------------------------
 if (cd "$ROOT/servers/node" && node -e "require('better-sqlite3')") >/dev/null 2>&1; then
