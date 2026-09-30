@@ -21,7 +21,7 @@ import {
   MESHCOM_MAX_DATAGRAM,
   type MeshcomEvent,
 } from "@aprscaching/aprs";
-import type { Packet } from "@aprscaching/shared";
+import { sanitizeMeshcomMeta, type MeshcomMeta, type Packet } from "@aprscaching/shared";
 
 /** The node's fixed ExtUDP port (`EXTERN_PORT` in the firmware). */
 export const MESHCOM_PORT = 1799;
@@ -113,17 +113,40 @@ export type MeshcomCounters = {
   rejected: Record<string, number>;
 };
 
+/**
+ * What the node told us about a frame beyond its APRS form, for the map: how it was heard, the signal of a
+ * LoRa hearing, the sender's device. Display only; the gateway sanitises it again and never trusts it.
+ */
+export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined): MeshcomMeta | null {
+  const p = e.provenance;
+  return sanitizeMeshcomMeta({
+    srcType: p.srcType,
+    direct: p.direct,
+    path: p.path,
+    receiver: receiverCall?.toUpperCase(),
+    // a signal report counts only for a real LoRa hearing, never the node's own frames
+    ...(p.rf ? { rssi: p.rssi, snr: p.snr } : {}),
+    firmware: p.firmware,
+    ...(e.type === "pos" ? { hwId: e.hwId, batt: e.batt } : {}),
+  });
+}
+
 export function meshcomToPacket(e: MeshcomEvent, receiverCall: string | undefined, ts: number): Packet | null {
   const f = meshcomToAprs(e);
   if (!f) return null;
   const hint = meshcomTransportHint(e.provenance, receiverCall);
+  const meta = meshcomMetaOf(e, receiverCall);
+  const parsed: Record<string, unknown> = {
+    ...(f.lat !== undefined ? { lat: f.lat, lon: f.lon } : {}),
+    ...(meta ? { meshcom: meta } : {}),
+  };
   return {
     src: f.src,
     dst: "APRS",
     path: f.path,
     payload: f.payload,
     kind: f.kind,
-    ...(f.lat !== undefined ? { parsed: { lat: f.lat, lon: f.lon } as Record<string, unknown> } : {}),
+    ...(Object.keys(parsed).length ? { parsed } : {}),
     heardVia: hint.heardVia,
     ...(hint.igateCall ? { igateCall: hint.igateCall } : {}),
     port: "meshcom",
