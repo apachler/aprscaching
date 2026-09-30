@@ -56,9 +56,7 @@ if [ "$HOTSPOT" -eq 1 ]; then
   if [ -z "$IP" ]; then
     wifi_detect
     # The hotspot's address; without Termux:API a joined Wi-Fi looks the same, so more than one is asked.
-    mapfile -t cands < <(local_ipv4 | while read -r name ip; do
-      case "$(kind_of "$name" "$ip")" in hotspot | wlan) echo "$ip" ;; esac
-    done)
+    mapfile -t cands < <(hotspot_candidates | awk '{sub(/\/.*/, "", $2); print $2}')
     case "${#cands[@]}" in
       0) die "no hotspot address found." "Turn the hotspot on, or name the address with --ip ADDR." ;;
       1) IP="${cands[0]}" ;;
