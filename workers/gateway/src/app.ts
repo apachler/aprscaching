@@ -91,6 +91,7 @@ import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotify
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleFederationSubmit, pushToHub } from "./fedpush.js";
+import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
 import { handleStationStatus } from "./station_status.js";
@@ -208,6 +209,11 @@ export async function runFrequentSync(env: Env): Promise<void> {
     await pushToHub(env);
   } catch (e) {
     console.error("push-to-hub:", (e as Error).message);
+  }
+  try {
+    await retryCorroborations(env);
+  } catch (e) {
+    console.error("corroboration retry:", (e as Error).message);
   }
   try {
     await relayPoll(env);

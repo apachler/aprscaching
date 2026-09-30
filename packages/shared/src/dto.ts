@@ -210,6 +210,7 @@ export interface CacheLogEntry {
   distanceM: number | null;
   comment: string | null;
   corroboratedBy?: string | null; // peer instance that corroborated a Tier-A find
+  corroboratedLaterAt?: number | null; // when a later attempt lifted the find to Tier A (unix seconds)
   signerKey?: string | null; // logger's device key that signed this find
 }
 

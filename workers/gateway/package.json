@@ -17,6 +17,7 @@
     "./fedregion": "./src/fedregion.ts",
     "./fedcbor": "./src/fedcbor.ts",
     "./corroborate": "./src/corroborate.ts",
+    "./corroborate_retry": "./src/corroborate_retry.ts",
     "./caches": "./src/caches.ts",
     "./gossip": "./src/gossip.ts",
     "./keys": "./src/keys.ts",
