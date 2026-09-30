@@ -83,6 +83,67 @@ media — see [Backups](#backups).
 
 Cost scales with rows written — see the cost table below.
 
+#### Cost on D1
+
+D1 bills **rows written**, and on this shape every packet your ingest forwards is written to D1. The cost
+therefore scales with your APRS-IS filter and your RF traffic, not with your users. A self-hosted SQLite
+database has no such meter: its cost is flat whatever the feed.
+
+D1 counts each row an `INSERT`, `UPDATE` or `DELETE` writes, plus one row for each index entry an insert or
+update writes. Cloudflare's price list ([D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), checked
+2026-09-30):
+
+| Plan | Rows written included | Beyond that |
+|------|-----------------------|-------------|
+| Workers Free | 100,000 per day (D1 queries fail once it is used up, until 00:00 UTC) | — |
+| Workers Paid ($5 per month minimum) | 50 million per month | $1.00 per million |
+
+**Rows written per packet.** The gateway's test suite pins these values, measured with the `rows_written`
+counter of workerd's local D1 (`workers/gateway/test/d1_writes.test.ts`). They are the steady state: a station
+and port already heard.
+
+| Packet | Written on ingest | Written by the nightly prune | Total |
+|--------|-------------------|------------------------------|-------|
+| Position fix | 12 | 2 | 14 |
+| Position fix of a registered station | 13 | 2 | 15 |
+| Weather report with a position | 14 | 3 | 17 |
+| Weather report without a position | 8 | 2 | 10 |
+| Message | 9 | 2 | 11 |
+| Status, telemetry, anything else | 6 | 1 | 7 |
+
+Every packet writes its row in the raw-packet ring (4 rows: the row, two indexes and the ID counter) and
+its MHeard entry (2). A position fix adds the position history (4) and the station's latest position (2). A
+station heard for the first time costs 2 more. On top of the per-packet rows, each ingest batch adds 1 row
+per port for the hourly RX counter. The ingest posts a batch every 1.5 s (`BATCH_MS`), so this adds at most
+57,600 rows per day for each port. The nightly prune writes 1 row for each row it deletes.
+
+**Rows per day and per month.** The table below assumes a typical feed: 65 % position fixes, 10 % weather
+with a position, 2 % weather without one, 3 % messages and 20 % other packets. That comes to about 13 rows
+written per packet, counter rows and prune included. It covers the ingest only; sign-ins, finds and federation
+add their own writes on top.
+
+| Feed | Packets per day | Rows written per day | Rows written per 30 days | Workers Free | Workers Paid per month |
+|------|-----------------|----------------------|--------------------------|--------------|------------------------|
+| 0.1 packets/s | 8,640 | ~118,000 | ~3.5 million | over the daily limit | $5 |
+| 0.5 packets/s | 43,200 | ~580,000 | ~17 million | over | $5 |
+| 1 packet/s | 86,400 | ~1.1 million | ~34 million | over | $5 |
+| 2 packets/s (the default filter, assumed) | 172,800 | ~2.3 million | ~68 million | over | ~$23 |
+| 5 packets/s | 432,000 | ~5.6 million | ~167 million | over | ~$122 |
+| 20 packets/s | 1.7 million | ~22 million | ~662 million | over | ~$617 |
+
+The Free plan fits a feed of up to about 0.08 packets/s (about 7,000 packets a day): a single RF port or a
+very small filter. Workers Paid covers about 1.5 packets/s within its included 50 million rows; every
+further packet per second costs about $34 a month.
+
+The default filter in `.env.example`, `r/47.07/15.42/300`, is every station within 300 km of Graz. Its rate
+in the table above is an assumption, not a measurement. Measure your own feed: `GET /api/ports` returns
+each port's received packets over the last 24 hours (`{"window":"24h","ports":[{"port":"aprs-is","rx":…}]}`);
+divide `rx` by 86,400 for packets per second. The Cloudflare dashboard (**D1 → your database → Metrics**)
+shows the rows actually written.
+
+This shape suits a small regional feed and an operator who wants no server to maintain. A large or
+global feed belongs on [Self-host](#self-host), where the cost is flat.
+
 ## Secrets every deployment sets
 
 !!! warning "Three distinct secrets"
