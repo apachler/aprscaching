@@ -44,8 +44,19 @@ Prints a one-time sign-in link: the way in on an off-grid instance, where passke
 email are unavailable. It posts to `/auth/operator-link` with `OPERATOR_SECRET`. The link is single-use,
 expires in 15 minutes, opens a confirm page (opening it signs nobody in), and signs in the account holding
 the call — or creates one, unverified, for a new call. It never verifies a callsign. On an instance where
-passkeys or email work, the gateway issues links only for `ADMIN_CALLSIGNS` calls. Run from the box itself,
-the link names `APP_URL`. See [Off-grid sign-in](../operate/first-hour.md#off-grid-sign-in).
+passkeys or email work, the gateway issues links only for `ADMIN_CALLSIGNS` calls, unless it runs with
+`OPERATOR_LINKS_FOR_ANY_CALL=1`. Run from the box itself, the link names `APP_URL`.
+
+`--link-origin <origin>` names another origin for the link: the station's https hotspot origin
+(`https://<its private IPv4 address>:<HTTPS_PORT>`), the one a visitor's phone opens. The gateway refuses any
+origin other than that and `APP_URL`. `--qr` also prints the link as a QR code for the phone to scan (Node
+22.18 or later). `BASE` stays the address the script reaches the gateway on.
+
+```bash
+OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.168.43.1:8443 --qr OE8VIS
+```
+
+See [Off-grid sign-in](../operate/first-hour.md#off-grid-sign-in).
 
 ## Licence registers — `tools/licence/` {#licence-registers}
 

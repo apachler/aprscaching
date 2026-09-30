@@ -19,6 +19,7 @@ import {
 import { adminCalls } from "./admin.js";
 import { licenceFor } from "./licence.js";
 import { appBase, gatewayBase } from "./sitemap.js";
+import { hotspotOrigin, linkOrigin } from "./visitor.js";
 
 /**
  * Email magic-link auth: the passwordless recovery / no-authenticator path that complements
@@ -104,23 +105,38 @@ export async function handleEmailStart(req: Request, env: Env): Promise<Response
  *
  * Scope: on an off-grid instance (no passkey origin, no email) it serves every call, since it is the only
  * way in. Where passkeys or email work it serves only ADMIN_CALLSIGNS calls, so a leaked operator secret
- * cannot open a member's account there.
+ * cannot open a member's account there — unless the operator sets OPERATOR_LINKS_FOR_ANY_CALL=1: an
+ * off-grid station whose owner signs in with a passkey on localhost, and whose visitors on its hotspot
+ * have no other way in.
+ *
+ * `base` picks the origin the link names: APP_URL, or the station's hotspot origin (visitor.ts), the only
+ * one a visitor's phone can open. Any other value is refused, so the link never points anywhere else.
  */
 export async function handleOperatorLink(req: Request, env: Env): Promise<Response> {
   if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
   if (!sessionsEnabled(env)) return sessionUnavailable();
-  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
-  const cs = String(callsign ?? "")
+  const body = (await req.json().catch(() => ({}))) as { callsign?: string; base?: unknown };
+  const cs = String(body.callsign ?? "")
     .toUpperCase()
     .trim();
   if (!isRegistrableCall(cs)) return json({ error: "a valid, unreserved callsign is required" }, { status: 400 });
+  const requested = body.base === undefined ? null : typeof body.base === "string" ? linkOrigin(body.base, env) : null;
+  if (body.base !== undefined && requested === null)
+    return json(
+      { error: "base must be APP_URL or this station's https hotspot origin (a private IPv4 address on HTTPS_PORT)" },
+      { status: 400 },
+    );
   const base = baseCall(cs);
   const paths = signInPaths(env);
   const offGrid = !paths.passkeys && !paths.email;
+  const anyCall = offGrid || env.OPERATOR_LINKS_FOR_ANY_CALL === "1";
   const admin = [...adminCalls(env)].some((c) => baseCall(c) === base);
-  if (!offGrid && !admin)
+  if (!anyCall && !admin)
     return json(
-      { error: "this instance offers passkey or email sign-in, so an operator link serves only ADMIN_CALLSIGNS calls" },
+      {
+        error:
+          "this instance offers passkey or email sign-in, so an operator link serves only ADMIN_CALLSIGNS calls (OPERATOR_LINKS_FOR_ANY_CALL=1 lifts this on an off-grid station)",
+      },
       { status: 403 },
     );
 
@@ -134,7 +150,7 @@ export async function handleOperatorLink(req: Request, env: Env): Promise<Respon
   // A script on the box reaches the gateway over loopback, which no other device can open: the link then
   // names the app origin. Reached on a public host (an API host beside a static app), it names that host.
   const onLoopback = LOOPBACK_HOSTS.has(new URL(req.url).hostname);
-  const origin = onLoopback && env.APP_URL ? appBase(env) : gatewayBase(req, env);
+  const origin = requested ?? (onLoopback && env.APP_URL ? appBase(env) : gatewayBase(req, env));
   console.log(`operator sign-in link issued for ${cs} (${existing ? "existing" : "new"} account)`);
   return json({
     link: `${origin}/auth/email/verify?token=${token}`,
@@ -230,9 +246,12 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   if (acct instanceof Response) return acct;
 
   const cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
-  // the confirm form → back into the app with the session set; an API client → JSON
-  if (isForm)
-    return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: appOrigin(req, env) + "/" } });
+  // the confirm form → back into the app with the session set; an API client → JSON. A visitor who
+  // confirmed on the station's hotspot origin returns there: APP_URL is the owner's localhost.
+  if (isForm) {
+    const back = hotspotOrigin(url.origin, env) ?? appOrigin(req, env);
+    return new Response(null, { status: 303, headers: { "set-cookie": cookie, location: back + "/" } });
+  }
   return json(
     { ok: true, callsign: acct.callsign, licence: await licenceFor(env, acct.callsign) },
     { headers: { "set-cookie": cookie } },

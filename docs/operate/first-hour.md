@@ -90,3 +90,28 @@ How it is kept safe:
   gated on control-verification.
 - **The link is a bearer credential** until it is used or expires: whoever opens it first gets the session.
   Over plain http the session cookie travels unencrypted on the LAN, like everything else there.
+
+### Visitors on the hotspot
+
+A station that is its own Wi-Fi hotspot (a phone or a field box) keeps `APP_URL=http://localhost:8787`, so
+the owner signs in with a passkey on the station itself. Visitors join the hotspot and open the station
+over https: the Node server's own listener on `HTTPS_PORT`, with a certificate for the station's hotspot
+address ([configuration](../reference/configuration.md)). Their browser warns until they install the
+station's CA from `http://<station address>:8787/pocket-ca.crt`, or they click through the warning. Passkeys
+do not work at an IP address, so a visitor signs in with a one-time link the operator mints for their
+call:
+
+```bash
+OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.168.43.1:8443 --qr OE8VIS
+```
+
+- **The station opts in.** `OPERATOR_LINKS_FOR_ANY_CALL=1` lets the link serve a call outside
+  `ADMIN_CALLSIGNS` on an instance that has passkeys; without it the gateway refuses. It also lets a leaked
+  operator secret open any account, so it belongs only on a station the operator alone runs.
+- **The link names only the hotspot origin.** `--link-origin` accepts `APP_URL`, or `https` at a private IPv4
+  address (10/8, 172.16/12, 192.168/16) on `HTTPS_PORT` while that listener runs. Any other origin is
+  refused.
+- **The session lives on that origin.** The visitor confirms on the hotspot origin and returns there; a page
+  from any other origin, including another device on the hotspot, cannot confirm the link.
+- **Nothing about trust changes.** A visitor's new account is unverified, logs finds only under the
+  visitor's own call, and reaches no tier a signed-in user could not reach before.

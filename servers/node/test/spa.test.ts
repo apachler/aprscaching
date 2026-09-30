@@ -63,8 +63,9 @@ describe("spaFile", () => {
 describe("the Node server wires the SPA", () => {
   it("serves it only when WEB_DIST is set and only for paths the gateway does not claim", () => {
     const here = path.dirname(new URL(import.meta.url).pathname);
-    const src = fs.readFileSync(path.join(here, "../src/server.ts"), "utf8");
-    expect(src).toContain("process.env.WEB_DIST");
-    expect(src).toContain("isGatewayPath(");
+    const server = fs.readFileSync(path.join(here, "../src/server.ts"), "utf8");
+    const listen = fs.readFileSync(path.join(here, "../src/listen.ts"), "utf8");
+    expect(server).toContain("process.env.WEB_DIST");
+    expect(listen).toContain("opts.webDist && !isGatewayPath(pathname)");
   });
 });
