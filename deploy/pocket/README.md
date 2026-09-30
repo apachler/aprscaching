@@ -63,8 +63,13 @@ bash ~/aprscaching/deploy/pocket/stop.sh
 bash ~/aprscaching/deploy/pocket/update.sh          # --branch dev, --pkg to upgrade Termux too
 ```
 
-Chrome on the phone opens the station at `http://localhost:8787`. Where a passkey does not work there,
-`signin-link.sh <CALL>` prints a one-time sign-in link.
+A browser on the phone opens the station at `http://localhost:8787`. Brave and Firefox both work; Firefox needs
+Settings → Site permissions → Location set to "Ask to allow" for the map's location button. Where a passkey does
+not work there (phones without Google Play services, such as microG builds, accept passkeys only on https
+origins), `signin-link.sh <CALL>` prints a one-time sign-in link.
+
+`status.sh` names the Wi-Fi network the phone has joined only when Termux:API holds Android's location
+permission (Settings → Apps → Termux:API → Permissions); without it the network shows by address alone.
 
 The gateway and the ingest each run in a restart loop, like the systemd units: 5 s after an exit, doubling on
 quick repeated failures up to 30 s. Their output is in `~/.aprscaching/logs/gateway.log` and `ingest.log`,

@@ -107,7 +107,7 @@ if [ "$ATTACH" -eq 0 ]; then
     sleep 1
   done
   if [ "$healthy" -eq 1 ]; then
-    info "gateway healthy on $BASE; Chrome on this phone opens http://localhost:$(gateway_port)"
+    info "gateway healthy on $BASE; a browser on this phone opens http://localhost:$(gateway_port)"
   else
     warn "the gateway does not answer on $BASE yet; see $LOG_DIR/gateway.log or run status.sh"
   fi

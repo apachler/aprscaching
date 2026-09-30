@@ -157,7 +157,7 @@ main() {
     case "$kind" in
       hotspot) note "on the hotspot:   http://$ip:$port   ($name)" ;;
       wlan) note "on Wi-Fi:         http://$ip:$port   ($name: the hotspot, or a network this phone joined)" ;;
-      wifi-client) note "on Wi-Fi ${WIFI_SSID:-}: http://$ip:$port   (everyone on that network can reach it)" ;;
+      wifi-client) note "on Wi-Fi${WIFI_SSID:+ $WIFI_SSID}: http://$ip:$port   (everyone on that network can reach it)" ;;
       usb-tether | bt-tether | ethernet | vpn) note "on $name:  http://$ip:$port" ;;
     esac
   done < <(list_ipv4)

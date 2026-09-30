@@ -442,8 +442,8 @@ Done. Next steps:
        bash $DIR/deploy/pocket/start.sh
      Without a MeshCom node or APRS-IS, add --gateway-only. status.sh shows the processes, the URLs
      other devices use (the hotspot included), storage and the battery.
-  2. Open http://localhost:$PORT in Chrome on this phone and sign in (a passkey works on localhost).
-     Without one, mint a one-time link:
+  2. Open http://localhost:$PORT in a browser on this phone and sign in. Where no passkey is offered
+     (phones without Google Play services), mint a one-time link:
        bash $DIR/deploy/pocket/signin-link.sh ${CALL:-<CALL>}
   3. Exempt Termux from battery optimisation in Android's settings, and back the station up with
        bash $DIR/deploy/pocket/backup.sh      (after termux-setup-storage)

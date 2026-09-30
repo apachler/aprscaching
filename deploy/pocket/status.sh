@@ -84,7 +84,7 @@ fi
 # ---- networks ----------------------------------------------------------------------------------------
 wifi_detect
 step "Networks (the gateway listens on every interface, port $PORT)"
-info "$(printf '%-12s %-19s %-28s %s' "this phone" "127.0.0.1" "http://localhost:$PORT" "Chrome on the phone")"
+info "$(printf '%-12s %-19s %-28s %s' "this phone" "127.0.0.1" "http://localhost:$PORT" "a browser on the phone")"
 wlan_seen=0
 found=0
 while read -r name cidr; do
@@ -112,7 +112,7 @@ while read -r name cidr; do
 done < <(list_ipv4)
 [ "$found" -eq 1 ] || info "no other interface found (ip and ifconfig gave no IPv4 address)"
 if [ -n "$WIFI_IP" ]; then
-  warn "this phone is joined to the Wi-Fi network ${WIFI_SSID:-?} ($WIFI_IP): everyone on that network can" \
+  warn "this phone is joined to the Wi-Fi network ${WIFI_SSID:+$WIFI_SSID }($WIFI_IP): everyone on that network can" \
     "reach the station on port $PORT. On a network you do not trust, stop the station or leave it."
 elif [ "$wlan_seen" -eq 1 ]; then
   info "if a wlan address above belongs to a Wi-Fi network this phone joined, everyone on that network"
@@ -166,5 +166,5 @@ else
 fi
 
 step "Sign in"
-info "Chrome on this phone: http://localhost:$PORT"
+info "a browser on this phone: http://localhost:$PORT"
 info "without a passkey, a one-time link:  bash $HERE/signin-link.sh <CALL>"

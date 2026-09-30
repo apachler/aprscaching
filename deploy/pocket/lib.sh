@@ -90,7 +90,8 @@ list_ipv4() {
   fi
 }
 # The Wi-Fi network this phone has joined as a client (WIFI_IP, WIFI_SSID), from Termux:API; empty when
-# not joined or when Termux:API is missing.
+# not joined or when Termux:API is missing. Android reports the SSID only to apps holding the location
+# permission, so without it Termux:API returns "<unknown ssid>" and WIFI_SSID stays empty.
 WIFI_IP=""
 WIFI_SSID=""
 wifi_detect() {
@@ -99,6 +100,7 @@ wifi_detect() {
   [ "$(printf '%s' "$wifi" | json_field supplicant_state)" = "COMPLETED" ] || return 0
   WIFI_IP="$(printf '%s' "$wifi" | json_field ip)"
   WIFI_SSID="$(printf '%s' "$wifi" | json_field ssid)"
+  [ "$WIFI_SSID" != "<unknown ssid>" ] || WIFI_SSID=""
   [ "$WIFI_IP" != "0.0.0.0" ] || WIFI_IP=""
 }
 # What an interface name usually is on Android. The Wi-Fi client address, when known, tells the client
