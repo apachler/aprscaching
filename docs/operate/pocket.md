@@ -106,11 +106,27 @@ for Termux:API).
 
 | Add-on | Gives the station |
 |---|---|
-| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery saver, field alerts, the battery and Wi-Fi lines in `status.sh`, the scheduled backup |
+| **Termux:API** (the app and `pkg install termux-api`) | a status notification, the battery saver, field alerts, the battery and Wi-Fi lines in `status.sh`, the scheduled backup, the setup questions as dialogs, a USB TNC, the Wi-Fi check before a sync |
 | **Termux:Widget** | home-screen shortcuts |
 | **Termux:Boot** | start at boot ([above](#keep-it-running)) |
 
 Without an add-on, the scripts print one line saying what to install and work as before.
+
+Every extra at a glance; the ones started by `start.sh` run in their own tmux window:
+
+| Extra | Script | Needs | Where |
+|---|---|---|---|
+| Setup questions | `wizard.sh` | Termux:API for dialogs, else the terminal | [Install](#install) |
+| Status notification | `extras/notify.sh` (`start.sh` runs it) | Termux:API | below |
+| Home-screen shortcuts | `extras/setup.sh --shortcuts` | Termux:Widget | below |
+| Battery saver | `extras/battery.sh` (`start.sh` runs it) | Termux:API | below |
+| Field alerts | `extras/alerts.sh` (`POCKET_ALERTS=1`) | Termux:API | below |
+| Scheduled backup | `extras/setup.sh --scheduled-backup` | Termux:API | below |
+| A USB KISS TNC | `extras/usb-kiss.sh` (`start.sh` runs it) | Termux:API, `python`, `libusb`, a CDC-ACM TNC | [A USB TNC on the phone](#a-usb-tnc-on-the-phone) |
+| Sync before a trip | `extras/sync-now.sh` | Termux:API to tell Wi-Fi from mobile data | [Federation](#federation-sync-before-a-trip) |
+| Your home instance as the hub | `wizard.sh` | the home instance's submit secret | [Your home instance as the hub](#your-home-instance-as-the-hub) |
+| https on the ampr.org name | `extras/ampr-cert.sh` | `lego`, 44Net | [Pocket on 44Net](#pocket-on-44net) |
+| An RTL-SDR | — | not supported | [An RTL-SDR on the phone](#an-rtl-sdr-on-the-phone-not-supported) |
 
 - **Status notification.** With Termux:API, `start.sh` keeps one ongoing notification current every
   minute: running or stopped, the stations heard in the last hour, when the MeshCom node was last heard,
@@ -118,7 +134,7 @@ Without an add-on, the scripts print one line saying what to install and work as
   it opens the map. It reads the gateway's `/api/admin/station-status` with the station's `OPERATOR_SECRET`.
   `stop.sh` removes it.
 - **Shortcuts.** `bash ~/aprscaching/deploy/pocket/extras/setup.sh --shortcuts` puts **Status**, **Start**,
-  **Stop**, **Open map** and **Backup** into `~/.shortcuts/`; add the Termux:Widget widget to the home
+  **Stop**, **Open map**, **Backup** and **Sync before trip** into `~/.shortcuts/`; add the Termux:Widget widget to the home
   screen to tap them. Status opens a terminal with `status.sh`; the others run in the background and report
   with a short toast.
 - **Battery saver.** With Termux:API, `start.sh` also watches the battery. Below `POCKET_BATTERY_LOW`
@@ -423,6 +439,23 @@ A consistent snapshot of the database taken while the gateway runs, with the `.e
 media; the newest 7 are kept. Shared storage is readable by any app with storage permission: `--no-env`
 leaves the secrets out. `backup.sh --restore FILE` puts one back. The station CA stays on the phone; a station
 restored elsewhere makes a new one.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| A script says an extra "needs the Termux:API app" | The app is missing, from another source than Termux, or never opened. Install it from the same source as Termux, open it once, and `pkg install termux-api`. |
+| `termux-*` commands hang | The same: the Termux:API app does not answer. The scripts give up after 8 seconds. |
+| No status notification | Android 13 and later ask for the notification permission: grant it to Termux:API in Android's app settings. |
+| The shortcuts do not show | Termux:Widget from the same source, its widget on the home screen, then `extras/setup.sh --shortcuts` again. |
+| The scheduled backup never runs | It runs only while charging with the battery above 50 %, and needs `termux-setup-storage` once. `status.sh` shows the last backup. |
+| No spoken alerts | `POCKET_ALERTS=1` and `POCKET_ALERTS_SPEAK=1` in the `.env`, a restart, and a text-to-speech engine installed in Android. Only messages to the calls in `ADMIN_CALLSIGNS` alert. |
+| The battery saver never switches | `POCKET_BATTERY_LOW` is 0, or Termux:API does not answer; `status.sh` shows the saver state. |
+| `usb-kiss.sh --list` shows nothing | An OTG adapter, and a TNC that is powered. A TNC on an FTDI, CP210x or CH340 chip is refused by name: only CDC-ACM devices work. |
+| `sync-now.sh` refuses to run | The phone is not on a Wi-Fi network, or Termux:API cannot tell: join Wi-Fi, or allow mobile data with `--mobile`. "0 peers" means `FED_PEERS` names no instance. |
+| `ampr-cert.sh` gives up waiting for the record | The portal publishes about once an hour. Check the record there, then run it again; Let's Encrypt then asks for a new value. |
+| `status.sh` says 44Net is not connected | The WireGuard app's tunnel is off, or carries no address in ARDC's 44Net space. |
+| The station stops with the screen off | See [Keep it running](#keep-it-running): battery "Unrestricted" for Termux, the wake lock, and on Android 14 and later *Disable child process restrictions*. |
 
 ## Tested on
 
