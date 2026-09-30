@@ -4,7 +4,8 @@
  * for the operator's own scripts (a phone notification, a field alert) and the sysop. Stations heard in
  * the last hour, packets per port in the current and previous hour (the counters are hourly buckets),
  * when each port last heard anything, and the direct messages received for the operator's own calls
- * (ADMIN_CALLSIGNS, any SSID) since a given time.
+ * (ADMIN_CALLSIGNS, any SSID) since a given time, and whether the operator's call is control-verified
+ * (a USB TNC's transmit path is enabled only then).
  *
  * Sysop or OPERATOR_SECRET only: message bodies are the operator's own mail, and nothing here is public.
  */
@@ -12,6 +13,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
+import { isCallsignVerified } from "./callsign.js";
 
 const HOUR = 3600;
 /** How far back `since` may reach, and how many messages one answer carries. */
@@ -22,6 +24,8 @@ export interface StationStatus {
   now: number;
   stationsLastHour: number;
   ports: { port: string; rxRecent: number; lastHeard: number | null }[];
+  /** The first ADMIN_CALLSIGNS call is control-verified: the gate the station's transmit paths share. */
+  operatorVerified: boolean;
   messages: { id: number; ts: number; from: string; to: string; body: string }[];
 }
 
@@ -75,6 +79,7 @@ export async function handleStationStatus(req: Request, env: Env): Promise<Respo
   const body: StationStatus = {
     now,
     stationsLastHour: stations?.n ?? 0,
+    operatorVerified: calls.length > 0 && (await isCallsignVerified(env, calls[0]!)),
     ports: [...ports.values()].sort((a, b) => a.port.localeCompare(b.port)),
     messages,
   };

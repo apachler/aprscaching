@@ -74,6 +74,7 @@ compose() {
     body="$body · $line"
   fi
   if [ -f "$SAVER_ENV" ]; then body="$body · battery saver on"; fi
+  if [ -f "$RUN_DIR/usb-kiss.tx" ]; then body="$body · USB TNC: TX ON"; fi
   CONTENT="$body"
 }
 
