@@ -182,7 +182,7 @@ main() {
   # backup) and opens Instance admin. It can run any time later.
   if [ "$first_install" -eq 1 ] && tty_ok; then
     local answer=""
-    printf '\n    Answer a few setup questions now (instance name, MeshCom node, shortcuts, backup)? [Y/n] ' >/dev/tty
+    printf '\n    Answer a few setup questions now (instance name, MeshCom node, shortcuts, backup, home instance)? [Y/n] ' >/dev/tty
     IFS= read -r answer </dev/tty || true
     case "$answer" in
       n* | N*) note "later: bash $dir/deploy/pocket/wizard.sh" ;;

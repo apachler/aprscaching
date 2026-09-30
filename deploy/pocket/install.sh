@@ -455,7 +455,7 @@ Done. Next steps:
        bash $DIR/deploy/pocket/signin-link.sh ${CALL:-<CALL>}
   3. Exempt Termux from battery optimisation in Android's settings, and back the station up with
        bash $DIR/deploy/pocket/backup.sh      (after termux-setup-storage)
-  4. The setup questions: callsign, instance name, a MeshCom node, home-screen shortcuts and a daily
-     backup while charging (Android dialogs with Termux:API, else questions in the terminal):
+  4. The setup questions: callsign, instance name, a MeshCom node, home-screen shortcuts, a daily
+     backup while charging and your home instance (Android dialogs with Termux:API, else in the terminal):
        bash $DIR/deploy/pocket/wizard.sh
 EOF
