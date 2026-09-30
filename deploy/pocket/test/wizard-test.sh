@@ -113,7 +113,7 @@ printf '{"code":0,"text":"yes"}' >"$QUEUE/06"
 OUT="$(PATH="$BIN:$PATH" bash "$WIZARD" --dir "$ROOT" --data-dir "$DATA" </dev/null 2>&1)"
 check "dialogs: callsign" "$(val ADMIN_CALLSIGNS)" OE7XYZ
 check "dialogs: empty answer takes the suggestion" "$(val INSTANCE)" oe7xyz-pocket
-check "dialogs: every answer used" "$(ls "$QUEUE" | wc -l | tr -d ' ')" 0
+check "dialogs: every answer used" "$(find "$QUEUE" -type f | wc -l | tr -d ' ')" 0
 
 fresh 7b
 printf '{"code":-2,"text":""}' >"$QUEUE/01"

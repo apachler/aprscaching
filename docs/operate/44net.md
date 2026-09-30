@@ -171,9 +171,19 @@ members who open the plain-http 44Net name sign in with the operator's
 - Because a Connect address is publicly reachable (see [step 6](#6-who-can-reach-you)), Caddy's usual
   certificate challenge on port 80/443 can reach it. **Unverified** on a live Connect address; the first
   Caddy start with the name in `DOMAIN` settles it.
-- DNS-01 through an `_acme-challenge` TXT record is **Unverified**. Underscore labels work in the Portal,
-  but the hourly export makes each challenge wait up to an hour. Delegating a subdomain to your own
-  name server with an NS record ([DNS](https://wiki.ampr.org/wiki/DNS)) avoids the wait.
+- **DNS-01 by hand, once per renewal.** The portal has no API, so each issue and each renewal takes one
+  `_acme-challenge.<name>` TXT record entered by hand. Underscore labels work in the Portal; the hourly
+  export makes each challenge wait up to an hour. Pocket's `extras/ampr-cert.sh` runs this with
+  [lego](https://go-acme.github.io/lego/) (a Termux package): it prints the record, polls DNS until it is
+  published, lets lego finish and warns 14 days before expiry ([Pocket on 44Net](pocket.md#pocket-on-44net)).
+  **Unverified** end to end against the live portal. Delegating a subdomain to your own name server with an
+  NS record ([DNS](https://wiki.ampr.org/wiki/DNS)) lets an ACME client with a DNS API renew unattended.
+- **DNS-PERSIST-01** — one standing TXT record that authorises an ACME account for a name, so renewals
+  need no new record — would suit the portal well. Let's Encrypt announced it in February 2026; it is not
+  in production (September 2026), held until an open point in the IETF draft is settled. lego already has
+  a `--dns-persist` option for it.
+- **Over amateur RF, plain http stays.** A HAMNET radio link or a packet channel carries no encryption, so
+  the plain-http 44Net name remains the way in there; https serves members who come over the internet.
 
 ## 5. Verify with the self-check
 
