@@ -8,17 +8,19 @@ stops background apps, and battery and heat are real limits.
 |---|---|
 | `pocket.sh` | the one-command install: upgrades Termux with `apt-get`, runs `install.sh` from the same branch, starts the station and prints its URLs and a one-time sign-in link; safe to re-run |
 | `install.sh` | installs the Termux packages, clones or updates `~/aprscaching`, installs only what the gateway, the ingest and the web build need, compiles better-sqlite3 for Android, builds the web app, writes `~/.aprscaching/.env` on the first run and starts the gateway once to apply the migrations; safe to re-run |
-| `.env.pocket.example` | the settings `install.sh` starts from (gateway on port 8787, ingest to localhost) |
+| `.env.pocket.example` | the settings `install.sh` starts from: gateway on port 8787, ingest to localhost, APRS-IS, short retention, federation off |
 | `start.sh` | starts the tmux session `aprscaching` (windows `gateway`, `ingest`, `logs`, `shell`, and `tls` with https on) with a wake lock, or attaches to it; `--no-attach`, `--gateway-only` |
 | `stop.sh` | stops the ingest and the gateway (SIGTERM, then SIGKILL after a grace period), closes the session, releases the wake lock |
 | `status.sh` | the processes (uptime, restarts), `/health`, the URLs other devices use on each network (the hotspot included, http and https), a warning on a joined Wi-Fi network, the https certificate, storage, database size, battery |
 | `update.sh` | runs `install.sh` for the current branch, then restarts both processes; the gateway migrates on start |
 | `backup.sh` | database snapshot, `.env` and media to shared storage, keeps the newest 7; `--restore FILE` |
 | `signin-link.sh` | a one-time sign-in link for a callsign, for a browser where the passkey does not work; `--hotspot` for a visitor, with a QR code |
+| `restart.sh` | restarts the gateway, the ingest or both in the running station (after editing the `.env`, or once the hotspot is on for a MeshCom node) |
+| `meshcom-setup.sh` | a MeshCom node on the hotspot or on the router the phone has joined (asks when both are up): finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
 | `supervise.sh`, `lib.sh` | the restart loop `start.sh` runs in each window, and the code the scripts share |
 | `boot/start-aprscaching` | optional [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) script: starts the station at boot |
-| `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh` and stop on a Linux box with tmux (not part of CI) |
+| `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 
 Every script takes `--help`, and `--dir` / `--data-dir` (or `APRSCACHING_DIR` / `APRSCACHING_DATA`) when the
 checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
@@ -56,6 +58,24 @@ bash install.sh --call <YOURCALL>
 
 `bash install.sh --help` lists its options (another branch or repository, a web build copied from a PC,
 a dry run).
+
+### The settings
+
+`install.sh` writes `~/.aprscaching/.env` from `.env.pocket.example` once, with new secrets, your call and
+the paths, and keeps it on every later run. The profile suits a phone:
+
+- the gateway on port 8787 on every interface, `APP_URL=http://localhost:8787`, the ingest posting to
+  `127.0.0.1`;
+- APRS-IS receive-only (passcode `-1`) with a 300 km example filter; tune `APRSIS_FILTER` to where you
+  operate. Offline, the ingest retries with a backoff;
+- `RETENTION` keeps the raw packet log 6 h, weather and telemetry 7 days, port counters and the node MHeard
+  list 3 days. Logger positions, finds and accounts are not affected;
+- federation off (no `FED_*` settings), no TAK/CoT or other transports, no write budget (SQLite has no
+  per-row cost);
+- MeshCom off until `meshcom-setup.sh` writes `MESHCOM_NODE`.
+
+A `.env` from an earlier install lacks the `RETENTION` line; copy it from `.env.pocket.example` and run
+`restart.sh gateway`. Every key is in [configuration](../../docs/reference/configuration.md).
 
 ## Run
 
@@ -98,6 +118,63 @@ chmod +x ~/.termux/boot/start-aprscaching
 It waits 30 s after boot (`APRSCACHING_BOOT_DELAY`), then runs `start.sh --no-attach`; its output is in
 `~/.aprscaching/logs/boot.log`. Delete the copy to stop starting at boot.
 
+## A MeshCom node on the hotspot
+
+A MeshCom node (a T-Deck, T-Beam or Heltec on 70 cm) joins the phone's hotspot as a Wi-Fi client and sends
+everything it handles to the ingest over ExtUDP. Positions and messages then appear on the map with no
+internet at all: flight mode with the hotspot on is enough. The node needs MeshCom firmware 4.35t built on
+or after 2026-09-25, or newer; older builds can crash with ExtUDP on.
+
+With the hotspot on:
+
+```bash
+bash ~/aprscaching/deploy/pocket/meshcom-setup.sh
+```
+
+1. It finds the hotspot's address and subnet (Android picks them, and they differ between phones).
+2. It suggests a fixed address for the node high in that subnet, away from the phone and from the devices
+   the phone currently sees. A fixed address keeps the node's entry in `MESHCOM_NODE` valid; the ingest
+   accepts datagrams only from the addresses listed there. The hotspot's DHCP server could still hand that
+   address to another device; with a few devices on the hotspot this is unlikely, and `status.sh` shows
+   who answers.
+3. It prints the commands to enter on the node, through its serial console, the MeshCom app or its web
+   page. It never sends anything to the node:
+
+    ```
+    --setssid <the hotspot name>
+    --setpwd <the hotspot password>
+    --setownip 192.168.43.200
+    --setowngw 192.168.43.1
+    --setownms 255.255.255.0
+    --extudpip 192.168.43.1
+    --extudp on
+    ```
+
+    `--setownip`, `--setowngw` and `--setownms` give the node its fixed address (MeshCom 4.34i and later).
+    `--extudpip` points ExtUDP at the phone.
+4. It writes `MESHCOM_NODE=<node address>=<node call>` to the `.env`, keeping any other node, and restarts
+   the ingest. The ingest log then shows `[meshcom] listening udp/1799 on <phone> for <node>`.
+
+**Through a router instead.** With the phone joined to a Wi-Fi network, the script can use that network. It
+uses whichever of the two is up; with both up it asks which one the node joins (`--hotspot` or `--wifi`
+answer without asking). On a router the node joins the router's Wi-Fi, and the router's DHCP server stays
+in charge of the addresses. The script prints only `--setssid`, `--setpwd`, `--extudpip <the phone>` and
+`--extudp on`, and asks for the address the router reserves for the node (`--node-ip`). Reserve an address
+for the phone as well, since the node sends to it; Android keeps one random MAC address per network, and a
+network set to use the device MAC keeps it for certain. Telling the hotspot from a joined Wi-Fi needs
+Termux:API; without it the script asks. On a router, everyone on the network reaches the station and could
+send datagrams in the node's name, so use a router you control.
+
+The MeshCom listener binds the phone's address on the node's subnet when the ingest starts. Turn the hotspot
+on (or join the router's Wi-Fi) before `start.sh`; brought up later, `status.sh` says so, and
+`restart.sh ingest` picks it up. Should the
+hotspot's subnet change (some phones pick a new one after a reboot), run `meshcom-setup.sh` again and
+enter the new commands on the node.
+
+Traffic from the node shows on the map at once, and none of it changes a trust tier by itself: a direct
+hearing by your own node counts toward Tier A only once you add the node's call to `FIRST_PARTY_SITES`, as
+on any ingest box ([MeshCom](../../docs/operate/meshcom.md#how-meshcom-traffic-is-trusted)).
+
 ## Visitors over https
 
 A visitor's browser grants location and keeps a sign-in only on a secure origin. `http://localhost` on the
@@ -135,6 +212,39 @@ bash ~/aprscaching/deploy/pocket/signin-link.sh --hotspot OE8VIS # per visitor: 
 - **Backups leave the CA out**: its key signs certificates, so it stays on the phone. A station restored
   elsewhere gets a new CA on its first start (`start.sh` renews before the gateway starts), and visitors
   who installed the old one install the new one.
+
+## Reaching the station from the internet
+
+Mobile networks put the phone behind the carrier's NAT (`status.sh` says so for mobile data): nothing on the
+internet can open a connection to it. Without the two options below the station is reachable only on its
+own hotspot and on a Wi-Fi network the phone has joined. Both are optional and off by default; a Pocket
+station is a field and demo station, and exposing it publicly is your decision.
+
+**Cloudflare Tunnel.** `cloudflared` is a Termux package. It opens an outbound connection to Cloudflare, and
+a hostname of yours reaches the station through it. It needs a Cloudflare account, a domain on Cloudflare
+and a named tunnel created in the dashboard, as in [Docker](../../docs/operate/docker.md#cloudflare-tunnel-ingress-a-pi-or-mini-pc-at-home),
+with the public hostname's service set to `http://localhost:8787`. Then:
+
+```bash
+pkg install cloudflared
+( umask 077; printf '%s
+' '<the tunnel token>' > ~/.aprscaching/tunnel.token )
+tmux new-window -d -t aprscaching -n tunnel   'TUNNEL_TOKEN="$(cat ~/.aprscaching/tunnel.token)" cloudflared tunnel --no-autoupdate run'
+```
+
+In the `.env`, set `APP_URL=https://<your hostname>`, then `restart.sh gateway`. Passkeys and sign-in links
+then belong to that hostname, so open the station there on the phone too; this needs a data connection.
+Quick tunnels (`cloudflared tunnel --url …`) get a new random name on every run and do not fit `APP_URL`.
+Leave `TRUST_CF` unset: the station stays reachable on its hotspot, where a client could send Cloudflare's
+client-address header itself. The rate limits then count every visitor through the tunnel as one client.
+
+**WireGuard and 44Net Connect.** A licensed operator gets a fixed 44.x address from ARDC's 44Net Connect,
+carried over WireGuard, which works behind the carrier's NAT. Import the Connect configuration into the
+WireGuard app (F-Droid or the Play Store). Android runs it as the phone's VPN, so it covers the whole phone,
+and the gateway, which listens on every interface, answers on the 44.x address too. That address is
+reachable from the internet; read [44Net](../../docs/operate/44net.md), in particular who can reach you and
+what 44Net does and does not give you. **Unverified**: whether Android delivers inbound connections on the VPN
+interface to Termux on every phone; test from another network before you rely on it.
 
 ## Backup
 

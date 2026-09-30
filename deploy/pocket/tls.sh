@@ -71,22 +71,6 @@ say() { [ "$QUIET" -eq 1 ] || info "$@"; }
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing." "Run deploy/pocket/install.sh first; it writes that file."
 have openssl || die "openssl is missing." "Install it with:  pkg install openssl-tool"
 
-# ---- .env edits: the last assignment wins, so a key is removed before it is written once at the end --
-env_unset() {
-  local tmp="$ENV_FILE.tmp.$$" key
-  cp -p "$ENV_FILE" "$tmp"
-  for key in "$@"; do
-    grep -vE "^$key=" "$tmp" >"$tmp.2" || true
-    mv -f "$tmp.2" "$tmp"
-  done
-  chmod 600 "$tmp"
-  mv -f "$tmp" "$ENV_FILE"
-}
-env_set() {
-  env_unset "$1"
-  printf '%s=%s\n' "$1" "$2" >>"$ENV_FILE"
-}
-
 # ---- certificates --------------------------------------------------------------------------------------
 # The station's call names the CA, with a random tag so two stations of one operator stay apart.
 station_call() {

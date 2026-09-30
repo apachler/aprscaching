@@ -57,6 +57,23 @@ env_load() {
   set +a
 }
 
+# Edit the .env in place: the last assignment wins, so a key is removed before it is written once at the
+# end. The file stays readable by Termux only.
+env_unset() {
+  local tmp="$ENV_FILE.tmp.$$" key
+  cp -p "$ENV_FILE" "$tmp"
+  for key in "$@"; do
+    grep -vE "^$key=" "$tmp" >"$tmp.2" || true
+    mv -f "$tmp.2" "$tmp"
+  done
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$ENV_FILE"
+}
+env_set() {
+  env_unset "$1"
+  printf '%s=%s\n' "$1" "$2" >>"$ENV_FILE"
+}
+
 gateway_port() {
   local p
   p="$(env_get PORT)"
@@ -97,11 +114,15 @@ list_ipv4() {
 # The Wi-Fi network this phone has joined as a client (WIFI_IP, WIFI_SSID), from Termux:API; empty when
 # not joined or when Termux:API is missing. Android reports the SSID only to apps holding the location
 # permission, so without it Termux:API returns "<unknown ssid>" and WIFI_SSID stays empty.
+# WIFI_KNOWN=1 once Termux:API answered, so an unjoined phone's wlan address can only be the hotspot.
 WIFI_IP=""
 WIFI_SSID=""
+WIFI_KNOWN=0
 wifi_detect() {
   local wifi
   wifi="$(termux_api termux-wifi-connectioninfo)" || return 0
+  [ -n "$wifi" ] || return 0
+  WIFI_KNOWN=1
   [ "$(printf '%s' "$wifi" | json_field supplicant_state)" = "COMPLETED" ] || return 0
   WIFI_IP="$(printf '%s' "$wifi" | json_field ip)"
   WIFI_SSID="$(printf '%s' "$wifi" | json_field ssid)"
@@ -116,7 +137,7 @@ kind_of() {
   case "$name" in
     lo) echo "loopback" ;;
     ap* | swlan* | softap* | wigig*) echo "hotspot" ;;
-    wlan*) if [ -n "$WIFI_IP" ]; then echo "hotspot"; else echo "wlan"; fi ;;
+    wlan*) if [ -n "$WIFI_IP" ] || [ "$WIFI_KNOWN" -eq 1 ]; then echo "hotspot"; else echo "wlan"; fi ;;
     rndis* | usb* | ncm*) echo "usb-tether" ;;
     bt-pan* | bnep*) echo "bt-tether" ;;
     rmnet* | ccmni* | seth* | pdp* | v4-* | clat*) echo "mobile" ;;
@@ -150,6 +171,44 @@ local_ipv4() {
     is_private_ipv4 "$ip" || continue
     printf '%s %s\n' "$name" "$ip"
   done < <(list_ipv4)
+}
+
+# "name address/prefix kind" for each interface that may be the phone's hotspot: kind `hotspot` when
+# certain (the interface name, or Termux:API; call wifi_detect first), `wlan` when a joined Wi-Fi looks
+# the same.
+hotspot_candidates() {
+  local name cidr kind
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    is_private_ipv4 "${cidr%%/*}" || continue
+    kind="$(kind_of "$name" "${cidr%%/*}")"
+    case "$kind" in hotspot | wlan) printf '%s %s %s\n' "$name" "$cidr" "$kind" ;; esac
+  done < <(list_ipv4)
+}
+
+# IPv4 arithmetic for the hotspot subnet: dotted quad <-> integer, and the netmask of a prefix length.
+ip_to_int() {
+  local a b c d
+  IFS=. read -r a b c d <<<"$1"
+  printf '%s' $(((a << 24) | (b << 16) | (c << 8) | d))
+}
+int_to_ip() { printf '%s.%s.%s.%s' $((($1 >> 24) & 255)) $((($1 >> 16) & 255)) $((($1 >> 8) & 255)) $(($1 & 255)); }
+prefix_mask() { int_to_ip $(((0xffffffff << (32 - $1)) & 0xffffffff)); }
+# The phone's own address on the subnet of $1 (the address a listener for that node binds), or nothing.
+local_address_for() {
+  local name cidr ip prefix mask
+  while read -r name cidr; do
+    [ -n "${name:-}" ] || continue
+    ip="${cidr%%/*}"
+    prefix="${cidr#*/}"
+    [ "$prefix" != "$cidr" ] || prefix=32
+    mask=$(((0xffffffff << (32 - prefix)) & 0xffffffff))
+    if [ $(($(ip_to_int "$ip") & mask)) -eq $(($(ip_to_int "$1") & mask)) ]; then
+      printf '%s' "$ip"
+      return 0
+    fi
+  done < <(list_ipv4)
+  return 1
 }
 
 # ---- https for visitors -----------------------------------------------------------------------------
