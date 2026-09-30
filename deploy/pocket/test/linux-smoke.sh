@@ -2,7 +2,7 @@
 # Exercise the Pocket scripts on a Linux box with tmux: pocket.sh (piped into bash, as on the phone) on
 # an installed checkout, recovery of a killed gateway, status, backup, https for visitors (tls.sh, with a
 # stand-in `ip` that reports a hotspot address), a MeshCom node (meshcom-setup.sh), restart.sh, the Termux
-# add-ons (notification, shortcuts, scheduled backup, battery saver) and stop. The Termux-only commands (termux-wake-lock,
+# add-ons (notification, shortcuts, scheduled backup, battery saver, field alerts) and stop. The Termux-only commands (termux-wake-lock,
 # termux-battery-status, …) are stand-ins on PATH, and tmux runs on its own socket, so an existing tmux
 # session is not touched.
 #
@@ -258,6 +258,39 @@ decided="$(for c in "30 0 normal" "19 0 normal" "19 1 normal" "25 0 saver" "29 0
   bash "$HERE/extras/battery.sh" --decide $c
 done | paste -sd ' ' -)"
 CHECK="battery.sh: the rule, with the 10-point gap" check test "$decided" = "normal saver normal saver saver normal normal"
+
+# ---- field alerts: a message to the operator's call makes the phone vibrate and speak the sender
+for cmd in termux-vibrate termux-tts-speak; do
+  printf '#!/bin/sh\nprintf "%%s\\n" "%s $*" >>"%s/api-calls"\n' "$cmd" "$WORK" >"$WORK/bin/$cmd"
+  chmod +x "$WORK/bin/$cmd"
+done
+wait_health 60 || true # the battery saver restarted the station just now
+CHECK="alerts.sh: off by default" check grep -q "field alerts off" <<<"$(bash "$HERE/extras/alerts.sh" --once 2>&1)"
+printf 'POCKET_ALERTS=1\nPOCKET_ALERTS_SPEAK=1\n' >>"$ENV_FILE"
+bash "$HERE/extras/alerts.sh" --once >/dev/null # the first run starts from now
+message() {
+  (cd "$DIR/servers/node" && node -e '
+    const D = require("better-sqlite3"), db = new D(process.argv[1]);
+    db.prepare("INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,NULL,\x27rx\x27)")
+      .run(Number(process.argv[2]), process.argv[3], process.argv[4], process.argv[5]);' \
+    "$(env_get DB_PATH)" "$1" "$2" "$3" "$4")
+}
+t=$(($(date +%s) + 2))
+message "$t" OE8XYZ N0CALL-7 "meet at the cache"
+: >"$WORK/api-calls"
+bash "$HERE/extras/alerts.sh" --once >/dev/null
+CHECK="alerts.sh: vibrates for a message to the operator's call" check grep -q "^termux-vibrate" "$WORK/api-calls"
+CHECK="alerts.sh: says who it is from, not the text" check grep -qx "termux-tts-speak Message from O E 8 X Y Z" "$WORK/api-calls"
+: >"$WORK/api-calls"
+bash "$HERE/extras/alerts.sh" --once >/dev/null
+CHECK="alerts.sh: announces a message once" check test ! -s "$WORK/api-calls"
+message $((t + 1)) OE8AAA N0CALL "one"
+message $((t + 1)) OE8BBB N0CALL "two"
+message $((t + 1)) OE8CCC OE5OTH "not for us"
+printf 'POCKET_ALERTS_SPEAK_BODY=1\n' >>"$ENV_FILE"
+bash "$HERE/extras/alerts.sh" --once >/dev/null
+CHECK="alerts.sh: two messages in one second both announced, others' mail not" check test "$(grep -c '^termux-vibrate' "$WORK/api-calls")" -eq 2
+CHECK="alerts.sh: the text only when POCKET_ALERTS_SPEAK_BODY=1" check grep -qx "termux-tts-speak Message from O E 8 B B B. two" "$WORK/api-calls"
 
 gw="$(proc_pid gateway)"
 bash "$HERE/stop.sh" >/dev/null

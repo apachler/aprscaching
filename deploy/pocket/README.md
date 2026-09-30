@@ -19,6 +19,7 @@ stops background apps, and battery and heat are real limits.
 | `meshcom-setup.sh` | a MeshCom node on the hotspot or on the router the phone has joined (asks when both are up): finds the network, suggests a fixed address for the node on the hotspot, prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest; never sends anything to the node |
 | `extras/notify.sh` | the ongoing status notification with Stop, Restart and Open map (Termux:API); `start.sh` runs it |
 | `extras/battery.sh` | the battery saver: below `POCKET_BATTERY_LOW` % on battery, APRS-IS narrowed to your own call and a 2-hour raw log, back when charging or 10 points higher (Termux:API); `start.sh` runs it |
+| `extras/alerts.sh` | field alerts (off by default, `POCKET_ALERTS=1`): vibrate, and optionally speak the sender, for a new direct message to your call (Termux:API); `start.sh` runs it |
 | `extras/setup.sh` | home-screen shortcuts (Termux:Widget) and a daily backup while charging (Termux:API); `--remove` |
 | `extras/scheduled-backup.sh` | the job the scheduled backup runs: battery above 50 %, `backup.sh`, the time for `status.sh` |
 | `tls.sh` | https for visitors on the hotspot: a station CA, a certificate for the phone's private addresses, the https settings in the `.env`; `--renew`, `--disable` |
