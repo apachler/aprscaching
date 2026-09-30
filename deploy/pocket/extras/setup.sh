@@ -10,7 +10,8 @@
 #
 # Shortcuts, in ~/.shortcuts/ (Termux:Widget lists them; add its widget to the home screen):
 #   aprscaching Status     opens a terminal with status.sh (and a toast of the headline)
-#   tasks/: aprscaching Start, Stop, Open map, Backup — run in the background, report with a toast
+#   tasks/: aprscaching Start, Stop, Open map, Backup, Sync before trip — run in the background, report
+#           with a toast
 #
 # Options:
 #   --shortcuts          install the home-screen shortcuts
@@ -45,7 +46,7 @@ pocket_paths
 SC_DIR="${APRSCACHING_SHORTCUTS_DIR:-$HOME/.shortcuts}"
 JOB_ID=4287
 NAMES=("aprscaching Status" "tasks/aprscaching Start" "tasks/aprscaching Stop" "tasks/aprscaching Open map"
-  "tasks/aprscaching Backup")
+  "tasks/aprscaching Backup" "tasks/aprscaching Sync before trip")
 
 cancel_job() { if have termux-job-scheduler; then termux_api termux-job-scheduler --cancel --job-id "$JOB_ID" >/dev/null || true; fi; }
 
@@ -96,7 +97,10 @@ read -r -p 'Enter closes this window. ' _"
   write_shortcut "tasks/aprscaching Stop" "bash $(q "$HERE/stop.sh") >/dev/null 2>&1; $(toast_cmd "'aprscaching stopped'")"
   write_shortcut "tasks/aprscaching Open map" "termux-open-url http://localhost:$(gateway_port)"
   write_shortcut "tasks/aprscaching Backup" "if bash $(q "$HERE/backup.sh") >/dev/null 2>&1; then date +%s > $(q "$RUN_DIR/last-backup"); $(toast_cmd "'aprscaching backup done'"); else $(toast_cmd "'aprscaching backup failed: run backup.sh in Termux'"); fi"
-  info "Status, Start, Stop, Open map, Backup. Add the Termux:Widget widget to the home screen to use them."
+  # The sync reports through its own notification; the toast covers a phone without one.
+  write_shortcut "tasks/aprscaching Sync before trip" "if bash $(q "$HERE/extras/sync-now.sh") >/dev/null 2>&1; then $(toast_cmd "'aprscaching synced'"); else $(toast_cmd "'aprscaching sync failed or not on Wi-Fi: run extras/sync-now.sh in Termux'"); fi"
+  info "Status, Start, Stop, Open map, Backup, Sync before trip. Add the Termux:Widget widget to the home"
+  info "screen to use them."
   have termux-toast || termux_api_hint "toasts from the shortcuts"
 fi
 

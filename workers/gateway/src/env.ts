@@ -54,6 +54,7 @@ const ENV_STRING_KEYS = [
   "FED_CORROBORATION_SECRET", // if set, /federation/corroborate also requires x-fed-secret; askers send it only to trusted https peers
   "FED_CORROBORATION_REQUIRE_KNOWN", // "1": answer only askers that are known, non-blocked peers (by their verified key)
   "FED_REVEAL_IGATE", // if set, corroboration responses include the exact IGate (both peers opt in)
+  "FED_SYNC_REGION", // S,W,N,E: pull only the caches inside this box from peers that filter by region (sync-cache-bbox)
   "FED_ENDPOINTS", // this instance's typed transport endpoints (JSON [{transport,address,priority}]) — published in the descriptor
   "FED_ALLOW_PRIVATE", // "1": federation may fetch private/loopback addresses (an all-LAN network); see fetchguard.ts
   // push-to-hub: NAT/firewall peers contribute without inbound reachability

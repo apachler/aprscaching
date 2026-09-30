@@ -23,6 +23,7 @@ import { displayCall } from "./auth.js";
 import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
+import { bboxWhere, SYNC_REGION_CAPABILITY, type Bbox } from "./fedregion.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -628,6 +629,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
       fk ? "sync-cbor" : null, // the CBOR sync surface exists only where frames can carry signatures
       env.FED_SUBMIT_SECRET ? "submit" : null,
       fk ? "corroborate-signed/1" : null, // signed corroboration questions and answers
+      fk ? SYNC_REGION_CAPABILITY : null, // the CBOR caches feed narrows to a region (fedregion.ts)
     ].filter(Boolean),
     endpoints: {
       caches: "/federation/caches",
@@ -659,6 +661,11 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
  * feeds are a transparency/browse surface: signatures live on the CBOR sync surface, the only wire
  * mirroring consumes.
  */
+/** What a subscriber may narrow a feed to; only the caches feed honours a region. */
+export interface FeedFilter {
+  bbox?: Bbox;
+}
+
 export interface FeedServeDef<Row = any> {
   type: string;
   /**
@@ -666,7 +673,7 @@ export interface FeedServeDef<Row = any> {
    * `sinceId` and returns rows strictly after `(since, sinceId)`, ordered by `(cursor, id)`; without
    * `sinceId` it returns rows with a cursor `>= since`.
    */
-  selectRows(env: Env, since: number, limit: number, sinceId?: number): Promise<Row[]>;
+  selectRows(env: Env, since: number, limit: number, sinceId?: number, filter?: FeedFilter): Promise<Row[]>;
   composite?: boolean;
   /** A row's wire form. `version` is the record's per-gid version (`v`) when it differs from the cursor. */
   recordOf(row: Row, instance: string): { id: string; cursor: number; data: unknown; version?: number };
@@ -712,15 +719,19 @@ const CACHE_VERSION_BASE = 2 ** 32;
 export const CACHE_FEED: FeedServeDef<CacheRow> = {
   type: "cache",
   composite: true,
-  selectRows: async (env, since, limit, sinceId = -1) =>
-    (
+  selectRows: async (env, since, limit, sinceId = -1, filter) => {
+    // a region narrows the rows before the cursor walks them, so the cursor stays exact for that region
+    const region = filter?.bbox ? bboxWhere(filter.bbox) : null;
+    return (
       await env.DB.prepare(
         `SELECT * FROM caches WHERE source = 'native' AND fed_scope != 'local-only'
+           ${region ? `AND ${region.sql}` : ""}
            AND (updated_at > ? OR (updated_at = ? AND id > ?)) ORDER BY updated_at, id LIMIT ?`,
       )
-        .bind(since, since, sinceId, limit)
+        .bind(...(region?.params ?? []), since, since, sinceId, limit)
         .all<CacheRow>()
-    ).results,
+    ).results;
+  },
   // the version is the row's revision above 2^32, so it sorts after any timestamp version a mirror holds
   recordOf: (r, instance) => ({
     id: `${instance}:cache:${r.id}`,

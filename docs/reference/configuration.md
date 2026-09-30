@@ -92,6 +92,7 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `FED_REGISTRY_DNS` | Alternative registry source: a DNS `TXT` record name whose `url=` locates the document; verified under `FED_REGISTRY_KEY` (without it the server refuses to start) | — |
 | `FED_OPERATOR` / `FED_APRS_CALL` | Operator label + APRS service callsign, self-published in `/.well-known` | — |
 | `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
+| `FED_SYNC_REGION` | `S,W,N,E` in decimal degrees: pull only the caches inside this box from peers that filter by region (`sync-cache-bbox`); deletes are never filtered. Changing it reads the caches feed again from the start | whole feed |
 | `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |
 | `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |
 | `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret. Records are signed either way; the secret decides who may register a new spoke's key on the hub | — |

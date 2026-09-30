@@ -341,6 +341,29 @@ a network change. Android runs one VPN at a time.
     repeats the record; `status.sh` warns 14 days before the certificate expires.
     [TLS on the 44Net name](44net.md#tls-on-the-44net-name) has the background.
 
+## Federation: sync before a trip
+
+A Pocket station can follow other instances like any instance (`FED_PEERS`, [Federation](../guides/federation.md)),
+usually your home instance. Out in the field it may have no data connection, so pull the caches while the
+phone is on Wi-Fi:
+
+```bash
+bash ~/aprscaching/deploy/pocket/extras/sync-now.sh            # caches, deletes, keys; up to 10 pages per feed
+bash ~/aprscaching/deploy/pocket/extras/sync-now.sh --finds    # finds too
+```
+
+- **Wi-Fi only** by default: without a joined Wi-Fi network (Termux:API tells) it stops; `--mobile` or
+  `POCKET_SYNC_MOBILE=1` allows mobile data.
+- **A data budget**: caches, deletes and callsign keys, finds only with `--finds`, and at most `--pages` pages
+  of 500 records per feed and peer; a later run carries on where this one stopped. Deletes always come, so
+  nothing you already hold outlives its removal.
+- **One region**: `FED_SYNC_REGION=S,W,N,E` in the `.env` pulls only the caches in that box from peers that
+  filter by region (a peer without the filter sends every cache). Changing it reads the caches again from the
+  start. As a guide, a cache with a short description is about 0.5 KB on the wire: 300 caches took 144 KB
+  in a test.
+- It reports what arrived and the bytes it took, in the terminal and in a notification; `status.sh` shows
+  the last sync. The Termux:Widget shortcut **Sync before trip** runs it (`extras/setup.sh --shortcuts`).
+
 ## Backup
 
 ```bash
