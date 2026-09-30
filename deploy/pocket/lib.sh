@@ -17,6 +17,7 @@ pocket_paths() {
   case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
   case "$DATA" in /*) ;; *) DATA="$PWD/$DATA" ;; esac
   ENV_FILE="$DATA/.env"
+  SAVER_ENV="$DATA/battery-saver.env"
   LOG_DIR="$DATA/logs"
   RUN_DIR="$DATA/run"
   # https for visitors: tls.sh keeps its CA and the station certificate here.
@@ -49,11 +50,15 @@ env_get() {
 }
 
 # Export every variable of the .env into the current shell, as install.sh prints it.
+# The battery saver's overlay (extras/battery.sh writes it while the battery is low): the processes load
+# it after the .env, so its few settings win until it is removed.
 env_load() {
   [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing." "Run deploy/pocket/install.sh first; it writes that file."
   set -a
   # shellcheck disable=SC1090 # the operator's own .env
   . "$ENV_FILE"
+  # shellcheck disable=SC1090 # written by extras/battery.sh
+  if [ -f "$SAVER_ENV" ]; then . "$SAVER_ENV"; fi
   set +a
 }
 

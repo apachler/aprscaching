@@ -2,7 +2,7 @@
 # Exercise the Pocket scripts on a Linux box with tmux: pocket.sh (piped into bash, as on the phone) on
 # an installed checkout, recovery of a killed gateway, status, backup, https for visitors (tls.sh, with a
 # stand-in `ip` that reports a hotspot address), a MeshCom node (meshcom-setup.sh), restart.sh, the Termux
-# add-ons (notification, shortcuts, scheduled backup) and stop. The Termux-only commands (termux-wake-lock,
+# add-ons (notification, shortcuts, scheduled backup, battery saver) and stop. The Termux-only commands (termux-wake-lock,
 # termux-battery-status, …) are stand-ins on PATH, and tmux runs on its own socket, so an existing tmux
 # session is not touched.
 #
@@ -73,7 +73,7 @@ out="$(APRSCACHING_RAW="file://$WORK/raw" bash -s -- --allow-non-termux --branch
 CHECK="pocket.sh: the gateway answers /health" check wait_health 60
 CHECK="pocket.sh: prints the local URL" check grep -q "on this phone: *http://localhost:" <<<"$out"
 CHECK="pocket.sh: prints a sign-in link" check grep -q "/auth/email/verify?token=" <<<"$out"
-CHECK="start.sh: four windows" check test "$(tmux list-windows -t "=$SESSION" | wc -l)" -eq 4
+CHECK="start.sh: gateway, ingest, battery, logs, shell" check test "$(tmux list-windows -t "=$SESSION" -F '#{window_name}' | paste -sd ' ' -)" = "gateway ingest battery logs shell"
 CHECK="start.sh: wake lock taken" check grep -qx termux-wake-lock "$WORK/calls"
 
 old="$(proc_pid gateway)"
@@ -235,6 +235,29 @@ bash "$job"
 CHECK="scheduled backup: skipped below 50 % battery" check test ! -e "$RUN_DIR/last-backup"
 bash "$HERE/extras/setup.sh" --remove >/dev/null
 CHECK="extras/setup.sh --remove: shortcuts gone, job cancelled" check test -z "$(find "$WORK/shortcuts" -type f)" -a -n "$(grep -- '--cancel --job-id 4287' "$WORK/api-calls")"
+
+# ---- the battery saver, with stand-in battery readings
+battery() { printf '#!/bin/sh\necho %s\n' "'{\"percentage\":$1,\"plugged\":\"$2\"}'" >"$WORK/bin/termux-battery-status"; }
+ing="$(state_get ingest restarts)"
+battery 15 UNPLUGGED
+bash "$HERE/extras/battery.sh" --once >/dev/null
+CHECK="battery.sh: saver below 20 % on battery" check grep -q "^APRSIS_FILTER='b/N0CALL\*'" "$SAVER_ENV"
+sleep 2
+CHECK="battery.sh: the station restarted into the saver profile" check test "$(state_get ingest restarts)" -gt "$ing"
+CHECK="battery.sh: one notification" check grep -q "aprscaching-battery --title aprscaching: battery saver on" "$WORK/api-calls"
+CHECK="status.sh: battery saver ON" check grep -q "battery saver: ON" <<<"$(bash "$HERE/status.sh" 2>&1 || true)"
+battery 25 UNPLUGGED
+bash "$HERE/extras/battery.sh" --once >/dev/null
+CHECK="battery.sh: stays in saver below 30 % (hysteresis)" check test -f "$SAVER_ENV"
+battery 25 PLUGGED_AC
+bash "$HERE/extras/battery.sh" --once >/dev/null
+CHECK="battery.sh: normal again when charging" check test ! -f "$SAVER_ENV"
+battery 80 UNPLUGGED
+decided="$(for c in "30 0 normal" "19 0 normal" "19 1 normal" "25 0 saver" "29 0 saver" "30 0 saver" "10 1 saver"; do
+  # shellcheck disable=SC2086 # the three words of each case
+  bash "$HERE/extras/battery.sh" --decide $c
+done | paste -sd ' ' -)"
+CHECK="battery.sh: the rule, with the 10-point gap" check test "$decided" = "normal saver normal saver saver normal normal"
 
 gw="$(proc_pid gateway)"
 bash "$HERE/stop.sh" >/dev/null

@@ -232,6 +232,14 @@ if bat="$(termux_api termux-battery-status)" && [ -n "$bat" ]; then
   plug="$(printf '%s' "$bat" | json_field plugged)"
   temp="$(printf '%s' "$bat" | json_field temperature)"
   info "${pct:-?}%, ${st:-?}, ${plug:-?}${temp:+, $temp °C}"
+  low="$(env_get POCKET_BATTERY_LOW)"
+  if [ -f "$SAVER_ENV" ]; then
+    info "battery saver: ON (APRS-IS narrowed to your own call until the phone charges)"
+  elif [ "${low:-20}" = 0 ]; then
+    info "battery saver: off (POCKET_BATTERY_LOW=0)"
+  else
+    info "battery saver: standing by (switches on below ${low:-20}% on battery)"
+  fi
 else
   info "unknown (needs the Termux:API app and: pkg install termux-api)"
 fi

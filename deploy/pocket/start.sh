@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start the Pocket station in the tmux session `aprscaching`, or attach to it when it already runs.
 # Windows: gateway (servers/node) · ingest (apps/ingest) · tls (with https on, tls.sh --watch) · notify
-# (with Termux:API, extras/notify.sh) · logs (both log files) · shell. The gateway and the ingest run under supervise.sh, which restarts either one
+# and battery (with Termux:API, extras/notify.sh and extras/battery.sh) · logs (both log files) · shell. The gateway and the ingest run under supervise.sh, which restarts either one
 # after a short backoff when it exits and writes its output to ~/.aprscaching/logs/. A wake lock keeps
 # the phone's CPU running while Termux is in the background (termux-wake-lock; stop.sh releases it).
 #
@@ -111,6 +111,11 @@ if have termux-notification && termux_api_ready; then
     "$(q "$DIR")" "$(q "$DATA")" "$(q "$HERE/extras/notify.sh")")"
 elif ! session_exists || ! tmux list-windows -t "=$SESSION" -F '#{window_name}' | grep -qxF notify; then
   termux_api_hint "the station notification"
+fi
+# The battery saver (extras/battery.sh) likewise, unless POCKET_BATTERY_LOW=0 turns it off.
+if [ "$(env_get POCKET_BATTERY_LOW)" != 0 ] && termux_api_ready; then
+  ensure_window battery "$(printf 'APRSCACHING_DIR=%s APRSCACHING_DATA=%s bash %s' \
+    "$(q "$DIR")" "$(q "$DATA")" "$(q "$HERE/extras/battery.sh")")"
 fi
 ensure_window logs "$(logs_cmd)"
 ensure_window shell
