@@ -1,0 +1,45 @@
+# Pocket in Termux: install and start the station inside the termux/termux-docker image, on aarch64 (the
+# architecture of phones, on GitHub's native Arm runner) and on x86_64. Weekly and manual, never the PR
+# loop: it downloads Termux packages and compiles better-sqlite3 with Termux's clang, and a mirror outage is
+# not a reason to hold a PR. The image has no Android underneath, so this proves the install and the
+# scripts, not a phone's background limits (docs/operate/pocket.md).
+name: pocket-termux
+on:
+  schedule:
+    - cron: "41 4 * * 2" # weekly, Tuesday 04:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  termux:
+    name: Termux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # a phone's own path: everything built inside Termux
+          - { arch: aarch64, runner: ubuntu-24.04-arm, web: termux }
+          # Rolldown has no x86_64 Android build: the web app comes from the runner (install.sh --web-dist)
+          - { arch: x86_64, runner: ubuntu-latest, web: runner }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: matrix.web == 'runner'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - if: matrix.web == 'runner'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - if: matrix.web == 'runner'
+        name: Build the web app on the runner
+        run: |
+          pnpm install --frozen-lockfile --filter "@aprscaching/web..."
+          pnpm --filter @aprscaching/web exec vite build
+      - name: Install and start Pocket in termux/termux-docker:${{ matrix.arch }}
+        run: |
+          web=()
+          if [ "${{ matrix.web }}" = runner ]; then web=(-v "$GITHUB_WORKSPACE/apps/web/dist:/web:ro"); fi
+          docker run --rm "${web[@]}" -v "$GITHUB_WORKSPACE:/src:ro" termux/termux-docker:${{ matrix.arch }} \
+            bash /src/deploy/pocket/test/termux-ci.sh /src ${{ matrix.web == 'runner' && '/web' || '' }}
