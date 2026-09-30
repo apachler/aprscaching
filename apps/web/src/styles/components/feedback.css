@@ -14,6 +14,23 @@
     border-left-color: var(--bad);
     background: color-mix(in oklch, var(--bad) 12%, transparent);
   }
+  /* the location wait: "Waiting for GPS… 23 s" and its actions on one wrapping line */
+  .locate-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-1) var(--sp-3);
+    font-size: var(--fs-md);
+    color: var(--ink-2);
+  }
+  .locate-status-text {
+    font-variant-numeric: tabular-nums;
+  }
+  .locate-status-actions {
+    display: flex;
+    gap: var(--sp-3);
+  }
   /* loading skeleton: placeholder bars while a surface's code or data arrives; opacity-only pulse */
   .skeleton {
     display: grid;

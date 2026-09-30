@@ -378,4 +378,26 @@
     position: relative;
     width: min(360px, 70vw);
   }
+  /* the error boundary's page: one card, centred, readable on the dark page background */
+  .crash {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(var(--sp-7), env(safe-area-inset-top)) var(--sp-7) max(var(--sp-7), env(safe-area-inset-bottom));
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .crash-card {
+    width: min(32rem, 100%);
+  }
+  .crash-title {
+    margin: 0 0 var(--sp-3);
+    font-size: var(--fs-xl);
+  }
+  .crash-msg {
+    padding: var(--sp-3);
+    border-left: 3px solid var(--bad);
+    background: color-mix(in oklch, var(--bad) 10%, transparent);
+    overflow-wrap: anywhere;
+  }
 }

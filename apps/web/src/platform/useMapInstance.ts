@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { canDrawMap } from "./mapSupport.js";
 
 // MapLibre locates its worker next to its own module by default, but the bundle has no such file: the
 // worker (which parses tiles, GeoJSON and styles off the main thread) is built as its own asset here.
@@ -15,23 +16,24 @@ export interface MapHandlers {
   /** The view settled after a pan/zoom. */
   onMoveEnd: (m: maplibregl.Map) => void;
   onClick: (m: maplibregl.Map, e: maplibregl.MapMouseEvent) => void;
-  /** The viewer's own fix, once they ask the map to locate them. */
-  onGeolocate: (lat: number, lon: number) => void;
 }
 
 /**
  * Create the MapLibre map once its container node mounts, and remove it on unmount. The container is
  * a callback-ref node rather than a plain ref, so the map initialises exactly when the container
  * exists: an effect keyed on a boolean would run while it is still absent and never re-run, leaving a
- * blank map. Returns the map as state (null until created) and a ref for event handlers. Handlers
- * are read through a ref, so passing fresh closures does not re-create the map.
+ * blank map. Returns the map as state (null until created), a ref for event handlers, and whether
+ * the browser cannot draw a map at all (no WebGL2). Handlers are read through a ref, so passing fresh
+ * closures does not re-create the map.
  */
 export function useMapInstance(
   node: HTMLElement | null,
   opts: { style: () => string | StyleSpecification; center: [number, number]; zoom: number },
   handlers: MapHandlers,
-): { map: maplibregl.Map | null; mapRef: React.RefObject<maplibregl.Map | null> } {
+): { map: maplibregl.Map | null; mapRef: React.RefObject<maplibregl.Map | null>; mapFailed: boolean } {
   const [map, setMap] = useState<maplibregl.Map | null>(null);
+  // the browser refused the WebGL2 context the map draws with: the app goes on without a map
+  const [mapFailed, setMapFailed] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const h = useRef(handlers);
   useEffect(() => {
@@ -41,17 +43,26 @@ export function useMapInstance(
 
   useEffect(() => {
     if (!node || mapRef.current) return;
-    const m = new maplibregl.Map({
-      container: node,
-      style: init.current.style(),
-      center: init.current.center,
-      zoom: init.current.zoom,
-      hash: true,
-    });
+    if (!canDrawMap()) {
+      setMapFailed(true);
+      return;
+    }
+    let m: maplibregl.Map;
+    try {
+      m = new maplibregl.Map({
+        container: node,
+        style: init.current.style(),
+        center: init.current.center,
+        zoom: init.current.zoom,
+        hash: true,
+      });
+    } catch (e) {
+      console.error(e);
+      setMapFailed(true);
+      return;
+    }
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
-    const locate = new maplibregl.GeolocateControl({ trackUserLocation: true });
-    locate.on("geolocate", (e) => h.current.onGeolocate(e.coords.latitude, e.coords.longitude));
-    m.addControl(locate, "top-left");
+    // the locate button joins this stack from LocateControl, driven by the app's own location helper
     m.on("load", () => h.current.onLoad(m));
     m.on("moveend", () => h.current.onMoveEnd(m));
     m.on("click", (e) => h.current.onClick(m, e));
@@ -64,7 +75,7 @@ export function useMapInstance(
     };
   }, [node]);
 
-  return { map, mapRef };
+  return { map, mapRef, mapFailed };
 }
 
 /** The map's `#zoom/lat/lon[/bearing[/pitch]]` in MapLibre's own hash format. */

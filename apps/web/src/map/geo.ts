@@ -59,6 +59,21 @@ export function gridCenter(grid: string): [number, number] | null {
   return [lat + latCell / 2, lon + lonCell / 2]; // centre of the smallest cell
 }
 
+/**
+ * A coordinate typed by hand: decimal degrees ("47.0736, 15.4379" or "47.0736 15.4379") or a
+ * Maidenhead locator (its cell centre). Null when it is neither, or out of range.
+ */
+export function parseCoordinates(text: string): { lat: number; lon: number } | null {
+  const q = text.trim();
+  const g = gridCenter(q);
+  if (g) return { lat: g[0], lon: g[1] };
+  const ll = /^(-?\d+(?:\.\d+)?)\s*[ ,;]\s*(-?\d+(?:\.\d+)?)$/.exec(q);
+  if (!ll) return null;
+  const lat = +ll[1]!,
+    lon = +ll[2]!;
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}
+
 /** Great-circle distance in metres (local copy; the web doesn't depend on @aprscaching/aprs). */
 export function haversine(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const R = 6371000,

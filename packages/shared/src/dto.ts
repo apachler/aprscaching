@@ -41,13 +41,30 @@ const Callsign = z
   .max(9)
   .regex(/^[A-Za-z0-9-]+$/);
 
-export const AppGeo = z.object({
-  lat: Lat,
-  lon: Lon,
-  accuracyM: z.number().nonnegative(),
-  ts: z.number(),
-});
+/**
+ * The in-app location evidence: one reading the device's geolocation reported, with the reading's own
+ * timestamp (unix seconds) and accuracy. It is strict: no field can mark a typed coordinate, because a
+ * coordinate the user typed is their claim, never evidence of where the device was.
+ */
+export const AppGeo = z
+  .object({
+    lat: Lat,
+    lon: Lon,
+    accuracyM: z.number().nonnegative(),
+    ts: z.number(),
+  })
+  .strict();
 export type AppGeo = z.infer<typeof AppGeo>;
+
+/**
+ * Unlock the next stage of a multi-stage cache. A geo stage takes the device reading (`appGeo`, where
+ * accuracy and timestamp are optional); an NFC stage takes the tag's `code`.
+ */
+export const StageUnlockRequest = z.object({
+  callsign: z.string().optional(),
+  appGeo: AppGeo.partial({ accuracyM: true, ts: true }).optional(),
+  code: z.string().optional(),
+});
 
 /** Owner "hide a cache" — create a native cache. Owner taken from session, else `ownerCall`. */
 /** Free-form cache tags: up to 12, each a short trimmed token (deduped + lowercased by the gateway). */

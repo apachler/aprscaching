@@ -38,4 +38,11 @@
   .srch input:focus {
     outline: none;
   }
+  /* a typed-coordinate entry: the field grows, its submit button sits on the field's baseline */
+  .coord-entry {
+    align-items: flex-end;
+  }
+  .coord-entry > label {
+    flex: 1;
+  }
 }

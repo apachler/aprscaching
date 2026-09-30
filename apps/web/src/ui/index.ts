@@ -8,6 +8,7 @@ export { Badge, TierBadge, CallVerifiedBadge, TIER_NAME, TIER_DESC, LicenceBadge
 export { Card } from "./Card.js";
 export { EmptyState } from "./EmptyState.js";
 export { ErrorState } from "./ErrorState.js";
+export { ErrorBoundary } from "./ErrorBoundary.js";
 export { LoadMore } from "./LoadMore.js";
 export { usePaged, type PageResult } from "./usePaged.js";
 export { useLoad } from "./useLoad.js";
