@@ -63,9 +63,11 @@ release. Listed in start order — the first two have outside dependencies and l
 
 These are blocked on physical radio, a real peer, or a network no CI runner has — not on code.
 
-- [ ] **Owned-RF Tier A · 44net PoP · IPIP-mesh/BGP** — genuine Tier-A corroboration needs a receiver
-  *you* operate and attest for. The provenance seam is built and Tier A is designed-for; standing up the
-  RF site, the 44net gateway/subnet, and mesh routing is hardware + network-ops, not code.
+- [ ] **Owned-RF Tier A** — genuine Tier-A corroboration needs a receiver *you* operate and attest for.
+  The provenance seam is built and Tier A is designed-for; standing up the RF site is hardware, not code.
+  Its amateur-IP reachability is a 44Net Connect address
+  ([`docs/operate/44net.md`](docs/operate/44net.md)); an own 44Net PoP, the IPIP mesh and BGP are
+  [decided, not planned](#44net-decided-not-planned).
   See [`docs/guides/federation.md`](docs/guides/federation.md) · [`docs/operate/rf-ingest.md`](docs/operate/rf-ingest.md).
 - [x] **FBB LZHUF (B0/B1) compressed forwarding + MD5 link auth** — the codec is built and **byte-exact
   against a real F6FBB oracle** (`packages/packet/src/lzhuf.ts`: N=2048 window, F=60, classic 6+6 position
@@ -522,6 +524,11 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   get full-detail maps without any third-party tile provider. Natural shape: a Protomaps PMTiles
   extract + a self-hosted MapLibre style wired in via `VITE_BASEMAP_STYLE` — which also removes the
   hosted default's dependency on the volunteer-run OpenFreeMap service.
+- [ ] **Load the map's data without the base style** *(P3 · S)* — the first cache fetch runs on
+  MapLibre's `load` event (`Platform.tsx`), which fires only once the base style has loaded. When the
+  online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty until the
+  first pan or zoom. Natural shape: also refresh on the style's `error`, or on a short timeout after the
+  map is created.
 
 ## Legal & attribution follow-ups (from the licensing audit)
 
@@ -629,12 +636,15 @@ lands with a regression test that fails without it.
   44net peer in `FED_PEERS` (which starts `trusted`). Waits for the next federation-hardening round, so the
   written defaults match its final settings. See
   [`docs/reference/federation-operations.md`](docs/reference/federation-operations.md#running-federation-safely).
-- [ ] **Self-host recipe on a 44net/HAMNET address** *(P3 · S)* — a Self-host walkthrough for a box reached
-  on amateur IP space: plain HTTP inside the network (no public TLS), what federation signatures protect
-  (record origin and integrity, corroboration answers bound to their question) and what they do not (a
-  confidential channel, or a find's Tier A — that still needs the corroboration quorum), and onboarding
-  peers through the `_aprscaching.<call>.ampr.org` DNS TXT record. Follows the safe-mode defaults above and belongs with the
-  44net/HAMNET networking work that follows them.
+- [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/operate/44net.md`](docs/operate/44net.md):
+  a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
+  signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
+  without the internet. The `<call>.ampr.org` identity binding is in
+  [`docs/guides/federation.md`](docs/guides/federation.md#identity-on-44net-callamprorg).
+- [ ] **Registry DNS lookup through `DOH_URL`** *(P3 · S)* — `FED_REGISTRY_DNS` always asks Cloudflare's
+  resolver (`federation.ts` `registryFromDns`), unlike 44net onboarding and `ampr.org` verification,
+  which use `DOH_URL`. *Why:* an instance on HAMNET without the internet cannot locate its registry by DNS;
+  `FED_REGISTRY` (a document URL) is the workaround meanwhile.
 
 ## Federation over RF (the wire contracts are in; the bindings land in this order)
 
@@ -702,6 +712,36 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb
   bound and an integrity-checked container so corrupt input fails decode instead of yielding wrong
   bytes.
+
+## 44Net: decided, not planned
+
+44Net is used for reachability (a 44Net Connect address) and identity (`<call>.ampr.org`), never for trust
+— see [`docs/operate/44net.md`](docs/operate/44net.md). These were weighed and are not planned, each for
+the reason given:
+
+- **BGP announcement of a 44Net /24** — solves routing for one operator, not identity or trust; it needs a
+  /24, a BGP-capable provider and a letter of authority, and 44Net space has no RPKI to lean on.
+- **An own ASN** — identity is keys; an ASN says nothing about which ham runs a box, and brings fees,
+  multihoming and BGP operations.
+- **Anycast for federated instances** — anycast needs identical state behind every address; the Cloudflare
+  split already serves from a global anycast edge.
+- **IPIP mesh / amprgw / ampr-ripd** — legacy, complex and low-bandwidth; 44Net Connect gives the same
+  reachability with a standard WireGuard client.
+- **In-app WireGuard or 44Net Connect management** — tunnels and routing are the operating system's or the
+  router's job; the app never holds tunnel keys or changes routes.
+- **Automated ARDC Portal / Connect provisioning** — no public ARDC API for it was found; the manual steps
+  are short (see the watch item below).
+- **Trust or identity from a source address** — an address is not a signature; deriving either from it
+  would break "transport is not trust".
+- **Encryption over HAMNET RF** — not allowed on amateur radio; everything that crosses RF is signed, never
+  encrypted.
+
+- [ ] **Watch: 44Net Connect inbound policy and an ARDC provisioning API** — ARDC documents Connect
+  addresses as reachable from the internet and unfiltered (checked 2026-09-30); a change to that policy
+  changes the reachability section of the 44Net page and its firewall advice. Also watch for a public API
+  for Portal DNS records or Connect tunnels: the Portal API documents only IPIP-mesh routes, and Connect's
+  API keys have no public reference. An API would let the self-check print a one-click fix, and would
+  reopen the provisioning item above.
 
 ## Deferred by design (reserved seams, opened on demand)
 

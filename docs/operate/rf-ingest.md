@@ -100,6 +100,40 @@ Point `INGEST_URL` at a gateway on the same machine (`http://localhost:8787/inge
 beside the box: RF in, map out, no internet. A cloud VM may also run an APRS-IS-only ingest for a baseline
 global feed, but that is never the only path for RF.
 
+## AXUDP and AXIP peering over 44Net
+
+Two packet nodes that each have a 44Net Connect address can link directly, even when both sit behind
+CGNAT: a Connect address is reachable from the internet with no port forwarding (see
+[Run an instance on 44Net](44net.md#6-who-can-reach-you)). Name the other node by its 44.x address or its
+`ampr.org` name:
+
+```bash
+AXUDP_PORT=10093
+AXUDP_BIND=44.x.y.z                       # listen on the tunnel address only (ingest on the host)
+AXUDP_PEERS=oe8xyz.ampr.org:10093         # or 44.a.b.c:10093; several peers comma-separated
+# AXIP instead (raw IP protocol 93, needs raw-socket + CAP_NET_RAW):
+# AXIP_PEERS=oe8xyz.ampr.org
+```
+
+- **Peer enforcement.** With `AXUDP_PEERS` (or `AXIP_PEERS`) set, the port accepts frames only from the
+  peers' IPv4 addresses and drops and counts everything else. Names are re-resolved every five minutes, so
+  a peer that moves to a new address is followed once its A record changes — within about an hour of the
+  change in the ARDC Portal, plus the old record's TTL.
+- **Binding.** `AXUDP_BIND` to the 44.x address needs the tunnel up before the ingest starts; a bind to an
+  absent address fails and is not retried. In the Docker stack the container does not hold the 44.x
+  address: leave `AXUDP_BIND` unset and publish the ingest's UDP port on the tunnel address only
+  (`ports: ["44.x.y.z:10093:10093/udp"]`), never on all addresses.
+- **Firewall.** Allow the AXUDP port (UDP 10093 by default) on the tunnel interface only from your peers'
+  addresses.
+- **Frames stay Tier C.** A frame that arrived over AXUDP or AXIP is tunnelled, not heard: it is never
+  first-party attested and never reaches Tier A, whatever address it came from.
+- **Signed, never encrypted.** WireGuard encrypts only each node's leg to ARDC; the AX.25 frames themselves
+  stay plain, and whatever your node puts on the air follows the
+  [no-encryption rule](rf-regulatory.md#no-encryption-on-the-air-sign-never-conceal).
+- **Unverified:** whether IP protocol 93 (AXIP) passes between two Connect addresses. ARDC states that
+  Connect does not filter traffic, which suggests it does, but no test is recorded; AXUDP rides plain UDP and
+  is the safer choice.
+
 ## On-air legality
 
 Every transmit path above (digipeat, IGate, node, gated user TX) makes your station a control-operated —

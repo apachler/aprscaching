@@ -6,7 +6,8 @@ in its signature and not its path, the same signed records travel over any trans
 on a 44net/HAMNET amateur-IP name, and the packet-radio carriers — and on amateur RF a signature
 authenticates but never conceals (see [Amateur-radio compliance](../operate/rf-regulatory.md)). The
 byte-level format, typed peer endpoints (https / 44net / ax25 / netrom / bbs), and the ARDC-verified
-44net onboarding flow are specified in the [Federation wire format](../reference/federation-wire.md).
+44net onboarding flow are specified in the [Federation wire format](../reference/federation-wire.md); running
+an instance on a 44Net address is covered in [Run an instance on 44Net](../operate/44net.md).
 
 ## Joining the network
 
@@ -27,6 +28,54 @@ byte-level format, typed peer endpoints (https / 44net / ax25 / netrom / bbs), a
 Your instance then mirrors its peers, verifies everything it mirrors, and contributes corroboration back.
 The settings that decide how much a stranger can do are collected in
 [Federation operations](../reference/federation-operations.md).
+
+## Identity on 44Net: `<call>.ampr.org`
+
+For an instance run by a ham, `<call>.ampr.org` is the recommended identity binding. ARDC delegates that
+name only after reviewing the holder's amateur licence, so a record the holder publishes under it ties a
+federation key to a verified callsign. [Run an instance on 44Net](../operate/44net.md) is the step-by-step
+recipe: the address, the DNS records, reachability and the self-check.
+
+**Publishing.** The instance advertises its identity in one TXT record:
+
+```
+_aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<INSTANCE>; key=<federation public key>"
+```
+
+An optional `host=<name>` field names the host peers contact, when it is not `<call>.ampr.org` itself. It
+must be `<call>.ampr.org` or a name under it; any other value invalidates the whole record. The same TXT
+name may also carry a `v=acs1; verify=<code>` record for [callsign verification](../operate/administration.md#callsign-verification);
+the two kinds sit side by side.
+
+**Adding a peer by callsign.** **Instance admin → Federation** (or `POST /federation/peers/44net`, sysop
+or operator secret) takes a base callsign and:
+
+1. resolves the TXT record through `DOH_URL`;
+2. fetches the peer's descriptor over plain http from the named host, when it is reachable. A descriptor
+   whose instance id differs from `inst=`, or whose active keys don't include `key=`, is refused. An
+   unreachable descriptor is not fatal: the DNS key alone becomes the pin;
+3. admits the peer automatically when the resolver validated the answer with DNSSEC (the AD flag).
+   Without DNSSEC it shows the resolved binding and the operator confirms it once — a trust-on-first-use
+   pin. `ampr.org` is not DNSSEC-signed today, so every admission is an operator confirmation.
+
+**Key pinning and rotation.** The DNS key becomes the peer's key pin. From then on every sync verifies
+against exactly that key, or a key the pin reaches through signed rotation records — the same rule as for
+every peer ([Signed feeds](#signed-feeds)). A hijacked DNS record or host cannot move the pin on its own. A
+peer that rotates its key updates its TXT record, so peers that add it later pin the new key.
+
+**Plain http, signed content.** A 44net peer is contacted at `http://<host>`: amateur IP space has no
+public certificate authority, and nothing it carries needs to be secret. Its records are signed, and
+corroboration questions and answers are signed and bound to each other, so a middlebox on the link can
+neither forge nor replay them ([Cross-instance corroboration](#cross-instance-corroboration)).
+`FED_CORROBORATION_SECRET` is sent only to https peers, so over a 44net link the signatures carry the whole
+weight.
+
+**Identity, not trust.** The peer is stored with `verified_via = 'ardc-lot'` and enters **`unvetted`**:
+mirrored, hidden on the map, and not counted toward Tier A until you promote it. `ardc-lot` records that
+ARDC reviewed the licence behind the name — it never changes a trust tier, and neither does the 44.x address
+the peer answers from. Re-adding a known peer never changes its tier, so a `blocked` peer stays blocked. A
+peer's instance id binds to one live row: if you already follow the instance at its https URL, adding it by
+callsign is refused as a binding conflict until you block or remove one of the two.
 
 ## Signed feeds
 
