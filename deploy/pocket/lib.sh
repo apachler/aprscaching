@@ -114,11 +114,15 @@ list_ipv4() {
 # The Wi-Fi network this phone has joined as a client (WIFI_IP, WIFI_SSID), from Termux:API; empty when
 # not joined or when Termux:API is missing. Android reports the SSID only to apps holding the location
 # permission, so without it Termux:API returns "<unknown ssid>" and WIFI_SSID stays empty.
+# WIFI_KNOWN=1 once Termux:API answered, so an unjoined phone's wlan address can only be the hotspot.
 WIFI_IP=""
 WIFI_SSID=""
+WIFI_KNOWN=0
 wifi_detect() {
   local wifi
   wifi="$(termux_api termux-wifi-connectioninfo)" || return 0
+  [ -n "$wifi" ] || return 0
+  WIFI_KNOWN=1
   [ "$(printf '%s' "$wifi" | json_field supplicant_state)" = "COMPLETED" ] || return 0
   WIFI_IP="$(printf '%s' "$wifi" | json_field ip)"
   WIFI_SSID="$(printf '%s' "$wifi" | json_field ssid)"
@@ -133,7 +137,7 @@ kind_of() {
   case "$name" in
     lo) echo "loopback" ;;
     ap* | swlan* | softap* | wigig*) echo "hotspot" ;;
-    wlan*) if [ -n "$WIFI_IP" ]; then echo "hotspot"; else echo "wlan"; fi ;;
+    wlan*) if [ -n "$WIFI_IP" ] || [ "$WIFI_KNOWN" -eq 1 ]; then echo "hotspot"; else echo "wlan"; fi ;;
     rndis* | usb* | ncm*) echo "usb-tether" ;;
     bt-pan* | bnep*) echo "bt-tether" ;;
     rmnet* | ccmni* | seth* | pdp* | v4-* | clat*) echo "mobile" ;;
@@ -169,14 +173,16 @@ local_ipv4() {
   done < <(list_ipv4)
 }
 
-# "name address/prefix" for each interface that may be the phone's hotspot. Termux:API tells a joined
-# Wi-Fi apart from the hotspot (call wifi_detect first); without it every wlan address is a candidate.
+# "name address/prefix kind" for each interface that may be the phone's hotspot: kind `hotspot` when
+# certain (the interface name, or Termux:API; call wifi_detect first), `wlan` when a joined Wi-Fi looks
+# the same.
 hotspot_candidates() {
-  local name cidr
+  local name cidr kind
   while read -r name cidr; do
     [ -n "${name:-}" ] || continue
     is_private_ipv4 "${cidr%%/*}" || continue
-    case "$(kind_of "$name" "${cidr%%/*}")" in hotspot | wlan) printf '%s %s\n' "$name" "$cidr" ;; esac
+    kind="$(kind_of "$name" "${cidr%%/*}")"
+    case "$kind" in hotspot | wlan) printf '%s %s %s\n' "$name" "$cidr" "$kind" ;; esac
   done < <(list_ipv4)
 }
 

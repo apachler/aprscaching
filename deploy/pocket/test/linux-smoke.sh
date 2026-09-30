@@ -176,6 +176,22 @@ CHECK="meshcom-setup.sh: an address outside the subnet is refused" check not bas
 out="$(bash "$HERE/status.sh" 2>&1)" || true
 CHECK="status.sh: the MeshCom node" check grep -q "MeshCom ExtUDP: UDP 1799, nodes 192.168.43.50=N0CALL-12" <<<"$out"
 
+# With Termux:API (a stand-in) the phone has joined the Wi-Fi "Home"; the hotspot is on beside it.
+printf '#!/bin/sh\necho %s\n' "'{\"supplicant_state\":\"COMPLETED\",\"ip\":\"192.168.1.183\",\"ssid\":\"Home\"}'" \
+  >"$WORK/bin/termux-wifi-connectioninfo"
+chmod +x "$WORK/bin/termux-wifi-connectioninfo"
+printf '1: lo inet 127.0.0.1/8\n5: wlan0 inet 192.168.1.183/24\n7: wlan1 inet 192.168.43.1/24\n' >"$WORK/ifaces"
+out="$(bash "$HERE/meshcom-setup.sh" --no-write 2>&1)" || true
+CHECK="meshcom-setup.sh: the hotspot first while it is on" check grep -q -- "--setowngw 192.168.43.1" <<<"$out"
+printf '1: lo inet 127.0.0.1/8\n5: wlan0 inet 192.168.1.183/24\n' >"$WORK/ifaces"
+CHECK="meshcom-setup.sh: on a router the node's reserved address is required" check not bash "$HERE/meshcom-setup.sh" --yes >/dev/null 2>&1
+out="$(bash "$HERE/meshcom-setup.sh" --node-ip 192.168.1.60 --yes 2>&1)" || true
+CHECK="meshcom-setup.sh: hotspot off, the joined Wi-Fi" check grep -q "hotspot is off; using the Wi-Fi network Home" <<<"$out"
+CHECK="meshcom-setup.sh: ExtUDP to the phone's Wi-Fi address" check grep -q -- "--extudpip 192.168.1.183" <<<"$out"
+CHECK="meshcom-setup.sh: the router's network name" check grep -q -- "--setssid Home" <<<"$out"
+CHECK="meshcom-setup.sh: no fixed-address commands on a router" check not grep -q -- "^    --setownip" <<<"$out"
+CHECK="meshcom-setup.sh: the node on the router replaces its hotspot entry" check test "$(env_get MESHCOM_NODE)" = "192.168.1.60=N0CALL-12"
+
 gw="$(proc_pid gateway)"
 bash "$HERE/restart.sh" gateway >/dev/null
 CHECK="restart.sh gateway: healthy again" check wait_health 30

@@ -164,19 +164,20 @@ meshcom="$(env_get MESHCOM_NODE)"
 if [ -n "$meshcom" ]; then
   mport="$(env_get MESHCOM_PORT)"
   info "MeshCom ExtUDP: UDP ${mport:-1799}, nodes $meshcom"
-  # The listener binds the phone's address on the first node's subnet when the ingest starts, so the
-  # hotspot must be on by then; a hotspot turned on later needs an ingest restart.
+  # The listener binds the phone's address on the first node's subnet when the ingest starts, so that
+  # network (the hotspot, or the joined Wi-Fi) must be up by then; one that comes up later needs an
+  # ingest restart.
   first="${meshcom%%,*}"
   first="${first%%=*}"
   if ! bind_ip="$(local_address_for "$first")"; then
-    warn "no address of this phone is on the subnet of $first: the hotspot is off, or its subnet changed" \
-      "(then run meshcom-setup.sh again). With the hotspot on:  bash $HERE/restart.sh ingest"
+    warn "no address of this phone is on the subnet of $first: the hotspot is off, the phone left that Wi-Fi," \
+      "or the subnet changed (then run meshcom-setup.sh again). Once it is back:  bash $HERE/restart.sh ingest"
   else
     last="$(grep -F '[meshcom]' "$LOG_DIR/ingest.log" 2>/dev/null | grep -E 'listening|no local address|disabled' | tail -n 1 || true)"
     case "$last" in
       *listening*) info "listening on $bind_ip (ingest log)" ;;
       *"no local address"* | *disabled*)
-        warn "the MeshCom listener did not start (the hotspot was off when the ingest started):" \
+        warn "the MeshCom listener did not start (the node's network was down when the ingest started):" \
           "bash $HERE/restart.sh ingest" ;;
     esac
   fi
