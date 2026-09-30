@@ -4,7 +4,12 @@
  * before delegating `<call>.ampr.org` (its Level-of-Trust process), so a name under that zone is an
  * externally-verified callsign↔person binding. A peer advertises its federation identity in DNS:
  *
- *   _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>"
+ *   _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>[; host=<name>]"
+ *
+ * The peer is contacted at `http://<call>.ampr.org`, or at `host=` when the record names one. `host=` must
+ * be `<call>.ampr.org` itself or a name under it: a TXT in one callsign's zone must not point federation
+ * traffic at a third party, so any other host rejects the whole record. It moves where the peer is
+ * reached, never who it is (the callsign), its key pin or its trust.
  *
  * Onboarding cross-checks four facts: the name exists under ampr.org (ARDC reviewed the licence),
  * the TXT binds an instance id + signing key, the peer's descriptor verifies under that key (checked
@@ -28,20 +33,43 @@ const BASE_CALL_RE = /^[A-Za-z0-9]{3,9}$/;
 
 interface Resolved44net {
   callsign: string; // base call, uppercased
-  host: string; // <call>.ampr.org
+  host: string; // where the peer is contacted: host= from the TXT, else <call>.ampr.org
   instance: string;
   publicKey: string; // b64url raw Ed25519 from the TXT
   dnssec: boolean; // the resolver validated the chain (AD flag)
 }
 
-/** Parse the `v=acs1; inst=…; key=…` TXT payload. Returns null for anything else. */
-export function parse44netTxt(txt: string): { instance: string; publicKey: string } | null {
+const HOST_LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * The host a `host=` value names, lowercased, when it is `zone` itself or a name under it and a valid
+ * hostname (labels of 1–63 letters, digits and inner hyphens, 253 characters at most, no trailing dot);
+ * otherwise null.
+ */
+export function hostInZone(value: string, zone: string): string | null {
+  const host = value.toLowerCase();
+  if (host.length > 253 || !host.split(".").every((l) => HOST_LABEL_RE.test(l))) return null;
+  return host === zone || host.endsWith(`.${zone}`) ? host : null;
+}
+
+/**
+ * Parse the `v=acs1; inst=…; key=…[; host=…]` TXT payload found under `callsign`'s zone. Returns null for
+ * anything else, including a `host=` outside `<call>.ampr.org`.
+ */
+export function parse44netTxt(
+  txt: string,
+  callsign: string,
+): { instance: string; publicKey: string; host: string } | null {
   const fields = acsFields(txt);
   if (!fields) return null;
   const instance = fields.get("inst");
   const publicKey = fields.get("key");
   if (!instance || !publicKey || !/^[A-Za-z0-9_-]{40,50}$/.test(publicKey)) return null; // 32-byte key, b64url
-  return { instance, publicKey };
+  const zone = amprNames(callsign).host;
+  const declared = fields.get("host");
+  const host = declared === undefined ? zone : hostInZone(declared, zone);
+  if (!host) return null;
+  return { instance, publicKey, host };
 }
 
 /**
@@ -51,15 +79,16 @@ export function parse44netTxt(txt: string): { instance: string; publicKey: strin
 export async function resolve44net(env: Env, callsign: string): Promise<Resolved44net> {
   const cs = callsign.trim().toUpperCase();
   if (!BASE_CALL_RE.test(cs)) throw new Error("a base callsign is required (letters/digits, no SSID)");
-  const { host, name } = amprNames(cs);
+  const { name } = amprNames(cs);
   const ans = await resolveTxt(env, name);
   if (ans.status !== 0) throw new Error(`no ${name} TXT record (DNS status ${ans.status})`);
   for (const txt of ans.txts) {
-    const parsed = parse44netTxt(txt);
-    if (parsed)
-      return { callsign: cs, host, instance: parsed.instance, publicKey: parsed.publicKey, dnssec: ans.dnssec };
+    const parsed = parse44netTxt(txt, cs);
+    if (parsed) return { callsign: cs, ...parsed, dnssec: ans.dnssec };
   }
-  throw new Error(`no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…")`);
+  throw new Error(
+    `no valid aprscaching TXT at ${name} (expect "v=acs1; inst=…; key=…", with any host= under ${amprNames(cs).host})`,
+  );
 }
 
 /**

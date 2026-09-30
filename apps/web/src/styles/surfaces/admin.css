@@ -94,6 +94,12 @@
     color: var(--muted);
     overflow-wrap: anywhere;
   }
+  /* the one-sentence fix under a self-check line always spans the row: it may carry a whole DNS record */
+  .setup-fix {
+    grid-column: 1 / -1;
+    font-size: var(--fs-md);
+    overflow-wrap: anywhere;
+  }
   @container setup (min-width: 34rem) {
     .setup-item {
       grid-template-columns: auto minmax(9rem, 14rem) 1fr;

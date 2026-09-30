@@ -211,3 +211,16 @@ describe("GET /api/admin/setup — three levels", () => {
     expect(find(pub, "EMAIL")).toMatchObject({ level: "recommended", status: "warn" });
   });
 });
+
+describe("GET /api/admin/setup — the 44Net item", () => {
+  it("appears only when FED_ENDPOINTS has a 44net endpoint, naming the host and callsign", async () => {
+    const none = await itemsOf(await get(baseEnv(), "OE8APR"));
+    expect(none.find((i) => i.key === "44net")).toBeUndefined();
+    const env = baseEnv({
+      FED_ENDPOINTS: '[{"transport":"44net","address":"aprscaching.oe8apr.ampr.org","priority":10}]',
+    });
+    const item = find(await itemsOf(await get(env, "OE8APR")), "44net");
+    expect(item).toMatchObject({ level: "optional", group: "trust", source: "env" });
+    expect(item.detail).toContain("aprscaching.oe8apr.ampr.org");
+  });
+});

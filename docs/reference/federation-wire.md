@@ -265,11 +265,25 @@ process), so the name is an externally-verified callsign binding. A peer adverti
 identity in DNS:
 
 ```
-_aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>"
+_aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw Ed25519>[; host=<name>]"
 ```
 
+| Field | Meaning |
+|---|---|
+| `inst` | The instance id, exactly as `INSTANCE` |
+| `key` | The current federation public key: raw Ed25519, base64url (the descriptor's `publicKey`) |
+| `host` | Optional. Where peers contact the instance: `<call>.ampr.org` itself or a name under it (`aprscaching.oe8apr.ampr.org`). Without it, peers contact `<call>.ampr.org` |
+
+The record always lives at `_aprscaching.<call>.ampr.org`; `host=` only moves where the peer is reached.
+It is lowercased and must be a valid hostname (labels of 1–63 letters, digits and inner hyphens, at most
+253 characters, no trailing dot) inside the callsign's own zone. A `host=` anywhere else — another domain,
+another call's zone — rejects the whole record: a TXT in one callsign's zone never points federation traffic
+at a third party. The same name may also carry a `v=acs1; verify=<code>` record for callsign verification;
+that record is separate and does not carry the binding.
+
 `POST /federation/peers/44net { callsign }` (sysop-only) resolves that TXT over DNS-over-HTTPS
-(`DOH_URL`, default Cloudflare) and cross-checks the peer's live descriptor when reachable:
+(`DOH_URL`, default Cloudflare) and cross-checks the live descriptor at `http://<host>` when reachable.
+The peer is stored under `http://<host>` with a `44net` endpoint of that address:
 
 - **DNSSEC-validated** (the resolver's AD flag) → the peer is admitted automatically. The gateway
   does not validate DNSSEC itself: it trusts the AD flag of the DoH resolver it asks, which makes that
@@ -281,7 +295,14 @@ _aprscaching.<call>.ampr.org  TXT  "v=acs1; inst=<instance-id>; key=<b64url raw 
 
 The DNS-advertised key becomes the peer's **key pin** — every sync verifies against exactly that key
 or a signed rotation from it. Admission attests **identity only** (`verified_via = 'ardc-lot'`): the
-peer enters `unvetted`, and the operator-set trust tier still decides whether its records count.
+peer enters `unvetted`, and the operator-set trust tier still decides whether its records count. `host=`
+changes none of this: the identity stays the callsign whose zone holds the record, and the key pin and
+trust are the same with or without it.
+
+`GET /api/admin/setup/44net` (sysop-only) runs the same lookups against this instance's own records —
+the A record of the host peers contact, the TXT's `inst` and `key` against this instance, and the 44net
+endpoint of the descriptor it serves — and reports each as pass, warn or fail with a fix
+([Your first hour as sysop](../operate/first-hour.md#the-checklist)). It only reads DNS; it writes nothing.
 
 On amateur RF all of this stays legal because the wire format **signs and never encrypts** — every
 frame is readable off the air; see [Amateur-radio compliance](../operate/rf-regulatory.md).

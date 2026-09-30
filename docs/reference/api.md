@@ -129,6 +129,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) |
 | POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
+| GET | `/api/admin/setup/44net` | The read-only 44Net self-check: A record, `_aprscaching` TXT and descriptor endpoint, each pass/warn/fail with a fix (sysop or x-operator-secret) |
 | GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table (public read; the POST mirror takes x-ingest-secret, sysop or x-operator-secret) · MHeard |
 | GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners (the partner-list read is also open to x-ingest-secret, for the ingest box's scheduler) |
 
