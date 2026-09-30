@@ -141,9 +141,12 @@ if [ "$PKG" -eq 1 ]; then
   fi
   # A fresh Termux has an old package index and libraries; upgrading first keeps newly installed packages
   # from linking against outdated libraries. --force-confold keeps any config file the operator changed.
-  if command -v apt >/dev/null 2>&1; then
-    run pkg upgrade -y -o Dpkg::Options::=--force-confold
-    run pkg install -y "${PACKAGES[@]}"
+  # apt-get, not pkg or apt: pkg runs apt, whose command line is meant for people and warns in a script.
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    run apt-get update
+    run apt-get dist-upgrade -y -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef
+    run apt-get install -y "${PACKAGES[@]}"
   else
     run pkg upgrade
     run pkg install "${PACKAGES[@]}"

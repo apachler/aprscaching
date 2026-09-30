@@ -8,8 +8,9 @@
 # or download it first and run it: bash pocket.sh --call OE8APR
 #
 # Steps:
-#   1. apt update && apt full-upgrade: a half-upgraded Termux breaks curl, and pkg with it; apt, not pkg,
-#      because pkg itself runs curl. When no mirror is chosen, termux-change-repo runs first (with a
+#   1. apt-get update && apt-get dist-upgrade: a half-upgraded Termux breaks curl, and pkg with it; apt-get,
+#      not pkg, because pkg itself runs curl, and apt-get rather than apt, whose command line is meant for
+#      people and warns when a script runs it. When no mirror is chosen, termux-change-repo runs first (with a
 #      terminal) or is suggested.
 #   2. install.sh from the same branch, with the options below passed on.
 #   3. start.sh --no-attach, then the station's URLs and a one-time sign-in link (the way in where a
@@ -97,11 +98,11 @@ main() {
         note "no Termux mirror chosen; if downloads fail, run termux-change-repo and then this again"
       fi
     fi
-    say "Upgrading Termux: apt update && apt full-upgrade"
+    say "Upgrading Termux: apt-get update && apt-get dist-upgrade"
     # Non-interactive: keep any config file the operator changed, take the package's default otherwise.
-    DEBIAN_FRONTEND=noninteractive apt update </dev/null ||
+    DEBIAN_FRONTEND=noninteractive apt-get update </dev/null ||
       fail "apt update failed." "Pick another mirror with termux-change-repo, then run this again."
-    DEBIAN_FRONTEND=noninteractive apt full-upgrade -y \
+    DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y \
       -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef </dev/null ||
       fail "apt full-upgrade failed." "Run it by hand (apt full-upgrade), then this again."
   fi

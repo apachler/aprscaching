@@ -6,7 +6,7 @@ stops background apps, and battery and heat are real limits.
 
 | File | Purpose |
 |---|---|
-| `pocket.sh` | the one-command install: upgrades Termux with `apt`, runs `install.sh` from the same branch, starts the station and prints its URLs and a one-time sign-in link; safe to re-run |
+| `pocket.sh` | the one-command install: upgrades Termux with `apt-get`, runs `install.sh` from the same branch, starts the station and prints its URLs and a one-time sign-in link; safe to re-run |
 | `install.sh` | installs the Termux packages, clones or updates `~/aprscaching`, installs only what the gateway, the ingest and the web build need, compiles better-sqlite3 for Android, builds the web app, writes `~/.aprscaching/.env` on the first run and starts the gateway once to apply the migrations; safe to re-run |
 | `.env.pocket.example` | the settings `install.sh` starts from (gateway on port 8787, ingest to localhost) |
 | `start.sh` | starts the tmux session `aprscaching` (windows `gateway`, `ingest`, `logs`, `shell`) with a wake lock, or attaches to it; `--no-attach`, `--gateway-only` |
@@ -31,15 +31,17 @@ Use Termux from [F-Droid](https://f-droid.org/packages/com.termux/) or its
 curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
 ```
 
-`pocket.sh` upgrades Termux (`apt update && apt full-upgrade`, after `termux-change-repo` when no mirror is
+`pocket.sh` upgrades Termux (`apt-get update && apt-get dist-upgrade`, after `termux-change-repo` when no mirror is
 chosen yet and a terminal is attached), runs `install.sh` from the same branch with the options passed on, starts the station and
 prints its URLs (on the phone and on the hotspot) and a one-time sign-in link. The link is the way in where
 a passkey does not work, e.g. in Firefox or on a phone without Google services. Running it again upgrades,
 updates and restarts the station; `bash pocket.sh --help` lists the options (`--branch`,
 `--gateway-only`, `--no-start`, and every `install.sh` option).
 
-It upgrades with `apt`, not `pkg`: `pkg` itself runs `curl`, and a half-upgraded Termux (a new `curl`
+It upgrades with `apt-get`, not `pkg`: `pkg` itself runs `curl`, and a half-upgraded Termux (a new `curl`
 against an older OpenSSL) stops `curl` with `cannot locate symbol "SSL_…"` until the upgrade completes.
+The scripts call `apt-get` rather than `apt`, whose command line is meant for people and prints
+"apt does not have a stable CLI interface" when a script runs it; typed by hand, `apt` is fine.
 If that already stops the `curl` above, run `apt update && apt full-upgrade -y` first.
 
 The steps one by one, with `install.sh` alone:
