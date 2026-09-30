@@ -216,6 +216,15 @@ shared `FED_CORROBORATION_SECRET`, if set, is sent only to trusted https peers, 
 answers only the peers holding it; set `FED_CORROBORATION_REQUIRE_KNOWN=1` to answer only peers whose key
 you know (including `unvetted` ones).
 
+**Asked again, within bounds.** A find that misses Tier A only because trusted peers could not be reached — a
+timeout, a failed connection, a rate limit or a server error; never a refusal — is asked again: the identical
+question, to those peers only, one, six and 24 hours after the find, and never past 72 hours. Evidence already
+in hand carries over, but counts only while its peer is still trusted; the quorum, the exclusions and the
+logger's own-track check are the same as when the find was logged. A verified "no" from a trusted peer ends it
+at once, and no later attempt follows one. A find lifted this way shows *confirmed later* and keeps the time
+(`corroborated_later_at`); peers that mirrored the find keep the tier they first saw, since the finds feed
+carries each log once.
+
 ## Privacy across the network
 
 GDPR deletions propagate as **signed, PII-free tombstones** that name only a global record id (never a

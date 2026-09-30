@@ -360,6 +360,10 @@ async function eraseCall(
   ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
+    // A pending later corroboration carries the call in its question: it goes with the person.
+    env.DB.prepare(
+      "DELETE FROM corroboration_retries WHERE log_id IN (SELECT id FROM cache_logs WHERE logger_call=? OR logger_call LIKE ?)",
+    ).bind(cs, `${cs}-%`),
     // One found per cache survives anonymisation: a find counts once per person, and two of the
     // person's founds (base call and an SSID) would collide on the one-found-per-logger index once
     // both carry the same marker. The dropped copies are tombstoned with the rest.

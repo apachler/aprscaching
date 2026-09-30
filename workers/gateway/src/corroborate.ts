@@ -407,6 +407,24 @@ async function acceptAnswer(
   return ev;
 }
 
+/** One trusted peer's evidence, kept by the peer's URL so a later attempt can check its trust again. */
+export interface PeerHit {
+  url: string;
+  ev: Evidence;
+}
+
+/** What one round of asking found, and what a later attempt needs. */
+interface CorroborationOutcome {
+  /** The Tier-A evidence, or null below quorum. */
+  winner: Evidence | null;
+  /** Trusted peers' evidence in hand, this round's and any carried in. */
+  hits: PeerHit[];
+  /** Trusted peers that could not be reached: the request failed in transit, timed out, or met a 429 or 5xx. */
+  unreachable: string[];
+  /** Whether a trusted peer answered with a verified "no". */
+  denied: boolean;
+}
+
 /**
  * Client: ask peers to corroborate **in parallel**, then apply the quorum gate (default 2 distinct
  * identities; `FED_CORROBORATION_QUORUM` sets it). Only **`trusted`** peers count toward Tier A:
@@ -416,23 +434,41 @@ async function acceptAnswer(
  * The shared FED_CORROBORATION_SECRET, when set, rides only to trusted https peers.
  */
 export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): Promise<Evidence | null> {
+  return (await askPeers(env, q)).winner;
+}
+
+/**
+ * The corroboration round behind {@link queryPeerCorroboration}, with what a later attempt needs.
+ * A later attempt ({@link retryCorroborations}) asks only `onlyUrls` — trusted peers that were not
+ * reached — and carries the evidence already in hand as `priorHits`; a prior hit counts only while its
+ * peer is still trusted, so a peer demoted or blocked since then lends nothing.
+ */
+export async function askPeers(
+  env: Env,
+  q: CorroborationQuery,
+  opts: { onlyUrls?: string[]; priorHits?: PeerHit[] } = {},
+): Promise<CorroborationOutcome> {
+  const nobody: CorroborationOutcome = { winner: null, hits: [], unreachable: [], denied: false };
   const quorum = Number(env.FED_CORROBORATION_QUORUM ?? 2);
   const threshold = Number(env.FED_AUTO_PROMOTE ?? 0);
   const us = env.INSTANCE;
-  if (!us) return null;
+  if (!us) return nobody;
   // trusted peers count toward Tier A; when reputation/promotion is enabled, unvetted peers are also
   // probed but ONLY advisorily — their hits never reach quorum, they just let an unvetted peer EARN
   // trust by agreeing with confirmed corroborations. Default (threshold 0) = trusted-only. A peer with
-  // no bound instance has no verifiable identity and is never asked.
-  const pool = (await listEnabledPeers(env))
-    .filter((p) => p.instance && p.instance !== us)
-    .filter((p) => p.trust === "trusted" || (threshold > 0 && p.trust === "unvetted"))
+  // no bound instance has no verifiable identity and is never asked. A later attempt asks trusted
+  // peers only.
+  const peers = (await listEnabledPeers(env)).filter((p) => p.instance && p.instance !== us);
+  const only = opts.onlyUrls ? new Set(opts.onlyUrls) : null;
+  const pool = peers
+    .filter((p) => p.trust === "trusted" || (!only && threshold > 0 && p.trust === "unvetted"))
+    .filter((p) => !only || only.has(p.url))
     .slice(0, CORROBORATION_FANOUT); // bounded fan-out budget
   let registry: Awaited<ReturnType<typeof loadRegistry>>;
   try {
     registry = await loadRegistry(env);
   } catch {
-    return null; // a misconfigured registry lends no identity to anyone
+    return nobody; // a misconfigured registry lends no identity to anyone
   }
 
   // good-citizen request coarsening: snap the center to a grid cell, widen the radius to cover the
@@ -450,9 +486,11 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
     excludeIgates: [...new Set((q.excludeIgates ?? []).map(baseCall))],
   };
 
+  type Probe = { peer: (typeof pool)[number]; ev: Evidence | null; denied: boolean; unreachable: boolean };
   const probes = await Promise.all(
-    pool.map(async (peer): Promise<{ peer: (typeof pool)[number]; ev: Evidence | null; denied: boolean }> => {
-      const none = { peer, ev: null, denied: false }; // unavailable or unverifiable ≠ contradiction
+    pool.map(async (peer): Promise<Probe> => {
+      // unavailable or unverifiable ≠ contradiction; only a peer not reached is worth asking again
+      const none: Probe = { peer, ev: null, denied: false, unreachable: false };
       const instance = peer.instance as string;
       const keys = await keysForOrigin(env, instance);
       if (keys === "blocked" || !keys.length) return none;
@@ -472,14 +510,20 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
       const headers: Record<string, string> = { "content-type": "application/cbor", accept: "application/cbor" };
       if (env.FED_CORROBORATION_SECRET && peer.trust === "trusted" && base.startsWith("https://"))
         headers["x-fed-secret"] = env.FED_CORROBORATION_SECRET;
+      let r: Response;
       try {
-        const r = await fedFetch(env, `${base}/federation/corroborate`, {
+        r = await fedFetch(env, `${base}/federation/corroborate`, {
           method: "POST",
           headers,
           body: question as BodyInit,
           signal: AbortSignal.timeout(3000),
         });
-        if (!r.ok) return none;
+      } catch {
+        return { ...none, unreachable: true };
+      }
+      // a refusal (4xx) is an answer; a rate limit or a server error is a peer not reached
+      if (!r.ok) return { ...none, unreachable: r.status === 429 || r.status >= 500 };
+      try {
         const verdict = await acceptAnswer(new Uint8Array(await r.arrayBuffer()), {
           instance,
           identity: identityOf(registry.get(instance)?.operator, peer.public_key ?? keys[0]!),
@@ -492,8 +536,8 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
           timeBucketSec: cfg.timeBucketSec,
           nowS: nowS(),
         });
-        if (verdict === "no") return { peer, ev: null, denied: true }; // an explicit, verified "no"
-        return verdict ? { peer, ev: verdict, denied: false } : none;
+        if (verdict === "no") return { ...none, denied: true }; // an explicit, verified "no"
+        return verdict ? { ...none, ev: verdict } : none;
       } catch {
         return none;
       }
@@ -503,11 +547,16 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
   // Tier A is decided from TRUSTED hits only; unvetted hits are advisory. When an
   // auto-promoted peer is among the evidence-bearing trusted set, one voice is not enough — a
   // farmed promotion must corroborate ALONGSIDE an operator-vetted peer, never alone.
-  const autoPromotedContributed = probes.some(
-    (x) => x.ev && x.peer.trust === "trusted" && x.peer.added_via === "auto-promoted",
+  const trustedNow = new Map(peers.filter((p) => p.trust === "trusted").map((p) => [p.url, p]));
+  const hits: PeerHit[] = [
+    ...(opts.priorHits ?? []).filter((h) => trustedNow.has(h.url) && !pool.some((p) => p.url === h.url)),
+    ...probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => ({ url: x.peer.url, ev: x.ev as Evidence })),
+  ];
+  const autoPromotedContributed = hits.some((h) => trustedNow.get(h.url)?.added_via === "auto-promoted");
+  const winner = selectCorroboration(
+    hits.map((h) => h.ev),
+    effectiveQuorum(quorum, autoPromotedContributed),
   );
-  const trustedHits = probes.filter((x) => x.ev && x.peer.trust === "trusted").map((x) => x.ev as Evidence);
-  const winner = selectCorroboration(trustedHits, effectiveQuorum(quorum, autoPromotedContributed));
   if (winner) {
     // reputation accrues ONLY for evidence that independently matches the confirmed
     // winner — answering "yes" with fabricated evidence no longer farms rep toward promotion.
@@ -525,5 +574,10 @@ export async function queryPeerCorroboration(env: Env, q: CorroborationQuery): P
       ),
     );
   }
-  return winner;
+  return {
+    winner,
+    hits,
+    unreachable: probes.filter((x) => x.unreachable && x.peer.trust === "trusted").map((x) => x.peer.url),
+    denied: probes.some((x) => x.denied && x.peer.trust === "trusted"),
+  };
 }
