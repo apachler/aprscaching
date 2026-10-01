@@ -108,6 +108,8 @@ jobs:
       # deploy/aprscaching, its library and shape modules: bash, checked like the Pocket scripts
       - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh deploy/oci/*.sh deploy/oci/test/*.sh
       - run: bash deploy/test/helpers-test.sh
+      # deploy/aprscaching net44, against mocked WireGuard, ip, systemd, nft and iptables
+      - run: bash deploy/test/net44-test.sh
       # the OCI stack's Bastion login helper, against a mocked OCI CLI and ssh
       - run: bash deploy/oci/test/bastion-ssh-test.sh
       # the OCI VM's first boot, against mocked apt, gpg, git and docker

@@ -438,7 +438,8 @@ fi
 # ---- the CLI reference names every option the help prints ---------------------------------------------------
 CLI="$DEPLOY/../docs/reference/cli.md"
 for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box --help" "init cloudflare --help" \
-  "--shape selfhost backup --help" "--shape selfhost restore x --help" "--shape selfhost update --help"; do
+  "--shape selfhost backup --help" "--shape selfhost restore x --help" "--shape selfhost update --help" \
+  "--shape selfhost net44 setup --help"; do
   missing=""
   # shellcheck disable=SC2086 # the words of the command
   for f in $("$H" $c 2>&1 | grep -oE -- "--[a-z][a-z0-9-]+" | sort -u); do grep -qF -- "\`$f" "$CLI" || missing="$missing $f"; done

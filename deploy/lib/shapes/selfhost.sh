@@ -17,14 +17,23 @@ selfhost_compose() {
 
 # init selfhost: setup.sh asks the questions and writes deploy/.env; its options pass through
 # (deploy/aprscaching init selfhost --help lists them).
+# --net44-config FILE also brings a 44Net Connect tunnel up afterwards (deploy/aprscaching net44 setup).
 shape_init() {
-  local opts=()
+  local opts=() setup=() net44=""
   [ "$APRS_INTERACTIVE" = 1 ] || opts+=(--non-interactive)
   [ "$APRS_ASSUME_YES" = 1 ] && opts+=(--yes)
-  case " $* " in *" -h "* | *" --help "*) exec "$DEPLOY_DIR/setup.sh" --help ;; esac
-  "$DEPLOY_DIR/setup.sh" "${opts[@]+"${opts[@]}"}" "$@"
+  case " $* " in *" -h "* | *" --help "*) "$DEPLOY_DIR/setup.sh" --help; echo "  --net44-config FILE (bring a 44Net Connect tunnel up afterwards: deploy/aprscaching net44 setup)"; return 0 ;; esac
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --net44-config) net44="$2"; shift ;;
+      *) setup+=("$1") ;;
+    esac
+    shift
+  done
+  "$DEPLOY_DIR/setup.sh" "${opts[@]+"${opts[@]}"}" "${setup[@]+"${setup[@]}"}"
   env_file_secure "$SHAPE_ENV"
   shape_record selfhost "$SHAPE_ENV"
+  n44_init_offer "$net44"
 }
 
 shape_status() {

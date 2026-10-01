@@ -8,7 +8,7 @@ callsign and support key management, signing, and verification.
 ```bash
 cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
 deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
-deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret (see Deployment helpers)
+deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret, net44 (see Deployment helpers)
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
 deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
@@ -34,16 +34,18 @@ One command for every shape ([Deployment helpers](../operate/helpers.md)). Every
 
 | Command | Options |
 |---|---|
-| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network` |
-| `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, and `setup.sh`'s |
+| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network`; and `--net44-config FILE`, which brings a 44Net Connect tunnel up afterwards (`net44 setup`) |
+| `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, `--net44-config`, and `setup.sh`'s |
 | `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
 | `init cloudflare` | `--api-base`, `--app-url` |
 | `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
 | `status`, `doctor` | none |
 | `backup` | `--dest`, `--with-media`, `--no-settings` |
-| `restore <archive>` | `--dry-run`, `--no-settings` |
+| `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
 | `update` | `--ref`, `--rollback-window` |
 | `rotate-secret <name>` | none |
+| `net44 setup <connect.conf>` | `--name`, `--mtu`, `--no-firewall` ([44Net](../operate/44net.md)) |
+| `net44 status`, `net44 check [name]`, `net44 remove` | none |
 
 ## Operator callsign — `tools/admin/` {#operator-callsign}
 

@@ -11,6 +11,7 @@
 #   deploy/aprscaching backup                   write a backup archive
 #   deploy/aprscaching restore <file>           restore a backup archive into this shape
 #   deploy/aprscaching rotate-secret <name>     replace one secret, e.g. INGEST_SECRET
+#   deploy/aprscaching net44 setup <conf>       bring a 44Net Connect tunnel up safely (also: status, check, remove)
 #   deploy/aprscaching help
 #
 # Options for every command:
@@ -37,6 +38,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib/backup.sh"
 # shellcheck source=deploy/lib/update.sh
 . "$HERE/lib/update.sh"
+# shellcheck source=deploy/lib/net44.sh
+. "$HERE/lib/net44.sh"
 
 SHAPE=""
 ARGS=()
@@ -129,6 +132,12 @@ case "$CMD" in
     shift
     load_shape "$SHAPE"
     run_shape_cmd init "$@"
+    ;;
+  net44)
+    [ -n "$SHAPE" ] || SHAPE="$(shape_detect)"
+    [ -n "$SHAPE" ] || die "No installation found here." "Set one up first with: deploy/aprscaching init <shape>"
+    load_shape "$SHAPE"
+    run_net44 "$@"
     ;;
   status | doctor | update | backup | restore | rotate-secret)
     [ -n "$SHAPE" ] || SHAPE="$(shape_detect)"

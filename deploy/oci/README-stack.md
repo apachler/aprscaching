@@ -194,6 +194,27 @@ for your tenancy.
 Instances → aprscaching → Console connection → Launch Cloud Shell connection*. Cloud Shell in the console also
 has the OCI CLI, and can run `bastion-ssh.sh` from a clone.
 
+## 44Net
+
+The VM can also carry a 44Net Connect tunnel, so the instance is reachable at a 44.x address and a
+`<call>.ampr.org` name ([Run an instance on 44Net](https://github.com/apachler/aprscaching/blob/main/docs/operate/44net.md)).
+The first boot installs `wireguard-tools` and `nftables` for it; the stack never handles the Connect configuration,
+which holds the tunnel's private key. Copy it to the VM through the Bastion and let the helper bring it up:
+
+```bash
+deploy/oci/bastion-ssh.sh --ssh-config >> ~/.ssh/config     # once
+scp ~/Downloads/wg44.conf aprscaching-oci:                    # the configuration Connect issued
+deploy/oci/bastion-ssh.sh                                     # a shell on the VM, then:
+sudo /opt/aprscaching/deploy/aprscaching net44 setup ~/wg44.conf --name aprscaching.<call>.ampr.org
+rm ~/wg44.conf                                                # setup keeps its own owner-only copy
+```
+
+The helper sets the tunnel's MTU from the path to the endpoint — the VM's own MTU stays 9000, and wg-quick
+would otherwise derive 8920 from it — keeps SSH on the internet link even when the configuration routes
+everything through the tunnel, and lets only TCP 80/443 in on it. It starts the tunnel with a rollback scheduled: open a
+**new** Bastion session while it waits, and answer `y` once that session connects. Without an answer the tunnel
+goes down again after two minutes.
+
 ## ICMP and the MTU
 
 OCI gives the VM a 9000-byte MTU, while traffic through the Internet Gateway is limited to 1500 bytes. Path MTU
