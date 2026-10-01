@@ -9,7 +9,10 @@
 selfhost_compose() {
   local files=(-f "$DEPLOY_DIR/docker-compose.yml")
   [ -n "$(env_file_get "$SHAPE_ENV" TUNNEL_TOKEN)" ] && files+=(-f "$DEPLOY_DIR/compose.home.yml")
-  docker compose --project-directory "$DEPLOY_DIR" "${files[@]}" "$@"
+  # the commit the image is built from, for its source link; one set in .env (a fork's) wins
+  [ -n "$(env_file_get "$SHAPE_ENV" SOURCE_COMMIT)" ] ||
+    SOURCE_COMMIT="$(git -C "$DEPLOY_DIR/.." rev-parse HEAD 2>/dev/null || true)"
+  SOURCE_COMMIT="${SOURCE_COMMIT:-}" docker compose --project-directory "$DEPLOY_DIR" "${files[@]}" "$@"
 }
 
 # init selfhost: setup.sh asks the questions and writes deploy/.env; its options pass through

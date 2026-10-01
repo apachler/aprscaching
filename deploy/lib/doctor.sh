@@ -476,7 +476,11 @@ doc_source() {
   if [ -z "$repo" ]; then
     failc source.link "${base%/}/.well-known/source does not answer" "the AGPL §13 source link must be public" "$DOCS_URL/first-hour.md"
   elif [ -z "$commit" ] || [ "$commit" = null ]; then
-    warnc source.link "the source link names no commit" "set SOURCE_COMMIT, or deploy from a git checkout"
+    if [ "$SHAPE" = selfhost ]; then
+      warnc source.link "the source link names no commit" "rebuild in deploy/: SOURCE_COMMIT=\$(git rev-parse HEAD) docker compose up -d --build"
+    else
+      warnc source.link "the source link names no commit" "set SOURCE_COMMIT, or deploy from a git checkout"
+    fi
   else
     pass source.link "the source link names $repo at ${commit:0:12}"
   fi

@@ -30,6 +30,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 # Self-host, recommended (a Pi, mini-PC or VM): the wizard asks how people reach the box —
 #   Caddy with TLS · a Cloudflare Tunnel · the LAN only (off-grid) — and prints the next commands
 ./setup.sh
+export SOURCE_COMMIT=$(git rev-parse HEAD)                              # the commit the source link names
 docker compose up -d --build                                            # Caddy with TLS, or LAN
 docker compose -f docker-compose.yml -f compose.home.yml up -d --build  # Cloudflare Tunnel
 #   optional CDN in front of a public box: restrict 80/443 to Cloudflare's ranges, set TRUST_CF=1, then

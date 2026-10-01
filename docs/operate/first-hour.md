@@ -15,7 +15,7 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
    its host), `DOMAIN`, the `APRSIS_*` feed, `RF_SITE_CALL` + `FIRST_PARTY_SITES`, and fresh
    `INGEST_SECRET`, `OPERATOR_SECRET` and `FED_PRIVATE_KEY`. `SESSION_SECRET` stays empty: the gateway
    generates it on first start. Re-running it keeps every value you already have.
-2. **Start it and check health.** `docker compose up -d --build`, then `curl -fsS https://<your domain>/health`
+2. **Start it and check health.** `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build`, then `curl -fsS https://<your domain>/health`
    (`http://<LAN address>/health` off-grid). The wizard prints both for your choice.
 3. **Sign in as your call.** Open `APP_URL` and create the account with a passkey. Off-grid (plain http, no
    email), use a one-time link instead — see [Off-grid sign-in](#off-grid-sign-in).

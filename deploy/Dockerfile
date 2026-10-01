@@ -20,4 +20,9 @@ COPY --from=build /app /app
 EXPOSE 8080
 # Default = gateway; compose overrides `command:` for the ingest. The built SPA sits at
 # /app/apps/web/dist — the compose `webdist` one-shot copies it into the volume Caddy serves.
+# The commit the image was built from, for the AGPL §13 source link: .git stays out of the build context,
+# so the host passes it in (compose reads SOURCE_COMMIT). Last, so a new commit rebuilds only this layer;
+# a SOURCE_COMMIT in .env still overrides it at runtime.
+ARG SOURCE_COMMIT=""
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 CMD ["pnpm","--filter","@aprscaching/node-gateway","start"]

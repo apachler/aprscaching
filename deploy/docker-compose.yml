@@ -11,7 +11,9 @@ x-logging: &default-logging
 
 services:
   gateway:
-    build: { context: .., dockerfile: deploy/Dockerfile }
+    # SOURCE_COMMIT names the commit in the image's source link: run compose as
+    # `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose …` (deploy/aprscaching does it itself)
+    build: { context: .., dockerfile: deploy/Dockerfile, args: { SOURCE_COMMIT: "${SOURCE_COMMIT:-}" } }
     image: aprscaching:local
     command: ["pnpm", "--filter", "@aprscaching/node-gateway", "start"]
     # Every setting in .env reaches the gateway (ADMIN_CALLSIGNS, RP_ID, FIRST_PARTY_SITES, OPERATOR_*,
