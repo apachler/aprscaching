@@ -43,7 +43,8 @@ heard, never the whole network:
 Stations that reach APRS-IS through a LoRa-APRS IGate show as ordinary APRS stations.
 
 Open a MeshCom station for how it was last heard, its device and firmware, its battery and signal, and a
-link to its page on MeshMap. Visitors see the battery and signal as *high / medium / low* and
+link to its page on MeshMap. When its latest message named relays (its *via* list), the panel shows "Sent via
+relays …": the sender limited forwarding to those nodes. That is its plan, not the path the message took. Visitors see the battery and signal as *high / medium / low* and
 *strong / usable / weak*; signed in, you see the percentage, RSSI and SNR.
 
 **MeshCom links** (off by default; shown once MeshCom is on) draws the links your node(s) heard in the last

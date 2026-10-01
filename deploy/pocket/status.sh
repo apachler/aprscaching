@@ -209,7 +209,16 @@ if [ -n "$meshcom" ]; then
   else
     last="$(grep -F '[meshcom]' "$LOG_DIR/ingest.log" 2>/dev/null | grep -E 'listening|no local address|disabled' | tail -n 1 || true)"
     case "$last" in
-      *listening*) info "listening on $bind_ip (ingest log)" ;;
+      *listening*)
+        info "listening on $bind_ip (ingest log)"
+        # the node's Via setting, logged once per change from its own messages
+        via="$(grep -F '[meshcom] node ' "$LOG_DIR/ingest.log" 2>/dev/null | grep -E 'has Via (on|off)' | tail -n 1 || true)"
+        case "$via" in
+          *"has Via on"*) info "the node has Via on: ${via#*: }" ;;
+          *"has Via off"*) info "the node has Via off" ;;
+          *) info "the node's Via setting is not known yet (it shows once the node has sent a message)" ;;
+        esac
+        ;;
       *"no local address"* | *disabled*)
         warn "the MeshCom listener did not start (the node's network was down when the ingest started):" \
           "bash $HERE/restart.sh ingest" ;;

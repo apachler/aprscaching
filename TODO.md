@@ -517,6 +517,14 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
   - a browser-direct Web Serial/BLE path, after reading the node's serial and BLE protocols from the
     MIT firmware.
+  - **Via-Calls** — done: the destination is the last token of the destination path, so a via path never
+    turns a broadcast or group message into a direct message to a relay; the via list is display
+    metadata, never a link and never trust; the operator's own node's Via setting shows in the station
+    status, the Pocket notification and the box log ([design](docs/design/meshcom.md#via-calls)).
+  - **Watch: automatic via selection and Hey!-based routing** — the firmware's automatic via (the gateway
+    token `HG`, the best-connected MHeard neighbour) is commented out "for testing" since 2026-07-22. Once
+    it returns, via lists appear without operators setting them, and destinations such as `HG` may reach
+    ExtUDP; check the destination rules and the fixtures against it then.
   - **MeshCom on the map** — done: the node and link store, `/api/meshcom/nodes` and `/links`, the map
     layer, the links sub-layer and the station panel section
     ([guide](docs/guides/caching.md#meshcom-on-the-map)). A network-wide feed from the MeshCom servers is

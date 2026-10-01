@@ -74,6 +74,12 @@ MESHCOM_TX=1
 MESHCOM_TX_CALL=OE8APR
 ```
 
+**Via on your node.** If your node has `--via` on, every message aprscaching sends through it — acks, replies,
+find confirmations — is forwarded only by the relays you listed. Recipients outside their range won't
+receive it. The box logs the node's setting once it has seen the node send a message
+(`[meshcom] node OE8APR-12 has Via on: …`), and the station status and the Pocket notification show it. Until
+then it is unknown. aprscaching never changes the setting: that is `--via` on the node.
+
 The node transmits every message under its own call, so `MESHCOM_TX_CALL` must be your call — the base call
 of the node's (`OE8APR-12` above). The box then logs `[meshcom] transmit enabled as OE8APR` and records each
 send in its log (time, node, destination, size and outcome — never the text). Sends share a rate limit of
@@ -138,13 +144,14 @@ set up, the node acks the message and confirms the verification.
 - **Box log** — every ten minutes a counters line:
 
   ```
-  [meshcom] stats {"received":412,"forwarded":377,"deduped":21,"upgraded":3,"rf":210,"udp":150,"own":17,"tele":14,"rejected":{"not-json":2},"lastSeenAgoS":4}
+  [meshcom] stats {"received":412,"forwarded":377,"deduped":21,"upgraded":3,"rf":210,"udp":150,"own":17,"tele":14,"viaDropped":0,"rejected":{"not-json":2},"lastSeenAgoS":4}
   ```
 
   `deduped` counts frames the node reported twice (over LoRa and from the server); `upgraded` counts a LoRa
-  copy that arrived after the server copy and was forwarded again as RF. Message text is never logged.
+  copy that arrived after the server copy and was forwarded again as RF; `viaDropped` counts via-list
+  tokens that were not callsigns (the message itself is kept). Message text is never logged.
 
-The box does not transmit on MeshCom.
+The box transmits on MeshCom only when [answering radio commands](#answering-radio-commands-optional) is set up.
 
 ## Troubleshooting
 

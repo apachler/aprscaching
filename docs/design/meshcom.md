@@ -77,6 +77,7 @@ LAN, not through a TNC.
 | Node and link store | `meshcom_nodes` and `meshcom_links` (`workers/gateway/src/meshcom.ts`): per node the latest device, firmware, battery, way of hearing, receiver and a rolling signal average; per link the last direct hearing or relay leg. Written only from the operator's own attested MeshCom port, when something shown changes or `MESHCOM_META_MIN_S` has passed; pruned nightly, skipped while the write budget sheds. Display only: never touches the A/B/C find tiers | built |
 | Read API | `GET /api/meshcom/nodes` and `GET /api/meshcom/links` ([API](../reference/api.md)): buckets for visitors, exact battery, RSSI and SNR for signed-in members | built |
 | Map | a MeshCom layer (on by default) marks nodes with an "M" tag, dashed when heard only via the server; a links sub-layer (off by default) draws the last 24 hours of links, solid for direct, dashed for relay legs, wider for a stronger signal, fainter with age; the station panel shows how the node was heard, its device, battery and signal, and links to its page on [MeshMap](https://meshmap.oevsv.at/). Device names come from a table of the firmware's hardware ids (`packages/aprs/src/meshcom/hardware.ts`) | built |
+| Via lists | the destination is the last token of `dst`; the via list rides as display metadata (`sent_via` on the node row) and never becomes a link or a trust input ([Via-Calls](#via-calls)) | built |
 | Telemetry | `tele` → the observational weather path (`sensor_readings`); never touches the A/B/C find tiers. The firmware reports an absent sensor as `0`, so the mapping needs a per-field presence rule | planned |
 
 ### Callsigns and paths
@@ -149,6 +150,38 @@ The box enables the sender with `MESHCOM_TX=1`. It is used by:
 Planned: **replies** from the Messages surface answering a direct message.
 
 Group announcements stay out of scope: software never originates group or broadcast traffic.
+
+## Via-Calls
+
+A node can name the relays allowed to forward what it sends, instead of letting every node flood it — source
+routing to save airtime (firmware v4.35p.06.13: "DESTINATION-PATH expanded to include VIA-CALLS").
+
+- **Commands.** `--via <CALL,CALL>` sets the list (upper-cased, at most 39 characters), `--via NONE` clears
+  it, `--via on|off` switches the function, `--viadebug on|off` adds debug output. The node settings show
+  the list as `VIACALL`.
+- **Sending.** With Via on and a list set, `checkVia()` writes the destination path as
+  `<via-list>,<destination>` on every send path, messages that arrive from an ExtUDP client included.
+- **Relaying.** A frame without a via list is relayed by every node with `--mesh on`. A frame with one is
+  relayed only by a node whose call appears in it — compared token by token at full length, so `DK5EN-9`
+  is not `DK5EN-90` — and only if that node has `--mesh on`. Order is not enforced: any named node that
+  hears the frame relays it. Every node still receives it.
+- **Automatic selection** (the gateway token `HG`, or the best-connected MHeard neighbour) is commented out
+  in the firmware since 22 July 2026; only lists an operator sets take effect.
+
+Three rules hold in aprscaching:
+
+1. **The destination is the last token** of `dst`, everything before it the via list
+   ([ExtUDP](../reference/meshcom-extudp.md#text-typemsg)).
+2. **A via list is never a link.** The map draws links from the source path and the receiving node only;
+   a via list names relays the sender allowed, not ones the frame passed.
+3. **A via list is never trust.** It bears on nothing in provenance, `direct` or the A/B/C tiers. It is
+   display information: the station panel shows a node's latest list ("sent via relays …"), and the
+   operator's own node's list — which every message the box sends through it carries — shows in the
+   station status, the Pocket notification and the box log.
+
+Sources: firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8) — `src/via_functions.cpp` (`checkVia`, `checkMesh`, `pathNamesCall`),
+`src/command_functions.cpp` (`--via`), `src/aprs_functions.cpp` (the destination split),
+`src/extudp_functions.cpp` (`dst`), `docs/hey-supp.md` (the routing design).
 
 ## Positions that already arrive
 

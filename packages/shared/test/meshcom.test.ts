@@ -17,6 +17,14 @@ describe("sanitizeMeshcomMeta", () => {
     };
     expect(sanitizeMeshcomMeta(m)).toEqual(m);
   });
+  it("keeps a message's via list of callsigns, empty included, and drops any other", () => {
+    expect(sanitizeMeshcomMeta({ via: ["OE1KBC-24", "OE1KFR-12", "OE1KBC-24"] })).toEqual({
+      via: ["OE1KBC-24", "OE1KFR-12"],
+    });
+    expect(sanitizeMeshcomMeta({ srcType: "lora", via: [] })).toEqual({ srcType: "lora", via: [] });
+    expect(sanitizeMeshcomMeta({ srcType: "lora", via: ["OE1KBC-24", "262"] })).toEqual({ srcType: "lora" });
+    expect(sanitizeMeshcomMeta({ srcType: "lora", via: "OE1KBC-24" })).toEqual({ srcType: "lora" });
+  });
   it("drops invalid fields one by one, never clamps", () => {
     expect(
       sanitizeMeshcomMeta({

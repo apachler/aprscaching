@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
 import {
+  sentViaText,
+  SENT_VIA_HINT,
   LINKS_VIEWPOINT,
   MESHMAP_ATTRIBUTION,
   batteryText,
@@ -40,6 +42,15 @@ describe("signal, battery and device in words", () => {
     expect(deviceText({ hwId: 8, firmware: "4.35t" })).toBe("LilyGO T-Deck, firmware 4.35t");
     expect(deviceText({ hwId: 13, firmware: null })).toBe("Unknown device (ID 13)");
     expect(deviceText({ hwId: null, firmware: null })).toBeNull();
+  });
+});
+
+describe("a node's via list", () => {
+  it("names the relays as the sender's limit, never as a route", () => {
+    expect(sentViaText({ sentVia: ["OE1KBC-24", "OE1KFR-12"] })).toBe("Sent via relays OE1KBC-24, OE1KFR-12");
+    expect(sentViaText({})).toBeNull();
+    expect(sentViaText({ sentVia: [] })).toBeNull();
+    expect(SENT_VIA_HINT).toMatch(/limited forwarding/);
   });
 });
 

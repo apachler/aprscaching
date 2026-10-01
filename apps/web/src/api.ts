@@ -231,6 +231,8 @@ export interface MeshcomNode {
   firmware: string | null;
   quality: "strong" | "usable" | "weak" | null;
   battLevel: "high" | "medium" | "low" | null;
+  /** The relays the node's latest message allowed to forward it (its `--via` list); absent when it named none. */
+  sentVia?: string[];
   /** Exact figures, for signed-in members only. */
   batt?: number | null;
   rssi?: number | null;
