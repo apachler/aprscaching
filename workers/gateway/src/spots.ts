@@ -13,7 +13,7 @@
  * normalize/dedup/filter logic is unit-tested with fixtures instead.
  */
 import { nowS } from "./util/time.js";
-import type { Env } from "./env.js";
+import { flagOn, type Env } from "./env.js";
 import { jsonObjectSetting } from "./util/config.js";
 import { json } from "./app.js";
 import {
@@ -25,8 +25,6 @@ import {
   dedupeSpots,
   filterSpots,
 } from "@aprscaching/shared";
-
-const truthy = (v?: string) => v === "1" || v === "true" || v === "yes";
 
 /** A normalizer turns one source's raw JSON into Spots (coords required; spots without lat/lon dropped). */
 interface SourceDef {
@@ -322,7 +320,7 @@ const SOURCES: SourceDef[] = [
 
 /** Which sources are enabled for this instance (master switch + optional allowlist). */
 function enabledSources(env: Env): SourceDef[] {
-  if (!truthy(env.SPOTS_ENABLED)) return [];
+  if (!flagOn(env.SPOTS_ENABLED)) return [];
   const only = (env.SPOTS_SOURCES || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
@@ -392,7 +390,7 @@ const csv = (v: string | null) =>
 /** GET /api/spots?bbox=minLon,minLat,maxLon,maxLat&bands=20m,2m&modes=SSB&sources=pota */
 export async function handleSpots(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
-  const enabled = truthy(env.SPOTS_ENABLED);
+  const enabled = flagOn(env.SPOTS_ENABLED);
   const bboxRaw = csv(u.searchParams.get("bbox"))?.map(Number);
   const bbox =
     bboxRaw && bboxRaw.length === 4 && bboxRaw.every(Number.isFinite)

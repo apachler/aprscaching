@@ -8,7 +8,7 @@
  * Runtime-neutral (fetch + crypto.subtle + env.DB) → runs on Cloudflare, Node and Bun alike. This
  * instance never mirrors itself.
  */
-import type { Env } from "./env.js";
+import { flagOn, type Env } from "./env.js";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
@@ -274,7 +274,7 @@ async function syncPeer(
   // taken, a learned peer starts `unvetted` and disabled (never fetched until an operator enables
   // it), and discovery stops adding once MAX_DISCOVERED discovered rows exist. INSERT OR IGNORE never
   // downgrades a peer already known.
-  if (env.FED_DISCOVER && p.trust === "trusted") {
+  if (flagOn(env.FED_DISCOVER) && p.trust === "trusted") {
     const have =
       (
         await env.DB.prepare("SELECT COUNT(*) AS n FROM fed_peers WHERE added_via = 'discovered'").first<{

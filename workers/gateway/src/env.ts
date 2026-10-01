@@ -29,6 +29,9 @@ export type Env = {
   HTTPS_LISTENER_PORT?: string;
 } & { [K in GatewayStringKey]?: string };
 
+/** An on/off setting is on for 1, true or yes; unset, 0, false and no leave it off. */
+export const flagOn = (v: string | undefined): boolean => v === "1" || v === "true" || v === "yes";
+
 /**
  * The malformed settings of a gateway environment (a whole number that is not one, an unknown value of a
  * fixed set, JSON that does not parse). The Node and Bun servers refuse to start on any; the Worker reports

@@ -51,8 +51,7 @@ kept unless you confirm the change, so re-running it is safe. For scripts: `./se
 the same wizard and records the shape for the other [helper commands](helpers.md).
 
 A public instance (a domain, with or without a tunnel) also gets the safe federation posture written out:
-`FED_AUTO_PROMOTE=0` and `FED_CORROBORATION_QUORUM=2`, with discovery left unset (any value of
-`FED_DISCOVER` turns it on). The wizard asks for the peers you know (`--fed-peers`, https only), refuses a
+`FED_AUTO_PROMOTE=0`, `FED_CORROBORATION_QUORUM=2` and `FED_DISCOVER=0`. The wizard asks for the peers you know (`--fed-peers`, https only), refuses a
 44Net peer there, since a listed peer starts `trusted` (onboard 44Net peers from Instance admin, which admits
 them `unvetted`), and can add the instance's 44Net name to `FED_ENDPOINTS` (`--net44-name`). On a hub
 (`FED_SUBMIT_SECRET` set) it requires the spoke list (`--fed-submit-instances`); with a registry it requires

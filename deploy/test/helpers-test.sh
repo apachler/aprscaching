@@ -132,7 +132,7 @@ check "a public instance is set up" setup --env-file "$P" --call OE8APR --domain
   --fed-peers https://peer.example.org --net44-name aprscaching.oe8apr.ampr.org
 check "  … with auto-promotion off" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "0"
 check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORROBORATION_QUORUM)" "2"
-check "  … with discovery unset" bash -c "! grep -q '^FED_DISCOVER=' '$P'"
+check "  … with discovery off" eq "$(env_file_get "$P" FED_DISCOVER)" "0"
 check "  … with the peers it was given" eq "$(env_file_get "$P" FED_PEERS)" "https://peer.example.org"
 check "  … with the D1 write budget off" eq "$(env_file_get "$P" D1_DAILY_WRITE_BUDGET)" "0"
 check "  … with its 44Net endpoint beside https" bash -c "grep -q '\"44net\",\"address\":\"aprscaching.oe8apr.ampr.org\"' '$P'"
@@ -393,5 +393,42 @@ for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box 
   for f in $("$H" $c 2>&1 | grep -oE -- "--[a-z][a-z0-9-]+" | sort -u); do grep -qF -- "\`$f" "$CLI" || missing="$missing $f"; done
   check "docs/reference/cli.md documents every option of '$c'" eq "${missing:-none}" none
 done
+
+# ---- the Pocket bootstrap: a release's copy installs only its checked bundle -----------------------------------
+PK="$TMP/pocket"
+mkdir -p "$PK/src/deploy/pocket" "$PK/rel/vtest" "$PK/raw/main/deploy/pocket"
+# a stand-in repository whose install.sh records how it was called
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$*" >"$POCKET_CALLED"' >"$PK/src/deploy/pocket/install.sh"
+printf '%s\n' 'pocket_paths() { :; }' >"$PK/src/deploy/pocket/lib.sh"
+cp "$PK/src/deploy/pocket/install.sh" "$PK/raw/main/deploy/pocket/install.sh"
+git -C "$PK/src" init -q && git -C "$PK/src" add . &&
+  git -C "$PK/src" -c user.name=t -c user.email=t@example.org commit -qm stub && git -C "$PK/src" tag vtest
+git -C "$PK/src" bundle create -q "$PK/rel/vtest/aprscaching-vtest.bundle" refs/tags/vtest 2>/dev/null
+sum="$(sha256sum "$PK/rel/vtest/aprscaching-vtest.bundle" | cut -d' ' -f1)"
+stamp() { sed -e "s/^POCKET_RELEASE=\"\"/POCKET_RELEASE=\"vtest\"/" -e "s/^POCKET_BUNDLE_SHA256=\"\"/POCKET_BUNDLE_SHA256=\"$1\"/" \
+  "$DEPLOY/pocket/pocket.sh" >"$PK/pocket.sh"; }
+pocket() { # pocket DIR [args…]: no terminal, so nothing can be asked
+  local d="$1"
+  shift
+  POCKET_CALLED="$PK/called" APRSCACHING_RELEASES="file://$PK/rel" APRSCACHING_RAW="file://$PK/raw" \
+    bash "$PK/pocket.sh" --allow-non-termux --no-start --call OE8APR --dir "$d" --data-dir "$PK/data" "$@" \
+    </dev/null >"$PK/out" 2>&1
+}
+stamp "$sum"
+rm -f "$PK/called"
+check "pocket.sh from a release installs its bundle" pocket "$PK/a"
+check "  … checked out at the release's tag" eq "$(git -C "$PK/a" describe --tags 2>/dev/null)" vtest
+check "  … with origin left at the repository" eq "$(git -C "$PK/a" remote get-url origin)" https://github.com/apachler/aprscaching.git
+check "  … and runs that release's install.sh, never updating past it" grep -q -- "--no-update" "$PK/called"
+stamp "$(printf '0%.0s' $(seq 64))"
+rm -f "$PK/called"
+check "pocket.sh refuses a bundle that does not match its checksum" bash -c "! POCKET_CALLED='$PK/called' APRSCACHING_RELEASES='file://$PK/rel' bash '$PK/pocket.sh' --allow-non-termux --no-start --call OE8APR --dir '$PK/b' --data-dir '$PK/data' </dev/null >'$PK/out' 2>&1"
+check "  … and installs nothing" bash -c "[ ! -e '$PK/b' ] && [ ! -e '$PK/called' ] && grep -q 'does not match the checksum' '$PK/out'"
+cp "$DEPLOY/pocket/pocket.sh" "$PK/pocket.sh"
+check "pocket.sh will not install a branch unasked without a terminal" bash -c "! POCKET_CALLED='$PK/called' bash '$PK/pocket.sh' --allow-non-termux --no-start --call OE8APR --dir '$PK/c' </dev/null >'$PK/out' 2>&1"
+check "  … and says it is unverified" grep -q "needs --unverified" "$PK/out"
+mkdir -p "$PK/c/deploy/pocket" && cp "$PK/src/deploy/pocket/lib.sh" "$PK/c/deploy/pocket/" # the stub clones nothing
+check "pocket.sh installs a branch with --unverified" pocket "$PK/c" --unverified
+check "  … through that branch's install.sh" grep -q -- "--branch main" "$PK/called"
 
 if [ "$FAILED" = 0 ]; then echo; echo "all helper checks passed"; else echo; echo "helper checks FAILED"; exit 1; fi

@@ -32,7 +32,8 @@ Every release carries, beside the OCI stack and the desktop binaries:
 - `aprscaching-<version>.bundle` — the release as a git bundle. Clone it, and the checkout updates like any
   other.
 - `aprscaching-<version>-source.tar.gz` — the source.
-- `pocket.sh` — the Pocket installer.
+- `pocket.sh` — the Pocket installer. It carries the release's tag and the bundle's SHA-256, so once it is
+  checked, it installs only that bundle and stops when the bundle does not match.
 - `SHA256SUMS` — the checksum of every asset.
 
 Each asset also has a signed build-provenance attestation. It is keyless (Sigstore), and it shows that this

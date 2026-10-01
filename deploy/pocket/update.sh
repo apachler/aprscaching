@@ -53,7 +53,8 @@ pocket_paths
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing." "Run deploy/pocket/install.sh first."
 if [ -z "$BRANCH" ]; then
   BRANCH="$(git -C "$DIR" rev-parse --abbrev-ref HEAD)"
-  [ "$BRANCH" != HEAD ] || die "$DIR is on a detached HEAD." "Pass --branch NAME."
+  [ "$BRANCH" != HEAD ] || die "$DIR is at a release, not on a branch." \
+    "Update to a newer release with that release's pocket.sh (docs/operate/pocket.md), or pass --branch NAME."
 fi
 
 before="$(git -C "$DIR" rev-parse HEAD)"

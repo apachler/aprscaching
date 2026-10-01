@@ -13,7 +13,7 @@
 #   ./setup.sh --non-interactive --call OE8APR --lan-host 192.168.1.10     # LAN / off-grid, plain http
 #
 # A public instance gets the safe federation posture: auto-promotion off and a corroboration quorum of 2
-# written out, discovery left unset (any value of FED_DISCOVER turns it on), only the peers you name, never a
+# written out, discovery off (FED_DISCOVER=0), only the peers you name, never a
 # 44Net peer as trusted, an explicit spoke list on a hub and a pinned key for any registry. A LAN instance
 # starts with federation off. The D1 write budget is written off: SQLite costs the same whatever it writes.
 #
@@ -275,6 +275,7 @@ if [ "$MODE" = lan ]; then
 else
   default_var FED_AUTO_PROMOTE 0
   default_var FED_CORROBORATION_QUORUM 2
+  default_var FED_DISCOVER 0
   [ -z "$FED_PEERS_IN" ] || setvar FED_PEERS "$FED_PEERS_IN"
   [ -z "$FED_SUBMIT_IN" ] || setvar FED_SUBMIT_INSTANCES "$FED_SUBMIT_IN"
   [ -z "$FED_REGKEY_IN" ] || setvar FED_REGISTRY_KEY "$FED_REGKEY_IN"
@@ -283,8 +284,9 @@ else
     setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$NET44_IN\",\"priority\":20}]'"
     echo "  44Net: check the name with the self-check in Instance admin -> Setup (docs/operate/44net.md)."
   fi
-  [ -z "$(current FED_DISCOVER)" ] ||
-    echo "  WARN: FED_DISCOVER is set, so learned peers are added (disabled). Delete the line to turn discovery off."
+  case "$(current FED_DISCOVER)" in 1 | true | yes)
+    echo "  WARN: FED_DISCOVER is on, so learned peers are added (disabled). Set it to 0 to turn discovery off." ;;
+  esac
   case "$(current FED_AUTO_PROMOTE)" in 0 | "") ;; *) echo "  WARN: FED_AUTO_PROMOTE is not 0: peers can become trusted without you." ;; esac
   case "$(current FED_CORROBORATION_QUORUM)" in 0 | 1) echo "  WARN: FED_CORROBORATION_QUORUM below 2 lets one peer lift a find to Tier A." ;; esac
   if [ -n "$(current FED_PEERS)" ] && ! check_peers "$(current FED_PEERS)" 2>/dev/null; then

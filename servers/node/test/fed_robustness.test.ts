@@ -231,6 +231,20 @@ describe("discovery", () => {
     expect(rows.length).toBeLessThanOrEqual(200);
   });
 
+  it("FED_DISCOVER=0 learns nothing", async () => {
+    const { a, hub } = await pair({ FED_DISCOVER: "0" });
+    const inner = serve(a);
+    stubFetch({
+      [A]: async (req) => {
+        const res = await inner(req);
+        if (new URL(req.url).pathname !== "/.well-known/aprscaching") return res;
+        return Response.json({ ...((await res.json()) as object), peers: ["https://learned.example"] });
+      },
+    });
+    await syncAllPeers(hub);
+    expect(await peerRow(hub, "https://learned.example")).toBeNull();
+  });
+
   it("an unvetted peer's advertised peers are ignored", async () => {
     const { a, hub } = await pair({ FED_DISCOVER: "1" });
     await hub.DB.prepare("UPDATE fed_peers SET trust = 'unvetted' WHERE url = ?").bind(A).run();

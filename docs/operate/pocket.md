@@ -44,18 +44,25 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     ```
 
     The checksum shows the file arrived intact; the attestation shows this repository's release workflow
-    built it ([Verified downloads](helpers.md#verified-downloads)).
+    built it ([Verified downloads](helpers.md#verified-downloads)). The script carries the SHA-256 of the
+    release's git bundle, so the code it installs is checked too: it stops, having installed nothing, when
+    the bundle does not match.
 
     It upgrades Termux first (`apt-get update && apt-get dist-upgrade`, choosing a mirror with
-    `termux-change-repo` when none is set), installs the packages, clones the repository to `~/aprscaching`,
-    compiles `better-sqlite3` for Android, builds the web app, writes `~/.aprscaching/.env` with new secrets,
-    starts the station and prints its addresses and a one-time sign-in link. It installs the `main`
-    (release) branch; `--branch dev` installs the development branch instead. Running it again upgrades,
-    updates and restarts. The first run takes a few minutes; compiling `better-sqlite3` is the long part.
+    `termux-change-repo` when none is set), installs the release's bundle to `~/aprscaching`, installs the
+    packages, compiles `better-sqlite3` for Android, builds the web app, writes `~/.aprscaching/.env` with
+    new secrets, starts the station and prints its addresses and a one-time sign-in link. The first run takes
+    a few minutes; compiling `better-sqlite3` is the long part. To update, check and run the newer release's
+    `pocket.sh` the same way: it keeps the `.env` and restarts the station on the new code.
+
+    `--branch dev` installs a branch instead, straight from GitHub with nothing to check. It says so and
+    asks first; `--unverified` answers for a script. A checkout on a branch then updates with
+    `deploy/pocket/update.sh`.
 
     !!! warning "Known issue: no release yet"
         Until the first release, the release URLs above answer 404 and there is nothing signed to check.
-        Download the script from `dev`, read it, then install that branch:
+        Download the script from `dev`, read it, then install that branch (it asks you to confirm the
+        unverified install):
         `curl -fsSLO https://raw.githubusercontent.com/apachler/aprscaching/dev/deploy/pocket/pocket.sh && less pocket.sh && bash pocket.sh --call <YOURCALL> --branch dev`
 
 3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
@@ -87,7 +94,7 @@ bash ~/aprscaching/deploy/pocket/start.sh      # the tmux session "aprscaching";
 bash ~/aprscaching/deploy/pocket/status.sh     # processes, addresses, certificate, MeshCom, storage, battery
 bash ~/aprscaching/deploy/pocket/restart.sh    # both processes, or: restart.sh gateway | ingest
 bash ~/aprscaching/deploy/pocket/stop.sh
-bash ~/aprscaching/deploy/pocket/update.sh     # pull, install, restart
+bash ~/aprscaching/deploy/pocket/update.sh     # a branch install: pull, install, restart
 ```
 
 The gateway and the ingest each run in a restart loop: 5 s after an exit, backing off to 30 s on quick
@@ -411,7 +418,7 @@ FED_SUBMIT_SECRET=<the home instance's FED_SUBMIT_SECRET>
 
 On the home instance, `FED_SUBMIT_SECRET` enables pushes and `FED_SUBMIT_INSTANCES` (when set) must list
 `oe8apr-pocket`. The phone's first push registers it there as `unvetted`: its caches arrive, hidden on the
-map by default, until you promote it once under **Instance admin → Federation**. Leave `FED_DISCOVER` unset on
+map by default, until you promote it once under **Instance admin → Federation**. Leave `FED_DISCOVER` off on
 the phone; it follows only what you name.
 
 **Corroboration.** A station vouches for finds only from receiving sites it attests (`FIRST_PARTY_SITES`), and

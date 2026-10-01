@@ -13,15 +13,25 @@
 #      not pkg, because pkg itself runs curl, and apt-get rather than apt, whose command line is meant for
 #      people and warns when a script runs it. When no mirror is chosen, termux-change-repo runs first (with a
 #      terminal) or is suggested.
-#   2. install.sh from the same branch, with the options below passed on.
+#   2. the code, then install.sh from it with the options below passed on. A release's copy of this script
+#      carries the release's tag and the SHA-256 of its git bundle (stamped by release-verify.yml), so once
+#      this script is checked, everything it installs is too: it downloads the bundle, compares the hash,
+#      and runs the install.sh inside. Without a stamp, or with --branch, it fetches install.sh and the
+#      branch from GitHub unchecked, and says so first.
 #   3. start.sh --no-attach, then the station's URLs and a one-time sign-in link (the way in where a
 #      passkey does not work, e.g. Firefox, or a phone without Google services).
 #   4. after a first install, on a terminal, the setup questions (wizard.sh).
 #
 # bash pocket.sh --help lists the options; any option it does not know goes to install.sh.
-# APRSCACHING_RAW (default https://raw.githubusercontent.com/apachler/aprscaching) is where install.sh is
-# fetched from: <APRSCACHING_RAW>/<branch>/deploy/pocket/install.sh.
+# APRSCACHING_RELEASES (default https://github.com/apachler/aprscaching/releases/download) is where a release's
+# bundle is fetched from: <APRSCACHING_RELEASES>/<tag>/aprscaching-<tag>.bundle; the stamped hash checks it
+# wherever it comes from. APRSCACHING_RAW (default https://raw.githubusercontent.com/apachler/aprscaching) is
+# where a branch's install.sh is fetched from: <APRSCACHING_RAW>/<branch>/deploy/pocket/install.sh.
 set -euo pipefail
+
+# The release this copy belongs to and the SHA-256 of its git bundle; empty in the repository.
+POCKET_RELEASE=""
+POCKET_BUNDLE_SHA256=""
 
 # Everything runs from main(), called on the last line: piped into bash, the whole script is read before
 # anything runs, so no command can swallow the rest of it from stdin. Commands get stdin from /dev/null,
@@ -35,7 +45,9 @@ pocket.sh: install and start aprscaching on an Android phone in Termux, in one c
 
 Options:
   --call CALL          your callsign (asked on the terminal when a new .env needs it)
-  --branch NAME        branch to install and to fetch install.sh from (APRSCACHING_BRANCH, default main)
+  --branch NAME        install a branch instead of this release, unchecked (APRSCACHING_BRANCH;
+                       a copy from the repository rather than a release installs main)
+  --unverified         install a branch without asking (scripts; the install is not checked)
   --dir PATH           checkout                       (APRSCACHING_DIR, default ~/aprscaching)
   --data-dir PATH      .env, database, logs           (APRSCACHING_DATA, default ~/.aprscaching)
   --gateway-only       start without the ingest (no MeshCom node and no APRS-IS)
@@ -60,8 +72,36 @@ fail() {
 tty_ok() { [ -t 1 ] || [ -t 2 ] || return 1; (: </dev/tty) 2>/dev/null; }
 is_termux() { case "${PREFIX:-}" in */com.termux/*) return 0 ;; *) return 1 ;; esac; }
 
+# fetch_release TAG DIR TMP: the release's bundle, checked against the stamped hash, checked out at TAG in
+# DIR (cloned when DIR is new). origin stays the repository.
+fetch_release() {
+  local tag="$1" dir="$2" tmp="$3" rel="${APRSCACHING_RELEASES:-https://github.com/apachler/aprscaching/releases/download}"
+  local bundle="$tmp/aprscaching-$tag.bundle" sum
+  say "Fetching the $tag release"
+  curl -fsSL --retry 3 -o "$bundle" "$rel/$tag/aprscaching-$tag.bundle" </dev/null ||
+    fail "cannot download $rel/$tag/aprscaching-$tag.bundle." "Check the connection, then run this again."
+  sum="$(sha256sum "$bundle" | cut -d' ' -f1)"
+  [ "$sum" = "$POCKET_BUNDLE_SHA256" ] ||
+    fail "the $tag bundle does not match the checksum this script carries; nothing was installed." \
+      "Download pocket.sh and SHA256SUMS again and check them (docs/operate/pocket.md)."
+  note "checked: sha256 $sum"
+  if [ -d "$dir/.git" ]; then
+    [ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] ||
+      fail "$dir has local changes; the release was not installed." "Commit or stash them, then run this again."
+    git -C "$dir" fetch --quiet "$bundle" "refs/tags/$tag:refs/tags/$tag" </dev/null ||
+      fail "the $tag tag in $dir differs from the release's." "Delete it (git -C $dir tag -d $tag), then run this again."
+  elif [ -e "$dir" ]; then
+    fail "$dir exists but is not a git checkout." "Move it aside or pass --dir PATH."
+  else
+    git clone --quiet --no-checkout "$bundle" "$dir" </dev/null || fail "cloning the $tag bundle failed."
+    git -C "$dir" remote set-url origin https://github.com/apachler/aprscaching.git
+  fi
+  git -C "$dir" -c advice.detachedHead=false checkout --quiet "refs/tags/$tag" </dev/null ||
+    fail "checking out $tag in $dir failed."
+}
+
 main() {
-  local call="" branch="${APRSCACHING_BRANCH:-main}" dir="${APRSCACHING_DIR:-$HOME/aprscaching}"
+  local call="" branch="${APRSCACHING_BRANCH:-}" dir="${APRSCACHING_DIR:-$HOME/aprscaching}" unverified=0
   local data="${APRSCACHING_DATA:-$HOME/.aprscaching}" raw="${APRSCACHING_RAW:-https://raw.githubusercontent.com/apachler/aprscaching}"
   local start=1 apt_step=1 non_termux=0 start_args=() pass=()
   while [ $# -gt 0 ]; do
@@ -73,6 +113,7 @@ main() {
       --gateway-only) start_args+=(--gateway-only) ;;
       --no-start) start=0 ;;
       --skip-apt) apt_step=0 ;;
+      --unverified) unverified=1 ;;
       --allow-non-termux) non_termux=1; apt_step=0 ;;
       -h | --help) usage; return 0 ;;
       --port | --repo | --web-dist) pass+=("$1" "${2:-}"); shift ;;
@@ -86,6 +127,23 @@ main() {
   if ! is_termux && [ "$non_termux" -eq 0 ]; then
     fail "this sets up aprscaching inside Termux on Android." \
       "Install Termux from F-Droid (https://f-droid.org/packages/com.termux/) and run it there."
+  fi
+
+  # A release's copy installs that release, checked; a branch is installed only once the operator agrees.
+  local release=""
+  if [ -n "$POCKET_RELEASE" ] && [ -z "$branch" ]; then
+    release="$POCKET_RELEASE"
+  else
+    branch="${branch:-main}"
+    if [ "$unverified" -eq 0 ]; then
+      say "Unverified: this installs the $branch branch straight from GitHub, with no checksum or signature"
+      tty_ok || fail "an unverified install needs --unverified when there is no terminal to ask on." \
+        "Or install a release: docs/operate/pocket.md."
+      local answer=""
+      printf '    Install it anyway? [y/N] ' >/dev/tty
+      IFS= read -r answer </dev/tty || true
+      case "$answer" in y* | Y*) ;; *) fail "nothing was installed." ;; esac
+    fi
   fi
 
   # ---- 1. Termux up to date ------------------------------------------------------------------------
@@ -125,10 +183,23 @@ main() {
   # shellcheck disable=SC2064 # the path is fixed now
   trap "rm -rf '$tmp'" EXIT
   installer="$tmp/install.sh"
-  say "Fetching install.sh ($branch)"
-  curl -fsSL --retry 3 -o "$installer" "$raw/$branch/deploy/pocket/install.sh" </dev/null ||
-    fail "cannot download $raw/$branch/deploy/pocket/install.sh." "Check the branch name and the connection."
-  local args=(--branch "$branch" --dir "$dir" --data-dir "$data" --no-next-steps)
+  local args=(--dir "$dir" --data-dir "$data" --no-next-steps)
+  if [ -n "$release" ]; then
+    # git comes with install.sh's packages, but the bundle needs it first
+    if ! command -v git >/dev/null 2>&1; then
+      is_termux || fail "git is missing."
+      DEBIAN_FRONTEND=noninteractive apt-get install -y git </dev/null || fail "installing git failed."
+    fi
+    fetch_release "$release" "$dir" "$tmp"
+    # a copy, as the checkout is the code it installs; --no-update keeps it at the release
+    cp "$dir/deploy/pocket/install.sh" "$installer"
+    args+=(--no-update)
+  else
+    say "Fetching install.sh ($branch)"
+    curl -fsSL --retry 3 -o "$installer" "$raw/$branch/deploy/pocket/install.sh" </dev/null ||
+      fail "cannot download $raw/$branch/deploy/pocket/install.sh." "Check the branch name and the connection."
+    args+=(--branch "$branch")
+  fi
   [ -z "$call" ] || args+=(--call "$call")
   [ "$non_termux" -eq 0 ] || args+=(--allow-non-termux)
   bash "$installer" "${args[@]}" "${pass[@]}" </dev/null || fail "install.sh failed; see its output above."

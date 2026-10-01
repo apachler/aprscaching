@@ -1,7 +1,7 @@
 name: release-verify
 # Makes a release verifiable. Once its other artifacts are attached, this adds the downloads an operator
 # starts from — the release as a git bundle (clone it, and the checkout updates like any other), the source
-# archive and the Pocket installer — then a SHA256SUMS over every asset and a signed build-provenance
+# archive and the Pocket installer, stamped with the tag and the bundle's SHA-256 — then a SHA256SUMS over every asset and a signed build-provenance
 # attestation for each (Sigstore, keyless: the signature names this repository's workflow, so there is no
 # signing key to keep). Operators check them with `sha256sum -c` and `gh attestation verify`
 # (docs/operate/helpers.md, Verified downloads).
@@ -42,7 +42,11 @@ jobs:
           mkdir -p "$out"
           git bundle create "$out/aprscaching-$TAG.bundle" "refs/tags/$TAG"
           git archive --format=tar.gz --prefix="aprscaching-$TAG/" -o "$out/aprscaching-$TAG-source.tar.gz" "$TAG"
-          cp deploy/pocket/pocket.sh "$out/pocket.sh"
+          # the Pocket installer carries the tag and the bundle's hash, so checking it checks what it installs
+          sum="$(sha256sum "$out/aprscaching-$TAG.bundle" | cut -d' ' -f1)"
+          sed -e "s/^POCKET_RELEASE=\"\"/POCKET_RELEASE=\"$TAG\"/" -e "s/^POCKET_BUNDLE_SHA256=\"\"/POCKET_BUNDLE_SHA256=\"$sum\"/" \
+            deploy/pocket/pocket.sh >"$out/pocket.sh"
+          grep -qx "POCKET_BUNDLE_SHA256=\"$sum\"" "$out/pocket.sh" || { echo "pocket.sh was not stamped" >&2; exit 1; }
           # the OCI stack and the desktop binaries, attached by the jobs before this one
           gh release download "$TAG" --dir "$out" --pattern 'aprscaching-oci-stack.zip' --pattern 'aprscaching-*-x64*' \
             --pattern 'aprscaching-*-arm64' || true
