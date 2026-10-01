@@ -49,8 +49,9 @@ export type {
   MessageItem,
   Spot,
 };
+import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
-import { migrateLegacy, packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
+import { packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
 import { fromB64u, toB64u } from "./base64url.js";
 
@@ -128,20 +129,8 @@ export class ApiError extends Error {
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
-let offlineReadyP: Promise<OfflineStore> | null = null;
-/** The offline store (offline/store.ts), once what earlier versions kept in localStorage has moved into it. */
-export function offlineReady(): Promise<OfflineStore> {
-  offlineReadyP ??= (async () => {
-    const st = offlineStore();
-    try {
-      await migrateLegacy(st, localStorage, localStorage.getItem("acs.instance") ?? "", Date.now());
-    } catch {
-      /* nothing to move, or no storage: the store starts empty */
-    }
-    return st;
-  })();
-  return offlineReadyP;
-}
+/** The offline store (offline/store.ts): the packs and the log queue. */
+export const offlineReady = (): Promise<OfflineStore> => Promise.resolve(offlineStore());
 const knownInstance = () => {
   try {
     return localStorage.getItem("acs.instance") ?? "";
@@ -163,7 +152,7 @@ export async function listCaches(
       `/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`,
     );
     void offlineReady()
-      .then((st) => saveAutoArea(st, r.caches, bbox, knownInstance(), Date.now()))
+      .then((st) => saveAutoArea(st, r.caches, knownInstance(), Date.now()))
       .catch(() => {});
     return r;
   } catch (e) {
@@ -1122,7 +1111,8 @@ export function setStages(
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
 /** Absolute URL for a media clue path returned by the API. */
-export const mediaUrl = (path: string): string => API_BASE + path;
+/** A media path on the instance as a URL; a local object URL (an offline pack's image) as it is. */
+export const mediaUrl = (path: string): string => (path.startsWith("blob:") ? path : API_BASE + path);
 
 // ---- cache media gallery: owner-managed photos/audio/files on a cache ----
 export interface CacheMediaItem {
@@ -1133,6 +1123,9 @@ export interface CacheMediaItem {
   url: string;
   bytes: number;
   createdAt?: number;
+  /** The small copy stored beside an image, for galleries. */
+  thumbUrl?: string;
+  thumbBytes?: number;
 }
 /** A cache's media; without a connection, the images its offline pack keeps, as local object URLs. */
 export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
@@ -1162,17 +1155,35 @@ export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMedi
   }
 }
 /** Upload a media item (raw body) — authorised by the signed-in owner session. */
+/**
+ * Upload a cache's media. A photo is scaled down here first (at most PHOTO_PX on its longest side), and
+ * its thumbnail is stored beside it, so galleries and offline packs load a few kilobytes instead of the
+ * photo; a photo whose thumbnail could not be made or stored still uploads, without one.
+ */
 export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
+  const isImage = file.type.startsWith("image/");
+  const photo = (isImage && (await resizeImage(file, PHOTO_PX, 0.85))) || file;
   const q = title ? `?title=${encodeURIComponent(title)}` : "";
   const res = await reach(`${API_BASE}/api/caches/${cacheId}/media${q}`, {
     method: "POST",
     credentials: "include",
-    headers: { "content-type": file.type || "application/octet-stream" },
-    body: file,
+    headers: { "content-type": photo.type || "application/octet-stream" },
+    body: photo,
   });
   const body = (await res.json().catch(() => ({}))) as { item?: CacheMediaItem; error?: string };
   if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
-  return body as { item: CacheMediaItem };
+  const item = body.item!;
+  const thumb = isImage ? await thumbnailOf(photo) : null;
+  if (thumb) {
+    const t = await reach(`${API_BASE}/api/caches/${cacheId}/media/${item.id}/thumb`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": thumb.type },
+      body: thumb,
+    }).catch(() => null);
+    if (t?.ok) Object.assign(item, (await t.json()) as { thumbUrl: string; thumbBytes: number });
+  }
+  return { item };
 }
 export function deleteCacheMedia(cacheId: number, mediaId: number): Promise<{ ok: boolean }> {
   return call(`/api/caches/${cacheId}/media/${mediaId}`, { method: "DELETE" });

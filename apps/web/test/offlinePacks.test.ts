@@ -2,16 +2,8 @@
 import { describe, it, expect } from "vitest";
 import type { MapCache, PackCache, PackResponse } from "@aprscaching/shared";
 import { memoryStore, type PackMeta } from "../src/offline/store.js";
-import {
-  AUTO_PACK_ID,
-  migrateLegacy,
-  packCache,
-  packCachesInBox,
-  saveAutoArea,
-  userPacks,
-} from "../src/offline/packs.js";
+import { packCache, packCachesInBox, saveAutoArea, userPacks } from "../src/offline/packs.js";
 import { estimatePack, imageKey, refreshPack, storePack, type Fetcher } from "../src/offline/download.js";
-import { routeFromGpx } from "../src/offline/gpx.js";
 
 const map = (id: number, lat = 47.1, lon = 15.1): MapCache => ({
   globalId: `x:cache:${id}`,
@@ -32,7 +24,7 @@ const map = (id: number, lat = 47.1, lon = 15.1): MapCache => ({
   sourceName: null,
   sourceUrl: null,
 });
-const full = (id: number, images: { id: number; bytes: number }[] = []): PackCache => ({
+const full = (id: number, images: { id: number; bytes: number; thumb?: number }[] = []): PackCache => ({
   ...map(id),
   stationCall: null,
   minTrust: null,
@@ -53,13 +45,15 @@ const full = (id: number, images: { id: number; bytes: number }[] = []): PackCac
     contentType: "image/jpeg",
     title: null,
     bytes: i.bytes,
+    thumbUrl: i.thumb ? `/api/media/t${i.id}` : null,
+    thumbBytes: i.thumb ?? null,
   })),
 });
 const BOX: [number, number, number, number] = [15, 47, 15.5, 47.5];
 const meta = (id: string, refreshedAt: number, extra: Partial<PackMeta> = {}): PackMeta => ({
   id,
   name: id,
-  area: { kind: "bbox", bbox: BOX },
+  area: { locator: "JN77" },
   filters: { types: [] },
   images: "none",
   instance: "x",
@@ -74,7 +68,7 @@ const meta = (id: string, refreshedAt: number, extra: Partial<PackMeta> = {}): P
 describe("reading packs offline", () => {
   it("shows each cache once, from the newest pack, with the automatic area last", async () => {
     const st = memoryStore();
-    await saveAutoArea(st, [map(1), map(9)], BOX, "x", 50);
+    await saveAutoArea(st, [map(1), map(9)], "x", 50);
     await st.putPack(meta("old", 10), [full(1), full(2)]);
     await st.putPack(meta("new", 20, { name: "Saualpe" }), [full(2), full(3)]);
     const r = await packCachesInBox(st, BOX);
@@ -112,25 +106,18 @@ describe("downloading a pack", () => {
     const e = estimatePack(
       pack([
         full(1, [
-          { id: 1, bytes: 400_000 },
-          { id: 2, bytes: 100_000 },
+          { id: 1, bytes: 400_000, thumb: 9_000 },
+          { id: 2, bytes: 100_000, thumb: 3_000 },
         ]),
         full(2),
       ]),
     );
-    expect(e).toMatchObject({
-      caches: 2,
-      thumbsDownload: 400_000,
-      thumbsStored: 25_000,
-      fullBytes: 500_000,
-      fullFits: true,
-    });
+    expect(e).toMatchObject({ caches: 2, thumbsBytes: 9_000, fullBytes: 500_000, fullFits: true });
   });
 
-  it("keeps a thumbnail of each cache's first image, made on the phone", async () => {
+  it("keeps the instance's thumbnail of each cache's first image, never the photo itself", async () => {
     const st = memoryStore();
     const f = images();
-    const shrunk: number[] = [];
     const m = await storePack(
       st,
       f.fetcher,
@@ -138,22 +125,15 @@ describe("downloading a pack", () => {
       meta("p", 1, { images: "thumbs" }),
       pack([
         full(1, [
-          { id: 1, bytes: 9 },
-          { id: 2, bytes: 9 },
+          { id: 1, bytes: 900_000, thumb: 8_000 },
+          { id: 2, bytes: 9, thumb: 9 },
         ]),
+        full(2, [{ id: 3, bytes: 5 }]), // no thumbnail stored: the pack keeps no image for it
       ]),
-      {
-        shrink: async (b) => {
-          shrunk.push(b.size);
-          return new Blob([new Uint8Array(100)]);
-        },
-      },
     );
-    expect(f.calls).toEqual(["https://i/api/media/k1"]);
-    expect(shrunk).toEqual([1000]);
+    expect(f.calls).toEqual(["https://i/api/media/t1"]);
     expect(await st.blobKeys("p")).toEqual(["thumb:1"]);
-    expect(m).toMatchObject({ cacheCount: 1, generation: "g1", instance: "x" });
-    expect(m.sizeBytes).toBeGreaterThan(100);
+    expect(m).toMatchObject({ cacheCount: 2, generation: "g1", instance: "x" });
   });
 
   it("leaves out an image that does not load, and keeps the rest", async () => {
@@ -226,39 +206,5 @@ describe("downloading a pack", () => {
     expect(calls.filter((u) => u.includes("/api/media/"))).toEqual(["/api/media/k3"]);
     expect((await st.blobKeys("p")).sort()).toEqual([imageKey({ id: 1 } as never, "full"), "full:3"]);
     expect((await st.packs())[0]).toMatchObject({ generation: "g2", cacheCount: 2, refreshedAt: 120 });
-  });
-});
-
-describe("the move from localStorage", () => {
-  it("turns the last browsed area into the automatic pack and moves the log queue, then removes the old keys", async () => {
-    const st = memoryStore();
-    const ls = new Map<string, string>([
-      ["acs.offline.caches", JSON.stringify({ at: 5, bbox: BOX, caches: [map(1)] })],
-      ["acs.logqueue", JSON.stringify([{ cacheId: 1, body: { logType: "found" } }])],
-    ]);
-    const legacy = { getItem: (k: string) => ls.get(k) ?? null, removeItem: (k: string) => void ls.delete(k) };
-    await migrateLegacy(st, legacy, "x", 100);
-    expect((await st.packs())[0]).toMatchObject({ id: AUTO_PACK_ID, auto: true, refreshedAt: 5 });
-    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toEqual([
-      { queuedAt: 100, cacheId: 1, body: { logType: "found" } },
-    ]);
-    expect([...ls.keys()]).toEqual([]);
-    await migrateLegacy(st, legacy, "x", 200); // once only: nothing left to move
-    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toHaveLength(1);
-  });
-});
-
-describe("a route from GPX", () => {
-  it("reads the track points, simplified, before route points or waypoints", () => {
-    const gpx = `<gpx><wpt lat="1" lon="1"/><trk><trkseg>
-      <trkpt lat="47.0" lon="15.0"/><trkpt lat='47.0' lon='15.001'/><trkpt lat="47.0" lon="15.002"/>
-    </trkseg></trk></gpx>`;
-    expect(routeFromGpx(gpx)).toEqual([
-      [47, 15],
-      [47, 15.002],
-    ]);
-  });
-  it("says when there is no route", () => {
-    expect(routeFromGpx("<gpx><wpt lat='1' lon='1'/></gpx>")).toMatch(/no track or route/);
   });
 });

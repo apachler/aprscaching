@@ -3,9 +3,8 @@
  * Downloading and refreshing an offline pack. First the pack's data (GET /api/offline/pack), which tells
  * what the images would cost; the user picks the images then, and the pack is stored only once complete.
  *
- * Images: `thumbs` keeps a small copy of each cache's first image, made on the phone (the instance stores
- * images as published, so the phone downloads each once and keeps a 320-pixel JPEG); `full` keeps every
- * image as published. A pack, its images included, stays within PACK_MAX_BYTES.
+ * Images: `thumbs` keeps the thumbnail the instance stores beside each cache's first image (a few
+ * kilobytes); `full` keeps every image as stored. A pack, its images included, stays within PACK_MAX_BYTES.
  *
  * A refresh sends the pack's generation and keeps everything when the instance says nothing changed;
  * otherwise it stores the new data and fetches only the images it does not hold yet.
@@ -20,9 +19,6 @@ import {
 } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
 
-/** The longest side of a thumbnail, in pixels, and its stored size when it cannot be measured. */
-const THUMB_PX = 320;
-const THUMB_EST_BYTES = 25_000;
 const PARALLEL = 4;
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
@@ -46,20 +42,22 @@ export async function fetchPackData(
   return body;
 }
 
-/** The images a pack keeps for each cache with the chosen option. */
+/** The images a pack keeps for each cache with the chosen option: every image, or the first one's thumbnail. */
 export function imagesFor(c: PackCache, option: PackMeta["images"]): PackImage[] {
   if (option === "full") return c.images;
-  if (option === "thumbs") return c.images.slice(0, 1);
+  if (option === "thumbs") return c.images.filter((i) => i.thumbUrl).slice(0, 1);
   return [];
 }
+/** What a pack downloads for one image with the chosen option. */
+const sourceOf = (img: PackImage, option: PackMeta["images"]) =>
+  option === "thumbs" && img.thumbUrl ? img.thumbUrl : img.url;
 
 export interface PackEstimate {
   caches: number;
   /** The pack's data as stored. */
   dataBytes: number;
-  /** Thumbnails: downloaded (the first images as published) and stored (the small copies). */
-  thumbsDownload: number;
-  thumbsStored: number;
+  /** The thumbnails of the caches' first images. */
+  thumbsBytes: number;
   /** Every image as published. */
   fullBytes: number;
   /** Does the pack stay within the size limit with full images? */
@@ -68,41 +66,19 @@ export interface PackEstimate {
 
 export function estimatePack(data: PackResponse): PackEstimate {
   const dataBytes = JSON.stringify(data.caches).length;
-  let thumbsDownload = 0,
-    thumbsStored = 0,
+  let thumbsBytes = 0,
     fullBytes = 0;
   for (const c of data.caches) {
-    const first = c.images[0];
-    if (first) {
-      thumbsDownload += first.bytes;
-      thumbsStored += Math.min(first.bytes, THUMB_EST_BYTES);
-    }
+    for (const i of imagesFor(c, "thumbs")) thumbsBytes += i.thumbBytes ?? 0;
     for (const i of c.images) fullBytes += i.bytes;
   }
   return {
     caches: data.caches.length,
     dataBytes,
-    thumbsDownload,
-    thumbsStored,
+    thumbsBytes,
     fullBytes,
     fullFits: dataBytes + fullBytes <= PACK_MAX_BYTES,
   };
-}
-
-/** A small JPEG of an image, made on the phone; the image itself when the browser cannot draw it. */
-export async function thumbnail(blob: Blob): Promise<Blob> {
-  try {
-    if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas !== "function") return blob;
-    const bmp = await createImageBitmap(blob);
-    const scale = Math.min(1, THUMB_PX / Math.max(bmp.width, bmp.height));
-    const canvas = new OffscreenCanvas(Math.round(bmp.width * scale), Math.round(bmp.height * scale));
-    canvas.getContext("2d")?.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    bmp.close();
-    const small = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.72 });
-    return small.size < blob.size ? small : blob;
-  } catch {
-    return blob;
-  }
 }
 
 /** The key an image is stored under in its pack. */
@@ -124,9 +100,8 @@ export async function storePack(
   base: string,
   meta: Omit<PackMeta, "sizeBytes" | "cacheCount" | "generation" | "instance">,
   data: PackResponse,
-  opts: { onProgress?: (p: SaveProgress) => void; signal?: AbortSignal; shrink?: (b: Blob) => Promise<Blob> } = {},
+  opts: { onProgress?: (p: SaveProgress) => void; signal?: AbortSignal } = {},
 ): Promise<PackMeta> {
-  const shrink = opts.shrink ?? thumbnail;
   const wanted = data.caches.flatMap((c) => imagesFor(c, meta.images));
   const have = new Set(await store.blobKeys(meta.id));
   const todo = wanted.filter((i) => !have.has(imageKey(i, meta.images)));
@@ -140,10 +115,9 @@ export async function storePack(
     for (let img = queue.shift(); img; img = queue.shift()) {
       if (opts.signal?.aborted) throw new DOMException("the download was stopped", "AbortError");
       try {
-        const res = await fetcher(base + img.url, { signal: opts.signal });
+        const res = await fetcher(base + sourceOf(img, meta.images), { signal: opts.signal });
         if (res.ok) {
-          const raw = await res.blob();
-          const kept = meta.images === "thumbs" ? await shrink(raw) : raw;
+          const kept = await res.blob();
           if (bytes + kept.size <= PACK_MAX_BYTES) {
             await store.putBlob(meta.id, imageKey(img, meta.images), kept);
             bytes += kept.size;
@@ -180,6 +154,7 @@ export async function refreshPack(
   now: number,
   opts: { onProgress?: (p: SaveProgress) => void; signal?: AbortSignal } = {},
 ): Promise<{ meta: PackMeta; changed: boolean }> {
+  if (!meta.area) throw new Error("the automatic area is kept as you browse; it has nothing to refresh");
   const data = await fetchPackData(fetcher, base, meta.area, meta.filters, meta.generation);
   if (data === "unchanged") {
     const touched = { ...meta, refreshedAt: now };

@@ -109,7 +109,12 @@ const STYLE: string | StyleSpecification =
 /** The base map style for the active theme: Phosphor always uses its keyless phosphor graticule so the
  *  map matches the terminal chrome; Modern uses the configured basemap. */
 const baseStyle = (): string | StyleSpecification =>
-  document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
+  document.documentElement.dataset.theme === "phosphor"
+    ? buildPhosphorStyle()
+    : // without a connection a remote style cannot load: start on the self-contained grid
+      typeof STYLE === "string" && !navigator.onLine
+      ? buildGraticuleStyle()
+      : STYLE;
 
 const NONE: never[] = []; // a layer that is off draws no markers
 /** localStorage key remembering the live-stations layer switch in this browser. */
@@ -357,7 +362,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const { map, mapRef, mapFailed } = useMapInstance(
     mapNode,
-    { style: baseStyle, center: DEFAULT_CENTER, zoom: 9 },
+    { style: baseStyle, fallbackStyle: buildGraticuleStyle, center: DEFAULT_CENTER, zoom: 9 },
     {
       onLoad: (m) => {
         setCenter([m.getCenter().lat, m.getCenter().lng]);

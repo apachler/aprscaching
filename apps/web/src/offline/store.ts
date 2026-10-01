@@ -13,7 +13,8 @@ import type { PackArea, PackCache } from "@aprscaching/shared";
 export interface PackMeta {
   id: string;
   name: string;
-  area: PackArea;
+  /** The locator square; null for the automatic area last browsed, which is the map view's box. */
+  area: PackArea | null;
   filters: { types: string[] };
   /** none: no images; thumbs: a small copy of each cache's first image; full: every image as published. */
   images: "none" | "thumbs" | "full";

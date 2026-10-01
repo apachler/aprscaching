@@ -364,10 +364,10 @@ async function eraseCall(
   // media uploaded to the caches this call (or an SSID of it) owns, captured while owner_call still names it
   const media = (
     await env.DB.prepare(
-      "SELECT m.id, m.media_key FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE c.owner_call=? OR c.owner_call LIKE ?",
+      "SELECT m.id, m.media_key, m.thumb_key FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE c.owner_call=? OR c.owner_call LIKE ?",
     )
       .bind(cs, `${cs}-%`)
-      .all<{ id: number; media_key: string }>()
+      .all<{ id: number; media_key: string; thumb_key: string | null }>()
   ).results;
   // Anonymise finds (keep cache integrity/counts, drop PII), erase personal records, tombstone.
   await env.DB.batch([
@@ -432,7 +432,7 @@ async function eraseCall(
       ...keyIds.map((r) => ({ kind: "key" as const, targetId: `${instance}:key:${r.id}` })),
       ...moveSeqs.map((r) => ({ kind: "move" as const, targetId: `${instance}:move:${r.seq}` })),
     ],
-    mediaKeys: media.map((m) => m.media_key),
+    mediaKeys: media.flatMap((m) => (m.thumb_key ? [m.media_key, m.thumb_key] : [m.media_key])),
   };
 }
 

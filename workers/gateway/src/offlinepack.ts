@@ -140,7 +140,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   ).results;
   const media = (
     await env.DB.prepare(
-      `SELECT id, cache_id, media_key, content_type, title, bytes FROM cache_media
+      `SELECT id, cache_id, media_key, content_type, title, bytes, thumb_key, thumb_bytes FROM cache_media
         WHERE kind = 'image' AND cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) ORDER BY created_at`,
     )
       .bind(...box, ...types)
@@ -151,6 +151,8 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
         content_type: string;
         title: string | null;
         bytes: number;
+        thumb_key: string | null;
+        thumb_bytes: number | null;
       }>()
   ).results;
   const byCache = <T extends { cache_id: number }>(rows: T[]) => {
@@ -186,6 +188,8 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
           contentType: m.content_type,
           title: m.title,
           bytes: m.bytes,
+          thumbUrl: m.thumb_key ? `/api/media/${m.thumb_key}` : null,
+          thumbBytes: m.thumb_bytes,
         })),
       };
     }),

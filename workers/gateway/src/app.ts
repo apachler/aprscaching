@@ -147,6 +147,7 @@ import {
   handleListCacheMedia,
   handleAddCacheMedia,
   handleDeleteCacheMedia,
+  handlePutMediaThumb,
 } from "./stages.js";
 import {
   handleAccountExport,
@@ -663,6 +664,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const cacheMediaDel = /^\/api\/caches\/(\d+)\/media\/(\d+)$/.exec(p);
   if (cacheMediaDel && m === "DELETE")
     return handleDeleteCacheMedia(req, env, Number(cacheMediaDel[1]), Number(cacheMediaDel[2]));
+  const cacheMediaThumb = /^\/api\/caches\/(\d+)\/media\/(\d+)\/thumb$/.exec(p);
+  if (cacheMediaThumb && m === "PUT")
+    return handlePutMediaThumb(req, env, Number(cacheMediaThumb[1]), Number(cacheMediaThumb[2]));
   const stagesMatch = /^\/api\/caches\/(\d+)\/stages$/.exec(p);
   if (stagesMatch) {
     const id = Number(stagesMatch[1]);

@@ -7,8 +7,8 @@
  *   1. Serve apps/web/dist (build it first: pnpm --filter @aprscaching/web build) with a stand-in
  *      gateway that answers the session check with a signed-in call.
  *   2. Open the app: the service worker installs, stores the shell and takes control.
- *   3. Make an offline pack of the map view in the Offline panel (the stand-in gateway answers with one
- *      cache in the middle of the requested box), so it lands in IndexedDB.
+ *   3. Make an offline pack of the locator square at the map centre in the Offline panel (the stand-in
+ *      gateway answers with one cache in the middle of the square), so it lands in IndexedDB.
  *   4. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
  *      call, with the map (MapLibre comes from the shell too) showing the pack's caches.
  *
@@ -21,6 +21,7 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { locatorBounds } from "../../packages/shared/src/offlinepack.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIST = path.join(ROOT, "apps/web/dist");
@@ -60,9 +61,9 @@ const TYPES = {
   ".svg": "image/svg+xml",
 };
 
-/** One offline pack for the requested box: a single cache in its middle. */
+/** One offline pack for the requested locator square: a single cache in its middle. */
 function pack(url) {
-  const [w, s, e, n] = (url.searchParams.get("bbox") ?? "0,0,1,1").split(",").map(Number);
+  const [w, s, e, n] = locatorBounds(url.searchParams.get("grid") ?? "JN77");
   const cache = {
     globalId: "e2e.test:cache:1",
     id: 1,
@@ -150,6 +151,9 @@ async function main() {
   };
   try {
     const context = await browser.newContext();
+    // the online basemap's host is unreachable throughout, so a cached copy of its style can never make the
+    // offline map work by accident: the map has to fall back to the self-contained style
+    await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (r) => r.abort());
     const page = await context.newPage();
     await page.goto(base);
     await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 60_000 });
@@ -164,6 +168,7 @@ async function main() {
     check(`the shell is stored (${stored} files)`, stored > 10);
 
     await page.click('.rail button[title="Offline"]');
+    await page.click('.newpack .seg button:has-text("Subsquare")');
     await page.click('button:has-text("Check size")');
     await page.waitForSelector(".pack-estimate", { timeout: 15_000 });
     await page.click('.pack-estimate button:has-text("Download")');
@@ -171,7 +176,7 @@ async function main() {
       .waitForSelector('.pack:has-text("1 caches")', { timeout: 15_000 })
       .then(() => true)
       .catch(() => false);
-    check("a pack of the map view is saved (IndexedDB)", saved);
+    check("a pack of the subsquare at the map centre is saved (IndexedDB)", saved);
 
     await context.setOffline(true);
     await page.reload();

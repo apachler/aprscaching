@@ -237,7 +237,7 @@ function mediaKind(ct: string): "image" | "audio" | "file" {
 export async function handleListCacheMedia(req: Request, env: Env, cacheId: number): Promise<Response> {
   const rows = (
     await env.DB.prepare(
-      "SELECT id, media_key, kind, content_type, title, bytes, created_at FROM cache_media WHERE cache_id=? ORDER BY created_at",
+      "SELECT id, media_key, kind, content_type, title, bytes, created_at, thumb_key, thumb_bytes FROM cache_media WHERE cache_id=? ORDER BY created_at",
     )
       .bind(cacheId)
       .all<{
@@ -248,6 +248,8 @@ export async function handleListCacheMedia(req: Request, env: Env, cacheId: numb
         title: string | null;
         bytes: number;
         created_at: number;
+        thumb_key: string | null;
+        thumb_bytes: number | null;
       }>()
   ).results;
   return json({
@@ -259,6 +261,7 @@ export async function handleListCacheMedia(req: Request, env: Env, cacheId: numb
       url: `/api/media/${r.media_key}`,
       bytes: r.bytes,
       createdAt: r.created_at,
+      ...(r.thumb_key && { thumbUrl: `/api/media/${r.thumb_key}`, thumbBytes: r.thumb_bytes }),
     })),
   });
 }
@@ -305,6 +308,40 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   );
 }
 
+/** The largest thumbnail an owner may store: a 320-pixel JPEG or WebP is well under it. */
+const THUMB_LIMIT = 150_000;
+
+/**
+ * PUT /api/caches/:id/media/:mediaId/thumb — the owner stores the small copy of an image, which the
+ * uploader's browser made (raw JPEG or WebP body). The gallery and offline packs load it instead of the
+ * image as published. A new one replaces the old.
+ */
+export async function handlePutMediaThumb(req: Request, env: Env, cacheId: number, mediaId: number): Promise<Response> {
+  if (!env.MEDIA) return json({ error: "media storage not configured" }, { status: 501 });
+  const owner = await ownerOf(env, cacheId);
+  if (!owner) return json({ error: "unknown cache" }, { status: 404 });
+  if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
+    return json({ error: "only the owner may add media" }, { status: 403 });
+  const row = await env.DB.prepare("SELECT kind, thumb_key FROM cache_media WHERE id=? AND cache_id=?")
+    .bind(mediaId, cacheId)
+    .first<{ kind: string; thumb_key: string | null }>();
+  if (!row) return json({ error: "no such media" }, { status: 404 });
+  if (row.kind !== "image") return json({ error: "only an image has a thumbnail" }, { status: 400 });
+  const ct = (req.headers.get("content-type") ?? "").split(";")[0]!.trim();
+  if (ct !== "image/jpeg" && ct !== "image/webp")
+    return json({ error: "a thumbnail is image/jpeg or image/webp" }, { status: 415 });
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (!bytes.length || bytes.length > THUMB_LIMIT)
+    return json({ error: `a thumbnail is at most ${THUMB_LIMIT / 1000} kB` }, { status: 413 });
+  const key = `cache/${cacheId}/media/${crypto.randomUUID()}.thumb.${ct === "image/webp" ? "webp" : "jpeg"}`;
+  await env.MEDIA.put(key, bytes, ct);
+  await env.DB.prepare("UPDATE cache_media SET thumb_key=?, thumb_bytes=? WHERE id=?")
+    .bind(key, bytes.length, mediaId)
+    .run();
+  if (row.thumb_key) await env.MEDIA.delete?.(row.thumb_key).catch(() => {});
+  return json({ thumbUrl: `/api/media/${key}`, thumbBytes: bytes.length });
+}
+
 /** Owner deletes a media item (removes the row + best-effort the stored object). */
 export async function handleDeleteCacheMedia(
   req: Request,
@@ -316,16 +353,17 @@ export async function handleDeleteCacheMedia(
   if (!owner) return json({ error: "unknown cache" }, { status: 404 });
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may delete media" }, { status: 403 });
-  const row = await env.DB.prepare("SELECT media_key FROM cache_media WHERE id=? AND cache_id=?")
+  const row = await env.DB.prepare("SELECT media_key, thumb_key FROM cache_media WHERE id=? AND cache_id=?")
     .bind(mediaId, cacheId)
-    .first<{ media_key: string }>();
+    .first<{ media_key: string; thumb_key: string | null }>();
   if (!row) return json({ error: "no such media" }, { status: 404 });
   await env.DB.prepare("DELETE FROM cache_media WHERE id=?").bind(mediaId).run();
-  try {
-    await env.MEDIA?.delete?.(row.media_key);
-  } catch {
-    /* best-effort; row gone either way */
-  }
+  for (const key of [row.media_key, row.thumb_key])
+    try {
+      if (key) await env.MEDIA?.delete?.(key);
+    } catch {
+      /* best-effort; row gone either way */
+    }
   return json({ ok: true });
 }
 

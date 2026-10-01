@@ -1,25 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Offline — the packs a hunter takes on a trip without signal. Two groups: the user's packs (age, size,
- * refresh, delete) and a new pack: an area (the map view, a circle around the map centre, or a corridor
- * along a GPX route), optional type filters, then "Check size" — the pack's data comes first and says what
- * images would add — and Download. The browser is asked to keep the data the first time.
+ * refresh, delete) and a new pack: a Maidenhead locator square (typed, or the field, square, subsquare or
+ * extended square at the map centre, outlined on the map), optional type filters, then "Check size" — the
+ * pack's data comes first and says what images would add — and Download. The browser is asked to keep the
+ * data the first time.
  */
 import { useEffect, useRef, useState } from "react";
-import {
-  PACK_MAX_CORRIDOR_M,
-  PACK_MAX_RADIUS_M,
-  PACK_MAX_SPAN_DEG,
-  PACK_MIN_CORRIDOR_M,
-  type CacheType,
-  type PackArea,
-  type PackResponse,
-} from "@aprscaching/shared";
+import { locatorBounds, normalizeLocator, type CacheType, type PackArea, type PackResponse } from "@aprscaching/shared";
+import type * as maplibregl from "maplibre-gl";
+import { maidenhead } from "../map/geo.js";
 import { API_BASE, offlineReady } from "../api.js";
 import { useFmt } from "../format.js";
 import { TYPE_META, TYPE_ORDER } from "../cacheTypes.js";
 import { usePlatform } from "../platform/PlatformContext.js";
-import { Advanced, Badge, Button, EmptyState, Group, Panel, Row, useConfirm, useToast } from "../ui/index.js";
+import { Advanced, Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from "../ui/index.js";
 import {
   estimatePack,
   fetchPackData,
@@ -28,7 +23,6 @@ import {
   type PackEstimate,
   type SaveProgress,
 } from "./download.js";
-import { routeFromGpx } from "./gpx.js";
 import { userPacks } from "./packs.js";
 import type { PackMeta } from "./store.js";
 
@@ -129,17 +123,29 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
   );
 }
 
-type AreaKind = "view" | "circle" | "route";
+/** The four locator sizes, from big to small. */
+const SIZES = [
+  { chars: 2, label: "Field", example: "JN" },
+  { chars: 4, label: "Square", example: "JN77" },
+  { chars: 6, label: "Subsquare", example: "JN77sb" },
+  { chars: 8, label: "Extended", example: "JN77sb42" },
+] as const;
+
+/** "160 × 111 km": a locator square's size on the ground. */
+function squareSize(locator: string): string {
+  const [w, s, e, n] = locatorBounds(locator);
+  const km = (deg: number, atLat = 0) => deg * 111.32 * Math.cos((atLat * Math.PI) / 180);
+  const fmt = (v: number) => (v >= 10 ? `${Math.round(v)}` : v >= 1 ? v.toFixed(1) : `${Math.round(v * 1000)} m`);
+  const x = km(e - w, (s + n) / 2),
+    y = km(n - s);
+  return x >= 1 ? `${fmt(x)} × ${fmt(y)} km` : `${fmt(x)} × ${fmt(y)}`;
+}
 
 function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const { map } = usePlatform();
   const toast = useToast();
+  const [input, setInput] = useState("");
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<AreaKind>("view");
-  const [radiusKm, setRadiusKm] = useState(10);
-  const [route, setRoute] = useState<[number, number][] | null>(null);
-  const [routeErr, setRouteErr] = useState<string | null>(null);
-  const [corridorM, setCorridorM] = useState(1000);
   const [types, setTypes] = useState<CacheType[]>([]);
   const [data, setData] = useState<{ area: PackArea; data: PackResponse; est: PackEstimate } | null>(null);
   const [images, setImages] = useState<PackMeta["images"]>("thumbs");
@@ -147,31 +153,29 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const [progress, setProgress] = useState<SaveProgress | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const locator = normalizeLocator(input);
+  useSquareOutline(map, locator);
 
-  // the area as the map shows it now, read when the size is checked
-  const areaNow = (): PackArea | string => {
-    if (kind === "route") return route ? { kind: "route", points: route, corridorM } : "pick a GPX file with the route";
-    if (!map) return "the map is not ready";
-    if (kind === "circle") {
-      const c = map.getCenter();
-      return { kind: "radius", lat: c.lat, lon: c.lng, radiusM: radiusKm * 1000 };
-    }
-    const b = map.getBounds();
-    if (b.getEast() - b.getWest() > PACK_MAX_SPAN_DEG || b.getNorth() - b.getSouth() > PACK_MAX_SPAN_DEG)
-      return `zoom in: a pack's box spans at most ${PACK_MAX_SPAN_DEG}° (about ${Math.round(PACK_MAX_SPAN_DEG * 111)} km)`;
-    return { kind: "bbox", bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] };
+  /** The square of the given size at the map centre. */
+  const fromMap = (chars: number) => {
+    const c = map?.getCenter();
+    if (!c) return;
+    setInput(maidenhead(c.lat, c.lng, chars));
+    setData(null);
+    setErr(null);
   };
 
   const check = async () => {
-    const area = areaNow();
-    if (typeof area === "string") return setErr(area);
+    if (!locator) return setErr("Enter a Maidenhead locator, such as JN77 or JN77sb.");
+    const area: PackArea = { locator };
     setBusy("check");
     setErr(null);
     try {
       const d = await fetchPackData(fetcher, API_BASE, area, { types });
       if (d === "unchanged") return;
-      setData({ area, data: d, est: estimatePack(d) });
-      if (!estimatePack(d).fullFits && images === "full") setImages("thumbs");
+      const est = estimatePack(d);
+      setData({ area, data: d, est });
+      if (!est.fullFits && images === "full") setImages("thumbs");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -193,7 +197,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
         API_BASE,
         {
           id: `pack-${now.toString(36)}`,
-          name: name.trim() || defaultName(data.area),
+          name: name.trim() || data.area.locator,
           area: data.area,
           filters: { types },
           images,
@@ -223,80 +227,36 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const est = data?.est;
   return (
     <div className="newpack">
-      <Row label="Area">
-        <div className="seg" role="group" aria-label="Pack area">
-          {(
-            [
-              ["view", "This map view"],
-              ["circle", "Around the map centre"],
-              ["route", "Along a route"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              className={kind === k ? "on" : ""}
-              aria-pressed={kind === k}
-              onClick={() => {
-                setKind(k);
-                setData(null);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </Row>
-      {kind === "view" && <p className="muted fine">Pan and zoom the map to the area, then check its size.</p>}
-      {kind === "circle" && (
-        <label className="slider">
-          Radius {radiusKm} km
-          <input
-            type="range"
-            min={1}
-            max={PACK_MAX_RADIUS_M / 1000}
-            value={radiusKm}
-            onChange={(e) => {
-              setRadiusKm(+e.target.value);
-              setData(null);
-            }}
-          />
-        </label>
-      )}
-      {kind === "route" && (
-        <>
-          <label className="fine">
-            GPX file (a track or a route)
-            <input
-              type="file"
-              accept=".gpx,application/gpx+xml"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const r = routeFromGpx(await f.text());
-                setRoute(typeof r === "string" ? null : r);
-                setRouteErr(typeof r === "string" ? r : null);
-                setData(null);
-              }}
-            />
-          </label>
-          {routeErr && <p className="inline-note bad">{routeErr}</p>}
-          {route && <p className="muted fine">{route.length} route points</p>}
-          <label className="slider">
-            Corridor {corridorM >= 1000 ? `${corridorM / 1000} km` : `${corridorM} m`} each side
-            <input
-              type="range"
-              min={PACK_MIN_CORRIDOR_M}
-              max={PACK_MAX_CORRIDOR_M}
-              step={100}
-              value={corridorM}
-              onChange={(e) => {
-                setCorridorM(+e.target.value);
-                setData(null);
-              }}
-            />
-          </label>
-        </>
-      )}
+      <label>
+        Maidenhead locator
+        <input
+          className="mono"
+          value={input}
+          placeholder="JN77sb"
+          autoCapitalize="characters"
+          spellCheck={false}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setData(null);
+          }}
+        />
+      </label>
+      <div className="seg" role="group" aria-label="Take the square at the map centre">
+        {SIZES.map((sz) => (
+          <button
+            key={sz.chars}
+            onClick={() => fromMap(sz.chars)}
+            title={`The ${sz.label.toLowerCase()} at the map centre, e.g. ${sz.example}`}
+          >
+            {sz.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted fine">
+        {locator
+          ? `${locator}: ${squareSize(locator)}, outlined on the map.`
+          : "Type a locator, or take the field, square, subsquare or extended square at the map centre. A longer locator is a smaller pack."}
+      </p>
       <Advanced label="Only some cache types">
         <div className="pack-types">
           {TYPE_ORDER.map((t) => (
@@ -317,17 +277,13 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
       </Advanced>
       {err && <p className="inline-note bad">{err}</p>}
       {!data ? (
-        <Button
-          variant="primary"
-          onClick={() => void check()}
-          disabled={props.disabled || busy != null || (kind === "route" && !route)}
-        >
+        <Button variant="primary" onClick={() => void check()} disabled={props.disabled || busy != null || !locator}>
           {busy === "check" ? "Checking…" : "Check size"}
         </Button>
       ) : (
         <div className="pack-estimate">
           <p>
-            <strong>{est!.caches}</strong> caches, {mb(est!.dataBytes)} of data.
+            <strong>{est!.caches}</strong> caches in {data.area.locator}, {mb(est!.dataBytes)} of data.
           </p>
           <fieldset>
             <legend>Images</legend>
@@ -336,7 +292,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
             </label>
             <label>
               <input type="radio" name="images" checked={images === "thumbs"} onChange={() => setImages("thumbs")} /> A
-              thumbnail per cache: {mb(est!.thumbsDownload)} to download, about {mb(est!.thumbsStored)} kept
+              thumbnail per cache: {mb(est!.thumbsBytes)}
             </label>
             <label>
               <input
@@ -352,7 +308,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
           </fieldset>
           <label>
             Name
-            <input value={name} placeholder={defaultName(data.area)} onChange={(e) => setName(e.target.value)} />
+            <input value={name} placeholder={data.area.locator} onChange={(e) => setName(e.target.value)} />
           </label>
           {progress ? (
             <div className="row">
@@ -365,7 +321,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
                 Download
               </Button>
               <Button variant="link" onClick={() => setData(null)}>
-                Change the area
+                Change the locator
               </Button>
             </div>
           )}
@@ -375,12 +331,53 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   );
 }
 
-function defaultName(area: PackArea): string {
-  if (area.kind === "radius")
-    return `${Math.round(area.radiusM / 1000)} km around ${area.lat.toFixed(2)}, ${area.lon.toFixed(2)}`;
-  if (area.kind === "route") return `Route, ${area.points.length} points`;
-  const [w, s, e, n] = area.bbox;
-  return `Area ${((s + n) / 2).toFixed(2)}, ${((w + e) / 2).toFixed(2)}`;
+const OUTLINE = "acs-pack-square";
+
+/** Outline the locator square on the map while it is being chosen; removed with the panel. */
+function useSquareOutline(map: maplibregl.Map | null, locator: string | null) {
+  useEffect(() => {
+    if (!map) return;
+    const clear = () => {
+      try {
+        if (map.getLayer(OUTLINE)) map.removeLayer(OUTLINE);
+        if (map.getSource(OUTLINE)) map.removeSource(OUTLINE);
+      } catch {
+        /* the style was replaced meanwhile */
+      }
+    };
+    clear();
+    if (!locator) return clear;
+    const [w, s, e, n] = locatorBounds(locator);
+    try {
+      map.addSource(OUTLINE, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [w, s],
+              [e, s],
+              [e, n],
+              [w, n],
+              [w, s],
+            ],
+          },
+        },
+      });
+      // a literal colour: MapLibre paints into the GPU canvas and cannot read CSS tokens
+      map.addLayer({
+        id: OUTLINE,
+        type: "line",
+        source: OUTLINE,
+        paint: { "line-color": "#2D8BAB", "line-width": 2, "line-dasharray": [2, 1] },
+      });
+    } catch {
+      /* the style is still loading: no outline this time */
+    }
+    return clear;
+  }, [map, locator]);
 }
 
 /** How much the browser grants this site, and how much is used. */

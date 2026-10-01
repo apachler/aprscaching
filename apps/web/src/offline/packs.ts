@@ -38,12 +38,12 @@ const bare = (c: MapCache): PackCache => ({
 });
 
 /** Keep the caches of the area just browsed as the automatic pack, so the map has them offline. */
-export async function saveAutoArea(store: OfflineStore, caches: MapCache[], bbox: BBox, instance: string, now: number) {
+export async function saveAutoArea(store: OfflineStore, caches: MapCache[], instance: string, now: number) {
   const kept = caches.slice(0, AUTO_MAX).map(bare);
   const meta: PackMeta = {
     id: AUTO_PACK_ID,
     name: "the area you last browsed",
-    area: { kind: "bbox", bbox },
+    area: null,
     filters: { types: [] },
     images: "none",
     instance,
@@ -131,46 +131,4 @@ export async function packCache(store: OfflineStore, id: number): Promise<{ cach
 /** The user's own packs, newest first (the automatic area is not one of them). */
 export async function userPacks(store: OfflineStore): Promise<PackMeta[]> {
   return (await store.packs()).filter((p) => !p.auto).sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export interface LegacyStorage {
-  getItem(key: string): string | null;
-  removeItem(key: string): void;
-}
-
-/**
- * Move what earlier versions kept in localStorage into the store, once: the last browsed area becomes
- * the automatic pack, and the log queue and its needs-attention list move as they are. The old keys are
- * removed only after the store holds the data.
- */
-export async function migrateLegacy(
-  store: OfflineStore,
-  ls: LegacyStorage,
-  instance: string,
-  now: number,
-): Promise<void> {
-  const area = ls.getItem("acs.offline.caches");
-  if (area) {
-    try {
-      const a = JSON.parse(area) as { at?: number; bbox?: BBox; caches?: MapCache[] };
-      if (Array.isArray(a.caches) && a.bbox) await saveAutoArea(store, a.caches, a.bbox, instance, a.at ?? now);
-    } catch {
-      /* unreadable: nothing to keep */
-    }
-    ls.removeItem("acs.offline.caches");
-  }
-  for (const key of ["acs.logqueue", "acs.logqueue.attention"]) {
-    const v = ls.getItem(key);
-    if (v == null) continue;
-    const prior = JSON.parse((await store.kvGet(key)) ?? "[]") as unknown[];
-    let moved: unknown[];
-    try {
-      const parsed = JSON.parse(v) as unknown;
-      moved = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      moved = [];
-    }
-    await store.kvSet(key, JSON.stringify([...prior, ...moved.map((m) => ({ queuedAt: now, ...(m as object) }))]));
-    ls.removeItem(key);
-  }
 }
