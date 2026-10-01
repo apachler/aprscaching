@@ -68,6 +68,8 @@ jobs:
       - run: pnpm run format:check
       # every gateway export has a user outside its own file (module-private code is not exported)
       - run: node tools/checks/dead-exports.mjs
+      # the docs stay present-tense, document every config key the code reads, and keep nav and links whole
+      - run: node tools/checks/docs.mjs
 
   pocket:
     name: Pocket scripts (shellcheck, ruff, Python tests)

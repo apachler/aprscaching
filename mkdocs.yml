@@ -23,6 +23,10 @@ exclude_docs: |
 not_in_nav: |
   reviews/*
 
+# A link to a missing heading fails `mkdocs build --strict`, the same as a link to a missing page.
+validation:
+  anchors: warn
+
 theme:
   name: material
   palette:

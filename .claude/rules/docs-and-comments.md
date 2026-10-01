@@ -76,6 +76,13 @@ either — e.g. an error body must say `verify <call> to transmit — control-ve
 
 ---
 
+## Enforced in CI
+
+`tools/checks/docs.mjs` (run in the `lint + format` job) fails on the codes and story phrases above in the
+manual, the root documents and the READMEs, on configuration keys missing from
+`docs/reference/configuration.md` (or documented but unread), on manual pages outside the nav, and on broken
+links outside the manual. It cannot judge subtler story-telling or code comments; review still does.
+
 ## Applies to NEW code
 
 This is not a one-time cleanup — it is the standing bar for every comment and doc written from now on.
