@@ -1,0 +1,89 @@
+/* Offline: the map's offline banner and the Offline panel (packs, new pack). */
+@layer surfaces {
+  /* over the map while it shows pack data: where the caches came from, and the way to the packs */
+  .offline-banner {
+    position: absolute;
+    top: var(--sp-3);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-map-ui);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3);
+    max-width: calc(100% - 2 * var(--sp-4));
+    padding: var(--sp-2) var(--sp-4);
+    border: 1px solid var(--hair);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--r-6);
+    background: color-mix(in oklch, var(--surface) 92%, transparent);
+    color: var(--ink);
+    font-size: var(--fs-md);
+  }
+  .offline-banner button {
+    min-height: var(--hit);
+  }
+
+  .packs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .pack {
+    display: grid;
+    gap: var(--sp-2);
+    padding: var(--sp-3) 0;
+    border-top: 1px solid var(--hair);
+  }
+  .pack .row,
+  .newpack .row {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+  .pack progress,
+  .newpack progress {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .newpack {
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .newpack .slider {
+    display: grid;
+    gap: var(--sp-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .newpack .slider input {
+    accent-color: var(--accent);
+    min-height: var(--hit);
+  }
+  .newpack > button {
+    justify-self: start;
+    min-height: var(--hit);
+  }
+  .pack-types {
+    display: grid;
+    gap: var(--sp-1);
+  }
+  .pack-estimate {
+    display: grid;
+    gap: var(--sp-3);
+  }
+  .pack-estimate p {
+    margin: 0;
+  }
+  .pack-estimate fieldset {
+    display: grid;
+    gap: var(--sp-2);
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--hair);
+    border-radius: var(--r-6);
+  }
+  .pack-estimate label {
+    display: flex;
+    gap: var(--sp-2);
+    align-items: baseline;
+  }
+}

@@ -118,8 +118,20 @@ callsign, it can also be **announced to APRS-IS**.
 
 **Without a connection.** Once you have opened the app with a connection, it opens without one too, on the
 phone where you used it (adding it to the home screen helps the phone keep it). It remembers who you
-signed in as, so you log finds offline; the map shows the caches of the area you last browsed. When a new
-version of the app is ready it says so, and updates only when you tap **Reload**.
+signed in as, so you log finds offline. When a new version of the app is ready it says so, and updates
+only when you tap **Reload**.
+
+**Offline packs.** Before a trip, open **Offline** (or **Offline packs** in **Nearby**) and make a pack of a
+Maidenhead locator square: type it, or take the field (`JN`), square (`JN77`), subsquare (`JN77sb`) or
+extended square (`JN77sb42`) at the map centre — the square is outlined on the map, and a longer locator is
+a smaller pack. Optionally keep only some cache types. **Check size** shows how many caches it holds and
+what images would add — none, a thumbnail per cache, or every image — before anything is kept. A pack
+holds each cache's description, hint, latest 5 logs and the shape of its stages, at most 5000 caches and
+250 MB. Offline, the map shows the caches of every pack in view and says which pack and how old it is; a
+cache page shows its stored copy. **Refresh** brings a pack up to date, and costs almost nothing when
+nothing changed; a pack older than a week says so. The area you last browsed is kept automatically as well.
+The browser is asked to keep your packs; if it may clear them when space runs low, the Offline panel says
+so.
 
 No signal at the cache? The find is **Saved — offline, will sync when you're back online**. It is signed
 with the time you logged it, and when it reaches the instance it is verified at that time, not at the
@@ -193,7 +205,7 @@ A multi-stage cache shows **Stages · 1/3 unlocked**. Unlock the next stage by:
    - **Local only** — stays on this instance. The hint is never shared.
 5. Tap **Hide cache**. It gets a code like `AC-1234`.
 
-Add photos afterwards from the cache's **Media** section. A **Living (APRS)** cache asks for the station
+Add photos afterwards from the cache's **Media** section. The app scales a photo to at most 1600 pixels before it uploads and stores a small thumbnail beside it, so the gallery and offline packs load little. A **Living (APRS)** cache asks for the station
 callsign it follows; you can also create one from **Settings → My stations**.
 
 The hide form does not set a cache's stages or raise its minimum tier. Both are owner updates through the

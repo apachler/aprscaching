@@ -16,7 +16,7 @@ import type { CacheLogEntry } from "@aprscaching/shared";
 
 const memStore = (): QueueStore => {
   const m = new Map<string, string>();
-  return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v) };
+  return { get: async (k) => m.get(k) ?? null, set: async (k, v) => void m.set(k, v) };
 };
 const T0 = 1_700_000_000_000;
 const body = (comment?: string) => ({ logType: "found", comment });
@@ -25,40 +25,40 @@ const fails = (f: SendFailure) => () => Promise.reject(f);
 describe("the offline log queue", () => {
   it("keeps every log while there is no connection", async () => {
     const s = memStore();
-    enqueue(s, { cacheId: 1, body: body() }, T0);
-    enqueue(s, { cacheId: 2, body: body() }, T0);
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, body: body() }, T0);
     const r = await flush(s, fails({ kind: "offline" }), T0);
     expect(r).toEqual({ sent: 0, refused: 0 });
-    expect(loadQueue(s).map((q) => q.cacheId)).toEqual([1, 2]);
-    expect(loadAttention(s)).toEqual([]);
+    expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([1, 2]);
+    expect(await loadAttention(s)).toEqual([]);
   });
 
   it("sends what it can and keeps the rest", async () => {
     const s = memStore();
-    for (const id of [1, 2, 3]) enqueue(s, { cacheId: id, body: body() }, T0);
+    for (const id of [1, 2, 3]) await enqueue(s, { cacheId: id, body: body() }, T0);
     const r = await flush(s, (it) => (it.cacheId === 2 ? Promise.reject({ kind: "retry" }) : Promise.resolve()), T0);
     expect(r.sent).toBe(2);
-    expect(loadQueue(s).map((q) => q.cacheId)).toEqual([2]);
+    expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 
   it("moves a refused log to needs-attention with the server's reason, never away", async () => {
     const s = memStore();
-    enqueue(s, { cacheId: 7, body: body("hello"), label: "AC-7" }, T0);
+    await enqueue(s, { cacheId: 7, body: body("hello"), label: "AC-7" }, T0);
     const r = await flush(
       s,
       fails({ kind: "refused", status: 400, reason: "author key not registered to callsign" }),
       T0,
     );
     expect(r.refused).toBe(1);
-    expect(loadQueue(s)).toEqual([]);
-    expect(loadAttention(s)).toMatchObject([
+    expect(await loadQueue(s)).toEqual([]);
+    expect(await loadAttention(s)).toMatchObject([
       { cacheId: 7, label: "AC-7", reason: "author key not registered to callsign", status: 400, refusedAt: T0 },
     ]);
   });
 
   it("retries a server error with backoff, and not before it is due", async () => {
     const s = memStore();
-    enqueue(s, { cacheId: 1, body: body() }, T0);
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
     const first = await flush(s, fails({ kind: "retry" }), T0);
     expect(first.nextAt).toBe(T0 + backoffMs(1));
     let tried = 0;
@@ -71,7 +71,7 @@ describe("the offline log queue", () => {
     const second = await flush(s, counting, T0 + backoffMs(1));
     expect(tried).toBe(1);
     expect(second.nextAt).toBe(T0 + backoffMs(1) + backoffMs(2));
-    expect(loadQueue(s)[0]?.attempts).toBe(2);
+    expect((await loadQueue(s))[0]?.attempts).toBe(2);
   });
 
   it("backs off from 30 s, doubling, to at most 30 minutes", () => {
@@ -81,21 +81,34 @@ describe("the offline log queue", () => {
 
   it("puts a refused log back with an edited comment, or discards it on request", async () => {
     const s = memStore();
-    enqueue(s, { cacheId: 1, body: body("old") }, T0);
-    enqueue(s, { cacheId: 2, body: body() }, T0);
+    await enqueue(s, { cacheId: 1, body: body("old") }, T0);
+    await enqueue(s, { cacheId: 2, body: body() }, T0);
     await flush(s, fails({ kind: "refused", status: 404, reason: "no such cache" }), T0);
-    expect(loadAttention(s)).toHaveLength(2);
-    retryAttention(s, 0, T0 + 1, "new");
-    expect(loadQueue(s)).toMatchObject([{ cacheId: 1, body: { comment: "new" }, queuedAt: T0 + 1 }]);
-    expect(loadQueue(s)[0]).not.toHaveProperty("reason");
-    discardAttention(s, 0);
-    expect(loadAttention(s)).toEqual([]);
+    expect(await loadAttention(s)).toHaveLength(2);
+    await retryAttention(s, 0, T0 + 1, "new");
+    expect(await loadQueue(s)).toMatchObject([{ cacheId: 1, body: { comment: "new" }, queuedAt: T0 + 1 }]);
+    expect((await loadQueue(s))[0]).not.toHaveProperty("reason");
+    await discardAttention(s, 0);
+    expect(await loadAttention(s)).toEqual([]);
   });
 
-  it("reads a damaged store as empty", () => {
+  it("keeps a log queued while a flush is still sending", async () => {
     const s = memStore();
-    s.set("acs.logqueue", "{not json");
-    expect(loadQueue(s)).toEqual([]);
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await flush(
+      s,
+      async () => {
+        await enqueue(s, { cacheId: 2, body: body() }, T0 + 5); // logged offline during the sync
+      },
+      T0,
+    );
+    expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
+  });
+
+  it("reads a damaged store as empty", async () => {
+    const s = memStore();
+    await s.set("acs.logqueue", "{not json");
+    expect(await loadQueue(s)).toEqual([]);
   });
 });
 

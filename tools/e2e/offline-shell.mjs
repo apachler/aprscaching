@@ -7,8 +7,10 @@
  *   1. Serve apps/web/dist (build it first: pnpm --filter @aprscaching/web build) with a stand-in
  *      gateway that answers the session check with a signed-in call.
  *   2. Open the app: the service worker installs, stores the shell and takes control.
- *   3. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
- *      call, with the map (MapLibre comes from the shell too).
+ *   3. Make an offline pack of the locator square at the map centre in the Offline panel (the stand-in
+ *      gateway answers with one cache in the middle of the square), so it lands in IndexedDB.
+ *   4. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
+ *      call, with the map (MapLibre comes from the shell too) showing the pack's caches.
  *
  * If no Chromium is found it prints SKIP and exits 0, like audio-mic.mjs, and fails in CI (`CI` set), where
  * the e2e-offline job installs one.
@@ -19,6 +21,7 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { locatorBounds } from "../../packages/shared/src/offlinepack.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIST = path.join(ROOT, "apps/web/dist");
@@ -58,7 +61,46 @@ const TYPES = {
   ".svg": "image/svg+xml",
 };
 
-/** The built app, plus a stand-in gateway: a signed-in session, and nothing else (every API call fails). */
+/** One offline pack for the requested locator square: a single cache in its middle. */
+function pack(url) {
+  const [w, s, e, n] = locatorBounds(url.searchParams.get("grid") ?? "JN77");
+  const cache = {
+    globalId: "e2e.test:cache:1",
+    id: 1,
+    code: "AC-E2E",
+    ownerCall: "OE8OWN",
+    title: "Offline test cache",
+    type: "traditional",
+    status: "active",
+    difficulty: 1,
+    terrain: 1,
+    lat: (s + n) / 2,
+    lon: (w + e) / 2,
+    origin: "e2e.test",
+    mirrored: false,
+    originTrust: "native",
+    source: "native",
+    sourceName: null,
+    sourceUrl: null,
+    stationCall: null,
+    minTrust: null,
+    fedScope: "public",
+    driveIn: false,
+    country: null,
+    tags: [],
+    externalId: null,
+    hint: "under the stone",
+    description: "for the offline test",
+    createdAt: 1,
+    updatedAt: 1,
+    stages: [],
+    logs: [],
+    images: [],
+  };
+  return { instance: "e2e.test", generation: "e2e1", builtAt: 1, caches: [cache] };
+}
+
+/** The built app, plus a stand-in gateway: a signed-in session, an empty map, one offline pack, nothing else. */
 function serve() {
   return createServer((req, res) => {
     const url = new URL(req.url, "http://x");
@@ -70,6 +112,8 @@ function serve() {
       return send(200, TYPES[".json"], JSON.stringify({ callsign: CALL, verified: true }));
     if (url.pathname === "/.well-known/aprscaching")
       return send(200, TYPES[".json"], JSON.stringify({ instance: "e2e.test" }));
+    if (url.pathname === "/api/caches") return send(200, TYPES[".json"], JSON.stringify({ caches: [] }));
+    if (url.pathname === "/api/offline/pack") return send(200, TYPES[".json"], JSON.stringify(pack(url)));
     if (/^\/(api|auth|federation|ws|health)\b/.test(url.pathname))
       return send(404, TYPES[".json"], JSON.stringify({ error: "not in this test" }));
     let file = path.join(DIST, path.normalize(decodeURIComponent(url.pathname)));
@@ -107,6 +151,9 @@ async function main() {
   };
   try {
     const context = await browser.newContext();
+    // the online basemap's host is unreachable throughout, so a cached copy of its style can never make the
+    // offline map work by accident: the map has to fall back to the self-contained style
+    await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (r) => r.abort());
     const page = await context.newPage();
     await page.goto(base);
     await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 60_000 });
@@ -120,6 +167,17 @@ async function main() {
     });
     check(`the shell is stored (${stored} files)`, stored > 10);
 
+    await page.click('.rail button[title="Offline"]');
+    await page.click('.newpack .seg button:has-text("Subsquare")');
+    await page.click('button:has-text("Check size")');
+    await page.waitForSelector(".pack-estimate", { timeout: 15_000 });
+    await page.click('.pack-estimate button:has-text("Download")');
+    const saved = await page
+      .waitForSelector('.pack:has-text("1 caches")', { timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    check("a pack of the subsquare at the map centre is saved (IndexedDB)", saved);
+
     await context.setOffline(true);
     await page.reload();
     const signedIn = await page
@@ -132,6 +190,11 @@ async function main() {
       .then(() => true)
       .catch(() => false);
     check("offline: the map loads from the shell", map);
+    const banner = await page
+      .waitForSelector('.offline-banner:has-text("caches from pack")', { timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    check("offline: the map shows the pack's caches and says so", banner);
     const pushHandlers = await page.evaluate(async () => {
       const reg = await navigator.serviceWorker.getRegistration();
       return !!reg?.pushManager;

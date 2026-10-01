@@ -170,6 +170,21 @@ const tb = await call("POST", `/api/caches/${id}/logs`, {
 });
 ok("Tier B verified (app_geo)", tb.data?.verified === true && tb.data?.tier === "B", JSON.stringify(tb.data));
 
+// offline pack: the area's caches with their latest logs (a window query every runtime must run), and a
+// cheap 304 for an unchanged area
+const packRes = await fetch(`${BASE}/api/offline/pack?grid=JN77`);
+const packBody = await packRes.json().catch(() => null);
+const packed = (packBody?.caches ?? []).find((c) => c.id === id);
+ok(
+  "offline pack holds the cache with its log",
+  packRes.status === 200 && packed?.logs?.length > 0,
+  JSON.stringify(packed?.logs?.length),
+);
+const packAgain = await fetch(`${BASE}/api/offline/pack?grid=JN77`, {
+  headers: { "if-none-match": packRes.headers.get("etag") ?? "" },
+});
+ok("offline pack answers 304 when unchanged", packAgain.status === 304, String(packAgain.status));
+
 // Tier A is never granted from APRS-IS: a `qAR,OE8XXX` line naming the attested site is something anyone
 // with a (public) passcode can inject, so the find it backs stays below Tier A
 const isQar = await call(

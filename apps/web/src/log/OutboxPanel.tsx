@@ -24,24 +24,25 @@ const what = (l: QueuedLog<LogBody>) => l.label ?? `cache #${l.cacheId}`;
 export function OutboxPanel(props: { onClose: () => void }) {
   const fmt = useFmt();
   const toast = useToast();
-  const [queue, setQueue] = useState(queuedLogs);
-  const [attention, setAttention] = useState(attentionLogs);
+  const [queue, setQueue] = useState<QueuedLog<LogBody>[]>([]);
+  const [attention, setAttention] = useState<AttentionLog<LogBody>[]>([]);
   const [busy, setBusy] = useState(false);
+  const reread = async () => {
+    setQueue(await queuedLogs());
+    setAttention(await attentionLogs());
+  };
   useEffect(() => {
-    const reread = () => {
-      setQueue(queuedLogs());
-      setAttention(attentionLogs());
-    };
-    window.addEventListener("acs-queued", reread);
-    return () => window.removeEventListener("acs-queued", reread);
+    void reread();
+    const on = () => void reread();
+    window.addEventListener("acs-queued", on);
+    return () => window.removeEventListener("acs-queued", on);
   }, []);
 
   async function syncNow() {
     setBusy(true);
     try {
       const r = await flushLogQueue();
-      setQueue(queuedLogs());
-      setAttention(attentionLogs());
+      await reread();
       if (r.sent) toast(`${r.sent} sent`);
       else if (r.refused) toast(`${r.refused} need attention`);
       else toast(navigator.onLine ? "Nothing could be sent yet; it retries on its own" : "Still offline");
@@ -127,7 +128,7 @@ function AttentionItem(props: { log: AttentionLog<LogBody>; index: number; when:
       confirmLabel: "Discard",
       danger: true,
     });
-    if (ok) discardAttentionLog(props.index);
+    if (ok) await discardAttentionLog(props.index);
   }
 
   const noteId = `outbox-note-${props.index}`;

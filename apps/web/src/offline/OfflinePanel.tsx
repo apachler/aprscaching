@@ -1,0 +1,403 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * Offline — the packs a hunter takes on a trip without signal. Two groups: the user's packs (age, size,
+ * refresh, delete) and a new pack: a Maidenhead locator square (typed, or the field, square, subsquare or
+ * extended square at the map centre, outlined on the map), optional type filters, then "Check size" — the
+ * pack's data comes first and says what images would add — and Download. The browser is asked to keep the
+ * data the first time.
+ */
+import { useEffect, useRef, useState } from "react";
+import { locatorBounds, normalizeLocator, type CacheType, type PackArea, type PackResponse } from "@aprscaching/shared";
+import type * as maplibregl from "maplibre-gl";
+import { maidenhead } from "../map/geo.js";
+import { API_BASE, offlineReady } from "../api.js";
+import { useFmt } from "../format.js";
+import { TYPE_META, TYPE_ORDER } from "../cacheTypes.js";
+import { usePlatform } from "../platform/PlatformContext.js";
+import { Advanced, Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from "../ui/index.js";
+import {
+  estimatePack,
+  fetchPackData,
+  refreshPack,
+  storePack,
+  type PackEstimate,
+  type SaveProgress,
+} from "./download.js";
+import { userPacks } from "./packs.js";
+import type { PackMeta } from "./store.js";
+
+/** A pack older than this shows as stale. */
+const STALE_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+const fetcher = (url: string, init?: RequestInit) => fetch(url, init);
+const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MB`;
+
+export function OfflinePanel(props: { onClose: () => void }) {
+  const [packs, setPacks] = useState<PackMeta[] | null>(null);
+  const reload = async () => setPacks(await userPacks(await offlineReady()));
+  useEffect(() => {
+    void reload();
+  }, []);
+  const online = typeof navigator === "undefined" || navigator.onLine;
+  return (
+    <Panel title="Offline" onClose={props.onClose}>
+      {!online && (
+        <p className="inline-note">No connection: the packs below work, new ones download once you are back online.</p>
+      )}
+      <Group title="Your packs" status={packs ? `${packs.length}` : "…"}>
+        {packs && packs.length === 0 ? (
+          <EmptyState>No packs yet. Make one below before a trip without signal.</EmptyState>
+        ) : (
+          <ul className="packs">
+            {packs?.map((p) => (
+              <PackRow key={p.id} pack={p} onChanged={reload} />
+            ))}
+          </ul>
+        )}
+      </Group>
+      <Group title="New pack" status={online ? undefined : "needs a connection"}>
+        <NewPack onSaved={reload} disabled={!online} />
+      </Group>
+      <StorageLine />
+    </Panel>
+  );
+}
+
+function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
+  const p = props.pack;
+  const fmt = useFmt();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [progress, setProgress] = useState<SaveProgress | null>(null);
+  const stale = Date.now() - p.refreshedAt > STALE_DAYS * DAY_MS;
+  const refresh = async () => {
+    setProgress({ done: 0, total: 0 });
+    try {
+      const r = await refreshPack(await offlineReady(), fetcher, API_BASE, p, Date.now(), { onProgress: setProgress });
+      toast(r.changed ? `${p.name} updated` : `${p.name} is up to date`);
+      props.onChanged();
+    } catch (e) {
+      toast(`Couldn't refresh ${p.name}: ${(e as Error).message}`);
+    } finally {
+      setProgress(null);
+    }
+  };
+  const remove = async () => {
+    if (
+      !(await confirm({
+        title: "Delete this pack?",
+        message: `${p.name} and its images leave this device.`,
+        confirmLabel: "Delete",
+        danger: true,
+      }))
+    )
+      return;
+    await (await offlineReady()).deletePack(p.id);
+    props.onChanged();
+  };
+  return (
+    <li className="pack">
+      <div className="row">
+        <strong>{p.name}</strong>
+        {stale && <Badge kind="warn">{Math.floor((Date.now() - p.refreshedAt) / DAY_MS)} days old</Badge>}
+      </div>
+      <div className="muted fine">
+        {p.cacheCount} caches · {mb(p.sizeBytes)} ·{" "}
+        {p.images === "none" ? "no images" : p.images === "thumbs" ? "thumbnails" : "full images"} · refreshed{" "}
+        {fmt.ago(Math.floor(p.refreshedAt / 1000))}
+      </div>
+      {progress ? (
+        <progress max={progress.total || 1} value={progress.done} aria-label={`Refreshing ${p.name}`} />
+      ) : (
+        <div className="row">
+          <Button onClick={() => void refresh()} disabled={!navigator.onLine}>
+            Refresh
+          </Button>
+          <Button variant="danger" onClick={() => void remove()}>
+            Delete
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** The four locator sizes, from big to small. */
+const SIZES = [
+  { chars: 2, label: "Field", example: "JN" },
+  { chars: 4, label: "Square", example: "JN77" },
+  { chars: 6, label: "Subsquare", example: "JN77sb" },
+  { chars: 8, label: "Extended", example: "JN77sb42" },
+] as const;
+
+/** "160 × 111 km": a locator square's size on the ground. */
+function squareSize(locator: string): string {
+  const [w, s, e, n] = locatorBounds(locator);
+  const km = (deg: number, atLat = 0) => deg * 111.32 * Math.cos((atLat * Math.PI) / 180);
+  const fmt = (v: number) => (v >= 10 ? `${Math.round(v)}` : v >= 1 ? v.toFixed(1) : `${Math.round(v * 1000)} m`);
+  const x = km(e - w, (s + n) / 2),
+    y = km(n - s);
+  return x >= 1 ? `${fmt(x)} × ${fmt(y)} km` : `${fmt(x)} × ${fmt(y)}`;
+}
+
+function NewPack(props: { onSaved: () => void; disabled: boolean }) {
+  const { map } = usePlatform();
+  const toast = useToast();
+  const [input, setInput] = useState("");
+  const [name, setName] = useState("");
+  const [types, setTypes] = useState<CacheType[]>([]);
+  const [data, setData] = useState<{ area: PackArea; data: PackResponse; est: PackEstimate } | null>(null);
+  const [images, setImages] = useState<PackMeta["images"]>("thumbs");
+  const [busy, setBusy] = useState<"check" | "save" | null>(null);
+  const [progress, setProgress] = useState<SaveProgress | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const abort = useRef<AbortController | null>(null);
+  const locator = normalizeLocator(input);
+  useSquareOutline(map, locator);
+
+  /** The square of the given size at the map centre. */
+  const fromMap = (chars: number) => {
+    const c = map?.getCenter();
+    if (!c) return;
+    setInput(maidenhead(c.lat, c.lng, chars));
+    setData(null);
+    setErr(null);
+  };
+
+  const check = async () => {
+    if (!locator) return setErr("Enter a Maidenhead locator, such as JN77 or JN77sb.");
+    const area: PackArea = { locator };
+    setBusy("check");
+    setErr(null);
+    try {
+      const d = await fetchPackData(fetcher, API_BASE, area, { types });
+      if (d === "unchanged") return;
+      const est = estimatePack(d);
+      setData({ area, data: d, est });
+      if (!est.fullFits && images === "full") setImages("thumbs");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const save = async () => {
+    if (!data) return;
+    setBusy("save");
+    abort.current = new AbortController();
+    try {
+      const store = await offlineReady();
+      const first = (await userPacks(store)).length === 0;
+      const now = Date.now();
+      await storePack(
+        store,
+        fetcher,
+        API_BASE,
+        {
+          id: `pack-${now.toString(36)}`,
+          name: name.trim() || data.area.locator,
+          area: data.area,
+          filters: { types },
+          images,
+          createdAt: now,
+          refreshedAt: now,
+        },
+        data.data,
+        { onProgress: setProgress, signal: abort.current.signal },
+      );
+      if (first && navigator.storage?.persist) {
+        const kept = await navigator.storage.persist().catch(() => false);
+        toast(kept ? "Pack saved; the browser keeps it" : "Pack saved; the browser may clear it when space runs low");
+      } else toast("Pack saved");
+      setData(null);
+      setName("");
+      props.onSaved();
+    } catch (e) {
+      setErr(
+        (e as Error).name === "AbortError" ? "The download was stopped; nothing was saved." : (e as Error).message,
+      );
+    } finally {
+      setBusy(null);
+      setProgress(null);
+    }
+  };
+
+  const est = data?.est;
+  return (
+    <div className="newpack">
+      <label>
+        Maidenhead locator
+        <input
+          className="mono"
+          value={input}
+          placeholder="JN77sb"
+          autoCapitalize="characters"
+          spellCheck={false}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setData(null);
+          }}
+        />
+      </label>
+      <div className="seg" role="group" aria-label="Take the square at the map centre">
+        {SIZES.map((sz) => (
+          <button
+            key={sz.chars}
+            onClick={() => fromMap(sz.chars)}
+            title={`The ${sz.label.toLowerCase()} at the map centre, e.g. ${sz.example}`}
+          >
+            {sz.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted fine">
+        {locator
+          ? `${locator}: ${squareSize(locator)}, outlined on the map.`
+          : "Type a locator, or take the field, square, subsquare or extended square at the map centre. A longer locator is a smaller pack."}
+      </p>
+      <Advanced label="Only some cache types">
+        <div className="pack-types">
+          {TYPE_ORDER.map((t) => (
+            <label key={t}>
+              <input
+                type="checkbox"
+                checked={types.includes(t)}
+                onChange={(e) => {
+                  setTypes(e.target.checked ? [...types, t] : types.filter((x) => x !== t));
+                  setData(null);
+                }}
+              />{" "}
+              {TYPE_META[t].label}
+            </label>
+          ))}
+          <p className="muted fine">None ticked: every type.</p>
+        </div>
+      </Advanced>
+      {err && <p className="inline-note bad">{err}</p>}
+      {!data ? (
+        <Button variant="primary" onClick={() => void check()} disabled={props.disabled || busy != null || !locator}>
+          {busy === "check" ? "Checking…" : "Check size"}
+        </Button>
+      ) : (
+        <div className="pack-estimate">
+          <p>
+            <strong>{est!.caches}</strong> caches in {data.area.locator}, {mb(est!.dataBytes)} of data.
+          </p>
+          <fieldset>
+            <legend>Images</legend>
+            <label>
+              <input type="radio" name="images" checked={images === "none"} onChange={() => setImages("none")} /> None
+            </label>
+            <label>
+              <input type="radio" name="images" checked={images === "thumbs"} onChange={() => setImages("thumbs")} /> A
+              thumbnail per cache: {mb(est!.thumbsBytes)}
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="images"
+                checked={images === "full"}
+                disabled={!est!.fullFits}
+                onChange={() => setImages("full")}
+              />{" "}
+              Every image: {mb(est!.fullBytes)}
+              {!est!.fullFits && " — more than a pack holds"}
+            </label>
+          </fieldset>
+          <label>
+            Name
+            <input value={name} placeholder={data.area.locator} onChange={(e) => setName(e.target.value)} />
+          </label>
+          {progress ? (
+            <div className="row">
+              <progress max={progress.total || 1} value={progress.done} aria-label="Downloading images" />
+              <Button onClick={() => abort.current?.abort()}>Stop</Button>
+            </div>
+          ) : (
+            <div className="row">
+              <Button variant="primary" onClick={() => void save()} disabled={busy != null}>
+                Download
+              </Button>
+              <Button variant="link" onClick={() => setData(null)}>
+                Change the locator
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const OUTLINE = "acs-pack-square";
+
+/** Outline the locator square on the map while it is being chosen; removed with the panel. */
+function useSquareOutline(map: maplibregl.Map | null, locator: string | null) {
+  useEffect(() => {
+    if (!map) return;
+    const clear = () => {
+      try {
+        if (map.getLayer(OUTLINE)) map.removeLayer(OUTLINE);
+        if (map.getSource(OUTLINE)) map.removeSource(OUTLINE);
+      } catch {
+        /* the style was replaced meanwhile */
+      }
+    };
+    clear();
+    if (!locator) return clear;
+    const [w, s, e, n] = locatorBounds(locator);
+    try {
+      map.addSource(OUTLINE, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [w, s],
+              [e, s],
+              [e, n],
+              [w, n],
+              [w, s],
+            ],
+          },
+        },
+      });
+      // a literal colour: MapLibre paints into the GPU canvas and cannot read CSS tokens
+      map.addLayer({
+        id: OUTLINE,
+        type: "line",
+        source: OUTLINE,
+        paint: { "line-color": "#2D8BAB", "line-width": 2, "line-dasharray": [2, 1] },
+      });
+    } catch {
+      /* the style is still loading: no outline this time */
+    }
+    return clear;
+  }, [map, locator]);
+}
+
+/** How much the browser grants this site, and how much is used. */
+function StorageLine() {
+  const [s, setS] = useState<{ usage: number; quota: number; persisted: boolean } | null>(null);
+  useEffect(() => {
+    void (async () => {
+      if (!navigator.storage?.estimate) return;
+      const e = await navigator.storage.estimate();
+      const persisted = (await navigator.storage.persisted?.().catch(() => false)) ?? false;
+      setS({ usage: e.usage ?? 0, quota: e.quota ?? 0, persisted });
+    })();
+  }, []);
+  if (!s) return null;
+  return (
+    <p className="muted fine">
+      Storage: {mb(s.usage)} of {mb(s.quota)} used.{" "}
+      {s.persisted
+        ? "The browser keeps it."
+        : "The browser may clear it when space runs low; adding the app to the home screen helps."}
+    </p>
+  );
+}

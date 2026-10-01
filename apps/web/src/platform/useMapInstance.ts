@@ -28,7 +28,13 @@ export interface MapHandlers {
  */
 export function useMapInstance(
   node: HTMLElement | null,
-  opts: { style: () => string | StyleSpecification; center: [number, number]; zoom: number },
+  opts: {
+    style: () => string | StyleSpecification;
+    /** The style to fall back to when `style` cannot load (no connection to the tile service). */
+    fallbackStyle?: () => StyleSpecification;
+    center: [number, number];
+    zoom: number;
+  },
   handlers: MapHandlers,
 ): { map: maplibregl.Map | null; mapRef: React.RefObject<maplibregl.Map | null>; mapFailed: boolean } {
   const [map, setMap] = useState<maplibregl.Map | null>(null);
@@ -63,6 +69,22 @@ export function useMapInstance(
     }
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
     // the locate button joins this stack from LocateControl, driven by the app's own location helper
+    // A remote style that cannot load (offline, or the tile service down) never fires "load", so the
+    // map would show nothing and load no caches: switch to the self-contained fallback once.
+    // A failed tile while the style is still loading is not the style failing, so it takes the style's own
+    // URL failing, or no connection at all.
+    let fellBack = false;
+    const styleUrl = (() => {
+      const st = init.current.style();
+      return typeof st === "string" ? st.split("?")[0] : null;
+    })();
+    m.on("error", (e) => {
+      if (fellBack || !styleUrl || m.isStyleLoaded() || !init.current.fallbackStyle) return;
+      const failed = (e.error as { url?: string } | undefined)?.url?.split("?")[0];
+      if (failed !== styleUrl && navigator.onLine) return;
+      fellBack = true;
+      m.setStyle(init.current.fallbackStyle());
+    });
     m.on("load", () => h.current.onLoad(m));
     m.on("moveend", () => h.current.onMoveEnd(m));
     m.on("click", (e) => h.current.onClick(m, e));

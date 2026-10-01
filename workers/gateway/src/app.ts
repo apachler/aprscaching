@@ -98,6 +98,7 @@ import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
+import { handleOfflinePack } from "./offlinepack.js";
 import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
 import { handleFederationSubmit, handleSubmitMarks, pushToHub, type PushResult } from "./fedpush.js";
 import { pruneMeshcom, handleMeshcomNodes, handleMeshcomLinks } from "./meshcom.js";
@@ -146,6 +147,7 @@ import {
   handleListCacheMedia,
   handleAddCacheMedia,
   handleDeleteCacheMedia,
+  handlePutMediaThumb,
 } from "./stages.js";
 import {
   handleAccountExport,
@@ -588,6 +590,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // caching REST
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
+  if (p === "/api/offline/pack" && m === "GET") return handleOfflinePack(req, env); // a trip's offline pack
   if (p === "/api/caches" && m === "POST") return handleCreateCache(req, env);
 
   // enriched as-you-type search across caches + stations
@@ -661,6 +664,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const cacheMediaDel = /^\/api\/caches\/(\d+)\/media\/(\d+)$/.exec(p);
   if (cacheMediaDel && m === "DELETE")
     return handleDeleteCacheMedia(req, env, Number(cacheMediaDel[1]), Number(cacheMediaDel[2]));
+  const cacheMediaThumb = /^\/api\/caches\/(\d+)\/media\/(\d+)\/thumb$/.exec(p);
+  if (cacheMediaThumb && m === "PUT")
+    return handlePutMediaThumb(req, env, Number(cacheMediaThumb[1]), Number(cacheMediaThumb[2]));
   const stagesMatch = /^\/api\/caches\/(\d+)\/stages$/.exec(p);
   if (stagesMatch) {
     const id = Number(stagesMatch[1]);

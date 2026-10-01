@@ -71,7 +71,8 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
             <figure key={it.id} className="media-item">
               {it.kind === "image" ? (
                 <a href={mediaUrl(it.url)} target="_blank" rel="noreferrer noopener">
-                  <img src={mediaUrl(it.url)} alt={it.title ?? "cache photo"} loading="lazy" />
+                  {/* the gallery loads the small copy; the photo itself opens on a tap */}
+                  <img src={mediaUrl(it.thumbUrl ?? it.url)} alt={it.title ?? "cache photo"} loading="lazy" />
                 </a>
               ) : it.kind === "audio" ? (
                 <audio controls preload="none" src={mediaUrl(it.url)} />

@@ -63,6 +63,9 @@ import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { OutboxPanel } from "./log/OutboxPanel.js";
+import { OfflinePanel } from "./offline/OfflinePanel.js";
+import type { OfflineSource } from "./offline/packs.js";
+import type { OfflineFrom } from "./api.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { ShackPanel } from "./shack/ShackPanel.js";
@@ -106,7 +109,12 @@ const STYLE: string | StyleSpecification =
 /** The base map style for the active theme: Phosphor always uses its keyless phosphor graticule so the
  *  map matches the terminal chrome; Modern uses the configured basemap. */
 const baseStyle = (): string | StyleSpecification =>
-  document.documentElement.dataset.theme === "phosphor" ? buildPhosphorStyle() : STYLE;
+  document.documentElement.dataset.theme === "phosphor"
+    ? buildPhosphorStyle()
+    : // without a connection a remote style cannot load: start on the self-contained grid
+      typeof STYLE === "string" && !navigator.onLine
+      ? buildGraticuleStyle()
+      : STYLE;
 
 const NONE: never[] = []; // a layer that is off draws no markers
 /** localStorage key remembering the live-stations layer switch in this browser. */
@@ -187,6 +195,9 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CacheDetail | null>(null);
+  // offline: where the map's caches and the open cache page came from (an offline pack)
+  const [offlineMap, setOfflineMap] = useState<{ source: OfflineSource | null } | null>(null);
+  const [detailFrom, setDetailFrom] = useState<OfflineFrom | null>(null);
   const [remote, setRemote] = useState<MapCache | null>(null); // a mirrored (peer) cache, read-only
   const [ready, setReady] = useState(false);
   const [nearPrompt, setNearPrompt] = useState<GeofencePrompt | null>(null);
@@ -351,7 +362,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const { map, mapRef, mapFailed } = useMapInstance(
     mapNode,
-    { style: baseStyle, center: DEFAULT_CENTER, zoom: 9 },
+    { style: baseStyle, fallbackStyle: buildGraticuleStyle, center: DEFAULT_CENTER, zoom: 9 },
     {
       onLoad: (m) => {
         setCenter([m.getCenter().lat, m.getCenter().lng]);
@@ -530,7 +541,9 @@ export default function Platform({ session, startTour }: { session: SessionState
     const bbox = m ? bboxOf(m) : fallbackBbox(location.hash, DEFAULT_CENTER);
     subscribeLive(bbox);
     try {
-      setCaches((await listCaches(bbox, includeUnvettedRef.current)).caches);
+      const r = await listCaches(bbox, includeUnvettedRef.current);
+      setCaches(r.caches);
+      setOfflineMap(r.offline ? { source: r.source ?? null } : null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -648,7 +661,9 @@ export default function Platform({ session, startTour }: { session: SessionState
     let live = true;
     getCache(selectedId, callsignRef.current)
       .then((r) => {
-        if (live) setDetail(r.cache);
+        if (!live) return;
+        setDetail(r.cache);
+        setDetailFrom(r.offlineFrom ?? null);
       })
       .catch(() => {
         // the core cacher action must never fail silently: say so and close the empty selection
@@ -665,7 +680,9 @@ export default function Platform({ session, startTour }: { session: SessionState
   const reloadDetail = useCallback(async () => {
     if (selectedId == null) return;
     try {
-      setDetail((await getCache(selectedId, callsignRef.current)).cache);
+      const r = await getCache(selectedId, callsignRef.current);
+      setDetail(r.cache);
+      setDetailFrom(r.offlineFrom ?? null);
     } catch {
       toast("Couldn't refresh the cache — check your connection.");
     }
@@ -791,11 +808,13 @@ export default function Platform({ session, startTour }: { session: SessionState
                   if (!op) closeAll();
                   openCache(id);
                 }}
+                onOffline={() => openView(panel("offline"))}
                 onClose={closeView}
               />
             )}
             {isPanel("activity") && <ActivityPanel onBoard={() => openView(panel("ranks"))} onClose={closeView} />}
             {isPanel("outbox") && <OutboxPanel onClose={closeView} />}
+            {isPanel("offline") && <OfflinePanel onClose={closeView} />}
             {isPanel("messages") && <MessagesPanel onClose={closeView} />}
             {isPanel("filter") && (
               <FilterPanel
@@ -898,6 +917,19 @@ export default function Platform({ session, startTour }: { session: SessionState
                   </div>
                 </div>
               )}
+              {offlineMap && (
+                <div className="offline-banner" role="status">
+                  <span>
+                    Offline —{" "}
+                    {offlineMap.source
+                      ? `caches from ${offlineMap.source.auto ? "" : "pack "}“${offlineMap.source.name}”, ${ageText(offlineMap.source.refreshedAt)}${offlineMap.source.packs > 1 ? ` (+${offlineMap.source.packs - 1} more)` : ""}`
+                      : "no offline pack covers this area"}
+                  </span>
+                  <button className="link" onClick={() => openView(panel("offline"))}>
+                    Packs
+                  </button>
+                </div>
+              )}
               {/* the viewer's own fix: the cache sheet shows the distance to it */}
               <LocateControl map={map} onFix={(lat, lon) => setHere({ lat, lon })} />
               {ready && <BasemapSwitcher map={map} styleEpoch={styleEpoch} />}
@@ -975,6 +1007,7 @@ export default function Platform({ session, startTour }: { session: SessionState
                     ? (spots.find((s) => haversine(s.lat, s.lon, detail.lat!, detail.lon!) <= 300) ?? null)
                     : null
                 }
+                offlineFrom={detailFrom}
                 onClose={() => setSelectedId(null)}
                 onLogged={reloadDetail}
                 onSignIn={() => openView(panel("signin"))}
@@ -1003,4 +1036,12 @@ export default function Platform({ session, startTour }: { session: SessionState
       </FormatContext.Provider>
     </PlatformContext.Provider>
   );
+}
+
+/** "2 days old", "3 h old", "just refreshed": the age of an offline pack. */
+function ageText(refreshedAtMs: number): string {
+  const h = (Date.now() - refreshedAtMs) / 3_600_000;
+  if (h < 1) return "just refreshed";
+  if (h < 48) return `${Math.round(h)} h old`;
+  return `${Math.round(h / 24)} days old`;
 }

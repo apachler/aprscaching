@@ -27,7 +27,8 @@ export type PanelKey =
   | "admin"
   | "docs"
   | "signin"
-  | "outbox";
+  | "outbox"
+  | "offline";
 
 export type View =
   | { kind: "map" }
@@ -52,6 +53,7 @@ const PANEL_KEYS: readonly PanelKey[] = [
   "docs",
   "signin",
   "outbox",
+  "offline",
 ];
 const isPanelKey = (k: string): k is PanelKey => (PANEL_KEYS as readonly string[]).includes(k);
 const isAppId = (k: string): k is ShackAppId => SHACK_APPS.some((a) => a.id === k);
@@ -77,6 +79,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "ranks", label: "Ranks", icon: "ranks", section: "top" },
   { key: "shack", label: "Shack", icon: "tools", section: "top" },
   { key: "profile", label: "You", icon: "profile", section: "bottom", tab: { glyph: "👤", cog: "☺" } },
+  { key: "offline", label: "Offline", icon: "import", section: "bottom" },
   { key: "settings", label: "Settings", icon: "settings", section: "bottom" },
   { key: "admin", label: "Admin", icon: "shield-check", section: "bottom", sysop: true },
 ];
