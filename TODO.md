@@ -430,6 +430,13 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       build lists (`apps/web/vite-sw.ts`), opens the app from it with no network, waits for the user before a
       new version replaces the running one, and keeps Web Push; the last signed-in call is remembered on the
       device for logging offline.
+- [ ] **Run the live mic decode e2e for real** _(P2 · S)_ — the `e2e-audio` CI job installs Chromium with
+  `playwright@1.61.1`, whose revision the repo's `playwright-core` 1.63 does not look for, so
+  `tools/e2e/audio-mic.mjs` prints SKIP and passes without running. Run against a real Chromium, its PSK31
+  decode comes out garbled and different on every run (`" cqde t s nd  teat  q"` for `cq de test`). Fix the
+  decode path (or the synthesised signal's timing), then install the browser with
+  `pnpm exec playwright-core install --with-deps chromium` and fail on a missing browser in CI, as the
+  `e2e-offline` job does.
 - [ ] **10-foot TV mode** _(P2 · S)_ — a kiosk variant for a TV across the room: large type,
       overscan-safe margins, no pointer or hover dependency, and a burn-in guard (slow pixel shift plus a
       dim schedule). One mode covers Fire TV, Android TV, and the Samsung/LG browsers. A free web route is
