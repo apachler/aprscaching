@@ -9,14 +9,23 @@
 import { baseCall } from "./callsign.js";
 import type { ParsedFrame } from "./types.js";
 
+// RF -> IS: `TCPIP` marks a frame that already came from APRS-IS, so it is never sent back up.
 const NO_GATE_TOKENS = ["TCPIP", "TCPXX", "NOGATE", "RFONLY"];
+// IS -> RF: `TCPIP*` is the ordinary path of every message an APRS-IS client sends, so only the
+// explicit do-not-gate tokens block it.
+const NO_TX_GATE_TOKENS = ["TCPXX", "NOGATE", "RFONLY"];
 
 /** Third-party traffic (already gated by someone else) — never re-gate. */
 export const isThirdParty = (payload: string) => payload.startsWith("}");
 
-/** Path carries a do-not-gate token (TCPIP/TCPXX/NOGATE/RFONLY)? */
+/** Path carries a token that keeps an RF frame off APRS-IS (TCPIP/TCPXX/NOGATE/RFONLY)? */
 export function pathBlocksGating(path: string[]): boolean {
   return path.some((p) => NO_GATE_TOKENS.includes(baseCall(p)));
+}
+
+/** Path carries a token that keeps an APRS-IS frame off RF (TCPXX/NOGATE/RFONLY)? */
+export function pathBlocksTxGating(path: string[]): boolean {
+  return path.some((p) => NO_TX_GATE_TOKENS.includes(baseCall(p)));
 }
 
 /** RX-IGate: should this RF-heard frame be relayed to APRS-IS? */
@@ -44,20 +53,41 @@ export function messageAddressee(payload: string): string | null {
 }
 
 /**
- * TX-IGate: should this APRS-IS frame be gated down to RF? Only messages addressed to a station
- * heard locally on RF recently, not blocked/own/third-party. `heardLocally` answers "have we heard
- * this callsign direct on RF lately?". Returns the addressee to gate to, or null.
+ * TX-IGate: should this APRS-IS frame be gated down to RF? Only messages (acks and rejects included,
+ * since an RF station retries until its ack arrives) addressed to a station heard locally on RF
+ * recently, from a sender that is not itself heard locally (the two then reach each other direct),
+ * and not blocked, own or third-party. `heardLocally` answers "have we heard this callsign on RF
+ * lately?". Returns the addressee to gate to, or null.
  */
 export function txIgateTarget(
   f: ParsedFrame,
   gateCall: string,
   heardLocally: (callsign: string) => boolean,
 ): string | null {
-  if (isThirdParty(f.payload) || pathBlocksGating(f.path)) return null;
+  if (isThirdParty(f.payload) || pathBlocksTxGating(f.path)) return null;
   if (baseCall(f.src) === baseCall(gateCall)) return null;
   const addr = messageAddressee(f.payload);
   if (!addr) return null; // only messages are TX-gated
   if (baseCall(addr) === baseCall(gateCall)) return null;
-  if (/^(ack|rej)/i.test(f.payload.slice(11))) return null; // don't gate bare acks
+  if (heardLocally(f.src)) return null;
   return heardLocally(addr) ? addr : null;
+}
+
+/**
+ * The RF frame a TX-IGate transmits for an APRS-IS message: sent under the IGate's own call, with the
+ * original packet carried in third-party format, `}SRC>DST,TCPIP,GATECALL*:<info>`, so the station
+ * identifies as itself on air and receivers still see who wrote the message.
+ */
+export function txIgateFrame(
+  f: ParsedFrame,
+  gateCall: string,
+  opts: { tocall?: string; path?: string[] } = {},
+): { src: string; dst: string; path: string[]; payload: string } {
+  const gate = gateCall.toUpperCase();
+  return {
+    src: gate,
+    dst: (opts.tocall ?? "APZACG").toUpperCase(),
+    path: opts.path ?? [],
+    payload: `}${f.src}>${f.dst},TCPIP,${gate}*:${f.payload}`,
+  };
 }

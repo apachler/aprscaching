@@ -6,6 +6,8 @@ import {
   shouldRxIgate,
   rxIgateLine,
   txIgateTarget,
+  txIgateFrame,
+  pathBlocksTxGating,
   messageAddressee,
   pathBlocksGating,
 } from "../src/index.js";
@@ -72,9 +74,35 @@ describe("TX-IGate", () => {
   it("won't gate to a station not heard locally", () => {
     expect(txIgateTarget(f([], "DL1ABC", ":OE9FAR   :hello{1"), "OE8XXX", local)).toBeNull();
   });
-  it("won't gate non-messages or bare acks", () => {
+  it("gates the ordinary TCPIP* path of an APRS-IS client message", () => {
+    const msg = f(["TCPIP*", "qAC", "T2AUSTRIA"], "DL1ABC", ":OE5LOC   :hi there{1");
+    expect(txIgateTarget(msg, "OE8XXX", local)).toBe("OE5LOC");
+  });
+  it("honours the IS -> RF do-not-gate tokens", () => {
+    for (const tok of ["TCPXX*", "NOGATE", "RFONLY"])
+      expect(txIgateTarget(f([tok, "qAX", "T2AUSTRIA"], "DL1ABC", ":OE5LOC   :hi{1"), "OE8XXX", local)).toBeNull();
+    expect(pathBlocksTxGating(["TCPIP*", "qAC", "T2AUSTRIA"])).toBe(false);
+  });
+  it("gates acks and rejects, which the RF station retries until it hears", () => {
+    expect(txIgateTarget(f(["TCPIP*"], "DL1ABC", ":OE5LOC   :ack1"), "OE8XXX", local)).toBe("OE5LOC");
+    expect(txIgateTarget(f(["TCPIP*"], "DL1ABC", ":OE5LOC   :rej1"), "OE8XXX", local)).toBe("OE5LOC");
+  });
+  it("won't gate non-messages", () => {
     expect(txIgateTarget(f([], "DL1ABC", "!4704.41N/01526.27E>pos"), "OE8XXX", local)).toBeNull();
-    expect(txIgateTarget(f([], "DL1ABC", ":OE5LOC   :ack1"), "OE8XXX", local)).toBeNull();
+  });
+  it("won't gate when the sender is heard locally too", () => {
+    const both = (cs: string) => cs === "OE5LOC" || cs === "OE5NBR";
+    expect(txIgateTarget(f(["TCPIP*"], "OE5NBR", ":OE5LOC   :hi{1"), "OE8XXX", both)).toBeNull();
+  });
+  it("builds a third-party frame under the IGate's own call", () => {
+    const msg = f(["TCPIP*", "qAC", "T2AUSTRIA"], "DL1ABC", ":OE5LOC   :hi there{1");
+    expect(txIgateFrame(msg, "oe8xxx-10")).toEqual({
+      src: "OE8XXX-10",
+      dst: "APZACG",
+      path: [],
+      payload: "}DL1ABC>APRS,TCPIP,OE8XXX-10*::OE5LOC   :hi there{1",
+    });
+    expect(txIgateFrame(msg, "OE8XXX-10", { path: ["WIDE1-1"] }).path).toEqual(["WIDE1-1"]);
   });
   it("messageAddressee parses the 9-char addressee", () => {
     expect(messageAddressee(":OE5LOC   :hi{1")).toBe("OE5LOC");

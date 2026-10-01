@@ -80,9 +80,13 @@ An IGate bridges RF and APRS-IS in both directions. It needs a KISS TNC and both
 - **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct. That copy is for the
   APRS-IS network: no instance attests it, because anyone with a (public) passcode can send the same line.
   Your hearings count toward Tier A through the box's own batch to the gateway, as described above.
-- **TX-IGate** gates APRS-IS messages down to RF, but only to stations heard locally within `IGATE_LOCAL_TTL`
-  (default 30 min), honouring the standard do-not-gate tokens (`TCPIP`, `TCPXX`, `NOGATE`, `RFONLY`),
-  skipping third-party frames, own beacons, and bare acks.
+- **TX-IGate** gates APRS-IS messages, acks and rejects included, down to RF, but only to stations heard
+  locally within `IGATE_LOCAL_TTL` (default 30 min) and only when the sender is not heard locally itself.
+  It honours the IS → RF do-not-gate tokens (`TCPXX`, `NOGATE`, `RFONLY`; the `TCPIP*` every APRS-IS client
+  message carries does not block it) and skips third-party frames and its own traffic. Each message goes out
+  under `IGATE_CALL` in third-party format, `}SENDER>DEST,TCPIP,IGATE_CALL*:<message>`, so the station
+  identifies as itself on air. `IGATE_TX_PATH` sets its RF path (default none, since the addressee was heard
+  locally; e.g. `WIDE1-1`).
 
 ## Digipeater
 
