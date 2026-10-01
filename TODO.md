@@ -581,11 +581,11 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   get full-detail maps without any third-party tile provider. Natural shape: a Protomaps PMTiles
   extract + a self-hosted MapLibre style wired in via `VITE_BASEMAP_STYLE` — which also removes the
   hosted default's dependency on the volunteer-run OpenFreeMap service.
-- [ ] **Load the map's data without the base style** *(P3 · S)* — the first cache fetch runs on
-  MapLibre's `load` event (`Platform.tsx`), which fires only once the base style has loaded. When the
-  online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty until the
-  first pan or zoom. Natural shape: also refresh on the style's `error`, or on a short timeout after the
-  map is created.
+- [ ] **Load the map's data without the base style** *(P3 · S)* — the first cache fetch runs on MapLibre's
+  `load` event (`apps/web/src/platform/useMapInstance.ts`), which fires only once the base style has loaded.
+  When the online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty
+  until the first pan or zoom. Natural shape: also refresh on the style's `error`, or on a short timeout after
+  the map is created.
 
 ## Legal & attribution follow-ups (from the licensing audit)
 

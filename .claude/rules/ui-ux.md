@@ -1,7 +1,7 @@
 # Rule: UI/UX Design Principles
 
 **Scope.** This is the design-principles spec for everything in `apps/web` — the cacher app, the
-shack, and all maintenance/settings surfaces. Claude Code MUST consult this rule **before
+Shack, and all maintenance/settings surfaces. Claude Code MUST consult this rule **before
 building or changing any component or page**, and MUST keep components consistent with it. Styling
 implementation is governed by the companion rule **`.claude/rules/css.md`** (CSS-over-JS, tokens,
 performance) — the two are read together.
@@ -27,7 +27,7 @@ If a screen feels like "a big list of everything," it is wrong. Fix it with the 
 ## 1. Core principles (MUST hold across the app)
 
 1. **Progressive disclosure.** Show the minimum needed now; reveal advanced/rare options on demand.
-   The cacher never sees shack machinery; the operator never sees every knob at once.
+   The cacher never sees Shack machinery; the operator never sees every knob at once.
 2. **Group, never dump.** Related controls MUST be organized into labelled sections/cards with
    clear hierarchy. A flat list of more than ~5–7 sibling controls is a defect.
 3. **Toggle-gated groups.** Any optional subsystem (a transport port, IGate, digipeater, announce,
@@ -53,7 +53,7 @@ If a screen feels like "a big list of everything," it is wrong. Fix it with the 
 
 ## 2. Settings & dense-config architecture (the anti-"big fat list" rule)
 
-This applies to **app settings, account/profile, connections/network config, an individual shack
+This applies to **app settings, account/profile, connections/network config, an individual Shack
 app's surface, and any maintenance page.** (The Shack itself is an app launcher, not a config
 page — see §5.)
 
@@ -123,11 +123,11 @@ group does.
 
 **Navigation**
 - **Bottom tab bar** (mobile) / **left rail** (desktop) for top-level destinations.
-- **Breadcrumb** inside the deeper shack only.
+- **Breadcrumb** inside the deeper Shack only.
 
 **Data display**
 - **List row** — scannable items (Nearby caches, logbook, station list). Consistent row anatomy.
-- **Table** — shack tabular data (stats, port RX/TX) only; not for the cacher surface.
+- **Table** — Shack tabular data (stats, port RX/TX) only; not for the cacher surface.
 - **Badge / chip** — compact status/trust (`Tier A/B/C`, `RF`/`IS`, status colors). One shared
   component, color from tokens.
 - **Stat** — a single highlighted metric (finds, 24h RX).
@@ -167,7 +167,7 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 - **The Shack:** an **app launcher**, not a config page. It lists the operator *apps* (packet
   terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
   into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching
-  *functionality* lives OUTSIDE the shack — on the map (caches, live stations, spots), as its own
+  *functionality* lives OUTSIDE the Shack — on the map (caches, live stations, spots), as its own
   surface (Messages), or in Settings (the config above). Each launched app surface is itself denser,
   grouped by subsystem, with status at headers per §2.
 
@@ -175,7 +175,7 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 
 ## 6. Density & consistency
 
-- **Two density modes:** comfortable (cacher) and compact (shack). MUST be a token-level switch
+- **Two density modes:** comfortable (cacher) and compact (Shack). MUST be a token-level switch
   (spacing/type scale), not per-component guesswork.
 - **Design tokens are the single source of truth** for color, spacing, type, radius, elevation —
   defined and used per `.claude/rules/css.md`. MUST NOT hard-code values or use inline styles for
