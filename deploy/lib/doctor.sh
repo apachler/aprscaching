@@ -55,6 +55,19 @@ json_field() { # json_field JSON FIELD: a top-level string, number or boolean fi
 # curl to the gateway at DOC_BASE, with the shape's options.
 gw_curl() { curl "${DOC_CURL_OPTS[@]+"${DOC_CURL_OPTS[@]}"}" "$@"; }
 
+# The signed credential check of an enrolled box: the shape's own way to run apps/ingest/src/check.ts, else
+# from this checkout with the settings loaded.
+doc_signed_check() {
+  if declare -F shape_doctor_signed_check >/dev/null; then
+    shape_doctor_signed_check
+  elif have node; then
+    # shellcheck disable=SC1090 # the installation's own .env
+    (set -a && . "$DOC_ENV" && set +a && cd "$DEPLOY_DIR/../apps/ingest" && node --import tsx src/check.ts) 2>/dev/null
+  else
+    echo "0 Node.js is needed here to check a signed credential"
+  fi
+}
+
 tcp_open() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
 
 # ---- config -------------------------------------------------------------------------------------------------
@@ -101,7 +114,8 @@ doc_config_secrets() {
   else
     pass config.secrets "no secret is empty-but-required, weak or an example value"
   fi
-  if [ -n "$DOC_INGEST$DOC_BASE" ] && [ -z "$(env_file_get "$DOC_ENV" INGEST_SECRET)" ] && [ "$SHAPE" != desktop ]; then
+  if [ -n "$DOC_INGEST$DOC_BASE" ] && [ -z "$(env_file_get "$DOC_ENV" INGEST_SECRET)" ] &&
+    [ -z "$(env_file_get "$DOC_ENV" BOX_KEY)" ] && [ "$SHAPE" != desktop ]; then
     failc config.ingest_secret "INGEST_SECRET is empty: the gateway refuses to start and the ingest cannot post" \
       "deploy/aprscaching init $SHAPE (it generates one)"
   fi
@@ -219,20 +233,35 @@ if b.get("budget", 0) > 0:
 
 # ---- ingest -------------------------------------------------------------------------------------------------
 doc_ingest() {
-  local secret code url body
+  local secret code url body cred="INGEST_SECRET"
   [ -n "$DOC_INGEST" ] || return 0
+  [ -z "$(doc_get BOX_KEY)" ] || cred="enrolled key ($(doc_get BOX_ID))"
   secret="$(doc_get INGEST_SECRET)"
   url="${DOC_INGEST%/}/check"
-  body="$(curl_secret x-ingest-secret "$secret" -s -w '\n%{http_code}' --max-time 8 "$url" 2>/dev/null || true)"
-  code="${body##*$'\n'}"
-  body="${body%$'\n'*}"
+  if [ -n "$(doc_get BOX_KEY)" ]; then
+    # an enrolled box signs; ask it to check the way it sends (apps/ingest/src/check.ts)
+    body="$(doc_signed_check || true)"
+    code="${body%% *}"
+    body="${body#* }"
+  else
+    body="$(curl_secret x-ingest-secret "$secret" -s -w '\n%{http_code}' --max-time 8 "$url" 2>/dev/null || true)"
+    code="${body##*$'\n'}"
+    body="${body%$'\n'*}"
+  fi
   # a 200 counts only with the gateway's answer: a proxy serving the web app answers 200 too
   [ "$code" != 200 ] || [ "$(json_field "$body" ok)" = true ] || code=proxy
   case "$code" in
-    200) pass ingest.credentials "the gateway accepts this box's INGEST_SECRET" ;;
+    200) pass ingest.credentials "the gateway accepts this box's ${cred}" ;;
     proxy) failc ingest.credentials "$url answers, but not as the gateway" "check the reverse proxy's route for /ingest/*" ;;
-    401) failc ingest.credentials "the gateway refuses this box's INGEST_SECRET" "copy the gateway's INGEST_SECRET to $DOC_ENV" \
-      "$DOCS_URL/rf-ingest.md" ;;
+    401)
+      if [ -n "$(doc_get BOX_KEY)" ]; then
+        failc ingest.credentials "the gateway refuses this box's key (revoked, or enrolled elsewhere)" \
+          "enroll again with a new code: deploy/aprscaching init ingest-box" "$DOCS_URL/rf-ingest.md#enrolling-the-box"
+      else
+        failc ingest.credentials "the gateway refuses this box's INGEST_SECRET" "copy the gateway's INGEST_SECRET to $DOC_ENV" \
+          "$DOCS_URL/rf-ingest.md"
+      fi
+      ;;
     404) warnc ingest.credentials "the gateway at $url is too old to check credentials" "update the gateway" ;;
     *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" "$DOCS_URL/rf-ingest.md" ;;
   esac

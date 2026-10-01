@@ -268,6 +268,51 @@ if have python3; then
 else
   echo "skip doctor (needs python3 for the stub gateway)"
 fi
+# ---- init ingest-box and init cloudflare ------------------------------------------------------------------
+if have python3 && have docker; then
+  PORT_IB="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
+  STUB_INGEST="gw-shared-0123456789abcdef0123" STUB_OPERATOR="x" python3 "$HERE/fixtures/stub-gateway.py" "$PORT_IB" &
+  IB_PID=$!
+  for _ in $(seq 1 50); do curl -fsS "http://127.0.0.1:$PORT_IB/health" >/dev/null 2>&1 && break; sleep 0.1; done
+  IB="$TMP/ib.env"
+  printf 'shape=ingest-box\nenv=%s\n' "$IB" >"$APRSCACHING_SHAPE_FILE"
+  printf 'OPERATOR_SECRET=x\n' >"$IB"
+  check "init ingest-box refuses a gateway's settings" bash -c "'$H' --non-interactive init ingest-box --gateway http://127.0.0.1:$PORT_IB 2>&1 </dev/null | grep -q 'belongs to a gateway'"
+  if "$H" --non-interactive init ingest-box --gateway http://127.0.0.1:$PORT_IB </dev/null >/dev/null 2>&1; then
+    bad "  … and stops"
+  else
+    ok "  … and stops"
+  fi
+  : >"$IB"
+  if "$H" --non-interactive init ingest-box --gateway http://127.0.0.1:1 --shared-secret --call OE8APR --no-start </dev/null >"$TMP/out" 2>"$TMP/err"; then
+    bad "init ingest-box stops when the gateway does not answer"
+  else
+    ok "init ingest-box stops when the gateway does not answer"
+  fi
+  check "init ingest-box sets up a box on the shared secret" env INGEST_SECRET="gw-shared-0123456789abcdef0123" \
+    "$H" --non-interactive init ingest-box --gateway "http://127.0.0.1:$PORT_IB/" --shared-secret --call oe8apr \
+    --kiss 192.168.1.20:8001 --site-call oe8apr-10 --no-start
+  check "  … pointing at the gateway's /ingest" eq "$(env_file_get "$IB" INGEST_URL)" "http://127.0.0.1:$PORT_IB/ingest"
+  check "  … with the secret, owner-only" bash -c "[ \"\$(. '$DEPLOY/lib/env.sh'; env_file_get '$IB' INGEST_SECRET)\" = gw-shared-0123456789abcdef0123 ] && [ \"\$(. '$DEPLOY/lib/env.sh'; file_mode '$IB')\" = 600 ]"
+  check "  … the call upper-cased" eq "$(env_file_get "$IB" APRSIS_CALLSIGN)" "OE8APR"
+  check "  … the TNC split into host and port" eq "$(env_file_get "$IB" KISS_TNC_HOST):$(env_file_get "$IB" KISS_TNC_PORT)" "192.168.1.20:8001"
+  check "  … its receiving site named" eq "$(env_file_get "$IB" RF_SITE_CALL)" "OE8APR-10"
+  check "  … and the shape recorded" grep -qx "shape=ingest-box" "$APRSCACHING_SHAPE_FILE"
+  kill "$IB_PID" 2>/dev/null || true
+  wait "$IB_PID" 2>/dev/null || true
+  rm -f "$APRSCACHING_SHAPE_FILE"
+else
+  echo "skip init ingest-box (needs python3 and docker)"
+fi
+if "$H" --non-interactive init cloudflare --api-base https://w.example --app-url https://a.example </dev/null >"$TMP/out" 2>"$TMP/err"; then
+  bad "init cloudflare asks before deploying the advanced shape"
+else
+  ok "init cloudflare asks before deploying the advanced shape"
+fi
+check "  … and says what it costs" grep -q "D1 bills every row written" "$TMP/out"
+check "  … and recorded nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
+check "init ingest-box --help lists its options" bash -c "'$H' init ingest-box --help | grep -q -- '--code CODE'"
+
 check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"
 check "  … 4.36 too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.36 4 35 t"
 check "  … 4.35s is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35s 4 35 t"

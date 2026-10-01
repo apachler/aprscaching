@@ -44,16 +44,17 @@ Instead of copying `INGEST_SECRET` to a box, you can enroll it. The box then hol
 signs every request to the gateway with it. Revoking that box cuts it off alone; boxes on the shared secret
 keep working beside enrolled ones.
 
-1. Create a one-time code (`POST /api/admin/boxes/codes`, as the sysop or with `OPERATOR_SECRET`). It is
-   shown once, holds 80 random bits, expires after 15 minutes (`ttlMin`, 10–15) and works for one box. Give it
+1. Create a one-time code in **Instance admin → Ingest boxes** (or `POST /api/admin/boxes/codes`, as the sysop
+   or with `OPERATOR_SECRET`). It is shown once, holds 80 random bits, expires after 15 minutes (`ttlMin`, 10–15) and works for one box. Give it
    a `label`, and optionally a `callsign`: a box enrolled for a callsign names only receiving sites of that base
    call.
-2. On the box, enroll with the code (`node --import tsx src/enroll.ts --code ABCD-EFGH-JKLM-NPQR` in
-   `apps/ingest`; see [RF ingest](rf-ingest.md#enrolling-the-box)). It writes `BOX_ID` and `BOX_KEY` into the
-   box's settings, which replace `INGEST_SECRET` there.
-3. The box now appears in `GET /api/admin/boxes`, with who enrolled it, when, and when it was last seen. You
-   own it for [remote control](#remote-control-of-your-box) without a separate pairing step.
-4. Revoke a box with `POST /api/admin/boxes/<id>/revoke`. Its key stops working at once; it comes back only
+2. On the box, run `deploy/aprscaching init ingest-box` and enter the code ([Deployment helpers](helpers.md#ingest-box);
+   without the helper, see [RF ingest](rf-ingest.md#enrolling-the-box)). It writes `BOX_ID` and `BOX_KEY` into
+   the box's settings, which replace `INGEST_SECRET` there.
+3. The box appears in the list under **Ingest boxes**, with when it was enrolled and last seen. When you
+   created the code signed in, you own the box for [remote control](#remote-control-of-your-box) without a
+   separate pairing step.
+4. **Revoke** a box there (or `POST /api/admin/boxes/<id>/revoke`). Its key stops working at once; it comes back only
    with a fresh code and key.
 
 A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.

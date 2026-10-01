@@ -25,11 +25,12 @@ services:
     environment:
       APRSIS_HOST: ${APRSIS_HOST:-rotate.aprs2.net}
       APRSIS_PORT: ${APRSIS_PORT:-14580}
-      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN}
-      APRSIS_PASSCODE: ${APRSIS_PASSCODE}
-      APRSIS_FILTER: ${APRSIS_FILTER}
-      INGEST_URL: ${INGEST_URL} # e.g. https://gateway.<you>.workers.dev/ingest
-      INGEST_SECRET: ${INGEST_SECRET} # or per-operator peer key when feeding a shared gateway
+      APRSIS_CALLSIGN: ${APRSIS_CALLSIGN:-}
+      APRSIS_PASSCODE: ${APRSIS_PASSCODE:-}
+      APRSIS_FILTER: ${APRSIS_FILTER:-}
+      INGEST_URL: ${INGEST_URL:-} # e.g. https://gateway.<you>.workers.dev/ingest
+      # the gateway's shared secret, or nothing for a box enrolled with its own key (BOX_ID + BOX_KEY in .env)
+      INGEST_SECRET: ${INGEST_SECRET:-}
       # the ingest box holds only INGEST_SECRET — never the gateway's operator or session secret
       OPERATOR_SECRET: ""
       SESSION_SECRET: ""

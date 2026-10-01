@@ -6,9 +6,39 @@
 
 CF_WORKER_DIR="$DEPLOY_DIR/../workers/gateway"
 
+# init cloudflare: the advanced shape, kept to the existing one-shot. It says what it costs, runs
+# cloudflare/deploy-cf.sh, and records the Worker's and the app's URLs for status and doctor.
 shape_init() {
-  bash "$DEPLOY_DIR/cloudflare/deploy-cf.sh" "$@"
-  shape_record cloudflare ""
+  local api="${API_BASE:-}" app=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --api-base) api="$2"; shift ;;
+      --app-url) app="$2"; shift ;;
+      -h | --help)
+        printf '%s\n' "deploy/aprscaching init cloudflare [--api-base URL] [--app-url URL]" \
+          "Runs deploy/cloudflare/deploy-cf.sh (wrangler, logged in) and records the Worker's and the app's URLs."
+        return 0
+        ;;
+      *) die "Unknown option $1." ;;
+    esac
+    shift
+  done
+  step "Cloudflare split (advanced)"
+  info "The gateway runs on Cloudflare, and D1 bills every row written: the cost grows with your feed."
+  info "Self-host behind a Cloudflare Tunnel gives the same edge without that cost:"
+  info "  deploy/aprscaching init selfhost  (choose the Cloudflare Tunnel)"
+  info "Sizing and the write budget: docs/reference/cloudflare-costs.md"
+  confirm "Deploy the Cloudflare split anyway?" || die "Nothing was deployed." "Pass --yes to deploy without asking."
+  have wrangler || die "wrangler is not installed." "npm i -g wrangler, then wrangler login."
+  ask api "The Worker's public URL (e.g. https://api.example.net or https://aprscaching.<you>.workers.dev)" "$api" --api-base
+  ask app "The app's public URL on Pages (e.g. https://aprs.example.net)" "$app" --app-url
+  API_BASE="$api" bash "$DEPLOY_DIR/cloudflare/deploy-cf.sh"
+  shape_record cloudflare "" "api=${api%/}" "app=${app%/}"
+  step "Next"
+  info "1. Set the Worker's APP_URL to $app (wrangler.toml [vars]) if deploy-cf.sh did not."
+  info "2. Your RF box: create a code in Instance admin -> Ingest boxes, then on the box run"
+  info "   deploy/aprscaching init ingest-box --gateway ${api%/}"
+  info "3. Check it: deploy/aprscaching doctor (with OPERATOR_SECRET in the environment to read Setup)."
 }
 
 # rotate-secret NAME: a fresh value stored in the Worker with wrangler, which redeploys it.

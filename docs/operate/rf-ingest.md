@@ -22,8 +22,9 @@ present. Each stamps its own `port`, visible at `GET /api/ports`.
 ## Enrolling the box
 
 A box reaches its gateway with either the gateway's shared `INGEST_SECRET` or its own key. To get a key, ask
-the gateway's sysop for a one-time enrollment code ([Enrolling ingest boxes](administration.md#enrolling-ingest-boxes)),
-then, with `INGEST_URL` set:
+the gateway's sysop for a one-time enrollment code ([Enrolling ingest boxes](administration.md#enrolling-ingest-boxes)).
+`deploy/aprscaching init ingest-box` enrolls a Docker box with it ([Deployment helpers](helpers.md#ingest-box)).
+Without the helper, with `INGEST_URL` set:
 
 ```bash
 cd apps/ingest

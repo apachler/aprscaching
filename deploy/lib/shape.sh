@@ -9,9 +9,15 @@ SHAPE_FILE="${APRSCACHING_SHAPE_FILE:-$DEPLOY_DIR/.shape}"
 
 shape_valid() { case " $SHAPES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-# shape_record SHAPE ENV_FILE: remember what init set up.
+# shape_record SHAPE ENV_FILE [KEY=VALUE…]: remember what init set up, and anything else the shape needs
+# later (the Cloudflare split records its Worker's and app's URLs).
 shape_record() {
-  printf 'shape=%s\nenv=%s\n' "$1" "$2" >"$SHAPE_FILE"
+  local line
+  {
+    printf 'shape=%s\nenv=%s\n' "$1" "$2"
+    shift 2
+    for line in "$@"; do printf '%s\n' "$line"; done
+  } >"$SHAPE_FILE"
 }
 
 shape_recorded() { [ -f "$SHAPE_FILE" ] && sed -n 's/^shape=//p' "$SHAPE_FILE" | tail -n 1; }
