@@ -13,7 +13,7 @@
     height: 7px;
     border-radius: 50%;
     background: var(--accent);
-    margin-right: var(--sp-2);
+    margin-right: var(--space-xs);
     vertical-align: middle;
   }
   .bbs-subj {
@@ -24,11 +24,11 @@
    query — the wide workspace surface), stacked master→detail swap when it's a slim drawer/sheet. */
   .bbs-tabs {
     flex-wrap: wrap;
-    margin-bottom: var(--sp-3);
+    margin-bottom: var(--space-sm);
   }
   .bbs-body {
     display: grid;
-    gap: var(--sp-6);
+    gap: var(--space-md);
     align-items: start;
   }
   .bbs-list {
@@ -37,13 +37,13 @@
     padding: 0;
   }
   .bbs-row {
-    padding: var(--sp-3) var(--sp-4);
-    border-radius: var(--r-6);
+    padding: var(--space-sm) var(--space-sm);
+    border-radius: var(--radius-control);
     cursor: pointer;
     border: 1px solid transparent;
   }
   .bbs-row + .bbs-row {
-    margin-top: var(--sp-0);
+    margin-top: var(--space-2xs);
   }
   .bbs-row:hover {
     background: color-mix(in oklch, var(--ink) 6%, transparent);
@@ -55,25 +55,25 @@
   .bbs-row-h {
     display: flex;
     align-items: baseline;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .bbs-row-date {
     margin-left: auto;
     white-space: nowrap;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .bbs-read {
     max-width: 80ch;
   } /* keep prose line-length readable on a wide pane */
   .bbs-read h3 {
-    margin: 0 0 var(--sp-4);
+    margin: 0 0 var(--space-sm);
   }
   .bbs-hdr {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 3px var(--sp-5);
-    margin: 0 0 var(--sp-6);
-    font-size: var(--fs-md);
+    gap: 3px var(--space-md);
+    margin: 0 0 var(--space-md);
+    font-size: var(--text-data);
   }
   .bbs-hdr > div {
     display: contents;
@@ -86,30 +86,30 @@
   }
   /* thread reply tree — forum/BBS style: replies nested under their parent, a connector line per level */
   .bbs-thread-h {
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin: var(--sp-0) 0 var(--sp-2);
+    margin: var(--space-2xs) 0 var(--space-xs);
   }
   .bbs-node {
     cursor: pointer;
   }
   .bbs-node .bbs-msg {
-    padding: var(--sp-3) 0;
+    padding: var(--space-sm) 0;
     border-top: 1px solid var(--line);
   }
   .bbs-node.on > .bbs-msg {
     background: color-mix(in oklch, var(--accent) 8%, transparent);
-    border-radius: var(--r-5);
-    padding: var(--sp-3);
+    border-radius: var(--radius-chip);
+    padding: var(--space-sm);
     border-top-color: transparent;
   }
   .bbs-node:not(.depth-0) {
     border-left: 2px solid var(--hair);
-    padding-left: var(--sp-4);
+    padding-left: var(--space-sm);
   }
   .bbs-node.depth-1 {
-    margin-left: var(--sp-6);
+    margin-left: var(--space-md);
   }
   .bbs-node.depth-2 {
     margin-left: 30px;
@@ -131,9 +131,9 @@
   }
   .bbs-msg-h {
     display: flex;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     align-items: baseline;
-    margin-bottom: var(--sp-0);
+    margin-bottom: var(--space-2xs);
     flex-wrap: wrap;
   }
   .bbs-node-date {
@@ -141,11 +141,11 @@
     white-space: nowrap;
   }
   .bbs-reader-empty {
-    padding: var(--sp-10) var(--sp-3);
+    padding: var(--space-xl) var(--space-sm);
   }
   .bbs-back {
     display: inline-block;
-    margin-bottom: var(--sp-3);
+    margin-bottom: var(--space-sm);
   }
   @container panel (min-width: 40rem) {
     .bbs-body {
@@ -153,7 +153,7 @@
     }
     .bbs-list {
       border-right: 1px solid var(--hair);
-      padding-right: var(--sp-6);
+      padding-right: var(--space-md);
     }
     .bbs-reader {
       position: sticky;

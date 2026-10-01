@@ -6,7 +6,7 @@
   .packet-term {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     min-width: 0;
   }
   /* channel bar — GP's numbered channel buttons (0 Monitor, 1..N), inline connect pushed to the right */
@@ -24,10 +24,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: var(--fs-sm-up);
-    padding: var(--sp-1) 9px;
+    font-size: var(--text-label);
+    padding: var(--space-xs) 9px;
     border: 1px solid var(--line);
-    border-radius: var(--r-sm) 0 0 var(--r-sm);
+    border-radius: var(--radius-control) 0 0 var(--radius-control);
     background: var(--surface-2);
     cursor: pointer;
   }
@@ -44,11 +44,11 @@
   .pt-x {
     border: 1px solid var(--line);
     border-left: none;
-    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    border-radius: 0 var(--radius-control) var(--radius-control) 0;
     background: var(--surface-2);
     color: var(--muted);
     cursor: pointer;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     line-height: 1;
     padding: 5px 7px;
     align-self: stretch;
@@ -58,7 +58,7 @@
   }
   .pt-cbtn .pt-count {
     color: var(--muted);
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
   }
   .pt-ch-n {
     display: inline-block;
@@ -66,17 +66,17 @@
     text-align: center;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-3);
-    font-size: var(--fs-xs);
+    border-radius: var(--radius-chip);
+    font-size: var(--text-caption);
     color: var(--muted);
   }
   .pt-cbtn.on .pt-ch-n {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: color-mix(in oklch, var(--accent) 55%, transparent);
   }
   .pt-connect-inline {
     display: flex;
-    gap: var(--sp-1);
+    gap: var(--space-xs);
     margin-left: auto;
   }
   .pt-connect-inline input {
@@ -85,7 +85,7 @@
   .pt-fnbar {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
     align-items: center;
   }
   .pt-fnbar .pt-macros {
@@ -98,18 +98,18 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--line);
-    border-radius: var(--r-md);
+    border-radius: var(--radius-control);
     overflow: hidden;
   }
   .pt-out {
     margin: 0;
-    padding: var(--sp-4);
+    padding: var(--space-sm);
     min-height: 300px;
     max-height: 60vh;
     flex: 1;
     overflow-y: auto;
     font-family: var(--font-mono);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
@@ -121,21 +121,21 @@
   }
 
   .pt-line.tx {
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .pt-line.sys {
     color: var(--muted);
     font-style: italic;
   }
   .pt-status {
-    padding: var(--sp-1) var(--sp-3);
+    padding: var(--space-xs) var(--space-sm);
     border-top: 1px solid var(--hair);
     background: var(--surface-2);
-    font-size: var(--fs-xs-up);
+    font-size: var(--text-caption);
     color: var(--muted);
   }
   .pt-cmd {
-    padding: var(--sp-2) var(--sp-3);
+    padding: var(--space-xs) var(--space-sm);
   }
   .pt-cmd input {
     flex: 1;
@@ -144,16 +144,16 @@
   .pt-macros {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-1);
-    padding: 0 var(--sp-3) var(--sp-3);
+    gap: var(--space-xs);
+    padding: 0 var(--space-sm) var(--space-sm);
   }
   .pt-macro {
-    font-size: var(--fs-xs-up);
-    padding: var(--sp-0) 7px;
+    font-size: var(--text-caption);
+    padding: var(--space-2xs) 7px;
   }
   .pt-mon-out {
     background: var(--surface-2);
-    font-size: var(--fs-xs-up);
+    font-size: var(--text-caption);
     line-height: 1.4;
   }
   /* the station-type colour arrives as --tag (a tool may recolour a line) */
@@ -163,6 +163,6 @@
   }
   .pt-ctext input {
     width: 100%;
-    margin-top: var(--sp-2);
+    margin-top: var(--space-xs);
   }
 }

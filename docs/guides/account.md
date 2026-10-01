@@ -144,7 +144,7 @@ radio and notification groups appear as well.
 | Group | What's in it |
 |---|---|
 | **Account** | Sign in/out, your callsigns, verification, email |
-| **Display** | Theme, units, CRT effect |
+| **Display** | Appearance (Auto, Light, Dark — the default — or Phosphor, a green-screen terminal), units, the CRT effect in Phosphor |
 | **Profile** | What others see on your profile |
 | **Home weather station** | Feed your own weather station into the network |
 | **My stations** | Your SSIDs and living caches |

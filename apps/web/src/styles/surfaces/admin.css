@@ -3,25 +3,25 @@
   /* the D1 write-budget banner at the top of Instance admin: headline, the count, then what is being shed */
   .budget-note {
     display: grid;
-    gap: var(--sp-1);
-    margin-bottom: var(--sp-3);
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
   }
   /* pending requests nested under an offered cache (Instance admin → Cache adoption) */
   .logs.adopt-reqs {
-    margin: var(--sp-2) 0 var(--sp-2) var(--sp-5);
-    padding-left: var(--sp-3);
+    margin: var(--space-xs) 0 var(--space-xs) var(--space-md);
+    padding-left: var(--space-sm);
     border-left: 1px solid var(--hair);
   }
   /* federation sync state: the hub line, the spokes, and Sync now */
   .fed-sync {
     display: grid;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-4);
-    padding-bottom: var(--sp-3);
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+    padding-bottom: var(--space-sm);
     border-bottom: 1px solid var(--hair);
   }
   .fed-sync .comment {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .fed-sync > button {
     justify-self: start;
@@ -31,49 +31,49 @@
    card (warn-tinted via color-mix — no hand-maintained hex), and the be-reachable disclosure. */
   .fed44net {
     display: grid;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-4);
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
   }
   .fed44net .comment {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     color: var(--muted);
   }
   .fed44net .confirmbox {
     display: grid;
-    gap: var(--sp-2);
-    padding: var(--sp-4);
+    gap: var(--space-xs);
+    padding: var(--space-sm);
     border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: color-mix(in oklch, var(--warn) 8%, transparent);
   }
   /* the bindings an ambiguous lookup found, each added by its host */
   .fed44net-candidates {
     display: grid;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
     margin: 0;
     padding: 0;
     list-style: none;
   }
   .fed44net .disclosure-body {
     display: grid;
-    gap: var(--sp-2);
-    padding: var(--sp-3) 0 var(--sp-1) var(--sp-5);
+    gap: var(--space-xs);
+    padding: var(--space-sm) 0 var(--space-xs) var(--space-md);
     border-left: 1px solid var(--hair);
   }
   /* FBB forwarding-partner add form (Settings → Network) — a sectioned grid, not one long scroll */
   .partner-form {
     display: grid;
-    gap: var(--sp-3);
-    margin: var(--sp-3) 0;
-    padding: var(--sp-4);
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0;
+    padding: var(--space-sm);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: var(--surface-2);
   }
   .partner-form label {
     display: grid;
     gap: 3px;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     color: var(--muted);
   }
   .partner-form input,
@@ -93,18 +93,18 @@
   /* A one-time box enrollment code: shown once, large enough to read off and type on the box */
   .box-code {
     display: grid;
-    gap: var(--sp-2);
-    margin: var(--sp-3) 0;
-    padding: var(--sp-4);
+    gap: var(--space-xs);
+    margin: var(--space-sm) 0;
+    padding: var(--space-sm);
     border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--hair));
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: color-mix(in oklch, var(--accent) 8%, var(--surface-2));
   }
   .box-code p {
     margin: 0;
   }
   .box-code__value {
-    font-size: var(--fs-lg);
+    font-size: var(--text-body);
     letter-spacing: 0.08em;
     user-select: all;
   }
@@ -118,9 +118,9 @@
   .setup-item {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--sp-0) var(--sp-2);
+    gap: var(--space-2xs) var(--space-xs);
     align-items: baseline;
-    padding: var(--sp-3) 0;
+    padding: var(--space-sm) 0;
     border-top: 1px solid var(--line);
   }
   .setup-item:first-child {
@@ -132,14 +132,14 @@
   }
   .setup-detail {
     grid-column: 1 / -1;
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
     color: var(--muted);
     overflow-wrap: anywhere;
   }
   /* the one-sentence fix under a self-check line always spans the row: it may carry a whole DNS record */
   .setup-fix {
     grid-column: 1 / -1;
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
     overflow-wrap: anywhere;
   }
   @container setup (min-width: 34rem) {

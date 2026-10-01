@@ -31,15 +31,8 @@ import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle, buildPackTileStyle, buildPhosphorStyle } from "./offlineBasemap.js";
 import { packTilesSummary, registerPackTiles } from "./offline/packTiles.js";
-import {
-  FormatContext,
-  makeFormatters,
-  loadSettings,
-  saveSettings,
-  resolveTheme,
-  resolveCrt,
-  type LocaleSettings,
-} from "./format.js";
+import { FormatContext, makeFormatters, loadSettings, saveSettings, type LocaleSettings } from "./format.js";
+import { applyTheme, watchSystemTheme } from "./shell/theme.js";
 import { pullPrefs, notePrefChange, PREFS_EVENT } from "./prefs.js";
 import { setToolTxVerified, feedHeard } from "./tools/host.js";
 import { ToolMapLayers } from "./tools/ToolMapLayers.js";
@@ -309,12 +302,12 @@ export default function Platform({ session, startTour }: { session: SessionState
     return () => mq.removeEventListener("change", h);
   }, []);
 
-  // apply the theme to the document root — modern → "dark" tokens, phosphor → the phosphor flip.
-  // data-crt gates the opt-in scanline/glow overlay (Phosphor only; off in Modern — see resolveCrt).
+  // apply the theme to the document root (shell/theme.ts), and follow the system's colour scheme while the
+  // Appearance setting is "auto"; data-crt gates the opt-in scanline/glow overlay (Phosphor only)
   useEffect(() => {
-    document.documentElement.dataset.theme = resolveTheme(locSettings.theme);
-    document.documentElement.dataset.crt = resolveCrt(locSettings);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveCrt reads only .theme/.crt, both listed
+    applyTheme(locSettings);
+    return watchSystemTheme(locSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyTheme reads only .theme/.crt, both listed
   }, [locSettings.theme, locSettings.crt]);
 
   const callsignRef = useRef(callsign);
@@ -397,19 +390,21 @@ export default function Platform({ session, startTour }: { session: SessionState
   // (grid/rings/terminator/arc, the raster basemap, tracks) ARE wiped by setStyle, so `styleEpoch`
   // bumps once the new style settles — the overlay owners key their setup on it and re-add. The mount
   // run is skipped: the map was just created with the right style.
-  const themeAtMount = useRef(locSettings.theme);
+  // Dark, light and auto share one basemap; only Phosphor has its own.
+  const phosphorStyle = locSettings.theme === "phosphor";
+  const themeAtMount = useRef(phosphorStyle);
   const [styleEpoch, setStyleEpoch] = useState(0);
   useEffect(() => {
     const m = mapRef.current;
-    if (!m || themeAtMount.current === locSettings.theme) {
-      themeAtMount.current = locSettings.theme;
+    if (!m || themeAtMount.current === phosphorStyle) {
+      themeAtMount.current = phosphorStyle;
       return;
     }
-    themeAtMount.current = locSettings.theme;
+    themeAtMount.current = phosphorStyle;
     m.setStyle(baseStyle());
     styleKind.current = "base";
     m.once("idle", () => setStyleEpoch((e) => e + 1)); // idle (not styledata) → no setData feedback loop
-  }, [locSettings.theme, mapRef]);
+  }, [phosphorStyle, mapRef]);
 
   // Offline, the map draws the packs' tiles when any pack holds them (else the grid stays); back online,
   // the configured basemap returns. Overlays re-add themselves on the style epoch, as on a theme switch.

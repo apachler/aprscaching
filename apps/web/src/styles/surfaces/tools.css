@@ -3,34 +3,34 @@
   /* tools (plugins) panel */
   .tools-panel {
     display: grid;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
   }
   .tools-list {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .tool-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
     border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-control);
+    padding: var(--space-sm) var(--space-sm);
   }
   .tool-meta {
     min-width: 0;
   }
   .tool-perms {
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     color: var(--muted);
     font-family: var(--font-mono);
   }
   .tool-sub {
     border-top: 1px dashed var(--line);
-    padding-top: var(--sp-3);
+    padding-top: var(--space-sm);
     display: grid;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .tool-sub textarea,
   .tool-sub input {
@@ -38,52 +38,52 @@
   }
   .tool-out {
     background: var(--surface-2);
-    border-radius: var(--r-6);
-    padding: var(--sp-3);
-    font-size: var(--fs-sm);
+    border-radius: var(--radius-control);
+    padding: var(--space-sm);
+    font-size: var(--text-label);
     margin: 0;
     white-space: pre-wrap;
   }
   .tool-prompt {
     border: 1px solid var(--warn);
-    border-radius: var(--r-md);
-    padding: var(--sp-4) var(--sp-5);
+    border-radius: var(--radius-control);
+    padding: var(--space-sm) var(--space-md);
     background: color-mix(in oklch, var(--warn) 8%, transparent);
   }
   .tool-surfaces {
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     color: var(--muted);
     font-family: var(--font-mono);
   }
   .tool-surfaces .badge {
-    margin-right: var(--sp-1);
+    margin-right: var(--space-xs);
   }
   /* declarative tool panels (the `panel` capability) — a tool's typed nodes rendered by the host */
   .tool-panels {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .tool-panel {
     border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-control);
+    padding: var(--space-sm) var(--space-sm);
     display: grid;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .tool-panel-h {
     margin: 0;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     font-weight: 600;
   }
   .tp-text {
     margin: 0;
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
   }
   .tp-kv {
     display: flex;
     justify-content: space-between;
-    gap: var(--sp-4);
-    font-size: var(--fs-md);
+    gap: var(--space-sm);
+    font-size: var(--text-data);
   }
   .tp-k {
     color: var(--muted);
@@ -94,12 +94,12 @@
   .tp-bar {
     display: grid;
     gap: 3px;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .tp-track {
     display: block;
     height: 8px;
-    border-radius: var(--r-3);
+    border-radius: var(--radius-chip);
     background: var(--surface-2);
     overflow: hidden;
   }
@@ -113,18 +113,18 @@
   .tp-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
   }
   .tp-table th {
     text-align: left;
     color: var(--muted);
-    font-size: var(--fs-2xs-up);
+    font-size: var(--text-caption);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 0 var(--sp-3) 3px 0;
+    padding: 0 var(--space-sm) 3px 0;
   }
   .tp-table td {
-    padding: 1px var(--sp-3) 1px 0;
+    padding: 1px var(--space-sm) 1px 0;
     font-family: var(--font-mono);
   }
   .tp-muted {
@@ -135,19 +135,19 @@
     color: var(--accent);
   }
   .tp-ok {
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .tp-fill.tp-ok {
     background: var(--ok);
   }
   .tp-warn {
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .tp-fill.tp-warn {
     background: var(--warn);
   }
   .tp-bad {
-    color: var(--bad);
+    color: var(--bad-text);
   }
   .tp-fill.tp-bad {
     background: var(--bad);
@@ -157,10 +157,10 @@
     display: grid;
     grid-template-columns: repeat(var(--tp-cols, 1), 1ch);
     font-family: var(--font-mono);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     line-height: 1.05;
     white-space: pre;
-    color: var(--accent);
+    color: var(--accent-text);
     overflow-x: auto;
     max-width: 100%;
   }
@@ -170,7 +170,7 @@
   }
   /* tool-contributed map markers (map surface) — a small tokened glyph */
   .tool-map-pin {
-    font-size: var(--fs-xl);
+    font-size: var(--text-input);
     line-height: 1;
     cursor: default;
     text-shadow: 0 0 2px var(--surface);

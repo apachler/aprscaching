@@ -24,6 +24,14 @@ import { SupportSettings } from "./SupportSettings.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
+
+const APPEARANCE: [LocaleSettings["theme"], string][] = [
+  ["auto", "Auto"],
+  ["light", "Light"],
+  ["dark", "Dark"],
+  ["phosphor", "Phosphor"],
+];
+
 export function SettingsPanel(props: {
   settings: LocaleSettings;
   onApply: (s: LocaleSettings) => void;
@@ -138,11 +146,19 @@ export function SettingsPanel(props: {
 
       {match("Display appearance theme units measurement") && (
         <Group title="Display">
-          <Row label="Theme" help="Phosphor = the late-90s green-screen flip">
-            <div className="seg">
-              {(["modern", "phosphor"] as const).map((t) => (
-                <button key={t} className={s.theme === t ? "on" : ""} onClick={() => props.onApply({ ...s, theme: t })}>
-                  {t}
+          <Row
+            label="Appearance"
+            help="Auto follows your system's light or dark setting. Phosphor is a late-90s green-screen terminal."
+          >
+            <div className="seg" role="group" aria-label="Appearance">
+              {APPEARANCE.map(([t, label]) => (
+                <button
+                  key={t}
+                  className={s.theme === t ? "on" : ""}
+                  aria-pressed={s.theme === t}
+                  onClick={() => props.onApply({ ...s, theme: t })}
+                >
+                  {label}
                 </button>
               ))}
             </div>

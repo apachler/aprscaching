@@ -10,7 +10,7 @@
     display: grid;
     align-items: end;
     justify-items: center;
-    padding: 0 var(--sp-7) calc(var(--sp-10) + env(safe-area-inset-bottom));
+    padding: 0 var(--space-lg) calc(var(--space-xl) + env(safe-area-inset-bottom));
     background: color-mix(in oklch, var(--shade) 50%, transparent);
     animation: tour-in 0.18s ease;
   }
@@ -19,21 +19,21 @@
     background: var(--surface);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: var(--r-9);
-    padding: var(--sp-7) var(--sp-8);
-    box-shadow: var(--elev-10);
+    border-radius: var(--radius-sheet);
+    padding: var(--space-lg) var(--space-lg);
+    box-shadow: var(--elevation-overlay);
   }
   .tour-card h3 {
-    margin: var(--sp-1) 0 var(--sp-2);
+    margin: var(--space-xs) 0 var(--space-xs);
     color: var(--heading);
   }
   .tour-stepn {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     color: var(--muted);
   }
   .tour-actions {
-    margin-top: var(--sp-6);
-    gap: var(--sp-3);
+    margin-top: var(--space-md);
+    gap: var(--space-sm);
   }
   @keyframes tour-in {
     from {
@@ -54,9 +54,9 @@
    in JS and nothing more — the placement itself stays declarative. */
   .tour-target {
     anchor-name: --tour-target;
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 3px;
-    border-radius: var(--r-7);
+    border-radius: var(--radius-card);
   }
   @supports (anchor-name: --x) {
     /* An anchored step must show what it points at, so the scrim stops dimming and only keeps its
@@ -70,7 +70,7 @@
       position-area: block-end;
       position-try-fallbacks: flip-block, flip-inline;
       max-width: min(460px, calc(100vw - 32px));
-      margin: var(--sp-4);
+      margin: var(--space-sm);
     }
   }
 }

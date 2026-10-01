@@ -4,7 +4,7 @@
   .loadmore {
     display: flex;
     justify-content: center;
-    padding: var(--sp-3) 0 var(--sp-0);
+    padding: var(--space-sm) 0 var(--space-2xs);
   }
   .loadmore button {
     min-height: var(--hit);

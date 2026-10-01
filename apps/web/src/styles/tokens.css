@@ -12,8 +12,9 @@
 
     /* brand + chrome */
     --brand: oklch(0.6 0.085 232); /* blue — chrome only */
-    --accent: oklch(0.73 0.18 128); /* green — the one primary-action accent */
-    --accent-ink: oklch(0.2 0.012 220); /* text on the green accent */
+    --accent: oklch(0.73 0.18 128); /* green — the one primary-action accent, as a fill */
+    --accent-ink: oklch(0.2 0.012 220); /* text on the green fill: dark ink in every theme */
+    --accent-text: var(--accent); /* the accent as text, a link or an icon; darker where the page is light */
     --beige: oklch(0.62 0.065 52);
 
     /* neutrals (dark) */
@@ -36,6 +37,15 @@
     --ok: oklch(0.74 0.17 145);
     --warn: oklch(0.8 0.15 85);
     --bad: oklch(0.66 0.19 27);
+    /* the same hues as text, icons and badge lettering: each base mixed toward --ink by --hue-text, so the
+       text lightens on a dark surface and darkens on a light one, from one formula */
+    --hue-text: 72%;
+    --tier-a-text: color-mix(in oklch, var(--tier-a) var(--hue-text), var(--ink));
+    --tier-b-text: color-mix(in oklch, var(--tier-b) var(--hue-text), var(--ink));
+    --tier-c-text: var(--muted);
+    --ok-text: color-mix(in oklch, var(--ok) var(--hue-text), var(--ink));
+    --warn-text: color-mix(in oklch, var(--warn) var(--hue-text), var(--ink));
+    --bad-text: color-mix(in oklch, var(--bad) var(--hue-text), var(--ink));
 
     /* operator surfaces — denser console chrome, derived in the same OKLCH family.
        Used by the nav rail, side panels and data chips; the core --surface/--ink stay as-is so
@@ -52,7 +62,14 @@
     --chrome-ink: oklch(
       1 0 0
     ); /* ink/marks/overlays on the dark chrome (top bar, tab bar, search, landing, solid controls) */
+    /* secondary text on the chrome (inactive tabs, placeholders, the in-view count): the ink mixed into the
+       bar's own colour, opaque, so its contrast is a fixed number rather than whatever shows through */
+    --chrome-ink-muted: color-mix(in oklch, var(--chrome-ink) 84%, var(--topbar-bg));
+    --chrome-field-bg: color-mix(in oklch, var(--chrome-ink) 10%, transparent); /* fields and chips in the top bar */
+    --chrome-hover-bg: color-mix(in oklch, var(--chrome-ink) 22%, transparent);
+    --selected-bg: color-mix(in oklch, var(--brand) 22%, transparent); /* the selected rail item, segment or chip */
     --pin-edge: oklch(1 0 0); /* map-marker outline + glyph — white ring reads on any basemap */
+    --map-control-ink: oklch(0.25 0.02 245); /* glyphs on MapLibre's control stack, which is white in every theme */
     --pin-station: oklch(0.86 0.012 230); /* default (roleless) station-pin fill */
     --meshcom: oklch(0.55 0.16 350); /* MeshCom ring, tag and links */
     --meshcom-map: #b0417f; /* the same hue for maplibre paint, which takes no CSS colour functions */
@@ -62,83 +79,12 @@
     --award-ink: oklch(0.86 0.14 95);
     --award-line: oklch(0.42 0.05 95);
 
-    /* spacing scale — padding, margin, gap and gutter offsets. Steps sit on a 2px grid; off-grid
-       1px optical nudges (3/5/7/9/11/13px) stay literal where they are used. */
-    --sp-0: 2px;
-    --sp-1: 4px;
-    --sp-2: 6px;
-    --sp-3: 8px;
-    --sp-4: 10px;
-    --sp-5: 12px;
-    --sp-6: 14px;
-    --sp-7: 16px;
-    --sp-8: 18px;
-    --sp-9: 20px;
-    --sp-10: 24px;
-    --sp-11: 28px;
-    --sp-12: 32px;
-    --sp-13: 40px;
-    --sp-14: 48px;
-
-    /* type scale — "-up" is the half step above its size */
-    --fs-3xs: 9px;
-    --fs-2xs: 10px;
-    --fs-2xs-up: 10.5px;
-    --fs-xs: 11px;
-    --fs-xs-up: 11.5px;
-    --fs-sm: 12px;
-    --fs-sm-up: 12.5px;
-    --fs-md: 13px;
-    --fs-md-up: 13.5px;
-    --fs-base: 14px; /* body text */
-    --fs-lg: 15px;
-    --fs-lg-up: 15.5px;
-    --fs-xl: 16px;
-    --fs-2xl: 17px;
-    --fs-3xl: 19px;
-    --fs-4xl: 20px; /* panel titles */
-    --fs-5xl: 22px;
-    --fs-landing-h2: clamp(22px, 3vw, 29px);
-    --fs-landing-slogan: clamp(34px, 6vw, 56px);
-
-    /* corner radius scale — tokenised so the Phosphor flip makes every corner sharp in one swap.
-       sm / md / lg are the named roles: buttons, inputs and chips / list rows and small cards /
-       panels, sheets and big cards. */
-    --r-1: 2px;
-    --r-2: 3px;
-    --r-3: 4px;
-    --r-4: 5px;
-    --r-5: 6px;
-    --r-sm: 7px;
-    --r-6: 8px;
-    --r-md: 9px;
-    --r-7: 10px;
-    --r-8: 11px;
-    --r-lg: 12px;
-    --r-9: 14px;
-    --r-10: 16px; /* bottom-sheet top corners */
-    --r-11: 20px;
-    --r-12: 24px;
-    --r-pill: 999px;
-
-    /* elevation — soft drop shadows in the theme's --shadow colour (Phosphor turns it into a glow) */
-    --elev-1: 0 1px 4px var(--shadow); /* station pins */
-    --elev-2: 0 1px 5px var(--shadow); /* cache and spot pins */
-    --elev-3: 0 2px 10px var(--shadow); /* top bar */
-    --elev-4: 0 4px 14px var(--shadow); /* tab-bar action button */
-    --elev-5: 0 6px 20px var(--shadow); /* toasts, geofence banner */
-    --elev-6: 0 6px 24px var(--shadow); /* map spot card */
-    --elev-7: 0 8px 28px var(--shadow); /* floating panels */
-    --elev-8: 0 12px 32px var(--shadow); /* popovers */
-    --elev-9: 0 12px 40px var(--shadow); /* dialogs */
-    --elev-10: 0 14px 44px var(--shadow); /* tour card */
-    --elev-up: 0 -3px 14px var(--shadow); /* bottom tab bar, casting upward */
-    --elev-hero: 0 18px 50px -22px var(--shadow); /* landing terminal */
-    --elev-shot: 0 12px 32px -18px var(--shadow); /* landing screenshots */
+    /* the landing page's two lifted surfaces */
+    --elevation-hero: 0 18px 50px -22px var(--shadow); /* the terminal card */
+    --elevation-shot: 0 12px 32px -18px var(--shadow); /* screenshots */
 
     /* ---- role scales (docs/design/design-language.md) ----
-       Named by what a value is for, so a heading, a card or a dialog picks its step by role. They replace the
-       size-named steps above, which stay only until every rule has moved over. */
+       Named by what a value is for, so a heading, a card or a dialog picks its step by role. */
 
     /* type: a 1.2 ratio around the 14px body; the display role is fluid for the landing page */
     --text-micro: 10px; /* rail and tab-bar labels under an icon, nothing else */
@@ -224,12 +170,12 @@
 
     /* density — comfortable is the default (cacher surfaces). [data-density="compact"] (Shack apps,
        instance admin) swaps in the compact set below. */
-    --density-fs: var(--fs-base); /* running text of a surface */
+    --density-fs: var(--text-body); /* running text of a surface */
     --ctl-fs: 1em; /* button text; 1em inherits the surface size */
-    --ctl-pad-y: var(--sp-2);
+    --ctl-pad-y: var(--space-xs);
     --ctl-pad-x: 11px;
-    --row-pad-y: var(--sp-3); /* settings rows */
-    --subh-mt: var(--sp-6); /* settings sub-heading top margin */
+    --row-pad-y: var(--space-sm); /* settings rows */
+    --subh-mt: var(--space-md); /* settings sub-heading top margin */
 
     /* achromatic mix partners for color-mix() darkening and lightening; hue "none" so a mix keeps
        the other colour's hue */
@@ -254,12 +200,12 @@
     --pad-card: var(--space-md);
     --pad-panel: var(--space-md);
     --gap-section: var(--space-lg);
-    --density-fs: var(--fs-md);
-    --ctl-fs: var(--fs-sm-up);
-    --ctl-pad-y: var(--sp-1);
+    --density-fs: var(--text-data);
+    --ctl-fs: var(--text-label);
+    --ctl-pad-y: var(--space-xs);
     --ctl-pad-x: 9px;
     --row-pad-y: 3px;
-    --subh-mt: var(--sp-5);
+    --subh-mt: var(--space-md);
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
@@ -271,11 +217,15 @@
     --surface-2: oklch(0.98 0.003 220);
     --field-bg: oklch(1 0 0);
     --ink: oklch(0.33 0.006 220);
-    --muted: oklch(0.56 0.009 220);
+    --muted: oklch(0.52 0.009 220);
     --line: oklch(0.92 0.004 220);
-    --accent-ink: oklch(1 0 0);
+    --accent-text: oklch(0.48 0.15 135); /* the green darkened until it reads as text on white */
+    --hue-text: 34%;
+    --selected-bg: color-mix(in oklch, var(--brand) 13%, transparent);
     --heading: oklch(0.5 0.072 230);
-    --topbar-bg: oklch(0.6 0.085 232);
+    --topbar-bg: oklch(0.5 0.085 232); /* the brand blue deep enough for white text */
+    --chrome-field-bg: color-mix(in oklch, var(--shade) 16%, transparent); /* darker than the bar, not lighter */
+    --chrome-hover-bg: color-mix(in oklch, var(--shade) 28%, transparent);
     --chip-bg: oklch(0.96 0.004 220);
     --shadow: oklch(0 0 0 / 0.16);
     /* operator surfaces (light) */
@@ -283,7 +233,6 @@
     --panel-2: oklch(0.99 0.002 220);
     --hair: oklch(0.91 0.004 220);
     --ink-2: oklch(0.4 0.008 220);
-    --ink-tier: oklch(0.99 0 0);
     /* chrome/pins stay light-on-dark (top bar is blue, pins sit on the map) — only the page + award flip */
     --page-bg: oklch(0.96 0.004 220);
     --award-bg: oklch(0.96 0.05 95);
@@ -339,6 +288,12 @@
     --ok: oklch(0.86 0.19 145);
     --warn: oklch(0.85 0.15 90); /* amber */
     --bad: oklch(0.68 0.2 27); /* red */
+    --hue-text: 100%; /* the phosphor ramp is already tuned for the black */
+    --bad-text: color-mix(
+      in oklch,
+      var(--bad) 72%,
+      var(--tint)
+    ); /* the red lifted toward white, not toward the green ink */
 
     /* recognition chip → amber phosphor */
     --award-bg: oklch(0.24 0.05 95);
@@ -349,22 +304,6 @@
     --shadow: oklch(0.86 0.19 145 / 0.2);
 
     /* terminals are sharp; all text is mono */
-    --r-1: 0px;
-    --r-2: 0px;
-    --r-3: 0px;
-    --r-4: 0px;
-    --r-5: 0px;
-    --r-sm: 0px;
-    --r-6: 0px;
-    --r-md: 0px;
-    --r-7: 0px;
-    --r-8: 0px;
-    --r-lg: 1px;
-    --r-9: 1px;
-    --r-10: 1px;
-    --r-11: 1px;
-    --r-12: 1px;
-    --r-pill: 2px;
     --radius-tick: 0px;
     --radius-chip: 0px;
     --radius-control: 0px;

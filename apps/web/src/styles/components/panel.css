@@ -5,39 +5,39 @@
    container queries". The panel↔sheet swap itself is viewport-coarse, so it stays a media query. */
   .panel {
     position: absolute;
-    top: var(--sp-5);
-    bottom: var(--sp-5);
+    top: var(--space-md);
+    bottom: var(--space-md);
     width: var(--panel-w);
     max-width: calc(100% - 24px);
     z-index: var(--z-panel);
     overflow: auto;
-    padding: var(--sp-7);
+    padding: var(--space-lg);
     container: panel / inline-size;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    box-shadow: var(--elev-7);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-floating);
     outline: none; /* the drawer takes programmatic focus on open (Panel.tsx) — no ring on the container */
   }
   .panel.left {
-    left: var(--sp-5);
+    left: var(--space-md);
   }
   .panel.right {
-    right: var(--sp-5);
+    right: var(--space-md);
   }
   .panel h2 {
-    margin: 0 0 var(--sp-1);
-    font-size: var(--fs-4xl);
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-title);
     display: flex;
     align-items: center;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .panel h3 {
-    margin: var(--sp-2) 0;
-    font-size: var(--fs-2xl);
+    margin: var(--space-xs) 0;
+    font-size: var(--text-heading);
   }
   .panel h4 {
-    margin: var(--sp-7) 0 var(--sp-2);
+    margin: var(--space-lg) 0 var(--space-xs);
     color: var(--heading);
   }
   /* Shack apps are desktop-density (ui-ux.md §5) — while the panel is narrow (a phone sheet or a tablet
@@ -49,12 +49,12 @@
   @container panel (max-width: 40rem) {
     .wide-hint {
       display: block;
-      margin: 0 0 var(--sp-4);
-      padding: var(--sp-2) var(--sp-4);
-      font-size: var(--fs-sm);
+      margin: 0 0 var(--space-sm);
+      padding: var(--space-xs) var(--space-sm);
+      font-size: var(--text-label);
       color: var(--muted);
       border: 1px solid var(--hair);
-      border-radius: var(--r-sm);
+      border-radius: var(--radius-control);
       background: color-mix(in oklch, var(--warn) 9%, transparent);
     }
   }

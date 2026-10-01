@@ -8,17 +8,17 @@
     color: var(--muted);
   }
   .error {
-    color: var(--bad);
+    color: var(--bad-text);
   }
   .ok {
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: 700;
   }
   .warn {
-    color: var(--warn);
+    color: var(--warn-text);
     font-weight: 700;
   }
   .fine {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
 }

@@ -7,12 +7,12 @@
     padding: 0;
   }
   .msg-row {
-    padding: var(--sp-3) var(--sp-4);
-    border-radius: var(--r-6);
+    padding: var(--space-sm) var(--space-sm);
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
   }
   .msg-row + .msg-row {
-    margin-top: var(--sp-1);
+    margin-top: var(--space-xs);
   }
   .msg-row.mine {
     background: color-mix(in oklch, var(--accent) 12%, transparent);
@@ -21,10 +21,10 @@
   .msg-h {
     display: flex;
     align-items: center;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
     font-size: 0.86rem;
   }
   .msg-body {
-    margin-top: var(--sp-0);
+    margin-top: var(--space-2xs);
   }
 }

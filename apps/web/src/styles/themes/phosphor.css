@@ -38,7 +38,7 @@
     background: none;
     border-radius: 0;
     padding: 0 1px;
-    margin-right: var(--sp-2);
+    margin-right: var(--space-xs);
     letter-spacing: 0.02em;
   }
   :where(:root[data-theme="phosphor"]) .badge::before {
@@ -61,7 +61,7 @@
   }
   :where(:root[data-theme="phosphor"]) button.primary {
     background: color-mix(in oklch, var(--accent) 22%, transparent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
   :where(:root[data-theme="phosphor"]) button.primary:hover {
     background: color-mix(in oklch, var(--accent) 32%, transparent);
@@ -94,12 +94,12 @@
   /* the panel header becomes a terminal title rule (┌─ style, drawn with a border not a glyph hack) */
   :where(:root[data-theme="phosphor"]) .panel > .row.between:first-child {
     border-bottom: 1px solid var(--frame);
-    padding-bottom: var(--sp-2);
-    margin-bottom: var(--sp-3);
+    padding-bottom: var(--space-xs);
+    margin-bottom: var(--space-sm);
   }
   :where(:root[data-theme="phosphor"]) .panel h2::before {
     content: "> ";
-    color: var(--accent);
+    color: var(--accent-text);
   }
   /* nav rail: the active destination gets a terminal cursor marker (paired with the existing .on tint) */
   :where(:root[data-theme="phosphor"]) .rail button.on {
@@ -108,11 +108,11 @@
   :where(:root[data-theme="phosphor"]) .rail button.on::before {
     content: "▸";
     position: absolute;
-    left: var(--sp-0);
+    left: var(--space-2xs);
     top: 50%;
     transform: translateY(-50%);
-    color: var(--accent);
-    font-size: var(--fs-sm);
+    color: var(--accent-text);
+    font-size: var(--text-label);
   }
   /* ─── Phosphor [data-shell="terminal"]: shack apps become bordered CRT windows ───
    Same DOM, same components — only presentation flips. The wide shack Panels (terminal, BBS,
@@ -128,9 +128,9 @@
    The corners sit at the window edges (title-bar ::before/::after); the flex spacer becomes the
    horizontal fill rule; the close ✕ is the top-right control. (bleeds to the frame; padding offset) */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child {
-    margin: -16px -16px var(--sp-4);
-    padding: var(--sp-1) var(--sp-4);
-    gap: var(--sp-3);
+    margin: -16px -16px var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    gap: var(--space-sm);
     align-items: center;
     flex-wrap: nowrap;
     background: color-mix(in oklch, var(--accent) 12%, transparent);
@@ -138,16 +138,16 @@
   }
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child::before {
     content: "┌─";
-    color: var(--accent);
+    color: var(--accent-text);
     flex: 0 0 auto;
   }
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child::after {
     content: "─┐";
-    color: var(--accent);
+    color: var(--accent-text);
     flex: 0 0 auto;
   }
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] h2 {
-    font-size: var(--fs-base);
+    font-size: var(--text-body);
     letter-spacing: 0.04em;
     flex: 0 0 auto;
   }
@@ -166,20 +166,20 @@
   }
   /* the title-bar close button reads as the window's ✕ control */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] > .row.between:first-child .icon {
-    color: var(--accent);
+    color: var(--accent-text);
     flex: 0 0 auto;
   }
   /* float the CRT window inside the shell on desktop so ALL FOUR borders (not just the flush edges) show */
   @media (min-width: 1024px) {
     :where(:root[data-theme="phosphor"]) .shell > .panel[data-shell="terminal"] {
-      margin: var(--sp-3);
+      margin: var(--space-sm);
     }
   }
   /* app tab / function rows → a terminal function bar (BBS tabs, packet channel bar) */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .bbs-tabs,
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-chanbar {
     border-bottom: 1px solid var(--hair);
-    padding-bottom: var(--sp-3);
+    padding-bottom: var(--space-sm);
   }
   /* the packet terminal already ships a status line + cmd input — make them read as the window's footer */
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-status {
@@ -189,9 +189,9 @@
   :where(:root[data-theme="phosphor"]) .panel[data-shell="terminal"] .pt-cmd::before {
     content: "cmd>";
     align-self: center;
-    color: var(--accent);
+    color: var(--accent-text);
     font-family: var(--font-mono);
-    margin-right: var(--sp-1);
+    margin-right: var(--space-xs);
   }
   /* ─── CRT FX — opt-in scanline + phosphor glow ────────────────────────────────
    Off by default; enabled only when the user turns it on AND Phosphor is active (data-crt="on", set by

@@ -3,22 +3,22 @@
   /* over the map while it shows pack data: where the caches came from, and the way to the packs */
   .offline-banner {
     position: absolute;
-    top: var(--sp-3);
+    top: var(--space-sm);
     left: 50%;
     transform: translateX(-50%);
     z-index: var(--z-map-ui);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--sp-3);
-    max-width: calc(100% - 2 * var(--sp-4));
-    padding: var(--sp-2) var(--sp-4);
+    gap: var(--space-sm);
+    max-width: calc(100% - 2 * var(--space-sm));
+    padding: var(--space-xs) var(--space-sm);
     border: 1px solid var(--hair);
     border-left: 3px solid var(--warn);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     color: var(--ink);
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
   }
   .offline-banner button {
     min-height: var(--hit);
@@ -31,14 +31,14 @@
   }
   .pack {
     display: grid;
-    gap: var(--sp-2);
-    padding: var(--sp-3) 0;
+    gap: var(--space-xs);
+    padding: var(--space-sm) 0;
     border-top: 1px solid var(--hair);
   }
   .pack .row,
   .newpack .row {
     flex-wrap: wrap;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .pack progress,
   .newpack progress {
@@ -47,11 +47,11 @@
   }
   .newpack {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .newpack .slider {
     display: grid;
-    gap: var(--sp-1);
+    gap: var(--space-xs);
     font-variant-numeric: tabular-nums;
   }
   .newpack .slider input {
@@ -64,34 +64,34 @@
   }
   .pack-types {
     display: grid;
-    gap: var(--sp-1);
+    gap: var(--space-xs);
   }
   .pack-estimate {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .pack-estimate p {
     margin: 0;
   }
   .pack-estimate fieldset {
     display: grid;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
     margin: 0;
-    padding: var(--sp-2) var(--sp-3);
+    padding: var(--space-xs) var(--space-sm);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
   }
   .pack-estimate label {
     display: flex;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
     align-items: baseline;
   }
   /* the owner's pack: the caches that need a visit */
   .pack-attention {
     list-style: none;
     padding: 0;
-    margin: var(--sp-2) 0 0;
+    margin: var(--space-xs) 0 0;
     display: grid;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
 }

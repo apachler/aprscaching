@@ -168,7 +168,8 @@ async function open(page, origin, s, theme) {
   const url = s.url
     ? `${origin}${s.url}&theme=${theme}`
     : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}#14/47.0725/15.4380`;
-  await page.goto(url, { waitUntil: "networkidle" });
+  // the UI kit's frames are whole app instances, which never settle into network idle together
+  await page.goto(url, { waitUntil: s.fullPage ? "load" : "networkidle", timeout: 60000 });
   await holdTheme(page, theme);
   if (s.wait) await page.waitForSelector(s.wait, { timeout: 15000 });
   for (const [kind, sel, value] of s.steps ?? []) {

@@ -2,26 +2,26 @@
 @layer components {
   /* a shell command to run on the gateway host: verbatim mono text + Copy */
   .cmd {
-    margin: var(--sp-2) 0;
+    margin: var(--space-xs) 0;
   }
   .cmd-l {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     color: var(--muted);
-    margin-bottom: var(--sp-0);
+    margin-bottom: var(--space-2xs);
   }
   .cmd-row {
     display: flex;
     align-items: stretch;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .cmd-c {
     flex: 1;
     min-width: 0;
     font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--text-label);
+    padding: var(--space-sm) var(--space-sm);
     border: 1px solid var(--line);
-    border-radius: var(--r-sm);
+    border-radius: var(--radius-control);
     background: var(--surface);
     overflow-wrap: anywhere;
     user-select: all;

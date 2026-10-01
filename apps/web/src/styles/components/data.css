@@ -16,13 +16,13 @@
   .badges {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .chip {
     border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: var(--sp-0) 9px;
-    font-size: var(--fs-sm);
+    border-radius: var(--radius-control);
+    padding: var(--space-2xs) 9px;
+    font-size: var(--text-label);
     color: var(--ink-2);
     background: color-mix(in oklch, var(--surface-2) 50%, transparent);
   }
@@ -30,39 +30,39 @@
     background: var(--award-bg);
     color: var(--award-ink);
     border: 1px solid var(--award-line);
-    border-radius: var(--r-lg);
-    padding: var(--sp-0) 9px;
-    font-size: var(--fs-sm);
+    border-radius: var(--radius-card);
+    padding: var(--space-2xs) 9px;
+    font-size: var(--text-label);
     font-weight: 700;
   }
   /* status/tier chips: one derivation per state works in both themes — translucent tint of the base
    over the surface, base as text. No per-theme hex overrides to hand-maintain (css.md). */
   .badge {
     display: inline-block;
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 1px var(--sp-2);
-    border-radius: var(--r-sm);
-    margin-right: var(--sp-2);
+    padding: 1px var(--space-xs);
+    border-radius: var(--radius-control);
+    margin-right: var(--space-xs);
     background: var(--chip-bg);
     color: var(--muted);
   }
   .badge.found {
     background: color-mix(in oklch, var(--ok) 20%, transparent);
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .badge.dnf {
     background: color-mix(in oklch, var(--bad) 20%, transparent);
-    color: var(--bad);
+    color: var(--bad-text);
   }
   .badge.tierA {
     background: color-mix(in oklch, var(--tier-a) 20%, transparent);
-    color: var(--tier-a);
+    color: var(--tier-a-text);
   }
   .badge.tierB {
     background: color-mix(in oklch, var(--tier-b) 20%, transparent);
-    color: var(--tier-b);
+    color: var(--tier-b-text);
   }
   .badge.tierC {
     background: color-mix(in oklch, var(--tier-c) 16%, transparent);
@@ -70,7 +70,7 @@
   }
   .badge.warn {
     background: color-mix(in oklch, var(--warn) 20%, transparent);
-    color: var(--warn);
+    color: var(--warn-text);
   }
   /* callsign control-verified: an account fact, not a find's trust — neutral, never a tier colour */
   .badge.callok {
@@ -92,18 +92,18 @@
     flex: none;
     width: 22px;
     height: 22px;
-    border-radius: var(--r-5);
+    border-radius: var(--radius-chip);
     font-family: var(--font-mono);
     font-weight: 700;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     line-height: 1;
     color: var(--ink-tier);
   }
   .tierchip.lg {
     width: 34px;
     height: 34px;
-    border-radius: var(--r-md);
-    font-size: var(--fs-lg);
+    border-radius: var(--radius-control);
+    font-size: var(--text-body);
   }
   .tierchip.A {
     background: var(--tier-a);
@@ -116,13 +116,13 @@
   }
   /* tier-coloured icons (MinTier) */
   .tcol.A {
-    color: var(--tier-a);
+    color: var(--tier-a-text);
   }
   .tcol.B {
-    color: var(--tier-b);
+    color: var(--tier-b-text);
   }
   .tcol.C {
-    color: var(--tier-c);
+    color: var(--tier-c-text);
   }
   /* cache-type chip (keeps OUR cache-type glyph + colour; --tc carries the per-type colour) */
   .typechip {
@@ -131,38 +131,39 @@
     gap: 5px;
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: var(--fs-xs);
-    padding: var(--sp-1) var(--sp-3);
-    border-radius: var(--r-5);
+    font-size: var(--text-caption);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-chip);
     background: color-mix(in oklch, var(--tc, var(--accent)) 18%, transparent);
-    color: var(--tc, var(--accent));
+    /* the type's hue mixed toward the ink, so it reads as text in every theme */
+    color: color-mix(in oklch, var(--tc, var(--accent)) var(--hue-text), var(--ink));
   }
   .srcchip {
     font-family: var(--font-mono);
     font-weight: 500;
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     color: var(--muted);
-    padding: var(--sp-1) var(--sp-3);
+    padding: var(--space-xs) var(--space-sm);
     border: 1px solid var(--line);
-    border-radius: var(--r-5);
+    border-radius: var(--radius-chip);
   }
   /* labelled stat + mono micro-label + bright data value */
   .stat-l {
-    font-size: var(--fs-2xs);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
-    margin-bottom: var(--sp-2);
+    margin-bottom: var(--space-xs);
   }
   .stat-v {
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .ulabel {
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: var(--fs-2xs-up);
+    font-size: var(--text-caption);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
