@@ -158,4 +158,25 @@ describe("FBB forwarding scheduler end-to-end", () => {
     await fwd.tick();
     expect(calls).toEqual(["DB0RF-1"]);
   });
+
+  it("tick() defers a due partner the admit gate refuses, and runs it once admitted", async () => {
+    const calls: string[] = [];
+    let open = false;
+    const { api } = fakeApi([partner({ call: "DB0RF-1" })], {});
+    const fwd = new BbsForwarder({
+      api,
+      linkFactory: (p) => {
+        calls.push(p.call);
+        return loopbackLinkFactory(makeStore([]));
+      },
+      admit: () => open,
+      now: () => 1000,
+    });
+    await fwd.tick();
+    expect(calls).toEqual([]); // refused: no session opened
+
+    open = true;
+    await fwd.tick(); // still due, because a refused partner is not marked as run
+    expect(calls).toEqual(["DB0RF-1"]);
+  });
 });

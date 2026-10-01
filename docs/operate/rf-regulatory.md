@@ -64,12 +64,30 @@ restrict where and how these run — permitted band segments, power, occupied ba
 requirement that a control operator be reachable. aprscaching's part:
 
 - automatic transmit (digipeat / beacon / forward / relay) is **opt-in per port**, never implicit;
-- unattended transmit paths are **rate-limited by fixed token buckets**: remote-box transmits and MeshCom
-  sends allow a burst of three, then one per minute; the digipeater suppresses a duplicate frame for
-  30 s and can hold a repeat back (`DIGI_VISCOUS_MS`). These limits are built in, not configurable per
-  port, and there is no duty-cycle setting;
+- every unattended transmit path is **paced by a token bucket** with a hard ceiling (see
+  [Transmit pacing](#transmit-pacing)); the digipeater suppresses a duplicate frame for 30 s and can hold
+  a repeat back (`DIGI_VISCOUS_MS`). There is no airtime duty-cycle setting;
 - the federation-over-RF carriers choose only the *record encoding and batch size* for a link
   (`workers/gateway/src/fedtransport.ts`) — never a band, segment, or power level.
+
+### Transmit pacing
+
+Each unattended path draws from its own token bucket: `burst` transmits at once, then one more every
+`refill` seconds. Separate buckets keep a busy path (IGate traffic) from starving another (an answer to
+a radio command). The operator can tighten any bucket freely; a looser value is clamped to the ceiling
+with a warning at startup, so a typo can never turn an unattended station into a channel hog.
+
+| Path | Unit | Settings | Default | Ceiling |
+|---|---|---|---|---|
+| Remote box (beacons, messages, answers) | frame | `BOX_TX_BURST`, `BOX_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
+| MeshCom sends | message | `MESHCOM_TX_BURST`, `MESHCOM_TX_REFILL_SEC` | 3, then 1 per 60 s | 10, then 1 per 6 s |
+| TX-IGate (APRS-IS → RF) | message | `IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC` | 6, then 1 per 10 s | 10, then 1 per 6 s |
+| FBB forwarding | session | `BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC` | 4, then 1 per 300 s | 10, then 1 per 60 s |
+
+A refused transmit is always logged. A refused remote-box command fails with the wait time; a refused
+IGate message is not gated, and the sender's own retry carries it once a token is back; a refused FBB
+session is deferred to the next scheduler poll. Forwarding is paced per session, never per frame —
+throttling frames inside an open AX.25 link would stall it into retries.
 
 ## Third-party traffic & message handling
 
@@ -109,7 +127,7 @@ for what crosses it in each direction.
 |---|---|
 | Signs, never encrypts; confidentiality degrades to field-drop | Confirming that satisfies *your* regulator |
 | Transmit off by default, gated on control-verification | Being the reachable, responsible control operator |
-| Per-port opt-in for automatic TX; fixed rate limits on unattended TX | Choosing enabled bands, ports, power, and segments; any duty-cycle limit your rules set |
+| Per-port opt-in for automatic TX; token-bucket pacing on unattended TX, with a ceiling | Choosing enabled bands, ports, power, and segments; tightening the pacing to any duty-cycle limit your rules set |
 | Callsign in every frame; NODES broadcast interval (`NETROM_BROADCAST_MS`) | Meeting your national ID rule |
 | Third-party encapsulation preserving the originating callsign | Meeting third-party and international-traffic rules |
 | Recognition-only donations; no commercial payloads | Keeping your on-air content non-commercial |
