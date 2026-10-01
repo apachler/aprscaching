@@ -4,6 +4,23 @@ The `deploy/` directory ships a complete Docker stack: one multi-arch image (amd
 contains the Node gateway, the ingest, and the built web app, plus compose files for the common
 deployment shapes. Everything below runs from a plain `git clone` — no host Node/pnpm install needed.
 
+## Before you start
+
+- **A Linux box** — a Pi, a mini-PC or a VM — with Docker Engine and the Compose plugin
+  (`docker compose version` answers).
+- **The repository:** `git clone https://github.com/apachler/aprscaching && cd aprscaching`.
+- **Your callsign and APRS-IS passcode** — `setup.sh` asks for both.
+- **How people reach the box**, one of:
+    - a DNS name pointing at the box, with ports **80 and 443** reachable from the internet (Caddy gets the
+      TLS certificate from Let's Encrypt);
+    - a [Cloudflare Tunnel](#cloudflare-tunnel-ingress-a-pi-or-mini-pc-at-home) — no inbound port at all;
+    - your LAN only ([off-grid](#off-grid)), plain HTTP on port 80.
+
+!!! warning "Open only what the stack needs"
+    Caddy publishes 80 and 443; the gateway's port 8080 stays inside Docker. On a public box, let the
+    firewall admit only 80 and 443 (and SSH from addresses you trust) — never the gateway port or an ingest
+    port.
+
 ## The image
 
 `deploy/Dockerfile` builds from the repo root: it installs the workspace with the pinned pnpm,

@@ -84,12 +84,12 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 
 ## Live
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ws?region=` | Upgrade to a region "room" (live positions/finds) |
-| GET | `/api/spots` | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED` |
-| GET | `/api/cot` | Cursor-on-Target snapshot for TAK (`bbox`) |
-| GET | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates |
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| GET | `/ws?region=` | Upgrade to a region "room" (live positions/finds) | public |
+| GET | `/api/spots` | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED` | public |
+| GET | `/api/cot` | Cursor-on-Target snapshot for TAK (`bbox`) | public |
+| GET | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates | public |
 
 ## Federation
 
@@ -125,32 +125,33 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 
 ## Admin / sysop
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/admin/whoami` | Whether the caller is an operator; `pending: "verify"` for the unconfirmed holder of an `ADMIN_CALLSIGNS` call |
-| GET · POST | `/api/admin/verifications` | List · add manual callsign verifications (`{ callsign, note }`) |
-| DELETE | `/api/admin/verifications/:call` | Revoke a manual verification |
-| GET · POST | `/api/admin/adoptions` | Withdrawn-owner caches, offers with their pending requests and the recent trail · offer a cache (`{ cacheId \| code, note }`) |
-| DELETE | `/api/admin/adoptions/:cacheId` | Withdraw an offer (cancels its pending requests) |
-| POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) |
-| POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) |
-| GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
-| GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most). Sysop or `x-operator-secret` |
-| GET | `/api/admin/setup/44net` | The read-only 44Net self-check: A record, `_aprscaching` TXT and descriptor endpoint, each pass/warn/fail with a fix (sysop or x-operator-secret) |
-| GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table (public read; the POST mirror takes x-ingest-secret, sysop or x-operator-secret) · MHeard |
-| GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners (the partner-list read is also open to x-ingest-secret, for the ingest box's scheduler) |
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| GET | `/api/admin/whoami` | Whether the caller is an operator; `pending: "verify"` for the unconfirmed holder of an `ADMIN_CALLSIGNS` call | public (answers for the session) |
+| GET · POST | `/api/admin/verifications` | List · add manual callsign verifications (`{ callsign, note }`) | sysop |
+| DELETE | `/api/admin/verifications/:call` | Revoke a manual verification | sysop |
+| GET · POST | `/api/admin/adoptions` | Withdrawn-owner caches, offers with their pending requests and the recent trail · offer a cache (`{ cacheId \| code, note }`) | sysop |
+| DELETE | `/api/admin/adoptions/:cacheId` | Withdraw an offer (cancels its pending requests) | sysop |
+| POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) | sysop |
+| POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) | sysop |
+| GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) | sysop |
+| GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most) | sysop or x-operator-secret |
+| GET | `/api/admin/setup/44net` | The read-only 44Net self-check: A record, `_aprscaching` TXT and descriptor endpoint, each pass/warn/fail with a fix | sysop or x-operator-secret |
+| GET · POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table · MHeard | public read; the POST mirror takes x-ingest-secret, sysop or x-operator-secret |
+| GET · POST · DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners | sysop or x-operator-secret (the partner-list read also x-ingest-secret, for the ingest box's scheduler) |
 
-All admin writes are **sysop**-gated server-side; each also accepts `x-operator-secret` for scripts.
+Every admin route is gated server-side. Scripts reach the routes marked *x-operator-secret* with the operator
+secret; the others need a signed-in sysop.
 
 ## Ingest & BBS backend
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/ingest` | Ingest positions/finds/packets (`x-ingest-secret` or on-device signed) |
-| GET · POST | `/outbox` · `/outbox/ack` | Box pulls / acks queued APRS-IS messages |
-| GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box (x-ingest-secret) |
-| GET · POST | `/api/bbs/session` · `/api/bbs/kill` | Connected-mode BBS session state · end a session (x-ingest-secret) |
-| POST | `/api/import/:source` | Import an external catalog — see [Administration](../operate/administration.md#import-heritage-places) (x-ingest-secret) |
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| POST | `/ingest` | Ingest positions/finds/packets | x-ingest-secret, or a batch signed on the device |
+| GET · POST | `/outbox` · `/outbox/ack` | Box pulls / acks queued APRS-IS messages | x-ingest-secret |
+| GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box | x-ingest-secret |
+| GET · POST | `/api/bbs/session` · `/api/bbs/kill` | Connected-mode BBS session state · end a session | x-ingest-secret |
+| POST | `/api/import/:source` | Import an external catalog — see [Administration](../operate/administration.md#import-heritage-places) | x-ingest-secret |
 
 ## Accounts, identity & GDPR
 
@@ -182,22 +183,35 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 
 ## BBS (public)
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST · GET | `/api/bbs/messages`, `?to=`, `/api/bbs/sent?from=`, `/api/bbs/bulletins`, `/api/bbs/thread/:id` | Store-and-forward mail + bulletins |
-| POST | `/api/bbs/messages/:id/read` | Mark a message read |
-| GET | `/api/bbs/route` · `/api/bbs/wp` | Hierarchical routing lookup · White Pages directory |
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| POST · GET | `/api/bbs/messages`, `?to=`, `/api/bbs/sent?from=`, `/api/bbs/bulletins`, `/api/bbs/thread/:id` | Store-and-forward mail + bulletins | none — see the note below |
+| POST | `/api/bbs/messages/:id/read` | Mark a message read | none — see the note below |
+| GET | `/api/bbs/route` | Hierarchical routing lookup | public |
+| GET · POST | `/api/bbs/wp` | White Pages: look up · set a callsign's home BBS (`{ callsign, homeBbs }`) | none — see the note below |
+
+!!! warning "Known issue: the web BBS routes are not authenticated"
+    `POST /api/bbs/messages` accepts any `fromCall`; `GET /api/bbs/messages?to=` and `/api/bbs/sent?from=`
+    return any callsign's personal mail; `POST /api/bbs/messages/:id/read` marks any message read; and
+    `POST /api/bbs/wp` sets any callsign's home BBS, which steers where FBB forwarding sends that callsign's
+    mail. None of them checks a session or a secret (`workers/gateway/src/bbs.ts`, `forward.ts`). Treat the
+    web BBS as open until these are gated.
 
 ## Misc
 
-`GET /health` (readiness; `?live` for liveness) · `/source` + `/.well-known/source` (running source) ·
-`/imprint` + `/privacy` (legal pages from `OPERATOR_*`) · `/sitemap` (human-readable site map) ·
-`/support` + `/api/support` · `GET/POST /api/support/prefs` + `POST /api/support/confirm`
-(supporter recognition; prefs are session-gated, confirm is x-operator-secret) · `/sitemap.xml` +
-`/api/sitemap` (JSON) + `/robots.txt` · `/feeds/*.xml` (RSS: activity, caches, bulletins, leaderboard,
-per-user) · `/badge/:call.svg` (embeddable network badge) · `/embed` + `/embed/qr.svg` (embeddable map +
-QR; the map takes `?cache=` or `?bbox=`, loads MapLibre from the instance's web app and its basemap from
-[`BASEMAP_STYLE`](configuration.md#gateway-read-api-spots-emailpush)) · `DELETE /api/views/:id` (remove a saved view).
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| GET | `/health` | Readiness; `?live` for liveness | public |
+| GET | `/source` · `/.well-known/source` | The running source (AGPL §13) | public |
+| GET | `/imprint` · `/privacy` | Legal pages from `OPERATOR_*` | public |
+| GET | `/sitemap` · `/sitemap.xml` · `/api/sitemap` · `/robots.txt` | Human-readable site map · XML sitemap · the same as JSON · crawler rules | public |
+| GET | `/support` · `/api/support` | Supporter recognition page · its data | public |
+| GET · POST | `/api/support/prefs` | Your supporter-recognition preferences | session |
+| POST | `/api/support/confirm` | Confirm a donation | x-operator-secret |
+| GET | `/feeds/*.xml` | RSS: activity, caches, bulletins, leaderboard, per-user (`/feeds/u/:call.xml`) | public |
+| GET | `/badge/:call.svg` | Embeddable network badge | public |
+| GET | `/embed` · `/embed/qr.svg` | Embeddable map (`?cache=` or `?bbox=`; MapLibre from the instance's web app, basemap from [`BASEMAP_STYLE`](configuration.md#gateway-read-api-spots-emailpush)) · its QR code | public |
+| DELETE | `/api/views/:id` | Remove a saved view | session |
 
 ## Scheduled tasks
 

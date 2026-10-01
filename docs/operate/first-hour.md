@@ -37,11 +37,16 @@ ingest is broken, *Recommended* ones are expected of a public instance, and *Opt
     - a nightly `deploy/backup.sh` cron (on the Cloudflare split: D1 Time Travel plus a copy of the R2 media —
       [Backups](deployment.md#backups));
     - `SOURCE_REPO` pointing at your published fork if you changed the code (AGPL §13).
+
+    **Check:** the *Operator imprint* item turns green and `/imprint` shows your details; run
+    `./backup.sh` once by hand and look for `backup: wrote …` or `backup: uploaded …`.
 7. **Attest your RF site.** `setup.sh` names it on both sides; with a second ingest box, add its
    `RF_SITE_CALL` to `FIRST_PARTY_SITES`. Only frames a listed site's own receiver heard directly reach
-   Tier A — [why](../concepts.md#transport-is-not-trust).
+   Tier A — [why](../concepts.md#transport-is-not-trust). **Check:** the *First-party RF sites* item under
+   **Instance admin → Setup** names your site call.
 8. **Join the network.** Add the peers you know to `FED_PEERS` and ask their operators to add yours — see
-   [Federation → Joining the network](../guides/federation.md#joining-the-network).
+   [Federation → Joining the network](../guides/federation.md#joining-the-network). **Check:** the
+   *Federation peers* item under **Instance admin → Setup** counts your enabled peers.
 
 9. **44Net** (only with a `44net` endpoint in `FED_ENDPOINTS`). Under **Instance admin → Setup → 44Net**,
    open *Check what peers find in DNS*. It reads the A record of the host peers contact (inside

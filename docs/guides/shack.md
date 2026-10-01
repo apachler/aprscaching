@@ -4,7 +4,7 @@ The Shack is the radio side of aprscaching: a set of packet-radio apps that run 
 **Shack** in the left rail (on a phone: **You → Advanced — the Shack**). Each app opens its own screen, and
 the pin button next to an app puts it on the left rail for one-tap access.
 
-Most apps work with a radio connected to **your own computer** — through a USB or Bluetooth TNC, or the
+Most apps work with a radio connected to **your own computer** — through a USB or Bluetooth [TNC](../glossary.md#tnc), or the
 soundcard — so a laptop and a radio are a complete station, even with no internet. Two apps manage the
 instance's always-on station and are shown only to its operator.
 
@@ -16,11 +16,11 @@ instance's always-on station and are shown only to its operator.
 |---|---|---|
 | **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over your TNC (USB or Bluetooth). | everyone |
 | **BBS** | Store-and-forward mail, bulletins and threads on the instance's BBS. | everyone |
-| **Packet decoder** | Paste a raw APRS or AX.25 line and see every field decoded. | everyone |
+| **Packet decoder** | Paste a raw [APRS](../glossary.md#aprs) or [AX.25](../glossary.md#ax25) line and see every field decoded. | everyone |
 | **Tools** | Plugins and signal decoders, including **CW and PSK31 decoding from your microphone**. | everyone |
-| **Rig control** | Tune your radio over USB (CAT). See [Rig control](my-radio.md#rig-control). | everyone |
-| **NET/ROM node** | The instance's node: routing table, digipeater, sysop console. | operator |
-| **Remote box** | Send commands to the instance's ingest box without opening a port on it. | operator |
+| **Rig control** | Tune your radio over USB ([CAT](../glossary.md#cat)). See [Rig control](my-radio.md#rig-control). | everyone |
+| **[NET/ROM](../glossary.md#netrom) node** | The instance's node: routing table, [digipeater](../glossary.md#digipeater), [sysop](../glossary.md#sysop) console. | operator |
+| **Remote box** | Send commands to the instance's [ingest box](../glossary.md#ingest-box) without opening a port on it. | operator |
 
 Your radio connection itself — receiving, forwarding and transmitting APRS — lives in
 **Settings → My radio (browser)**: see [Your radio in the browser](my-radio.md).
@@ -41,7 +41,8 @@ Paste a line in the usual TNC2 format, for example
 OE8APR-9>APRS,WIDE1-1,qAR,OE8XBM-10:!4703.00N/01526.00E>mobile
 ```
 
-and the decoder shows what it contains: position (plain, compressed or Mic-E), course, speed, altitude,
+(`qAR,OE8XBM-10` is the [q-construct](../glossary.md#q-construct): where the packet entered APRS-IS), and
+the decoder shows what it contains: position (plain, compressed or Mic-E), course, speed, altitude,
 objects and items, messages with acknowledgements, bulletins, status, weather and telemetry.
 
 ## CW and PSK31 by ear
@@ -57,11 +58,11 @@ with other nodes. Setting those up is the operator's job: see [Packet BBS & node
 
 ## Remote box and spots
 
-- **Remote box** (operator) — the web app queues commands and the ingest box collects them over its own
-  outbound connection, so the box needs no open port. Set `BOX_ID` on the box and the same name in the app,
-  then enter the pairing code the box prints when it starts to link it to your account; each command's
-  result appears in the command log. Transmit commands need a verified callsign and
-  `BOX_TX=1` on the box ([set-up](../operate/administration.md#remote-control-of-your-box)).
+- **Remote box** (operator) — send commands to the instance's ingest box from the web app. The box collects
+  them over its own outbound connection, so it needs no open port. Link the box once by entering the pairing
+  code it prints when it starts; each command's result appears in the command log. Transmit commands need a
+  verified callsign, and the box must allow remote transmit. Setting up the box is covered in
+  [Remote control of your box](../operate/administration.md#remote-control-of-your-box).
 - **Spots** — when the operator enables them, POTA and SOTA activations (and DX-cluster, RBN and
   PSKReporter spots) appear on the map; filter them under **Search & filter → Live layers**.
 
@@ -81,6 +82,8 @@ Plugins you don't fully trust run in a sealed-off sandbox without network access
 plugin can transmit or change how finds are verified without passing the same checks as you.
 
 ### For plugin authors
+
+This part is for developers writing a plugin; using plugins needs none of it.
 
 - **Capabilities** declare what a tool may do (`command`, `monitor`, `event`, `decoder`, `panel`, `map`,
   `ipc`, `beacon`, `network`, `tx`, `geo`). `beacon`, `network`, `tx` and `geo` need an extra grant, and
