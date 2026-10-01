@@ -65,20 +65,20 @@ export interface NavItem {
   icon: IconName;
   /** Rail section: pinned Shack apps render between "top" and "bottom". */
   section: "top" | "bottom";
-  /** Also a mobile tab: its Modern glyph and its Phosphor (CP437/ASCII) glyph. */
-  tab?: { glyph: string; cog: string };
+  /** Also a mobile tab, with the glyph the Phosphor theme shows in place of its icon. */
+  tab?: { cog: string };
   /** Shown only to this instance's operator. */
   sysop?: boolean;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { key: "map", label: "Map", icon: "map", section: "top", tab: { glyph: "🗺", cog: "▦" } },
-  { key: "nearby", label: "Nearby", icon: "locate", section: "top", tab: { glyph: "📍", cog: "@" } },
-  { key: "activity", label: "Activity", icon: "bench", section: "top", tab: { glyph: "⚡", cog: "↯" } },
+  { key: "map", label: "Map", icon: "map", section: "top", tab: { cog: "▦" } },
+  { key: "nearby", label: "Nearby", icon: "locate", section: "top", tab: { cog: "@" } },
+  { key: "activity", label: "Activity", icon: "bench", section: "top", tab: { cog: "↯" } },
   { key: "messages", label: "Messages", icon: "message", section: "top" },
   { key: "ranks", label: "Ranks", icon: "ranks", section: "top" },
   { key: "shack", label: "Shack", icon: "tools", section: "top" },
-  { key: "profile", label: "You", icon: "profile", section: "bottom", tab: { glyph: "👤", cog: "☺" } },
+  { key: "profile", label: "You", icon: "profile", section: "bottom", tab: { cog: "☺" } },
   { key: "offline", label: "Offline", icon: "import", section: "bottom" },
   { key: "settings", label: "Settings", icon: "settings", section: "bottom" },
   { key: "admin", label: "Admin", icon: "shield-check", section: "bottom", sysop: true },

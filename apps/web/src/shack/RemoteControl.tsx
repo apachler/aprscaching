@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { enqueueBoxCommand, getBoxLog, pairBox, needsPairing, type BoxCommand } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Ico } from "../ui/index.js";
+import { Button, Row, Badge, EmptyState, ErrorState, useConfirm, useToast, usePoll, Icon } from "../ui/index.js";
 
 /**
  * Remote control of your own ingest box. The web app enqueues commands; the box pulls
@@ -155,31 +155,31 @@ export function RemoteControl(props: { callsign: string; verified: boolean; map:
       {signedIn && unpaired && <p className="muted">Pair this box to your account before sending it commands.</p>}
 
       <div className="row wrap gap-2">
-        <button onClick={() => send("status")} disabled={!ready}>
+        <Button onClick={() => send("status")} disabled={!ready}>
           ↻ Status
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={beacon}
           disabled={!canTx}
           title={
             canTx ? "Beacon the map centre" : unpaired ? "Pair this box first" : "Verify your callsign to transmit"
           }
         >
-          <Ico e="📍 " />
+          <Icon name="place" cp437="" className="lead-ic" />
           Beacon here
-        </button>
-        <button onClick={() => send("igate", { on: true })} disabled={!canTx}>
+        </Button>
+        <Button onClick={() => send("igate", { on: true })} disabled={!canTx}>
           IGate on
-        </button>
-        <button onClick={() => send("igate", { on: false })} disabled={!canTx}>
+        </Button>
+        <Button onClick={() => send("igate", { on: false })} disabled={!canTx}>
           IGate off
-        </button>
-        <button onClick={() => send("digi", { on: true })} disabled={!canTx}>
+        </Button>
+        <Button onClick={() => send("digi", { on: true })} disabled={!canTx}>
           Digi on
-        </button>
-        <button onClick={() => send("tx", { on: false })} disabled={!canTx}>
+        </Button>
+        <Button onClick={() => send("tx", { on: false })} disabled={!canTx}>
           TX off
-        </button>
+        </Button>
       </div>
 
       <label>

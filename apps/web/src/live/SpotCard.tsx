@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Spot } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Badge, useToast, Ico } from "../ui/index.js";
+import { Button, Badge, useToast, Icon } from "../ui/index.js";
 import { cat, useCatConnected } from "../rf/cat.js";
 
 /**
@@ -28,9 +28,9 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
         <span className="mono spot-call">{s.callsign}</span>
         <Badge className="ml-2">{s.source.toUpperCase()}</Badge>
         <span className="spacer" />
-        <button className="icon" aria-label="Close" onClick={props.onClose}>
+        <Button variant="icon" aria-label="Close" onClick={props.onClose}>
           ✕
-        </button>
+        </Button>
       </div>
       {(s.ref || s.name) && (
         <div className="spot-ref">
@@ -46,10 +46,10 @@ export function SpotCard(props: { spot: Spot; onClose: () => void; onViewCache?:
       </div>
       {s.comment && <p className="spot-comment muted">{s.comment}</p>}
       {rigOn && s.freqHz != null && (
-        <button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot">
-          <Ico e="📻 " />
+        <Button className="spot-tune" onClick={tune} title="Tune your connected rig to this spot">
+          <Icon name="radio" cp437="" className="lead-ic" />
           Tune rig to {freqMHz} MHz{s.mode ? ` ${s.mode}` : ""}
-        </button>
+        </Button>
       )}
       {props.onViewCache && (
         <Button variant="primary" className="spot-cta" onClick={props.onViewCache}>

@@ -2,7 +2,18 @@
 import { useState } from "react";
 import { listWatch, addWatch, removeWatch, getWatchAlerts, markWatchSeen, type WatchEntry } from "../api.js";
 import { useFmt } from "../format.js";
-import { Row, Badge, EmptyState, ErrorState, LoadMore, usePaged, useToast, useLoad, usePoll } from "../ui/index.js";
+import {
+  Row,
+  Badge,
+  EmptyState,
+  ErrorState,
+  LoadMore,
+  usePaged,
+  useToast,
+  useLoad,
+  usePoll,
+  Button,
+} from "../ui/index.js";
 
 /**
  * Watchlist — watch callsigns and see in-app alerts when one is heard, especially near a
@@ -64,9 +75,9 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
               if (e.key === "Enter") add();
             }}
           />
-          <button onClick={add} disabled={!input.trim()}>
+          <Button onClick={add} disabled={!input.trim()}>
             Watch
-          </button>
+          </Button>
         </div>
       </Row>
       {watching.length === 0 ? (
@@ -74,14 +85,15 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
       ) : (
         <div className="badges">
           {watching.map((w) => (
-            <button
+            <Button
               key={w.callsign}
               className="chip-btn"
               onClick={() => remove(w.callsign)}
               title="Remove from watchlist"
+              aria-label={`Stop watching ${w.callsign}`}
             >
               {w.callsign} ✕
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -89,9 +101,9 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
       <div className="row between">
         <h4>Alerts{unseen > 0 ? ` (${unseen} new)` : ""}</h4>
         {unseen > 0 && (
-          <button className="link" onClick={clearSeen}>
+          <Button variant="quiet" onClick={clearSeen}>
             mark all seen
-          </button>
+          </Button>
         )}
       </div>
       {alerts.error && alerts.items.length === 0 ? (
@@ -123,9 +135,9 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
               <span className="muted"> · {fmt.ago(a.ts)}</span>
               {a.detail && <div className="comment">{a.detail}</div>}
               {a.lat != null && a.lon != null && props.onFly && (
-                <button className="link" onClick={() => props.onFly!(a.lat!, a.lon!)}>
+                <Button variant="quiet" onClick={() => props.onFly!(a.lat!, a.lon!)}>
                   show on map
-                </button>
+                </Button>
               )}
             </li>
           ))}

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Icon — inline-SVG glyphs (no Google Material Symbols / web-font dependency: perf + offline,
- * per css.md). 24-unit stroke icons coloured by `currentColor`; size in px. Grow the map as
- * surfaces need more glyphs. A few markers (navigation arrow, overflow dots) are filled.
+ * Icon — the app's one icon set (docs/design/design-language.md): inline-SVG line icons on a 24-unit grid,
+ * stroke 2, coloured by `currentColor`, size in px. No icon font, so they work offline and cost no request.
+ * A few markers (navigation arrow, overflow dots) are filled. In the Phosphor theme an icon given a `cp437`
+ * glyph shows that glyph instead (an empty string drops it), so the terminal look stays text through the same
+ * component; without one, Phosphor shows the line icon.
  */
 import type { CSSProperties } from "react";
+import { useTheme } from "../format.js";
 
 export type IconName =
   | "close"
@@ -48,7 +51,24 @@ export type IconName =
   | "pin"
   | "pin-off"
   | "node"
-  | "message";
+  | "message"
+  | "offline"
+  | "edit"
+  | "thermo"
+  | "drop"
+  | "wind"
+  | "rain"
+  | "lock"
+  | "signal"
+  | "car"
+  | "handover"
+  | "ruler"
+  | "link"
+  | "attach"
+  | "satellite"
+  | "antenna"
+  | "trophy"
+  | "place";
 
 const D: Record<IconName, string> = {
   close: "M18 6 6 18 M6 6l12 12",
@@ -95,6 +115,24 @@ const D: Record<IconName, string> = {
   "pin-off": "M9 3h6l-1 7 4 3v2h-5v6l-1 2-1-2v-6H5v-2l4-3z M3 3l18 18",
   node: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M12 3v3 M12 18v3 M4 6l3.5 3.5 M20 6l-3.5 3.5 M4 18l3.5-3.5 M20 18l-3.5-3.5",
   message: "M4 4h16v16H4z M4 7l8 6 8-6",
+  offline:
+    "M2 2l20 20 M8.5 16.4a5 5 0 0 1 7 0 M5 12.9a10 10 0 0 1 5-2.8 M19 12.9a10 10 0 0 0-2.6-1.8 M2 8.8a15 15 0 0 1 4.6-2.8 M22 8.8a15 15 0 0 0-11-3.8 M12 20h.01",
+  edit: "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+  thermo: "M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z",
+  drop: "M12 2.7l5.7 5.7a8 8 0 1 1-11.4 0z",
+  wind: "M17.7 7.7A2.5 2.5 0 1 1 19.5 12H2 M9.6 4.6A2 2 0 1 1 11 8H2 M12.6 19.4A2 2 0 1 0 14 16H2",
+  rain: "M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.3 M16 14v6 M8 14v6 M12 16v6",
+  lock: "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4",
+  signal: "M2 20h.01 M7 20v-4 M12 20v-8 M17 20V8 M22 20V4",
+  car: "M3 17v-5l2-5h14l2 5v5z M3 12h18 M7 17v2 M17 17v2 M7 14.5h.01 M17 14.5h.01",
+  handover: "M4 8h14l-4-4 M20 16H6l4 4",
+  ruler: "M3 17 17 3l4 4L7 21z M7 13l2 2 M10 10l2 2 M13 7l2 2",
+  link: "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7 M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
+  attach: "M21 11.5l-8.6 8.6a5 5 0 0 1-7-7l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-8",
+  satellite: "M13 7 9 3 5 7l4 4 M17 11l4 4-4 4-4-4 M8 12l4 4 6-6-4-4z M9 21a6 6 0 0 0-6-6",
+  antenna: "M12 12v9 M8 21h8 M9.5 9a2.5 2.5 0 1 1 5 0 M6.5 6.5a7.5 7.5 0 0 1 11 0 M12 9.5h.01",
+  trophy: "M8 21h8 M12 16v5 M7 4h10v5a5 5 0 0 1-10 0z M17 6h3v1a3 3 0 0 1-3 3 M7 6H4v1a3 3 0 0 0 3 3",
+  place: "M12 21s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z M12 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
 };
 
 /** Every icon, in the order they are defined (the design harness shows them all). */
@@ -108,7 +146,17 @@ export function Icon(props: {
   className?: string;
   title?: string;
   style?: CSSProperties;
+  /** the glyph Phosphor shows instead ("" shows nothing) */
+  cp437?: string;
 }) {
+  const phosphor = useTheme() === "phosphor";
+  if (phosphor && props.cp437 !== undefined) {
+    return props.cp437 ? (
+      <span className={["ico", props.className].filter(Boolean).join(" ")} aria-hidden="true">
+        {props.cp437}
+      </span>
+    ) : null;
+  }
   const s = props.size ?? 18;
   const common = {
     width: s,

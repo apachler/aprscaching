@@ -119,12 +119,12 @@ export function RigControl() {
       ) : (
         <>
           <div className="row gap-2">
-            <button onClick={() => tune(APRS_FREQ.eu, "FM")} disabled={busy}>
+            <Button onClick={() => tune(APRS_FREQ.eu, "FM")} disabled={busy}>
               144.800 (EU APRS)
-            </button>
-            <button onClick={() => tune(APRS_FREQ.na, "FM")} disabled={busy}>
+            </Button>
+            <Button onClick={() => tune(APRS_FREQ.na, "FM")} disabled={busy}>
               144.390 (NA APRS)
-            </button>
+            </Button>
           </div>
           <div className="row gap-2">
             <input
@@ -134,9 +134,9 @@ export function RigControl() {
               value={mhz}
               onChange={(e) => setMhz(e.target.value)}
             />
-            <button onClick={tuneManual} disabled={busy}>
+            <Button onClick={tuneManual} disabled={busy}>
               Tune
-            </button>
+            </Button>
           </div>
           <div className="row end">
             <Button variant="danger" onClick={() => cat.disconnect()}>

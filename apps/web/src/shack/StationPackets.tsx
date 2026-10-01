@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getStationPackets, type RawPacket } from "../api.js";
 import { useFmt } from "../format.js";
+import { Button } from "../ui/index.js";
 
 /**
  * Recent raw frames heard from a station — a shack-only diagnostic. Loads on
@@ -30,9 +31,9 @@ export function StationPackets(props: { callsign: string }) {
 
   return (
     <div className="station-packets">
-      <button className="link" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <Button variant="quiet" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? "▾" : "▸"} Raw packets
-      </button>
+      </Button>
       {open &&
         (err ? (
           <p className="muted">Couldn't load packets: {err}</p>

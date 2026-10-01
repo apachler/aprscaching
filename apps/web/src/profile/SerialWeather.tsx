@@ -4,7 +4,7 @@ import { decodeUltimeter, type UltimeterReading } from "@aprscaching/aprs";
 import { WebSerialWeather, webSerialSupported } from "../rf/serialWeather.js";
 import { submitWxReading } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, useToast, Ico } from "../ui/index.js";
+import { Button, useToast, Icon } from "../ui/index.js";
 
 /**
  * Browser-direct PWS over Web Serial: read a Peet Bros / Ultimeter station on USB in the
@@ -98,7 +98,7 @@ export function SerialWeather(props: { wxKey: string | null }) {
           </select>
         </label>
         {connected ? (
-          <button onClick={disconnect}>Disconnect</button>
+          <Button onClick={disconnect}>Disconnect</Button>
         ) : (
           <Button variant="primary" onClick={connect} disabled={!props.wxKey}>
             Connect station
@@ -112,19 +112,19 @@ export function SerialWeather(props: { wxKey: string | null }) {
             <>
               {reading.tempC != null && (
                 <span>
-                  <Ico e="🌡 " c="T " />
+                  <Icon name="thermo" cp437="T" className="lead-ic" />
                   {fmt.temp(reading.tempC)}
                 </span>
               )}
               {reading.humidity != null && (
                 <span>
-                  <Ico e="💧 " c="RH " />
+                  <Icon name="drop" cp437="RH" className="lead-ic" />
                   {reading.humidity}%
                 </span>
               )}
               {reading.windKn != null && (
                 <span>
-                  <Ico e="🌬 " c="WND " />
+                  <Icon name="wind" cp437="WND" className="lead-ic" />
                   {fmt.speed(reading.windKn)}
                   {reading.windDirDeg != null ? ` @ ${reading.windDirDeg}°` : ""}
                 </span>
@@ -132,7 +132,7 @@ export function SerialWeather(props: { wxKey: string | null }) {
               {reading.pressureHpa != null && <span>{reading.pressureHpa} hPa</span>}
               {reading.rainTodayMm != null && (
                 <span>
-                  <Ico e="☔ " c="RN " />
+                  <Icon name="rain" cp437="RN" className="lead-ic" />
                   {reading.rainTodayMm} mm
                 </span>
               )}

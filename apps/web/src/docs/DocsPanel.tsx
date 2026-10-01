@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DOC_PAGES, type DocPage } from "virtual:docs";
-import { Panel, EmptyState } from "../ui/index.js";
+import { Panel, EmptyState, Button } from "../ui/index.js";
 import { renderMarkdown } from "./markdown.js";
 
 /** Pages grouped into their sections, section order preserved from the manifest order. */
@@ -79,14 +79,14 @@ export function DocsPanel(props: { initialSlug?: string; onClose: () => void }) 
             <div key={g.section} className="docs-navgroup">
               <p className="docs-navhead">{g.section}</p>
               {g.pages.map((p) => (
-                <button
+                <Button
                   key={p.slug}
                   className={p.slug === slug ? "on" : ""}
                   aria-current={p.slug === slug ? "page" : undefined}
                   onClick={() => navTo(p.slug)}
                 >
                   {p.title}
-                </button>
+                </Button>
               ))}
             </div>
           ))}

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Ico } from "../ui/index.js";
+import { Button, Icon } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
@@ -125,7 +125,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
       <div className="stages">
         <h4>Stages</h4>
         <p className="muted error">Couldn't load this cache's stages.</p>
-        <button onClick={load}>Retry</button>
+        <Button onClick={load}>Retry</Button>
       </div>
     );
 
@@ -149,7 +149,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
                   "✓ unlocked"
                 ) : (
                   <>
-                    <Ico e="🔒 " c="LOCK " />
+                    <Icon name="lock" cp437="LOCK" className="lead-ic" />
                     {s.unlock}
                   </>
                 )}
@@ -159,7 +159,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
             {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} />}
             {s.unlocked && s.lat != null && s.lon != null && (
               <div className="muted mt-1">
-                <Ico e="📍 " />
+                <Icon name="place" cp437="" className="lead-ic" />
                 <span className="mono">{fmt.coord(s.lat, s.lon)}</span> ·{" "}
                 <a
                   href={`https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=17/${s.lat}/${s.lon}`}
@@ -173,10 +173,10 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
             {!s.unlocked && nextLocked?.stageNo === s.stageNo && s.unlock === "nfc" && (
               <div className="nfc-unlock mt-2">
                 <div className="row gap-2">
-                  <button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}>
-                    <Ico e="📶 " />
+                  <Button disabled={busy === s.stageNo} onClick={() => scanNfc(s.stageNo)}>
+                    <Icon name="signal" cp437="" className="lead-ic" />
                     Scan NFC tag
-                  </button>
+                  </Button>
                 </div>
                 <div className="row gap-2 mt-2">
                   <input
@@ -185,13 +185,13 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
                     aria-label="Stage tag code"
                     onChange={(e) => setCode(e.target.value)}
                   />
-                  <button
-                    className="primary"
+                  <Button
+                    variant="primary"
                     disabled={busy === s.stageNo || !code.trim()}
                     onClick={() => reveal(s.stageNo)}
                   >
                     {busy === s.stageNo ? "Checking…" : "Unlock"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

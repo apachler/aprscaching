@@ -5,7 +5,7 @@
  * destinations come from the nav table (nav.ts); Shack apps the user has PINNED render after Shack.
  * The Admin item shows only to this instance's operator (and every admin write is gated server-side).
  */
-import { Icon, type IconName } from "./ui/index.js";
+import { Icon, type IconName, Button } from "./ui/index.js";
 import { NAV_ITEMS, type NavItem } from "./nav.js";
 import type { ShackApp } from "./shack/apps.js";
 
@@ -18,7 +18,7 @@ export function NavRail(props: {
   sysop: boolean;
 }) {
   const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
-    <button
+    <Button
       key={key}
       className={`${props.active === key ? "on" : ""}${cls ? " " + cls : ""}`}
       onClick={onClick}
@@ -28,7 +28,7 @@ export function NavRail(props: {
     >
       <Icon name={icon} size={21} />
       <span>{label}</span>
-    </button>
+    </Button>
   );
   const core = (section: NavItem["section"]) =>
     NAV_ITEMS.filter((i) => i.section === section && (!i.sysop || props.sysop)).map((i, n) =>

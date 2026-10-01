@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { getCacheMedia, addCacheMedia, deleteCacheMedia, mediaUrl, type CacheMediaItem } from "../api.js";
-import { Ico } from "../ui/index.js";
+import { Button, Icon } from "../ui/index.js";
 
 /**
  * Cache media gallery — photos, audio and files an owner attaches to a cache (hints,
@@ -78,14 +78,14 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
                 <audio controls preload="none" src={mediaUrl(it.url)} />
               ) : (
                 <a className="media-file" href={mediaUrl(it.url)} target="_blank" rel="noreferrer noopener">
-                  <Ico e="📎 " />
+                  <Icon name="attach" cp437="" className="lead-ic" />
                   {it.title ?? "file"}
                 </a>
               )}
               {props.isOwner && (
-                <button className="media-del" aria-label="Delete media" onClick={() => remove(it.id)}>
+                <Button className="media-del" aria-label="Delete media" onClick={() => remove(it.id)}>
                   ✕
-                </button>
+                </Button>
               )}
             </figure>
           ))}

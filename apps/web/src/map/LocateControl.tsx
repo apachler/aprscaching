@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as maplibregl from "maplibre-gl";
-import { Icon } from "../ui/index.js";
+import { Icon, Button } from "../ui/index.js";
 import { locationSupport, watchFixes, watchPermission, type DeviceFix, type LocationProblem } from "../geo/location.js";
 import { LocateStatus } from "../geo/useLocate.js";
 
@@ -156,7 +156,7 @@ export function LocateControl(props: { map: maplibregl.Map | null; onFix: (lat: 
     <>
       {box &&
         createPortal(
-          <button
+          <Button
             type="button"
             className="locate-btn"
             data-mode={mode}
@@ -167,7 +167,7 @@ export function LocateControl(props: { map: maplibregl.Map | null; onFix: (lat: 
             onClick={onClick}
           >
             <Icon name="locate" size={18} />
-          </button>,
+          </Button>,
           box,
         )}
       {lineBox &&
@@ -176,9 +176,9 @@ export function LocateControl(props: { map: maplibregl.Map | null; onFix: (lat: 
           <div className="map-locate-status">
             <LocateStatus waiting={waiting} problem={problem} onCancel={stop} />
             {problem && (
-              <button type="button" className="icon" aria-label="Dismiss" onClick={() => setProblem(null)}>
+              <Button type="button" variant="icon" aria-label="Dismiss" onClick={() => setProblem(null)}>
                 <Icon name="close" size={14} />
-              </button>
+              </Button>
             )}
           </div>,
           lineBox,

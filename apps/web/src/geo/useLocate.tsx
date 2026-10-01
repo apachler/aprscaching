@@ -83,11 +83,11 @@ export function LocateStatus(props: {
         <span className="locate-status-text">{waitingText(props.waiting.elapsedMs, props.waiting.hint)}</span>
         <span className="locate-status-actions">
           {props.onSkip && (
-            <Button variant="link" onClick={props.onSkip}>
+            <Button variant="quiet" onClick={props.onSkip}>
               {props.skipLabel ?? "Skip"}
             </Button>
           )}
-          <Button variant="link" onClick={props.onCancel}>
+          <Button variant="quiet" onClick={props.onCancel}>
             Cancel
           </Button>
         </span>

@@ -14,7 +14,7 @@ import {
   type AmprChallenge,
   type VerifyMethods,
 } from "../api.js";
-import { Button, Icon, copyText, useToast, usePoll } from "../ui/index.js";
+import { Button, Icon, copyText, useToast, usePoll, Segmented } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { signWithP12 } from "./lotw.js";
 
@@ -78,18 +78,13 @@ export function VerifyCall(props: { callsign: string; onVerified: () => void; on
               {NO_SITE}
             </p>
           )}
-          <div className="seg verify-methods" role="group" aria-label="Verification method">
-            {shown.map((m) => (
-              <button
-                key={m.id}
-                className={active === m.id ? "on" : ""}
-                aria-pressed={active === m.id}
-                onClick={() => setMethod(m.id)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Verification method"
+            className="verify-methods"
+            value={active}
+            onChange={setMethod}
+            options={shown.map((m) => ({ value: m.id, label: m.label }))}
+          />
           {!methods ? (
             <p className="muted fine" role="status">
               Checking…
@@ -107,15 +102,15 @@ export function VerifyCall(props: { callsign: string; onVerified: () => void; on
                 ) : (
                   <p className="muted fine">
                     On-air verification needs a receiving station run by this instance to hear your message. Use{" "}
-                    <button className="link" onClick={() => setMethod("ampr")}>
+                    <Button variant="quiet" onClick={() => setMethod("ampr")}>
                       ampr.org DNS
-                    </button>
+                    </Button>
                     {methods.methods.lotw && (
                       <>
                         {" or "}
-                        <button className="link" onClick={() => setMethod("lotw")}>
+                        <Button variant="quiet" onClick={() => setMethod("lotw")}>
                           your LoTW certificate
-                        </button>
+                        </Button>
                       </>
                     )}{" "}
                     instead.
@@ -131,7 +126,7 @@ export function VerifyCall(props: { callsign: string; onVerified: () => void; on
         </>
       )}
       <div className="row end mt-2">
-        <button onClick={props.onClose}>{done ? "Done" : "Cancel"}</button>
+        <Button onClick={props.onClose}>{done ? "Done" : "Cancel"}</Button>
       </div>
     </section>
   );
@@ -237,14 +232,14 @@ function OnAir(props: { callsign: string; sites: string[]; onVerified: () => voi
       )}
       <div className="row end">
         {state === "waiting" ? (
-          <button
-            className="primary"
+          <Button
+            variant="primary"
             onClick={async () =>
               toast((await copyText(ch.text)) ? "Message copied" : "Couldn't copy — type it on the radio as shown")
             }
           >
             Copy message
-          </button>
+          </Button>
         ) : (
           <Button variant="primary" disabled={busy} onClick={() => void start()}>
             {busy ? "Starting…" : "Get a new code"}
@@ -318,11 +313,11 @@ function AmprDns(props: { callsign: string; onVerified: () => void }) {
       <div className="row end">
         {ch ? (
           <>
-            <button
+            <Button
               onClick={async () => toast((await copyText(ch.value)) ? "Value copied" : "Couldn't copy — select it")}
             >
               Copy value
-            </button>
+            </Button>
             <Button variant="primary" disabled={busy} onClick={() => void check()}>
               {busy ? "Checking…" : "Check"}
             </Button>

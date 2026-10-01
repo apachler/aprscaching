@@ -114,15 +114,15 @@ export function ProfileEditor(props: { callsign: string }) {
             onChange={(e) => setLink(i, "label", e.target.value)}
           />
           <input value={l.url} placeholder="https://…" onChange={(e) => setLink(i, "url", e.target.value)} />
-          <button className="icon" aria-label="Remove link" onClick={() => removeLink(i)}>
+          <Button variant="icon" aria-label="Remove link" onClick={() => removeLink(i)}>
             ✕
-          </button>
+          </Button>
         </div>
       ))}
       {(p.links ?? []).length < 5 && (
-        <button className="link" onClick={addLink}>
+        <Button variant="quiet" onClick={addLink}>
           + add link
-        </button>
+        </Button>
       )}
 
       <div className="row end mt-6">

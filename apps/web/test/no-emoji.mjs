@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// CI guard (Phosphor): keep colour emoji out of rendered UI so the ASCII Phosphor theme
-// stays emoji-free. Emoji are legal ONLY where they get swapped for a CP437/ASCII glyph at render:
-//   • inside an <Ico e="…" c="…" /> element (Modern emoji → Phosphor ASCII),
-//   • in a data glyph declaration (a `glyph:` / `cog:` / `emoji:` field),
+// CI guard: keep colour emoji out of rendered UI. The interface draws its icons from one line-icon set
+// (ui/Icon), and the Phosphor theme stays CP437/ASCII. Emoji are legal ONLY as map content glyphs that get
+// swapped for a CP437/ASCII glyph at render:
+//   • in a data glyph declaration (a `glyph:` / `cog:` field, e.g. the cache types),
 //   • in the APRS category glyph map (aprsGlyph.ts).
 // A raw emoji anywhere else (JSX text, a rendered string) is a regression: it would show through in
 // Phosphor. This scan fails the build on such leaks. Comments are ignored.
@@ -31,8 +31,7 @@ function isEmoji(cp) {
 function lineAllowed(line, file) {
   const t = line.trim();
   if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return true; // comment
-  if (line.includes("<Ico ")) return true; // <Ico e c/> wrapper
-  if (/\b(glyph|cog|emoji)\s*:/.test(line)) return true; // data glyph field
+  if (/\b(glyph|cog)\s*:/.test(line)) return true; // data glyph field
   if (basename(file) === "aprsGlyph.ts") return true; // APRS category map
   return false;
 }
@@ -62,7 +61,9 @@ for (const file of files) {
 }
 
 if (violations.length) {
-  console.error(`no-emoji guard: ${violations.length} raw emoji in rendered UI (wrap in <Ico e c/> or a glyph map):`);
+  console.error(
+    `no-emoji guard: ${violations.length} raw emoji in rendered UI (use an Icon, or a glyph map for map content):`,
+  );
   for (const v of violations) console.error("  " + v);
   process.exit(1);
 }

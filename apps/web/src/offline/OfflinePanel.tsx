@@ -393,13 +393,13 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
       </label>
       <div className="seg" role="group" aria-label="Take the square at the map centre">
         {SIZES.map((sz) => (
-          <button
+          <Button
             key={sz.chars}
             onClick={() => fromMap(sz.chars)}
             title={`The ${sz.label.toLowerCase()} at the map centre, e.g. ${sz.example}`}
           >
             {sz.label}
-          </button>
+          </Button>
         ))}
       </div>
       <p className="muted fine">
@@ -489,7 +489,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
               <Button variant="primary" onClick={() => void save()} disabled={busy != null}>
                 Download
               </Button>
-              <Button variant="link" onClick={() => setData(null)}>
+              <Button variant="quiet" onClick={() => setData(null)}>
                 Change the locator
               </Button>
             </div>

@@ -22,7 +22,6 @@ import {
   Group,
   Icon,
   ICON_NAMES,
-  Ico,
   LicenceBadge,
   LoadMore,
   MinTier,
@@ -34,6 +33,10 @@ import {
   ToastProvider,
   useConfirm,
   useToast,
+  Segmented,
+  Tabs,
+  tabPanelId,
+  ChipToggle,
 } from "../ui/index.js";
 import { FormatContext, loadSettings, makeFormatters } from "../format.js";
 
@@ -149,21 +152,15 @@ function Section(props: { id: string; title: string; lede?: ReactNode; children:
 function Seg<T extends string>(props: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
     <div className="uikit-ctl">
-      <span className="ulabel" id={`seg-${props.label}`}>
+      <span className="ulabel" aria-hidden="true">
         {props.label}
       </span>
-      <div className="seg" role="group" aria-labelledby={`seg-${props.label}`}>
-        {props.options.map(([v, l]) => (
-          <button
-            key={v}
-            className={props.value === v ? "on" : ""}
-            aria-pressed={props.value === v}
-            onClick={() => props.onChange(v)}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label={props.label}
+        value={props.value}
+        onChange={props.onChange}
+        options={props.options.map(([value, label]) => ({ value, label }))}
+      />
     </div>
   );
 }
@@ -222,6 +219,10 @@ function Primitives() {
   const [sw, setSw] = useState(true);
   const [master, setMaster] = useState(true);
   const [seg, setSeg] = useState("all");
+  const [bands, setBands] = useState<string[]>(["2m"]);
+  const [tab, setTab] = useState("inbox");
+  const [chans, setChans] = useState(["OE6XGR-10", "OE8KUR"]);
+  const [chan, setChan] = useState("mon");
   return (
     <>
       <h3>Buttons</h3>
@@ -229,9 +230,14 @@ function Primitives() {
         <Button variant="primary">Log a find</Button>
         <Button>Navigate</Button>
         <Button variant="danger">Delete</Button>
-        <Button variant="link">Show the logbook</Button>
+        <Button variant="quiet">Show the logbook</Button>
+        <Button variant="inline">remove</Button>
+        <Button variant="inline-danger">delete row</Button>
         <Button variant="icon" aria-label="Close">
           <Icon name="close" />
+        </Button>
+        <Button variant="icon-subtle" aria-label="Copy the coordinates">
+          <Icon name="copy" size={16} />
         </Button>
       </div>
       <div className="uikit-row">
@@ -290,24 +296,73 @@ function Primitives() {
           </Row>
         </Card>
         <div>
-          <div className="seg" role="group" aria-label="Show">
-            {[
-              ["all", "All"],
-              ["caches", "Caches"],
-              ["stations", "Stations"],
-            ].map(([v, l]) => (
-              <button
-                key={v}
-                className={seg === v ? "on" : ""}
-                aria-pressed={seg === v}
-                onClick={() => setSeg(v as string)}
+          <Segmented
+            label="Show"
+            value={seg}
+            onChange={setSeg}
+            options={[
+              { value: "all", label: "All" },
+              { value: "caches", label: "Caches" },
+              { value: "stations", label: "Stations" },
+            ]}
+          />
+          <Segmented
+            label="Show as chips"
+            look="chips"
+            className="mt-3"
+            value={seg}
+            onChange={setSeg}
+            options={[
+              { value: "all", label: "All" },
+              { value: "caches", label: "Caches" },
+              { value: "stations", label: "Stations" },
+            ]}
+          />
+          <div className="badges mt-3">
+            {["2m", "70cm", "HF"].map((b) => (
+              <ChipToggle
+                key={b}
+                pressed={bands.includes(b)}
+                onChange={(on) => setBands(on ? [...bands, b] : bands.filter((x) => x !== b))}
               >
-                {l}
-              </button>
+                {b}
+              </ChipToggle>
             ))}
           </div>
         </div>
       </div>
+
+      <h3>Tabs</h3>
+      <Tabs
+        label="Mail"
+        idBase="uk-mail"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: "inbox", label: "Inbox" },
+          { key: "sent", label: "Sent" },
+          { key: "bulletins", label: "Bulletins" },
+        ]}
+      />
+      <div role="tabpanel" id={tabPanelId("uk-mail", tab)} className="muted">
+        The {tab} view. Arrow keys move between the tabs.
+      </div>
+      <div className="pt-chanbar-row mt-3">
+        <Tabs
+          label="Channels"
+          idBase="uk-ch"
+          look="channel"
+          panels={false}
+          value={chan}
+          onChange={setChan}
+          onClose={(k) => setChans(chans.filter((c) => c !== k))}
+          items={[
+            { key: "mon", label: "0 Monitor", closable: false, className: "pt-cbtn" },
+            ...chans.map((c, i) => ({ key: c, label: `${i + 1} ${c}`, className: "pt-cbtn" })),
+          ]}
+        />
+      </div>
+      <p className="muted">A channel closes by its × or, with the tab focused, the Delete key.</p>
 
       <h3>Groups, rows and disclosure</h3>
       <div className="uikit-grid2">
@@ -385,9 +440,8 @@ function Primitives() {
         ))}
       </ul>
       <p className="muted">
-        Decorative glyphs (<code>Ico</code>): <Ico e="📡 " c="" />
-        <Ico e="📻 " c="" />— emoji in Modern, CP437 in Phosphor. The design language replaces them with the line icons
-        above (G3).
+        One set for every surface. In Phosphor an icon given a CP437 glyph shows the glyph instead (the tab bar, panel
+        titles), through the same component.
       </p>
     </>
   );

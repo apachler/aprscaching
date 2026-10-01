@@ -12,7 +12,19 @@ import {
 } from "../api.js";
 import { signAccountAction } from "../crypto.js";
 import { useFmt, browserLocale, browserTimeZone, type LocaleSettings } from "../format.js";
-import { Panel, Group, Row, Advanced, Switch, Ico, Button, useConfirm, useToast, useLoad } from "../ui/index.js";
+import {
+  Panel,
+  Group,
+  Row,
+  Advanced,
+  Switch,
+  Button,
+  useConfirm,
+  useToast,
+  useLoad,
+  Icon,
+  Segmented,
+} from "../ui/index.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { ConnectionsSettings } from "./ConnectionsSettings.js";
 import { Watchlist } from "../shack/Watchlist.js";
@@ -124,7 +136,7 @@ export function SettingsPanel(props: {
     <Panel
       title={
         <>
-          <Ico e="⚙ " />
+          <Icon name="settings" cp437="" className="lead-ic" />
           Settings
         </>
       }
@@ -150,27 +162,23 @@ export function SettingsPanel(props: {
             label="Appearance"
             help="Auto follows your system's light or dark setting. Phosphor is a late-90s green-screen terminal."
           >
-            <div className="seg" role="group" aria-label="Appearance">
-              {APPEARANCE.map(([t, label]) => (
-                <button
-                  key={t}
-                  className={s.theme === t ? "on" : ""}
-                  aria-pressed={s.theme === t}
-                  onClick={() => props.onApply({ ...s, theme: t })}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Appearance"
+              value={s.theme}
+              onChange={(theme) => props.onApply({ ...s, theme })}
+              options={APPEARANCE.map(([value, label]) => ({ value, label }))}
+            />
           </Row>
           <Row label="Units" help="distances, speed, temperature">
-            <div className="seg">
-              {(["metric", "imperial"] as const).map((u) => (
-                <button key={u} className={s.units === u ? "on" : ""} onClick={() => props.onApply({ ...s, units: u })}>
-                  {u}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Units"
+              value={s.units}
+              onChange={(units) => props.onApply({ ...s, units })}
+              options={[
+                { value: "metric", label: "Metric" },
+                { value: "imperial", label: "Imperial" },
+              ]}
+            />
           </Row>
           {s.theme === "phosphor" && (
             <Row
@@ -236,9 +244,9 @@ export function SettingsPanel(props: {
             ) : pushState === "unsupported" ? (
               <span className="muted">Not supported in this browser</span>
             ) : (
-              <button onClick={togglePush} disabled={pushState === "loading"}>
+              <Button onClick={togglePush} disabled={pushState === "loading"}>
                 {pushState === "on" ? "Disable" : "Enable"}
-              </button>
+              </Button>
             )}
           </Row>
           {pushState === "denied" && (
@@ -294,7 +302,7 @@ export function SettingsPanel(props: {
                 erase anonymises your finds and removes your account, keys and personal data.
               </p>
               <div className="row">
-                <button onClick={exportData}>Export my data</button>
+                <Button onClick={exportData}>Export my data</Button>
                 <Button variant="danger" onClick={deleteData}>
                   Erase my account
                 </Button>
@@ -315,7 +323,7 @@ export function SettingsPanel(props: {
         <Group title="About & credits" defaultOpen={false}>
           {props.onDocs && (
             <p>
-              <Button variant="link" onClick={props.onDocs}>
+              <Button variant="quiet" onClick={props.onDocs}>
                 Read the full manual
               </Button>
             </p>

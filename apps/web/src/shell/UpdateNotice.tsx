@@ -22,7 +22,7 @@ export function UpdateNotice() {
       <Button variant="primary" onClick={applyUpdate}>
         Reload
       </Button>
-      <Button variant="link" onClick={() => setLater(true)}>
+      <Button variant="quiet" onClick={() => setLater(true)}>
         Later
       </Button>
     </div>

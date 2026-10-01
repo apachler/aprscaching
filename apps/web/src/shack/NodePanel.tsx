@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { getNodes, getMheard, type NodeRouteRow, type MheardRow } from "../api.js";
 import { useFmt } from "../format.js";
-import { ErrorState } from "../ui/index.js";
+import { ErrorState, Button } from "../ui/index.js";
 import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
@@ -32,9 +32,9 @@ export function NodePanel() {
 
   return (
     <div className="node-panel">
-      <button className="link" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <Button variant="quiet" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? "▾" : "▸"} NODES + MHeard
-      </button>
+      </Button>
       {open && loadErr && (
         <ErrorState
           onRetry={() => {

@@ -17,6 +17,7 @@
     vertical-align: middle;
   }
   .bbs-subj {
+    display: block;
     color: var(--ink-2);
     font-style: italic;
   }
@@ -36,13 +37,20 @@
     margin: 0;
     padding: 0;
   }
+  /* a list row: the whole row is one button inside its list item */
   .bbs-row {
+    display: block;
+    width: 100%;
+    text-align: start;
+    background: none;
+    color: inherit;
+    font: inherit;
     padding: var(--space-sm) var(--space-sm);
     border-radius: var(--radius-control);
     cursor: pointer;
     border: 1px solid transparent;
   }
-  .bbs-row + .bbs-row {
+  .bbs-list > li + li {
     margin-top: var(--space-2xs);
   }
   .bbs-row:hover {

@@ -53,12 +53,12 @@ import {
   EmptyState,
   ErrorState,
   Switch,
-  Ico,
   copyText,
   useConfirm,
   useToast,
   useLoad,
   Disclosure,
+  Icon,
 } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -80,7 +80,7 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
     <Panel
       title={
         <>
-          <Ico e="🛡 " />
+          <Icon name="shield-check" cp437="" className="lead-ic" />
           Instance admin
         </>
       }
@@ -267,13 +267,13 @@ function VerificationAdmin() {
                 · by <span className="mono">{v.verifiedBy ?? "?"}</span> · {fmt.date(v.verifiedAt)}
                 {v.held ? "" : " · no account yet"}
               </span>
-              <button
-                className="link-btn danger"
+              <Button
+                variant="inline-danger"
                 aria-label={`Revoke the verification of ${v.callsign}`}
                 onClick={() => void revoke(v)}
               >
                 Revoke
-              </button>
+              </Button>
               {v.note && <div className="comment">{v.note}</div>}
             </li>
           ))}
@@ -389,9 +389,9 @@ function BoxesAdmin() {
           <p className="box-code__value mono">{issued.code}</p>
           <div className="row">
             <Button onClick={() => void copyText(issued.code).then(() => toast("Code copied"))}>Copy</Button>
-            <button className="link-btn" onClick={() => setIssued(null)}>
+            <Button variant="inline" onClick={() => setIssued(null)}>
               Done
-            </button>
+            </Button>
           </div>
           <p className="muted fine">
             On the box: <span className="mono">deploy/aprscaching init ingest-box</span>
@@ -429,13 +429,13 @@ function BoxesAdmin() {
                 ) : null}
               </span>
               {!b.revokedAt && (
-                <button
-                  className="link-btn danger"
+                <Button
+                  variant="inline-danger"
                   aria-label={`Revoke ${b.label ?? b.box}`}
                   onClick={() => void revoke(b)}
                 >
                   Revoke
-                </button>
+                </Button>
               )}
               <div className="comment">
                 enrolled {fmt.date(b.enrolledAt)}
@@ -625,21 +625,21 @@ function AdoptionAdmin() {
                           </span>
                           {r.note && <div className="comment">{r.note}</div>}
                           <div className="row">
-                            <button
+                            <Button
                               disabled={busy !== null || c.noticeEndsAt > now}
                               aria-busy={busy === `r${r.id}`}
                               title={c.noticeEndsAt > now ? "The owner's notice period is still running" : undefined}
                               onClick={() => void decide(c, r, "approve")}
                             >
                               Approve
-                            </button>
-                            <button
-                              className="danger"
+                            </Button>
+                            <Button
+                              variant="danger"
                               disabled={busy !== null}
                               onClick={() => void decide(c, r, "decline")}
                             >
                               Decline
-                            </button>
+                            </Button>
                           </div>
                         </li>
                       ))}
@@ -647,14 +647,14 @@ function AdoptionAdmin() {
                   )}
                   <div className="row">
                     <AssignOwner cache={c} disabled={busy !== null || c.noticeEndsAt > now} onDone={refresh} />
-                    <button
-                      className="link-btn danger"
+                    <Button
+                      variant="inline-danger"
                       disabled={busy !== null}
                       aria-label={`Withdraw the adoption offer on ${c.code}`}
                       onClick={() => void withdraw(c)}
                     >
                       Withdraw offer
-                    </button>
+                    </Button>
                   </div>
                 </li>
               ))}
@@ -736,9 +736,9 @@ function OfferWithdrawn(props: { cache: AdoptCache; onDone: () => void }) {
   };
   if (!open)
     return (
-      <button aria-expanded={false} onClick={() => setOpen(true)}>
+      <Button aria-expanded={false} onClick={() => setOpen(true)}>
         Offer…
-      </button>
+      </Button>
     );
   return (
     <div className="partner-form">
@@ -747,7 +747,7 @@ function OfferWithdrawn(props: { cache: AdoptCache; onDone: () => void }) {
         <input value={note} maxLength={300} aria-invalid={!!err} onChange={(e) => setNote(e.target.value)} />
       </label>
       <div className="row end">
-        <button onClick={() => setOpen(false)}>Cancel</button>
+        <Button onClick={() => setOpen(false)}>Cancel</Button>
         <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
           {saving ? "Offering…" : `Offer ${props.cache.code}`}
         </Button>
@@ -801,14 +801,14 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
   };
   if (!open)
     return (
-      <button
+      <Button
         aria-expanded={false}
         disabled={props.disabled}
         title={props.disabled ? "The owner's notice period is still running" : undefined}
         onClick={() => setOpen(true)}
       >
         Assign…
-      </button>
+      </Button>
     );
   return (
     <div className="partner-form">
@@ -839,7 +839,7 @@ function AssignOwner(props: { cache: AdoptCache; disabled: boolean; onDone: () =
         confirmed in place: make the cache active
       </label>
       <div className="row end">
-        <button onClick={() => setOpen(false)}>Cancel</button>
+        <Button onClick={() => setOpen(false)}>Cancel</Button>
         <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
           {saving ? "Assigning…" : "Assign owner"}
         </Button>
@@ -905,9 +905,9 @@ function WriteBudgetBanner(props: { budget: WriteBudget; onDocs: (slug: string) 
           ? "Only protected stations, RF hearings, finds, accounts and federation data are stored; other stations reach the live map without being saved."
           : "The raw packet log is paused and stations nothing protects store fewer fixes."}{" "}
         The count starts again at 00:00 UTC.{" "}
-        <button className="link-btn" onClick={() => props.onDocs("operate/deployment")}>
+        <Button variant="inline" onClick={() => props.onDocs("operate/deployment")}>
           About the write budget
-        </button>
+        </Button>
       </p>
     </div>
   );
@@ -968,13 +968,13 @@ function SetupAdmin(props: {
         Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
         <span className="mono">deploy/.env</span>, the systemd unit, or{" "}
         <span className="mono">wrangler secret put</span>) and restart.{" "}
-        <button className="link-btn" onClick={() => props.onDocs("operate/first-hour")}>
+        <Button variant="inline" onClick={() => props.onDocs("operate/first-hour")}>
           Your first hour as sysop
-        </button>
+        </Button>
       </p>
-      <button onClick={refresh} disabled={loading}>
+      <Button onClick={refresh} disabled={loading}>
         {loading ? "Checking…" : "Re-check"}
-      </button>
+      </Button>
     </>
   );
 }
@@ -1011,9 +1011,9 @@ function Net44Check() {
         Read-only: DNS lookups through <span className="mono">DOH_URL</span> and this instance's own descriptor. It does
         not test whether peers can reach you.
       </p>
-      <button onClick={reload} disabled={loading}>
+      <Button onClick={reload} disabled={loading}>
         {loading ? "Checking…" : "Check again"}
-      </button>
+      </Button>
     </>
   );
 }
@@ -1067,12 +1067,12 @@ function FederationAdmin() {
             </div>
             {p.health === "error" && p.last_error && <div className="comment error">{p.last_error}</div>}
             <div className="row">
-              <button disabled={p.trust === "trusted"} onClick={() => trust(p.url, "trusted")}>
+              <Button disabled={p.trust === "trusted"} onClick={() => trust(p.url, "trusted")}>
                 Trust
-              </button>
-              <button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
+              </Button>
+              <Button disabled={p.trust === "unvetted"} onClick={() => trust(p.url, "unvetted")}>
                 Unvet
-              </button>
+              </Button>
               <Button variant="danger" disabled={p.trust === "blocked"} onClick={() => trust(p.url, "blocked")}>
                 Block
               </Button>
@@ -1250,9 +1250,9 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
           {candidates.map((c) => (
             <li key={`${c.instance} ${c.host}`} className="row">
               <span className="mono">{c.host}</span> · <span className="mono">{c.instance}</span>
-              <button disabled={busy} onClick={() => void submit({ host: c.host }, false)}>
+              <Button disabled={busy} onClick={() => void submit({ host: c.host }, false)}>
                 Add by host
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -1275,9 +1275,9 @@ function Fed44netWizard(props: { onAdmitted: () => void }) {
             <Button variant="primary" disabled={busy} onClick={() => void submit(pending.target, true)}>
               Confirm &amp; pin
             </Button>
-            <button disabled={busy} onClick={() => setPending(null)}>
+            <Button disabled={busy} onClick={() => setPending(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1330,7 +1330,7 @@ function TxtRecordBody() {
           onChange={(e) => setCall(e.target.value.toUpperCase())}
           aria-label="Your base callsign"
         />
-        <button
+        <Button
           disabled={!record}
           onClick={() => {
             if (record)
@@ -1340,7 +1340,7 @@ function TxtRecordBody() {
           }}
         >
           Copy
-        </button>
+        </Button>
       </div>
       {record && <div className="comment mono">{record}</div>}
       <div className="comment">
@@ -1463,9 +1463,9 @@ function ForwardingAdmin() {
                 · {p.proto}
                 {p.ha ? ` · ${p.ha}` : ""}
               </span>
-              <button className="link-btn danger" aria-label={`Remove ${p.call}`} onClick={() => void removePartner(p)}>
+              <Button variant="inline-danger" aria-label={`Remove ${p.call}`} onClick={() => void removePartner(p)}>
                 Remove
-              </button>
+              </Button>
               <div className="comment">
                 every {p.intervalMin} min{p.timebands ? ` @ ${p.timebands} UTC` : ""} · types {p.msgtypes}
                 {p.requestReverse ? " · reverse" : ""}
@@ -1537,18 +1537,18 @@ function ForwardingAdmin() {
             <Button variant="primary" onClick={submitPartner}>
               Save partner
             </Button>
-            <button
+            <Button
               onClick={() => {
                 setForm(EMPTY_PARTNER);
                 setAdding(false);
               }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)}>Add partner</button>
+        <Button onClick={() => setAdding(true)}>Add partner</Button>
       )}
 
       <h4 className="set-subh">
@@ -1564,13 +1564,13 @@ function ForwardingAdmin() {
               <span className="muted">
                 → {r.partner} · {r.transport}
               </span>
-              <button
-                className="link-btn danger"
+              <Button
+                variant="inline-danger"
                 aria-label={`Remove rule ${r.route} to ${r.partner}`}
                 onClick={() => void removeRule(r)}
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -1590,7 +1590,7 @@ function ForwardingAdmin() {
           value={rule.partner}
           onChange={(e) => setRule((x) => ({ ...x, partner: e.target.value }))}
         />
-        <button onClick={submitRule}>Add rule</button>
+        <Button onClick={submitRule}>Add rule</Button>
       </div>
     </>
   );
@@ -1632,7 +1632,7 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
       <p className="muted">Add this as a data feed in ATAK/WinTAK to see this instance's APRS stations as CoT:</p>
       <div className="row">
         <input className="mono" readOnly value={feedUrl} onFocus={(e) => e.currentTarget.select()} />
-        <button
+        <Button
           onClick={() => {
             void copyText(feedUrl).then((ok) =>
               toast(ok ? "Feed URL copied" : "Copy failed — select the URL and copy manually"),
@@ -1640,7 +1640,7 @@ function IngestAdmin(props: { map: maplibregl.Map | null }) {
           }}
         >
           Copy
-        </button>
+        </Button>
       </div>
     </>
   );

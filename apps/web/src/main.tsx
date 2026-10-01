@@ -55,7 +55,7 @@ if (demo === "app") {
     ),
   );
 } else if (demo) {
-  // the harness renders components directly (no Platform), so provide the format/theme context Ico needs
+  // the harness renders components directly (no Platform), so provide the format/theme context Icon needs
   import("./demo/DemoHarness.js").then(({ DemoHarness }) =>
     root.render(
       <React.StrictMode>

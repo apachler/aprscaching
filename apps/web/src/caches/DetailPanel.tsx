@@ -25,7 +25,6 @@ import {
   Panel,
   Badge,
   Icon,
-  Ico,
   TierChip,
   MinTier,
   Disclosure,
@@ -147,9 +146,9 @@ export function DetailPanel(props: {
       onClose={props.onClose}
       title={c.title}
       actions={
-        <button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>
+        <Button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>
           {fav.on ? "♥" : "♡"} {fav.count}
-        </button>
+        </Button>
       }
     >
       {props.offlineFrom && (
@@ -174,7 +173,7 @@ export function DetailPanel(props: {
         </div>
       )}
       <div className="detail-meta">
-        <span className="typechip" style={{ ["--tc"]: meta.color } as CSSProperties}>
+        <span className="typechip" data-ctype={c.type}>
           {typeGlyph(meta, phosphor)} {meta.label}
         </span>
         <span className="srcchip">
@@ -196,7 +195,7 @@ export function DetailPanel(props: {
         <div className="badges cache-tags">
           {c.driveIn && (
             <span className="chip">
-              <Ico e="🚗 " />
+              <Icon name="car" cp437="" className="lead-ic" />
               Drive-in
             </span>
           )}
@@ -226,9 +225,9 @@ export function DetailPanel(props: {
         <div className="coordblock">
           <div className="coordblock-h">
             <span className="ulabel">Coordinates</span>
-            <button className="iconbtn" aria-label="Copy coordinates" onClick={copyCoords}>
+            <Button variant="icon-subtle" aria-label="Copy coordinates" onClick={copyCoords}>
               <Icon name="copy" size={16} />
-            </button>
+            </Button>
           </div>
           <div className="coordblock-g">
             <span className="k">LAT/LON</span>
@@ -286,7 +285,7 @@ export function DetailPanel(props: {
           <ul className="rdv-list">
             {c.rendezvous.map((r, i) => (
               <li key={`${r.withCacheId}-${r.ts}-${i}`}>
-                <Ico e="🤝 " />
+                <Icon name="handover" cp437="" className="lead-ic" />
                 met <span className="mono">{r.withCall}</span> <span className="muted">· {fmt.ago(r.ts)}</span>
               </li>
             ))}
@@ -381,7 +380,7 @@ function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheR
       {r.canRate ? (
         <div className="rating-stars" role="radiogroup" aria-label="Rate this cache" onMouseLeave={() => setHover(0)}>
           {[1, 2, 3, 4, 5].map((s) => (
-            <button
+            <Button
               key={s}
               type="button"
               role="radio"
@@ -392,7 +391,7 @@ function RatingWidget(props: { cacheId: number; callsign: string; rating: CacheR
               onClick={() => rate(s)}
             >
               ★
-            </button>
+            </Button>
           ))}
           {r.mine ? <span className="muted fine">your rating</span> : null}
         </div>
@@ -484,13 +483,13 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
           <p className="muted fine" role="status">
             Your request as <span className="mono">{st.request!.callsign}</span> is waiting for the sysop.
           </p>
-          <button
-            className="link-btn danger"
+          <Button
+            variant="inline-danger"
             disabled={busy}
             onClick={() => void run(() => cancelAdoptionRequest(props.cacheId), "Request withdrawn")}
           >
             Withdraw my request
-          </button>
+          </Button>
         </>
       ) : st.canRequest ? (
         <>
@@ -508,7 +507,7 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
               : "On approval the cache becomes yours and stays archived until you edit it."}
           </p>
           <div className="row">
-            <button
+            <Button
               disabled={busy}
               aria-busy={busy}
               onClick={() =>
@@ -519,15 +518,15 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
               }
             >
               {busy ? "Sending…" : "Request adoption"}
-            </button>
+            </Button>
           </div>
         </>
       ) : (
         <p className="muted fine">
           {st.reason === "sign in to adopt a cache" ? (
-            <button className="link" onClick={props.onSignIn}>
+            <Button variant="quiet" onClick={props.onSignIn}>
               Sign in to adopt this cache
-            </button>
+            </Button>
           ) : (
             (st.reason ?? "").replace(/^./, (ch) => ch.toUpperCase())
           )}
@@ -551,7 +550,7 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
   return (
     <div className="sharecache">
       <div className="row gap-2">
-        <button
+        <Button
           onClick={() => {
             void copyText(url).then((ok) =>
               props.onToast(ok ? "Share link copied" : "Copy failed — copy the link from the QR view"),
@@ -559,10 +558,10 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
           }}
         >
           <Icon name="share" size={15} /> Copy link
-        </button>
-        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        </Button>
+        <Button onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           ▦ QR
-        </button>
+        </Button>
       </div>
       {open && (
         <div className="qrbox">

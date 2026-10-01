@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { getMessages } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Ico } from "../ui/index.js";
+import { Panel, Badge, EmptyState, ErrorState, LoadMore, usePaged, Icon } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /**
@@ -27,7 +27,7 @@ export function MessagesPanel(props: { onClose: () => void }) {
     <Panel
       title={
         <>
-          <Ico e="✉ " />
+          <Icon name="message" cp437="" className="lead-ic" />
           Messages
         </>
       }

@@ -79,26 +79,26 @@ export function WeatherStation(props: { callsign: string }) {
                 value={info.ecowittPath ?? ""}
                 onFocus={(e) => e.currentTarget.select()}
               />
-              <button
-                className="iconbtn"
+              <Button
+                variant="icon-subtle"
                 aria-label="Copy Ecowitt URL"
                 onClick={() => copy(info.ecowittPath ?? "", "Ecowitt URL")}
               >
                 copy
-              </button>
+              </Button>
             </span>
           </label>
           <label>
             Weather Underground — Rapidfire URL
             <span className="copyrow">
               <input className="mono" readOnly value={info.wuUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
-              <button
-                className="iconbtn"
+              <Button
+                variant="icon-subtle"
                 aria-label="Copy Weather Underground URL"
                 onClick={() => copy(info.wuUrl ?? "", "WU URL")}
               >
                 copy
-              </button>
+              </Button>
             </span>
           </label>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
@@ -111,9 +111,9 @@ export function WeatherStation(props: { callsign: string }) {
           <h5 className="mt-2">Browser-direct (Web Serial)</h5>
           <SerialWeather wxKey={info.key} />
           <div className="row end mt-2">
-            <button onClick={issue} disabled={busy}>
+            <Button onClick={issue} disabled={busy}>
               Re-issue key
-            </button>
+            </Button>
           </div>
         </>
       )}

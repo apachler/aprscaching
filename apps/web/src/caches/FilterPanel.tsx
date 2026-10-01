@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { TYPE_ORDER, TYPE_META, typeGlyph } from "../cacheTypes.js";
 import { useTheme } from "../format.js";
-import { Panel, useToast, Ico } from "../ui/index.js";
+import { Panel, useToast, Button, Icon, ChipToggle } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
 import { saveView, type MapViewState } from "../api.js";
 import { MESHMAP_ATTRIBUTION, meshmapUrl } from "../meshcom/meshcomView.js";
@@ -75,9 +75,9 @@ export function FilterPanel(props: {
           const m = TYPE_META[t];
           const on = filters.types.includes(t);
           return (
-            <button key={t} className={`chip-btn${on ? " primary" : ""}`} aria-pressed={on} onClick={() => toggle(t)}>
+            <ChipToggle key={t} pressed={on} onChange={() => toggle(t)}>
               {typeGlyph(m, phosphor)} {m.label}
-            </button>
+            </ChipToggle>
           );
         })}
       </div>
@@ -146,14 +146,13 @@ export function FilterPanel(props: {
             <span className="filter-label">Band</span>
             <div className="badges">
               {SPOT_BANDS.map((b) => (
-                <button
+                <ChipToggle
                   key={b}
-                  className={`chip-btn${props.spotFilters.bands.includes(b) ? " primary" : ""}`}
-                  aria-pressed={props.spotFilters.bands.includes(b)}
-                  onClick={() => toggleSpot("bands", b)}
+                  pressed={props.spotFilters.bands.includes(b)}
+                  onChange={() => toggleSpot("bands", b)}
                 >
                   {b}
-                </button>
+                </ChipToggle>
               ))}
             </div>
           </div>
@@ -161,14 +160,13 @@ export function FilterPanel(props: {
             <span className="filter-label">Mode</span>
             <div className="badges">
               {SPOT_MODES.map((md) => (
-                <button
+                <ChipToggle
                   key={md}
-                  className={`chip-btn${props.spotFilters.modes.includes(md) ? " primary" : ""}`}
-                  aria-pressed={props.spotFilters.modes.includes(md)}
-                  onClick={() => toggleSpot("modes", md)}
+                  pressed={props.spotFilters.modes.includes(md)}
+                  onChange={() => toggleSpot("modes", md)}
                 >
                   {md}
-                </button>
+                </ChipToggle>
               ))}
             </div>
           </div>
@@ -176,14 +174,13 @@ export function FilterPanel(props: {
             <span className="filter-label">Source</span>
             <div className="badges">
               {SPOT_SOURCES.map((s) => (
-                <button
+                <ChipToggle
                   key={s}
-                  className={`chip-btn${props.spotFilters.sources.includes(s) ? " primary" : ""}`}
-                  aria-pressed={props.spotFilters.sources.includes(s)}
-                  onClick={() => toggleSpot("sources", s)}
+                  pressed={props.spotFilters.sources.includes(s)}
+                  onChange={() => toggleSpot("sources", s)}
                 >
                   {s.toUpperCase()}
-                </button>
+                </ChipToggle>
               ))}
             </div>
           </div>
@@ -192,15 +189,15 @@ export function FilterPanel(props: {
       <h4>Share</h4>
       <div className="row between">
         <span className="muted">Save this map view (centre, layers, filters) as a link.</span>
-        <button onClick={share}>
-          <Ico e="🔗 " />
+        <Button onClick={share}>
+          <Icon name="link" cp437="" className="lead-ic" />
           Share this view
-        </button>
+        </Button>
       </div>
       <div className="row between mt-6">
-        <button className="link" onClick={() => setFilters({ types: [], q: "" })}>
+        <Button variant="quiet" onClick={() => setFilters({ types: [], q: "" })}>
           Clear all
-        </button>
+        </Button>
         <span className="muted">
           {props.count} match{props.count === 1 ? "" : "es"}
         </span>

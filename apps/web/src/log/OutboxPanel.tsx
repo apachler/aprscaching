@@ -214,7 +214,7 @@ function RadioFallback(props: { log: QueuedLog<QueueBody>; serviceCall: string |
   return (
     <Disclosure label="Send it from a radio">
       <CommandBlock label={`APRS message to ${props.serviceCall}`} command={text} />
-      <Button variant="link" onClick={() => void sent()}>
+      <Button variant="quiet" onClick={() => void sent()}>
         I sent it by radio
       </Button>
     </Disclosure>

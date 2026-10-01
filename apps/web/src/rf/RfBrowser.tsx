@@ -16,7 +16,7 @@ import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
 import { NAV_MAX_AGE_MS } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Row, Switch, EmptyState, Disclosure, useToast, Ico, useConfirm } from "../ui/index.js";
+import { Button, Row, Switch, EmptyState, Disclosure, useToast, useConfirm, Icon, Segmented } from "../ui/index.js";
 
 const FWD_KEY = "acs.rf.gateway-url"; // the self-host gateway URL; the ingest secret is never stored
 type LinkKind = "serial" | "ble" | "audio" | "mesh";
@@ -295,27 +295,27 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               </Button>
             )}
             {bleOk && (
-              <button onClick={() => connect("ble")} disabled={busy}>
+              <Button onClick={() => connect("ble")} disabled={busy}>
                 {busy ? "…" : "Connect Bluetooth"}
-              </button>
+              </Button>
             )}
             {audioOk && (
-              <button
+              <Button
                 onClick={() => connect("audio")}
                 disabled={busy}
                 title="Decode APRS audio from a radio via the soundcard — no TNC"
               >
                 {busy ? "…" : "Soundcard AFSK"}
-              </button>
+              </Button>
             )}
             {serialOk && (
-              <button
+              <Button
                 onClick={() => connect("mesh")}
                 disabled={busy}
                 title="Read a Meshtastic/LoRa node's positions over USB"
               >
                 {busy ? "…" : "Meshtastic node"}
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -353,24 +353,20 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
           {fwdOn && (
             <>
               <Row label="Auth">
-                <div className="seg">
-                  <button
-                    className={mode === "signed" ? "on" : ""}
-                    aria-pressed={mode === "signed"}
-                    disabled={!signedIn}
-                    title={signedIn ? undefined : "Sign in to forward under your own callsign"}
-                    onClick={() => setMode("signed")}
-                  >
-                    signed{signedIn ? ` (${props.callsign})` : " — sign in to enable"}
-                  </button>
-                  <button
-                    className={mode === "secret" ? "on" : ""}
-                    aria-pressed={mode === "secret"}
-                    onClick={() => setMode("secret")}
-                  >
-                    secret (self-host)
-                  </button>
-                </div>
+                <Segmented
+                  label="Auth"
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    {
+                      value: "signed",
+                      label: `signed${signedIn ? ` (${props.callsign})` : " — sign in to enable"}`,
+                      disabled: !signedIn,
+                      title: signedIn ? undefined : "Sign in to forward under your own callsign",
+                    },
+                    { value: "secret", label: "secret (self-host)" },
+                  ]}
+                />
               </Row>
               {mode === "secret" && (
                 <>
@@ -450,14 +446,14 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                       value={bcn.lon}
                       onChange={(e) => setBcn((b) => ({ ...b, lon: e.target.value }))}
                     />
-                    <button
+                    <Button
                       onClick={() => void fillMyLocation()}
                       disabled={!!loc.waiting}
                       title="Use my location"
                       aria-label="Use my location"
                     >
-                      <Ico e="📍" c="@" />
-                    </button>
+                      <Icon name="place" cp437="@" className="lead-ic" />
+                    </Button>
                   </div>
                   <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
                   <input
@@ -516,13 +512,13 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
               <h4>
                 Field station <span className="muted fine">off-grid · no gateway</span>
               </h4>
-              <button
+              <Button
                 onClick={syncBack}
                 disabled={heardN === 0}
                 title="Replay locally-heard frames to a gateway when back online"
               >
                 Sync {heardN} heard
-              </button>
+              </Button>
             </div>
             <div className="fs-cols">
               <div>
@@ -567,9 +563,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                         <span className="muted"> · {fmt.ago(mm.at / 1000)}</span>
                         <div className="comment mono">{mm.text.slice(0, 80)}</div>
                         {txOn && link && ackReply(mm, props.callsign) && (
-                          <button className="fine" onClick={() => ackMessage(mm)} disabled={txBusy}>
+                          <Button className="fine" onClick={() => ackMessage(mm)} disabled={txBusy}>
                             ACK {mm.msgNo}
-                          </button>
+                          </Button>
                         )}
                       </li>
                     ))}

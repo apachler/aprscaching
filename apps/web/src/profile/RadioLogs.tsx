@@ -109,9 +109,9 @@ export function RadioLogs() {
                   <Button variant="primary" disabled={busy === c.id} onClick={() => void decide(c, "confirm")}>
                     Confirm
                   </Button>
-                  <button disabled={busy === c.id} onClick={() => void decide(c, "discard")}>
+                  <Button disabled={busy === c.id} onClick={() => void decide(c, "discard")}>
                     Discard
-                  </button>
+                  </Button>
                 </div>
               )}
             </li>

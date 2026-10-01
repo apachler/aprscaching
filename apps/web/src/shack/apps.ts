@@ -26,8 +26,6 @@ export interface ShackApp {
   blurb: string;
   /** Surface header title (emoji-free) shown when the app is launched into its own workspace. */
   title: string;
-  /** Modern-theme leading emoji for the title/launcher; dropped in Phosphor (emoji-free). */
-  emoji: string;
   /** Wide workspace (fills the content area, hides the map) vs. a normal docked side panel. */
   wide?: boolean;
   /** Operator-only: this app drives the instance's always-on server RF infrastructure (the ingest box /
@@ -55,7 +53,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "radio",
     label: "Packet terminal",
     blurb: "Graphic-Packet multi-channel connected-mode terminal (Web Serial / BLE)",
-    emoji: "📻",
     title: "Packet terminal",
     wide: true,
     ownChrome: true,
@@ -66,7 +63,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "bbs",
     label: "BBS",
     blurb: "Store-and-forward mail, bulletins & threads",
-    emoji: "✉",
     title: "BBS",
     wide: true,
     ownChrome: true,
@@ -77,7 +73,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "decode",
     label: "Packet decoder",
     blurb: "Decode a raw AX.25 / APRS frame",
-    emoji: "🔎",
     title: "Packet decoder",
     wide: true,
     load: () => import("./DecoderPanel.js").then((m) => ({ default: m.DecoderPanel })),
@@ -87,7 +82,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "tools",
     label: "Tools",
     blurb: "Sandboxed plugins & signal decoders",
-    emoji: "🧩",
     title: "Tools",
     wide: true,
     load: () => import("../tools/ToolsPanel.js").then((m) => ({ default: m.ToolsPanel })),
@@ -97,7 +91,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "dial",
     label: "Rig control",
     blurb: "CAT — one-click tune (Web Serial)",
-    emoji: "🎚",
     title: "Rig control (CAT)",
     intro:
       "Tune your transceiver over Web Serial — the APRS frequency, a manual MHz, or a live spot's freq. Tuning only (no transmit).",
@@ -108,7 +101,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "node",
     label: "NET/ROM node",
     blurb: "Run a node · digipeater · sysop console",
-    emoji: "🗄",
     title: "NET/ROM node",
     wide: true,
     sysop: true,
@@ -121,7 +113,6 @@ export const SHACK_APPS: ShackApp[] = [
     icon: "server",
     label: "Remote box",
     blurb: "Control your ingest box over the relay",
-    emoji: "🛰",
     title: "Remote control — your box",
     sysop: true,
     load: () => import("./RemoteControl.js").then((m) => ({ default: m.RemoteControl })),

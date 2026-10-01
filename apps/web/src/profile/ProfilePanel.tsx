@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Ico } from "../ui/index.js";
+import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Icon } from "../ui/index.js";
 import { RadioLogs } from "./RadioLogs.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -41,7 +41,7 @@ export function ProfilePanel(props: {
       onClose={props.onClose}
       title={
         <>
-          <Ico e="👤 " />
+          <Icon name="profile" cp437="" className="lead-ic" />
           <span className="mono">{callsign || "Profile"}</span>
         </>
       }
@@ -87,13 +87,13 @@ export function ProfilePanel(props: {
             ) : (
               <>
                 <Badge title="Verify control of your callsign to enable transmit">unverified</Badge>{" "}
-                <button
-                  className="link"
+                <Button
+                  variant="quiet"
                   title="Verify control of your callsign in Settings → Account"
                   onClick={props.onSettings}
                 >
                   Verify callsign
-                </button>
+                </Button>
               </>
             )}
             {licence && (
@@ -144,18 +144,18 @@ export function ProfilePanel(props: {
       <Group title="Advanced — the Shack" defaultOpen={false}>
         <p className="muted">Live stations, transports, digipeater, IGate, BBS, decoder. A cacher never needs this.</p>
         <div className="row wrap">
-          <button onClick={props.onShack}>
-            <Ico e="📡 " />
+          <Button onClick={props.onShack}>
+            <Icon name="antenna" cp437="" className="lead-ic" />
             Shack
-          </button>
-          <button onClick={props.onMail}>
-            <Ico e="✉ " />
+          </Button>
+          <Button onClick={props.onMail}>
+            <Icon name="message" cp437="" className="lead-ic" />
             BBS
-          </button>
-          <button onClick={props.onSettings}>
-            <Ico e="⚙ " />
+          </Button>
+          <Button onClick={props.onSettings}>
+            <Icon name="settings" cp437="" className="lead-ic" />
             Settings
-          </button>
+          </Button>
         </div>
       </Group>
     </Panel>

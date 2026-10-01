@@ -5,7 +5,7 @@
  * multi-channel terminal, active window and monitor get room to lay out as columns — a real workspace,
  * not a slim drawer squeezed beside a map.
  */
-import { Panel, Ico } from "../ui/index.js";
+import { Panel, Icon } from "../ui/index.js";
 import { PacketTerminal } from "./PacketTerminal.js";
 
 export function TerminalPanel(props: { callsign: string; onClose: () => void }) {
@@ -13,7 +13,7 @@ export function TerminalPanel(props: { callsign: string; onClose: () => void }) 
     <Panel
       title={
         <>
-          <Ico e="📻 " />
+          <Icon name="radio" cp437="" className="lead-ic" />
           Packet terminal
         </>
       }

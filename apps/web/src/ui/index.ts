@@ -3,7 +3,10 @@
 export { Switch } from "./Switch.js";
 export { Group, Row, Advanced } from "./Group.js";
 export { Panel } from "./Panel.js";
-export { Button } from "./Button.js";
+export { Button, type ButtonVariant } from "./Button.js";
+export { Segmented, type SegmentOption } from "./Segmented.js";
+export { Tabs, tabPanelId, type TabItem } from "./Tabs.js";
+export { ChipToggle } from "./ChipToggle.js";
 export { Badge, TierBadge, CallVerifiedBadge, TIER_NAME, TIER_DESC, LicenceBadge, licenceLabel } from "./Badge.js";
 export { Card } from "./Card.js";
 export { EmptyState } from "./EmptyState.js";
@@ -14,10 +17,8 @@ export { usePaged, type PageResult } from "./usePaged.js";
 export { useLoad } from "./useLoad.js";
 export { usePoll } from "./usePoll.js";
 export { ToastProvider, useToast, TOAST_EVENT } from "./Toast.js";
-// Two glyph kinds: Icon is the UI chrome (stroke SVG on rail items, buttons and controls, coloured by
-// currentColor); Ico is a decorative content glyph (emoji in Modern, CP437/ASCII in Phosphor).
+// The one icon set: line icons, with a CP437 glyph in Phosphor where one is given (see Icon).
 export { Icon, ICON_NAMES, type IconName } from "./Icon.js";
-export { Ico } from "./Ico.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";
 export { TOUR_STEPS } from "./tourSteps.js";
 export { useModalDialog } from "./useModalDialog.js";
