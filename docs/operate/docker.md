@@ -135,8 +135,10 @@ is only the container's own interface, and the published port exposes it on your
   gateway boot (forward-only, tracked in `_migrations`).
 - **Backup:** cron `deploy/backup.sh` — a consistent SQLite `.backup` snapshot, gzipped, uploaded
   to a directory / OCI bucket / any S3-compatible endpoint (see `deploy/.env.example`). It exits
-  non-zero if no destination is configured, so a misconfigured cron cannot silently no-op. The
-  Cloudflare split backs up with D1 Time Travel instead — see [Backups](deployment.md#backups).
+  non-zero if no destination is configured, so a misconfigured cron cannot silently no-op. A bucket
+  destination is append-only and needs a lifecycle rule on its `db/` prefix, or `BACKUP_PRUNE_BUCKET=1`
+  — see [Backups](deployment.md#backups) for both. The Cloudflare split backs up with D1 Time Travel
+  instead.
 - **Logs:** `docker compose logs -f gateway` (rotation is capped by the compose logging options).
 
 ## Standalone images
