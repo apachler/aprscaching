@@ -15,7 +15,7 @@ instance's always-on station and are shown only to its operator.
 | App | What it does | Who |
 |---|---|---|
 | **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over your TNC (USB or Bluetooth). | everyone |
-| **BBS** | Store-and-forward mail, bulletins and threads on the instance's BBS. | everyone |
+| **BBS** | Store-and-forward mail, bulletins and threads on the instance's BBS. Bulletins are open to everyone; your mail needs you signed in as your callsign. | everyone |
 | **Packet decoder** | Paste a raw [APRS](../glossary.md#aprs) or [AX.25](../glossary.md#ax25) line and see every field decoded. | everyone |
 | **Tools** | Plugins and signal decoders, including **CW and PSK31 decoding from your microphone**. | everyone |
 | **Rig control** | Tune your radio over USB ([CAT](../glossary.md#cat)). See [Rig control](my-radio.md#rig-control). | everyone |

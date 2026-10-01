@@ -62,13 +62,17 @@ export async function handleBbsRoute(req: Request, env: Env): Promise<Response> 
   return json({ addr, parsed: parseHierAddr(addr), partner });
 }
 
-/** White Pages: GET ?call= (lookup) · POST {callsign, homeBbs} (set). */
+/** White Pages: GET ?call= (public lookup) · POST {callsign, homeBbs} (set; the ingest box or the operator). */
 export async function handleWhitePages(req: Request, env: Env): Promise<Response> {
   if (req.method === "GET") {
     const call = new URL(req.url).searchParams.get("call");
     if (!call) return json({ error: "call required" }, { status: 400 });
     return json({ callsign: call.toUpperCase(), homeBbs: await homeBbs(env, call) });
   }
+  // A White Pages entry steers where FBB forwarding sends a callsign's mail, so only the ingest box (which
+  // learns them from the mail it carries) and the operator set one.
+  const denied = await requireIngestOrOperator(req, env);
+  if (denied) return denied;
   const b = (await req.json().catch(() => ({}))) as { callsign?: string; homeBbs?: string };
   if (!b.callsign || !b.homeBbs) return json({ error: "callsign + homeBbs required" }, { status: 400 });
   await learnWhitePages(env, b.callsign, b.homeBbs);
