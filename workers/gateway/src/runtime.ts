@@ -36,7 +36,7 @@ export interface TileArchive {
   /** The archive's size and a tag that changes with its content; null when there is no archive. */
   stat(): Promise<{ size: number; etag: string } | null>;
   /** `length` bytes from `offset` (fewer at the end of the archive). */
-  read(offset: number, length: number): Promise<Uint8Array>;
+  read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>>;
 }
 
 /** Media blob store (audio clues etc.) — implemented by R2 on CF and the filesystem on Node. */

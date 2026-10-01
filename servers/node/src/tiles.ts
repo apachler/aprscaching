@@ -21,9 +21,9 @@ export function fileTiles(file: string | undefined): TileArchive | undefined {
     read: async (offset, length) => {
       const fh = await fs.open(file, "r");
       try {
-        const buf = Buffer.alloc(length);
-        const { bytesRead } = await fh.read(buf, 0, length, offset);
-        return new Uint8Array(buf.buffer, buf.byteOffset, bytesRead);
+        const out = new Uint8Array(length);
+        const { bytesRead } = await fh.read(out, 0, length, offset);
+        return out.subarray(0, bytesRead);
       } finally {
         await fh.close();
       }
