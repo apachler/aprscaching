@@ -1,0 +1,11 @@
+{
+  "description": "Lower-case via and destination tokens are normalised; a repeated via token appears once.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1\",\"dst\":\" oe1kbc-24,oe1kbc-24,oe8xyz-7 \",\"msg\":\"Hallo{015\",\"msg_id\":\"6A1B0008\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "dst": "OE8XYZ-7",
+    "dstKind": "call",
+    "via": ["OE1KBC-24"]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "description": "A via message heard after a relay: the source path, not the via list, decides direct versus relayed.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1,OE1KBC-24\",\"dst\":\"OE1KBC-24,OE1KFR-12,OE8XYZ-7\",\"msg\":\"Zwei Hops{013\",\"msg_id\":\"6A1B0004\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "dst": "OE8XYZ-7",
+    "dstKind": "call",
+    "via": ["OE1KBC-24", "OE1KFR-12"],
+    "path": ["OE3XYZ-1", "OE1KBC-24"],
+    "rf": true,
+    "direct": false
+  }
+}

@@ -9,6 +9,8 @@ import { decodeMeshcom, encodeMeshcomText, MeshcomDedup, meshcomToAprs, decodeAp
 export interface MeshcomFixture {
   name: string;
   description?: string;
+  /** The firmware source (repository@commit and files) the datagram's shape was derived from. */
+  firmware?: string;
   receiver?: string;
   datagram?: string;
   datagramHex?: string;
@@ -42,8 +44,11 @@ function view(input: Uint8Array | string, receiver?: string): Record<string, unk
   };
   for (const k of ["msgId", "rssi", "snr", "firmware"] as const) if (p[k] !== undefined) out[k] = p[k];
   if (e.type === "pos") Object.assign(out, { lat: e.lat, lon: e.lon, locator: e.locator, symbol: e.symbol });
-  if (e.type === "msg")
+  if (e.type === "msg") {
     Object.assign(out, { dst: e.dst, dstKind: e.dstKind, text: e.text, textBytes: utf8Len(e.text) });
+    if (e.via) out.via = e.via;
+    if (e.viaDropped) out.viaDropped = e.viaDropped;
+  }
   if (e.type === "tele") out.tele = e.values;
   const aprs = meshcomToAprs(e);
   if (aprs) {

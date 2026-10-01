@@ -1,0 +1,9 @@
+{
+  "description": "A trailing comma leaves the firmware's destination call empty: no destination, rejected.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1\",\"dst\":\"OE1KBC-24,\",\"msg\":\"leer\",\"msg_id\":\"6A1B0005\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": false,
+    "reason": "bad-dst"
+  }
+}

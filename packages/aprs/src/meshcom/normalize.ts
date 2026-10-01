@@ -56,8 +56,16 @@ export interface MeshcomPosEvent extends EventBase {
 
 export interface MeshcomMsgEvent extends EventBase {
   type: "msg";
+  /** The final destination: the last token of the destination path. */
   dst: string;
   dstKind: MeshcomDstKind;
+  /**
+   * The relays the sender allowed to forward the message (its `--via` list), in order, when the destination
+   * path names any. The sender's plan, not the route taken: it never bears on `direct` or trust.
+   */
+  via?: string[];
+  /** Via tokens dropped because they are not callsigns. */
+  viaDropped?: number;
   /** Message text, control characters collapsed to single spaces. */
   text: string;
 }
@@ -100,13 +108,32 @@ export function classifyMeshcomDst(dst: string): { dst: string; kind: MeshcomDst
   return /^[A-Z][A-Z0-9-]{0,8}$/.test(d) ? { dst: d, kind: "call" } : null;
 }
 
+/** Path tokens beyond this are not a MeshCom path (the firmware's hop limit is far lower). */
+const MAX_PATH = 9;
+
+/**
+ * Split a message's destination path `[<via>,…,]<destination>` the way the firmware's APRS decoder does: the
+ * destination is the text after the last comma (empty after a trailing comma), everything before it is the
+ * sender's via list. Via tokens that are not callsigns — the firmware does not check them — are dropped and
+ * counted; a group number or `*` is only ever a destination.
+ */
+export function splitMeshcomDst(path: string): { dst: string; via: string[]; viaDropped: number } {
+  const tokens = path.split(",");
+  const dst = tokens.pop()!;
+  const via: string[] = [];
+  let viaDropped = 0;
+  for (const t of tokens) {
+    const c = canonMeshcomCall(t);
+    if (!c || via.length >= MAX_PATH) viaDropped++;
+    else if (!via.includes(c)) via.push(c);
+  }
+  return { dst, via, viaDropped };
+}
+
 /** Collapse control characters (including NUL) to single spaces and trim. */
 export function collapseControls(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
 }
-
-/** Path tokens beyond this are not a MeshCom path (the firmware's hop limit is far lower). */
-const MAX_PATH = 9;
 
 /** Normalise one parsed datagram. */
 export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): MeshcomDecodeResult {
@@ -157,11 +184,23 @@ export function normalizeMeshcom(d: MeshcomDatagram, ctx: MeshcomContext = {}): 
   }
 
   if (d.type === "msg") {
-    const dst = classifyMeshcomDst(d.dst.split(",")[0]!);
+    const parts = splitMeshcomDst(d.dst);
+    const dst = classifyMeshcomDst(parts.dst);
     if (!dst) return { ok: false, reason: "bad-dst" };
     const text = collapseControls(d.text);
     if (!text) return { ok: false, reason: "empty-text" };
-    return { ok: true, event: { ...base, type: "msg", dst: dst.dst, dstKind: dst.kind, text } };
+    return {
+      ok: true,
+      event: {
+        ...base,
+        type: "msg",
+        dst: dst.dst,
+        dstKind: dst.kind,
+        text,
+        ...(parts.via.length ? { via: parts.via } : {}),
+        ...(parts.viaDropped ? { viaDropped: parts.viaDropped } : {}),
+      },
+    };
   }
 
   return { ok: true, event: { ...base, type: "tele", values: d.values, ...(d.din ? { din: d.din } : {}) } };
