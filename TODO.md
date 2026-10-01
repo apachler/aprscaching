@@ -9,7 +9,7 @@ are fixed, not listed.
 Each item carries a rough **priority · size** where useful — `P1`–`P3` (higher = sooner) and
 `S`/`M`/`L` (effort). Deferred work is grouped by *why* it waits, not by area.
 
-## Before 1.0.0 — the launch list (target: end of September 2026)
+## Before 1.0.0 — the launch list (ships once the courtesy contacts are sent and the release pipeline is green)
 
 Everything below this section is deliberately post-1.0. These five are in the tag because launch
 timing is what makes them worth doing: copy and onboarding land while first impressions are being
