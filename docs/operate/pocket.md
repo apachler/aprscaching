@@ -334,7 +334,9 @@ With [44Net Connect](44net.md), ARDC's WireGuard service, the phone gets a fixed
 station a callsign-verified name to federate under. Termux cannot run WireGuard without root, so the
 **WireGuard app** carries the tunnel for the whole phone: import the configuration the ARDC portal issues
 for the phone, and turn on *Always-on VPN* for it in Android's VPN settings so the tunnel comes back after
-a network change. Android runs one VPN at a time.
+a network change. Android runs one VPN at a time. In the app, set the tunnel's MTU to 1420 or less (1412 on
+PPPoE, lower on DS-Lite) and the peer's *Persistent keepalive* to 25; `deploy/aprscaching net44 setup <file>` in
+Termux prints the MTU it measures for your path, where Termux's `ping` can ([Run an instance on 44Net](44net.md#2-bring-the-tunnel-up)).
 
 !!! warning "Which traffic takes the tunnel"
     Android routes by the tunnel's `AllowedIPs`, and without root nothing can route by source address. So

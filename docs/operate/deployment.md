@@ -78,7 +78,15 @@ configuration and asks how people reach it:
 
 A licensed operator can also give the box a static 44.x address over a 44Net Connect WireGuard tunnel —
 reachable without port forwarding, even behind CGNAT — and publish its federation identity under
-`<call>.ampr.org`: see [Run an instance on 44Net](44net.md).
+`<call>.ampr.org`: see [Run an instance on 44Net](44net.md). By shape:
+
+| Shape | 44Net |
+|---|---|
+| Self-host, OCI stack | `deploy/aprscaching net44 setup` brings the tunnel up on the host, with its routing and firewall |
+| Bare metal | the same |
+| Pocket | the WireGuard app carries it; `net44 setup` prints the app's settings ([Pocket on 44Net](pocket.md#pocket-on-44net)) |
+| Desktop | the WireGuard app carries it; `net44 setup` prints the app's settings |
+| Cloudflare split, ingest box | not applicable: the gateway runs at Cloudflare, or elsewhere |
 
 Oracle
 Cloud users can start the same stack with the

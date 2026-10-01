@@ -30,6 +30,7 @@ web build, the .env (the Self-host questions), and the gateway and ingest units.
   --no-start       install the units without enabling or starting them
   --checksum-only  install a release verified by its checksum alone, when gh is not installed
   --dry-run        print every step, run none
+  --net44-config FILE  bring a 44Net Connect tunnel up afterwards (deploy/aprscaching net44 setup)
 Any other option goes to setup.sh (--call, --passcode, --filter, --domain, --lan-host, --fed-peers, …).
 EOF
 }
@@ -130,7 +131,7 @@ bm_preflight() {
 }
 
 shape_init() {
-  local repo="https://github.com/apachler/aprscaching" ref="" start=1 setup=() kind tmp unit bundle=""
+  local repo="https://github.com/apachler/aprscaching" ref="" start=1 setup=() kind tmp unit bundle="" net44=""
   BM_DRY=0
   BM_ALLOW_UNSIGNED=0
   while [ $# -gt 0 ]; do
@@ -143,6 +144,7 @@ shape_init() {
       --no-start) start=0 ;;
       --checksum-only) BM_ALLOW_UNSIGNED=1 ;;
       --dry-run) BM_DRY=1 ;;
+      --net44-config) net44="$2"; shift ;;
       -h | --help) bm_usage; return 0 ;;
       *) setup+=("$1") ;;
     esac
@@ -246,6 +248,7 @@ shape_init() {
   [ "$BM_DRY" = 1 ] && return 0
   shape_record baremetal "$SHAPE_ENV"
   if [ "$start" = 1 ]; then bm_wait_health; fi
+  n44_init_offer "$net44"
   bm_next_steps
 }
 

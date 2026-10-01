@@ -86,7 +86,8 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
 else
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q
-  apt-get install -y -q ca-certificates curl gnupg git
+  # wireguard-tools and nftables serve deploy/aprscaching net44 (a 44Net Connect tunnel), if the operator adds one
+  apt-get install -y -q ca-certificates curl gnupg git wireguard-tools nftables
   tmp="$(mktemp -d)"
   curl -fsSL --retry 5 -o "$tmp/docker.asc" https://download.docker.com/linux/ubuntu/gpg ||
     stop "could not download Docker's signing key"

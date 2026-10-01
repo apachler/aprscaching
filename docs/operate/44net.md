@@ -44,13 +44,49 @@ IPv4 A record; don't rely on the IPv6 address.
 
 ## 2. Bring the tunnel up
 
-Install a standard WireGuard client on the self-host machine and load the configuration Connect issued
-(`wg-quick up <name>` on Linux; the interface takes the configuration file's name). ARDC's
+On a Self-host or bare-metal box, let the helper do it. Copy the configuration Connect issued to the box, then:
+
+```bash
+sudo deploy/aprscaching net44 setup wg44.conf --name aprscaching.<call>.ampr.org
+deploy/aprscaching net44 status
+```
+
+It installs the tunnel as `wg44` (`/etc/wireguard/wg44.conf`, owner-only; the issued file is kept beside it) and
+changes four things about the issued configuration:
+
+- **The MTU.** It probes the path to the endpoint and sets the tunnel's MTU to that path less 80 bytes, at most
+  1420. wg-quick otherwise derives it from the interface's MTU, which is too large wherever the path carries less
+  than the interface does: a cloud VM with a 9000-byte MTU behind a 1500-byte gateway, PPPoE (1492), DS-Lite
+  (1452). Too large an MTU looks like a tunnel where small requests work and large replies hang. Override it
+  with `--mtu`.
+- **Keepalive.** It adds `PersistentKeepalive = 25` to the peer when the configuration has none, so NAT and CGNAT
+  keep the tunnel open for traffic that comes in.
+- **Full or split tunnel.** A configuration whose `AllowedIPs` covers everything (`0.0.0.0/0`) would send all the
+  box's traffic through ARDC and cut the SSH session that brought it up. The helper turns such a tunnel into
+  policy routing (`Table = off`): only traffic from the 44.x address, and replies to connections that came in
+  on the tunnel, take it; everything else stays on the internet link. A split configuration (`AllowedIPs`
+  covering 44Net only) stays as issued — it carries 44Net traffic only, so hosts outside 44/8 cannot reach the
+  44.x address. For reachability from the whole internet, use a full-tunnel configuration.
+- **A firewall** on `wg44` ([step 6](#6-who-can-reach-you)).
+
+It starts the tunnel with a rollback scheduled. Open a new SSH session while it waits and answer `y` once it
+connects; without an answer, or when no handshake arrives in a non-interactive run, the tunnel goes down again
+and is not started at boot. `--name` adds the 44Net name to `FED_ENDPOINTS` ([step 4](#4-configure-the-instance)).
+`deploy/aprscaching init selfhost --net44-config wg44.conf` (and `init baremetal`) runs the same setup after the
+install. `net44 check` checks the DNS records of step 3, `net44 remove` takes it all down again, and `doctor`
+checks the tunnel, its MTU and firewall, the records and the certificate.
+
+On Pocket and Desktop a WireGuard app carries the tunnel; `deploy/aprscaching net44 setup wg44.conf` there prints
+the settings to enter in the app (the MTU from the same probe, keepalive 25).
+
+**By hand**, install a standard WireGuard client and load the configuration (`wg-quick up <name>` on Linux; the
+interface takes the configuration file's name), with the same three changes: an explicit `MTU`, a keepalive, and
+for a full tunnel `Table = off` plus a rule for the 44.x source. ARDC's
 [Quick Start](https://wiki.ampr.org/wiki/44Net_Connect/Quick_Start) covers the clients and routers it
 supports; a community guide from AllStarLink
 ([44Net Connect](https://allstarlink.github.io/adv-topics/44net-connect/)) shows one Linux install.
 
-Check that the address is up: `ip addr show <name>` lists your 44.x address.
+Check that the address is up: `ip addr show wg44` lists your 44.x address.
 
 WireGuard encrypts the leg between your machine and ARDC's Connect endpoint, which runs over the
 internet. Beyond that endpoint, and on any amateur radio link, the traffic is plain.
@@ -233,7 +269,9 @@ ARDC's own network ([Guide for ISPs](https://wiki.ampr.org/wiki/Guide_for_ISPs))
 address quickly, so the firewall on the tunnel is yours to set:
 
 - Allow only what Caddy serves — TCP 80 and 443 — on the tunnel interface, plus replies to connections
-  the box opens, and drop everything else arriving on it. With nftables, for a tunnel named `wg44`:
+  the box opens, and drop everything else arriving on it. `net44 setup` does this for you, in the tunnel's own
+  `PostUp`/`PreDown` so it comes and goes with the tunnel (`--no-firewall` leaves it out). It tells you when ufw
+  or firewalld also filter the host; those stay yours to open. By hand, with nftables, for a tunnel named `wg44`:
 
     ```
     table inet tunnel44 {
@@ -247,7 +285,8 @@ address quickly, so the firewall on the tunnel is yours to set:
     ```
 
 - Docker publishes container ports through its own rules, which an `input` chain like this does not see.
-  The stack publishes only Caddy's 80 and 443; bind any other port you publish (a MeshCom or AXUDP
+  `net44 setup` adds the same filter to Docker's `DOCKER-USER` chain on a Self-host box. The stack publishes
+  only Caddy's 80 and 443; bind any other port you publish (a MeshCom or AXUDP
   listener) to a specific LAN or tunnel address, never to all addresses.
 - Never expose SSH, the gateway's port 8080 or an ingest port on the tunnel.
 
@@ -261,9 +300,10 @@ fails while the tunnel is up:
   can still pull from peers and push to a hub ([Reaching firewalled peers](../guides/federation.md#reaching-firewalled-peers));
 - or replies leave by the wrong route: a tunnel that carries only 44Net traffic (a "split tunnel",
   [Single Device Tunnel](https://wiki.ampr.org/wiki/44Net_Connect/Single_Device_Tunnel)) must still send
-  replies from the 44.x address back through the tunnel. **Unverified:** whether the configuration Connect
-  issues does this by default; `ip route get <phone's address> from 44.x.y.z` on the box shows which way a
-  reply goes.
+  replies from the 44.x address back through the tunnel, and WireGuard drops a reply to an address outside the
+  peer's `AllowedIPs`. A split tunnel therefore serves 44Net hosts only; use a full-tunnel configuration through
+  `net44 setup`, which routes replies back through the tunnel and leaves the rest of the box's traffic alone.
+  `ip route get <phone's address> from 44.x.y.z` on the box shows which way a reply goes.
 
 **HAMNET.** HAMNET is a separate amateur IP backbone, mostly `44.128.0.0/10` and not announced to the
 internet. ARDC: "A subnet reachable via Connect is not automatically part of the Mesh. A Mesh network does

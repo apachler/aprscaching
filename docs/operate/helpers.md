@@ -81,6 +81,7 @@ The output is plain text with no colour codes, so it reads the same in a termina
 | `restore <file>` | yes | yes (D1 at the backup's schema) | — | yes | yes; Pocket's own archives too | yes, with the app closed |
 | `update` | rollback | rollback (D1 Time Travel) | code only | rollback | `pocket/update.sh` | how to replace the binary |
 | `rotate-secret <name>` | `deploy/.env` | `wrangler secret put` | `deploy/.env` | `<dir>/deploy/.env` | `~/.aprscaching/.env` | — |
+| `net44 …` | tunnel, routing, firewall (incl. `DOCKER-USER`) | — | — | tunnel, routing, firewall | the app's settings; `status`, `check` | the app's settings; `status`, `check` |
 
 A command a shape does not support says so and exits without changing anything. The existing scripts
 (`setup.sh`, `cloudflare/deploy-cf.sh`, the Pocket scripts) keep working on their own, with the same options.
@@ -277,6 +278,23 @@ signature check, and the helper asks before installing it (`--yes` confirms).
 | `--dry-run` | print every step, run none |
 
 Any other option goes to `setup.sh`. Re-running it updates the checkout to the ref and keeps the `.env`.
+
+## 44Net
+
+```bash
+sudo deploy/aprscaching net44 setup wg44.conf --name aprscaching.<call>.ampr.org   # bring the tunnel up
+deploy/aprscaching net44 status        # interface, address, handshake, transfer, MTU, routing, firewall
+deploy/aprscaching net44 check         # the A and _aprscaching records of the 44Net name, and how to test from outside
+sudo deploy/aprscaching net44 remove   # down, not at boot, firewall and configuration removed, FED_ENDPOINTS cleaned
+```
+
+`setup` takes the WireGuard configuration 44Net Connect issued. It writes the tunnel as `wg44` with an MTU
+probed from the path, keepalive 25, policy routing for a full tunnel (so SSH stays on the internet link) and a
+firewall that lets only TCP 80/443 in. It starts the tunnel under a two-minute rollback that you cancel by
+confirming a new SSH session connects. Running it again with the same configuration changes nothing.
+`--mtu`, `--no-firewall` and `--name` adjust it; [Run an instance on 44Net](44net.md#2-bring-the-tunnel-up) explains
+each change. `init selfhost` and `init baremetal` take `--net44-config <file>` to run it after the install, and
+ask for one when they can.
 
 ## Rotating a secret
 

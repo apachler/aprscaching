@@ -413,6 +413,66 @@ doc_federation() {
   done
 }
 
+# ---- 44Net ---------------------------------------------------------------------------------------------------
+# When the instance publishes a 44net endpoint or this host has wg44: the tunnel, its MTU and firewall, the DNS
+# records under the 44Net name, and the certificate when Caddy serves that name with TLS.
+doc_net44() {
+  local name="" on_host=0 age mtu v4 a txt end days domain link="$DOCS_URL/44net.md"
+  declare -F n44_up >/dev/null || return 0
+  [ -z "$DOC_ENV" ] || name="$(SHAPE_ENV="$DOC_ENV" n44_name_from_env)"
+  n44_up && on_host=1
+  [ -n "$name" ] || [ "$on_host" = 1 ] || return 0
+  case "$(n44_shape_mode)" in docker | host) ;; *) on_host=0 ;; esac
+  if [ "$on_host" = 1 ]; then
+    age="$(n44_handshake_age)"
+    if [ -z "$age" ]; then
+      failc net44.tunnel "$N44_IF is up, but has had no handshake" "check the endpoint and the keys: deploy/aprscaching net44 status" "$link"
+    elif [ "$age" -gt 180 ]; then
+      warnc net44.tunnel "$N44_IF's last handshake was $age s ago" "a peer handshakes every 2 minutes while traffic flows; keepalive 25 keeps it open" "$link"
+    else
+      pass net44.tunnel "$N44_IF is up; handshake $age s ago"
+    fi
+    mtu="$(ip -o link show dev "$N44_IF" 2>/dev/null | sed -nE 's/.* mtu ([0-9]+).*/\1/p')"
+    if [ -n "$mtu" ] && [ "$mtu" -le "$N44_MTU_CAP" ]; then pass net44.mtu "$N44_IF's MTU is $mtu"; else
+      warnc net44.mtu "$N44_IF's MTU is ${mtu:-unknown}, above $N44_MTU_CAP: large replies can stall" "deploy/aprscaching net44 setup sets it from the path MTU" "$link"
+    fi
+    if have nft && nft list table inet "$N44_NFT" >/dev/null 2>&1; then pass net44.firewall "$N44_IF is filtered: only TCP 80/443 and replies"; else
+      warnc net44.firewall "no firewall from net44 on $N44_IF: ARDC filters nothing" "deploy/aprscaching net44 setup applies it, or filter $N44_IF yourself" "$link#6-who-can-reach-you"
+    fi
+  elif [ -n "$name" ] && [ "$(n44_shape_mode)" != guide ]; then
+    failc net44.tunnel "FED_ENDPOINTS names $name, but $N44_IF is not up on this host" "deploy/aprscaching net44 setup <connect.conf>" "$link"
+  fi
+  [ -n "$name" ] || return 0
+  a="$(SHAPE_ENV="$DOC_ENV" n44_doh "$name" A | grep -E '^[0-9.]+$' | head -n 1)"
+  v4="$( [ -f "$(n44_conf)" ] && n44_v4 "$(n44_conf)" || true)"
+  if [ -z "$a" ]; then
+    failc net44.dns "$name has no A record" "add it in the 44Net Portal${v4:+, pointing at $v4}" "$link#3-name-and-identity"
+  elif [ -n "$v4" ] && [ "$a" != "$v4" ]; then
+    failc net44.dns "$name points at $a, but the tunnel is $v4" "correct the A record in the 44Net Portal" "$link#3-name-and-identity"
+  else
+    pass net44.dns "$name points at $a"
+  fi
+  txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.$name" TXT | grep 'v=acs1' | head -n 1)"
+  [ -n "$txt" ] || txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.${name#*.}" TXT | grep 'v=acs1' | head -n 1)"
+  if [ -n "$txt" ]; then pass net44.txt "the _aprscaching record is published"; else
+    failc net44.txt "no _aprscaching TXT record for $name" "publish the value Instance admin -> Setup -> 44Net shows" "$link#3-name-and-identity"
+  fi
+  domain="$(doc_get DOMAIN)"
+  case ", $domain," in
+    *", $name,"* | *" $name,"*)
+      end="$(echo | openssl s_client -connect "${a:-$name}:443" -servername "$name" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)"
+      if [ -z "$end" ]; then
+        warnc net44.cert "no certificate answered for $name" "Caddy fetches one once the name resolves and is reachable" "$link#tls-on-the-44net-name"
+      else
+        days=$((($(date -d "$end" +%s) - $(date +%s)) / 86400))
+        if [ "$days" -gt 14 ]; then pass net44.cert "the certificate for $name is valid for $days more days"; else
+          warnc net44.cert "the certificate for $name expires in $days days" "check Caddy's renewal (docker compose logs caddy)" "$link#tls-on-the-44net-name"
+        fi
+      fi
+      ;;
+  esac
+}
+
 # ---- resources ----------------------------------------------------------------------------------------------
 doc_resources() {
   local avail pct size newest age
@@ -552,6 +612,7 @@ run_doctor() {
   doc_ingest
   doc_network
   doc_federation
+  doc_net44
   if declare -F shape_doctor_extra >/dev/null; then shape_doctor_extra; fi
   doc_resources
   doc_source
