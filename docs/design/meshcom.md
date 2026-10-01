@@ -3,8 +3,9 @@
 !!! note "Built and planned"
     The receive side is built: the pure core in `packages/aprs/src/meshcom/` decodes the datagrams,
     `apps/ingest/src/meshcom.ts` listens for them, and operator setup is under
-    [MeshCom](../operate/meshcom.md). Telemetry, find logging over the mesh, the features that
-    transmit, and a browser-direct path are design only, tracked in
+    [MeshCom](../operate/meshcom.md). Transmit is built for one use: answering radio commands heard on
+    the mesh (see [Transmit](#transmit)). Telemetry, replies from the Messages surface, and a
+    browser-direct path are planned, tracked in
     [`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
 
 ## What MeshCom is
@@ -52,7 +53,7 @@ is the integration point. A node joined to Wi-Fi and configured with `--extudpip
 ## How it fits the platform
 
 MeshCom sits between APRS and Meshtastic. Like APRS it carries real callsigns on every frame and APRS
-payloads, so a MeshCom position maps onto a station and, later, an account directly — Meshtastic shows a
+payloads, so a MeshCom position maps onto a station directly — Meshtastic shows a
 callsign only for nodes in licensed mode, learned from their node info. Like Meshtastic it is a LoRa mesh reached through a node on the operator's
 LAN, not through a TNC.
 
@@ -126,7 +127,7 @@ asks for: a Pi next to the node works off-grid with a local gateway, and the sam
 LAN or cloud gateway through `INGEST_URL`.
 
 The browser cannot open UDP sockets. A browser-direct path goes over Web Serial or Web Bluetooth to the
-node, the way `RfBrowser.tsx` reaches Meshtastic today; it depends on the node's serial and BLE
+node, the way `RfBrowser.tsx` reaches Meshtastic; it depends on the node's serial and BLE
 protocols, which are listed under open questions.
 
 ## Transmit
@@ -147,7 +148,8 @@ The box enables the sender with `MESHCOM_TX=1`. It is used by:
   message that one of the box's nodes heard, queued by the gateway as a `meshcom_msg` box command
   ([Logging finds over radio messages](radio-find-logging.md)).
 
-Planned: **replies** from the Messages surface answering a direct message.
+Planned: **replies** from the Messages surface answering a direct message, tracked in
+[`TODO.md`](https://github.com/apachler/aprscaching/blob/dev/TODO.md).
 
 Group announcements stay out of scope: software never originates group or broadcast traffic.
 
@@ -186,7 +188,7 @@ Sources: firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree
 ## Positions that already arrive
 
 Nodes running `--track on` beacon on the LoRa-APRS frequency, and LoRa-APRS IGates forward those
-beacons to APRS-IS. They reach every instance today through the existing APRS-IS feed, as ordinary
+beacons to APRS-IS. They reach every instance through the APRS-IS feed, as ordinary
 Tier C positions, with no MeshCom-specific code. The listener adds what that path cannot: MeshCom-only
 nodes, messages, telemetry, and signal reports from the operator's own node.
 
@@ -195,8 +197,8 @@ nodes, messages, telemetry, and signal reports from the operator's own node.
 - **Serial and BLE protocols.** Whether the node's serial console emits machine-readable frames, and
   what the BLE service the phone apps use looks like. Both are answered from the MIT firmware source
   before a browser-direct path is designed.
-- **Acknowledgements.** How the node reports an ACK for a message sent over UDP, so the Messages
-  surface can show delivery once transmit exists.
+- **Acknowledgements.** How the node reports an ACK for a message sent over UDP. ExtUDP carries none, so
+  a transmitted message ends at *handed to node* and the Messages surface cannot yet show delivery.
 - **Gateway server protocol.** Whether an instance should ever talk to the MeshCom servers directly;
   the default answer is no — the local node is the integration point.
 - **Reference clients.** [MeshcomWebDesk](https://github.com/DH1FR/MeshcomWebDesk) and

@@ -1,13 +1,13 @@
 # Logging finds over radio messages (design)
 
-!!! note "Built and planned"
+!!! note "Built"
     Logging a find — or a DNF or note — by sending a text message from a radio instead of tapping **Log a
     find** in the app. APRS and MeshCom share one engine, and only the reply path differs. Built: the command
     engine in the gateway ingest path (`workers/gateway/src/radiolog.ts`), `radio_commands`, acks and
     opt-in replies sent back the way each message came (the hearing box's RF, its MeshCom node, or the
     APRS-IS outbox), pending confirmation under **Profile → Logs sent over the air**, and export/erase.
-    Player guide:
-    [Log from your radio](../guides/caching.md#log-from-your-radio).
+    One point stays open: a bench test of the MeshCom ack on a real node (see [Open points](#open-points)).
+    Player guide: [Log from your radio](../guides/caching.md#log-from-your-radio).
 
 ## Goal
 
@@ -144,7 +144,7 @@ log id, and timestamps. Decided commands are purged 30 days after the decision; 
 `cache_logs`. It belongs to the player's data: the GDPR export includes it and erase deletes it, and the
 export and erase of a callsign cover logs written under any of its SSIDs.
 
-## Open points
+## Behaviour details
 
 `HELP` is always answered, even with text replies off — the sender asked for the reply — and it counts
 against the per-destination reply limit.
@@ -154,28 +154,26 @@ against a callsign pattern, so `APRSCG` is a valid destination; nodes relay dire
 them and output them on ExtUDP (unless the node operator turned on `--nopmother`); and a direct message
 carries its number as a `{nnn` suffix, which reaches the gateway as the APRS message number.
 
-- **MeshCom ack on the air.** The `SENDER   :ack<nnn>` text ack follows the firmware's receive path; it
-  still needs a bench test on a real node. The node appends its own `{nnn` to it, so the sender's node may
-  ack the ack back.
-
-## Build order
-
-1. Gateway: the pure command parser, the handler in the ingest path, `radio_commands`, APRS acks via the
-   outbox, pending confirmation in the app, export/erase. Built.
-2. APRS text replies (operator opt-in). Built.
-3. Answers back the way the message came: RF acks from the hearing box, MeshCom acks and replies through
-   the hearing node, capability reports on the box poll. Built; the MeshCom ack awaits a bench test.
-
-## Tests the implementation needs
+## Invariants
 
 - The parser accepts every command form and rejects malformed ones with a reason.
 - A message heard at an attested site logs immediately; the same message over APRS-IS is pending; confirming
   it in the app creates the log with the tier scored at message time.
-- A retry with the same message number is re-acked but logged once.
+- A retry with the same message number (or the same text, when unnumbered) within 30 minutes is re-acked
+  but runs once.
 - An unverified or unknown callsign is acked and rejected; a callsign held by another account never logs
   for this one.
-- Tier A with a nearby beacon heard directly by an independent attested site; Tier C without, and Tier C
-  when the only copy of that beacon arrived over APRS-IS naming the attested site.
-- The APRS ack is queued from the service call with the sender's message number.
-- MeshCom: the ack is queued only to the box that owns the hearing node, and refused when that box has
-  MeshCom transmit disabled.
+- Tier A needs a nearby beacon heard directly by an independent attested site; without one the find is
+  Tier C, and so is one whose only copy of that beacon arrived over APRS-IS naming the attested site.
+- The APRS ack goes out from the service call with the sender's message number.
+- A MeshCom ack is queued only to the box that owns the hearing node, and only when that box reports
+  MeshCom transmit enabled.
+
+`workers/gateway/test/radiolog.test.ts` pins the command grammar, message-number handling and the trust
+decision.
+
+## Open points
+
+- **MeshCom ack on the air.** The `SENDER   :ack<nnn>` text ack follows the firmware's receive path; it
+  still needs a bench test on a real node. The node appends its own `{nnn` to it, so the sender's node may
+  ack the ack back.

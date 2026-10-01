@@ -25,8 +25,8 @@ sends every gateway route (`isGatewayPath` in the gateway's `app.ts`, the same s
 makes) through `handle()` and serves everything else as the SPA (router-fallback to `index.html`), and
 keeps SQLite in the OS app-data dir. `bun run
 launcher.ts` in the repo gives a disk-backed dev run (no embed needed). RF is browser Web Serial/BLE
-(operator-local); an always-on local feed is `apps/ingest`, run separately. *Validated: the compiled
-linux-x64 binary serves the embedded SPA + gateway + migrations from an isolated dir.*
+(operator-local); an always-on local feed is `apps/ingest`, run separately. The compiled binary is
+self-contained: it serves the embedded SPA, gateway and migrations with no repository beside it.
 
 ## Build (one machine → all platforms)
 ```bash

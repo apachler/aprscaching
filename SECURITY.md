@@ -89,13 +89,12 @@ network layer (that's the operator's edge/CDN concern).
   name servers, and a single dissenting answer refuses. That is weaker than a signature, so each such
   verification is marked in its note and can be re-checked or revoked. Once ARDC signs the zone, the
   validating resolver returns AD and the method becomes cryptographic by itself; `AMPR_REQUIRE_DNSSEC=1`
-  demands that today.
+  accepts only a signed answer.
 - Keep secrets out of the repo (`FED_PRIVATE_KEY`, `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`,
   VAPID keys, etc.) — use
   `wrangler secret` / environment variables. GitHub **secret scanning** is enabled on this repo;
   rotate anything it flags.
-- A full reliability/security hardening pass was completed ahead of going public — every finding
-  (Critical through Low) was fixed with a regression test. Deferred capability work is tracked openly
-  in [`TODO.md`](TODO.md).
+- Every bug fix, security fixes included, ships with the test that would have caught it. Deferred
+  capability work is tracked openly in [`TODO.md`](TODO.md).
 
 Thank you for helping keep the open network safe.

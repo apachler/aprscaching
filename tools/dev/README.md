@@ -7,7 +7,7 @@ Run from anywhere (they `cd` to the repo root). Also wired as root pnpm scripts.
 |---|---|---|
 | `pnpm run check` (`tools/dev/check.sh`) | `pnpm -r build` (typecheck every unit) + `pnpm -r test` (all vitest suites) + web typecheck & production build | fast inner loop after any code change |
 | `pnpm run smoke` (`tools/dev/smoke.sh`) | spins a fresh Node/SQLite gateway on a throwaway DB + random port, waits for `/health`, runs each runtime-agnostic smoke suite on its own clean instance, tears down | prove the Worker-equivalent behaviour over a real DB |
-| `pnpm run verify` (`tools/dev/verify.sh`) | `check` then `smoke` — the full pre-commit / final gate | before committing / at the end of a slice |
+| `pnpm run verify` (`tools/dev/verify.sh`) | `check` then `smoke` — the full pre-commit / final gate | before committing / at the end of a change |
 
 Flags:
 - `tools/dev/check.sh --build` or `--test` — only one half.

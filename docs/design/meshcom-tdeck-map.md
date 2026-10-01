@@ -62,10 +62,10 @@ positions.
 
 ## Concept: three layers, one overlay renderer
 
-**1. Text bot — works with today's firmware.** An operator sends `CACHES [grid]` to a bot callsign and
-receives the nearest caches in one reply within the message limit. Without a grid, the bot uses the
-sender's last beaconed position. It rides the gateway → box transmit channel described in
-[Logging finds over radio messages](radio-find-logging.md).
+**1. Text bot — works with current firmware (4.35t).** An operator sends `CACHES [grid]` to a bot callsign and
+receives the nearest caches in one reply within the message limit. Without a grid, the bot uses the sender's
+last beaconed position. It rides the gateway → box transmit channel described in [Logging finds over radio
+messages](radio-find-logging.md).
 
 **2. SD-card POI layer — upstream feature.** The firmware loads a GPX or CSV waypoint file from the SD card
 and draws it as a map overlay; APRScaching provides a GPX export per region or Maidenhead grid square.
