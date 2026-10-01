@@ -29,7 +29,7 @@ your own VM, or on Cloudflare's edge — see [Deployment](operate/deployment.md)
 runnable on your own equipment and is never cloud-only. Run your own instance and the retention schedule, the
 data and the hardware are all yours.
 
-Your own account data is yours to take or destroy: export and erase live under *Settings -> Data*, erasure
+Your own account data is yours to take or destroy: export and erase live under *Settings → Your data*, erasure
 propagates to federation peers as signed tombstones, and owner contact fields are redacted from federated
 records. Profiles are thin and opt-in — there is no name or address directory.
 

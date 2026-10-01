@@ -5,7 +5,8 @@ aprscaching separates two concerns that deploy independently:
 - the **gateway** (API + data plane), which runs on any of three interchangeable runtimes, and
 - the **RF ingest**, which is always operator-local.
 
-You pick one of three shapes — **Self-host**, **Desktop** or **Cloudflare split**. Once it is up, work
+You pick one of three shapes — **Self-host**, **Desktop** or **Cloudflare split** — or run Self-host on a
+phone as **Pocket**. Once it is up, work
 through [Your first hour as sysop](first-hour.md) — the ordered checklist from "it boots" to a public,
 verified, backed-up instance (mirrored live in the app under **Instance admin → Setup**).
 

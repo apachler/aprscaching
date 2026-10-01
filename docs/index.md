@@ -61,5 +61,5 @@ invariants are spelled out, with the code behind each, under [About](about.md#pr
 | **Ingest** | The operator-local RF bridge (a Pi/PC process, or the browser over Web Serial/Bluetooth). Always runnable on your own equipment; never cloud-only. |
 | **Libraries** | Pure, reusable codecs (`@aprscaching/aprs`, `@aprscaching/ax25`, `@aprscaching/packet`, `@aprscaching/tools`) and typed contracts (`@aprscaching/shared`). |
 
-Start with [Getting started](getting-started.md) to run it locally, or [Core concepts](concepts.md) to
+Start with [Run from source](getting-started.md) to run it locally, or [Core concepts](concepts.md) to
 understand the trust model before you deploy.

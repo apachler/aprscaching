@@ -113,10 +113,10 @@ out/teaser.png      the composed poster (hero)
 ## Prerequisites
 
 - Repo deps installed once at the root: `pnpm install`.
-- Chromium for Playwright:
-  - **This sandbox:** prebuilt at `/opt/pw-browsers` (auto-detected via `PW_CHROMIUM`).
-  - **Elsewhere:** `cd tools/teaser && npm install && npx playwright install chromium`, then leave
-    `PW_CHROMIUM` unset so Playwright resolves its own browser.
+- Chromium for Playwright under `/opt/pw-browsers`: `run-tour.sh` (and so `run-docs.sh`) sets
+  `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` and picks the Chromium it finds there as `PW_CHROMIUM`. On a
+  machine without it, install it to that path once:
+  `cd tools/teaser && npm install && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npx playwright install chromium`.
 - Video assembly needs **no ffmpeg** — it composes in Chromium (the same browser the tour uses).
 
 ## Knobs
@@ -127,6 +127,8 @@ out/teaser.png      the composed poster (hero)
 | `API_BASE` | `http://127.0.0.1:<PORT_API>` | gateway base for seeding |
 | `BASE` | `http://127.0.0.1:<PORT_WEB>` | app base for the crawl |
 | `VIEW` | all | tour viewport: `desktop` / `tablet` / `mobile` |
+| `run-tour.sh desktop mobile` | `desktop tablet mobile` | positional arguments: the viewports `run-tour.sh` captures |
+| `SKIP_VIDEO` | `0` | `1`: capture the frames only, without assembling the video (`run-docs.sh` sets it) |
 | `HOLD` / `FADE` | `2.4` / `0.45` | video per-step seconds / crossfade seconds |
 | `PW_CHROMIUM` | `/opt/pw-browsers/chromium` if present | Chromium executable |
 | `INGEST_SECRET` | `change-me` | matches the gateway secret (for the Tier-A RF seed) |

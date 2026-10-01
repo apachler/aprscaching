@@ -9,7 +9,7 @@ are shared (`@aprscaching/gateway/app`); only the bindings differ:
 | DB | D1 | SQLite (better-sqlite3) via a D1-compatible shim (`d1.ts`) |
 | Real-time | Durable Object `RegionRoom` | in-memory region rooms over `ws` (`rooms.ts`) |
 | HTTP | Workers runtime | `node:http` (and optionally `node:https`) ↔ Web `Request`/`Response` bridge (`listen.ts`) |
-| Cron | `scheduled()` | `setInterval` nightly TTL |
+| Cron | `scheduled()` | `setInterval`: the nightly jobs (`runScheduled`), and the frequent federation sync (`runFrequentSync`, every `FED_SYNC_INTERVAL_MS`, default 5 min) |
 
 This is the **self-host story** for hams and clubs who want to run their own node and join the
 federated network (see [Federation](../../docs/guides/federation.md)) instead of standing up an island.
@@ -56,8 +56,8 @@ Migrations are applied automatically on boot and tracked in a `_migrations` tabl
 ## Conformance
 
 `tools/smoke/smoke.mjs` runs an assertive end-to-end flow (hide → list → Tier A/B/C → DNF →
-owner-gating → auth guards). CI runs it against **both** this server and `wrangler dev`, so the two
-runtimes can never silently diverge.
+owner-gating → auth guards). CI runs it against this server, `wrangler dev` and the Bun server, so the
+three runtimes can never silently diverge.
 
 ## Scope / notes
 - Single-process SQLite ⇒ single node. Horizontal scale (libSQL/Turso or Postgres) can slot into the

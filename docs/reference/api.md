@@ -17,6 +17,7 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 | **sysop** | A signed-in operator whose callsign is in `ADMIN_CALLSIGNS`, held by their account and control-verified, or `x-operator-secret` where marked. Locked if `ADMIN_CALLSIGNS` is unset. |
 | **signed-body** | An Ed25519 assertion (`key`, `sig`, `at`) registered to the callsign, or a session of the account that holds the call. |
 | **x-relay-secret / x-fed-secret / wx-key** | Federation relay / federation submit-corroborate / weather-station keys. |
+| **spoke-signed** | `x-relay-instance`, `x-relay-at` and `x-relay-sig`: the request signed with the spoke instance's federation key, which the hub already holds; the signing time must sit within 120 s of the hub's clock. |
 
 Cross-origin requests carry credentials only from `APP_URL` and `CORS_ORIGINS`; with neither set the
 gateway answers `Access-Control-Allow-Origin: *` without credentials.
@@ -106,7 +107,10 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/federation/frames` | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding); frames are signature-verified | x-ingest-secret, sysop or x-operator-secret |
 | GET · POST | `/federation/beacon` | Beacon-tier presence: serve our signed single-frame record · apply a heard one (trust-gated) | public · x-ingest-secret, sysop or x-operator-secret |
 | POST | `/federation/bbs/enqueue` | Queue federation records for the FBB store-and-forward carrier | sysop or x-operator-secret |
-| POST · GET | `/federation/relay/:instance/query`, `/lease`, `/answer`, `/result/:id` | The poll-based rendezvous relay | x-relay-secret |
+| POST | `/federation/relay/:instance/query` | Queue a query for a spoke behind NAT; answers `201 { id, ticket }` | x-relay-secret |
+| GET | `/federation/relay/lease` | The spoke leases its next queued query | spoke-signed |
+| POST | `/federation/relay/answer` | The spoke answers a leased query | spoke-signed |
+| GET | `/federation/relay/result/:id` | The requester reads the answer, presenting its ticket in `x-relay-ticket` | x-relay-secret + ticket |
 | POST | `/federation/relay/:instance/dispatch` | Pack a packet-only spoke's queued queries into an FBB bulletin | sysop or x-operator-secret |
 
 ## Remote box
@@ -171,6 +175,7 @@ All admin writes are **sysop**-gated server-side; each also accepts `x-operator-
 | POST · GET | `/keys/register` · `/keys/:call` | Register a device key for a call the session's account holds · list a callsign's keys | session · public |
 | POST | `/api/account/:call/export`, `/delete`, `/bundle`, `/move`, `/api/account/import` | GDPR export/erase + account portability | signed-body |
 | GET/PUT | `/api/prefs` · `/api/notify/prefs` | Preferences · notification settings | session |
+| GET · POST | `/api/watch` | Your watched callsigns and unseen-alert count · watch a callsign (`{ callsign }`) | session |
 | GET · POST · DELETE | `/api/watch/alerts` · `/api/watch/seen` · `/api/watch/:id` | Watchlist alerts · mark seen · stop watching | session |
 | GET · POST | `/api/push/key` · `/api/push/subscribe` · `/api/push/unsubscribe` | Web-push public key · (un)subscribe this browser | session |
 | GET/POST · GET | `/api/views` · `/v/:id` | Saved map views · resolve a shared view | session · public |
