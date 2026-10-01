@@ -49,7 +49,9 @@ export type {
   MessageItem,
   Spot,
 };
-import { saveArea, loadArea } from "./offlineArea.js";
+import { offlineStore, type OfflineStore } from "./offline/store.js";
+import { migrateLegacy, packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
+import { imageKey } from "./offline/download.js";
 import { fromB64u, toB64u } from "./base64url.js";
 
 /**
@@ -126,25 +128,113 @@ export class ApiError extends Error {
 
 export type BBox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
+let offlineReadyP: Promise<OfflineStore> | null = null;
+/** The offline store (offline/store.ts), once what earlier versions kept in localStorage has moved into it. */
+export function offlineReady(): Promise<OfflineStore> {
+  offlineReadyP ??= (async () => {
+    const st = offlineStore();
+    try {
+      await migrateLegacy(st, localStorage, localStorage.getItem("acs.instance") ?? "", Date.now());
+    } catch {
+      /* nothing to move, or no storage: the store starts empty */
+    }
+    return st;
+  })();
+  return offlineReadyP;
+}
+const knownInstance = () => {
+  try {
+    return localStorage.getItem("acs.instance") ?? "";
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * The caches in view. Each answer is kept as the automatic offline pack (the area last browsed); without
+ * a connection the caches of every offline pack in view are shown instead, with where they came from.
+ */
 export async function listCaches(
   bbox: BBox,
   includeUnvetted = false,
-): Promise<{ caches: MapCache[]; offline?: boolean }> {
+): Promise<{ caches: MapCache[]; offline?: boolean; source?: OfflineSource | null }> {
   try {
     const r = await call<{ caches: MapCache[] }>(
       `/api/caches?bbox=${bbox.join(",")}${includeUnvetted ? "&includeUnvetted=1" : ""}`,
     );
-    saveArea(r.caches, bbox); // write-through: browsing an area caches it
+    void offlineReady()
+      .then((st) => saveAutoArea(st, r.caches, bbox, knownInstance(), Date.now()))
+      .catch(() => {});
     return r;
   } catch (e) {
-    const off = loadArea(); // offline: render the last-downloaded area, no network
-    if (off) return { caches: off.caches, offline: true };
-    throw e;
+    if (!isOffline(e)) throw e;
+    const off = await packCachesInBox(await offlineReady(), bbox);
+    return { caches: off.caches, offline: true, source: off.source };
   }
 }
 
-export function getCache(id: number, callsign?: string): Promise<{ cache: CacheDetail }> {
-  return call(`/api/caches/${id}${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
+/** The pack a cache page was read from while offline. */
+export interface OfflineFrom {
+  name: string;
+  refreshedAt: number;
+  auto: boolean;
+}
+
+/** A cache's page; without a connection, its copy in an offline pack (`offlineFrom` says which). */
+export async function getCache(
+  id: number,
+  callsign?: string,
+): Promise<{ cache: CacheDetail; offlineFrom?: OfflineFrom }> {
+  try {
+    return await call(`/api/caches/${id}${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
+  } catch (e) {
+    if (!isOffline(e)) throw e;
+    const hit = await packCache(await offlineReady(), id);
+    if (!hit || hit.cache.id == null) throw e;
+    const c = hit.cache;
+    const cache: CacheDetail = {
+      id: hit.cache.id,
+      code: c.code,
+      ownerCall: c.ownerCall,
+      title: c.title,
+      type: c.type,
+      status: c.status,
+      difficulty: c.difficulty,
+      terrain: c.terrain,
+      lat: c.lat,
+      lon: c.lon,
+      stationCall: c.stationCall,
+      source: c.source,
+      sourceName: c.sourceName,
+      sourceUrl: c.sourceUrl,
+      minTrust: c.minTrust,
+      fedScope: c.fedScope,
+      driveIn: c.driveIn,
+      country: c.country,
+      tags: c.tags,
+      hint: c.hint,
+      description: c.description,
+      externalId: c.externalId,
+      createdAt: c.createdAt ?? 0,
+      updatedAt: c.updatedAt ?? 0,
+      // counts and ratings are the instance's live figures; a pack does not hold them
+      finds: 0,
+      logs: c.logs,
+      logsHasMore: false,
+      favorites: 0,
+      favorited: false,
+      needsMaintenance: false,
+      dnfStreak: 0,
+      lastFound: null,
+      rating: { avg: null, count: 0, mine: null, policy: "off", canRate: false },
+      rendezvous: [],
+      stageCount: c.stages.length,
+    };
+    return {
+      cache,
+      offlineFrom: { name: hit.pack.name, refreshedAt: hit.pack.refreshedAt, auto: !!hit.pack.auto },
+    };
+  }
 }
 
 export function getLeaderboard(bbox: BBox, metric: "finds" | "points"): Promise<{ leaderboard: LeaderboardEntry[] }> {
@@ -1044,8 +1134,32 @@ export interface CacheMediaItem {
   bytes: number;
   createdAt?: number;
 }
-export function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
-  return call(`/api/caches/${cacheId}/media`);
+/** A cache's media; without a connection, the images its offline pack keeps, as local object URLs. */
+export async function getCacheMedia(cacheId: number): Promise<{ media: CacheMediaItem[] }> {
+  try {
+    return await call(`/api/caches/${cacheId}/media`);
+  } catch (e) {
+    if (!isOffline(e)) throw e;
+    const st = await offlineReady();
+    const hit = await packCache(st, cacheId);
+    if (!hit) throw e;
+    const media: CacheMediaItem[] = [];
+    for (const img of hit.cache.images)
+      for (const option of ["full", "thumbs"] as const) {
+        const blob = await st.blob(hit.pack.id, imageKey(img, option));
+        if (!blob) continue;
+        media.push({
+          id: img.id,
+          kind: "image",
+          contentType: blob.type || img.contentType,
+          title: img.title,
+          url: URL.createObjectURL(blob),
+          bytes: blob.size,
+        });
+        break;
+      }
+    return { media };
+  }
 }
 /** Upload a media item (raw body) — authorised by the signed-in owner session. */
 export async function addCacheMedia(cacheId: number, file: File, title?: string): Promise<{ item: CacheMediaItem }> {
@@ -1183,9 +1297,10 @@ export interface AuthorSig {
 export type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
 
 // ---- offline-tolerant logging: queue a log if the network is down, sync when back (log/logQueue.ts) ----
-const browserStore: QueueStore = {
-  get: (k) => localStorage.getItem(k),
-  set: (k, v) => localStorage.setItem(k, v),
+// The queue lives in the offline store (IndexedDB), where the service worker can reach it as well.
+const queueStore: QueueStore = {
+  get: async (k) => (await offlineReady()).kvGet(k),
+  set: async (k, v) => (await offlineReady()).kvSet(k, v),
 };
 const isOffline = (e: unknown) => !navigator.onLine || e instanceof TypeError; // fetch network errors throw TypeError
 const queueChanged = () => {
@@ -1198,25 +1313,27 @@ const queueChanged = () => {
 
 /** Log against a cache; with no connection the log is queued (signed and timed now) and sent later. */
 export function logFind(cacheId: number, body: LogBody, label?: string): Promise<LogResult> {
-  return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) }).catch((e) => {
-    if (!isOffline(e)) throw e;
-    enqueue(browserStore, { cacheId, body, ...(label && { label }) }, Date.now());
-    queueChanged();
-    return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
-  });
+  return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) }).catch(
+    async (e) => {
+      if (!isOffline(e)) throw e;
+      await enqueue(queueStore, { cacheId, body, ...(label && { label }) }, Date.now());
+      queueChanged();
+      return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
+    },
+  );
 }
 
-export const queuedLogs = (): QueuedLog<LogBody>[] => loadQueue<LogBody>(browserStore);
-export const attentionLogs = (): AttentionLog<LogBody>[] => loadAttention<LogBody>(browserStore);
+export const queuedLogs = (): Promise<QueuedLog<LogBody>[]> => loadQueue<LogBody>(queueStore);
+export const attentionLogs = (): Promise<AttentionLog<LogBody>[]> => loadAttention<LogBody>(queueStore);
 
 /**
  * Send the queued logs that are due (the signature and its time are kept, so the instance verifies each
  * at the time it was made). A refused log moves to needs-attention, never away.
  */
 export async function flushLogQueue(): Promise<FlushResult> {
-  if (!queuedLogs().length) return { sent: 0, refused: 0 };
+  if (!(await queuedLogs()).length) return { sent: 0, refused: 0 };
   const res = await flush<LogBody>(
-    browserStore,
+    queueStore,
     async (it) => {
       try {
         await call(`/api/caches/${it.cacheId}/logs`, {
@@ -1238,14 +1355,14 @@ export async function flushLogQueue(): Promise<FlushResult> {
 }
 
 /** Queue a refused log again (optionally with a new comment) and try it at once. */
-export function retryAttentionLog(index: number, comment?: string): Promise<FlushResult> {
-  retryAttention(browserStore, index, Date.now(), comment);
+export async function retryAttentionLog(index: number, comment?: string): Promise<FlushResult> {
+  await retryAttention(queueStore, index, Date.now(), comment);
   queueChanged();
   return flushLogQueue();
 }
 /** Remove a refused log for good. */
-export function discardAttentionLog(index: number): void {
-  discardAttention(browserStore, index);
+export async function discardAttentionLog(index: number): Promise<void> {
+  await discardAttention(queueStore, index);
   queueChanged();
 }
 

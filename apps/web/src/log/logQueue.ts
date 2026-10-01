@@ -9,7 +9,8 @@
  *   needs-attention list with the server's reason, where the user retries it, edits its comment
  *   (the signature does not cover the comment) or discards it.
  *
- * Pure apart from the storage and the sender it is given, so it is tested without a browser.
+ * Pure apart from the storage and the sender it is given, so it is tested without a browser. The app keeps
+ * it in IndexedDB (offline/store.ts), where the service worker can read it too.
  */
 
 /** The fields a log carries; the queue treats the body as opaque apart from its comment. */
@@ -41,8 +42,8 @@ export interface AttentionLog<B extends QueuedBody = QueuedBody> extends QueuedL
 }
 
 export interface QueueStore {
-  get(key: string): string | null;
-  set(key: string, value: string): void;
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
 }
 
 /** What a failed send was: the network, a server error to retry, or a refusal. */
@@ -58,27 +59,26 @@ const BACKOFF_MAX_MS = 30 * 60_000;
 export const backoffMs = (attempts: number): number =>
   Math.min(BACKOFF_FIRST_MS * 2 ** Math.max(0, attempts - 1), BACKOFF_MAX_MS);
 
-function read<T>(store: QueueStore, key: string): T[] {
+async function read<T>(store: QueueStore, key: string): Promise<T[]> {
   try {
-    const v = JSON.parse(store.get(key) || "[]") as unknown;
+    const v = JSON.parse((await store.get(key)) || "[]") as unknown;
     return Array.isArray(v) ? (v as T[]) : [];
   } catch {
     return [];
   }
 }
-function write(store: QueueStore, key: string, items: unknown[]): void {
-  try {
-    store.set(key, JSON.stringify(items));
-  } catch {
-    /* storage full or unavailable: the in-memory copy is lost with the page */
-  }
-}
+// a failed write throws: the caller must not report a log as kept when it was not
+const write = (store: QueueStore, key: string, items: unknown[]) => store.set(key, JSON.stringify(items));
 
 export const loadQueue = <B extends QueuedBody>(store: QueueStore) => read<QueuedLog<B>>(store, QUEUE_KEY);
 export const loadAttention = <B extends QueuedBody>(store: QueueStore) => read<AttentionLog<B>>(store, ATTENTION_KEY);
 
-export function enqueue<B extends QueuedBody>(store: QueueStore, item: Omit<QueuedLog<B>, "queuedAt">, now: number) {
-  write(store, QUEUE_KEY, [...loadQueue<B>(store), { ...item, queuedAt: now }]);
+export async function enqueue<B extends QueuedBody>(
+  store: QueueStore,
+  item: Omit<QueuedLog<B>, "queuedAt">,
+  now: number,
+): Promise<void> {
+  await write(store, QUEUE_KEY, [...(await loadQueue<B>(store)), { ...item, queuedAt: now }]);
 }
 
 export interface FlushResult {
@@ -98,7 +98,7 @@ export async function flush<B extends QueuedBody>(
   send: (item: QueuedLog<B>) => Promise<void>,
   now: number,
 ): Promise<FlushResult> {
-  const queue = loadQueue<B>(store);
+  const queue = await loadQueue<B>(store);
   const keep: QueuedLog<B>[] = [];
   const refused: AttentionLog<B>[] = [];
   let sent = 0;
@@ -125,32 +125,36 @@ export async function flush<B extends QueuedBody>(
       }
     }
   }
-  write(store, QUEUE_KEY, keep);
-  if (refused.length) write(store, ATTENTION_KEY, [...loadAttention<B>(store), ...refused]);
+  // A log added while this flush was sending is in the store but not in `queue`: keep it too.
+  const added = (await loadQueue<B>(store)).filter(
+    (q) => !queue.some((o) => o.queuedAt === q.queuedAt && o.cacheId === q.cacheId),
+  );
+  await write(store, QUEUE_KEY, [...keep, ...added]);
+  if (refused.length) await write(store, ATTENTION_KEY, [...(await loadAttention<B>(store)), ...refused]);
   const waits = keep.map((i) => i.nextAt).filter((t): t is number => t != null);
   return { sent, refused: refused.length, ...(waits.length && { nextAt: Math.min(...waits) }) };
 }
 
 /** Put a refused log back in the queue, with a new comment when given; it goes with the next flush. */
-export function retryAttention(store: QueueStore, index: number, now: number, comment?: string): void {
-  const list = loadAttention(store);
+export async function retryAttention(store: QueueStore, index: number, now: number, comment?: string): Promise<void> {
+  const list = await loadAttention(store);
   const item = list[index];
   if (!item) return;
   const { reason: _r, status: _s, refusedAt: _t, ...rest } = item;
   const body = comment === undefined ? rest.body : { ...rest.body, comment: comment.trim() || undefined };
-  write(
+  await write(store, QUEUE_KEY, [...(await loadQueue(store)), { ...rest, body, queuedAt: now }]);
+  await write(
     store,
     ATTENTION_KEY,
     list.filter((_, i) => i !== index),
   );
-  write(store, QUEUE_KEY, [...loadQueue(store), { ...rest, body, queuedAt: now }]);
 }
 
 /** Remove a refused log for good, at the user's request. */
-export function discardAttention(store: QueueStore, index: number): void {
-  write(
+export async function discardAttention(store: QueueStore, index: number): Promise<void> {
+  await write(
     store,
     ATTENTION_KEY,
-    loadAttention(store).filter((_, i) => i !== index),
+    (await loadAttention(store)).filter((_, i) => i !== index),
   );
 }

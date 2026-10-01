@@ -37,7 +37,7 @@ import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 
 // ---- D1 row shapes (snake_case) ----
-interface CacheDbRow {
+export interface CacheDbRow {
   id: number;
   code: string;
   owner_call: string;
@@ -65,7 +65,7 @@ interface CacheDbRow {
   created_at: number;
   updated_at: number;
 }
-interface LogDbRow {
+export interface LogDbRow {
   id: number;
   cache_id: number;
   logger_call: string;
@@ -83,7 +83,7 @@ interface LogDbRow {
   field_time_rejected?: string | null;
 }
 
-function toSummary(r: CacheDbRow): CacheSummary {
+export function toSummary(r: CacheDbRow): CacheSummary {
   return {
     id: r.id,
     code: r.code,
@@ -126,7 +126,7 @@ function joinTags(tags: string[] | undefined): string | null {
   }
   return seen.size ? [...seen].slice(0, 12).join(",") : null;
 }
-function toLogEntry(r: LogDbRow): CacheLogEntry {
+export function toLogEntry(r: LogDbRow): CacheLogEntry {
   return {
     id: r.id,
     cacheId: r.cache_id,
@@ -165,7 +165,7 @@ export async function actor(req: Request, env: Env, fallback?: string): Promise<
   return null;
 }
 
-interface RemoteCacheRow {
+export interface RemoteCacheRow {
   global_id: string;
   origin: string;
   code: string;
@@ -184,7 +184,7 @@ interface RemoteCacheRow {
   origin_trust: string; // joined from fed_peers: 'trusted' | 'unvetted' (blocked is filtered out)
 }
 
-function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
+export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
   return {
     globalId: `${instance}:cache:${r.id}`,
     id: r.id,
@@ -205,7 +205,7 @@ function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     sourceUrl: r.source_url,
   };
 }
-function remoteMapCache(r: RemoteCacheRow): MapCache {
+export function remoteMapCache(r: RemoteCacheRow): MapCache {
   return {
     globalId: r.global_id,
     id: null,

@@ -9,7 +9,10 @@ export interface LogQueueState {
   attention: number;
 }
 
-const counts = (): LogQueueState => ({ queued: queuedLogs().length, attention: attentionLogs().length });
+const counts = async (): Promise<LogQueueState> => ({
+  queued: (await queuedLogs()).length,
+  attention: (await attentionLogs()).length,
+});
 
 /**
  * Logs made offline wait in a local queue (log/logQueue.ts). Flush it on mount, whenever connectivity
@@ -17,7 +20,7 @@ const counts = (): LogQueueState => ({ queued: queuedLogs().length, attention: a
  * something (the map re-reads). Returns the counts the top bar shows.
  */
 export function useLogQueue(onFlushed: () => void): LogQueueState {
-  const [state, setState] = useState(counts);
+  const [state, setState] = useState<LogQueueState>({ queued: 0, attention: 0 });
   const flushed = useRef(onFlushed);
   useEffect(() => {
     flushed.current = onFlushed;
@@ -27,12 +30,12 @@ export function useLogQueue(onFlushed: () => void): LogQueueState {
     const sync = async () => {
       clearTimeout(timer);
       const res = await flushLogQueue();
-      setState(counts());
+      setState(await counts());
       if (res.sent) flushed.current();
       if (res.nextAt != null) timer = setTimeout(() => void sync(), Math.max(1000, res.nextAt - Date.now()));
     };
     void sync();
-    const onq = () => setState(counts());
+    const onq = () => void counts().then(setState);
     const online = () => void sync();
     window.addEventListener("online", online);
     window.addEventListener("acs-queued", onq);

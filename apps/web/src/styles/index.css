@@ -48,6 +48,7 @@
 @import "./surfaces/settings.css";
 @import "./surfaces/bbs.css";
 @import "./surfaces/messages.css";
+@import "./surfaces/offline.css";
 @import "./surfaces/landing.css";
 @import "./surfaces/docs.css";
 @import "./themes/phosphor.css";

@@ -118,8 +118,19 @@ callsign, it can also be **announced to APRS-IS**.
 
 **Without a connection.** Once you have opened the app with a connection, it opens without one too, on the
 phone where you used it (adding it to the home screen helps the phone keep it). It remembers who you
-signed in as, so you log finds offline; the map shows the caches of the area you last browsed. When a new
-version of the app is ready it says so, and updates only when you tap **Reload**.
+signed in as, so you log finds offline. When a new version of the app is ready it says so, and updates
+only when you tap **Reload**.
+
+**Offline packs.** Before a trip, open **Offline** (or **Offline packs** in **Nearby**) and make a pack: the
+map view, a circle around the map centre, or a corridor along a route from a GPX file, optionally only some
+cache types. **Check size** shows how many caches it holds and what images would add — none, a thumbnail
+per cache (made on your phone from the first image), or every image — before anything is kept. A pack
+holds each cache's description, hint, latest 5 logs and the shape of its stages, at most 5000 caches and
+250 MB. Offline, the map shows the caches of every pack in view and says which pack and how old it is; a
+cache page shows its stored copy. **Refresh** brings a pack up to date, and costs almost nothing when
+nothing changed; a pack older than a week says so. The area you last browsed is kept automatically as well.
+The browser is asked to keep your packs; if it may clear them when space runs low, the Offline panel says
+so.
 
 No signal at the cache? The find is **Saved — offline, will sync when you're back online**. It is signed
 with the time you logged it, and when it reaches the instance it is verified at that time, not at the

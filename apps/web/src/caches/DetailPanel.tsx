@@ -43,6 +43,7 @@ import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
 import { CacheMedia } from "./CacheMedia.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
 
 /** A point on the globe. */
@@ -80,6 +81,8 @@ export function DetailPanel(props: {
   /** The viewer's position, when the map already knows it. */
   here?: LatLon | null;
   activating?: Spot | null;
+  /** The offline pack this page was read from, when there is no connection. */
+  offlineFrom?: OfflineFrom | null;
   onClose: () => void;
   onLogged: () => void;
   onSignIn: () => void;
@@ -149,6 +152,14 @@ export function DetailPanel(props: {
         </button>
       }
     >
+      {props.offlineFrom && (
+        <p className="inline-note" role="status">
+          Offline copy from{" "}
+          {props.offlineFrom.auto ? "the area you last browsed" : `the pack “${props.offlineFrom.name}”`}, refreshed{" "}
+          {fmt.ago(Math.floor(props.offlineFrom.refreshedAt / 1000))}. Finds, favourites and ratings show once you are
+          back online; a find you log now is saved and sent then.
+        </p>
+      )}
       {props.activating && (
         <div className="activating-now" role="status">
           <span className="pulse" aria-hidden="true" /> Being activated now by{" "}
