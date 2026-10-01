@@ -26,7 +26,8 @@ export type PanelKey =
   | "settings"
   | "admin"
   | "docs"
-  | "signin";
+  | "signin"
+  | "outbox";
 
 export type View =
   | { kind: "map" }
@@ -50,6 +51,7 @@ const PANEL_KEYS: readonly PanelKey[] = [
   "admin",
   "docs",
   "signin",
+  "outbox",
 ];
 const isPanelKey = (k: string): k is PanelKey => (PANEL_KEYS as readonly string[]).includes(k);
 const isAppId = (k: string): k is ShackAppId => SHACK_APPS.some((a) => a.id === k);

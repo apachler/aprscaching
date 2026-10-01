@@ -60,7 +60,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | GET | `/api/caches?bbox=` | Caches in a box (native + trust-filtered federated mirrors) | public |
 | POST | `/api/caches` | Hide a cache | actor |
 | GET · PATCH | `/api/caches/:id` | Detail · update (owner) | public · actor |
-| GET · POST | `/api/caches/:id/logs` | Logbook · log a find/DNF/note | public · actor |
+| GET · POST | `/api/caches/:id/logs` | Logbook · log a find/DNF/note. A log signed with the logger's device key is timed by its signature (`author.signedAt`) when that is at most 60 s ahead, at most 7 days back, and after both the cache and the key existed; otherwise it is timed by its arrival and the answer's `fieldTimeRejected` says why (`future`, `too_old`, `before_cache`, `before_key`, or `unsigned` for an unsigned log sent with `offline: true`). The answer's `foundAt` is the time used | public · actor |
 | GET | `/api/radio/commands` | Your radio commands (FOUND / DNF / NOTE / HELP messages) and the service call to send them to | session |
 | POST | `/api/radio/commands/:id/confirm` · `/discard` | Log or drop a command that arrived only over the internet | session |
 | POST | `/api/caches/:id/favorite` · `/watch` · `/rate` | Favorite · watch · rate 1–5 (finders) | public/session |

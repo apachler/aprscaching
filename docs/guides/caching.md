@@ -116,7 +116,17 @@ it again later shows **You already logged this** and leaves the first find as it
 Your find is signed with your device key (**signed with your device key ✍**); if you verified your
 callsign, it can also be **announced to APRS-IS**.
 
-No signal at the cache? The find is **Saved — offline, will sync when you're back online**.
+No signal at the cache? The find is **Saved — offline, will sync when you're back online**. It is signed
+with the time you logged it, and when it reaches the instance it is verified at that time, not at the
+time it synced: your APRS track and your phone's location are matched against the moment of the find,
+so it gets the same tier it would have had with signal. That holds for up to 7 days; the logbook then
+shows **logged offline at 10:02, synced 18:14**. A find without a device signature (a browser that cannot
+sign) counts from when it arrives. Log once with signal on a new phone first, so its key is registered.
+
+The top bar shows how many logs wait (**2 queued**); tap it for **Logs to sync**, which has **Sync now**.
+If the instance refuses a log when it syncs, for example because the cache was archived meanwhile, the log
+is not lost: it moves to **Needs attention** with the reason, where you retry it, edit its comment, or
+discard it.
 
 **Couldn't find it** records a [DNF](../glossary.md#dnf); **Add a note** posts a note to the logbook.
 

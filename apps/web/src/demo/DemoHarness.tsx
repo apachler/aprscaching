@@ -49,6 +49,8 @@ function AppShell({
         onHide={noop}
         count={7}
         queued={0}
+        attention={0}
+        onQueue={noop}
         onFilters={noop}
         filtered={false}
         q=""

@@ -33,6 +33,7 @@ import { emitTombstones } from "./tombstones.js";
 import { verifyAuthorship, isKeyRegistered } from "./keys.js";
 import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo } from "./community.js";
 import { rendezvousFor } from "./rendezvous.js";
+import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 
 // ---- D1 row shapes (snake_case) ----
@@ -78,6 +79,8 @@ interface LogDbRow {
   corroborated_by: string | null;
   corroborated_later_at?: number | null;
   signer_key: string | null;
+  received_at?: number | null;
+  field_time_rejected?: string | null;
 }
 
 function toSummary(r: CacheDbRow): CacheSummary {
@@ -138,6 +141,8 @@ function toLogEntry(r: LogDbRow): CacheLogEntry {
     corroboratedBy: r.corroborated_by,
     corroboratedLaterAt: r.corroborated_later_at ?? null,
     signerKey: r.signer_key,
+    receivedAt: r.received_at ?? null,
+    fieldTimeRejected: r.field_time_rejected ?? null,
   };
 }
 
@@ -481,7 +486,7 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?")
     .bind(cacheId)
-    .first<CacheRow & { code: string; title: string }>();
+    .first<CacheRow & { code: string; title: string; created_at: number }>();
   if (!cache) return json({ error: "no such cache" }, { status: 404 });
 
   const now = nowS();
@@ -510,6 +515,16 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     authorSig = a.authorSig;
     signedAt = a.signedAt;
   }
+  // The find time: the signed field time within its bounds, else now (fieldtime.ts). A find queued offline
+  // is scored, stored and federated at the moment it was made.
+  const ft = await fieldTime(env, {
+    now,
+    loggerCall,
+    cacheCreatedAt: cache.created_at,
+    signed: signerKey && signedAt != null ? { at: signedAt, key: signerKey } : null,
+    offline: parsed.data.offline,
+  });
+  const foundAt = ft.foundAt;
 
   // a found is idempotent per (cache, logger). Checked AFTER author-signature
   // verification (a tampered replay still 400s), BEFORE re-running verify + insert + owner-alert +
@@ -536,19 +551,28 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   // Only `found` logs are presence-verified; DNF/note/maintenance are plain records.
   if (logType !== "found") {
     await env.DB.prepare(
-      `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment, signer_key, author_sig, signed_at)
-       VALUES (?,?,?,?, 0, NULL, 'manual', ?,?,?,?)`,
+      `INSERT INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, comment, signer_key, author_sig, signed_at, received_at, field_time_rejected)
+       VALUES (?,?,?,?, 0, NULL, 'manual', ?,?,?,?,?,?)`,
     )
-      .bind(cacheId, loggerCall, now, logType, comment ?? null, signerKey, authorSig, signedAt)
+      .bind(cacheId, loggerCall, foundAt, logType, comment ?? null, signerKey, authorSig, signedAt, now, ft.rejected)
       .run();
-    return json({ logged: true, logType, accountVerified, verified: false, signerKey });
+    return json({
+      logged: true,
+      logType,
+      accountVerified,
+      verified: false,
+      signerKey,
+      foundAt,
+      fieldTimeRejected: ft.rejected,
+    });
   }
 
-  const score = await scoreFind(env, cache, loggerCall, now, appGeo);
-  const committed = await commitFind(env, cache, loggerCall, now, comment ?? null, score, {
+  const score = await scoreFind(env, cache, loggerCall, foundAt, appGeo);
+  const committed = await commitFind(env, cache, loggerCall, foundAt, comment ?? null, score, {
     signerKey,
     authorSig,
     signedAt,
+    fieldTimeRejected: ft.rejected,
   });
   const { result, corroboratedBy } = score;
   if (committed.duplicate)
@@ -568,6 +592,8 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     announced: committed.announced,
     corroboratedBy,
     signerKey,
+    foundAt,
+    fieldTimeRejected: ft.rejected,
     ...result,
   });
 }
@@ -716,7 +742,12 @@ export async function commitFind(
   at: number,
   comment: string | null,
   score: FindScore,
-  author: { signerKey: string | null; authorSig: string | null; signedAt: number | null } = {
+  author: {
+    signerKey: string | null;
+    authorSig: string | null;
+    signedAt: number | null;
+    fieldTimeRejected?: string | null;
+  } = {
     signerKey: null,
     authorSig: null,
     signedAt: null,
@@ -727,8 +758,8 @@ export async function commitFind(
   // INSERT OR IGNORE against the partial unique index on (cache, logger) founds. If a concurrent
   // found for the same pair beat us here, changes()==0 → don't fire the alert/announce/gossip twice.
   const ins = await env.DB.prepare(
-    `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at)
-     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT OR IGNORE INTO cache_logs (cache_id, logger_call, ts, log_type, verified, tier, verify_method, matched_position_id, distance_m, comment, corroborated_by, corroborator_igate, signer_key, author_sig, signed_at, received_at, field_time_rejected)
+     VALUES (?,?,?, 'found', ?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       cacheId,
@@ -745,6 +776,8 @@ export async function commitFind(
       author.signerKey,
       author.authorSig,
       author.signedAt,
+      nowS(),
+      author.fieldTimeRejected ?? null,
     )
     .run();
   if ((ins.meta?.changes ?? 1) === 0) return { duplicate: true };
@@ -760,7 +793,7 @@ export async function commitFind(
   const ownerCall = (cache as { owner_call?: string }).owner_call;
   const ownerAcct = ownerCall && !isWithdrawnCall(ownerCall) ? await baseHolder(env, baseCall(ownerCall)) : null;
   if (ownerAcct && ownerAcct !== (await baseHolder(env, baseCall(loggerCall)))) {
-    const detail = `${loggerCall} found ${cache.code}${result.verified ? ` · Tier ${result.tier}` : " · unverified"}`;
+    const detail = `${loggerCall} found ${cache.code}${result.verified ? ` · Tier ${result.tier}` : " · unverified"}${foundEarlier(at, now)}`;
     await env.DB.prepare(
       "INSERT INTO watch_alerts (account_id, callsign, kind, detail, cache_id, lat, lon, ts) VALUES (?,?,?,?,?,?,?,?)",
     )
@@ -789,6 +822,11 @@ export async function commitFind(
   // optional: announce to APRS-IS (opt-in + verified callsign only)
   const announced = await maybeAnnounceFind(env, loggerCall, cache.code, cache.title);
   return { duplicate: false, logId, announced };
+}
+
+/** " · found <UTC time>" for a find that reaches the gateway well after it was made (a find queued offline). */
+function foundEarlier(at: number, now: number): string {
+  return now - at > 300 ? ` · found ${new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
 }
 
 /** A DNF, note or maintenance log: a plain record, never presence-verified. Returns its id. */

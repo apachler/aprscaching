@@ -34,3 +34,9 @@ export function retentionFrom(env: Env): Retention {
   }
   return out;
 }
+
+/**
+ * How long the nightly prune keeps firehose and browser-bridge positions. Fixed rather than in RETENTION:
+ * these are verification evidence, and a signed field time never reaches further back (fieldtime.ts).
+ */
+export const POSITION_RETENTION_S = 7 * 24 * 3600;

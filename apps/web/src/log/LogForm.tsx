@@ -113,7 +113,11 @@ export function LogForm(props: {
       } catch {
         /* unsupported browser -> log unsigned */
       }
-      const r = await logFind(props.cacheId, { loggerCall: props.callsign, logType, comment, appGeo, author });
+      const r = await logFind(
+        props.cacheId,
+        { loggerCall: props.callsign, logType, comment, appGeo, author },
+        props.cacheCode,
+      );
       setResult(r);
       setNote("");
       setNoteOpen(false);

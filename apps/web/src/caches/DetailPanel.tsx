@@ -43,6 +43,7 @@ import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
 import { CacheMedia } from "./CacheMedia.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { syncNote } from "../log/syncNote.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -319,7 +320,13 @@ export function DetailPanel(props: {
       </div>
       {c.logs.length === 0 && <p className="muted">No logs yet — be the first to find it.</p>}
       {[...c.logs, ...moreLogs].map((l) => (
-        <LogRow key={l.id} log={l} ago={fmt.ago(l.ts)} dist={l.distanceM != null ? fmt.distance(l.distanceM) : null} />
+        <LogRow
+          key={l.id}
+          log={l}
+          ago={fmt.ago(l.ts)}
+          dist={l.distanceM != null ? fmt.distance(l.distanceM) : null}
+          sync={syncNote(l, fmt.dateTime)}
+        />
       ))}
       <LoadMore hasMore={logsMore} loading={logsLoading} onClick={loadMoreLogs} />
     </Panel>
@@ -563,7 +570,7 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
   );
 }
 
-function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null }) {
+function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null; sync: string | null }) {
   const l = props.log;
   const tier: Tier = l.logType === "found" && l.verified ? ((l.tier ?? "C") as Tier) : "C";
   const method = [
@@ -591,6 +598,7 @@ function LogRow(props: { log: CacheLogEntry; ago: string; dist: string | null })
           <span className="logrow-when">{props.ago}</span>
         </div>
         {method && <div className="logrow-method">{method}</div>}
+        {props.sync && <div className="logrow-method">{props.sync}</div>}
         {l.comment && <div className="logrow-note">{l.comment}</div>}
       </div>
     </div>
