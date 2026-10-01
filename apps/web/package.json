@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "visual": "node test/visual/run.mjs",
     "test": "node test/no-emoji.mjs && node test/tour-anchors.mjs && node test/vendor-maplibre.mjs && vitest run"
   },
   "dependencies": {

@@ -15,6 +15,10 @@ Then open:
 - `/?demo=packet` — the packet terminal, auto-connected to a loopback FBB BBS peer
 - `/?demo=bbs` — the BBS panel with canned inbox / sent / bulletins
 - `/?demo=1` (or `?demo=both`) — both, side by side
+- `/?demo=app` — the whole app against canned gateway answers (`fixtures.ts`): caches of every type,
+  stations, logs in all three tiers, messages, ranks. `&as=sysop` signs in as the instance's operator,
+  `&as=out` shows the landing page. The visual and accessibility harness
+  (`apps/web/test/visual/run.mjs`) renders the same page.
 
 ## How it works
 

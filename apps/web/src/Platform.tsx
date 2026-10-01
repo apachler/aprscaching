@@ -254,6 +254,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
+  const [sysopKnown, setSysopKnown] = useState(false); // the operator check has answered (or nobody is signed in)
   const sysopRef = useRef(sysop);
   sysopRef.current = sysop;
   const [operatorPending, setOperatorPending] = useState(false); // operator's call not yet confirmed
@@ -277,6 +278,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     if (!session.signedIn) {
       setSysop(false);
       setOperatorPending(false);
+      setSysopKnown(true);
       return;
     }
     adminWhoami()
@@ -287,7 +289,8 @@ export default function Platform({ session, startTour }: { session: SessionState
       .catch(() => {
         setSysop(false);
         setOperatorPending(false);
-      });
+      })
+      .finally(() => setSysopKnown(true));
     // re-asked when the call's verification changes: the operator confirms it from the CLI, then re-checks
   }, [session.signedIn, session.verified]);
   useEffect(() => {
@@ -455,12 +458,18 @@ export default function Platform({ session, startTour }: { session: SessionState
 
   // One-shot ?view= deep link (the Site map, sitemap.xml and API consumers link these). The map
   // position stays in MapLibre's #z/lat/lon hash, so this query param never collides with it.
+  // An operator-only destination waits for the operator check, which answers after the first render.
+  const deepLinked = useRef(false);
   useEffect(() => {
+    if (deepLinked.current) return;
     const v = viewFromQuery(initialQuery);
+    const operatorOnly = v && ((v.kind === "panel" && v.key === "admin") || (v.kind === "app" && !!appById(v.id)?.sysop));
+    if (operatorOnly && !sysopKnown) return;
+    deepLinked.current = true;
     if (!v) return;
     if (v.kind === "panel" && v.key === "docs") setDocSlug(new URLSearchParams(initialQuery).get("doc") || "index");
     openView(v);
-  }, [initialQuery, openView]);
+  }, [initialQuery, openView, sysopKnown]);
 
   // capture / restore a shareable map view
   const getViewState = useCallback((): MapViewState => {
