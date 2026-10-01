@@ -45,7 +45,7 @@ jobs:
                 deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
               esac
               case "$f" in
-                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
+                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/oci/test/* | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
                 docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;
@@ -106,8 +106,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24 }
       # deploy/aprscaching, its library and shape modules: bash, checked like the Pocket scripts
-      - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh
+      - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh deploy/oci/*.sh deploy/oci/test/*.sh
       - run: bash deploy/test/helpers-test.sh
+      # the OCI stack's Bastion login helper, against a mocked OCI CLI and ssh
+      - run: bash deploy/oci/test/bastion-ssh-test.sh
+      # the OCI stack itself: OpenTofu checks the syntax and the provider schema (tools/checks/oci-stack.mjs
+      # checks what Terraform cannot see: schema.yaml, cloud-init placeholders, the release packaging)
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with: { tofu_version: 1.13.1, tofu_wrapper: false }
+      - run: tofu -chdir=deploy/oci init -backend=false -input=false && tofu -chdir=deploy/oci validate && tofu -chdir=deploy/oci fmt -check
 
   lint-types:
     name: lint (type-aware, slow)

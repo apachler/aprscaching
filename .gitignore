@@ -26,3 +26,7 @@ debug.bug
 # an instance's settings and secrets (deploy/setup.sh, deploy/aprscaching init), and the shape init recorded
 .env
 deploy/.shape
+
+# OpenTofu/Terraform working files (validating deploy/oci locally or in CI)
+deploy/oci/.terraform/
+deploy/oci/.terraform.lock.hcl

@@ -82,7 +82,9 @@ reachable without port forwarding, even behind CGNAT — and publish its federat
 
 Oracle
 Cloud users can start the same stack with the
-[one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip).
+[one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip):
+one Always-Free A1 VM within an Always-Free-only tenancy's allowance (2 OCPUs and 12 GB since mid-2026), a
+reserved public IP, and SSH only through OCI Bastion (`deploy/oci/README-stack.md`).
 Bare metal without Docker: `deploy/aprscaching init baremetal` installs the same gateway and ingest from a
 checkout under systemd, as a dedicated system user, with the gateway serving the web app on its own port
 (see [Deployment helpers](helpers.md#bare-metal)). The units it installs are `deploy/systemd/`'s.
