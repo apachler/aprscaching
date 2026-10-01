@@ -90,6 +90,27 @@ register + login (and a tampered-signature rejection) against a running gateway 
 virtual authenticator. It is not wired into CI — the WebAuthn logic is unit-tested; this validates
 the real browser ceremony before a release.
 
+## Design and accessibility
+
+- **Contrast** — `apps/web/test/contrast.test.ts` (part of the web unit suite) measures the WCAG contrast of every
+  foreground/background token pair the stylesheets use, in the dark, light and Phosphor themes. It resolves
+  `var()`, OKLCH and `color-mix()` itself. A pair listed as a known failure must keep failing: once it passes,
+  the test asks for it to leave the list.
+- **The UI kit** — `/?demo=ui` in a running app (`pnpm dev:web`): every token, the role scales and every
+  primitive in every state, with a theme, density and scale switch ([Design language](../design/design-language.md)).
+- **The whole app on fixtures** — `/?demo=app` serves the app from canned gateway answers
+  (`apps/web/src/demo/fixtures.ts`); `&as=sysop` or `&as=out` changes who is signed in.
+- **Visual and axe harness** — after `pnpm --filter @aprscaching/web build`:
+
+    ```bash
+    pnpm --filter @aprscaching/web visual                      # every surface × theme × phone/desktop
+    node apps/web/test/visual/run.mjs --only map,detail --themes light --keyboard
+    ```
+
+    It writes screenshots, `axe.json`, `keyboard.json` and an HTML index to `apps/web/test/visual/out/`.
+    Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
+    axe finding.
+
 ## Interop against real packet software
 
 `tools/interop/` tests the FBB/NET-ROM stack against the actual programs it must talk to. Two
