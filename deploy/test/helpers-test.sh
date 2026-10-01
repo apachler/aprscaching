@@ -97,7 +97,7 @@ run() { "$H" "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
 check "help prints the commands" bash -c "'$H' help | grep -q 'rotate-secret'"
 check "an unknown command fails" bash -c "! '$H' frob 2>/dev/null"
 check "an unknown shape fails" bash -c "! '$H' init mainframe 2>/dev/null"
-check "a shape without a command explains it" bash -c "'$H' --shape baremetal status 2>&1 | grep -q 'not available for the baremetal shape'"
+check "a shape without a command explains it" bash -c "'$H' --shape desktop update 2>&1 | grep -q 'not available for the desktop shape'"
 check "status --json is JSON" bash -c "'$H' --shape desktop --json status | node -e 'JSON.parse(require(\"fs\").readFileSync(0,\"utf8\"))' 2>/dev/null || ! have node"
 
 E2="$TMP/selfhost.env"
@@ -123,5 +123,83 @@ printf 'ADMIN_CALLSIGNS=OE8APR\nINGEST_SECRET=x\n' >"$TMP/d/.env"
 check "a .env with operator settings is a self-host gateway" eq "$(probe)" "selfhost"
 printf 'INGEST_URL=https://gw.example/ingest\nINGEST_SECRET=x\n' >"$TMP/d/.env"
 check "a .env with only the ingest link is an ingest box" eq "$(probe)" "ingest-box"
+
+# ---- setup.sh: the federation posture ---------------------------------------------------------------------
+S="$DEPLOY/setup.sh"
+setup() { "$S" --non-interactive --no-network "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
+P="$TMP/pub.env"
+check "a public instance is set up" setup --env-file "$P" --call OE8APR --domain aprs.example.net \
+  --fed-peers https://peer.example.org --net44-name aprscaching.oe8apr.ampr.org
+check "  … with auto-promotion off" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "0"
+check "  … with a corroboration quorum of 2" eq "$(env_file_get "$P" FED_CORROBORATION_QUORUM)" "2"
+check "  … with discovery unset" bash -c "! grep -q '^FED_DISCOVER=' '$P'"
+check "  … with the peers it was given" eq "$(env_file_get "$P" FED_PEERS)" "https://peer.example.org"
+check "  … with the D1 write budget off" eq "$(env_file_get "$P" D1_DAILY_WRITE_BUDGET)" "0"
+check "  … with its 44Net endpoint beside https" bash -c "grep -q '\"44net\",\"address\":\"aprscaching.oe8apr.ampr.org\"' '$P'"
+if setup --env-file "$TMP/x.env" --call OE8APR --domain a.example.net --fed-peers https://gw.oe1xyz.ampr.org; then
+  bad "a 44Net peer is refused for FED_PEERS"
+else
+  ok "a 44Net peer is refused for FED_PEERS"
+fi
+if setup --env-file "$TMP/y.env" --call OE8APR --domain a.example.net --fed-peers http://peer.example.org; then
+  bad "a plain-http peer is refused"
+else
+  ok "a plain-http peer is refused"
+fi
+cp "$P" "$TMP/hub.env"
+echo "FED_SUBMIT_SECRET=s" >>"$TMP/hub.env"
+if setup --env-file "$TMP/hub.env" --call OE8APR --domain aprs.example.net --fed-peers ""; then
+  bad "a hub without its spoke list is refused"
+else
+  ok "a hub without its spoke list is refused"
+fi
+check "a hub takes its spoke list" setup --env-file "$TMP/hub.env" --call OE8APR --domain aprs.example.net \
+  --fed-peers "" --fed-submit-instances spoke.example.org
+check "  … and writes it" eq "$(env_file_get "$TMP/hub.env" FED_SUBMIT_INSTANCES)" "spoke.example.org"
+env_file_set "$P" FED_AUTO_PROMOTE 3
+check "a re-run keeps the operator's own choice" setup --env-file "$P" --call OE8APR --domain aprs.example.net --fed-peers ""
+check "  … unchanged" eq "$(env_file_get "$P" FED_AUTO_PROMOTE)" "3"
+check "  … and warns about it" grep -q "FED_AUTO_PROMOTE is not 0" "$TMP/out"
+L="$TMP/lan.env"
+check "a LAN instance is set up" setup --env-file "$L" --call OE8APR --lan-host 10.0.0.5 --app-port 8080
+check "  … on its own port" eq "$(env_file_get "$L" APP_URL)" "http://10.0.0.5:8080"
+check "  … with no federation peers" eq "$(env_file_get "$L" FED_PEERS)" ""
+if setup --env-file "$TMP/t.env" --call OE8APR --domain a.example.net --tunnel-token t --no-tunnel; then
+  bad "--no-tunnel refuses a tunnel token"
+else
+  ok "--no-tunnel refuses a tunnel token"
+fi
+check "--no-next-steps prints no Docker steps" bash -c "! '$S' --non-interactive --no-network --env-file '$L' --call OE8APR --lan-host 10.0.0.5 --no-next-steps </dev/null | grep -q 'docker compose'"
+
+# ---- bare metal ------------------------------------------------------------------------------------------------
+if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then
+  check "bare metal: a dry run" run --yes init baremetal --dry-run --ref main --dir /srv/acs --user acs --port 8090 --call OE8APR
+  check "  … lists the root steps first" grep -q "Steps that need root" "$TMP/out"
+  check "  … creates the user as root" grep -q "\[root\] useradd --system .* acs" "$TMP/out"
+  check "  … clones as the service user" grep -q "\[acs\] git clone" "$TMP/out"
+  check "  … writes the .env through setup.sh on its port" grep -q "setup.sh --env-file /srv/acs/deploy/.env --app-port 8090 --no-tunnel" "$TMP/out"
+  check "  … enables both units" grep -q "systemctl enable --now aprscaching-gateway aprscaching-ingest" "$TMP/out"
+  check "  … says the checkout is unverified" grep -q "without verification" "$TMP/err"
+  check "  … records nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
+  check "bare metal: --no-start leaves systemd alone" run --yes init baremetal --dry-run --ref main --no-start --call OE8APR
+  check "  … no systemctl" bash -c "! grep -q '\[root\] systemctl' '$TMP/out'"
+  if run --non-interactive init baremetal --dry-run --ref main --call OE8APR; then
+    bad "bare metal: an unverified install without --yes is refused"
+  else
+    ok "bare metal: an unverified install without --yes is refused"
+  fi
+else
+  echo "skip bare metal (needs systemctl and Node.js 22+)"
+fi
+render() {
+  bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
+    BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'"
+}
+U="$(render)"
+check "a rendered unit uses the install directory" bash -c "grep -q '^WorkingDirectory=/srv/acs\$' <<<'$U' && ! grep -q /opt/aprscaching <<<'$U'"
+check "  … the service user" bash -c "grep -q '^User=acs\$' <<<'$U'"
+check "  … the port" bash -c "grep -q '^Environment=PORT=8090\$' <<<'$U'"
+check "  … the web app" bash -c "grep -q '^Environment=WEB_DIST=/srv/acs/apps/web/dist\$' <<<'$U'"
+check "  … pnpm by absolute path" bash -c "grep -qE '^ExecStart=/[^ ]*(pnpm|corepack pnpm) --filter @aprscaching/node-gateway start\$' <<<'$U'"
 
 if [ "$FAILED" = 0 ]; then echo; echo "all helper checks passed"; else echo; echo "helper checks FAILED"; exit 1; fi

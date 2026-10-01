@@ -45,7 +45,7 @@ jobs:
                 deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
               esac
               case "$f" in
-                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | .github/workflows/ci.yml) helpers=true ;;
+                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
                 docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;
@@ -102,6 +102,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Node.js 22+ for the bare-metal checks and the federation key setup.sh generates
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24 }
       # deploy/aprscaching, its library and shape modules: bash, checked like the Pocket scripts
       - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh
       - run: bash deploy/test/helpers-test.sh

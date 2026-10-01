@@ -12,8 +12,20 @@
 #              --domain aprs.example.net [--tunnel-token …] [--site-call OE8APR-10]
 #   ./setup.sh --non-interactive --call OE8APR --lan-host 192.168.1.10     # LAN / off-grid, plain http
 #
+# A public instance gets the safe federation posture: auto-promotion off and a corroboration quorum of 2
+# written out, discovery left unset (any value of FED_DISCOVER turns it on), only the peers you name, never a
+# 44Net peer as trusted, an explicit spoke list on a hub and a pinned key for any registry. A LAN instance
+# starts with federation off. The D1 write budget is written off: SQLite costs the same whatever it writes.
+#
 # Options: --env-file PATH (default ./.env) · --no-network (skip the APRS-IS reachability check) ·
-#          --yes (replace existing values without asking) · --help
+#          --yes (replace existing values without asking) · --app-port PORT (the LAN URL's port, when the
+#          gateway answers on its own port rather than through Caddy) · --no-tunnel (offer no Cloudflare
+#          Tunnel: the installer has no compose stack to run one) · --no-next-steps (the caller prints its
+#          own) · --help
+# Federation (public instances): --fed-peers URL,… (https peers you know; they start trusted) ·
+#          --fed-submit-instances ID,… (required on a hub, FED_SUBMIT_SECRET set) ·
+#          --fed-registry-key KEY (required with FED_REGISTRY/FED_REGISTRY_DNS) ·
+#          --net44-name NAME (this instance's 44Net name, e.g. aprscaching.oe8apr.ampr.org)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
@@ -22,9 +34,10 @@ ENV_FILE="$HERE/.env"
 INTERACTIVE=1
 NETWORK=1
 ASSUME_YES=0
-CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" TUNNEL="" SITE="" SITE_SET=0
+CALL="" PASS="" FILTER="" DOMAIN_IN="" LAN_HOST="" TUNNEL="" SITE="" SITE_SET=0 APP_PORT="" NO_TUNNEL=0 NEXT_STEPS=1
+FED_PEERS_IN="" FED_PEERS_SET=0 FED_SUBMIT_IN="" FED_REGKEY_IN="" NET44_IN="" NET44_SET=0
 
-usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --non-interactive) INTERACTIVE=0 ;;
@@ -36,6 +49,13 @@ while [ $# -gt 0 ]; do
     --tunnel-token) TUNNEL="$2"; shift ;;
     --site-call) SITE="$2"; SITE_SET=1; shift ;;
     --env-file) ENV_FILE="$2"; shift ;;
+    --app-port) APP_PORT="$2"; shift ;;
+    --no-tunnel) NO_TUNNEL=1 ;;
+    --no-next-steps) NEXT_STEPS=0 ;;
+    --fed-peers) FED_PEERS_IN="$2"; FED_PEERS_SET=1; shift ;;
+    --fed-submit-instances) FED_SUBMIT_IN="$2"; shift ;;
+    --fed-registry-key) FED_REGKEY_IN="$2"; shift ;;
+    --net44-name) NET44_IN="$2"; NET44_SET=1; shift ;;
     --no-network) NETWORK=0 ;;
     --yes) ASSUME_YES=1 ;;
     -h | --help) usage; exit 0 ;;
@@ -138,13 +158,24 @@ if [ -n "$TUNNEL" ]; then MODE=tunnel
 elif [ -n "$DOMAIN_IN" ]; then MODE=domain
 elif [ -n "$LAN_HOST" ]; then MODE=lan
 fi
+if [ "$NO_TUNNEL" -eq 1 ] && [ "$MODE" = tunnel ]; then
+  echo "This installation offers no Cloudflare Tunnel (--no-tunnel); leave out --tunnel-token." >&2
+  exit 2
+fi
 if [ -z "$MODE" ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "How do people reach this instance?"
-  echo "  1) a public domain; Caddy fetches the TLS certificate (ports 80+443 open)"
-  echo "  2) a public domain through a Cloudflare Tunnel (no open ports; home connections, CGNAT)"
-  echo "  3) the local network only — off-grid, plain http"
-  read -rp "Choose 1-3 [1]: " m
-  case "${m:-1}" in 2) MODE=tunnel ;; 3) MODE=lan ;; *) MODE=domain ;; esac
+  if [ "$NO_TUNNEL" -eq 1 ]; then
+    echo "  1) a public domain, through your own reverse proxy with TLS"
+    echo "  2) the local network only — off-grid, plain http"
+    read -rp "Choose 1-2 [1]: " m
+    case "${m:-1}" in 2) MODE=lan ;; *) MODE=domain ;; esac
+  else
+    echo "  1) a public domain; Caddy fetches the TLS certificate (ports 80+443 open)"
+    echo "  2) a public domain through a Cloudflare Tunnel (no open ports; home connections, CGNAT)"
+    echo "  3) the local network only — off-grid, plain http"
+    read -rp "Choose 1-3 [1]: " m
+    case "${m:-1}" in 2) MODE=tunnel ;; 3) MODE=lan ;; *) MODE=domain ;; esac
+  fi
 fi
 MODE="${MODE:-lan}"
 case "$MODE" in
@@ -164,13 +195,54 @@ case "$MODE" in
     ;;
   lan)
     guess="$(hostname -I 2>/dev/null | awk '{print $1}')"
-    case "$existing_app" in http://*) guess="$existing_host" ;; esac
+    case "$existing_app" in http://*) guess="${existing_host%:*}" ;; esac
     ask LAN_HOST "Address other devices reach this box at" "${LAN_HOST:-${guess:-localhost}}"
-    APP_URL="http://${LAN_HOST:-localhost}"
+    APP_URL="http://${LAN_HOST:-localhost}${APP_PORT:+:$APP_PORT}"
     CADDY_DOMAIN=":80"
     HEALTH="$APP_URL/health"
     ;;
 esac
+
+# ---- federation (public instances only) -------------------------------------------------------------------
+# A peer listed in FED_PEERS starts trusted, and a 44Net peer must earn that: it is onboarded from Instance
+# admin (admitted unvetted) instead. A name under ampr.org or an address in 44/8 is a 44Net peer.
+is_44net_peer() {
+  local host="${1#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  case "$host" in *.ampr.org | ampr.org | 44.*) return 0 ;; *) return 1 ;; esac
+}
+check_peers() {
+  local p
+  for p in ${1//,/ }; do
+    case "$p" in https://*) ;; *) echo "Peer '$p' is not an https URL." >&2; return 1 ;; esac
+    if is_44net_peer "$p"; then
+      echo "Peer '$p' is on 44Net: onboard it from Instance admin, which admits it unvetted, not FED_PEERS." >&2
+      return 1
+    fi
+  done
+}
+if [ "$MODE" != lan ]; then
+  if [ "$FED_PEERS_SET" -eq 0 ]; then
+    echo "Federation: instances you know and trust can mirror caches and corroborate finds with this one."
+    ask FED_PEERS_IN "Their https URLs, comma-separated (blank = none for now)" "$(current FED_PEERS)"
+  fi
+  FED_PEERS_IN="$(printf '%s' "$FED_PEERS_IN" | tr -d ' ')"
+  [ -z "$FED_PEERS_IN" ] || check_peers "$FED_PEERS_IN" || exit 2
+  if [ -n "$(current FED_SUBMIT_SECRET)" ] && [ -z "$(current FED_SUBMIT_INSTANCES)" ]; then
+    echo "This instance is a federation hub (FED_SUBMIT_SECRET); list the spokes allowed to submit to it."
+    ask FED_SUBMIT_IN "Spoke instance ids, comma-separated" "$FED_SUBMIT_IN"
+    [ -n "$FED_SUBMIT_IN" ] || { echo "A hub needs its spoke list (--fed-submit-instances)." >&2; exit 2; }
+  fi
+  if { [ -n "$(current FED_REGISTRY)" ] || [ -n "$(current FED_REGISTRY_DNS)" ]; } && [ -z "$(current FED_REGISTRY_KEY)" ]; then
+    echo "A federation registry is configured; pin its authority's public key, or the gateway refuses to start."
+    ask FED_REGKEY_IN "Registry authority key (base64url Ed25519)" "$FED_REGKEY_IN"
+    [ -n "$FED_REGKEY_IN" ] || { echo "The registry needs its authority key (--fed-registry-key)." >&2; exit 2; }
+  fi
+  if [ "$NET44_SET" -eq 0 ]; then
+    ask NET44_IN "This instance's 44Net name, if it has one (e.g. aprscaching.${CALL,,}.ampr.org; blank = none)" ""
+  fi
+fi
 
 if [ "$SITE_SET" -eq 0 ]; then
   echo "An RF receiver you operate (a TNC on the ingest box) can attest what it hears directly: Tier A."
@@ -193,6 +265,32 @@ if [ -n "$SITE" ]; then
   setvar RF_SITE_CALL "$SITE"
   setvar FIRST_PARTY_SITES "$SITE"
 fi
+# The safe federation posture, written out so the operator sees it. A value the operator chose is kept,
+# and an unsafe one is pointed out rather than replaced.
+default_var() { [ -n "$(current "$1")" ] || { write_line "$1" "$2"; echo "  set $1=$2"; }; }
+default_var D1_DAILY_WRITE_BUDGET 0
+if [ "$MODE" = lan ]; then
+  [ -z "$(current FED_PEERS)$(current FED_HUB_URL)" ] ||
+    echo "  NOTE: federation is configured (FED_PEERS / FED_HUB_URL) on a LAN instance; kept as it is."
+else
+  default_var FED_AUTO_PROMOTE 0
+  default_var FED_CORROBORATION_QUORUM 2
+  [ -z "$FED_PEERS_IN" ] || setvar FED_PEERS "$FED_PEERS_IN"
+  [ -z "$FED_SUBMIT_IN" ] || setvar FED_SUBMIT_INSTANCES "$FED_SUBMIT_IN"
+  [ -z "$FED_REGKEY_IN" ] || setvar FED_REGISTRY_KEY "$FED_REGKEY_IN"
+  if [ -n "$NET44_IN" ]; then
+    # single-quoted, as compose and systemd both read a quoted JSON value intact
+    setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$NET44_IN\",\"priority\":20}]'"
+    echo "  44Net: check the name with the self-check in Instance admin -> Setup (docs/operate/44net.md)."
+  fi
+  [ -z "$(current FED_DISCOVER)" ] ||
+    echo "  WARN: FED_DISCOVER is set, so learned peers are added (disabled). Delete the line to turn discovery off."
+  case "$(current FED_AUTO_PROMOTE)" in 0 | "") ;; *) echo "  WARN: FED_AUTO_PROMOTE is not 0: peers can become trusted without you." ;; esac
+  case "$(current FED_CORROBORATION_QUORUM)" in 0 | 1) echo "  WARN: FED_CORROBORATION_QUORUM below 2 lets one peer lift a find to Tier A." ;; esac
+  if [ -n "$(current FED_PEERS)" ] && ! check_peers "$(current FED_PEERS)" 2>/dev/null; then
+    echo "  WARN: FED_PEERS holds a 44Net or non-https peer, which starts trusted. Onboard 44Net peers from Instance admin."
+  fi
+fi
 ensure_secret INGEST_SECRET
 ensure_secret OPERATOR_SECRET
 if [ -n "$(current FED_PRIVATE_KEY)" ]; then
@@ -213,6 +311,7 @@ if [ "$NETWORK" -eq 1 ]; then
 fi
 
 # ---- next steps ------------------------------------------------------------------------------------------
+[ "$NEXT_STEPS" -eq 1 ] || exit 0
 UP="docker compose up -d --build"
 [ "$MODE" = tunnel ] && UP="docker compose -f docker-compose.yml -f compose.home.yml up -d --build"
 cat <<EOF
@@ -239,5 +338,6 @@ fi
 cat <<EOF
   4. Verify:  docker compose exec gateway node tools/admin/verify-call.mjs $CALL
      This confirms your call with OPERATOR_SECRET and opens Instance admin (the Admin rail entry).
+  5. Finish:  Instance admin -> Setup ($APP_URL) lists what is left to configure, in order.
 Keep OPERATOR_SECRET off any separate ingest box; that box needs only INGEST_SECRET.
 EOF
