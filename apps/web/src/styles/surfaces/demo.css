@@ -54,4 +54,166 @@
     overflow: auto;
     max-width: 100%;
   }
+
+  /* ---- the UI kit (/?demo=ui) ---- */
+  .uikit {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-xl) var(--space-lg) var(--space-4xl);
+    background: var(--page-bg);
+    color: var(--ink);
+    container-type: inline-size;
+  }
+  html:has(.uikit),
+  body:has(.uikit) {
+    height: auto;
+    background: var(--page-bg);
+  }
+  .uikit-head h1 {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-title-lg);
+  }
+  .uikit-sec {
+    margin-top: var(--space-3xl);
+  }
+  .uikit-sec h2 {
+    font-size: var(--text-title);
+    margin: 0 0 var(--space-xs);
+  }
+  .uikit-sec h3 {
+    font-size: var(--text-heading);
+    margin: var(--space-xl) 0 var(--space-sm);
+  }
+  .uikit-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap-inline) var(--space-md);
+    margin: var(--space-sm) 0;
+  }
+  .uikit-ctl {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .uikit-grid2 {
+    display: grid;
+    gap: var(--space-lg);
+  }
+  @container (min-width: 44rem) {
+    .uikit-grid2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .uikit-card {
+    padding: var(--pad-card);
+  }
+  .uikit-swatches {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--space-sm);
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  }
+  .uikit-swatches li {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr auto;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    font-size: var(--text-caption);
+  }
+  .uikit-chip {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-control);
+    background: var(--c);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--ink) 20%, transparent);
+  }
+  .uikit-mid,
+  .uikit-low {
+    font-weight: var(--weight-strong);
+  }
+  .uikit-low::after {
+    content: " ✕";
+  }
+  .uikit-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .uikit-table :is(th, td) {
+    text-align: left;
+    padding: var(--space-sm);
+    border-bottom: 1px solid var(--hair);
+    vertical-align: baseline;
+  }
+  .uikit-sample {
+    font-size: var(--fs);
+    font-family: var(--ff);
+  }
+  .uikit-scale {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .uikit-scale > div {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .uikit-bar {
+    display: inline-block;
+    height: var(--space-md);
+    width: var(--w);
+    background: var(--brand);
+  }
+  .uikit-shape {
+    display: grid;
+    place-items: center;
+    width: 7rem;
+    height: 4.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--rad, var(--radius-card));
+    box-shadow: var(--sh, none);
+    font-size: var(--text-caption);
+  }
+  .uikit-icons {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: var(--space-sm);
+  }
+  .uikit-icons li {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-control);
+    font-size: var(--text-caption);
+  }
+  .uikit-pair {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-lg);
+    margin: var(--space-lg) 0;
+  }
+  .uikit-frame {
+    margin: 0;
+  }
+  .uikit-frame iframe {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sheet);
+    background: var(--surface);
+    max-width: 100%;
+  }
+  .uikit-frame figcaption {
+    font-size: var(--text-caption);
+    color: var(--muted);
+    margin-top: var(--space-xs);
+  }
 }

@@ -582,6 +582,18 @@ const ROUTES: Route[] = [
     () => ({ instance: INSTANCE, signed: true, publicKey: "demo", aprsCall: ME, operator: ME }),
   ],
   ["GET", /^\/\.well-known\/source$/, () => SOURCE],
+  // a shared map view with the first cache open, so a frame can show the cache sheet (`?v=demo`)
+  [
+    "GET",
+    /^\/v\/demo$/,
+    () => ({
+      slug: "demo",
+      name: "Demo",
+      ownerCall: ME,
+      createdAt: NOW,
+      state: { center: [15.4378, 47.0763], zoom: 15, selected: 1 },
+    }),
+  ],
   ["GET", /^\/api\/caches$/, () => ({ caches: MAP_CACHES })],
   ["GET", /^\/api\/caches\/(\d+)$/, (m) => ({ cache: DETAILS.get(Number(m[1])) ?? DETAILS.get(1) })],
   ["GET", /^\/api\/caches\/(\d+)\/logs$/, (m) => page({ logs: LOGS.filter((l) => l.cacheId === Number(m[1])) })],

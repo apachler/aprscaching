@@ -106,6 +106,7 @@ nav:
       - Data model: reference/data-model.md
       - Specification registry: reference/specs.md
   - Design notes:
+      - Design language: design/design-language.md
       - MeshCom integration: design/meshcom.md
       - Logging finds over radio messages: design/radio-find-logging.md
       - Caches on the MeshCom map: design/meshcom-tdeck-map.md

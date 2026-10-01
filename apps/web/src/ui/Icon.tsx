@@ -97,6 +97,9 @@ const D: Record<IconName, string> = {
   message: "M4 4h16v16H4z M4 7l8 6 8-6",
 };
 
+/** Every icon, in the order they are defined (the design harness shows them all). */
+export const ICON_NAMES = Object.keys(D) as IconName[];
+
 const FILLED = new Set<IconName>(["navigation", "near"]);
 
 export function Icon(props: {

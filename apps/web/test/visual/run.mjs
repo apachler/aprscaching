@@ -101,7 +101,7 @@ const SURFACES = [
   { name: "admin", as: "sysop", query: "?view=admin" },
   { name: "node", as: "sysop", query: "?view=node" },
   { name: "remote", as: "sysop", query: "?view=remote" },
-  { name: "ui", as: "user", url: "/?demo=ui", wait: "main" },
+  { name: "ui", as: "user", url: "/?demo=ui", wait: "main", fullPage: true },
   { name: "packet-harness", as: "user", url: "/?demo=packet", wait: "body" },
 ];
 
@@ -166,7 +166,7 @@ async function holdTheme(page, theme) {
 async function open(page, origin, s, theme) {
   // the map opens on the fixtures' region (MapLibre keeps its position in the hash)
   const url = s.url
-    ? `${origin}${s.url}`
+    ? `${origin}${s.url}&theme=${theme}`
     : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}#14/47.0725/15.4380`;
   await page.goto(url, { waitUntil: "networkidle" });
   await holdTheme(page, theme);
@@ -177,6 +177,7 @@ async function open(page, origin, s, theme) {
     await page.waitForTimeout(400);
   }
   if (s.after) await page.waitForSelector(s.after, { timeout: 8000 }).catch(() => {});
+  if (s.fullPage) await page.waitForTimeout(6000); // the frames load whole app instances
   await page.waitForTimeout(800); // map tiles, fonts and transitions settle
 }
 
@@ -236,7 +237,7 @@ async function main() {
           const row = { id, surface: s.name, theme, view, error: null, violations: [] };
           try {
             await open(page, origin, s, theme);
-            if (shots) await page.screenshot({ path: path.join(OUT, `${id}.png`) });
+            if (shots) await page.screenshot({ path: path.join(OUT, `${id}.png`), fullPage: !!s.fullPage });
             await page.addScriptTag({ content: AXE });
             const r = await page.evaluate(() =>
               window.axe.run(document, {
