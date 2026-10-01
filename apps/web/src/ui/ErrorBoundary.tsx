@@ -2,7 +2,8 @@
 /**
  * ErrorBoundary — the last line for an error thrown while rendering. Without it React unmounts the
  * whole tree and the user is left with an empty dark page; with it they see what broke, the error's
- * own message, and a Reload (ui-ux.md §1 "always feedback").
+ * own message, and a Reload (ui-ux.md §1 "always feedback"). Every Panel has its own (scope "panel"), so a
+ * surface that fails to draw takes down only itself, not the map and the navigation around it.
  */
 import { Component, useState, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "./Button.js";
@@ -34,7 +35,23 @@ function CrashCard(props: { error: Error; onRetry: () => void }) {
   );
 }
 
-export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+/** The same, inside one panel: the rest of the app keeps working, and the panel offers to try again. */
+function PanelCrash(props: { error: Error; onRetry: () => void }) {
+  return (
+    <div className="crash-panel" role="alert">
+      <p>
+        <strong>This panel stopped with an error.</strong> The rest of the app still works.
+      </p>
+      <p className="mono crash-msg">{props.error.message || String(props.error)}</p>
+      <Button onClick={props.onRetry}>Try again</Button>
+    </div>
+  );
+}
+
+export class ErrorBoundary extends Component<
+  { children: ReactNode; scope?: "app" | "panel" },
+  { error: Error | null }
+> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: unknown) {
@@ -46,7 +63,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 
   render() {
-    if (this.state.error) return <CrashCard error={this.state.error} onRetry={() => this.setState({ error: null })} />;
+    if (this.state.error) {
+      const retry = () => this.setState({ error: null });
+      return this.props.scope === "panel" ? (
+        <PanelCrash error={this.state.error} onRetry={retry} />
+      ) : (
+        <CrashCard error={this.state.error} onRetry={retry} />
+      );
+    }
     return this.props.children;
   }
 }

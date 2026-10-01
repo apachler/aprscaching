@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Panel, Icon, Button } from "../ui/index.js";
 import type { ShackApp, ShackAppId } from "./apps.js";
+import { TermHelp } from "../platform/TermHelp.js";
 
 /**
  * Shack — a pure app launcher. Every shack app (terminal, BBS, decoder, NET/ROM node, tools,
@@ -29,6 +30,7 @@ export function ShackPanel(props: {
         Your <strong>field station</strong>: these apps drive a radio straight from this browser (Web Serial / Bluetooth
         / audio) or run on the platform — so you can operate off-grid with just a laptop and a rig, no server box.
         Launch one, or pin it to the left rail.
+        <TermHelp term="shack" />
       </p>
 
       <div className="shack-apps" role="list">

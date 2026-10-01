@@ -24,10 +24,10 @@ function useSections(): { section: string; pages: DocPage[] }[] {
   }, []);
 }
 
-export function DocsPanel(props: { initialSlug?: string; onClose: () => void }) {
+export function DocsPanel(props: { initialSlug?: string; initialAnchor?: string; onClose: () => void }) {
   const sections = useSections();
   const [slug, setSlug] = useState(props.initialSlug || "index");
-  const [pendingAnchor, setPendingAnchor] = useState("");
+  const [pendingAnchor, setPendingAnchor] = useState(props.initialAnchor ?? "");
   const page = DOC_PAGES.find((p) => p.slug === slug) ?? null;
   const html = useMemo(() => (page ? renderMarkdown(page.body, page.slug) : ""), [page]);
   const bodyRef = useRef<HTMLDivElement>(null);

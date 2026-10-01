@@ -72,6 +72,8 @@ export function useMapInstance(
     // The attribution joins the top-left stack: the bottom corners carry the app's own overlays (the
     // coordinate readout, the map tools), which would cover it.
     m.addControl(new maplibregl.AttributionControl({ compact: true }), "top-left");
+    // the canvas takes MapLibre's keyboard handler (arrows pan, + and − zoom) once it has focus; say so
+    m.getCanvas().setAttribute("aria-label", "Map. Arrow keys pan; plus and minus zoom; Nearby lists every cache.");
     // the locate button joins this stack from LocateControl, driven by the app's own location helper
     // A remote style that cannot load (offline, or the tile service down) never fires "load", so the
     // map would show nothing and load no caches: switch to the self-contained fallback once.

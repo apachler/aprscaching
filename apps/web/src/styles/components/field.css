@@ -35,8 +35,13 @@
     background: none;
     padding: 7px 0;
   }
+  /* the ring moves to the whole field, so it frames the icon and the text together (WCAG 2.4.7) */
   .srch input:focus {
     outline: none;
+  }
+  .srch:focus-within {
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
   }
   /* a typed-coordinate entry: the field grows, its submit button sits on the field's baseline */
   .coord-entry {

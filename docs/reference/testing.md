@@ -108,6 +108,9 @@ the real browser ceremony before a release.
     ```
 
     It writes screenshots, `axe.json`, `keyboard.json` and an HTML index to `apps/web/test/visual/out/`.
+    `pnpm --filter @aprscaching/web journeys` walks the main tasks (first visit, sign in, find and log, hide,
+    settings search, the Shack, the sysop's first hour) by their visible controls on a phone and a desktop, with a
+    screenshot per step and a log that marks every step it could not complete.
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
     axe finding.
 

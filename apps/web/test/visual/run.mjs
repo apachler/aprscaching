@@ -323,10 +323,15 @@ async function keyboardWalk(exe, origin) {
         await page.evaluate(() => {
           const el = document.activeElement;
           if (!el || el === document.body) return { tag: "body" };
-          const cs = getComputedStyle(el);
-          const ring =
-            (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) ||
-            (cs.boxShadow && cs.boxShadow !== "none");
+          // the ring may be drawn by the element or by a wrapper through :focus-within (a search field)
+          const drawn = (n) => {
+            const cs = getComputedStyle(n);
+            return (
+              (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) ||
+              (cs.boxShadow && cs.boxShadow !== "none")
+            );
+          };
+          const ring = [el, el.parentElement, el.parentElement?.parentElement].some((n) => n && drawn(n));
           const r = el.getBoundingClientRect();
           const name =
             el.getAttribute("aria-label") ||

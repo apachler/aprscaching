@@ -40,9 +40,14 @@
     /* the same hues as text, icons and badge lettering: each base mixed toward --ink by --hue-text, so the
        text lightens on a dark surface and darkens on a light one, from one formula */
     --hue-text: 72%;
+    --hue-chip: 50%; /* a cache type's chip lettering: its hues run from grey to green, so it mixes further */
     --tier-a-text: color-mix(in oklch, var(--tier-a) var(--hue-text), var(--ink));
     --tier-b-text: color-mix(in oklch, var(--tier-b) var(--hue-text), var(--ink));
-    --tier-c-text: var(--muted);
+    --tier-c-text: color-mix(
+      in oklch,
+      var(--muted) 80%,
+      var(--ink)
+    ); /* a shade firmer than muted, for its tinted chip */
     --ok-text: color-mix(in oklch, var(--ok) var(--hue-text), var(--ink));
     --warn-text: color-mix(in oklch, var(--warn) var(--hue-text), var(--ink));
     --bad-text: color-mix(in oklch, var(--bad) var(--hue-text), var(--ink));
@@ -228,6 +233,7 @@
     --line: oklch(0.92 0.004 220);
     --accent-text: oklch(0.48 0.15 135); /* the green darkened until it reads as text on white */
     --hue-text: 34%;
+    --hue-chip: 34%;
     --selected-bg: color-mix(in oklch, var(--brand) 13%, transparent);
     --heading: oklch(0.5 0.072 230);
     --topbar-bg: oklch(0.5 0.085 232); /* the brand blue deep enough for white text */
@@ -288,6 +294,14 @@
     --meshcom-map: #c8e05a;
     --fav: oklch(0.72 0.18 20);
 
+    /* cache types on the phosphor ramp, like the tiers */
+    --type-green: oklch(0.86 0.19 145);
+    --type-blue: oklch(0.82 0.12 195);
+    --type-forest: oklch(0.76 0.16 150);
+    --type-grey: oklch(0.72 0.06 150);
+    --type-clay: oklch(0.82 0.13 75);
+    --type-sand: oklch(0.86 0.14 95);
+
     /* trust tiers re-hued onto the phosphor ramp: A=green, B=cyan, C=dim green */
     --tier-a: oklch(0.86 0.19 145);
     --tier-b: oklch(0.82 0.12 195);
@@ -296,6 +310,7 @@
     --warn: oklch(0.85 0.15 90); /* amber */
     --bad: oklch(0.68 0.2 27); /* red */
     --hue-text: 100%; /* the phosphor ramp is already tuned for the black */
+    --hue-chip: 100%;
     --bad-text: color-mix(
       in oklch,
       var(--bad) 72%,

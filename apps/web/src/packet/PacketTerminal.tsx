@@ -24,7 +24,7 @@ import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
-import { Button, Disclosure, Tabs, tabPanelId } from "../ui/index.js";
+import { Button, Disclosure, EmptyState, Tabs, tabPanelId } from "../ui/index.js";
 
 /** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
 export interface TermTransport extends Transport {
@@ -305,6 +305,19 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         )}
       </div>
       {err && <p className="error">{err}</p>}
+
+      {!portOpen && (
+        <EmptyState
+          action={
+            <Button variant="primary" onClick={openPort}>
+              Open KISS TNC…
+            </Button>
+          }
+        >
+          A connected-mode packet terminal for your own radio: plug a KISS TNC into this computer over USB, open it
+          here, then connect to a BBS or a node by callsign. Channel 0 shows everything your TNC hears.
+        </EmptyState>
+      )}
 
       {portOpen && (
         <>
