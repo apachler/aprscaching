@@ -17,67 +17,28 @@ Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
 > your first find — no installation needed. [Start here](https://apachler.github.io/aprscaching/start-here/)
 > walks you through it in five minutes.
 
-The **[manual](https://apachler.github.io/aprscaching/)** describes the platform as it is. It has three
-audiences:
+## What it is
 
-- **Cachers** play the game — see [Start here](https://apachler.github.io/aprscaching/start-here/),
-  [Your account](https://apachler.github.io/aprscaching/guides/account/) and
-  [Caching](https://apachler.github.io/aprscaching/guides/caching/).
-- **Operators** connect radios and run an instance — see
-  [Your radio in the browser](https://apachler.github.io/aprscaching/guides/my-radio/),
-  [Connect a radio: quick starts](https://apachler.github.io/aprscaching/operate/quickstarts/) and
-  [Deployment](https://apachler.github.io/aprscaching/operate/deployment/).
-- **Integrators** talk to the platform's open, signed feeds and read API — see
-  [Reference](https://apachler.github.io/aprscaching/reference/api/) and
-  [Federation](https://apachler.github.io/aprscaching/guides/federation/).
+- **The cache game.** Caches are places tied to amateur radio. Browse the map, go there, and log the find —
+  verified **by radio** when a receiving station that isn't yours heard your APRS beacon nearby, by your
+  phone's location otherwise. A packet that only travelled over the internet proves nothing on its own.
+- **The Shack.** A packet-radio bench in the browser: an APRS decoder, a live station map, a BBS and NET/ROM
+  node, an IGate and digipeater over a KISS TNC, rig control, CW and PSK31 decoding, and signed tool plugins.
+- **Yours to run.** A Raspberry Pi, a mini-PC, a phone, a desktop app or Cloudflare — and the instances
+  federate into one open network. Positions are pruned, nothing tracks you, and every instance links the
+  exact source it runs.
 
-## Two things in one application
+## The manual
 
-**The cache game (for everyone).** A geocaching-style hunt where caches are places tied to amateur radio.
-Browse a map, pick a nearby cache, and log a find when you get there — the app can prompt you the moment you
-walk into a cache's geofence. Leaderboards, profiles, badges, and imported heritage summits and parks
-(SOTA / POTA / WWFF / castles / islands) share the same map.
+| I want to… | Start with |
+|---|---|
+| **Play** — find and hide caches, connect my radio | [Start here](https://apachler.github.io/aprscaching/start-here/) |
+| **Run an instance** | [Deployment](https://apachler.github.io/aprscaching/operate/deployment/) and [Your first hour as sysop](https://apachler.github.io/aprscaching/operate/first-hour/) |
+| **Build on it** — the read API, signed feeds, federation | [HTTP API](https://apachler.github.io/aprscaching/reference/api/) and [Federation wire format](https://apachler.github.io/aprscaching/reference/federation-wire/) |
+| **Contribute** | [Run from source](https://apachler.github.io/aprscaching/getting-started/) and [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-**The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live
-station map, run a store-and-forward BBS and a NET/ROM node, digipeat and IGate over a KISS TNC, control a
-transceiver over CAT, decode CW and PSK31 off the air, and extend it all with signed tool plugins. The
-caching side is the *product*; the Shack is the *platform* it rides on.
-
-## Trust follows the radio, not the transport
-
-The single idea that shapes the whole platform: **a packet arriving over the internet proves nothing on its
-own.** aprscaching only *believes* a find when independent evidence corroborates it, and that evidence has to
-come from the air or from a first-party device reading — never merely from the wire a packet travelled on.
-Every find earns one of three honest tiers
-([Core concepts](https://apachler.github.io/aprscaching/concepts/#verification-tiers)):
-
-| Tier | Means | Earned by |
-|------|-------|-----------|
-| **A** | Radio-verified | Heard directly on the air by an attested receiving site that isn't yours — through that site's own ingest, never an APRS-IS copy — on a plausible track |
-| **B** | Location-verified | Your device's first-party geolocation matches the cache at log time |
-| **C** | Logged | Nothing independent placed you at the cache (a bare APRS-IS beacon at most) — on record, but unverified |
-
-## A map that forgets
-
-Everything an amateur transmits is public, so the honest question is not whether a map can see your beacons —
-it is what the map does with them afterwards. Here: firehose positions are pruned on a retention schedule
-rather than archived, there is no analytics, advertising or third-party tracking of any kind, every instance
-links the exact source commit it runs, and you can self-host the whole thing on your own hardware. Those four
-invariants are spelled out, with the code behind each, under
-[About](https://apachler.github.io/aprscaching/about/#privacy-by-default).
-
-## Architecture at a glance
-
-| Piece | What it is |
-|-------|------------|
-| **Gateway** | The API + data plane. Runs as a Cloudflare Worker + D1, plain Node + SQLite, or Bun — one conformance suite proves all three identical. |
-| **Web app** | A React + MapLibre single-page app: the map, the Shack, and the operator surface. |
-| **Ingest** | The operator-local RF bridge (a Pi/PC process, or the browser over Web Serial/Bluetooth). Always runnable on your own equipment; never cloud-only. |
-| **Libraries** | Pure, reusable codecs (`@aprscaching/aprs`, `@aprscaching/ax25`, `@aprscaching/packet`, `@aprscaching/tools`) and typed contracts (`@aprscaching/shared`). |
-
-Start with [Getting started](https://apachler.github.io/aprscaching/getting-started/) to run it locally, or
-[Core concepts](https://apachler.github.io/aprscaching/concepts/) to understand the trust model before you
-deploy.
+How finds are verified is in [Core concepts](https://apachler.github.io/aprscaching/concepts/); the privacy invariants, with the code behind each,
+are under [About](https://apachler.github.io/aprscaching/about/#privacy-by-default).
 
 ---
 
@@ -95,11 +56,12 @@ pnpm dev:web                                      # the map UI (talks to http://
 pnpm dev:ingest                                   # the operator-local RF ingest (copy .env.example to .env)
 ```
 
-[Getting started](https://apachler.github.io/aprscaching/getting-started/) covers the Cloudflare Worker
+[Run from source](https://apachler.github.io/aprscaching/getting-started/) covers the Cloudflare Worker
 gateway, the Bun desktop build and the ingest box, and
 [Testing](https://apachler.github.io/aprscaching/reference/testing/) covers the smoke and conformance suites.
 
-For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key:
+For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key. It
+deploys the stack archive attached to the latest release, so it works once the first release is published:
 
 [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip)
 
@@ -144,7 +106,7 @@ Contributions from hams, developers, and cachers are welcome.
 - **[SECURITY.md](SECURITY.md)** — how to report a vulnerability privately.
 - **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** · **[SUPPORT.md](SUPPORT.md)** ·
   **[CHANGELOG.md](CHANGELOG.md)**
-- **[TODO.md](TODO.md)** — the short post-1.0 deferred list.
+- **[TODO.md](TODO.md)** — the launch list and the work deferred past 1.0, with why each piece waits.
 
 aprscaching is **free in full** — every feature, forever. Donations (when available) are
 recognition-only and never gate functionality.

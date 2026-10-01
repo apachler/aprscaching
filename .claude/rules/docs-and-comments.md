@@ -29,6 +29,8 @@ Everything else is present-tense.
 1. **Process/sequence codes.** No milestone, phase, stage, slice, or track labels in comments or docs:
    `M0`–`M9`, `Stage 2A`, `Phase B`, `Slice A`, `P1`–`P4`, `T3a`–`T3e`, `A1/A2`, `B1`–`B3`, and the
    hardware/feature tracks `H1`–`H6`, `W1`–`W4`, `F-1`–`F-8`. Name the thing, not its plan slot.
+   (`TODO.md` alone marks its items with a priority · size, `P1`–`P3` · `S`/`M`/`L`; that is a scale, not
+   a plan slot, and stays there.)
 2. **Review / ticket IDs.** No `SR-SEC-07`, `SR-TRUST-02`, `SR-*`, or similar audit tags. Keep the
    invariant they guarded; drop the tag.
 3. **ADR labels.** No `ADR-3` / `ADR-4b`. State the decision as a standing rule.

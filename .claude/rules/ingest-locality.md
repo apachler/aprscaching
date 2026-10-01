@@ -1,8 +1,8 @@
 # Rule: RF ingest locality (operator-owned, never cloud-only)
 
 **Scope.** `apps/ingest`, the browser RF bridge in `apps/web` (Web Serial / Web Bluetooth), the
-gateway ingest endpoints (`workers/gateway`, `servers/node`), and all deployment tooling under
-`deploy/`. Claude Code MUST honor this invariant whenever touching the ingest or the
+gateway ingest endpoints (`workers/gateway`, and the Node and Bun servers under `servers/`), and all
+deployment tooling under `deploy/` — Self-host, Desktop, Cloudflare split and Pocket. Claude Code MUST honor this invariant whenever touching the ingest or the
 ingest↔gateway boundary.
 
 ## Invariant (MUST)
@@ -34,6 +34,3 @@ ingest↔gateway boundary.
   can't run themselves.
 - Remove or hide the browser RF path to force a server install.
 - Bake a single cloud `INGEST_URL` as the only option in deployment tooling.
-
-> Claude Code: wire this into `CLAUDE.md` by adding `@.claude/rules/ingest-locality.md` to the
-> Rules section, alongside `ui-ux.md` and `css.md`.
