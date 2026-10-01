@@ -40,7 +40,7 @@ The output is plain text with no colour codes, so it reads the same in a termina
 
 | Command | Self-host | Cloudflare split | Ingest box | Bare metal | Pocket | Desktop |
 |---|---|---|---|---|---|---|
-| `init` | `setup.sh` | `cloudflare/deploy-cf.sh` | — | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
+| `init` | `setup.sh` | `cloudflare/deploy-cf.sh`, after a cost warning | enrollment, feeds, radios, start | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
 | `status` | health + containers | Worker health | containers | health + units | `pocket/status.sh` | health |
 | `doctor` | yes | yes | yes | yes | yes | yes |
 | `backup` | `backup.sh` | — | — | `backup.sh` | `pocket/backup.sh` | — |
@@ -87,6 +87,38 @@ data directory.
 `init selfhost` runs `deploy/setup.sh`, so its options work here too (`deploy/aprscaching init selfhost
 --help`). A public instance gets the safe federation posture written out and a LAN instance starts with
 federation off: see [Running in Docker](docker.md).
+
+## Ingest box
+
+```bash
+deploy/aprscaching init ingest-box --gateway https://aprs.example.net --code ABCD-EFGH-JKLM-NPQR --call OE8APR
+```
+
+Sets up a box that feeds a gateway elsewhere, in Docker (`compose.ingest-only.yml`):
+
+1. checks that the gateway answers at `<gateway>/ingest/check`;
+2. **enrolls the box** with a one-time code from the gateway's **Instance admin → Ingest boxes**
+   ([Enrolling ingest boxes](administration.md#enrolling-ingest-boxes)). Enrollment runs inside the ingest
+   image, so the box needs no Node.js, and writes `BOX_ID` and `BOX_KEY` into `deploy/.env` without showing
+   the key. With `--shared-secret` it takes the gateway's `INGEST_SECRET` instead, asked for without
+   echoing it (non-interactive: from the environment);
+3. asks for the APRS-IS login and filter, a KISS TNC (`--kiss host[:port]`) and a MeshCom node
+   (`--meshcom address=CALL`). With a TNC, it asks for the receiving site the TNC names (`RF_SITE_CALL`),
+   which counts for Tier A only once the gateway's sysop lists it in `FIRST_PARTY_SITES`;
+4. starts the ingest container and runs `doctor`, which checks the box's credential the way the box sends it:
+   signed, for an enrolled box.
+
+It refuses a `deploy/.env` that belongs to a gateway: the Self-host stack runs its own ingest. Re-running it
+keeps the enrolled key unless you pass a new `--code`. `--no-start` writes the settings only. A revoked box
+shows in `doctor` as refused, with the fix: enroll again with a new code.
+
+## Cloudflare split
+
+`init cloudflare` is kept to the existing one-shot (`deploy/cloudflare/deploy-cf.sh`, which needs `wrangler`
+logged in). It first says what the split costs and points to Self-host behind a Cloudflare Tunnel, then
+asks before it deploys (`--yes` confirms). It records the Worker's and the app's URLs (`--api-base`,
+`--app-url`), so `status` and `doctor` work from the same machine afterwards. Set up the RF box with
+`init ingest-box --gateway <the Worker's URL>`.
 
 ## Bare metal
 

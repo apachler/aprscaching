@@ -112,7 +112,8 @@ first run. Best for one operator, a field day, or trying it out; it works off-gr
     without the per-write cost.
 
 A managed core: the Worker gateway with D1 and R2, and the SPA on Pages, set up by
-`deploy/cloudflare/deploy-cf.sh`. Nothing of yours runs in the cloud except that; the RF ingest runs on your
+`deploy/cloudflare/deploy-cf.sh` (or `deploy/aprscaching init cloudflare`, which runs it and records the URLs
+for `status` and `doctor`). Nothing of yours runs in the cloud except that; the RF ingest runs on your
 own box with `compose.ingest-only.yml` and `INGEST_URL` pointing at the Worker. A cloud VM may add an
 APRS-IS-only feed the same way, never the RF bridge. Back it up with D1 Time Travel and a copy of the R2
 media — see [Backups](#backups).

@@ -70,9 +70,28 @@
     .partner-form {
       grid-template-columns: 1fr 1fr;
     }
-    .partner-form .row {
+    .partner-form .row,
+    .partner-form > p {
       grid-column: 1 / -1;
     }
+  }
+  /* A one-time box enrollment code: shown once, large enough to read off and type on the box */
+  .box-code {
+    display: grid;
+    gap: var(--sp-2);
+    margin: var(--sp-3) 0;
+    padding: var(--sp-4);
+    border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--hair));
+    border-radius: var(--r-6);
+    background: color-mix(in oklch, var(--accent) 8%, var(--surface-2));
+  }
+  .box-code p {
+    margin: 0;
+  }
+  .box-code__value {
+    font-size: var(--fs-lg);
+    letter-spacing: 0.08em;
+    user-select: all;
   }
   /* Setup checklist rows: status + name on one line, the detail beneath; side by side when there is room */
   .setup-list {

@@ -776,6 +776,37 @@ export function addManualVerification(
 export function revokeManualVerification(callsign: string): Promise<{ revoked: boolean }> {
   return call(`/api/admin/verifications/${encodeURIComponent(callsign)}`, { method: "DELETE" });
 }
+// ---- ingest box enrollment ----
+/** An enrolled ingest box; enrolledBy / revokedBy are account ids, or "operator" for the operator secret. */
+export interface EnrolledBox {
+  box: string;
+  label: string | null;
+  callsign: string | null;
+  enrolledBy: string;
+  enrolledAt: number;
+  revokedBy: string | null;
+  revokedAt: number | null;
+  lastSeenAt: number | null;
+}
+export interface OpenBoxCode {
+  label: string | null;
+  callsign: string | null;
+  createdAt: number;
+  expiresAt: number;
+}
+export function listEnrolledBoxes(): Promise<{ boxes: EnrolledBox[]; openCodes: OpenBoxCode[] }> {
+  return call(`/api/admin/boxes`);
+}
+/** A one-time enrollment code, returned once. */
+export function createBoxCode(label: string, callsign: string): Promise<{ code: string; expiresAt: number }> {
+  return call(`/api/admin/boxes/codes`, {
+    method: "POST",
+    body: JSON.stringify({ label: label || undefined, callsign: callsign || undefined }),
+  });
+}
+export function revokeBox(box: string): Promise<{ revoked: boolean }> {
+  return call(`/api/admin/boxes/${encodeURIComponent(box)}/revoke`, { method: "POST" });
+}
 // ---- cache adoption ----
 /** A cache as the adoption endpoints serve it; `ownerCall` reads `WITHDRAWN` for an erased owner. */
 export interface AdoptionCache {

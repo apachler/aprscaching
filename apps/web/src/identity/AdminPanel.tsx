@@ -25,6 +25,10 @@ import {
   addManualVerification,
   revokeManualVerification,
   type ManualVerification,
+  listEnrolledBoxes,
+  createBoxCode,
+  revokeBox,
+  type EnrolledBox,
   getAdminAdoptions,
   offerForAdoption,
   withdrawAdoptionOffer,
@@ -119,6 +123,11 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
       {show("forwarding", "fbb", "bbs", "partners", "rules", "mail") && (
         <Group title="Forwarding" status="FBB / BBS" defaultOpen={false}>
           <ForwardingAdmin />
+        </Group>
+      )}
+      {show("boxes", "ingest", "enroll", "code", "revoke", "key") && (
+        <Group title="Ingest boxes" status="enrollment" defaultOpen={false}>
+          <BoxesAdmin />
         </Group>
       )}
       {show("ingest", "transports", "ports", "tak", "cot", "feed") && (
@@ -264,6 +273,176 @@ function VerificationAdmin() {
                 Revoke
               </button>
               {v.note && <div className="comment">{v.note}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- ingest box enrollment
+
+/**
+ * Let an ingest box in without handing it the shared INGEST_SECRET: a one-time code, typed on the box
+ * (`deploy/aprscaching init ingest-box`), registers the box's own key. Each box is listed with when it was last
+ * seen, and revoking one cuts that box off alone. Enrolling grants no trust: a box's receiving site counts for
+ * Tier A only once it is listed in FIRST_PARTY_SITES.
+ */
+function BoxesAdmin() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const list = useLoad(() => listEnrolledBoxes(), []);
+  const refresh = list.reload;
+  const [label, setLabel] = useState("");
+  const [call, setCall] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ code: string; expiresAt: number } | null>(null);
+
+  const base = call.trim().toUpperCase();
+  const callOk = !base || CALL_RE.test(base);
+  const create = async () => {
+    if (!callOk) {
+      setFormErr("Enter a valid callsign, or leave it empty.");
+      return;
+    }
+    setSaving(true);
+    setFormErr(null);
+    try {
+      setIssued(await createBoxCode(label.trim(), base));
+      setLabel("");
+      setCall("");
+      refresh();
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const revoke = async (b: EnrolledBox) => {
+    if (
+      !(await confirmDialog({
+        title: `Revoke ${b.label ?? b.box}?`,
+        message: "Its key stops working at once. The box comes back only with a new code.",
+        confirmLabel: "Revoke",
+        danger: true,
+      }))
+    )
+      return;
+    try {
+      await revokeBox(b.box);
+      toast(`${b.label ?? b.box} revoked`);
+      refresh();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  const boxes = list.data?.boxes;
+  const open = list.data?.openCodes ?? [];
+
+  return (
+    <>
+      <p className="muted fine">
+        A one-time code lets a box in with its own key, so it needs no copy of the shared ingest secret and you can
+        revoke it alone. Enrolling grants no trust: list the box&apos;s receiving site in{" "}
+        <span className="mono">FIRST_PARTY_SITES</span> for Tier A.
+      </p>
+      <div className="partner-form">
+        <label>
+          Box name
+          <input placeholder="home TNC" value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        <label>
+          Limit to callsign (optional)
+          <input
+            className="mono"
+            placeholder="OE8APR"
+            value={call}
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={!!formErr && !callOk}
+            aria-describedby="box-call-help"
+            onChange={(e) => setCall(e.target.value)}
+          />
+        </label>
+        <p id="box-call-help" className="muted fine">
+          A box limited to a callsign may name only receiving sites of that call.
+        </p>
+        <div className="row end">
+          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void create()}>
+            {saving ? "Creating…" : "Create enrollment code"}
+          </Button>
+        </div>
+      </div>
+      {formErr && (
+        <p className="error fine" role="alert">
+          {formErr}
+        </p>
+      )}
+      {issued && (
+        <div className="box-code" role="status">
+          <p>Enter this code on the box before {fmt.time(issued.expiresAt)}. It works once and is not shown again.</p>
+          <p className="box-code__value mono">{issued.code}</p>
+          <div className="row">
+            <Button onClick={() => void copyText(issued.code).then(() => toast("Code copied"))}>Copy</Button>
+            <button className="link-btn" onClick={() => setIssued(null)}>
+              Done
+            </button>
+          </div>
+          <p className="muted fine">
+            On the box: <span className="mono">deploy/aprscaching init ingest-box</span>
+          </p>
+        </div>
+      )}
+      {open.length > 0 && (
+        <p className="muted fine">
+          {open.length} code{open.length === 1 ? "" : "s"} waiting to be used.
+        </p>
+      )}
+      <h4 className="set-subh">Enrolled boxes</h4>
+      {list.error ? (
+        <ErrorState onRetry={refresh}>Couldn&apos;t load the boxes.</ErrorState>
+      ) : boxes === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : boxes.length === 0 ? (
+        <EmptyState>No enrolled boxes. Create a code above and enter it on the box.</EmptyState>
+      ) : (
+        <ul className="logs">
+          {boxes.map((b) => (
+            <li key={b.box}>
+              <Badge kind={b.revokedAt ? "dnf" : "found"}>{b.revokedAt ? "revoked" : "active"}</Badge>
+              <span>{b.label ?? b.box}</span>
+              <span className="muted">
+                {" "}
+                · <span className="mono">{b.box}</span>
+                {b.callsign ? (
+                  <>
+                    {" "}
+                    · <span className="mono">{b.callsign}</span>
+                  </>
+                ) : null}
+              </span>
+              {!b.revokedAt && (
+                <button
+                  className="link-btn danger"
+                  aria-label={`Revoke ${b.label ?? b.box}`}
+                  onClick={() => void revoke(b)}
+                >
+                  Revoke
+                </button>
+              )}
+              <div className="comment">
+                enrolled {fmt.date(b.enrolledAt)}
+                {b.revokedAt
+                  ? ` · revoked ${fmt.date(b.revokedAt)}`
+                  : b.lastSeenAt
+                    ? ` · last seen ${fmt.ago(b.lastSeenAt)}`
+                    : " · not seen yet"}
+              </div>
             </li>
           ))}
         </ul>
