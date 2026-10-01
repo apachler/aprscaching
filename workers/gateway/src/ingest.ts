@@ -64,6 +64,16 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
  *  5 MB; anything larger is refused BEFORE req.json() buffers it into memory. */
 const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
+/**
+ * GET /ingest/check — does this ingest credential work? 200 with the instance id for a valid
+ * x-ingest-secret, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
+ * doctor`) can test its settings without posting a batch, draining the outbox or leasing a command.
+ */
+export async function handleIngestCheck(req: Request, env: Env): Promise<Response> {
+  if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
+  return json({ ok: true, instance: env.INSTANCE ?? null });
+}
+
 /** Receive batched packets from the ingest box, persist positions, enrich the shack, fan out live. */
 export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
   const len = Number(req.headers.get("content-length") ?? 0);

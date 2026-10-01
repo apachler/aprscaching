@@ -1,0 +1,501 @@
+# doctor: a read-only health check of an installation, the same on every shape. Each check reports pass,
+# warn or fail with a one-line fix and a docs link; --json prints them as one JSON document. It changes
+# nothing: no setting, no file, no service.
+#
+# A shape module supplies its context in shape_doctor_context (the variables below) and may add its own
+# checks in shape_doctor_extra. Sourced by deploy/aprscaching after common.sh, env.sh and config.sh.
+# shellcheck shell=bash
+
+DOC_ENV=""          # the .env the shape keeps its settings in (empty: none, e.g. the Cloudflare Worker)
+DOC_BASE=""         # the gateway as this host reaches it (http://127.0.0.1:8080), empty without a gateway
+DOC_PUBLIC=""       # the public origin (APP_URL)
+DOC_INGEST=""       # the ingest's /ingest URL as this host reaches it, empty without an ingest
+DOC_DATA_DIR=""     # where the database lives, for the disk-space check
+DOC_DB_FILE=""      # the SQLite file, for its size
+DOC_BACKUP_DIR=""   # where backups land, for their age
+DOC_BACKUP_GLOB="*" # the backup files in it
+DOC_BACKUP_SETTINGS=0 # 1: the destination comes from BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET (deploy/backup.sh)
+DOC_BACKUP_MAX_DAYS="${APRS_BACKUP_MAX_DAYS:-7}"
+DOC_OPERATOR_SECRET="" # read from the shape's settings, or the environment; never printed
+DOC_CURL_OPTS=()   # extra curl options for requests to DOC_BASE (Self-host pins its public name to this host)
+DOC_HEALTH=""
+DOC_ROWS=()
+
+DOCS_URL="docs/operate" # docs links are paths in the repository, readable in a checkout and on the docs site
+
+# doc_add STATUS ID MESSAGE [FIX] [DOCS]: one result. MESSAGE and FIX never carry a secret value.
+doc_add() {
+  DOC_ROWS+=("$1"$'\t'"$2"$'\t'"$3"$'\t'"${4:-}"$'\t'"${5:-}")
+}
+pass() { doc_add pass "$@"; }
+warnc() { doc_add warn "$@"; }
+failc() { doc_add fail "$@"; }
+
+# The value of KEY for this installation: its .env, else the environment.
+doc_get() {
+  local v=""
+  [ -z "$DOC_ENV" ] || v="$(env_file_get "$DOC_ENV" "$1")"
+  [ -n "$v" ] || v="${!1:-}"
+  printf '%s' "$v"
+}
+
+doc_public() { case "$DOC_PUBLIC" in https://*) return 0 ;; *) return 1 ;; esac; }
+
+# curl that sends a secret header without putting the secret on a command line (ps shows those).
+curl_secret() { # curl_secret HEADER SECRET curl-args…
+  local h="$1" s="$2"
+  shift 2
+  printf 'header = "%s: %s"\n' "$h" "$s" | gw_curl -K - "$@"
+}
+
+json_field() { # json_field JSON FIELD: a top-level string, number or boolean field, without jq
+  printf '%s' "$1" | sed -n -E "s/.*\"$2\":[[:space:]]*(\"([^\"]*)\"|([-0-9.a-z]+)).*/\\2\\3/p" | head -n 1 || true
+}
+
+# curl to the gateway at DOC_BASE, with the shape's options.
+gw_curl() { curl "${DOC_CURL_OPTS[@]+"${DOC_CURL_OPTS[@]}"}" "$@"; }
+
+tcp_open() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+
+# ---- config -------------------------------------------------------------------------------------------------
+doc_config() {
+  local key v msg unknown=() bad=0 mode
+  [ -n "$DOC_ENV" ] || return 0
+  if [ ! -f "$DOC_ENV" ]; then
+    failc config.file "$DOC_ENV is missing" "run deploy/aprscaching init $SHAPE" "$DOCS_URL/helpers.md"
+    return 0
+  fi
+  mode="$(file_mode "$DOC_ENV")"
+  if [ "${mode: -2}" = 00 ]; then
+    pass config.permissions "$DOC_ENV is readable by its owner only"
+  else
+    failc config.permissions "$DOC_ENV is readable by others (mode $mode); it holds secrets" "chmod 600 $DOC_ENV"
+  fi
+  while IFS= read -r key; do
+    cfg_known "$key" || { unknown+=("$key"); continue; }
+    v="$(env_file_get "$DOC_ENV" "$key")"
+    if ! msg="$(cfg_check "$key" "$v")"; then
+      failc "config.value.$key" "$msg" "correct it in $DOC_ENV" "docs/reference/configuration.md"
+      bad=1
+    fi
+  done < <(env_file_keys "$DOC_ENV" | sort -u)
+  [ "$bad" = 1 ] || pass config.values "every setting has a value of its type"
+  if [ "${#unknown[@]}" -gt 0 ]; then
+    warnc config.unknown "not settings (a typo?): ${unknown[*]}" "check the names in docs/reference/configuration.md" \
+      "docs/reference/configuration.md"
+  fi
+  doc_config_secrets
+  doc_config_required
+}
+
+doc_config_secrets() {
+  local s v weak=()
+  for s in INGEST_SECRET OPERATOR_SECRET SESSION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET FED_CORROBORATION_SECRET; do
+    v="$(env_file_get "$DOC_ENV" "$s")"
+    [ -n "$v" ] || continue
+    case "$v" in change-me | changeme | secret | example | xxx* | "<"*) weak+=("$s") ;; esac
+    [ "${#v}" -ge 16 ] || weak+=("$s")
+  done
+  if [ "${#weak[@]}" -gt 0 ]; then
+    failc config.secrets "weak or example secrets: ${weak[*]}" "deploy/aprscaching rotate-secret <name>" "$DOCS_URL/helpers.md#rotating-a-secret"
+  else
+    pass config.secrets "no secret is empty-but-required, weak or an example value"
+  fi
+  if [ -n "$DOC_INGEST$DOC_BASE" ] && [ -z "$(env_file_get "$DOC_ENV" INGEST_SECRET)" ] && [ "$SHAPE" != desktop ]; then
+    failc config.ingest_secret "INGEST_SECRET is empty: the gateway refuses to start and the ingest cannot post" \
+      "deploy/aprscaching init $SHAPE (it generates one)"
+  fi
+}
+
+doc_config_required() {
+  local k missing=()
+  [ -n "$DOC_BASE" ] && doc_public || return 0
+  while IFS= read -r k; do
+    case "$k" in
+      SESSION_SECRET) [ "$SHAPE" = cloudflare ] || continue ;; # self-host servers generate it
+      INGEST_SECRET) continue ;;                                 # checked above
+    esac
+    [ -n "$(doc_get "$k")" ] || missing+=("$k")
+  done < <(cfg_keys_for "$SHAPE" 1)
+  if [ "${#missing[@]}" -gt 0 ]; then
+    warnc config.public "a public instance should set: ${missing[*]}" "set them in $DOC_ENV" "$DOCS_URL/first-hour.md"
+  else
+    pass config.public "everything a public instance needs is set"
+  fi
+}
+
+# ---- gateway ------------------------------------------------------------------------------------------------
+doc_gateway() {
+  local db schema commit newest head
+  [ -n "$DOC_BASE" ] || return 0
+  if ! DOC_HEALTH="$(gw_curl -sS --max-time 8 "$DOC_BASE/health" 2>/dev/null)" || [ -z "$DOC_HEALTH" ]; then
+    failc gateway.reachable "the gateway does not answer at $DOC_BASE/health" "deploy/aprscaching status; check its logs" \
+      "$DOCS_URL/helpers.md"
+    DOC_HEALTH=""
+    return 0
+  fi
+  db="$(json_field "$DOC_HEALTH" db)"
+  if [ -z "$db" ]; then
+    failc gateway.reachable "$DOC_BASE/health answers, but not as the gateway (a proxy serving the web app instead?)" \
+      "check the reverse proxy's routes: /health, /api/*, /ingest and /.well-known/* go to the gateway" "$DOCS_URL/deployment.md"
+    DOC_HEALTH=""
+    return 0
+  fi
+  pass gateway.reachable "the gateway answers at $DOC_BASE"
+  if [ "$db" = up ]; then pass gateway.database "the database answers"; else
+    failc gateway.database "the database does not answer" "check the data directory and the gateway's logs"
+  fi
+  schema="$(json_field "$DOC_HEALTH" schema)"
+  newest="$(cd "$DEPLOY_DIR/../db/migrations" 2>/dev/null && find . -maxdepth 1 -name '*.sql' | sed 's|^\./||' | sort | tail -n 1 || true)"
+  if [ -z "$schema" ] || [ "$schema" = null ]; then
+    warnc gateway.migrations "the gateway does not report its schema (an older release)" "update it"
+  elif [ -z "$newest" ] || [ "$schema" = "$newest" ]; then
+    pass gateway.migrations "migrations are current ($schema)"
+  elif [[ "$schema" < "$newest" ]]; then
+    warnc gateway.migrations "the database is at $schema; this checkout has $newest" "restart the gateway: it applies them when it starts"
+  else
+    warnc gateway.migrations "the database ($schema) is newer than this checkout ($newest)" "update this checkout"
+  fi
+  commit="$(json_field "$DOC_HEALTH" commit)"
+  head="$(git -C "$DEPLOY_DIR/.." rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$commit" ] && [ -n "$head" ] && [ "$commit" != null ] && [ "$commit" != "$head" ] && [ "$SHAPE" != ingest-box ]; then
+    warnc gateway.version "the gateway runs ${commit:0:12}; this checkout is ${head:0:12}" "deploy/aprscaching update, or restart it"
+  fi
+}
+
+# The gateway's own Setup checklist, read with the operator secret; relayed item by item.
+doc_setup_checklist() {
+  local body status key level detail
+  [ -n "$DOC_BASE" ] && [ -n "$DOC_HEALTH" ] || return 0
+  DOC_OPERATOR_SECRET="$(doc_get OPERATOR_SECRET)"
+  if [ -z "$DOC_OPERATOR_SECRET" ]; then
+    warnc setup.checklist "no OPERATOR_SECRET here, so the gateway's Setup checklist is not read" \
+      "run doctor with OPERATOR_SECRET in the environment, or open Instance admin -> Setup" "$DOCS_URL/first-hour.md"
+    return 0
+  fi
+  body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 10 "$DOC_BASE/api/admin/setup" 2>/dev/null || true)"
+  case "$body" in *'"items"'*) ;; *)
+    warnc setup.checklist "the gateway did not return its Setup checklist" "check OPERATOR_SECRET matches the gateway's"
+    return 0
+    ;;
+  esac
+  # one item per line: key, level, status, detail
+  while IFS=$'\t' read -r key level status detail; do
+    [ -n "$key" ] || continue
+    case "$status" in
+      ok) pass "setup.$key" "$detail" ;;
+      warn) warnc "setup.$key" "$detail" "Instance admin -> Setup" ;;
+      *) if [ "$level" = blocking ]; then failc "setup.$key" "$detail" "Instance admin -> Setup"; else
+        warnc "setup.$key" "$detail" "Instance admin -> Setup"
+      fi ;;
+    esac
+  done < <(doc_setup_items "$body")
+}
+
+# The checklist's items as tab-separated lines (key, level, status, detail), parsed with node or python3.
+doc_setup_items() {
+  if have node; then
+    B="$1" node -e '
+      const j = JSON.parse(process.env.B);
+      for (const i of j.items) console.log([i.key, i.level, i.status, `${i.label}: ${i.detail}`.replace(/[\t\n]/g, " ")].join("\t"));
+      const b = j.budget;
+      if (b && b.budget > 0)
+        console.log(["budget", "recommended", b.level === "ok" ? "ok" : "warn", `D1 writes today: ${b.used} of ${b.budget} (${b.level})`].join("\t"));
+    ' 2>/dev/null
+  elif have python3; then
+    B="$1" python3 -c '
+import json, os
+j = json.loads(os.environ["B"])
+for i in j["items"]:
+    print("\t".join([i["key"], i["level"], i["status"], " ".join(("%s: %s" % (i["label"], i["detail"])).split())]))
+b = j.get("budget") or {}
+if b.get("budget", 0) > 0:
+    print("\t".join(["budget", "recommended", "ok" if b["level"] == "ok" else "warn", "D1 writes today: %s of %s (%s)" % (b["used"], b["budget"], b["level"])]))
+' 2>/dev/null
+  else
+    echo $'checklist\trecommended\twarn\tneither node nor python3 is installed here to read the Setup checklist; open Instance admin -> Setup'
+  fi
+}
+
+# ---- ingest -------------------------------------------------------------------------------------------------
+doc_ingest() {
+  local secret code url body
+  [ -n "$DOC_INGEST" ] || return 0
+  secret="$(doc_get INGEST_SECRET)"
+  url="${DOC_INGEST%/}/check"
+  body="$(curl_secret x-ingest-secret "$secret" -s -w '\n%{http_code}' --max-time 8 "$url" 2>/dev/null || true)"
+  code="${body##*$'\n'}"
+  body="${body%$'\n'*}"
+  # a 200 counts only with the gateway's answer: a proxy serving the web app answers 200 too
+  [ "$code" != 200 ] || [ "$(json_field "$body" ok)" = true ] || code=proxy
+  case "$code" in
+    200) pass ingest.credentials "the gateway accepts this box's INGEST_SECRET" ;;
+    proxy) failc ingest.credentials "$url answers, but not as the gateway" "check the reverse proxy's route for /ingest/*" ;;
+    401) failc ingest.credentials "the gateway refuses this box's INGEST_SECRET" "copy the gateway's INGEST_SECRET to $DOC_ENV" \
+      "$DOCS_URL/rf-ingest.md" ;;
+    404) warnc ingest.credentials "the gateway at $url is too old to check credentials" "update the gateway" ;;
+    *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" "$DOCS_URL/rf-ingest.md" ;;
+  esac
+  doc_transports
+}
+
+doc_transports() {
+  local host port name
+  host="$(doc_get APRSIS_HOST)"
+  port="$(doc_get APRSIS_PORT)"
+  host="${host:-rotate.aprs2.net}"
+  port="${port:-14580}"
+  if tcp_open "$host" "$port"; then pass ingest.aprsis "APRS-IS $host:$port is reachable"; else
+    warnc ingest.aprsis "APRS-IS $host:$port is not reachable from here (fine off-grid)" "check the network or APRSIS_HOST"
+  fi
+  for name in KISS_TNC AGWPE HOSTMODE MESHTASTIC; do
+    host="$(doc_get "${name}_HOST")"
+    [ -n "$host" ] || continue
+    port="$(doc_get "${name}_PORT")"
+    port="${port:-$(cfg_default "${name}_PORT")}"
+    if tcp_open "$host" "$port"; then pass "ingest.${name,,}" "$name $host:$port is reachable"; else
+      failc "ingest.${name,,}" "$name $host:$port does not answer" "check the device and ${name}_HOST/${name}_PORT" "$DOCS_URL/rf-ingest.md"
+    fi
+  done
+  doc_meshcom
+}
+
+# MeshCom: when each configured node was last heard, and whether its firmware is new enough for ExtUDP.
+doc_meshcom() {
+  local nodes entry call body heard fw base
+  nodes="$(doc_get MESHCOM_NODE)"
+  [ -n "$nodes" ] || return 0
+  if [ "$(doc_get MESHCOM_BIND)" = 0.0.0.0 ] && doc_public; then
+    warnc ingest.meshcom_bind "MESHCOM_BIND=0.0.0.0 on a public host accepts datagrams from anywhere" \
+      "bind the LAN address, or leave it blank" "$DOCS_URL/meshcom.md"
+  fi
+  base="${DOC_BASE:-${DOC_INGEST%/ingest}}"
+  for entry in ${nodes//,/ }; do
+    call="${entry#*=}"
+    [ "$call" != "$entry" ] || continue # a node without =CALL cannot be looked up
+    body="$(gw_curl -sS --max-time 8 "$base/api/meshcom/nodes?call=$call" 2>/dev/null || true)"
+    heard="$(json_field "$body" lastHeard)"
+    fw="$(json_field "$body" firmware)"
+    if [ -z "$heard" ]; then
+      warnc "ingest.meshcom.$call" "MeshCom node $call has not been heard recently" "check the node's ExtUDP settings" "$DOCS_URL/meshcom.md"
+      continue
+    fi
+    pass "ingest.meshcom.$call" "MeshCom node $call last heard $(date -d "@$heard" '+%F %T' 2>/dev/null || echo "$heard")"
+    if [ -n "$fw" ] && ! fw_at_least "$fw" 4 35 t; then
+      warnc "ingest.meshcom_fw.$call" "MeshCom node $call runs firmware $fw; ExtUDP needs 4.35t (built 2026-09-25) or newer" \
+        "update the node's firmware" "$DOCS_URL/meshcom.md"
+    fi
+  done
+}
+
+# fw_at_least VERSION MAJOR MINOR LETTER: MeshCom versions look like 4.35t.
+fw_at_least() {
+  local v="${1#v}" maj min sub
+  [[ "$v" =~ ^([0-9]+)\.([0-9]+)([a-z]?) ]] || return 0 # unknown format: do not warn
+  maj="${BASH_REMATCH[1]}" min="$((10#${BASH_REMATCH[2]}))" sub="${BASH_REMATCH[3]}"
+  [ "$maj" -ne "$2" ] && { [ "$maj" -gt "$2" ]; return; }
+  [ "$min" -ne "$3" ] && { [ "$min" -gt "$3" ]; return; }
+  [[ ! "$sub" < "$4" ]]
+}
+
+# ---- network ------------------------------------------------------------------------------------------------
+doc_network() {
+  local host ips end end_s now days health
+  doc_public || return 0
+  host="${DOC_PUBLIC#https://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  ips="$(getent hosts "$host" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)"
+  if [ -n "$ips" ]; then pass network.dns "$host resolves ($ips)"; else
+    failc network.dns "$host does not resolve" "create its DNS record (or the tunnel's public hostname)" "$DOCS_URL/deployment.md"
+    return 0
+  fi
+  end="$(echo | timeout 10 openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null |
+    openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+  if [ -z "$end" ]; then
+    failc network.tls "no TLS certificate from $host:443" "check Caddy / the tunnel / your proxy" "$DOCS_URL/deployment.md"
+  else
+    end_s="$(date -d "$end" +%s 2>/dev/null || echo 0)"
+    now="$(date +%s)"
+    days=$(((end_s - now) / 86400))
+    if [ "$end_s" -le "$now" ]; then failc network.tls "the certificate of $host expired on $end" "renew it"
+    elif [ "$days" -lt 14 ]; then warnc network.tls "the certificate of $host expires in $days days" "check its automatic renewal"
+    else pass network.tls "the certificate of $host is valid for $days more days"; fi
+  fi
+  # The public name reaches this gateway: the same instance answers there as here.
+  if [ -n "$DOC_HEALTH" ] && health="$(curl -sS --max-time 10 "${DOC_PUBLIC%/}/health" 2>/dev/null)"; then
+    if [ "$(json_field "$health" instance)" = "$(json_field "$DOC_HEALTH" instance)" ] &&
+      [ "$(json_field "$health" commit)" = "$(json_field "$DOC_HEALTH" commit)" ]; then
+      pass network.route "$DOC_PUBLIC reaches this gateway"
+    else
+      failc network.route "$DOC_PUBLIC answers, but not as this gateway" "point the DNS record or tunnel at this host"
+    fi
+  elif [ -n "$DOC_HEALTH" ]; then
+    failc network.route "$DOC_PUBLIC/health does not answer from here" "check DNS, the proxy and the firewall"
+  fi
+}
+
+# ---- federation ---------------------------------------------------------------------------------------------
+doc_federation() {
+  local peers p unsafe=()
+  [ -n "$DOC_BASE" ] || [ "$SHAPE" = cloudflare ] || return 0
+  peers="$(doc_get FED_PEERS)"
+  if ! doc_public; then
+    if [ -z "$peers$(doc_get FED_HUB_URL)" ]; then pass federation.off "federation is off on this LAN instance"; else
+      warnc federation.lan "a LAN instance has federation peers configured" "fine on HAMNET; otherwise remove FED_PEERS"
+    fi
+    return 0
+  fi
+  [ -n "$DOC_ENV" ] || return 0 # the Worker's settings are not readable here; Setup reports them
+  if [ -n "$(doc_get FED_PRIVATE_KEY)" ]; then pass federation.key "the federation signing key is set"; else
+    warnc federation.key "no FED_PRIVATE_KEY: feeds go out unsigned and peers cannot verify them" \
+      "node tools/fedkey/genkey.mjs --raw, into FED_PRIVATE_KEY" "docs/guides/federation.md"
+  fi
+  [ -z "$(doc_get FED_DISCOVER)" ] || unsafe+=("FED_DISCOVER is set (any value turns discovery on)")
+  case "$(doc_get FED_AUTO_PROMOTE)" in 0 | "") ;; *) unsafe+=("FED_AUTO_PROMOTE is not 0") ;; esac
+  case "$(doc_get FED_CORROBORATION_QUORUM)" in 0 | 1) unsafe+=("FED_CORROBORATION_QUORUM is below 2") ;; esac
+  for p in ${peers//,/ }; do
+    case "$p" in
+      https://*) ;;
+      *) unsafe+=("peer $p is not https") ;;
+    esac
+    case "${p#*://}" in *.ampr.org* | 44.*) unsafe+=("peer $p is on 44Net and starts trusted") ;; esac
+  done
+  if [ -n "$(doc_get FED_SUBMIT_SECRET)" ] && [ -z "$(doc_get FED_SUBMIT_INSTANCES)" ]; then
+    unsafe+=("a hub without FED_SUBMIT_INSTANCES")
+  fi
+  if [ -n "$(doc_get FED_REGISTRY)$(doc_get FED_REGISTRY_DNS)" ] && [ -z "$(doc_get FED_REGISTRY_KEY)" ]; then
+    unsafe+=("a registry without FED_REGISTRY_KEY")
+  fi
+  if [ "${#unsafe[@]}" -gt 0 ]; then
+    local u
+    for u in "${unsafe[@]}"; do
+      warnc federation.posture "$u" "see Running federation safely" "docs/guides/federation.md#running-federation-safely"
+    done
+  else
+    pass federation.posture "the federation settings are the safe ones"
+  fi
+  for p in ${peers//,/ }; do
+    if curl -fsS -o /dev/null --max-time 8 "${p%/}/.well-known/aprscaching" 2>/dev/null; then
+      pass "federation.peer.${p#*://}" "peer $p answers"
+    else
+      warnc "federation.peer.${p#*://}" "peer $p does not answer" "check the URL, or ask its operator"
+    fi
+  done
+}
+
+# ---- resources ----------------------------------------------------------------------------------------------
+doc_resources() {
+  local avail pct size newest age
+  [ "$DOC_BACKUP_SETTINGS" = 0 ] || doc_backup_destination
+  if [ -n "$DOC_DATA_DIR" ] && [ -d "$DOC_DATA_DIR" ]; then
+    read -r avail pct < <(df -Pk "$DOC_DATA_DIR" | awk 'NR==2 {print $4, $5}')
+    pct="${pct%\%}"
+    if [ "$pct" -ge 98 ]; then failc resources.disk "the data disk is ${pct}% full" "free space, or move the data"
+    elif [ "$pct" -ge 90 ] || [ "$avail" -lt 1048576 ]; then warnc resources.disk "the data disk is ${pct}% full ($((avail / 1024)) MiB free)" "free space soon"
+    else pass resources.disk "the data disk has $((avail / 1024)) MiB free (${pct}% used)"; fi
+  fi
+  if [ -n "$DOC_DB_FILE" ] && [ -f "$DOC_DB_FILE" ]; then
+    size="$(du -k "$DOC_DB_FILE" | cut -f1 || true)"
+    pass resources.database "the database is $((size / 1024)) MiB"
+  fi
+  if [ -n "$DOC_BACKUP_DIR" ]; then
+    # shellcheck disable=SC2086 # the glob is the point
+    newest="$(cd "$DOC_BACKUP_DIR" 2>/dev/null && ls -t $DOC_BACKUP_GLOB 2>/dev/null | head -n 1 || true)"
+    if [ -z "$newest" ]; then
+      failc resources.backup "no backup in $DOC_BACKUP_DIR" "deploy/aprscaching backup, and schedule it" "$DOCS_URL/deployment.md#backups"
+    else
+      age=$((($(date +%s) - $(stat -c %Y "$DOC_BACKUP_DIR/$newest" 2>/dev/null || stat -f %m "$DOC_BACKUP_DIR/$newest")) / 86400))
+      if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
+        warnc resources.backup "the newest backup is $age days old" "check the scheduled backup" "$DOCS_URL/deployment.md#backups"
+      else
+        pass resources.backup "the newest backup is $age days old ($newest)"
+      fi
+    fi
+  fi
+}
+
+# Self-host and bare metal: where deploy/backup.sh writes, from the settings.
+doc_backup_destination() {
+  local dir
+  dir="$(doc_get BACKUP_DIR)"
+  if [ -n "$dir" ]; then
+    DOC_BACKUP_DIR="$dir/db"
+    DOC_BACKUP_GLOB="*.db.gz"
+  elif [ -n "$(doc_get OCI_BUCKET)$(doc_get BACKUP_BUCKET)" ]; then
+    pass resources.backup "backups go to a bucket (their age is not checked from here)"
+  else
+    failc resources.backup "no backup destination is set" "set BACKUP_DIR, OCI_BUCKET or BACKUP_BUCKET, then schedule deploy/aprscaching backup" \
+      "$DOCS_URL/deployment.md#backups"
+  fi
+}
+
+# ---- AGPL §13 -----------------------------------------------------------------------------------------------
+doc_source() {
+  local base body repo commit
+  base="${DOC_PUBLIC:-$DOC_BASE}"
+  [ -n "$base" ] && [ "$SHAPE" != ingest-box ] || return 0
+  body="$(curl -sS --max-time 8 "${base%/}/.well-known/source" 2>/dev/null || true)"
+  repo="$(json_field "$body" repo)"
+  commit="$(json_field "$body" commit)"
+  if [ -z "$repo" ]; then
+    failc source.link "${base%/}/.well-known/source does not answer" "the AGPL §13 source link must be public" "$DOCS_URL/first-hour.md"
+  elif [ -z "$commit" ] || [ "$commit" = null ]; then
+    warnc source.link "the source link names no commit" "set SOURCE_COMMIT, or deploy from a git checkout"
+  else
+    pass source.link "the source link names $repo at ${commit:0:12}"
+  fi
+  if [ -z "$(doc_get SOURCE_REPO)" ] && [ -n "$(git -C "$DEPLOY_DIR/.." status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    warnc source.fork "this checkout has local changes but SOURCE_REPO is the upstream" "publish your changes and set SOURCE_REPO to your fork"
+  fi
+}
+
+# ---- the report ---------------------------------------------------------------------------------------------
+doc_report() {
+  local row st id msg fix docs fails=0 warns=0 passes=0 first=1 section=""
+  for row in "${DOC_ROWS[@]}"; do
+    case "${row%%$'\t'*}" in fail) fails=$((fails + 1)) ;; warn) warns=$((warns + 1)) ;; *) passes=$((passes + 1)) ;; esac
+  done
+  if [ "$APRS_JSON" = 1 ]; then
+    printf '{"shape":%s,"pass":%d,"warn":%d,"fail":%d,"checks":[' "$(json_str "$SHAPE")" "$passes" "$warns" "$fails"
+    for row in "${DOC_ROWS[@]}"; do
+      IFS=$'\t' read -r st id msg fix docs <<<"$row"
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"status":%s,"id":%s,"message":%s,"fix":%s,"docs":%s}' "$(json_str "$st")" "$(json_str "$id")" \
+        "$(json_str "$msg")" "$(json_str "$fix")" "$(json_str "$docs")"
+    done
+    printf ']}\n'
+  else
+    step "doctor: $SHAPE"
+    for row in "${DOC_ROWS[@]}"; do
+      IFS=$'\t' read -r st id msg fix docs <<<"$row"
+      if [ "${id%%.*}" != "$section" ]; then
+        section="${id%%.*}"
+        printf '\n  %s\n' "$section"
+      fi
+      printf '    %-4s  %s\n' "$st" "$msg"
+      if [ "$st" != pass ] && [ -n "$fix" ]; then printf '          fix: %s\n' "$fix"; fi
+      if [ "$st" != pass ] && [ -n "$docs" ]; then printf '          see: %s\n' "$docs"; fi
+    done
+    printf '\n  %d passed, %d warnings, %d failed\n' "$passes" "$warns" "$fails"
+  fi
+  [ "$fails" = 0 ]
+}
+
+# doctor for the loaded shape: its context, the shared checks, its own, then the report. Exit status 1
+# when any check failed.
+run_doctor() {
+  declare -F shape_doctor_context >/dev/null || die "'doctor' is not available for the $SHAPE shape."
+  shape_doctor_context
+  doc_config
+  doc_gateway
+  doc_setup_checklist
+  doc_ingest
+  doc_network
+  doc_federation
+  if declare -F shape_doctor_extra >/dev/null; then shape_doctor_extra; fi
+  doc_resources
+  doc_source
+  doc_report
+}

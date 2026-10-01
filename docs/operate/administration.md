@@ -29,7 +29,7 @@ Two shared secrets reach the gateway from machines, and they never overlap:
 | Secret | Header | Authorises | Held by |
 |---|---|---|---|
 | `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
-| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
+| `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: reading the Setup checklist (`GET /api/admin/setup`, which `deploy/aprscaching doctor` relays), `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
 
 The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a
 stolen ingest box cannot take over an account or the instance. The operator secret mints one-time sign-in

@@ -380,11 +380,13 @@ async function dbItems(env: Env, callsign: string | null, budget: WriteBudgetSta
 }
 
 /**
- * GET /api/admin/setup — the operator's configuration checklist (sysop-gated, statuses only), plus the
+ * GET /api/admin/setup — the operator's configuration checklist (a sysop, or the operator secret; statuses only), plus the
  * D1 write budget's `{ used, budget, level, alerts }` for the admin banner.
  */
 export async function handleAdminSetup(req: Request, env: Env): Promise<Response> {
-  const guard = await requireSysop(req, env);
+  // The checklist reports statuses, never a secret value, so the operator's scripts may read it too
+  // (`deploy/aprscaching doctor` sends x-operator-secret).
+  const guard = await requireSysop(req, env, { allowOperatorSecret: true });
   if (guard) return guard;
   const callsign = (await sessionIdentity(req, env))?.callsign ?? null;
   applyDerivedDefaults(env); // handle() has filled them already; a direct caller sees the same values

@@ -31,6 +31,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib/config.sh"
 # shellcheck source=deploy/lib/shape.sh
 . "$HERE/lib/shape.sh"
+# shellcheck source=deploy/lib/doctor.sh
+. "$HERE/lib/doctor.sh"
 
 SHAPE=""
 ARGS=()
@@ -130,7 +132,9 @@ case "$CMD" in
       "or name it with --shape ($SHAPES)."
     load_shape "$SHAPE"
     if [ "$CMD" = restore ] && [ $# -lt 1 ]; then die "restore needs the archive: deploy/aprscaching restore <file>"; fi
-    if [ "$CMD" = rotate-secret ]; then
+    if [ "$CMD" = doctor ]; then
+      run_doctor
+    elif [ "$CMD" = rotate-secret ]; then
       [ $# -ge 1 ] || die "rotate-secret needs a name, e.g. deploy/aprscaching rotate-secret INGEST_SECRET"
       if declare -F shape_rotate_secret >/dev/null; then shape_rotate_secret "$@"; else rotate_env_secret "$1"; fi
     else
