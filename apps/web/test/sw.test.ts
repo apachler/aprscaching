@@ -5,7 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import "fake-indexeddb/auto";
 import { describe, it, expect } from "vitest";
+import { idbStore } from "../src/offline/store.js";
 
 const SRC = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public/sw.js"), "utf8");
 const ORIGIN = "https://app.example";
@@ -13,19 +15,32 @@ const ORIGIN = "https://app.example";
 type Handler = (event: Record<string, unknown>) => void;
 
 /** Load the worker with `list` as its precache list; `net` answers the network, or throws when offline. */
-function load(opts: { list?: string[]; active?: boolean; net?: (url: string) => Response | Promise<Response> } = {}) {
+function load(
+  opts: {
+    list?: string[];
+    active?: boolean;
+    net?: (url: string, init?: RequestInit) => Response | Promise<Response>;
+  } = {},
+) {
   const src = SRC.replace('const VERSION = "dev";', 'const VERSION = "v2";').replace(
     "const PRECACHE = [];",
     `const PRECACHE = ${JSON.stringify(opts.list ?? ["/index.html", "/assets/app.js"])};`,
   );
   const handlers: Record<string, Handler> = {};
   const stores = new Map<string, Map<string, Response>>([["acs-shell-v1", new Map()]]);
-  const calls = { skipWaiting: 0, claimed: 0, notifications: [] as unknown[], focused: 0, fetched: [] as string[] };
+  const calls = {
+    skipWaiting: 0,
+    claimed: 0,
+    notifications: [] as unknown[],
+    focused: 0,
+    fetched: [] as string[],
+    messages: [] as unknown[],
+  };
   const net = opts.net ?? ((u: string) => new Response(`net:${u}`));
-  const fetchFn = async (input: RequestInfo | URL) => {
+  const fetchFn = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     calls.fetched.push(url);
-    return net(url);
+    return net(url, init);
   };
   const caches = {
     open: async (name: string) => {
@@ -49,7 +64,9 @@ function load(opts: { list?: string[]; active?: boolean; net?: (url: string) => 
     },
     clients: {
       claim: async () => void calls.claimed++,
-      matchAll: async () => [{ focus: () => void calls.focused++ }],
+      matchAll: async () => [
+        { focus: () => void calls.focused++, postMessage: (m: unknown) => void calls.messages.push(m) },
+      ],
       openWindow: async () => null,
     },
     skipWaiting: async () => void calls.skipWaiting++,
@@ -164,5 +181,69 @@ describe("Web Push", () => {
     await w.fire("notificationclick", { notification: { close: () => (closed = true) } });
     expect(closed).toBe(true);
     expect(w.calls.focused).toBe(1);
+  });
+});
+
+describe("Background Sync of the offline log queue", () => {
+  const API = "https://api.example";
+  const item = (cacheId: number, instance?: string, extra: Record<string, unknown> = {}) => ({
+    cacheId,
+    body: { logType: "found", comment: `c${cacheId}` },
+    queuedAt: 1000 + cacheId,
+    ...(instance && { instance }),
+    ...extra,
+  });
+  async function seed(queue: unknown[]) {
+    const st = idbStore();
+    await st.kvSet("acs.sync.apiBase", API);
+    await st.kvSet("acs.sync.instance", "here.example");
+    await st.kvSet("acs.logqueue", JSON.stringify(queue));
+    await st.kvSet("acs.logqueue.attention", "[]");
+    return st;
+  }
+
+  it("sends what is due to the instance it was signed for, files refusals, backs off server errors", async () => {
+    const st = await seed([
+      item(1, "here.example"),
+      item(2, "here.example"),
+      item(3, "here.example"),
+      item(4, "there.example"),
+    ]);
+    const posted: { url: string; body: unknown }[] = [];
+    const w = load({
+      net: (url, init) => {
+        posted.push({ url, body: JSON.parse(String(init?.body)) });
+        if (url.endsWith("/2/logs")) return Response.json({ error: "no such cache" }, { status: 404 });
+        if (url.endsWith("/3/logs")) return new Response("busy", { status: 503 });
+        return Response.json({ logged: true });
+      },
+    });
+    await w.fire("sync", { tag: "acs-logqueue" });
+    expect(posted.map((p) => p.url)).toEqual([
+      `${API}/api/caches/1/logs`,
+      `${API}/api/caches/2/logs`,
+      `${API}/api/caches/3/logs`,
+    ]);
+    expect(posted[0]!.body).toEqual({ logType: "found", comment: "c1", offline: true });
+    const queue = JSON.parse((await st.kvGet("acs.logqueue"))!) as { cacheId: number; attempts?: number }[];
+    expect(queue.map((q) => q.cacheId)).toEqual([3, 4]);
+    expect(queue[0]!.attempts).toBe(1);
+    const attention = JSON.parse((await st.kvGet("acs.logqueue.attention"))!) as { cacheId: number; reason: string }[];
+    expect(attention).toMatchObject([{ cacheId: 2, reason: "no such cache", status: 404 }]);
+    expect(w.calls.messages).toEqual([{ type: "acs-queued" }]);
+  });
+
+  it("keeps everything and fails the sync while the instance cannot be reached, so the browser retries", async () => {
+    const st = await seed([item(5, "here.example")]);
+    const w = load({ net: () => Promise.reject(new TypeError("offline")) });
+    await expect(w.fire("sync", { tag: "acs-logqueue" })).rejects.toThrow(/not reachable/);
+    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toHaveLength(1);
+  });
+
+  it("ignores other sync tags", async () => {
+    await seed([item(6, "here.example")]);
+    const w = load();
+    expect(await w.fire("sync", { tag: "something-else" })).toBeUndefined();
+    expect(w.calls.fetched).toEqual([]);
   });
 });

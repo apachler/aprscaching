@@ -140,7 +140,13 @@ so it gets the same tier it would have had with signal. That holds for up to 7 d
 shows **logged offline at 10:02, synced 18:14**. A find without a device signature (a browser that cannot
 sign) counts from when it arrives. Log once with signal on a new phone first, so its key is registered.
 
-The top bar shows how many logs wait (**2 queued**); tap it for **Logs to sync**, which has **Sync now**.
+The top bar says what waits — **2 logs waiting · pack “JN77sb” 3 days old** — and opens **Logs to sync**, with
+**Sync now**. The app syncs on its own when it starts and when the connection returns: first the logs, then
+the packs older than a day, on Wi-Fi only unless **Offline → Sync → Refresh packs on mobile data** is on;
+**Sync now** also refreshes every pack. With the app closed, Chrome and Edge send waiting logs in the
+background (Background Sync); Safari, Firefox and iPhones have no Background Sync, so there the logs go when
+you next open the app. A log goes only to the instance it was made on; signed in elsewhere, it waits and
+says so.
 If the instance refuses a log when it syncs, for example because the cache was archived meanwhile, the log
 is not lost: it moves to **Needs attention** with the reason, where you retry it, edit its comment, or
 discard it.

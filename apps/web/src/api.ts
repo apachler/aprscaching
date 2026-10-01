@@ -1327,8 +1327,10 @@ export function logFind(cacheId: number, body: LogBody, label?: string): Promise
   return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) }).catch(
     async (e) => {
       if (!isOffline(e)) throw e;
-      await enqueue(queueStore, { cacheId, body, ...(label && { label }) }, Date.now());
+      const instance = await getInstance();
+      await enqueue(queueStore, { cacheId, body, ...(label && { label }), ...(instance && { instance }) }, Date.now());
       queueChanged();
+      void askForBackgroundSync(instance);
       return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
     },
   );
@@ -1341,8 +1343,13 @@ export const attentionLogs = (): Promise<AttentionLog<LogBody>[]> => loadAttenti
  * Send the queued logs that are due (the signature and its time are kept, so the instance verifies each
  * at the time it was made). A refused log moves to needs-attention, never away.
  */
-export async function flushLogQueue(): Promise<FlushResult> {
+export function flushLogQueue(): Promise<FlushResult> {
+  // one flush at a time across this page and the service worker's background sync
+  return withQueueLock(flushUnlocked);
+}
+async function flushUnlocked(): Promise<FlushResult> {
   if (!(await queuedLogs()).length) return { sent: 0, refused: 0 };
+  const instance = (await getInstance()) || undefined;
   const res = await flush<LogBody>(
     queueStore,
     async (it) => {
@@ -1360,9 +1367,35 @@ export async function flushLogQueue(): Promise<FlushResult> {
       }
     },
     Date.now(),
+    instance,
   );
   if (res.sent || res.refused) queueChanged();
   return res;
+}
+
+/** The lock the page and the service worker take around a flush, so a log is never sent twice at once. */
+const QUEUE_LOCK = "acs-logqueue";
+function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  return locks ? locks.request(QUEUE_LOCK, fn) : fn();
+}
+
+/**
+ * Ask the browser to sync the queue in the background once the connection returns, even with the app
+ * closed (Background Sync: Chromium; elsewhere the queue syncs when the app is opened). The worker reads the
+ * queue from IndexedDB, and where to send it from the two values stored here.
+ */
+async function askForBackgroundSync(instance: string): Promise<void> {
+  try {
+    const st = await offlineReady();
+    await st.kvSet("acs.sync.apiBase", API_BASE || location.origin);
+    if (instance) await st.kvSet("acs.sync.instance", instance);
+    const reg = (await navigator.serviceWorker?.getRegistration()) as
+      (ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } }) | undefined;
+    await reg?.sync?.register("acs-logqueue");
+  } catch {
+    /* no Background Sync here: the queue syncs when the app is opened or the connection returns */
+  }
 }
 
 /** Queue a refused log again (optionally with a new comment) and try it at once. */

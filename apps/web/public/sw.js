@@ -12,6 +12,9 @@
    A new version waits until the user agrees (the app shows "Reload"), so it never replaces the running
    app in the middle of a hunt; the very first install activates at once.
 
+   Background Sync: the offline log queue is sent when the connection returns, even with the app closed
+   (Chromium; see "Background Sync" below).
+
    Push: a notification on push, and the app focused on click. Pushes are payload-less by default, so
    the body is generic; the detail lives in the in-app watchlist and the email digest. */
 const VERSION = "dev";
@@ -78,6 +81,103 @@ self.addEventListener("fetch", (event) => {
   }
   if (PRECACHED.has(url.pathname))
     event.respondWith(caches.match(url.pathname, { cacheName: CACHE }).then((hit) => hit || fetch(req)));
+});
+
+// ---- Background Sync: the offline log queue -------------------------------------------------------------
+/* With a connection back, the browser wakes the worker (tag "acs-logqueue", Chromium) even with the app
+   closed. The worker sends the queued logs the way the app does (src/log/logQueue.ts): each to the instance
+   it was signed for, a server error backed off, a refusal moved to needs-attention, never dropped. It takes
+   the same lock as the app, so the two never send a log at once, and tells open pages the queue changed. */
+const OFFLINE_DB = "acs-offline";
+
+function openOfflineDb() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(OFFLINE_DB);
+    // the app creates the database; a worker finding none has nothing to send and must not create it
+    r.onupgradeneeded = () => r.transaction.abort();
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function kvGet(db, key) {
+  return new Promise((resolve, reject) => {
+    const r = db.transaction("kv").objectStore("kv").get(key);
+    r.onsuccess = () => resolve(r.result ?? null);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function kvSet(db, key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const backoffMs = (attempts) => Math.min(30_000 * 2 ** Math.max(0, attempts - 1), 30 * 60_000);
+
+async function flushQueue() {
+  let db;
+  try {
+    db = await openOfflineDb();
+  } catch {
+    return;
+  }
+  const apiBase = await kvGet(db, "acs.sync.apiBase");
+  const instance = await kvGet(db, "acs.sync.instance");
+  const queue = JSON.parse((await kvGet(db, "acs.logqueue")) || "[]");
+  if (!apiBase || !queue.length) return;
+  const keep = [];
+  const refused = [];
+  const now = Date.now();
+  let offline = false;
+  for (const item of queue) {
+    const elsewhere = instance && item.instance && item.instance !== instance;
+    if (offline || elsewhere || (item.nextAt != null && item.nextAt > now)) {
+      keep.push(item);
+      continue;
+    }
+    let res;
+    try {
+      res = await fetch(`${apiBase}/api/caches/${item.cacheId}/logs`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...item.body, offline: true }),
+      });
+    } catch {
+      offline = true;
+      keep.push(item);
+      continue;
+    }
+    if (res.ok) continue;
+    if (res.status >= 500 || res.status === 408 || res.status === 429) {
+      const attempts = (item.attempts ?? 0) + 1;
+      keep.push({ ...item, attempts, nextAt: now + backoffMs(attempts) });
+    } else {
+      const body = await res.json().catch(() => ({}));
+      const { nextAt: _n, attempts: _a, ...rest } = item;
+      refused.push({ ...rest, reason: body.error || `${res.status}`, status: res.status, refusedAt: now });
+    }
+  }
+  // a log queued while this flush was sending is kept too
+  const latest = JSON.parse((await kvGet(db, "acs.logqueue")) || "[]");
+  const added = latest.filter((q) => !queue.some((o) => o.queuedAt === q.queuedAt && o.cacheId === q.cacheId));
+  await kvSet(db, "acs.logqueue", JSON.stringify([...keep, ...added]));
+  if (refused.length) {
+    const attention = JSON.parse((await kvGet(db, "acs.logqueue.attention")) || "[]");
+    await kvSet(db, "acs.logqueue.attention", JSON.stringify([...attention, ...refused]));
+  }
+  for (const c of await self.clients.matchAll({ type: "window", includeUncontrolled: true }))
+    c.postMessage({ type: "acs-queued" });
+  // still no connection: failing the sync makes the browser try it again later
+  if (offline) throw new Error("the instance is not reachable yet");
+}
+
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "acs-logqueue") return;
+  const locks = self.navigator && self.navigator.locks;
+  event.waitUntil(locks ? locks.request("acs-logqueue", flushQueue) : flushQueue());
 });
 
 self.addEventListener("push", (event) => {

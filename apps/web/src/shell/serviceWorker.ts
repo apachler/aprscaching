@@ -28,6 +28,10 @@ export async function registerServiceWorker(): Promise<void> {
   // a version stored while the app was closed waits already; an update replacing a worker that controls
   // this page is announced once it is installed (the very first install takes over at once instead)
   if (reg.waiting && navigator.serviceWorker.controller) announce(reg.waiting);
+  // the worker's background sync changed the log queue: the app re-reads it
+  navigator.serviceWorker.addEventListener("message", (e: MessageEvent<{ type?: string }>) => {
+    if (e.data?.type === "acs-queued") window.dispatchEvent(new Event("acs-queued"));
+  });
   reg.addEventListener("updatefound", () => {
     const next = reg.installing;
     next?.addEventListener("statechange", () => {
