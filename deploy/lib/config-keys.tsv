@@ -20,12 +20,12 @@ FED_OPERATOR	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	O
 FED_APRS_CALL	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	APRS service callsign this instance publishes in /.well-known
 FIRST_PARTY_SITES	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated calls of receiving sites you operate and attest (Tier A)
 FED_PEERS	list	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated base URLs of federation peers to sync from
-FED_DISCOVER	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Any value learns the peers that trusted peers advertise
+FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 learns the peers that trusted peers advertise
 FED_CORROBORATION_QUORUM	int	gateway	2		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Distinct corroborating identities required to promote a find to Tier A
 FED_AUTO_PROMOTE	int	gateway	0		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Confirmed corroborations that promote an unvetted peer to trusted (0 = off)
 FED_CORROBORATION_SECRET	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	Shared secret corroboration questions must carry (x-fed-secret)
 FED_CORROBORATION_REQUIRE_KNOWN	enum	gateway		0|1	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 answers corroboration questions only from known, non-blocked peers
-FED_REVEAL_IGATE	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Any value includes the exact IGate in corroboration answers
+FED_REVEAL_IGATE	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 includes the exact IGate in corroboration answers
 FED_SYNC_REGION	string	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	S,W,N,E box in decimal degrees: pull only the caches inside it from peers
 FED_ENDPOINTS	json	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	JSON array of this instance's transport endpoints {transport,address,priority}
 FED_ALLOW_PRIVATE	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 lets federation fetch private and loopback addresses (an all-LAN network)

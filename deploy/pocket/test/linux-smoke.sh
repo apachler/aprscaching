@@ -68,7 +68,7 @@ not() { ! "$@"; }
 # pocket.sh fetches install.sh from <APRSCACHING_RAW>/<branch>/…; point it at this checkout's copy.
 mkdir -p "$WORK/raw/local/deploy/pocket"
 ln -s "$DIR/deploy/pocket/install.sh" "$WORK/raw/local/deploy/pocket/install.sh"
-out="$(APRSCACHING_RAW="file://$WORK/raw" bash -s -- --allow-non-termux --branch local --no-update \
+out="$(APRSCACHING_RAW="file://$WORK/raw" bash -s -- --allow-non-termux --branch local --unverified --no-update \
   <"$HERE/pocket.sh" 2>&1)" || printf '%s\n' "$out" | tail -n 20 >&2
 CHECK="pocket.sh: the gateway answers /health" check wait_health 60
 CHECK="pocket.sh: prints the local URL" check grep -q "on this phone: *http://localhost:" <<<"$out"

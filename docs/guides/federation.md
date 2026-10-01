@@ -41,7 +41,7 @@ The defaults are safe; these are the settings that decide how much a stranger ca
 | Setting | Safe choice | Secure by default |
 |---|---|---|
 | `FED_PEERS` | List the peers you know. They start `trusted`; everything else starts `unvetted`. | yes |
-| `FED_DISCOVER` | Leave off, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
+| `FED_DISCOVER` | Leave at `0`, or accept that learned peers arrive disabled and wait for you to enable them. | yes (off) |
 | `FED_AUTO_PROMOTE` | Leave at `0`, so only you promote a peer to `trusted`. | yes (`0`) |
 | `FED_SUBMIT_SECRET` / `FED_SUBMIT_INSTANCES` | On a hub, list the spokes you expect; new spokes still arrive `unvetted`. | yes (submit off) |
 | `FED_REGISTRY` / `FED_REGISTRY_DNS` + `FED_REGISTRY_KEY` | Pin the registry authority's key; DNS may only locate the document. | yes (no registry) |

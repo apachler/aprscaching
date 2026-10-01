@@ -13,7 +13,7 @@
  */
 import { nowS } from "./util/time.js";
 import { fedFetch, readCappedBody, trimTrailingSlashes } from "./fetchguard.js";
-import type { Env } from "./env.js";
+import { flagOn, type Env } from "./env.js";
 import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
@@ -268,7 +268,7 @@ export async function handleCorroborate(req: Request, env: Env): Promise<Respons
         corroborated: true,
         distanceM: distanceBucketM(ev.distanceM, cfg.distBucketM),
         ts: bucketTs(ev.ts, cfg.timeBucketSec),
-        ...(env.FED_REVEAL_IGATE && ev.igateCall ? { igateCall: ev.igateCall } : {}),
+        ...(flagOn(env.FED_REVEAL_IGATE) && ev.igateCall ? { igateCall: ev.igateCall } : {}),
       };
     } else negStore(key, nowMs);
   }
@@ -537,7 +537,7 @@ export async function askPeers(
           nonce,
           queryHash: await payloadHash(decodeFedFrame(question).payload),
           question: cq,
-          revealIgate: !!env.FED_REVEAL_IGATE,
+          revealIgate: flagOn(env.FED_REVEAL_IGATE),
           distBucketM: cfg.distBucketM,
           timeBucketSec: cfg.timeBucketSec,
           nowS: nowS(),
