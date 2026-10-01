@@ -98,7 +98,8 @@ import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
-import { handleFederationSubmit, pushToHub } from "./fedpush.js";
+import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
+import { handleFederationSubmit, handleSubmitMarks, pushToHub, type PushResult } from "./fedpush.js";
 import { pruneMeshcom, handleMeshcomNodes, handleMeshcomLinks } from "./meshcom.js";
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
@@ -206,16 +207,31 @@ export async function handle(req: Request, env: Env, ctx: ExecCtx): Promise<Resp
  * Frequent federation tasks: pull from peers, push to a hub, answer relay queries. Cheap +
  * safe to run every few minutes — the Worker's 15-minute cron calls THIS, not the full nightly job.
  */
-export async function runFrequentSync(env: Env): Promise<void> {
+export function runFrequentSync(env: Env, opts: { resync?: boolean } = {}): Promise<FrequentSyncResult> {
+  // one at a time: the interval, the reconnect probe and an operator's Sync now share the running one
+  frequentSync ??= frequentSyncOnce(env, opts).finally(() => {
+    frequentSync = null;
+  });
+  return frequentSync;
+}
+let frequentSync: Promise<FrequentSyncResult> | null = null;
+
+/** What the frequent sync reports to the scheduler: the push-to-hub outcome (null without a hub). */
+export interface FrequentSyncResult {
+  push: PushResult | null;
+}
+
+async function frequentSyncOnce(env: Env, opts: { resync?: boolean }): Promise<FrequentSyncResult> {
   applyDerivedDefaults(env);
   meterWrites(env);
+  let push: PushResult | null = null;
   try {
     await syncAllPeers(env);
   } catch (e) {
     console.error("federation sync:", (e as Error).message);
   }
   try {
-    await pushToHub(env);
+    push = await pushToHub(env, undefined, { resync: opts.resync });
   } catch (e) {
     console.error("push-to-hub:", (e as Error).message);
   }
@@ -230,6 +246,7 @@ export async function runFrequentSync(env: Env): Promise<void> {
     console.error("relay poll:", (e as Error).message);
   }
   await flushWrites(env);
+  return { push };
 }
 
 /**
@@ -476,6 +493,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/federation/tombstones" && m === "GET") return handleFederationTombstones(req, env); // delete propagation
   if (p === "/federation/notify" && m === "POST") return handleFederationNotify(req, env, ctx); // gossip push-to-pull
   if (p === "/federation/submit" && m === "POST") return handleFederationSubmit(req, env); // push-to-hub (NAT/firewall peers)
+  if (p === "/federation/submit/marks" && m === "GET") return handleSubmitMarks(req, env); // where a spoke's feeds stand here
   if (p === "/federation/account-moves" && m === "GET") return handleFederationAccountMoves(req, env); // account-move feed
   if (p === "/federation/registry" && m === "GET") return handleFederationRegistry(req, env); // signed instance registry
 
@@ -500,6 +518,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/ingest/check" && m === "GET") return handleIngestCheck(req, env);
   if (p === "/ingest/enroll" && m === "POST") return handleEnroll(req, env);
   if (p === "/api/admin/boxes" && m === "GET") return handleListBoxes(req, env);
+  if (p === "/api/admin/federation/sync" && m === "GET") return handleSyncStatus(req, env);
+  if (p === "/api/admin/federation/sync" && m === "POST") return handleSyncNow(req, env, ctx);
   if (p === "/api/admin/boxes/codes" && m === "POST") return handleCreateEnrollCode(req, env);
   const revoke = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/revoke$/.exec(p);
   if (revoke && m === "POST") return handleRevokeBox(req, env, revoke[1]!);

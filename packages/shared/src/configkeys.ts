@@ -48,6 +48,7 @@ export const CONFIG_KEYS = {
   FED_AUTO_PROMOTE: { type: "int", units: ["gateway"], default: "0" },
   FED_CORROBORATION_SECRET: { type: "string", units: ["gateway"], secret: true },
   FED_CORROBORATION_REQUIRE_KNOWN: { type: "enum", units: ["gateway"], values: ["0", "1"] },
+  FED_SPOKE_STALE_HOURS: { type: "number", units: ["gateway"], default: "24" },
   FED_REVEAL_IGATE: {
     type: "enum",
     units: ["gateway"],

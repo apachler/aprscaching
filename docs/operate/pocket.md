@@ -95,6 +95,7 @@ bash ~/aprscaching/deploy/pocket/status.sh     # processes, addresses, certifica
 bash ~/aprscaching/deploy/pocket/restart.sh    # both processes, or: restart.sh gateway | ingest
 bash ~/aprscaching/deploy/pocket/stop.sh
 bash ~/aprscaching/deploy/pocket/update.sh     # a branch install: pull, install, restart
+bash ~/aprscaching/deploy/pocket/sync.sh       # pull from the peers and push to the home hub now
 ```
 
 The gateway and the ingest each run in a restart loop: 5 s after an exit, backing off to 30 s on quick
@@ -420,6 +421,15 @@ On the home instance, `FED_SUBMIT_SECRET` enables pushes and `FED_SUBMIT_INSTANC
 `oe8apr-pocket`. The phone's first push registers it there as `unvetted`: its caches arrive, hidden on the
 map by default, until you promote it once under **Instance admin → Federation**. Leave `FED_DISCOVER` off on
 the phone; it follows only what you name.
+
+**Back from a trip.** The phone remembers how far it has pushed each feed, so a restart (Termux killed, the
+phone rebooted) never sends its history again. When a push fails because the phone is offline, the station
+asks the home instance's `/health` again after 30 s, then less often (at most every 10 minutes), and pushes
+as soon as it answers; it also asks the home instance what it already holds, so a backup restored on either
+side resumes where the home instance stands. `bash ~/aprscaching/deploy/pocket/sync.sh` (or **Sync now** under
+**Instance admin → Federation**) does it at once. `status.sh` shows the last push, the records still waiting
+and since when the phone is offline; the home instance lists the phone with its last push, marked stale after
+`FED_SPOKE_STALE_HOURS` (24 h) without one.
 
 **Corroboration.** A station vouches for finds only from receiving sites it attests (`FIRST_PARTY_SITES`), and
 a Pocket as installed attests none, so trusting it at home adds no voice to the corroboration quorum. If the

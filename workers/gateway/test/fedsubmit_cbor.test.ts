@@ -161,7 +161,9 @@ function spokeDb() {
 describe("pushToHub speaks the CBOR wire only", () => {
   it("pushes a CBOR page when the hub accepts it", async () => {
     const seen: { ct: string; body: Uint8Array }[] = [];
-    const fetchFn = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchFn = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      // the spoke first asks where the hub stands; only the submissions matter here
+      if (!String(url).endsWith("/federation/submit")) return new Response("{}", { status: 404 });
       seen.push({
         ct: String((init?.headers as Record<string, string>)["content-type"]),
         body: new Uint8Array(init?.body as Uint8Array),
@@ -185,7 +187,8 @@ describe("pushToHub speaks the CBOR wire only", () => {
 
   it("stops on a hub error and retries next cycle from the same cursor — never a JSON body", async () => {
     const cts: string[] = [];
-    const fetchFn = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchFn = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(url).endsWith("/federation/submit")) return new Response("{}", { status: 404 });
       cts.push(String((init?.headers as Record<string, string>)["content-type"]));
       return new Response("bad", { status: 400 });
     }) as typeof fetch;

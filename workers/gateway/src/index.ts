@@ -34,6 +34,6 @@ export default {
     // The two crons do different work. Only the nightly `0 4` cron runs the full TTL/rollup/digest
     // job; the frequent `*/15` cron does the cheap federation sync. Running the full job 96×/day would
     // burn D1 rows-read cost and diverge the digest cadence from Node/Bun.
-    return event.cron === "0 4 * * *" ? runScheduled(env) : runFrequentSync(env);
+    return event.cron === "0 4 * * *" ? runScheduled(env) : runFrequentSync(env).then(() => undefined);
   },
 };

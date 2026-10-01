@@ -36,6 +36,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_AUTO_PROMOTE: "Confirmed corroborations that promote an unvetted peer to trusted (0 = off)",
   FED_CORROBORATION_SECRET: "Shared secret corroboration questions must carry (x-fed-secret)",
   FED_CORROBORATION_REQUIRE_KNOWN: "1 answers corroboration questions only from known, non-blocked peers",
+  FED_SPOKE_STALE_HOURS: "On a hub, hours without a submission before a spoke shows as stale",
   FED_REVEAL_IGATE: "1 includes the exact IGate in corroboration answers",
   FED_SYNC_REGION: "S,W,N,E box in decimal degrees: pull only the caches inside it from peers",
   FED_ENDPOINTS: "JSON array of this instance's transport endpoints {transport,address,priority}",
@@ -476,7 +477,12 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "—",
       ],
       ["`FED_SUBMIT_INSTANCES`", "Hub allowlist of submitter instances", "any non-self"],
-      ["`FED_HUB_URL`", "Spoke: a reachable hub to push signed records to", "—"],
+      [
+        "`FED_HUB_URL`",
+        "Spoke: a reachable hub to push signed records to. Each feed resumes where the hub's marks say it stands; after a network failure the spoke probes the hub (30 s backing off to 10 min) and pushes as soon as it answers",
+        "—",
+      ],
+      ["`FED_SPOKE_STALE_HOURS`", "Hub: hours without a submission before Instance admin shows a spoke as stale", "24"],
       [
         "`FED_RELAY_SECRET`",
         "Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key",

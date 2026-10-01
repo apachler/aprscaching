@@ -192,6 +192,18 @@ else
   info "not connected (the WireGuard app with 44Net Connect gives the phone a 44.x address)"
 fi
 
+# ---- federation --------------------------------------------------------------------------------------
+if [ -n "$(env_get FED_HUB_URL)" ] || [ -n "$(env_get FED_SUBMIT_SECRET)" ]; then
+  step "Federation sync"
+  fed="$(fed_sync_lines || true)"
+  if [ -n "$fed" ]; then
+    while IFS= read -r l; do info "$l"; done <<<"$fed"
+    info "push now: bash $DIR/deploy/pocket/sync.sh"
+  else
+    info "the gateway did not answer (is the station running?)"
+  fi
+fi
+
 # ---- ingest inputs -----------------------------------------------------------------------------------
 step "Ingest inputs (from $ENV_FILE)"
 meshcom="$(env_get MESHCOM_NODE)"
