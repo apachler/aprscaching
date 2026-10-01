@@ -56,7 +56,8 @@ or operator secret) takes a base callsign and:
    unreachable descriptor is not fatal: the DNS key alone becomes the pin;
 3. admits the peer automatically when the resolver validated the answer with DNSSEC (the AD flag).
    Without DNSSEC it shows the resolved binding and the operator confirms it once — a trust-on-first-use
-   pin. `ampr.org` is not DNSSEC-signed today, so every admission is an operator confirmation.
+   pin. `ampr.org` is not DNSSEC-signed ([checked 2026-09-30](../operate/44net.md#3-name-and-identity)), so
+   until ARDC signs the zone every admission is an operator confirmation.
 
 **Key pinning and rotation.** The DNS key becomes the peer's key pin. From then on every sync verifies
 against exactly that key, or a key the pin reaches through signed rotation records — the same rule as for

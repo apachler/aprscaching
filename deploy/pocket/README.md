@@ -87,8 +87,8 @@ the paths, and keeps it on every later run. The profile suits a phone:
   per-row cost);
 - MeshCom off until `meshcom-setup.sh` writes `MESHCOM_NODE`.
 
-A `.env` from an earlier install lacks the `RETENTION` line; copy it from `.env.pocket.example` and run
-`restart.sh gateway`. Every key is in [configuration](../../docs/reference/configuration.md).
+If your `.env` has no `RETENTION` line, copy it from `.env.pocket.example` and run `restart.sh gateway`.
+Every key is in [configuration](../../docs/reference/configuration.md).
 
 ## Run
 

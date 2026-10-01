@@ -260,7 +260,7 @@ the bridge calls libusb through Python's `ctypes` instead).
 
 ## An RTL-SDR on the phone: not supported
 
-An RTL-SDR dongle with Direwolf would make the phone an RF receiver without a TNC. On Termux today this
+An RTL-SDR dongle with Direwolf would make the phone an RF receiver without a TNC. On Termux this
 does not work, for three independent reasons (checked in the `termux/termux-docker` image and upstream, as
 of September 2026):
 

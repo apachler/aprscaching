@@ -87,11 +87,11 @@ proves control.
 5. Tap **Check**. The instance looks the record up and verifies the call when it carries the current code.
 
 The code is valid for **48 hours**. The answer has to be authentic, and the instance accepts it one of two
-ways. A DNSSEC-validated answer settles it on its own. Without DNSSEC, which is the case while ampr.org is not
-DNSSEC-signed, several independent public DNS resolvers (by default Cloudflare, Google and Quad9) must all return
-the same record carrying the code; if any of them sees something else, **Check** refuses. Publish the TXT
-record at that name itself, not as a CNAME: an answer through an alias does not count. An instance can
-require DNSSEC; there, **Check** refuses while ampr.org is unsigned, and you verify another way.
+ways. A DNSSEC-validated answer settles it on its own. Without DNSSEC (ampr.org is not DNSSEC-signed, as
+checked on 2026-09-30), several independent public DNS resolvers (by default Cloudflare, Google and Quad9)
+must all return the same record carrying the code; if any of them sees something else, **Check** refuses.
+Publish the TXT record at that name itself, not as a CNAME: an answer through an alias does not count. An
+instance can require DNSSEC; there, **Check** refuses while ampr.org is unsigned, and you verify another way.
 
 ### LoTW certificate
 

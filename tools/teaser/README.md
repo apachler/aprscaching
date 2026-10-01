@@ -1,13 +1,13 @@
 # Website teaser tooling
 
-Reproducible captures of the **current development state** of `apps/web`, driven against the
+Reproducible captures of the **current state** of `apps/web`, driven against the
 **live app** with Playwright over a throwaway local DB (offline grid basemap — no tile CDN, no
 Cloudflare, no live data). Two outputs:
 
 1. **UI/UX tour video** (`run-tour.sh`) — the primary teaser: every page + dialog, screenshotted
    at **desktop / tablet / mobile**, assembled into an ordered, captioned animation. Re-run any
    time to snapshot the UI as it evolves.
-2. **Brand poster** (`run.sh`) — the original composed marketing hero (`out/teaser.png`).
+2. **Brand poster** (`run.sh`) — the composed marketing hero (`out/teaser.png`).
 
 ---
 
