@@ -116,8 +116,10 @@ pnpm run conformance:meshcom   # the MeshCom core on Node, Bun and workerd (tool
 ```
 
 CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent,
-`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code, and `dead-exports.mjs`
-fails when a gateway export is named nowhere outside its own file. `tools/interop/` runs
+`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code, `dead-exports.mjs`
+fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
+present-tense, every configuration key the code reads documented (and every documented key read), the
+manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
 interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc); see its README.
 
 The smoke suites themselves live in `tools/smoke/` (`smoke.mjs`, `geofence.mjs`, and the two-instance
