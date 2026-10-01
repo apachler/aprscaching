@@ -15,14 +15,14 @@ import type { Env } from "./env.js";
 import { POSITION_RETENTION_S } from "./retention.js";
 
 /** How far ahead of the gateway's clock a signed time may be (phone clock skew). */
-export const FIELD_TIME_SKEW_S = 60;
+const FIELD_TIME_SKEW_S = 60;
 /** The furthest back a signed time reaches: no evidence older than the position retention exists. */
-export const FIELD_TIME_MAX_LAG_S = POSITION_RETENTION_S;
+const FIELD_TIME_MAX_LAG_S = POSITION_RETENTION_S;
 
 /** Why a log's find time is its receive time rather than its signed field time. */
-export type FieldTimeRejection = "future" | "too_old" | "before_cache" | "before_key" | "unsigned";
+type FieldTimeRejection = "future" | "too_old" | "before_cache" | "before_key" | "unsigned";
 
-export interface FieldTime {
+interface FieldTime {
   /** The find time: the signed time when it passes the bounds, else the receive time. */
   foundAt: number;
   /** Set when the log was not timed by its signature; null for a signed time taken, or an unsigned live log. */
