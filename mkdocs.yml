@@ -18,6 +18,11 @@ docs_dir: docs
 exclude_docs: |
   LICENSE
 
+# Dated review records: built and linkable, but kept out of the manual's navigation so a reader of the
+# manual never mistakes a point-in-time review for documentation of the current state.
+not_in_nav: |
+  reviews/*
+
 theme:
   name: material
   palette:
