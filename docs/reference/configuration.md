@@ -202,7 +202,8 @@ Read by the scripts under `deploy/`, not by the gateway or the ingest box. They 
 | `BACKUP_DIR` | `deploy/backup.sh` | Back up to this local or mounted directory — use a mount that is not the database's disk | — |
 | `OCI_BUCKET` | `deploy/backup.sh` | Back up to this OCI Object Storage bucket (needs the `oci` CLI configured) | — |
 | `BACKUP_BUCKET` / `R2_ENDPOINT` | `deploy/backup.sh` | Back up to this S3-compatible bucket (Cloudflare R2, AWS S3) at this endpoint URL; both are required, and the `aws` CLI must be configured | — |
-| `BACKUP_RETENTION_DAYS` | `deploy/backup.sh` | Snapshots in `BACKUP_DIR` older than this many days are deleted. Bucket destinations are not pruned by the script; set a lifecycle rule on the bucket | `30` |
+| `BACKUP_RETENTION_DAYS` | `deploy/backup.sh` | Snapshots in `BACKUP_DIR` older than this many days are deleted; with `BACKUP_PRUNE_BUCKET=1`, bucket snapshots too | `30` |
+| `BACKUP_PRUNE_BUCKET` | `deploy/backup.sh` | `1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../operate/deployment.md#backups)) | off |
 | `CF_API_TOKEN` / `CF_ZONE_ID` | `deploy/cloudflare/cache-rules.sh` | Cloudflare API token and zone for the CDN cache rules when Self-host runs behind Cloudflare | required by that script |
 
 `deploy/backup.sh` uses the first destination that is set, in the order above. The Pocket extras read

@@ -154,6 +154,27 @@ baseline global feed, but that is never the only way to get RF in. See
   snapshot, gzips it, and uploads it to `BACKUP_DIR`, an OCI bucket or any S3-compatible endpoint (see
   `deploy/.env.example`); it exits non-zero when no destination is set. Uploaded cache media is stored as files (`MEDIA_DIR`),
   not in the database — include that directory in your host backup.
+
+    **Retention.** `BACKUP_DIR` snapshots older than `BACKUP_RETENTION_DAYS` (default 30) are deleted by the
+    script. A bucket destination is append-only: the script never deletes from it, so the bucket key needs no
+    delete permission and a compromised host cannot wipe its own backups. A bucket destination therefore
+    **needs a lifecycle rule** that expires the `db/` prefix, set once when you create the bucket:
+
+    ```bash
+    # Cloudflare R2
+    npx wrangler r2 bucket lifecycle add <bucket> expire-db db/ --expire-days 30
+    # AWS S3
+    aws s3api put-bucket-lifecycle-configuration --bucket <bucket> --lifecycle-configuration \
+      '{"Rules":[{"ID":"expire-db","Status":"Enabled","Filter":{"Prefix":"db/"},"Expiration":{"Days":30}}]}'
+    # OCI Object Storage (the tenancy also needs a policy that lets the objectstorage-<region> service
+    # manage object-family in the bucket's compartment)
+    oci os object-lifecycle-policy put -bn <bucket> --items \
+      '[{"name":"expire-db","action":"DELETE","timeAmount":30,"timeUnit":"DAYS","isEnabled":true,"objectNameFilter":{"inclusionPrefixes":["db/"]}}]'
+    ```
+
+    Where a lifecycle rule is not available, `BACKUP_PRUNE_BUCKET=1` makes `backup.sh` delete bucket snapshots
+    older than `BACKUP_RETENTION_DAYS` after each upload, judged by the timestamp in the snapshot's name. The
+    bucket key then needs delete permission.
 - **Pocket (Termux on a phone):** `deploy/pocket/backup.sh` takes the same kind of consistent snapshot
   (SQLite's online backup, through better-sqlite3) and writes it, with the `.env` and the media, to the
   phone's shared storage, keeping the newest seven; `--no-env` leaves the secrets out.
