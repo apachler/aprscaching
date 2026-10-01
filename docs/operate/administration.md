@@ -161,7 +161,7 @@ requests and replaces their call in the trail with the withdrawn marker, droppin
 The licence badge shows whether a public register lists a call as licensed ([Licence
 registers](../reference/licence-sources.md)). It needs the registers imported. The import tool runs on the
 operator's machine — the ingest box, or any computer with Node 22+ — downloads each register, keeps only
-callsign, status and expiry, and posts them to the gateway with `INGEST_SECRET`:
+callsign, status and expiry, and posts them to the gateway with `OPERATOR_SECRET`:
 
 ```bash
 BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,at,de
@@ -245,7 +245,7 @@ Respect each source's licence; OpenCaching content in particular carries conditi
 
 You can drive your own ingest box from the web app without opening any inbound port: the app enqueues
 commands and the box pulls them over its existing outbound connection (`/api/box/:id/*`), runs them, and
-reports each result back to the command log in **Shack → Remote control**.
+reports each result back to the command log in **Shack → Remote box**.
 
 1. On the box, set `BOX_ID` to a name of your choice (for example `pi-home`) and restart the ingest. At start
    the box prints a one-time pairing code to its log:

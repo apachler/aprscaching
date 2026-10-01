@@ -91,7 +91,7 @@ mirroring consumes**: a consumer pulls frames, verifies each under the peer's ac
 the namespace/self-attestation/tombstone acceptance checks and the appliers. A signed instance
 advertises the surface as the `sync-cbor` capability in its descriptor. An unsigned instance (no
 frame signatures possible) does not serve the surface and cannot be mirrored. The JSON feeds
-(`/federation/feed/*`) are an unsigned transparency/browse surface only — nothing consumes them for
+(`/federation/caches`, `/finds`, `/bulletins`, `/keys`, `/tombstones`, `/account-moves`, `/registry`) are an unsigned transparency/browse surface only — nothing consumes them for
 mirroring.
 
 **Scaled fields.** The deterministic codec carries no floats, so fractional record fields travel as
@@ -191,8 +191,8 @@ HTTP-sync peer does.
 
 Both halves ride the existing BBS machinery:
 
-- **Send** — `POST /federation/bbs/enqueue {types?, since?, limit?}` (sysop or the operator's ingest
-  box) signs the local feed records (tombstones first) into fedwire frames — the same producer the
+- **Send** — `POST /federation/bbs/enqueue {types?, since?, limit?}` (sysop or `x-operator-secret`)
+  signs the local feed records (tombstones first) into fedwire frames — the same producer the
   HTTP sync surface uses — packs them into one `ACSFED` bulletin, and stores it as a local BBS
   bulletin. The forwarding rules, pool, and partner scheduler then carry it like any other bulletin;
   the content BID lands in `bbs_messages.bid` (UNIQUE), so an unchanged snapshot never double-posts.
@@ -253,7 +253,7 @@ records (tombstones) apply idempotently by gid. There is no batch envelope and n
 the global id is the dedup.
 
 The rendezvous relay rides the same carrier for a packet-only spoke. `POST
-/federation/relay/<instance>/dispatch` (sysop/ingest) packs the spoke's queued queries into signed
+/federation/relay/<instance>/dispatch` (sysop or `x-operator-secret`) packs the spoke's queued queries into signed
 `relayQuery` frames and marks them leased; the spoke's receive path answers each from its own DB and
 sends back a signed `relayAnswer` frame, which lands in the hub's relay queue for the requester —
 scoped to rows addressed to the answering instance, so a spoke can only ever answer its own queue.

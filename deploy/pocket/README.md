@@ -33,7 +33,7 @@ stops background apps, and battery and heat are real limits.
 | `test/linux-smoke.sh` | checks `pocket.sh`, recovery, status, backup, `tls.sh`, `meshcom-setup.sh`, `restart.sh` and stop on a Linux box with tmux (not part of CI) |
 | `test/wizard-test.sh` | fixture tests for `wizard.sh`: terminal and dialog answers, validation, rerun, cancel, `--dry-run`, the home instance; CI runs it |
 | `test/net44-test.sh` | fixture tests for the 44Net address, ampr.org names, the expiry check and `extras/ampr-cert.sh` with a fake lego and DNS; CI runs it |
-| `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the weekly `pocket-termux` workflow runs it on x86_64 and aarch64 |
+| `test/termux-ci.sh` | installs and starts Pocket inside the `termux/termux-docker` image; the monthly `pocket-termux` workflow runs it on x86_64 and aarch64 |
 
 Every script takes `--help`, and `--dir` / `--data-dir` (or `APRSCACHING_DIR` / `APRSCACHING_DATA`) when the
 checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
@@ -46,6 +46,9 @@ Use Termux from [F-Droid](https://f-droid.org/packages/com.termux/) or its
 ```bash
 curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
 ```
+
+**Known issue:** until the first release reaches `main`, the `main` URLs here answer 404. Use `dev` in the
+URL and pass `--branch dev` to install the development branch.
 
 `pocket.sh` upgrades Termux (`apt-get update && apt-get dist-upgrade`, after `termux-change-repo` when no mirror is
 chosen yet and a terminal is attached), runs `install.sh` from the same branch with the options passed on, starts the station and
@@ -275,5 +278,5 @@ any app with storage permission: `--no-env` leaves them out. `--dest DIR`, `--ke
 keeps the current database in `~/.aprscaching/before-restore-<time>/` and starts it again.
 
 The operator guide is [Pocket: a station on an Android phone](../../docs/operate/pocket.md), and
-`test/termux-ci.sh` (run weekly by `.github/workflows/pocket-termux.yml`) installs and starts Pocket in the
+`test/termux-ci.sh` (run monthly by `.github/workflows/pocket-termux.yml`) installs and starts Pocket in the
 `termux/termux-docker` image.

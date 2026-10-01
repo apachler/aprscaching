@@ -5,7 +5,7 @@
     find** in the app. APRS and MeshCom share one engine, and only the reply path differs. Built: the command
     engine in the gateway ingest path (`workers/gateway/src/radiolog.ts`), `radio_commands`, acks and
     opt-in replies sent back the way each message came (the hearing box's RF, its MeshCom node, or the
-    APRS-IS outbox), pending confirmation under **Profile → Logs sent over the air**, and export/erase.
+    APRS-IS outbox), pending confirmation under **You → Logs sent over the air**, and export/erase.
     One point stays open: a bench test of the MeshCom ack on a real node (see [Open points](#open-points)).
     Player guide: [Log from your radio](../guides/caching.md#log-from-your-radio).
 

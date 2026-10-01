@@ -124,7 +124,7 @@ the log goes to the account that holds it.
 
 - **Heard by one of the instance's own receiving stations** (its attested sites), the message is logged at
   once.
-- **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message), it waits under **Profile →
+- **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message), it waits under **You →
   Logs sent over the air** until you tap **Confirm** — anyone can put your callsign on an internet message,
   so the app asks you first. Unconfirmed messages expire after seven days.
 

@@ -16,7 +16,7 @@ Also part of the gate: `pnpm lint` (fast ESLint), `pnpm lint:types` (type-aware 
 
 ## Unit tests (vitest)
 
-~120 test files across `packages/aprs` (parser), `packages/ax25`, `packages/packet` (the largest
+More than 200 test files across `packages/aprs` (parser), `packages/ax25`, `packages/packet` (the largest
 logic surface: NET/ROM, INP3, FBB incl. LZHUF), `packages/shared` (CBOR/fedwire),
 `packages/tools` (DSP decoders, registry), `workers/gateway` (federation, auth, trust),
 `servers/node`, and `apps/ingest` (transports, reconnect).
@@ -119,13 +119,14 @@ peer downloads and kernel modules are not PR-gating dependencies.
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint · lint-types · unit tests + builds · conformance on Node, Worker, Bun · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — `mkdocs build --strict` | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
+| `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |
 | `release-please.yml` — versioning + changelog | push (main) | Release |
 
 A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips

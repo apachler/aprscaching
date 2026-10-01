@@ -21,7 +21,7 @@ the sense of the project's IP rule and lets the decoder live in the MIT `package
 | Frequency | 433.175 MHz (D-A-CH, EU); 439.9125 MHz (UK); 433.925 MHz (Norway) |
 | Modulation | LoRa, SF11, 250 kHz bandwidth, CR 4/6 |
 | Framing | APRS source / destination / digipeater path and APRS payload (`:` message, `!` position) inside a small binary header: 32-bit message id, hop byte (hop count + flags), hardware id, modulation id, 16-bit checksum ([protocol](https://icssw.org/en/meshcom-2-0-protokoll/)) |
-| Addressing | Direct message to a callsign, group message to a 2–5 digit group number (group 9 = emergency), broadcast to `*` |
+| Addressing | Direct message to a callsign, group message to a group number `1`–`99999` (group 9 = emergency), broadcast to `*` |
 | Payload types | Text, position, telemetry (temperature, humidity, pressure) |
 | Identity | Real amateur callsigns with SSID (SSIDs above 15 occur, e.g. `-99`) |
 | Gateways | A node in gateway mode links its local mesh to the MeshCom servers over HAMNET or the internet; dashboards at [meshcom.oevsv.at](https://meshcom.oevsv.at/) |
@@ -40,8 +40,9 @@ is the integration point. A node joined to Wi-Fi and configured with `--extudpip
 {"src_type":"lora","type":"tele","src":"9V1LH-1,OE1KBC-12","batt":5,"temp1":28.9,"temp2":0,"hum":40.2,"qfe":1004.9,"qnh":1005.4}
 ```
 
-- A client registers with `{"type":"info","src":"<CALL-SSID>"}` and sends with
-  `{"type":"msg","dst":"<call | group | *>","msg":"<text>"}` (UTF-8, at most 150 characters).
+- A client sends with `{"type":"msg","dst":"<call | group | *>","msg":"<text>"}` (UTF-8, at most 150
+  **bytes**). The full datagram set, verified against the firmware, is the
+  [ExtUDP reference](../reference/meshcom-extudp.md).
 - `lat`/`long` are unsigned degrees (truncated to four decimals) with the hemisphere in
   `lat_dir`/`long_dir`. `alt` holds the raw `/A=` digits, which are feet or metres depending on a
   per-node setting, so the listener does not forward it.
@@ -72,7 +73,7 @@ LAN, not through a TNC.
 | Pure core | `packages/aprs/src/meshcom/`: `parse` (total, structured rejection reasons), `normalize` (hemisphere, callsigns, path, locator, provenance), `dedup` (bounded frame-id window, stronger copies upgrade), `encode` (direct-callsign text, 150 UTF-8 bytes), `aprs` (APRS mapping and transport hint). A position becomes an uncompressed `!` position; a direct message an APRS `:ADDRESSEE:text{nnn` message; group and `*` text an APRS user-defined `{MG` packet, which the decoder classifies as `other` so it stays out of the message log. Conformance runs the golden fixtures on Node, Bun and workerd (`pnpm conformance:meshcom`) | built |
 | UDP listener | `MeshcomListener` in `apps/ingest/src/meshcom.ts`: accepts only configured node addresses, bounds size and per-node rate, passes raw datagrams to `MESHCOM_FANOUT` targets, dedups, stamps the transport hint, logs counters and warns on a silent node or crash-prone firmware. Never in the Worker bundle (`tools/checks/worker-bundle.mjs`) | built |
 | Configuration | `MESHCOM_NODE` (`ip[=CALL]` list; enables the listener), `MESHCOM_PORT`, `MESHCOM_BIND`, `MESHCOM_FANOUT`, `MESHCOM_RATE`, `MESHCOM_STALE_MIN` | built |
-| Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`). Stored positions carry no port, so `transportOf()` in `workers/gateway/src/provenance.ts` does not distinguish it; trust does not depend on it either way | built |
+| Transport enum | `"meshcom"` in `Transport` (`packages/shared/src/packet.ts`). Stored positions record it in `positions.transport`, which `transportOf()` in `workers/gateway/src/provenance.ts` reads back; display and statistics only, since trust gates on the attestation flag, not the transport | built |
 | Positions | `kind:"position"` with `parsed.lat/lon` → live map, MHeard, `GET /api/ports` | built |
 | Messages | a direct message → the messages log (`shack.ts`); the Messages surface shows it | built |
 | Node and link store | `meshcom_nodes` and `meshcom_links` (`workers/gateway/src/meshcom.ts`): per node the latest device, firmware, battery, way of hearing, receiver and a rolling signal average; per link the last direct hearing or relay leg. Written only from the operator's own attested MeshCom port, when something shown changes or `MESHCOM_META_MIN_S` has passed; pruned nightly, skipped while the write budget sheds. Display only: never touches the A/B/C find tiers | built |
@@ -104,7 +105,7 @@ standing rule that transport is not trust:
   independence rule stops an operator's own node from corroborating the operator's own find.
 - **Relayed and server frames never corroborate presence.** A relay proves the originator was near the
   relay, not near the receiving node, and a server copy proves nothing about the air.
-- **Finds logged over the mesh** (see below) stay Tier C unless corroborated by the usual A or B
+- **Finds logged over the mesh** ([Logging finds over radio messages](radio-find-logging.md)) stay Tier C unless corroborated by the usual A or B
   evidence; the message itself proves nothing about presence.
 
 ## Security
@@ -173,7 +174,7 @@ routing to save airtime (firmware v4.35p.06.13: "DESTINATION-PATH expanded to in
 Three rules hold in aprscaching:
 
 1. **The destination is the last token** of `dst`, everything before it the via list
-   ([ExtUDP](../reference/meshcom-extudp.md#text-typemsg)).
+   ([ExtUDP](../reference/meshcom-extudp.md#text-type-msg)).
 2. **A via list is never a link.** The map draws links from the source path and the receiving node only;
    a via list names relays the sender allowed, not ones the frame passed.
 3. **A via list is never trust.** It bears on nothing in provenance, `direct` or the A/B/C tiers. It is

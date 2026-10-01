@@ -133,8 +133,9 @@ even if you later move to another instance.
 ## Settings at a glance
 
 **Settings** (left rail on a computer, **You → Advanced → Settings** on a phone) is grouped; the search box at
-the top filters it. Signed out you see only the general groups; after signing in, the account, profile,
-station, radio and notification groups appear as well.
+the top filters it. Signed out you see **Account** (with the way to sign in), **Display**, **Locale & time**,
+**Your data**, **Support the project** and **About & credits**; after signing in, the profile, station,
+radio and notification groups appear as well.
 
 ![Settings while signed out](../assets/shots/set-account-desktop.webp){ width="720" loading=lazy }
 
@@ -149,6 +150,7 @@ station, radio and notification groups appear as well.
 | **Notifications** | Email digest, browser push, the watchlist |
 | **Locale & time** | Language, time format |
 | **Your data** | Export or erase everything about you |
+| **Support the project** | Donating, and the public ledger of what donations pay for — recognition only, never a feature gate |
 | **About & credits** | The manual, the source code, credits |
 
 ## Your data

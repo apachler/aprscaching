@@ -50,21 +50,26 @@ inspectable — which is exactly what keeps it legal.
 ## Station identification
 
 Automatic stations must identify with their callsign at the interval your regulator requires. Every
-APRS/AX.25 frame aprscaching sends carries its source callsign, and beacon/identification intervals
-for the digipeater, IGate, node, and beacons are operator-configured in `apps/ingest`. Set them to
-satisfy your national identification rule.
+APRS/AX.25 frame aprscaching sends carries its source callsign. The NET/ROM node identifies through its
+NODES broadcast, whose interval is `NETROM_BROADCAST_MS` (default 5 minutes). The digipeater and IGate
+have no separate identification timer: they transmit only when relaying traffic, under the station's
+callsign. Check that this meets your national identification rule.
 
 ## Automatic & unattended operation
 
-A digipeater, IGate, NET/ROM (and FlexNet/TheNet/BayCom) node, BBS, store-and-forward mail path, and
+A digipeater, IGate, NET/ROM node (whichever command style it presents — NET/ROM, FlexNet, TNN or
+BayCom), BBS, store-and-forward mail path, and
 any automatic federation-over-RF relay are **automatically-controlled stations**. National rules
 restrict where and how these run — permitted band segments, power, occupied bandwidth, and the
 requirement that a control operator be reachable. aprscaching's part:
 
 - automatic transmit (digipeat / beacon / forward / relay) is **opt-in per port**, never implicit;
-- **duty-cycle and rate limits** are configurable on each transmit port in `apps/ingest`;
-- the tiered RF transport negotiator chooses only the *record encoding and batch size* for a link's
-  capability — it never selects a band, segment, or power level on your behalf.
+- unattended transmit paths are **rate-limited by fixed token buckets**: remote-box transmits and MeshCom
+  sends allow a burst of three, then one per minute; the digipeater suppresses a duplicate frame for
+  30 s and can hold a repeat back (`DIGI_VISCOUS_MS`). These limits are built in, not configurable per
+  port, and there is no duty-cycle setting;
+- the federation-over-RF carriers choose only the *record encoding and batch size* for a link
+  (`workers/gateway/src/fedtransport.ts`) — never a band, segment, or power level.
 
 ## Third-party traffic & message handling
 
@@ -83,8 +88,9 @@ records carry no advertising. Keep it that way on any RF binding.
 
 ## Bandwidth, band plans, and high-speed modes
 
-aprscaching is **field-first** — 1200-baud AFSK and 9600-baud G3RUH on VHF/UHF, 300-baud on HF — and
-also supports high-bandwidth modes (HAMNET microwave IP, robust HF, and internet-side AXIP/AXUDP).
+aprscaching is **field-first**: it runs over whatever modem your TNC provides — typically 1200-baud AFSK
+or 9600-baud G3RUH on VHF/UHF and 300-baud on HF — plus the browser's own 1200-baud soundcard AFSK, and
+over IP links (HAMNET microwave, and internet-side AXIP/AXUDP).
 Symbol-rate, occupied-bandwidth, and band-segment rules for these differ widely by country and band.
 The operator decides which ports and bands are enabled; the platform adapts its encoding to whatever
 link you turn on, but it does not choose the RF parameters for you.
@@ -103,8 +109,8 @@ for what crosses it in each direction.
 |---|---|
 | Signs, never encrypts; confidentiality degrades to field-drop | Confirming that satisfies *your* regulator |
 | Transmit off by default, gated on control-verification | Being the reachable, responsible control operator |
-| Per-port opt-in for automatic TX; configurable duty-cycle/rate | Choosing enabled bands, ports, power, and segments |
-| Callsign in every frame; configurable ID/beacon intervals | Setting intervals to your national ID rule |
+| Per-port opt-in for automatic TX; fixed rate limits on unattended TX | Choosing enabled bands, ports, power, and segments; any duty-cycle limit your rules set |
+| Callsign in every frame; NODES broadcast interval (`NETROM_BROADCAST_MS`) | Meeting your national ID rule |
 | Third-party encapsulation preserving the originating callsign | Meeting third-party and international-traffic rules |
 | Recognition-only donations; no commercial payloads | Keeping your on-air content non-commercial |
 
