@@ -22,3 +22,7 @@ dist/desktop/
 # MkDocs build output
 site/
 debug.bug
+
+# an instance's settings and secrets (deploy/setup.sh, deploy/aprscaching init), and the shape init recorded
+.env
+deploy/.shape

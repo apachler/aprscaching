@@ -19,6 +19,7 @@ import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
+import { validateConfig } from "@aprscaching/shared";
 import { migrate, type Migration } from "@aprscaching/gateway/migrate";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { BunDb } from "./d1.ts";
@@ -63,9 +64,12 @@ export interface BunServer {
 /**
  * Start the gateway on Bun: migrate the database, build the runtime-neutral env, serve HTTP and the
  * live WebSocket rooms, start the scheduled jobs, and stop cleanly (WAL checkpointed) on SIGINT/SIGTERM.
- * Refuses a federation registry whose authority key is not pinned, as the Node server does.
+ * Refuses a malformed setting and a federation registry whose authority key is not pinned, as the Node
+ * server does.
  */
 export function createServer(opts: BunServerOptions): BunServer {
+  const configProblems = validateConfig(opts.environment, ["gateway", "server"]);
+  if (configProblems.length) throw new Error(configProblems.map((p) => p.message).join("; "));
   const fedConfigError = federationConfigError(opts.environment as unknown as Env);
   if (fedConfigError) throw new Error(fedConfigError);
 

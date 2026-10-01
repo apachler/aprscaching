@@ -57,7 +57,7 @@ if [ -z "$BRANCH" ]; then
 fi
 
 before="$(git -C "$DIR" rev-parse HEAD)"
-scripts_sum() { cat "$DIR/deploy/pocket/supervise.sh" "$DIR/deploy/pocket/lib.sh" 2>/dev/null | cksum || true; }
+scripts_sum() { cat "$DIR/deploy/pocket/supervise.sh" "$DIR/deploy/pocket/lib.sh" "$DIR/deploy/lib/common.sh" 2>/dev/null | cksum || true; }
 sup_before="$(scripts_sum)"
 
 # The same steps as the first install, from a copy of install.sh for the reason above.

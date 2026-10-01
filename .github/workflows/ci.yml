@@ -26,6 +26,7 @@ jobs:
     outputs:
       code: ${{ steps.paths.outputs.code }}
       pocket: ${{ steps.paths.outputs.pocket }}
+      helpers: ${{ steps.paths.outputs.helpers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 2 }
@@ -37,10 +38,14 @@ jobs:
             && git fetch --quiet --depth=1 origin "$BASE" && files=$(git diff --name-only "$BASE" HEAD); then
             code=false
             pocket=false
+            helpers=false
             while IFS= read -r f; do
               [ -n "$f" ] || continue
               case "$f" in
-                deploy/pocket/* | .github/workflows/ci.yml) pocket=true ;;
+                deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
+              esac
+              case "$f" in
+                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
                 docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;
@@ -50,10 +55,12 @@ jobs:
           else
             code=true
             pocket=true
+            helpers=true
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "pocket=$pocket" >> "$GITHUB_OUTPUT"
-          echo "code=$code pocket=$pocket"
+          echo "helpers=$helpers" >> "$GITHUB_OUTPUT"
+          echo "code=$code pocket=$pocket helpers=$helpers"
 
   lint:
     name: lint + format
@@ -68,8 +75,10 @@ jobs:
       - run: pnpm run format:check
       # every gateway export has a user outside its own file (module-private code is not exported)
       - run: node tools/checks/dead-exports.mjs
-      # the docs stay present-tense, document every config key the code reads, and keep nav and links whole
+      # the docs stay present-tense, the schema lists every config key the code reads, and nav and links stay whole
       - run: node tools/checks/docs.mjs
+      # the configuration page's key tables, both .env.example files and the deploy helpers' export match the schema
+      - run: node tools/config/generate.mjs --check
 
   pocket:
     name: Pocket scripts (shellcheck, ruff, Python tests)
@@ -85,6 +94,17 @@ jobs:
       - run: cd deploy/pocket/extras && python3 -m unittest discover -s test -v
       - run: bash deploy/pocket/test/wizard-test.sh
       - run: bash deploy/pocket/test/net44-test.sh
+
+  helpers:
+    name: Deploy helpers (shellcheck, tests)
+    needs: changes
+    if: needs.changes.outputs.helpers == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # deploy/aprscaching, its library and shape modules: bash, checked like the Pocket scripts
+      - run: shellcheck -x -S warning deploy/aprscaching deploy/lib/*.sh deploy/lib/shapes/*.sh deploy/test/*.sh
+      - run: bash deploy/test/helpers-test.sh
 
   lint-types:
     name: lint (type-aware, slow)

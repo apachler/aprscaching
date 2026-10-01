@@ -7,8 +7,8 @@
  *  1. Present tense — no milestone, review or ADR codes and no story framing ("previously", "for now", …)
  *     in the manual, the root documents and the READMEs. CHANGELOG.md is the one place history belongs,
  *     TODO.md keeps its P1–P3 priority scale, and dated review records under docs/reviews/ are exempt.
- *  2. Configuration — every environment key the code reads appears in docs/reference/configuration.md,
- *     and every key that page documents is read somewhere in the repository.
+ *  2. Configuration — every environment key the code reads is in the configuration schema, and every key
+ *     the schema lists is read somewhere in the repository.
  *  3. Navigation — every mkdocs.yml nav entry exists, and every docs/ page is in the nav or `not_in_nav`.
  *  4. Links — every relative link in the root documents and READMEs (outside the mkdocs build, which
  *     checks its own) points at a file that exists.
@@ -75,7 +75,11 @@ for (const f of PROSE) {
 }
 
 // ---------------------------------------------------------------- 2. configuration keys
-const CONFIG = "docs/reference/configuration.md";
+// The schema (packages/shared/src/config.ts) is the list of settings; its generated export is read here so
+// this check needs no install. tools/config/generate.mjs --check keeps that export, the key tables of the
+// configuration page and the .env.example files in step with the schema.
+const SCHEMA = "deploy/lib/config-keys.json";
+const schemaKeys = new Set(JSON.parse(read(SCHEMA)).keys.map((k) => k.name));
 const source = (prefixes, exts) =>
   tracked.filter(
     (f) => prefixes.some((p) => f.startsWith(p)) && exts.some((e) => f.endsWith(e)) && !/\/test\//.test(f),
@@ -85,10 +89,9 @@ const keysIn = (files, re) => {
   for (const f of files) for (const m of read(f).matchAll(re)) out.add(m[1]);
   return out;
 };
-const envTs = read("workers/gateway/src/env.ts");
-const listBody = envTs.slice(envTs.indexOf("ENV_STRING_KEYS = ["), envTs.indexOf("] as const"));
-const used = new Set([...listBody.matchAll(/^\s*"([A-Z][A-Z0-9_]+)"/gm)].map((m) => m[1]));
-for (const k of keysIn(source(["apps/ingest/src/"], [".ts"]), /\benv\.([A-Z][A-Z0-9_]+)\b/g)) used.add(k);
+const used = new Set();
+for (const k of keysIn(source(["workers/gateway/src/", "apps/ingest/src/"], [".ts"]), /\benv\.([A-Z][A-Z0-9_]+)\b/g))
+  used.add(k);
 // keys read through the ingest's typed helpers, e.g. numEnv("MESHCOM_RATE", 20)
 for (const k of keysIn(
   source(["apps/ingest/src/", "servers/"], [".ts"]),
@@ -102,22 +105,50 @@ for (const k of keysIn(
   used.add(k);
 for (const k of keysIn(source(["apps/web/src/"], [".ts", ".tsx"]), /import\.meta\.env\.(VITE_[A-Z0-9_]+)/g))
   used.add(k);
-// Set by the servers for the shared app, or by the platform — not operator settings.
-const INTERNAL = new Set(["FED_FETCH_GUARD", "HTTPS_LISTENER_PORT", "NODE_ENV", "HOME", "PATH", "CI"]);
-const configText = read(CONFIG);
-const documented = new Set([...configText.matchAll(/`([A-Z][A-Z0-9_]{2,})`/g)].map((m) => m[1]));
+// what the compose files and the Caddyfile interpolate
+for (const k of keysIn(
+  tracked.filter((f) => /^deploy\/[^/]*\.yml$/.test(f) || f === "deploy/Caddyfile"),
+  /\$\{([A-Z][A-Z0-9_]+)/g,
+))
+  used.add(k);
+// Bindings, values the servers set for the shared app, and the platform's own — not operator settings.
+const INTERNAL = new Set([
+  "DB",
+  "TILES",
+  "MEDIA",
+  "ROOMS",
+  "FED_FETCH_GUARD",
+  "HTTPS_LISTENER_PORT",
+  "NODE_ENV",
+  "HOME",
+  "PATH",
+  "CI",
+]);
 for (const k of [...used].sort())
-  if (!INTERNAL.has(k) && !documented.has(k)) fail(CONFIG, 0, `${k} is read by the code but not documented`);
-// The reverse: a documented key must be read somewhere (code, deploy scripts, compose files, Caddyfile).
+  if (!INTERNAL.has(k) && !schemaKeys.has(k)) fail(SCHEMA, 0, `${k} is read by the code but not in the schema`);
+// The reverse: a schema key must be read somewhere (code, deploy scripts, compose files, Caddyfile) — the
+// schema, its generated outputs and the docs do not count.
+const GENERATED = new Set([
+  "packages/shared/src/configkeys.ts",
+  "packages/shared/src/configdocs.ts",
+  "tools/config/envfiles.mjs",
+  ".env.example",
+  "deploy/.env.example",
+  "deploy/lib/config-keys.tsv",
+  SCHEMA,
+]);
 const everything = tracked
-  .filter((f) => !f.endsWith(".md") && !f.includes("node_modules/") && !/\.(png|webp|jpg|ico|woff2?)$/.test(f))
+  .filter(
+    (f) =>
+      !f.endsWith(".md") &&
+      !GENERATED.has(f) &&
+      !f.includes("node_modules/") &&
+      !/\.(png|webp|jpg|ico|woff2?)$/.test(f),
+  )
   .map(read)
   .join("\n");
-// Tokens on the page that are protocol words or examples, not settings.
-const NOT_KEYS = new Set(["APRSCG", "FOUND", "DNF", "NOTE", "HELP", "N0CALL", "GET", "POST", "SIGHUP", "TXT"]);
-for (const k of [...documented].sort())
-  if (!NOT_KEYS.has(k) && !new RegExp(`\\b${k}\\b`).test(everything))
-    fail(CONFIG, 0, `${k} is documented but nothing reads it`);
+for (const k of [...schemaKeys].sort())
+  if (!new RegExp(`\\b${k}\\b`).test(everything)) fail(SCHEMA, 0, `${k} is in the schema but nothing reads it`);
 
 // ---------------------------------------------------------------- 3. navigation
 const mk = read("mkdocs.yml");
@@ -154,5 +185,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `✓ docs: ${PROSE.length} files present-tense, ${used.size} config keys documented, nav complete, links resolve`,
+  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve`,
 );

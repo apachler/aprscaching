@@ -10,6 +10,9 @@ phone as **Pocket**. Once it is up, work
 through [Your first hour as sysop](first-hour.md) — the ordered checklist from "it boots" to a public,
 verified, backed-up instance (mirrored live in the app under **Instance admin → Setup**).
 
+`deploy/aprscaching` sets up, checks and maintains every shape with the same commands. See
+[Deployment helpers](helpers.md).
+
 ## Which shape should I pick?
 
 - **Self-host** — the recommended default. The Docker stack on a Pi, a mini-PC or a VM runs the gateway, the
