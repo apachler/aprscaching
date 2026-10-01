@@ -6,6 +6,7 @@ same thing on every shape; what each one does underneath depends on the shape.
 ```bash
 deploy/aprscaching init selfhost        # set up a shape (its own questions; --help lists its options)
 deploy/aprscaching status               # is it running, and where
+deploy/aprscaching doctor               # check everything; changes nothing
 deploy/aprscaching backup               # back it up
 deploy/aprscaching rotate-secret INGEST_SECRET
 deploy/aprscaching help
@@ -40,7 +41,8 @@ The output is plain text with no colour codes, so it reads the same in a termina
 | Command | Self-host | Cloudflare split | Ingest box | Bare metal | Pocket | Desktop |
 |---|---|---|---|---|---|---|
 | `init` | `setup.sh` | `cloudflare/deploy-cf.sh` | — | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
-| `status` | health + containers | — | containers | health + units | `pocket/status.sh` | health |
+| `status` | health + containers | Worker health | containers | health + units | `pocket/status.sh` | health |
+| `doctor` | yes | yes | yes | yes | yes | yes |
 | `backup` | `backup.sh` | — | — | `backup.sh` | `pocket/backup.sh` | — |
 | `restore <file>` | — | — | — | — | `pocket/backup.sh --restore` | — |
 | `update` | — | — | — | — | `pocket/update.sh` | — |
@@ -48,6 +50,37 @@ The output is plain text with no colour codes, so it reads the same in a termina
 
 A command a shape does not support says so and exits without changing anything. The existing scripts
 (`setup.sh`, `cloudflare/deploy-cf.sh`, the Pocket scripts) keep working on their own, with the same options.
+
+## doctor
+
+```bash
+deploy/aprscaching doctor
+deploy/aprscaching --json doctor      # one JSON document: {shape, pass, warn, fail, checks: [{status, id, message, fix, docs}]}
+```
+
+`doctor` checks the whole installation and changes nothing. Each check is `pass`, `warn` or `fail`. A check
+that is not `pass` also prints a one-line fix and, where one helps, a docs page. The exit status is `1` when
+any check failed, so a cron job or a monitor can run it. It never prints a secret value.
+
+| Group | What it checks | Shapes |
+|---|---|---|
+| `config` | the settings file is owner-only; every setting is a known key (a misspelt one is pointed out) with a value of its type; no secret is weak or an example value; a public instance sets what it needs | every shape with a `.env` |
+| `gateway` | `/health` answers; the database answers; the migrations match this checkout (`/health` reports the newest applied one); the gateway runs this checkout's commit | every shape with a gateway |
+| `setup` | the gateway's own **Instance admin → Setup** checklist, item by item, read with `OPERATOR_SECRET`; a blocking item that is not met fails. On the Cloudflare split it includes the D1 write budget (used, budget, level) | every shape with a gateway |
+| `ingest` | the gateway accepts the box's `INGEST_SECRET` (`GET /ingest/check`); APRS-IS and each configured TNC, AGWPE, host-mode and Meshtastic address answers; each MeshCom node named `=CALL` was heard recently and runs firmware 4.35t or newer; `MESHCOM_BIND=0.0.0.0` on a public host | every shape with an ingest |
+| `network` | the public name resolves; its TLS certificate is valid (a warning 14 days before it expires); the public URL reaches this gateway (the same instance and commit answer there) | public instances |
+| `federation` | the signing key is set; the settings are the safe ones (see [Running federation safely](../guides/federation.md#running-federation-safely)); each peer in `FED_PEERS` answers. A LAN instance has federation off | gateways |
+| `service` | Self-host: the containers run, the gateway's port is not published past Caddy, MeshCom's UDP port is not open on every address of a public host. Bare metal: both units run. Ingest box: the container runs | per shape |
+| `pages` | the Pages app was built for this Worker (`VITE_API_BASE`) | Cloudflare split |
+| `resources` | free space on the data disk; the database's size; the newest backup is at most 7 days old (`APRS_BACKUP_MAX_DAYS`) | every shape |
+| `source` | `/.well-known/source` names the repository and commit (AGPL §13); a checkout with local changes sets `SOURCE_REPO` to its fork | gateways |
+
+Self-host checks the gateway through this host's Caddy, with the public name pinned to this host. A
+DNS problem then shows as a `network` failure, not as a dead gateway. On the Cloudflare split the Worker's
+settings are not readable from your machine: `doctor` checks it over the internet. It reads the Setup checklist
+when `OPERATOR_SECRET` is in the environment. `APRSCACHING_API_BASE` and `APRSCACHING_APP_URL` name the
+Worker's and the app's URLs when `init` did not record them. The desktop app's secrets are read from its
+data directory.
 
 ## Self-host
 

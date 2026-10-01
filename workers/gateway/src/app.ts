@@ -8,7 +8,7 @@ import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
 import { retentionFrom } from "./retention.js";
-import { handleIngest } from "./ingest.js";
+import { handleIngest, handleIngestCheck } from "./ingest.js";
 import {
   handleLog,
   handleCachesInBBox,
@@ -178,7 +178,7 @@ export { syncAllPeers } from "./fedpull.js";
  * A test reads every route in route() below and checks it is claimed here.
  */
 const GATEWAY_PATH =
-  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|\.well-known)(?:\/|$)|^\/(?:ws|ingest|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
 
 export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pathname);
 
@@ -289,8 +289,28 @@ export async function runScheduled(env: Env): Promise<void> {
  * only checks liveness would route traffic to it and every request would then fail. So the default
  * probe pings the DB and reports 503 (`db: "down"`) until it answers — traffic is held until the
  * instance is genuinely ready. `?live` skips the DB for cheap load-balancer polling (process-up only).
- * The body carries the instance id + running source commit for at-a-glance ops visibility (no secrets).
+ * The body carries the instance id, the running source commit and the newest applied migration (`schema`)
+ * for at-a-glance ops visibility and for `deploy/aprscaching doctor`, which compares it with the checkout
+ * (no secrets).
  */
+/**
+ * The newest applied migration: the self-host runner records them in `_migrations`, wrangler in
+ * `d1_migrations`. Null when neither table answers.
+ */
+async function schemaVersion(env: Env): Promise<string | null> {
+  for (const table of ["_migrations", "d1_migrations"]) {
+    try {
+      const row = await env.DB.prepare(`SELECT name FROM ${table} ORDER BY name DESC LIMIT 1`).first<{
+        name: string;
+      }>();
+      if (row?.name) return row.name;
+    } catch {
+      // the other runner's table
+    }
+  }
+  return null;
+}
+
 async function handleHealth(req: Request, env: Env): Promise<Response> {
   if (new URL(req.url).searchParams.has("live")) return json({ ok: true, live: true });
   let db: "up" | "down" = "up";
@@ -301,7 +321,7 @@ async function handleHealth(req: Request, env: Env): Promise<Response> {
   }
   const { commit } = sourceInfo(env);
   return json(
-    { ok: db === "up", db, instance: env.INSTANCE ?? null, commit: commit ?? null },
+    { ok: db === "up", db, instance: env.INSTANCE ?? null, commit: commit ?? null, schema: await schemaVersion(env) },
     { status: db === "up" ? 200 : 503 },
   );
 }
@@ -464,6 +484,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);
+  if (p === "/ingest/check" && m === "GET") return handleIngestCheck(req, env);
   if (p === "/outbox" && m === "GET") return outboxPending(req, env);
   if (p === "/outbox/ack" && m === "POST") return outboxAck(req, env);
 

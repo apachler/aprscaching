@@ -27,6 +27,47 @@ describe("/health readiness probe", () => {
     expect(body).toMatchObject({ ok: true, db: "up", instance: "oe.test" });
   });
 
+  it("reports the newest applied migration as the schema", async () => {
+    const tables: Record<string, string> = { d1_migrations: "0007_seven.sql" };
+    const db = {
+      prepare: (sql: string) => ({
+        first: async () => {
+          if (sql === "SELECT 1 AS ok") return { ok: 1 };
+          const t = /FROM (\w+)/.exec(sql)?.[1] ?? "";
+          if (!(t in tables)) throw new Error(`no such table: ${t}`);
+          return { name: tables[t] };
+        },
+      }),
+    };
+    const res = await route(get("/health"), { DB: db } as unknown as Env, ctx);
+    expect(await res.json()).toMatchObject({ ok: true, schema: "0007_seven.sql" });
+    tables._migrations = "0008_eight.sql";
+    const again = await route(get("/health"), { DB: db } as unknown as Env, ctx);
+    expect(await again.json()).toMatchObject({ schema: "0008_eight.sql" });
+  });
+
+  it("checks an ingest credential without reading or writing anything", async () => {
+    let touched = false;
+    const env = {
+      INGEST_SECRET: "the-ingest-secret-123",
+      INSTANCE: "oe.test",
+      DB: {
+        prepare: () => {
+          touched = true;
+          return { first: async () => ({}) };
+        },
+      },
+    } as unknown as Env;
+    const check = (secret?: string) =>
+      route(new Request("http://gw/ingest/check", { headers: secret ? { "x-ingest-secret": secret } : {} }), env, ctx);
+    const ok = await check("the-ingest-secret-123");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ ok: true, instance: "oe.test" });
+    expect((await check("wrong")).status).toBe(401);
+    expect((await check()).status).toBe(401);
+    expect(touched).toBe(false);
+  });
+
   it("returns 503 + db:down when the database is unreachable (traffic held)", async () => {
     const env = { DB: downDb } as unknown as Env;
     const res = await route(get("/health"), env, ctx);

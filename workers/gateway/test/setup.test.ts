@@ -75,6 +75,15 @@ describe("GET /api/admin/setup — sysop gate", () => {
   it("200 for the operator", async () => {
     expect((await get(baseEnv(), "OE8APR")).status).toBe(200);
   });
+
+  it("200 for the operator secret, so the operator's scripts can read it", async () => {
+    const env = baseEnv({ OPERATOR_SECRET: "operator-secret-value-321" });
+    const req = (secret: string) =>
+      handleAdminSetup(new Request("http://gw/api/admin/setup", { headers: { "x-operator-secret": secret } }), env);
+    expect((await req("operator-secret-value-321")).status).toBe(200);
+    expect((await req("wrong-operator-secret")).status).not.toBe(200);
+    expect((await req(SECRET)).status).not.toBe(200); // the ingest secret never reaches it
+  });
 });
 
 describe("GET /api/admin/setup — env items are statuses, never secret values", () => {

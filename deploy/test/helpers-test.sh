@@ -202,4 +202,80 @@ check "  … the port" bash -c "grep -q '^Environment=PORT=8090\$' <<<'$U'"
 check "  … the web app" bash -c "grep -q '^Environment=WEB_DIST=/srv/acs/apps/web/dist\$' <<<'$U'"
 check "  … pnpm by absolute path" bash -c "grep -qE '^ExecStart=/[^ ]*(pnpm|corepack pnpm) --filter @aprscaching/node-gateway start\$' <<<'$U'"
 
+# ---- doctor ------------------------------------------------------------------------------------------------
+# A stub gateway (fixtures/stub-gateway.py) answers on a free port; doctor checks it through the Pocket
+# context, whose settings live in one .env.
+if have python3; then
+  PORT_STUB="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
+  ING="ingest-0123456789abcdef0123456789" OPS="operator-0123456789abcdef01234567"
+  STUB_INGEST="$ING" STUB_OPERATOR="$OPS" STUB_SCHEMA=0001_baseline.sql \
+    python3 "$HERE/fixtures/stub-gateway.py" "$PORT_STUB" &
+  STUB_PID=$!
+  for _ in $(seq 1 50); do curl -fsS "http://127.0.0.1:$PORT_STUB/health" >/dev/null 2>&1 && break; sleep 0.1; done
+  PD="$TMP/pocket"
+  mkdir -p "$PD" "$TMP/backups"
+  printf 'PORT=%s\nAPP_URL=http://127.0.0.1:%s\nINGEST_SECRET=%s\nOPERATOR_SECRET=%s\nINGEST_URL=http://127.0.0.1:%s/ingest\nAPRSIS_HOST=127.0.0.1\nAPRSIS_PORT=1\nFED_AUTOPROMOTE=0\n' \
+    "$PORT_STUB" "$PORT_STUB" "$ING" "$OPS" "$PORT_STUB" >"$PD/.env"
+  chmod 644 "$PD/.env"
+  touch "$TMP/backups/aprscaching-pocket-20260101T000000Z.tar.gz"
+  doctor() { APRSCACHING_DATA="$PD" APRSCACHING_BACKUP_DIR="$TMP/backups" "$H" --shape pocket "$@" doctor </dev/null >"$TMP/out" 2>"$TMP/err"; }
+  status_of() { node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const c=j.checks.find(c=>c.id===process.argv[2]);console.log(c?c.status:"absent")' "$TMP/out" "$1"; }
+  if have node; then
+    if doctor --json; then bad "doctor fails when a check fails"; else ok "doctor fails when a check fails"; fi
+    check "  … its JSON parses" node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$TMP/out"
+    check "  … a world-readable .env fails" eq "$(status_of config.permissions)" fail
+    check "  … a misspelt key is pointed out" eq "$(status_of config.unknown)" warn
+    check "  … the gateway answers" eq "$(status_of gateway.reachable)" pass
+    check "  … an older schema than the checkout is reported" eq "$(status_of gateway.migrations)" warn
+    check "  … the ingest credential is accepted" eq "$(status_of ingest.credentials)" pass
+    check "  … the Setup checklist is relayed, labelled" grep -q '"Imprint: incomplete"' "$TMP/out"
+    check "  … a blocking checklist item fails" eq "$(status_of setup.db:ingest)" fail
+    check "  … the write budget is relayed" eq "$(status_of setup.budget)" pass
+    check "  … a LAN instance has federation off" eq "$(status_of federation.off)" pass
+    check "  … a recent backup passes" eq "$(status_of resources.backup)" pass
+    check "  … the source link passes" eq "$(status_of source.link)" pass
+    check "  … no secret appears in the report" bash -c "! grep -qE '$ING|$OPS' '$TMP/out' '$TMP/err'"
+    chmod 600 "$PD/.env"
+    env_file_set "$PD/.env" INGEST_SECRET "wrong-0123456789abcdef0123456789"
+    doctor --json || true
+    check "a wrong ingest secret fails" eq "$(status_of ingest.credentials)" fail
+    check "  … and the permissions now pass" eq "$(status_of config.permissions)" pass
+    env_file_set "$PD/.env" OPERATOR_SECRET "x-0123456789abcdef0123456789abcd"
+    doctor --json || true
+    check "a wrong operator secret leaves the checklist unread" eq "$(status_of setup.checklist)" warn
+    touch -d '30 days ago' "$TMP/backups/aprscaching-pocket-20260101T000000Z.tar.gz"
+    doctor --json || true
+    check "an old backup warns" eq "$(status_of resources.backup)" warn
+    kill "$STUB_PID" 2>/dev/null || true
+    wait "$STUB_PID" 2>/dev/null || true
+    doctor --json || true
+    check "a gateway that does not answer fails" eq "$(status_of gateway.reachable)" fail
+    STUB_SPA=1 STUB_INGEST="$ING" STUB_OPERATOR="$OPS" python3 "$HERE/fixtures/stub-gateway.py" "$PORT_STUB" &
+    STUB_PID=$!
+    for _ in $(seq 1 50); do curl -fsS "http://127.0.0.1:$PORT_STUB/" >/dev/null 2>&1 && break; sleep 0.1; done
+    env_file_set "$PD/.env" INGEST_SECRET "$ING"
+    doctor --json || true
+    check "a proxy serving the web app for /health is not the gateway" eq "$(status_of gateway.reachable)" fail
+    check "  … nor for /ingest/check" eq "$(status_of ingest.credentials)" fail
+    kill "$STUB_PID" 2>/dev/null || true
+    wait "$STUB_PID" 2>/dev/null || true
+    doctor || true
+    check "the text report counts the results" grep -qE '[0-9]+ passed, [0-9]+ warnings, [0-9]+ failed' "$TMP/out"
+  else
+    kill "$STUB_PID" 2>/dev/null || true
+    echo "skip doctor (needs Node.js to read its JSON)"
+  fi
+else
+  echo "skip doctor (needs python3 for the stub gateway)"
+fi
+check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"
+check "  … 4.36 too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.36 4 35 t"
+check "  … 4.35s is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35s 4 35 t"
+check "  … 4.34z is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.34z 4 35 t"
+if have python3; then
+  check "the checklist is read without node, with python3" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/doctor.sh';
+    have() { [ \"\$1\" != node ] && command -v \"\$1\" >/dev/null; };
+    doc_setup_items '{\"items\":[{\"key\":\"k\",\"label\":\"L\",\"level\":\"blocking\",\"status\":\"ok\",\"detail\":\"d\"}]}' | grep -q \$'k\tblocking\tok\tL: d'"
+fi
+
 if [ "$FAILED" = 0 ]; then echo; echo "all helper checks passed"; else echo; echo "helper checks FAILED"; exit 1; fi

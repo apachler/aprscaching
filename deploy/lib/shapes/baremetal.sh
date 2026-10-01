@@ -6,6 +6,7 @@
 # creating the install directory, installing the two units, and enabling them. Everything else (the
 # checkout, the dependencies, the build, the .env) runs as the service user.
 # shellcheck shell=bash
+# shellcheck disable=SC2034 # DOC_* is the doctor context, read by deploy/lib/doctor.sh
 
 BM_DIR="${APRSCACHING_BAREMETAL_DIR:-/opt/aprscaching}"
 BM_USER="aprscaching"
@@ -159,6 +160,8 @@ shape_init() {
   [ "$APRS_INTERACTIVE" = 1 ] || opts+=(--non-interactive)
   [ "$APRS_ASSUME_YES" = 1 ] && opts+=(--yes)
   bm_user bash "$BM_DIR/deploy/setup.sh" "${opts[@]}" "${setup[@]+"${setup[@]}"}"
+  # The ingest reaches the gateway on this host, not by the Docker stack's service name.
+  bm_user sed -i "s|^INGEST_URL=.*|INGEST_URL=http://127.0.0.1:$BM_PORT/ingest|" "$SHAPE_ENV"
   bm_user chmod 600 "$SHAPE_ENV"
 
   step "systemd units"
@@ -213,6 +216,33 @@ bm_next_steps() {
   info "2. Verify your call: ${run}verify-call.mjs ${call:-<CALL>}'"
   info "3. Finish: Instance admin -> Setup lists what is left to configure."
   case "$url" in https://*) info "Your reverse proxy forwards $url to http://127.0.0.1:$BM_PORT." ;; esac
+}
+
+# doctor: the gateway on this host, its database under the install directory.
+shape_doctor_context() {
+  local dir port
+  dir="$(dirname "$(dirname "$SHAPE_ENV")")"
+  port="$(sed -n 's/^Environment=PORT=//p' "$BM_UNIT_DIR/aprscaching-gateway.service" 2>/dev/null)"
+  DOC_ENV="$SHAPE_ENV"
+  DOC_BASE="http://127.0.0.1:${port:-$BM_PORT}"
+  DOC_PUBLIC="$(env_file_get "$SHAPE_ENV" APP_URL)"
+  DOC_INGEST="$(env_file_get "$SHAPE_ENV" INGEST_URL)"
+  DOC_INGEST="${DOC_INGEST:-$DOC_BASE/ingest}"
+  DOC_DATA_DIR="$dir/data"
+  DOC_DB_FILE="$dir/data/aprscaching.db"
+  DOC_BACKUP_SETTINGS=1
+}
+
+shape_doctor_extra() {
+  local unit state
+  for unit in $BM_UNITS; do
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    if [ "$state" = active ]; then pass "service.$unit" "$unit is running"; else
+      failc "service.$unit" "$unit is ${state:-not installed}" "sudo systemctl enable --now $unit; journalctl -u $unit -n 50"
+    fi
+  done
+  case "$DOC_INGEST" in http://gateway:*) failc ingest.url "INGEST_URL names the Docker service 'gateway', which bare metal has not" \
+    "set INGEST_URL=$DOC_BASE/ingest in $DOC_ENV" ;; esac
 }
 
 shape_status() {
