@@ -3,8 +3,8 @@
 What actually **shipped** is in [`CHANGELOG.md`](CHANGELOG.md) and the product manual under
 [`docs/`](docs/). This file holds two lists: the short **launch list** of what remains before the
 1.0.0 tag, and below it the honest list of what is *intentionally* left for after it — and **why**
-each piece waits. It's a live checklist: boxes get ticked as items land, and nothing here is a known
-defect (the pre-launch hardening pass closed those).
+each piece waits. It's a live checklist: boxes get ticked as items land. Nothing here is a known defect — defects
+are fixed, not listed.
 
 Each item carries a rough **priority · size** where useful — `P1`–`P3` (higher = sooner) and
 `S`/`M`/`L` (effort). Deferred work is grouped by *why* it waits, not by area.
@@ -148,13 +148,12 @@ The inversion of the transport work above: today the box *consumes* protocols; t
 it also *serve* them, so third-party packet software uses our box as its TNC/driver (the TFPCX
 role, over TCP/pty instead of a DOS TSR) — and drives every kind of shack hardware underneath.
 One radio, many applications: every app sees RX, the hub arbitrates TX, and the platform ingest
-taps everything that flows through. Owner decisions 2026-07: all-three southbound servers (1c),
-TNC2 emulation in (2a), shared arbitration (3a), hardware tier 1 through PACTOR (4c), full rig
-program incl. re-export (5c), full PTT set (6a), GPS in (7a), separate hub daemon (8b), weekly
-client-conformance legs (9a), fringe hardware as tier 3 (10a).
+taps everything that flows through. Decided scope: all three southbound servers, TNC2 emulation,
+shared arbitration, hardware tier 1 through PACTOR, the full rig program including re-export, the full
+PTT set, GPS, a separate hub daemon, weekly client-conformance legs, and fringe hardware as tier 3.
 
 **Architecture** — new `packages/hub` (pure protocol/driver cores, unit-testable) + a separate
-hub daemon process shipped in the same box image next to the ingest process (8b): crash-isolated,
+hub daemon process shipped in the same box image next to the ingest process: crash-isolated,
 restartable, talks to ingest over the existing local seam. MIT-clean like the other packages.
 
 **Southbound servers (what 3rd-party software connects to):**
@@ -166,8 +165,8 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **WA8DED/TF hostmode server over TCP + pty** *(P1 · M)* — the literal TFPCX/TFKISS role for
   Paxon/LinKT-class software: channel polling, monitor headers, autobaud prompt on the pty.
 - [ ] **TNC2 command-mode emulation (`cmd:`) on telnet + pty** *(P2 · M)* — vintage terminal
-  programs get the classic prompt: C/D/MHEARD/MYCALL against our real stack (2a).
-- [ ] **Channel arbitration + monitor fan-out** *(P1 · M)* — shared model (3a): every connected
+  programs get the classic prompt: C/D/MHEARD/MYCALL against our real stack.
+- [ ] **Channel arbitration + monitor fan-out** *(P1 · M)* — shared model: every connected
   app receives RX; TX serialized through a fair per-port queue with per-app budgets; session
   ownership tracked so connected-mode links stay coherent.
 
@@ -188,20 +187,20 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [ ] **Direct CAT serial drivers** *(P2 · M)* — Icom CI-V, Kenwood, Yaesu protocol families for
   zero-dependency setups.
 - [ ] **rigctld-compatible re-export server** *(P2 · M)* — the hub serves the rigctld wire
-  protocol so logging/digimode apps share the rig through us — same bridge idea as packet (5c).
+  protocol so logging/digimode apps share the rig through us — same bridge idea as packet.
 - [ ] **PTT/keying paths** *(P2 · M)* — CAT PTT, serial RTS/DTR, CM108 GPIO, Raspberry Pi GPIO;
-  one PTT abstraction with per-port assignment and TX-watchdog (6a).
+  one PTT abstraction with per-port assignment and TX-watchdog.
 - [ ] **GPS/position sources** *(P2 · S)* — gpsd client + raw NMEA serial feeding station
-  position, beaconing, and the shack map (7a).
+  position, beaconing, and the shack map.
 
-**Conformance (9a) + fringe (10a):**
+**Conformance and fringe hardware:**
 
 - [ ] **Client-side conformance legs in weekly `transports.yml`** *(P1 · M)* — the mirror image
   of the interop suite: real third-party clients dial OUR servers in CI (Direwolf as AGW/KISS
   client, `call`/axcall via kissattach against our KISS-TCP, tfkiss-driven hostmode session,
   hamlib `rigctl` against the re-export). Every server above lands with its leg.
 - [ ] **Tier-3 fringe hardware** *(P3 · L)* — Meshtastic serial/BLE, LoRa RNode, RX-only SDR via
-  rtl_tcp: roadmap-listed, attempted opportunistically after tiers 1–2 (10a).
+  rtl_tcp: roadmap-listed, attempted opportunistically after tiers 1–2.
 
 ## Native packaging
 
@@ -498,20 +497,20 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   (peaks, castles, lighthouses) for the current viewport as a switchable layer, respecting each source's
   attribution.
 - [ ] **Native Meshtastic transports at the ingest box** *(P3 · L)* — BLE and USB serial at the box, with
-  the same licensed-only rule as the node TCP API and MQTT protobuf feeds it reads today (the browser path
+  the same licensed-only rule as the node TCP API and MQTT protobuf feeds it reads (the browser path
   already does Meshtastic over Web Serial).
 - [x] **MeshCom transport** — the LoRa ham mesh through a node's ExtUDP JSON interface
   ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
   [operator guide](docs/operate/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on
   Node/Bun/workerd), the RX listener (allowlist, rate cap, dedup with RF upgrade, fan-out, direct LoRa
-  hearings attestable via `FIRST_PARTY_SITES`), and the opt-in `MeshcomSender`.
+  hearings attestable via `FIRST_PARTY_SITES`), the opt-in `MeshcomSender`, and the `meshcom_msg` box
+  command through which gateway features send via the node owner's box.
 - [ ] **MeshCom follow-ups** *(P2 · M)*, in order:
-  - a `meshcom_msg` box command so gateway features can request a send through the node owner's box
-    (the sender has no caller);
   - bench-test the MeshCom ack for radio commands (`SENDER   :ack<nnn>` handed to the hearing node) on a
     real node ([design](docs/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
+  - replies from the Messages surface to a MeshCom direct message, sent through `MeshcomSender`;
   - group messages, opt-in per group and rate-limited, if operators ask for them;
   - `rssi`/`snr` as a presence-plausibility signal alongside a direct hearing;
   - a HAMNET-hosted aggregator for several operators' nodes, each attested separately;
@@ -646,17 +645,17 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 ## Engineering-quality follow-ups (opportunistic, not defects)
 
 - [x] **Platform overlay state** — the map platform's "single-overlay" invariant (at most one top-level
-  surface open) is modelled as one `View` value (`apps/web/src/nav.ts`) instead of a boolean-per-panel
-  plus a hand-maintained close-everything list, so opening one surface cannot leave another stuck open.
+  surface open) is modelled as one `View` value (`apps/web/src/nav.ts`), so opening one surface cannot leave another
+  stuck open.
 
-- [x] **Type-aware ESLint** — a separate, slower `lint:types` job now runs `@typescript-eslint`
+- [x] **Type-aware ESLint** — a separate, slower `lint:types` job runs `@typescript-eslint`
   type-checked rules over `workers/` + `packages/` (the trust-critical surface), gating the real
   promise/assertion bug-catchers while the by-design `any` boundaries stay off. See `eslint.config.types.mjs`.
 - [x] **Burn down the lint warnings** — the fast `pnpm lint` is at **0 warnings**; keep it there (clear
   opportunistically when touching neighbouring code, never let the count grow).
 - [ ] **Tighten the type-aware warnings** *(P3 · M)* — promote `lint:types` warnings to errors rule-by-rule
   as the code is cleaned. **Done so far:** `require-await`, `unbound-method`, `no-base-to-string`, and
-  `restrict-template-expressions` are now **errors** (the legitimate exceptions — the Durable Object
+  `restrict-template-expressions` are **errors** (the legitimate exceptions — the Durable Object
   hibernation handlers must be async; a data property named `apply` — carry a documented inline disable).
   Untrusted request-body fields are coerced through `asStr()` (gateway `app.ts`) / a local equivalent
   (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
@@ -719,10 +718,10 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   endpoints (`addresses`), re-validated on load so a malformed address never rides in; the self-entry
   publishes them from `FED_ENDPOINTS`, and the signing tooling documents the field. The registry is a
   tamper-proof directory of who-is-reachable-where (addressing only, never a trust uplift).
-- [x] **Retire the JSON per-record signatures** — the CBOR fedwire frame is the only signed record
+- [x] **CBOR frames are the only signed record encoding** — the CBOR fedwire frame is the only signed record
   encoding: sync consumes `/federation/sync/<type>` exclusively, `/federation/submit` accepts only
   `application/cbor` (415 otherwise), relay feed answers always carry a CBOR page, and the JSON feeds
-  serve unsigned browse items. The stableStringify signing base survives only for standalone signed
+  serve unsigned browse items. The stableStringify signing base is used only for standalone signed
   documents (registry, key rotation, account operations, find-log device signatures).
 - [x] **44net onboarding wizard in the admin surface** — the sysop federation panel adds a peer by
   callsign (DNSSEC-validated bindings admit in one click; otherwise the resolved key is shown for an
@@ -732,7 +731,7 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   sync page per request, `deflateDict1`-compressed when negotiated) rides the existing session
   machinery; `FedSyncApp` mounts as a node service sourcing pages from the local gateway, the pull
   side delivers pages to `POST /federation/frames` into the shared trust-gated pipeline, and the
-  session driver gained ordered async command handling to support I/O-backed apps. Dialing the RF
+  session driver runs async commands in order, so I/O-backed apps work. Dialing the RF
   circuit is validate-at-deploy, like FBB forwarding.
 - [x] **Store-and-forward carrier over FBB forwarding** — complete, including the relay's packet
   leg. `encodeFedBbsBatch`/`decodeFedBbsBatch` pack signed frames into a text-safe `ACSFED` bulletin

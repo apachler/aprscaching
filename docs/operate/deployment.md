@@ -237,16 +237,16 @@ counts changed rows only (SQLite reports no index rows), so it runs low.
       generate `data/session.secret`.
     - **Desktop:** generated on first run into the data directory.
 
-### Upgrading an existing deployment
+### Operator scripts, sessions and remote boxes
 
-- **Set `OPERATOR_SECRET`** on the gateway if you run `tools/admin/verify-call.mjs`, change peer trust or
-  forwarding partners/rules from scripts, or confirm donations. Those calls authenticate with
+- **`OPERATOR_SECRET`** is needed on the gateway if you run `tools/admin/verify-call.mjs`, change peer trust
+  or forwarding partners/rules from scripts, or confirm donations. Those calls authenticate with
   `x-operator-secret`; the ingest secret does not reach them.
-- **Set `SESSION_SECRET`** on the Worker (`npx wrangler secret put SESSION_SECRET`). The Node/Bun servers
-  generate one on first start when it is unset. A session binds to its account, and a cookie without that
-  binding is not accepted, so every user signs in once after the upgrade.
-- **Pair remote boxes.** A box answers only the account it is paired to: restart the ingest box, read the
-  pairing code it prints, and enter it under **Shack → Remote box**.
+- **`SESSION_SECRET`** must be set on the Worker (`npx wrangler secret put SESSION_SECRET`); the Node/Bun
+  servers generate one on first start when it is unset. A session binds to its account, and a cookie without
+  that binding is not accepted, so changing `SESSION_SECRET` signs every user out once.
+- **Remote boxes are paired.** A box answers only the account it is paired to: the ingest box prints a
+  pairing code when it starts, which you enter under **Shack → Remote box**.
 - **Dev setups with the SPA on another origin** (`pnpm dev:web`) set `CORS_ORIGINS=http://localhost:5173`
   on the gateway; without an allowlist no cross-origin request carries a session.
 - A device key binds only through its holder's signed-in session. If an ingest secret may have leaked,

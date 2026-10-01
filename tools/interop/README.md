@@ -72,14 +72,14 @@ modules are not PR-gating dependencies).
 
 ## What this catches
 
-The local loop already caught two wire bugs on its first run: the interactive BBS answering a
-forwarding peer's SID with the human menu (fixed by the `FbbGatedBbs` responder gate), and
-hierarchical to-addresses leaking spaces into the space-delimited FB proposal line (fixed in
-`fbbFromRow` + hardened in `FbbSession`). A real FBB/BPQ partner would have hit both.
+The local loop asserts two wire properties a real FBB/BPQ partner depends on: the BBS answers a
+forwarding peer's SID with the forwarding protocol, never the human menu (the `FbbGatedBbs` responder
+gate), and hierarchical to-addresses never put spaces into the space-delimited FB proposal line
+(`fbbFromRow`, `FbbSession`).
 
-## F6FBB runbook (validated live in the sandbox)
+## F6FBB runbook
 
-The `fbb/` configs in this directory are the exact set validated against Ubuntu's `fbb` 7.011
+The `fbb/` configs in this directory are the set tested against Ubuntu's `fbb` 7.011
 package: `fbb.conf` + the telnet com in `port.sys` bring `xfbbd` up serving
 `OE9FBB BBS. TELNET Access` on :6300 with the real `[FBB-7.0.11-AHMR$]` SID
 (`tests/fbb-smoke.mjs` asserts this). First boot needs its data files created — `start.sh` answers
