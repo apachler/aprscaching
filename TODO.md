@@ -692,7 +692,7 @@ lands with a regression test that fails without it.
   on, ask for the registry authority key before any `FED_REGISTRY`/`FED_REGISTRY_DNS`, and never place a
   44net peer in `FED_PEERS` (which starts `trusted`). Waits for the next federation-hardening round, so the
   written defaults match its final settings. See
-  [`docs/reference/federation-operations.md`](docs/reference/federation-operations.md#running-federation-safely).
+  [`docs/guides/federation.md`](docs/guides/federation.md#running-federation-safely).
 - [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/operate/44net.md`](docs/operate/44net.md):
   a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
   signatures protect over plain http and what 44Net does not give, and which features work over HAMNET

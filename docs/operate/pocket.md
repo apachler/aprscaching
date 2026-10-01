@@ -242,9 +242,9 @@ bash ~/aprscaching/deploy/pocket/extras/usb-kiss.sh --setup --baud 9600    # And
 
 `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD`, `KISS_TNC_HOST=127.0.0.1` and `KISS_TNC_PORT` to the
 `.env`; `start.sh` then runs the bridge in the tmux window `usb-kiss`, which waits for the TNC and restarts
-the bridge when it is unplugged and plugged in again. Set `RF_SITE_CALL` to this station's call to name it
-as the receiving site. What the TNC hears is a local TNC's hearing like any other: it counts toward Tier A
-only once `RF_SITE_CALL` is in `FIRST_PARTY_SITES`, and your own receiver never corroborates your own finds.
+the bridge when it is unplugged and plugged in again. Set `RF_SITE_CALL` to this station's call and list it
+in `FIRST_PARTY_SITES` to make what the TNC hears count toward Tier A
+([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)).
 
 **Only CDC-ACM devices** work, since they need no driver of their own; the bridge refuses FTDI, Silicon Labs
 CP210x, WCH CH340 and Prolific chips by name.
@@ -280,9 +280,6 @@ of September 2026):
 | rtl-sdr from source | Builds (`rtl_fm`, `rtl_tcp`, `rtl_sdr`, `rtl_power`; `rtl_adsb` fails because Android's C library has no `pthread_cancel`). It **cannot open the dongle**: librtlsdr finds devices by scanning the USB bus, which Android forbids an app without root, and it has no call that takes the file descriptor `termux-usb` hands over. A patch adding one (`rtlsdr_open_fd`) was posted to the osmocom-sdr list and not merged. |
 | Direwolf from source | Does not build unmodified: it needs ALSA or OSS sound headers, which Termux does not ship. Reading audio only from stdin (`rtl_fm … \| direwolf -r 24000 -`) would need a patch. |
 | CPU, battery, heat | Not measured: nothing runs far enough to measure. |
-
-Were it to work, an SDR would be one more local receiver: what it hears counts toward Tier A only once
-`RF_SITE_CALL` is in `FIRST_PARTY_SITES`, and your own receiver never corroborates your own finds.
 
 Pocket therefore installs neither. For RF on the phone use a TNC — [on USB](#a-usb-tnc-on-the-phone), or
 [over Bluetooth in the browser](#your-radio-in-the-browser) — or a MeshCom node; for an SDR receiver run

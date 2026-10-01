@@ -25,14 +25,6 @@ instance's always-on station and are shown only to its operator.
 Your radio connection itself — receiving, forwarding and transmitting APRS — lives in
 **Settings → My radio (browser)**: see [Your radio in the browser](my-radio.md).
 
-## Live stations
-
-Turn on **Search & filter → Live layers → Live stations** to see APRS stations on the map as they are heard;
-the browser remembers the switch. Moving stations show a heading arrow. Tap a station for its page: symbol,
-speed and course, altitude, recent track, weather, and its raw packets. Signed in, **+ Add to my stations**
-puts it in your stations; a station already there shows **In your stations**, and one another operator
-registered says so.
-
 ## Packet decoder
 
 Paste a line in the usual TNC2 format, for example
@@ -56,15 +48,16 @@ follow slightly off-tune and noisy signals, and everything runs in the browser.
 The instance's BBS forwards mail with the wider packet network (FBB forwarding), and its NET/ROM node links
 with other nodes. Setting those up is the operator's job: see [Packet BBS & node](../operate/packet.md).
 
-## Remote box and spots
+## Remote box
 
-- **Remote box** (operator) — send commands to the instance's ingest box from the web app. The box collects
-  them over its own outbound connection, so it needs no open port. Link the box once by entering the pairing
-  code it prints when it starts; each command's result appears in the command log. Transmit commands need a
-  verified callsign, and the box must allow remote transmit. Setting up the box is covered in
-  [Remote control of your box](../operate/administration.md#remote-control-of-your-box).
-- **Spots** — when the operator enables them, POTA and SOTA activations (and DX-cluster, RBN and
-  PSKReporter spots) appear on the map; filter them under **Search & filter → Live layers**.
+**Remote box** (operator) sends commands to the instance's ingest box from the web app. The box collects
+them over its own outbound connection, so it needs no open port. Link the box once by entering the pairing
+code it prints when it starts; each command's result appears in the command log. Transmit commands need a
+verified callsign, and the box must allow remote transmit. Setting up the box is covered in
+[Remote control of your box](../operate/administration.md#remote-control-of-your-box).
+
+Live stations and activity spots are map layers: see [Caching → Live stations and spots](caching.md#live-stations-and-spots).
+
 
 ## Tools and plugins
 

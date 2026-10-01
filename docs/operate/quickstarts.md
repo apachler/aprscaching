@@ -86,11 +86,9 @@ KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
 5. Check: the `kiss-tnc` port counts packets.
 6. **Make it count for find verification** (optional): set `RF_SITE_CALL=OE8APR-10` on the box — the
    callsign that names this receiver — and add the same call to `FIRST_PARTY_SITES` on the gateway. Frames
-   your radio hears **directly** (not through a digipeater) then count as radio-verified evidence
-   (**tier A**) for other people's finds, even with no internet. Your own finds never do: your own receiver
-   is not an independent witness. With an IGate configured, `IGATE_CALL` is used when `RF_SITE_CALL` is
-   not set. The same works for an AGWPE or host-mode TNC. Set it only for a TNC you operate — not when
-   `KISS_TNC_HOST` points at someone else's station.
+   your radio hears **directly** then count toward **tier A** for other people's finds, never your own
+   ([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)). With an IGate configured, `IGATE_CALL` is used when `RF_SITE_CALL` is not
+   set. The same works for an AGWPE or host-mode TNC. Set it only for a TNC you operate.
 
 Receiving alone never transmits. The box transmits over KISS only when you enable a digipeater, IGate,
 node or BBS forwarding below.
@@ -134,11 +132,9 @@ also needs PTT.
    log `[igate] TX->RF message for …`.
 3. **Make it count for find verification**: on the gateway, set `FIRST_PARTY_SITES=OE8APR-10`. The box
    names `IGATE_CALL` as the receiving site of every frame it hears directly, so those frames can reach
-   **tier A** right away — except for your own finds, because your own receiver is not an independent
-   witness. The copies the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) are never attested, not even
-   when they come back through the box's [APRS-IS feed](#aprs-is-internet-feed): anyone with a passcode can
-   send such a line. Only the box's own direct hearings count, so an IGate you want counted must run this
-   box.
+   **tier A**. The copies the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) never count, not even when
+   they come back through the box's [APRS-IS feed](#aprs-is-internet-feed) — see
+   [Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a).
 
 The IGate only sends messages to RF for stations heard locally in the last 30 minutes
 (`IGATE_LOCAL_TTL`) and honours `NOGATE`/`RFONLY`. Read [Amateur-radio compliance](rf-regulatory.md) first:

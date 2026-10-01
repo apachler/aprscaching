@@ -73,34 +73,35 @@ nav:
       - Caching: guides/caching.md
       - Your radio in the browser: guides/my-radio.md
       - The Shack: guides/shack.md
-      - Federation: guides/federation.md
+      - Rig control & weather: operate/rig-weather.md
   - Core concepts: concepts.md
   - Glossary: glossary.md
   - Operating an instance:
       - Deployment: operate/deployment.md
       - Running in Docker: operate/docker.md
-      - Run an instance on 44Net: operate/44net.md
       - "Pocket: a station on a phone": operate/pocket.md
       - Your first hour as sysop: operate/first-hour.md
       - "Connect a radio: quick starts": operate/quickstarts.md
       - RF ingest & transports: operate/rf-ingest.md
       - MeshCom: operate/meshcom.md
       - Packet BBS & node: operate/packet.md
-      - Rig control & weather: operate/rig-weather.md
       - Amateur-radio compliance: operate/rf-regulatory.md
       - Administration: operate/administration.md
+      - Federation: guides/federation.md
+      - Run an instance on 44Net: operate/44net.md
   - Reference:
-      - Run from source: getting-started.md
       - HTTP API: reference/api.md
-      - Federation wire format: reference/federation-wire.md
-      - Federation operations: reference/federation-operations.md
       - Configuration: reference/configuration.md
+      - Cloudflare D1 costs: reference/cloudflare-costs.md
       - Command-line tools: reference/cli.md
-      - Licence registers: reference/licence-sources.md
-      - Testing & verification: reference/testing.md
-      - Specification registry: reference/specs.md
+      - Federation wire format: reference/federation-wire.md
       - MeshCom ExtUDP protocol: reference/meshcom-extudp.md
+      - Licence registers: reference/licence-sources.md
+  - Develop & contribute:
+      - Run from source: getting-started.md
+      - Testing & verification: reference/testing.md
       - Data model: reference/data-model.md
+      - Specification registry: reference/specs.md
   - Design notes:
       - MeshCom integration: design/meshcom.md
       - Logging finds over radio messages: design/radio-find-logging.md
