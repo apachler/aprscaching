@@ -26,6 +26,7 @@
  * can send, so the gateway only routes answers here while it can deliver them.
  */
 import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
+import { TokenBucket } from "./txlimit.js";
 
 /** What the box can transmit through — the KISS TNC's UI-frame send. */
 export interface BoxRadio {
@@ -86,7 +87,7 @@ export interface BoxPollerOpts {
   tocall?: string;
   maxAgeSec?: number;
   pollMs?: number;
-  /** Token bucket for remote transmits: `burst` tokens, one refilled every `refillSec`. */
+  /** Token bucket for remote transmits: `burst` tokens, one refilled every `refillSec` (`BOX_TX_BURST`, `BOX_TX_REFILL_SEC`). */
   burst?: number;
   refillSec?: number;
   fetch?: typeof fetch;
@@ -115,8 +116,7 @@ function onFlag(payload: unknown): boolean | null {
 const fmtState = (v: boolean | null) => (v == null ? "n/a" : v ? "on" : "off");
 
 export class BoxPoller {
-  private tokens: number;
-  private refilledAt: number;
+  private bucket: TokenBucket;
   private pendingAcks: { id: number; status: string; result: string }[] = [];
   private timer?: ReturnType<typeof setInterval>;
   private inFlight = false;
@@ -131,8 +131,7 @@ export class BoxPoller {
     this.now = o.now ?? (() => Date.now());
     this.fetch = o.fetch ?? fetch;
     this.log = o.log ?? ((m) => console.log(m));
-    this.tokens = o.burst ?? 3;
-    this.refilledAt = this.now();
+    this.bucket = new TokenBucket({ burst: o.burst ?? 3, refillSec: o.refillSec ?? 60, now: this.now });
     this.startedAt = this.now();
   }
 
@@ -229,19 +228,13 @@ export class BoxPoller {
     }
   }
 
-  private takeToken(): boolean {
-    const refill = (this.o.refillSec ?? 60) * 1000;
-    const burst = this.o.burst ?? 3;
-    const t = this.now();
-    const gained = Math.floor((t - this.refilledAt) / refill);
-    if (gained > 0) {
-      this.tokens = Math.min(burst, this.tokens + gained);
-      this.refilledAt += gained * refill;
-    }
-    if (this.tokens >= burst) this.refilledAt = t; // a full bucket banks no extra time
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
-    return true;
+  /** Spend a remote-transmit token; the refusal says when the next one is due. */
+  private rateLimited(): BoxResult | null {
+    if (this.bucket.take()) return null;
+    return {
+      status: "failed",
+      result: `rate limited — too many remote transmits, try again in ${this.bucket.waitSec()} s`,
+    };
   }
 
   /** What this box can transmit, reported with every poll so the gateway routes answers only here when deliverable. */
@@ -282,7 +275,8 @@ export class BoxPoller {
     if (gate) return gate;
     if (!this.o.boxCall) return fail("no station call configured on this box (set BOX_CALL)");
     if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC)");
-    if (!this.takeToken()) return fail("rate limited — too many remote transmits, try again in a minute");
+    const limited = this.rateLimited();
+    if (limited) return limited;
     const tocall = this.o.tocall ?? "APZACG";
     const call = this.o.boxCall.toUpperCase();
     const ok = this.o.radio.send({
@@ -332,7 +326,8 @@ export class BoxPoller {
     if (cmd.createdAt != null && this.now() / 1000 - cmd.createdAt > maxAge)
       return fail(`expired — queued more than ${Math.round(maxAge / 60)} min ago`);
     if (!this.o.radio) return fail("no RF transmitter on this box (configure a KISS TNC)");
-    if (!this.takeToken()) return fail("rate limited — too many remote transmits, try again in a minute");
+    const limited = this.rateLimited();
+    if (limited) return limited;
     return { src };
   }
 

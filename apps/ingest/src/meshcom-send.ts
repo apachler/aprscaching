@@ -15,15 +15,16 @@ import dgram from "node:dgram";
 import { appendFile } from "node:fs/promises";
 import { encodeMeshcomText, type MeshcomEncodeReason } from "@aprscaching/aprs";
 import { MESHCOM_PORT, type MeshcomNode } from "./meshcom.js";
+import { TokenBucket } from "./txlimit.js";
 
 export interface MeshcomSenderOpts {
   enabled: boolean;
   /** The licensed operator's callsign; must match the target node's call (base call, any SSID). */
   operatorCall?: string;
   nodes: MeshcomNode[];
-  /** Sustained sends per minute (default 1) and burst (default 3). */
-  perMinute?: number;
+  /** Token bucket: `burst` sends at once (default 3), one more every `refillSec` (default 60). */
   burst?: number;
+  refillSec?: number;
   /** JSON-lines audit file; unset = audit to the log only. */
   auditPath?: string;
   port?: number;
@@ -66,8 +67,7 @@ type SendFn = (datagram: string, port: number, host: string) => Promise<void>;
 const baseCall = (c: string) => c.trim().toUpperCase().split("-")[0]!;
 
 export class MeshcomSender {
-  private tokens: number;
-  private at: number;
+  private bucket: TokenBucket;
   private sock?: dgram.Socket;
 
   constructor(
@@ -78,23 +78,11 @@ export class MeshcomSender {
       audit?: (e: MeshcomAuditEntry) => Promise<void> | void;
     } = {},
   ) {
-    this.tokens = o.burst ?? 3;
-    this.at = this.now();
+    this.bucket = new TokenBucket({ burst: o.burst ?? 3, refillSec: o.refillSec ?? 60, now: () => this.now() });
   }
 
   private now() {
     return this.deps.now?.() ?? Date.now();
-  }
-
-  private take(): boolean {
-    const burst = this.o.burst ?? 3;
-    const perMs = (this.o.perMinute ?? 1) / 60_000;
-    const now = this.now();
-    this.tokens = Math.min(burst, this.tokens + (now - this.at) * perMs);
-    this.at = now;
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
-    return true;
   }
 
   private async audit(req: MeshcomSendRequest, node: string | null, bytes: number | null, outcome: string) {
@@ -132,7 +120,7 @@ export class MeshcomSender {
 
     const enc = encodeMeshcomText(req.dst, req.text);
     if (!enc.ok) return refuse(enc.reason, node.ip);
-    if (!this.take()) return refuse("rate-limited", node.ip, enc.bytes);
+    if (!this.bucket.take()) return refuse("rate-limited", node.ip, enc.bytes);
 
     try {
       await this.sendDatagram(enc.datagram, this.o.port ?? MESHCOM_PORT, node.ip);

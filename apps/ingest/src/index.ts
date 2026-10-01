@@ -8,6 +8,7 @@ import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
+import { txLimitFromEnv } from "./txlimit.js";
 import type { BoxRadio, BoxState } from "./boxpoll.js";
 
 loadDotEnv(); // `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
@@ -177,6 +178,7 @@ if (env.KISS_TNC_HOST) {
       filter: env.IGATE_FILTER,
       localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
       canTx: () => station.tx && station.igate === true,
+      ...txLimitFromEnv("igate"),
     });
     station.igate = true;
     frameSubs.push((f) => {
@@ -214,6 +216,7 @@ if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
     operatorCall,
     nodes,
     auditPath: env.MESHCOM_TX_AUDIT || undefined,
+    ...txLimitFromEnv("meshcom"),
   });
   meshcomTx = { nodes, send: (req) => sender.send(req) };
   console.log(`[meshcom] transmit enabled as ${operatorCall ?? "? (set MESHCOM_TX_CALL)"}`);
@@ -361,6 +364,7 @@ if (env.BBS_FORWARD === "1" && env.BBS_FORWARD_CALL && (env.KISS_TNC_HOST || axu
     pollMs: numEnv("BBS_FORWARD_POLL_MS", 60000, { min: 1000 }),
     sid: env.BBS_FORWARD_SID,
     compress: env.BBS_FORWARD_COMPRESS === "1",
+    ...txLimitFromEnv("bbs"),
   });
   console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
 }
@@ -384,6 +388,7 @@ if (env.BOX_ID) {
     path: parseBoxPath(env.BOX_TX_PATH),
     maxAgeSec: numEnv("BOX_CMD_MAX_AGE", 900, { min: 30 }),
     pollMs: numEnv("BOX_POLL_MS", 5000, { min: 1000 }),
+    ...txLimitFromEnv("box"),
   }).start();
   console.log(
     `[box] remote control active as ${env.BOX_ID} (remote transmit ${env.BOX_TX === "1" ? `allowed as ${boxCall ?? "?"}` : "disabled"})`,

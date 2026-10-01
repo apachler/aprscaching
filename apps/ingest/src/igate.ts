@@ -4,6 +4,7 @@ import { parseTNC2, shouldRxIgate, rxIgateLine, txIgateTarget } from "@aprscachi
 import type { ParsedFrame } from "@aprscaching/aprs";
 import type { KissTnc } from "./kiss.js";
 import { Backoff } from "./backoff.js";
+import { TokenBucket } from "./txlimit.js";
 
 export interface IgateOpts {
   host: string;
@@ -15,6 +16,10 @@ export interface IgateOpts {
   retryMs?: number;
   idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
   canTx?: () => boolean; // runtime RF-transmit switch for the APRS-IS -> RF direction (default always on)
+  /** Token bucket for the APRS-IS -> RF direction (`IGATE_TX_BURST`, `IGATE_TX_REFILL_SEC`). */
+  burst?: number;
+  refillSec?: number;
+  now?: () => number;
 }
 
 const base = (c: string) => c.split("-")[0]!.toUpperCase();
@@ -35,6 +40,7 @@ export class Igate {
   private timer?: ReturnType<typeof setTimeout>;
   private backoff: Backoff;
   private sweep?: ReturnType<typeof setInterval>;
+  private bucket: TokenBucket;
 
   constructor(
     private kiss: KissTnc,
@@ -42,6 +48,7 @@ export class Igate {
   ) {
     this.localTtl = (o.localTtlSec ?? 1800) * 1000;
     this.backoff = new Backoff({ baseMs: o.retryMs ?? 3000 });
+    this.bucket = new TokenBucket({ burst: o.burst ?? 6, refillSec: o.refillSec ?? 10, now: o.now });
   }
 
   start(): void {
@@ -65,6 +72,24 @@ export class Igate {
     const t = this.heard.get(base(cs));
     return !!t && Date.now() - t < this.localTtl;
   };
+
+  /**
+   * One APRS-IS line for the TX-IGate direction: a message for a station heard locally is gated to RF,
+   * paced by the token bucket. A message refused by the bucket is logged and not queued — APRS messaging
+   * retries an unacknowledged message itself, so a later retry gets through once a token is back.
+   */
+  onIsLine(line: string): void {
+    const f = parseTNC2(line);
+    if (!f) return;
+    const addr = txIgateTarget(f, this.o.call, this.heardLocally);
+    if (!addr || !(this.o.canTx?.() ?? true)) return;
+    if (!this.bucket.take()) {
+      console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
+      return;
+    }
+    if (this.kiss.send({ src: f.src, dst: f.dst, path: [`${this.o.call}*`], payload: f.payload }))
+      console.log(`[igate] TX->RF message for ${addr}`);
+  }
 
   private sendIs(line: string): void {
     if (this.ready && this.sock) {
@@ -111,15 +136,7 @@ export class Igate {
         const line = this.buf.slice(0, i).replace(/\r$/, "");
         this.buf = this.buf.slice(i + 1);
         if (!line || line.startsWith("#")) continue;
-        const f = parseTNC2(line);
-        if (!f) continue;
-        const addr = txIgateTarget(f, this.o.call, this.heardLocally);
-        if (
-          addr &&
-          (this.o.canTx?.() ?? true) &&
-          this.kiss.send({ src: f.src, dst: f.dst, path: [`${this.o.call}*`], payload: f.payload })
-        )
-          console.log(`[igate] TX->RF message for ${addr}`);
+        this.onIsLine(line);
       }
     });
     s.on("error", () => {

@@ -91,6 +91,8 @@ export interface ForwarderOpts {
   now?: () => number;
   sessionTimeoutMs?: number;
   connectTimeoutMs?: number;
+  /** Transmit pacing: false defers a due partner to a later tick instead of opening a session now. */
+  admit?: (p: GwPartner) => boolean;
 }
 
 export class BbsForwarder {
@@ -126,6 +128,7 @@ export class BbsForwarder {
     for (const p of partners.filter((x) => x.proto === "rf-fbb" || x.proto === "axudp")) {
       if (this.busy.has(p.call)) continue;
       if (!partnerDue(p, this.lastRun.get(p.call) ?? null, nowSec)) continue;
+      if (this.o.admit && !this.o.admit(p)) continue; // stays due, so a later tick picks it up
       this.lastRun.set(p.call, nowSec);
       this.busy.add(p.call);
       try {

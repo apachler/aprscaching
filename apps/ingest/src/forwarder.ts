@@ -12,6 +12,7 @@
 import net from "node:net";
 import { kissWrap, kissFrames } from "@aprscaching/aprs";
 import type { FrameLink } from "./link.js";
+import { TokenBucket } from "./txlimit.js";
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprscaching/ax25";
 import {
   BbsForwarder,
@@ -105,6 +106,19 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
   };
 }
 
+/**
+ * The forwarding session gate. Pacing is per session, never per frame: throttling frames inside an open
+ * AX.25 link would stall it into retries and a failed exchange. A partner refused here stays due and is
+ * tried again on the next scheduler tick.
+ */
+export function forwardAdmit(bucket: TokenBucket): (p: GwPartner) => boolean {
+  return (p) => {
+    if (bucket.take()) return true;
+    console.warn(`[forward] rate limited — session with ${p.call} deferred (next in ${bucket.waitSec()} s)`);
+    return false;
+  };
+}
+
 /** Build + start a forwarder from env config (a KISS-TCP or shared frame link + the gateway pool). */
 export function startForwarder(o: {
   base: string;
@@ -115,6 +129,9 @@ export function startForwarder(o: {
   pollMs?: number;
   sid?: string;
   compress?: boolean; // offer LZHUF-B1 compressed forwarding (engages only when the partner also does)
+  /** Session pacing (`BBS_FORWARD_BURST`, `BBS_FORWARD_REFILL_SEC`): each session keys the transmitter. */
+  burst?: number;
+  refillSec?: number;
 }): BbsForwarder {
   const fwd = new BbsForwarder({
     api: new GatewayApi(o.base, o.secret),
@@ -131,6 +148,7 @@ export function startForwarder(o: {
     pollMs: o.pollMs,
     sid: o.sid,
     compress: o.compress,
+    admit: forwardAdmit(new TokenBucket({ burst: o.burst ?? 4, refillSec: o.refillSec ?? 300 })),
   });
   fwd.start();
   return fwd;

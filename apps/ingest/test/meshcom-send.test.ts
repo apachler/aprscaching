@@ -75,7 +75,7 @@ describe("MeshCom sender — scope and encoding", () => {
 
 describe("MeshCom sender — rate limit and audit", () => {
   it("caps a burst and refills at the configured rate", async () => {
-    const { s, sent, clock } = make({ perMinute: 1, burst: 3 });
+    const { s, sent, clock } = make({ refillSec: 60, burst: 3 });
     const results = [];
     for (let i = 0; i < 10; i++) results.push((await s.send(req())).ok);
     expect(results.filter(Boolean)).toHaveLength(3);
