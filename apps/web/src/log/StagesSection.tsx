@@ -27,6 +27,7 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
   const [stages, setStages] = useState<CacheStage[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const loc = useLocate();
 
@@ -47,8 +48,13 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
         const r = await unlockStage(props.cacheId, stageNo, props.callsign, appGeo, unlockCode);
         if (r.unlocked) {
           setCode("");
+          setNote(
+            r.offline ? "Unlocked from your offline pack; the instance confirms it when you are back online." : null,
+          );
           load();
-        } else if (r.reason === "too_far") setErr(`Too far — ${fmt.distance(r.distanceM ?? 0)} away.`);
+        } else if (r.reason === "needs_connection")
+          setErr("This stage unlocks online: the instance checks it. Try again with a connection.");
+        else if (r.reason === "too_far") setErr(`Too far — ${fmt.distance(r.distanceM ?? 0)} away.`);
         else if (r.reason === "bad_code") setErr("That tag/code doesn't match this stage.");
         else if (r.reason === "no_code") setErr("Scan the NFC tag or enter its code.");
         else setErr("Not unlocked yet.");
@@ -203,6 +209,11 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
         ))}
       </ol>
       <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
+      {note && (
+        <p className="inline-note" role="status">
+          {note}
+        </p>
+      )}
       {err && <p className="error">{err}</p>}
     </div>
   );

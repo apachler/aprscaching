@@ -50,6 +50,7 @@ export type {
   Spot,
 };
 import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
+import { openSealedStage, type StagePayload } from "@aprscaching/shared";
 import { offlineStore, type OfflineStore } from "./offline/store.js";
 import { packCache, packCachesInBox, saveAutoArea, type OfflineSource } from "./offline/packs.js";
 import { imageKey } from "./offline/download.js";
@@ -1088,26 +1089,106 @@ export function deleteForwardRule(id: number): Promise<{ ok: boolean }> {
 // ---- audio-cache: staged multi-cache ----
 import type { CacheStage } from "@aprscaching/shared";
 export type { CacheStage };
-export function getStages(cacheId: number, callsign?: string): Promise<{ stages: CacheStage[] }> {
-  return call(`/api/caches/${cacheId}/stages${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
+// ---- stages offline: the published start and the NFC stages a pack carries sealed (stageseal.ts) ----
+const STAGE_UNLOCKS_KEY = "acs.stages.unlocked";
+type LocalUnlocks = Record<string, StagePayload>;
+async function localUnlocks(): Promise<LocalUnlocks> {
+  try {
+    return JSON.parse((await (await offlineReady()).kvGet(STAGE_UNLOCKS_KEY)) ?? "{}") as LocalUnlocks;
+  } catch {
+    return {};
+  }
 }
-export function unlockStage(
+
+/**
+ * A cache's stages; without a connection, as its offline pack knows them: the published start, every stage
+ * this phone unlocked offline, and the rest locked (an NFC stage the pack carries sealed can be unlocked by
+ * scanning its tag).
+ */
+export async function getStages(
+  cacheId: number,
+  callsign?: string,
+): Promise<{ stages: (CacheStage & { offline?: boolean })[] }> {
+  try {
+    return await call(`/api/caches/${cacheId}/stages${callsign ? `?callsign=${encodeURIComponent(callsign)}` : ""}`);
+  } catch (e) {
+    if (!isOffline(e)) throw e;
+    const hit = await packCache(await offlineReady(), cacheId);
+    if (!hit) throw e;
+    const unlocks = await localUnlocks();
+    return {
+      stages: hit.cache.stages.map((s) => {
+        const known = s.open ?? unlocks[`${cacheId}:${s.stageNo}`];
+        return {
+          stageNo: s.stageNo,
+          unlock: s.unlock as CacheStage["unlock"],
+          clue: known?.clue ?? null,
+          mediaUrl: known?.mediaUrl ?? null,
+          radiusM: 60,
+          unlocked: !!known,
+          lat: known?.lat ?? null,
+          lon: known?.lon ?? null,
+          // can this stage be unlocked here, without a connection?
+          offline: !!s.sealed,
+        };
+      }),
+    };
+  }
+}
+
+/**
+ * Unlock a stage. Without a connection, an NFC stage the pack carries sealed opens with its tag code on the
+ * phone; the unlock is kept here and queued, and the instance confirms it on sync (log/logQueue.ts). Any
+ * other stage answers `needs_connection`.
+ */
+export async function unlockStage(
   cacheId: number,
   stageNo: number,
   callsign: string,
   appGeo?: AppGeo,
   code?: string,
-): Promise<{ unlocked: boolean; lat?: number; lon?: number; reason?: string; distanceM?: number }> {
-  return call(`/api/caches/${cacheId}/stages/${stageNo}/unlock`, {
-    method: "POST",
-    body: JSON.stringify({ callsign, appGeo, code }),
-  });
+): Promise<{ unlocked: boolean; lat?: number; lon?: number; reason?: string; distanceM?: number; offline?: boolean }> {
+  try {
+    return await call(`/api/caches/${cacheId}/stages/${stageNo}/unlock`, {
+      method: "POST",
+      body: JSON.stringify({ callsign, appGeo, code }),
+    });
+  } catch (e) {
+    if (!isOffline(e)) throw e;
+    const store = await offlineReady();
+    const hit = await packCache(store, cacheId);
+    const stage = hit?.cache.stages.find((s) => s.stageNo === stageNo);
+    if (!hit || !stage) throw e;
+    if (stage.unlock !== "nfc" || !stage.sealed) return { unlocked: false, reason: "needs_connection" };
+    if (!code?.trim()) return { unlocked: false, reason: "no_code" };
+    const payload = await openSealedStage(code, stage.sealed);
+    if (!payload) return { unlocked: false, reason: "bad_code" };
+    const unlocks = await localUnlocks();
+    unlocks[`${cacheId}:${stageNo}`] = payload;
+    await store.kvSet(STAGE_UNLOCKS_KEY, JSON.stringify(unlocks));
+    const instance = await getInstance();
+    await enqueue(
+      queueStore,
+      {
+        cacheId,
+        kind: "unlock",
+        stageNo,
+        body: { loggerCall: callsign, logType: "unlock", code: code.trim() },
+        label: hit.cache.code,
+        ...(instance && { instance }),
+      },
+      Date.now(),
+    );
+    queueChanged();
+    void askForBackgroundSync(instance);
+    return { unlocked: true, lat: payload.lat ?? undefined, lon: payload.lon ?? undefined, offline: true };
+  }
 }
 export function setStages(
   cacheId: number,
   ownerCall: string,
   stages: Array<Partial<CacheStage> & { stageNo: number; secret?: string }>,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; offline: { stageNo: number; offline: boolean; reason?: string }[] }> {
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
 /** Absolute URL for a media clue path returned by the API. */
@@ -1306,6 +1387,8 @@ export interface AuthorSig {
   signedAt: number;
 }
 export type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
+/** What the offline queue holds: a log, or a stage unlocked offline (with the code that opened it). */
+export type QueueBody = Omit<LogBody, "logType"> & { logType: LogType | "unlock"; code?: string };
 
 // ---- offline-tolerant logging: queue a log if the network is down, sync when back (log/logQueue.ts) ----
 // The queue lives in the offline store (IndexedDB), where the service worker can reach it as well.
@@ -1336,8 +1419,8 @@ export function logFind(cacheId: number, body: LogBody, label?: string): Promise
   );
 }
 
-export const queuedLogs = (): Promise<QueuedLog<LogBody>[]> => loadQueue<LogBody>(queueStore);
-export const attentionLogs = (): Promise<AttentionLog<LogBody>[]> => loadAttention<LogBody>(queueStore);
+export const queuedLogs = (): Promise<QueuedLog<QueueBody>[]> => loadQueue<QueueBody>(queueStore);
+export const attentionLogs = (): Promise<AttentionLog<QueueBody>[]> => loadAttention<QueueBody>(queueStore);
 
 /**
  * Send the queued logs that are due (the signature and its time are kept, so the instance verifies each
@@ -1350,14 +1433,21 @@ export function flushLogQueue(): Promise<FlushResult> {
 async function flushUnlocked(): Promise<FlushResult> {
   if (!(await queuedLogs()).length) return { sent: 0, refused: 0 };
   const instance = (await getInstance()) || undefined;
-  const res = await flush<LogBody>(
+  const res = await flush<QueueBody>(
     queueStore,
     async (it) => {
       try {
-        await call(`/api/caches/${it.cacheId}/logs`, {
-          method: "POST",
-          body: JSON.stringify({ ...it.body, offline: true }),
-        });
+        if (it.kind === "unlock")
+          // a stage unlocked offline from a pack: the instance checks the code and records it
+          await call(`/api/caches/${it.cacheId}/stages/${it.stageNo}/unlock`, {
+            method: "POST",
+            body: JSON.stringify({ callsign: it.body.loggerCall, code: it.body.code }),
+          });
+        else
+          await call(`/api/caches/${it.cacheId}/logs`, {
+            method: "POST",
+            body: JSON.stringify({ ...it.body, offline: true }),
+          });
       } catch (e) {
         if (isOffline(e)) throw { kind: "offline" } satisfies SendFailure;
         const status = e instanceof ApiError ? e.status : 0;

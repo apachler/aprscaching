@@ -27,6 +27,12 @@ export interface QueuedLog<B extends QueuedBody = QueuedBody> {
   label?: string;
   /** The instance the log was signed for: it is sent there and nowhere else (the signature names it). */
   instance?: string;
+  /**
+   * What the entry is: a log (the default), or a stage unlock made offline from a pack, which the instance
+   * confirms on sync like any other (`stageNo`; the body carries the scanned code).
+   */
+  kind?: "log" | "unlock";
+  stageNo?: number;
   /** When the log entered the queue (ms). */
   queuedAt: number;
   /** Failed sends that count toward the backoff. */

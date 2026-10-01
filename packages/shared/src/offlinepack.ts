@@ -8,6 +8,7 @@
  * The limits and the locator arithmetic live here so the gateway and the app agree.
  */
 import type { CacheLogEntry, CacheSummary, MapCache } from "./dto.js";
+import type { SealedStage, StagePayload } from "./stageseal.js";
 
 /** At most this many caches in one pack; a larger area is refused with its count. */
 export const PACK_MAX_CACHES = 5000;
@@ -45,8 +46,13 @@ export interface PackCache
   description: string | null;
   createdAt: number | null;
   updatedAt: number | null;
-  /** The stages after the published start: their number and how each unlocks. Never coordinates or clues. */
-  stages: { stageNo: number; unlock: string }[];
+  /**
+   * The stages after the published start: their number and how each unlocks. Never coordinates, clues or
+   * codes in the clear; an NFC stage whose code is strong enough carries what it reveals sealed under the
+   * code (stageseal.ts), so the phone unlocks it offline by scanning the tag. The published start (stage 0)
+   * is public and comes `open`.
+   */
+  stages: { stageNo: number; unlock: string; sealed?: SealedStage; open?: StagePayload }[];
   logs: CacheLogEntry[];
   images: PackImage[];
 }

@@ -130,6 +130,13 @@ holds each cache's description, hint, latest 5 logs and the shape of its stages,
 250 MB. Offline, the map shows the caches of every pack in view and says which pack and how old it is; a
 cache page shows its stored copy. If the instance offers an [offline map](../operate/offline-map.md), **Check size** also offers the map of the square — as detailed as fits the pack, without place names — and the offline map draws it; otherwise it shows a grid under the caches. **Refresh** brings a pack up to date, and costs almost nothing when
 nothing changed; a pack older than a week says so. The area you last browsed is kept automatically as well.
+**Multi-stage caches offline.** A pack shows a multi-stage cache's published start. An NFC stage whose tag code
+is long enough (the tag's serial, or nine or more random letters and digits) travels in the pack sealed under
+that code: scan the tag, or type its code, and the next stage opens on your phone with no connection; the
+instance confirms the unlock when you sync, and a refused one waits under **Needs attention**. A geo stage, or
+an NFC stage with a short code, unlocks only online: checking where you stand is the instance's job, and a short
+code could be guessed by anyone holding the pack. Never is a stage's position or clue in a pack in the clear.
+
 The browser is asked to keep your packs; if it may clear them when space runs low, the Offline panel says
 so.
 

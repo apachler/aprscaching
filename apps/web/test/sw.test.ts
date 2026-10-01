@@ -240,6 +240,31 @@ describe("Background Sync of the offline log queue", () => {
     expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toHaveLength(1);
   });
 
+  it("confirms a stage unlocked offline at its unlock endpoint, with the scanned code", async () => {
+    const st = await seed([
+      {
+        cacheId: 7,
+        kind: "unlock",
+        stageNo: 2,
+        body: { logType: "unlock", loggerCall: "OE8FND", code: "k7m2q9x4w8" },
+        queuedAt: 9,
+        instance: "here.example",
+      },
+    ]);
+    const posted: { url: string; body: unknown }[] = [];
+    const w = load({
+      net: (url, init) => {
+        posted.push({ url, body: JSON.parse(String(init?.body)) });
+        return Response.json({ unlocked: true });
+      },
+    });
+    await w.fire("sync", { tag: "acs-logqueue" });
+    expect(posted).toEqual([
+      { url: `${API}/api/caches/7/stages/2/unlock`, body: { callsign: "OE8FND", code: "k7m2q9x4w8" } },
+    ]);
+    expect(JSON.parse((await st.kvGet("acs.logqueue"))!)).toEqual([]);
+  });
+
   it("ignores other sync tags", async () => {
     await seed([item(6, "here.example")]);
     const w = load();
