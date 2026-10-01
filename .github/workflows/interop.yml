@@ -1,10 +1,10 @@
-# Interoperability against real packet software (LinBPQ, F6FBB, TNN, JNOS). Scheduled + manual —
+# Interoperability against real packet software (LinBPQ, F6FBB, TNN, JNOS). Weekly + manual —
 # never the PR loop: peer downloads, source builds, and the host kernel ax25 module are not
 # PR-gating dependencies. The no-Docker local loop runs first as the in-repo baseline.
 name: interop
 on:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 3 * * 3" # weekly, Wednesday 03:17 UTC
   workflow_dispatch: {}
 
 permissions:
@@ -114,7 +114,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # each peer builds in its own bounded step so one dead mirror or a wedged build cannot
-      # cancel the other peer or hang the nightly
+      # cancel the other peer or hang the run
       - id: build-tnn
         continue-on-error: true
         timeout-minutes: 10
