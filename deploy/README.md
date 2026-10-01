@@ -1,7 +1,7 @@
 # deploy/
 
-Provisioning assets for the three deployment shapes — **Self-host** (recommended), **Desktop** and
-**Cloudflare split** (below). Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
+Provisioning assets for the deployment shapes — **Self-host** (recommended; behind Cloudflare's Tunnel and CDN
+if you want Cloudflare), **Desktop**, and the **Cloudflare split** (advanced: its D1 bill grows with the feed). Principle: the **RF ingest always runs on the operator's own equipment** — a local process *or* the
 browser (Web Serial/BLE); the gateway/core is the variable.
 
 ## Files
@@ -38,7 +38,7 @@ CF_API_TOKEN=… CF_ZONE_ID=… ./cloudflare/cache-rules.sh
 # Desktop (no Node/Docker): build executables for every OS from one machine
 bash desktop/build-exe.sh v1.0.0
 
-# Cloudflare split (Worker + D1 + R2 + Pages) with the RF ingest on your own box
+# Cloudflare split (advanced; D1 bills every row written): Worker + D1 + R2 + Pages, RF ingest on your own box
 ./cloudflare/deploy-cf.sh
 INGEST_URL=https://api.example.net/ingest docker compose -f compose.ingest-only.yml up -d --build
 ```
