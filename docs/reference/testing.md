@@ -119,11 +119,11 @@ peer downloads and kernel modules are not PR-gating dependencies.
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
-| `docs.yml` — `mkdocs build --strict` | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `docs.yml` — `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |
