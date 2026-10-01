@@ -92,7 +92,7 @@ import {
 import { PlatformContext } from "./platform/PlatformContext.js";
 import { TabBar } from "./platform/TabBar.js";
 import { useLiveSocket } from "./platform/useLiveSocket.js";
-import { useLogQueue } from "./platform/useLogQueue.js";
+import { useSync } from "./platform/useSync.js";
 import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
 import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
@@ -609,7 +609,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [includeUnvetted, refresh]);
 
   // logs queued while offline flush on load, whenever connectivity returns, and as backoffs come due
-  const logQueue = useLogQueue(() => void refresh());
+  const sync = useSync(() => void refresh());
 
   // re-subscribe when the callsign changes so prompts are addressed to you
   useEffect(() => {
@@ -787,8 +787,8 @@ export default function Platform({ session, startTour }: { session: SessionState
             onAccount={() => openView(panel(session.signedIn ? "settings" : "signin"))}
             onHide={() => openView(panel("hide"))}
             count={shown.length}
-            queued={logQueue.queued}
-            attention={logQueue.attention}
+            syncLine={sync.line}
+            attention={sync.status.attention}
             onQueue={() => openView(panel("outbox"))}
             onFilters={() => openView(panel("filter"))}
             filtered={filters.types.length > 0 || filters.q.length > 0}

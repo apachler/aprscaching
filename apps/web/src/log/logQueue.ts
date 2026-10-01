@@ -25,6 +25,8 @@ export interface QueuedLog<B extends QueuedBody = QueuedBody> {
   body: B;
   /** The cache, as shown in the list (code and title), when the form knew it. */
   label?: string;
+  /** The instance the log was signed for: it is sent there and nowhere else (the signature names it). */
+  instance?: string;
   /** When the log entered the queue (ms). */
   queuedAt: number;
   /** Failed sends that count toward the backoff. */
@@ -97,6 +99,8 @@ export async function flush<B extends QueuedBody>(
   store: QueueStore,
   send: (item: QueuedLog<B>) => Promise<void>,
   now: number,
+  /** The instance this flush reaches: a log signed for another one waits for it. */
+  instance?: string,
 ): Promise<FlushResult> {
   const queue = await loadQueue<B>(store);
   const keep: QueuedLog<B>[] = [];
@@ -104,7 +108,8 @@ export async function flush<B extends QueuedBody>(
   let sent = 0;
   let offline = false;
   for (const item of queue) {
-    if (offline || (item.nextAt != null && item.nextAt > now)) {
+    const elsewhere = instance != null && item.instance != null && item.instance !== instance;
+    if (offline || elsewhere || (item.nextAt != null && item.nextAt > now)) {
       keep.push(item);
       continue;
     }

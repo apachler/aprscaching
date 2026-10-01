@@ -16,7 +16,8 @@ export function TopBar(props: {
   onAccount: () => void;
   onHide: () => void;
   count: number;
-  queued: number;
+  /** The offline sync's status line ("2 logs waiting · pack “JN77sb” 3 days old"), empty when all is synced. */
+  syncLine: string;
   /** Queued logs the instance refused, waiting for the user's choice. */
   attention: number;
   onQueue: () => void;
@@ -55,16 +56,14 @@ export function TopBar(props: {
       <span className="muted">
         · {props.count} caches{props.filtered ? " (filtered)" : " in view"}
       </span>
-      {(props.queued > 0 || props.attention > 0) && (
+      {props.syncLine && (
         <button
           className={`link queue-chip${props.attention > 0 ? " attn" : ""}`}
           onClick={props.onQueue}
-          title="Logs made without a connection"
+          title="Offline logs and packs"
         >
           <Ico e="📴 " />
-          {[props.queued > 0 && `${props.queued} queued`, props.attention > 0 && `${props.attention} need attention`]
-            .filter(Boolean)
-            .join(" · ")}
+          {props.syncLine}
         </button>
       )}
       <span className="spacer" />

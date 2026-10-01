@@ -105,6 +105,17 @@ describe("the offline log queue", () => {
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 
+  it("sends a log only to the instance it was signed for", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body(), instance: "here.example" }, T0);
+    await enqueue(s, { cacheId: 2, body: body(), instance: "there.example" }, T0);
+    await enqueue(s, { cacheId: 3, body: body() }, T0); // queued before its instance was known
+    const sent: number[] = [];
+    await flush(s, async (it) => void sent.push(it.cacheId), T0, "here.example");
+    expect(sent).toEqual([1, 3]);
+    expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
+  });
+
   it("reads a damaged store as empty", async () => {
     const s = memStore();
     await s.set("acs.logqueue", "{not json");

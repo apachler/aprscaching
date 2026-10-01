@@ -8,11 +8,12 @@ import { useEffect, useState } from "react";
 import {
   attentionLogs,
   discardAttentionLog,
-  flushLogQueue,
+  getInstance,
   queuedLogs,
   retryAttentionLog,
   type LogBody,
 } from "../api.js";
+import { runSync } from "../offline/sync.js";
 import { useFmt } from "../format.js";
 import { Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from "../ui/index.js";
 import type { AttentionLog, QueuedLog } from "./logQueue.js";
@@ -27,6 +28,8 @@ export function OutboxPanel(props: { onClose: () => void }) {
   const [queue, setQueue] = useState<QueuedLog<LogBody>[]>([]);
   const [attention, setAttention] = useState<AttentionLog<LogBody>[]>([]);
   const [busy, setBusy] = useState(false);
+  const [instance, setInstance] = useState("");
+  useEffect(() => void getInstance().then(setInstance), []);
   const reread = async () => {
     setQueue(await queuedLogs());
     setAttention(await attentionLogs());
@@ -41,11 +44,22 @@ export function OutboxPanel(props: { onClose: () => void }) {
   async function syncNow() {
     setBusy(true);
     try {
-      const r = await flushLogQueue();
+      // Sync now also refreshes every offline pack, whatever the connection
+      const r = await runSync({ manual: true });
       await reread();
-      if (r.sent) toast(`${r.sent} sent`);
-      else if (r.refused) toast(`${r.refused} need attention`);
-      else toast(navigator.onLine ? "Nothing could be sent yet; it retries on its own" : "Still offline");
+      const said = [
+        r.sent && `${r.sent} sent`,
+        r.refused && `${r.refused} need attention`,
+        r.refreshed && `${r.refreshed} ${r.refreshed === 1 ? "pack" : "packs"} refreshed`,
+        r.refreshFailed && `${r.refreshFailed} ${r.refreshFailed === 1 ? "pack" : "packs"} could not refresh`,
+      ].filter(Boolean);
+      toast(
+        said.length
+          ? said.join(" · ")
+          : navigator.onLine
+            ? "Nothing could be sent yet; it retries on its own"
+            : "Still offline",
+      );
     } finally {
       setBusy(false);
     }
@@ -89,12 +103,16 @@ export function OutboxPanel(props: { onClose: () => void }) {
                       made {fmt.dateTime(madeAt(l))}
                       {!l.body.author && " · unsigned: it counts from when it arrives"}
                       {l.nextAt != null && ` · next try ${fmt.time(Math.floor(l.nextAt / 1000))}`}
+                      {instance &&
+                        l.instance &&
+                        l.instance !== instance &&
+                        ` · signed for ${l.instance}: it goes only there`}
                     </div>
                   </li>
                 ))}
               </ul>
             )}
-            <Button variant="primary" onClick={() => void syncNow()} disabled={busy || queue.length === 0}>
+            <Button variant="primary" onClick={() => void syncNow()} disabled={busy}>
               {busy ? "Syncing…" : "Sync now"}
             </Button>
           </Group>

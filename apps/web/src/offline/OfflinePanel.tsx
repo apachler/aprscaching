@@ -14,7 +14,8 @@ import { API_BASE, offlineReady } from "../api.js";
 import { useFmt } from "../format.js";
 import { TYPE_META, TYPE_ORDER } from "../cacheTypes.js";
 import { usePlatform } from "../platform/PlatformContext.js";
-import { Advanced, Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from "../ui/index.js";
+import { Advanced, Badge, Button, EmptyState, Group, Panel, Row, Switch, useConfirm, useToast } from "../ui/index.js";
+import { mobileDataAllowed, setMobileDataAllowed } from "./sync.js";
 import {
   estimatePack,
   fetchPackData,
@@ -85,6 +86,7 @@ export function OfflinePanel(props: { onClose: () => void }) {
       <Group title="New pack" status={online ? undefined : "needs a connection"}>
         <NewPack onSaved={reload} disabled={!online} />
       </Group>
+      <SyncSettings />
       <StorageLine />
     </Panel>
   );
@@ -445,6 +447,32 @@ function useSquareOutline(map: maplibregl.Map | null, locator: string | null) {
     }
     return clear;
   }, [map, locator]);
+}
+
+/** When packs refresh on their own: on Wi-Fi or Ethernet, or on mobile data too if allowed. */
+function SyncSettings() {
+  const [mobile, setMobile] = useState(mobileDataAllowed);
+  return (
+    <Group title="Sync" status={mobile ? "any connection" : "Wi-Fi only"} defaultOpen={false}>
+      <Row
+        label="Refresh packs on mobile data"
+        help="Packs older than a day refresh on their own on Wi-Fi; Sync now refreshes them on any connection"
+      >
+        <Switch
+          label="Refresh packs on mobile data"
+          checked={mobile}
+          onChange={(v) => {
+            setMobileDataAllowed(v);
+            setMobile(v);
+          }}
+        />
+      </Row>
+      <p className="muted fine">
+        Logs made offline go as soon as the connection returns. With the app closed, Chrome and Edge send them in the
+        background; Safari and Firefox send them when you next open the app.
+      </p>
+    </Group>
+  );
 }
 
 /** How much the browser grants this site, and how much is used. */

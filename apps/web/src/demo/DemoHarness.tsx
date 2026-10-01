@@ -48,7 +48,7 @@ function AppShell({
         onAccount={noop}
         onHide={noop}
         count={7}
-        queued={0}
+        syncLine=""
         attention={0}
         onQueue={noop}
         onFilters={noop}
