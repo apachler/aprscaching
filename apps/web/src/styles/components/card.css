@@ -3,15 +3,15 @@
   /* ---- card / empty-state / toast primitives (ui-ux.md §3) ---- */
   .card {
     border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    padding: var(--sp-5);
-    margin: var(--sp-4) 0;
+    border-radius: var(--radius-card);
+    padding: var(--space-md);
+    margin: var(--space-sm) 0;
     background: var(--surface-2);
   }
   .empty {
-    padding: var(--sp-1) 0;
+    padding: var(--space-xs) 0;
   }
   .empty-action {
-    margin-top: var(--sp-3);
+    margin-top: var(--space-sm);
   }
 }

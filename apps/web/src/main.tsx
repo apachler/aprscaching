@@ -3,7 +3,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { ErrorBoundary } from "./ui/index.js";
-import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext } from "./format.js";
+import { loadSettings, makeFormatters, FormatContext } from "./format.js";
+import { applyTheme } from "./shell/theme.js";
 import { registerServiceWorker } from "./shell/serviceWorker.js";
 
 // The offline app shell (public/sw.js). Development serves unhashed modules, so there is nothing to store.
@@ -11,11 +12,7 @@ if (import.meta.env.PROD) void registerServiceWorker();
 
 // Apply the saved theme to <html> before first paint so a Phosphor user doesn't flash the modern
 // palette while the (lazily-loaded) Platform mounts.
-{
-  const saved = loadSettings();
-  document.documentElement.dataset.theme = resolveTheme(saved.theme);
-  document.documentElement.dataset.crt = resolveCrt(saved);
-}
+applyTheme(loadSettings());
 
 const root = createRoot(document.getElementById("root")!);
 // `/?demo=packet|bbs|1` mounts the hardware-free design harness (real components + in-process simulator)
@@ -25,10 +22,7 @@ const demo = params.get("demo");
 if (demo === "app") {
   // the whole app against canned gateway answers (demo/fixtures.ts): the design review's and the visual
   // harness's bench. `&as=user|sysop|out` picks who is signed in.
-  // `&scale=role` previews the role scales on the real surfaces (styles/scale-preview.css)
-  const preview = params.get("scale") === "role" ? import("./styles/scale-preview.css") : Promise.resolve();
-  Promise.all([import("./demo/fixtures.js"), preview]).then(([{ installAppFixtures }]) => {
-    if (params.get("scale") === "role") document.documentElement.dataset.scale = "role";
+  import("./demo/fixtures.js").then(({ installAppFixtures }) => {
     // `&theme=dark|light|phosphor` holds the token attribute on the theme asked for (the UI kit's frames)
     const theme = params.get("theme");
     if (theme === "dark" || theme === "light" || theme === "phosphor") {

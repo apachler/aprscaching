@@ -1,18 +1,18 @@
 /* Map surface: pins, spot markers and card, coordinate readout, basemap switch, map tools, geofence banner. */
 @layer surfaces {
   .spot-filters {
-    margin-top: var(--sp-3);
+    margin-top: var(--space-sm);
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .spot-filters .filter-row {
     display: flex;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     align-items: baseline;
     flex-wrap: wrap;
   }
   .spot-filters .filter-label {
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     text-transform: uppercase;
     color: var(--muted);
     min-width: 3.5rem;
@@ -24,10 +24,10 @@
     border-radius: 50% 50% 50% 0;
     transform: rotate(-45deg);
     border: 2px solid var(--pin-edge);
-    box-shadow: var(--elev-2);
+    box-shadow: var(--elevation-raised);
     cursor: pointer;
     color: var(--pin-edge);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     padding: 0;
     display: flex;
     align-items: center;
@@ -47,7 +47,7 @@
     width: 13px;
     height: 13px;
     border-radius: 50%;
-    font-size: var(--fs-3xs);
+    font-size: var(--text-micro);
     line-height: 13px;
     text-align: center;
     border: 1px solid var(--pin-edge);
@@ -63,7 +63,7 @@
     opacity: 0.9;
     box-shadow:
       0 0 0 2px color-mix(in oklch, var(--brand) 40%, transparent),
-      var(--elev-2);
+      var(--elevation-raised);
   }
   /* live station pins (shack layer) */
   button.station-pin {
@@ -74,13 +74,13 @@
     border: 2px solid var(--pin-edge);
     background: var(--pin-station);
     color: var(--ink-tier);
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--elev-1);
+    box-shadow: var(--elevation-raised);
   }
   button.station-pin > span {
     display: block;
@@ -89,7 +89,7 @@
   button.station-pin.role {
     width: 22px;
     height: 22px;
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
     font-weight: 700;
   }
   /* MeshCom nodes: the station pin with a MeshCom ring and an "M" tag, so the difference never rests on
@@ -98,7 +98,7 @@
   button.station-pin.meshcom {
     box-shadow:
       0 0 0 2px var(--meshcom),
-      var(--elev-1);
+      var(--elevation-raised);
   }
   button.station-pin.meshcom::after {
     content: "M";
@@ -112,19 +112,19 @@
     font: 700 9px/1 var(--font-mono);
   }
   button.station-pin.meshcom.via-server {
-    box-shadow: var(--elev-1);
+    box-shadow: var(--elevation-raised);
     outline: 2px dashed var(--meshcom);
     outline-offset: 1px;
   }
   /* a switch that belongs to the one above it (MeshCom links under MeshCom) */
   .row.between.sub {
-    padding-inline-start: var(--sp-5);
+    padding-inline-start: var(--space-md);
   }
   /* bottom-left, above the coordinate readout, where it covers the least map */
   .mc-legend {
     position: absolute;
-    left: var(--sp-5);
-    bottom: calc(var(--sp-5) + 72px + env(safe-area-inset-bottom));
+    left: var(--space-md);
+    bottom: calc(var(--space-md) + 72px + env(safe-area-inset-bottom));
     z-index: var(--z-map-ui);
     max-width: min(92vw, 20rem);
     flex-wrap: wrap;
@@ -149,13 +149,13 @@
     border: 2px solid var(--pin-edge);
     background: var(--warn);
     color: var(--ink-tier);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--elev-2);
+    box-shadow: var(--elevation-raised);
   }
   button.spot-pin > span {
     display: block;
@@ -188,52 +188,52 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: var(--z-map-card);
-    bottom: calc(var(--sp-7) + env(safe-area-inset-bottom));
+    bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
     width: min(360px, calc(100vw - 24px));
     background: var(--surface);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: var(--r-9);
-    padding: var(--sp-5) var(--sp-6);
-    box-shadow: var(--elev-6);
+    border-radius: var(--radius-sheet);
+    padding: var(--space-md) var(--space-md);
+    box-shadow: var(--elevation-floating);
   }
   .spot-card-h {
     display: flex;
     align-items: center;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .spot-card .spot-call {
-    font-size: var(--fs-2xl);
+    font-size: var(--text-heading);
     color: var(--heading);
   }
   .spot-card .spot-ref {
-    margin: var(--sp-1) 0;
+    margin: var(--space-xs) 0;
   }
   .spot-card .spot-meta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--sp-2);
-    margin-top: var(--sp-1);
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
   }
   .spot-card .spot-comment {
-    margin: var(--sp-3) 0 0;
+    margin: var(--space-sm) 0 0;
   }
   .spot-card .spot-cta {
     width: 100%;
-    margin-top: var(--sp-4);
+    margin-top: var(--space-sm);
   }
   /* ---- map coordinate / grid readout ---- */
   .coordreadout {
     position: absolute;
-    left: var(--sp-5);
-    bottom: var(--sp-5);
+    left: var(--space-md);
+    bottom: var(--space-md);
     z-index: var(--z-map-ui);
     display: flex;
     gap: 1px;
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     overflow: hidden;
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
   }
@@ -244,14 +244,14 @@
     border-left: 1px solid var(--hair);
   }
   .coordreadout .crl {
-    font-size: var(--fs-3xs);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
   }
   .coordreadout .crv {
     font-family: var(--font-mono);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     color: var(--ink-2);
     margin-top: 3px;
   }
@@ -265,38 +265,38 @@
    bottom chips never overlap each other (they share one row on wider screens) */
   @media (max-width: 680px) {
     .coordreadout {
-      bottom: calc(var(--tabbar-h) + var(--sp-5) + env(safe-area-inset-bottom));
+      bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
     }
     .maptools {
       bottom: calc(126px + env(safe-area-inset-bottom));
     }
     .mc-legend {
-      bottom: calc(var(--tabbar-h) + var(--sp-5) + 72px + env(safe-area-inset-bottom));
+      bottom: calc(var(--tabbar-h) + var(--space-md) + 72px + env(safe-area-inset-bottom));
     }
   }
   /* field-navigation map tools: grid / rings / ruler toggles + readouts */
   /* basemap layer switcher — top-right, opt-in raster */
   .basemap-switch {
     position: absolute;
-    right: var(--sp-5);
-    top: var(--sp-5);
+    right: var(--space-md);
+    top: var(--space-md);
     z-index: var(--z-map-ui);
     display: flex;
     gap: 1px;
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
   }
   /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
      area of each button can reach past the bar */
   .basemap-switch > button:first-child {
-    border-start-start-radius: calc(var(--r-6) - 1px);
-    border-end-start-radius: calc(var(--r-6) - 1px);
+    border-start-start-radius: calc(var(--radius-control) - 1px);
+    border-end-start-radius: calc(var(--radius-control) - 1px);
   }
   .basemap-switch > button:last-child {
-    border-start-end-radius: calc(var(--r-6) - 1px);
-    border-end-end-radius: calc(var(--r-6) - 1px);
+    border-start-end-radius: calc(var(--radius-control) - 1px);
+    border-end-end-radius: calc(var(--radius-control) - 1px);
   }
   .basemap-switch button {
     min-width: var(--hit);
@@ -304,10 +304,10 @@
     border: none;
     background: none;
     color: var(--ink-2);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     font-weight: 600;
     cursor: pointer;
-    padding: 0 var(--sp-4);
+    padding: 0 var(--space-sm);
   }
   .basemap-switch button + button {
     border-left: 1px solid var(--hair);
@@ -325,31 +325,31 @@
   }
   .maptools {
     position: absolute;
-    right: var(--sp-5);
-    bottom: var(--sp-5);
+    right: var(--space-md);
+    bottom: var(--space-md);
     z-index: var(--z-map-ui);
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
   }
   .maptools-bar {
     display: flex;
     gap: 1px;
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     backdrop-filter: blur(6px);
   }
   /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
      area of each button can reach past the bar */
   .maptools-bar > button:first-child {
-    border-start-start-radius: calc(var(--r-6) - 1px);
-    border-end-start-radius: calc(var(--r-6) - 1px);
+    border-start-start-radius: calc(var(--radius-control) - 1px);
+    border-end-start-radius: calc(var(--radius-control) - 1px);
   }
   .maptools-bar > button:last-child {
-    border-start-end-radius: calc(var(--r-6) - 1px);
-    border-end-end-radius: calc(var(--r-6) - 1px);
+    border-start-end-radius: calc(var(--radius-control) - 1px);
+    border-end-end-radius: calc(var(--radius-control) - 1px);
   }
   .maptools-bar button {
     min-width: 38px;
@@ -357,7 +357,7 @@
     border: none;
     background: none;
     color: var(--ink-2);
-    font-size: var(--fs-xl);
+    font-size: var(--text-input);
     cursor: pointer;
   }
   .maptools-bar button + button {
@@ -382,33 +382,33 @@
   .maptools-legend {
     background: color-mix(in oklch, var(--surface) 88%, transparent);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     padding: 5px 9px;
     font-family: var(--font-mono);
-    font-size: var(--fs-xs-up);
+    font-size: var(--text-caption);
     color: var(--ink-2);
     display: flex;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     align-items: center;
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
   }
   /* live geofence prompt banner */
   .geo-banner {
     position: absolute;
-    top: var(--sp-6);
+    top: var(--space-md);
     left: 50%;
     transform: translateX(-50%);
     z-index: var(--z-banner);
     display: flex;
     align-items: center;
-    gap: var(--sp-5);
+    gap: var(--space-md);
     max-width: calc(100% - 24px);
     background: var(--accent);
     color: var(--accent-ink);
-    padding: 9px var(--sp-5) 9px var(--sp-7);
-    border-radius: var(--r-12);
-    box-shadow: var(--elev-5);
-    font-size: var(--fs-base);
+    padding: 9px var(--space-md) 9px var(--space-lg);
+    border-radius: var(--radius-sheet);
+    box-shadow: var(--elevation-floating);
+    font-size: var(--text-body);
   }
   .geo-banner .muted {
     color: color-mix(in oklch, var(--accent-ink) 70%, transparent);
@@ -431,7 +431,7 @@
     display: grid;
     place-items: center;
     /* MapLibre's control stack is white in every theme: near-black ink, like its own glyphs */
-    color: var(--ink-tier);
+    color: var(--map-control-ink);
   }
   .maplibregl-ctrl-group button.locate-btn[data-mode="follow"] {
     color: var(--accent-ink);
@@ -439,7 +439,7 @@
   }
   /* blocked for this site: a struck-through look, so the state reads without the colour */
   .maplibregl-ctrl-group button.locate-btn[data-blocked] {
-    color: var(--bad);
+    color: var(--bad-text);
     opacity: 0.8;
   }
   .maplibregl-ctrl-group button.locate-btn[data-blocked]::before {
@@ -476,21 +476,21 @@
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid var(--pin-edge);
-    box-shadow: var(--elev-2);
+    box-shadow: var(--elevation-raised);
   }
   /* the locate progress / problem line, stacked under the locate button */
   .map-locate-slot {
-    max-width: min(22rem, calc(100vw - 2 * var(--sp-5)));
+    max-width: min(22rem, calc(100vw - 2 * var(--space-md)));
   }
   .map-locate-status {
     display: flex;
     align-items: flex-start;
-    gap: var(--sp-2);
-    padding: var(--sp-2) var(--sp-3);
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
     background: color-mix(in oklch, var(--surface) 92%, transparent);
     color: var(--ink);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     /* no blur: css.md allows one frosted surface over the map (the map-tools bar) */
   }
   .map-locate-status > :first-child {
@@ -506,8 +506,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--sp-5);
-    padding: var(--sp-6);
+    gap: var(--space-md);
+    padding: var(--space-md);
     background: var(--surface);
     text-align: center;
   }

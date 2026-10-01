@@ -2,8 +2,8 @@
 /**
  * The UI kit — `/?demo=ui`: the design language on one page. Every primitive in every state it has, in either
  * density; the colour tokens with their contrast on the panel surface; the role scales for type, space,
- * radius, elevation and motion beside the size-named steps they replace; and real surfaces rendered both
- * ways, side by side. A theme switch covers dark, light and Phosphor. docs/design/design-language.md is the
+ * radius, elevation and motion; and real surfaces of the app in frames. A theme switch covers dark, light and
+ * Phosphor. docs/design/design-language.md is the
  * text this page illustrates; apps/web/test/visual/run.mjs renders it for review and runs axe on it.
  */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
@@ -36,7 +36,6 @@ import {
   useToast,
 } from "../ui/index.js";
 import { FormatContext, loadSettings, makeFormatters } from "../format.js";
-import "../styles/scale-preview.css";
 
 type ThemeAttr = "dark" | "light" | "phosphor";
 
@@ -84,21 +83,20 @@ const COLOURS: { group: string; tokens: [name: string, role: string][] }[] = [
   },
 ];
 
-const TYPE_ROLES: [role: string, old: string, sample: string, font?: string][] = [
-  ["--text-display", "--fs-landing-slogan", "Geocaching, on the air.", "var(--font-brand)"],
-  ["--text-title-lg", "--fs-5xl", "Run an instance", "var(--font-brand)"],
-  ["--text-title", "--fs-4xl", "Schlossberg clock tower", "var(--font-brand)"],
-  ["--text-heading", "--fs-2xl", "Coordinates"],
-  ["--text-input", "--fs-xl", "Type a callsign"],
-  ["--text-body", "--fs-base", "A small container with a logbook, verified on the air."],
-  ["--text-data", "--fs-md", "OE8APR-7 · 47.0763° 15.4378° · JN77rb", "var(--font-mono)"],
-  ["--text-label", "--fs-sm", "DIFFICULTY"],
-  ["--text-caption", "--fs-xs", "Logged 2 h ago"],
-  ["--text-micro", "--fs-3xs", "Nearby"],
+const TYPE_ROLES: [role: string, sample: string, font?: string][] = [
+  ["--text-display", "Geocaching, on the air.", "var(--font-brand)"],
+  ["--text-title-lg", "Run an instance", "var(--font-brand)"],
+  ["--text-title", "Schlossberg clock tower", "var(--font-brand)"],
+  ["--text-heading", "Coordinates"],
+  ["--text-input", "Type a callsign"],
+  ["--text-body", "A small container with a logbook, verified on the air."],
+  ["--text-data", "OE8APR-7 · 47.0763° 15.4378° · JN77rb", "var(--font-mono)"],
+  ["--text-label", "DIFFICULTY"],
+  ["--text-caption", "Logged 2 h ago"],
+  ["--text-micro", "Nearby"],
 ];
 
 const SPACE = ["2xs", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl"];
-const OLD_SPACE = Array.from({ length: 15 }, (_, i) => `--sp-${i}`);
 const RADII = ["tick", "chip", "control", "card", "sheet", "pill"];
 const ELEVATIONS = ["flat", "raised", "floating", "floating-up", "overlay"];
 
@@ -395,15 +393,13 @@ function Primitives() {
   );
 }
 
-/** A real surface of the app in a frame, at phone size, with the current or the role scale. */
-function Frame(props: { title: string; query: string; scale: "current" | "role"; theme: ThemeAttr }) {
-  const src = `/${props.query}${props.query ? "&" : "?"}demo=app&as=user${props.scale === "role" ? "&scale=role" : ""}&theme=${props.theme}#14/47.0725/15.4380`;
+/** A real surface of the app in a frame, at phone size, in the theme of the page. */
+function Frame(props: { title: string; query: string; theme: ThemeAttr }) {
+  const src = `/${props.query}${props.query ? "&" : "?"}demo=app&as=user&theme=${props.theme}#14/47.0725/15.4380`;
   return (
     <figure className="uikit-frame">
-      <iframe title={`${props.title}, ${props.scale} scale`} src={src} width={390} height={720} />
-      <figcaption>
-        {props.title} · {props.scale === "role" ? "role scale" : "current scale"}
-      </figcaption>
+      <iframe title={props.title} src={src} width={390} height={720} />
+      <figcaption>{props.title}</figcaption>
     </figure>
   );
 }
@@ -412,18 +408,10 @@ function Kit() {
   const params = useMemo(() => new URLSearchParams(location.search), []);
   const [theme, setTheme] = useState<ThemeAttr>((params.get("theme") as ThemeAttr) || "dark");
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
-  const [scale, setScale] = useState<"current" | "role">("current");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
-  useEffect(() => {
-    if (scale === "role") document.documentElement.dataset.scale = "role";
-    else delete document.documentElement.dataset.scale;
-  }, [scale]);
-  const fmt = useMemo(
-    () => makeFormatters({ ...loadSettings(), theme: theme === "phosphor" ? "phosphor" : "modern" }),
-    [theme],
-  );
+  const fmt = useMemo(() => makeFormatters({ ...loadSettings(), theme }), [theme]);
 
   return (
     <FormatContext.Provider value={fmt}>
@@ -456,15 +444,6 @@ function Kit() {
                     ["compact", "Compact"],
                   ]}
                 />
-                <Seg
-                  label="Scale"
-                  value={scale}
-                  onChange={setScale}
-                  options={[
-                    ["current", "Current"],
-                    ["role", "Role"],
-                  ]}
-                />
               </div>
             </header>
 
@@ -476,21 +455,16 @@ function Kit() {
               <Swatches theme={theme} />
             </Section>
 
-            <Section
-              id="type"
-              title="Type"
-              lede="Ten roles on a 1.2 ratio around the 14 px body, beside the size-named step each replaces."
-            >
+            <Section id="type" title="Type" lede="Ten roles on a 1.2 ratio around the 14 px body.">
               <table className="uikit-table">
                 <thead>
                   <tr>
                     <th scope="col">Role</th>
-                    <th scope="col">Role scale</th>
-                    <th scope="col">Current step</th>
+                    <th scope="col">Sample</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {TYPE_ROLES.map(([role, old, sample, font]) => (
+                  {TYPE_ROLES.map(([role, sample, font]) => (
                     <tr key={role}>
                       <th scope="row">
                         <code>{role}</code>
@@ -500,12 +474,6 @@ function Kit() {
                         style={{ "--fs": `var(${role})`, "--ff": font ?? "inherit" } as CSSProperties}
                       >
                         {sample}
-                      </td>
-                      <td
-                        className="uikit-sample"
-                        style={{ "--fs": `var(${old})`, "--ff": font ?? "inherit" } as CSSProperties}
-                      >
-                        {sample} <code className="muted">{old}</code>
                       </td>
                     </tr>
                   ))}
@@ -527,16 +495,6 @@ function Kit() {
                   </div>
                 ))}
               </div>
-              <Disclosure label={`The ${OLD_SPACE.length} current steps`}>
-                <div className="uikit-scale">
-                  {OLD_SPACE.map((s) => (
-                    <div key={s}>
-                      <span className="uikit-bar" style={{ "--w": `var(${s})` } as CSSProperties} />
-                      <code>{s}</code>
-                    </div>
-                  ))}
-                </div>
-              </Disclosure>
               <h3>Radius</h3>
               <div className="uikit-row">
                 {RADII.map((r) => (
@@ -571,20 +529,19 @@ function Kit() {
 
             <Section
               id="surfaces"
-              title="Real surfaces, both ways"
-              lede="The app itself, current scale on the left and the role scale on the right, in the theme above."
+              title="Real surfaces"
+              lede="The app itself, on the demo fixtures, in the theme above."
             >
-              {[
-                ["Map home", ""],
-                ["Cache sheet", "?v=demo"],
-                ["Settings", "?view=settings"],
-                ["BBS (a Shack app)", "?view=bbs"],
-              ].map(([title, query]) => (
-                <div className="uikit-pair" key={title}>
-                  <Frame title={title as string} query={query as string} scale="current" theme={theme} />
-                  <Frame title={title as string} query={query as string} scale="role" theme={theme} />
-                </div>
-              ))}
+              <div className="uikit-pair">
+                {[
+                  ["Map home", ""],
+                  ["Cache sheet", "?v=demo"],
+                  ["Settings", "?view=settings"],
+                  ["BBS (a Shack app)", "?view=bbs"],
+                ].map(([title, query]) => (
+                  <Frame key={title} title={title as string} query={query as string} theme={theme} />
+                ))}
+              </div>
             </Section>
           </main>
         </ConfirmProvider>

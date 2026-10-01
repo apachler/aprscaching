@@ -9,11 +9,11 @@
     overflow-y: auto;
     background: var(--page-bg);
     color: var(--ink);
-    font-size: var(--fs-lg);
+    font-size: var(--text-body);
   }
   .landing h2 {
-    margin: var(--sp-2) 0 0;
-    font-size: var(--fs-landing-h2);
+    margin: var(--space-xs) 0 0;
+    font-size: var(--text-title-lg);
     letter-spacing: -0.01em;
     color: var(--ink);
     text-wrap: balance;
@@ -21,14 +21,14 @@
   .landing-eyebrow {
     margin: 0;
     font-family: var(--font-mono);
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--accent);
   }
   .landing-lede {
-    margin: var(--sp-4) 0 0;
+    margin: var(--space-sm) 0 0;
     color: var(--muted);
     max-width: 60ch;
   }
@@ -53,7 +53,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: var(--sp-8);
+    gap: var(--space-lg);
     max-width: 1080px;
     margin: 0 auto clamp(28px, 6vw, 56px);
   }
@@ -64,9 +64,9 @@
   }
   .landing-nav-links {
     display: none;
-    gap: var(--sp-7);
+    gap: var(--space-lg);
     margin-left: auto;
-    font-size: var(--fs-md-up);
+    font-size: var(--text-data);
   }
   .landing-nav-links a {
     color: color-mix(in oklch, var(--chrome-ink) 85%, transparent);
@@ -102,8 +102,8 @@
     }
   }
   .landing-slogan {
-    margin: var(--sp-3) 0 0;
-    font-size: var(--fs-landing-slogan);
+    margin: var(--space-sm) 0 0;
+    font-size: var(--text-display);
     line-height: 1.06;
     font-weight: 750;
     letter-spacing: -0.02em;
@@ -114,21 +114,21 @@
     color: var(--accent);
   }
   .landing-sub {
-    margin: var(--sp-6) 0 22px;
+    margin: var(--space-md) 0 22px;
     max-width: 52ch;
-    font-size: var(--fs-xl);
+    font-size: var(--text-input);
     color: color-mix(in oklch, var(--chrome-ink) 82%, transparent);
   }
   .landing-cta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
     align-items: center;
   }
   .landing-cta button {
     min-height: var(--hit);
-    padding: 0 var(--sp-8);
-    border-radius: var(--r-7);
+    padding: 0 var(--space-lg);
+    border-radius: var(--radius-card);
     font-weight: 600;
   }
   /* the packet-proof terminal — animates only opacity/transform, and not at all under reduced motion */
@@ -136,18 +136,18 @@
     position: relative;
     background: color-mix(in oklch, var(--shade) 62%, var(--surface));
     border: 1px solid color-mix(in oklch, var(--chrome-ink) 22%, transparent);
-    border-radius: var(--r-lg);
+    border-radius: var(--radius-card);
     overflow: hidden;
-    box-shadow: var(--elev-hero);
+    box-shadow: var(--elevation-hero);
   }
   .landing-term-bar {
     display: flex;
     align-items: center;
-    gap: var(--sp-3);
-    padding: var(--sp-3) var(--sp-6);
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid color-mix(in oklch, var(--chrome-ink) 18%, transparent);
     font-family: var(--font-mono);
-    font-size: var(--fs-2xs-up);
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -160,9 +160,9 @@
     background: var(--tier-a);
   }
   .landing-term-body {
-    padding: var(--sp-6) var(--sp-7) var(--sp-8);
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
     font-family: var(--font-mono);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
     line-height: 1.75;
     color: color-mix(in oklch, var(--accent) 85%, var(--tint));
     overflow-x: auto;
@@ -176,14 +176,14 @@
   .landing-stamp {
     display: inline-flex;
     align-items: center;
-    gap: var(--sp-2);
-    margin-top: var(--sp-5);
-    padding: 5px var(--sp-5);
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+    padding: 5px var(--space-md);
     border: 1.5px solid var(--tier-a);
-    border-radius: var(--r-pill);
-    color: var(--tier-a);
+    border-radius: var(--radius-pill);
+    color: var(--tier-a-text);
     font-family: var(--font-mono);
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     font-weight: 700;
     letter-spacing: 0.12em;
   }
@@ -239,7 +239,7 @@
     list-style: none;
     counter-reset: landing-step;
     display: grid;
-    gap: var(--sp-6);
+    gap: var(--space-md);
     margin: 22px 0 0;
     padding: 0;
   }
@@ -252,8 +252,8 @@
     counter-increment: landing-step;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    padding: var(--sp-8) var(--sp-9);
+    border-radius: var(--radius-card);
+    padding: var(--space-lg) var(--space-lg);
   }
   .landing-steps li::before {
     content: counter(landing-step);
@@ -261,18 +261,18 @@
     place-items: center;
     width: 30px;
     height: 30px;
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: var(--accent);
     color: var(--accent-ink);
     font-family: var(--font-mono);
     font-weight: 700;
-    margin-bottom: var(--sp-5);
+    margin-bottom: var(--space-md);
   }
   .landing-steps h3,
   .landing-tier h3,
   .landing-feature h3 {
     margin: 0 0 5px;
-    font-size: var(--fs-lg-up);
+    font-size: var(--text-input);
     color: var(--ink);
   }
   .landing-steps p,
@@ -280,7 +280,7 @@
   .landing-feature p {
     margin: 0;
     color: var(--muted);
-    font-size: var(--fs-md-up);
+    font-size: var(--text-data);
   }
   .landing-steps code {
     font-family: var(--font-mono);
@@ -288,7 +288,7 @@
   }
   .landing-tiers {
     display: grid;
-    gap: var(--sp-6);
+    gap: var(--space-md);
     margin-top: 22px;
   }
   @media (min-width: 760px) {
@@ -300,8 +300,8 @@
     background: var(--surface);
     border: 1px solid var(--line);
     border-left: 4px solid var(--tc);
-    border-radius: var(--r-lg);
-    padding: var(--sp-8) var(--sp-9);
+    border-radius: var(--radius-card);
+    padding: var(--space-lg) var(--space-lg);
   }
   .landing-tier.tier-a {
     --tc: var(--tier-a);
@@ -314,19 +314,19 @@
   }
   .landing-tier-badge {
     display: inline-block;
-    margin-bottom: var(--sp-4);
-    padding: 3px var(--sp-4);
+    margin-bottom: var(--space-sm);
+    padding: 3px var(--space-sm);
     border: 1.5px solid var(--tc);
-    border-radius: var(--r-pill);
+    border-radius: var(--radius-pill);
     color: var(--tc);
     font-family: var(--font-mono);
-    font-size: var(--fs-2xs-up);
+    font-size: var(--text-caption);
     font-weight: 700;
     letter-spacing: 0.1em;
   }
   .landing-features {
     display: grid;
-    gap: var(--sp-6);
+    gap: var(--space-md);
     margin-top: 22px;
   }
   @media (min-width: 620px) {
@@ -352,12 +352,12 @@
   .landing-feature {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    padding: var(--sp-8) var(--sp-9);
+    border-radius: var(--radius-card);
+    padding: var(--space-lg) var(--space-lg);
   }
   .landing-glyph {
     font-family: var(--font-mono);
-    font-size: var(--fs-xs);
+    font-size: var(--text-caption);
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--accent);
@@ -367,7 +367,7 @@
   }
   .landing-shots {
     display: grid;
-    gap: var(--sp-6);
+    gap: var(--space-md);
     margin-top: 26px;
   }
   @media (min-width: 760px) {
@@ -378,23 +378,23 @@
   .landing-shots figure {
     margin: 0;
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .landing-shots img {
     width: 100%;
     height: auto;
     border: 1px solid var(--line);
-    border-radius: var(--r-7);
-    box-shadow: var(--elev-shot);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-shot);
   }
   .landing-shots figcaption {
     color: var(--muted);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
     text-align: center;
   }
   .landing-hosts {
     display: grid;
-    gap: var(--sp-5);
+    gap: var(--space-md);
     grid-template-columns: repeat(2, 1fr);
     margin-top: 22px;
   }
@@ -405,24 +405,24 @@
   }
   .landing-host {
     display: grid;
-    gap: var(--sp-0);
+    gap: var(--space-2xs);
     justify-items: center;
     text-align: center;
     border: 1px dashed var(--line);
-    border-radius: var(--r-7);
-    padding: var(--sp-7) var(--sp-5);
+    border-radius: var(--radius-card);
+    padding: var(--space-lg) var(--space-md);
   }
   .landing-host span {
     color: var(--muted);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
   }
   .landing-band {
     display: grid;
-    gap: var(--sp-8);
+    gap: var(--space-lg);
     align-items: center;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-10);
+    border-radius: var(--radius-sheet);
     padding: clamp(24px, 4vw, 40px);
   }
   @media (min-width: 820px) {
@@ -431,26 +431,26 @@
     }
   }
   .landing-band p {
-    margin: var(--sp-3) 0 0;
+    margin: var(--space-sm) 0 0;
     color: var(--muted);
     max-width: 60ch;
   }
   .landing-band button {
     min-height: var(--hit);
-    padding: 0 var(--sp-9);
-    border-radius: var(--r-7);
+    padding: 0 var(--space-lg);
+    border-radius: var(--radius-card);
     font-weight: 600;
   }
   .landing-footer {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-3) var(--sp-7);
+    gap: var(--space-sm) var(--space-lg);
     justify-content: center;
     max-width: 1080px;
     margin: 0 auto;
-    padding: var(--sp-9) var(--sp-7) calc(var(--sp-11) + env(safe-area-inset-bottom));
+    padding: var(--space-lg) var(--space-lg) calc(var(--space-xl) + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
   }
   .landing-footer a {
     color: var(--muted);
@@ -463,7 +463,7 @@
   .landing-footer a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
-    border-radius: var(--r-2);
+    border-radius: var(--radius-tick);
   }
   /* Phosphor: the hero drops the colour photo + teal wash for the near-black phosphor field
    (every surface is themed, incl. the landing); text goes phosphor via the shared tokens. */
@@ -484,8 +484,8 @@
   /* landing footer fineprint: trademark + non-affiliation notices */
   .landing-fineprint {
     flex-basis: 100%;
-    margin: var(--sp-4) 0 0;
-    font-size: var(--fs-xs);
+    margin: var(--space-sm) 0 0;
+    font-size: var(--text-caption);
     color: var(--muted);
   }
 }

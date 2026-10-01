@@ -8,25 +8,25 @@
   /* gated transmit block (gated on callsign control-verification) — set apart from RX */
   .tx-block {
     border-top: 1px dashed var(--line);
-    margin-top: var(--sp-4);
-    padding-top: var(--sp-3);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
   }
   .tx-block h5 {
-    margin: var(--sp-3) 0 var(--sp-1);
+    margin: var(--space-sm) 0 var(--space-xs);
   }
   /* operated-stations registry (Settings → My stations) */
   .station-card {
     border: 1px solid var(--line);
-    border-radius: var(--r-7);
-    margin: var(--sp-3) 0;
+    border-radius: var(--radius-card);
+    margin: var(--space-sm) 0;
     overflow: hidden;
   }
   .station-head {
     display: flex;
     align-items: center;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     width: 100%;
-    padding: var(--sp-4) var(--sp-5);
+    padding: var(--space-sm) var(--space-md);
     background: none;
     border: none;
     cursor: pointer;
@@ -47,27 +47,27 @@
     flex: 1;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-1);
+    gap: var(--space-xs);
   }
   .station-body {
-    padding: var(--sp-1) var(--sp-5) var(--sp-5);
+    padding: var(--space-xs) var(--space-md) var(--space-md);
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     border-top: 1px solid var(--line);
   }
   .station-body fieldset.roles {
     border: 1px solid var(--line);
-    border-radius: var(--r-6);
-    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius-control);
+    padding: var(--space-sm) var(--space-sm);
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
   }
   .station-body fieldset.roles legend {
-    padding: 0 var(--sp-1);
+    padding: 0 var(--space-xs);
     color: var(--muted);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .role-check {
     display: inline-flex;
@@ -76,36 +76,36 @@
   }
   .wx-key {
     border-top: 1px dashed var(--line);
-    padding-top: var(--sp-3);
-    margin-top: var(--sp-1);
+    padding-top: var(--space-sm);
+    margin-top: var(--space-xs);
   }
   .wx-key h5 {
-    margin: 0 0 var(--sp-2);
+    margin: 0 0 var(--space-xs);
   }
   .wx-tx {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .wx-tx .row.between {
     align-items: center;
-    gap: var(--sp-5);
+    gap: var(--space-md);
   }
   .serial-wx {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .serial-wx .row {
     align-items: center;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
   }
   .serial-live {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-6);
-    padding: var(--sp-3) var(--sp-4);
+    gap: var(--space-xs) var(--space-md);
+    padding: var(--space-sm) var(--space-sm);
     border: 1px solid var(--hair);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: color-mix(in oklch, var(--surface) 60%, transparent);
-    font-size: var(--fs-sm-up);
+    font-size: var(--text-label);
   }
 }

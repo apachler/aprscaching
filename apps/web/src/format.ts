@@ -9,10 +9,12 @@
 import { createContext, useContext } from "react";
 
 /**
- * v1 ships exactly two themes, both DARK-ONLY: "modern" (the default visual
- * language) and "phosphor" (the late-90s green-phosphor flip). There is no light mode.
+ * The Appearance setting: "dark" (the default), "light", "auto" (dark or light, following the system and
+ * switching live) or "phosphor" (the late-90s green-phosphor flip).
  */
-export type Theme = "modern" | "phosphor";
+export type Theme = "auto" | "light" | "dark" | "phosphor";
+/** What the token layer applies: the `data-theme` attribute on the document root. */
+export type ResolvedTheme = "dark" | "light" | "phosphor";
 export interface LocaleSettings {
   locale: string; // BCP-47 (e.g. "de-AT"); "" => browser default
   timeZone: string; // IANA (e.g. "Europe/Vienna"); "" => browser default
@@ -29,15 +31,25 @@ export function resolveCrt(s: LocaleSettings): "on" | "off" {
   return s.theme === "phosphor" && s.crt ? "on" : "off";
 }
 
-/** Map the chosen theme to the `data-theme` attribute the token layer keys off. Modern reuses the
- *  default dark token set (attribute "dark"); Phosphor applies its own [data-theme="phosphor"] block. */
-export function resolveTheme(theme: Theme): "dark" | "phosphor" {
-  return theme === "phosphor" ? "phosphor" : "dark";
+/** The token set for THEME: "auto" follows the system's colour scheme (PREFERS_DARK), the rest are themselves. */
+export function resolveTheme(theme: Theme, prefersDark: boolean): ResolvedTheme {
+  if (theme === "auto") return prefersDark ? "dark" : "light";
+  return theme;
 }
-/** Coerce any stored theme value to a valid theme: "phosphor" (or its alias "cogmind") stays phosphor;
- *  anything else (dark/light/auto, garbage) is modern. */
-function normalizeTheme(t: unknown): Theme {
-  return t === "phosphor" || t === "cogmind" ? "phosphor" : "modern";
+/** Whether the system asks for a dark colour scheme; true where it cannot say. */
+export function systemPrefersDark(): boolean {
+  try {
+    return typeof matchMedia === "function" ? !matchMedia("(prefers-color-scheme: light)").matches : true;
+  } catch {
+    return true;
+  }
+}
+/** Coerce any stored theme value to a theme, never throwing. "modern" (the name of the dark theme in the
+ *  settings of older versions) is dark, "cogmind" is Phosphor's old alias, and anything unknown is dark. */
+export function normalizeTheme(t: unknown): Theme {
+  if (t === "auto" || t === "light" || t === "dark" || t === "phosphor") return t;
+  if (t === "cogmind") return "phosphor";
+  return "dark";
 }
 
 const KEY = "acs.locale";
@@ -64,14 +76,14 @@ function unitsForLocale(locale: string): "metric" | "imperial" {
 
 function defaultSettings(): LocaleSettings {
   const locale = browserLocale();
-  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "modern", crt: false };
+  return { locale: "", timeZone: "", units: unitsForLocale(locale), theme: "dark", crt: false };
 }
 export function loadSettings(): LocaleSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = { ...defaultSettings(), ...(JSON.parse(raw) as Partial<LocaleSettings>) };
-      s.theme = normalizeTheme(s.theme); // dark/light/auto → modern
+      s.theme = normalizeTheme(s.theme);
       return s;
     }
   } catch {
@@ -161,6 +173,7 @@ export function makeFormatters(settings: LocaleSettings): Formatters {
 
 export const FormatContext = createContext<Formatters>(makeFormatters(defaultSettings()));
 export const useFmt = (): Formatters => useContext(FormatContext);
-/** The active theme, reactively (from the settings in context). Phosphor is emoji-free, so components
- *  gate decorative glyphs on this (see ui/Ico). */
-export const useTheme = (): Theme => normalizeTheme(useContext(FormatContext).settings.theme);
+/** The applied theme, reactively: the setting from context, with "auto" resolved against the system scheme.
+ *  Phosphor is emoji-free, so components gate decorative glyphs on this (see ui/Ico). */
+export const useTheme = (): ResolvedTheme =>
+  resolveTheme(normalizeTheme(useContext(FormatContext).settings.theme), systemPrefersDark());

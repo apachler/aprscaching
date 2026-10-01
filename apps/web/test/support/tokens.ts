@@ -92,7 +92,12 @@ export function parseColor(value: string, tokens: Map<string, string>, seen: str
   }
   const mix = /^color-mix\(\s*in oklch\s*,(.*)\)$/.exec(v);
   if (mix) {
-    const [p1, p2] = splitTop(mix[1]);
+    // a percentage may itself be a token: color-mix(in oklch, var(--tc) var(--hue-text), var(--ink))
+    const body = (mix[1] ?? "").replace(/var\((--[\w-]+)\)/g, (m, name: string) => {
+      const t = tokens.get(name);
+      return t !== undefined && /^\d+(\.\d+)?%$/.test(t) ? t : m;
+    });
+    const [p1, p2] = splitTop(body);
     const part = (p: string) => {
       const pm = /^(.*?)\s+(\d+(?:\.\d+)?)%$/.exec(p);
       return pm ? { col: pm[1], pct: parseFloat(pm[2]) / 100 } : { col: p, pct: null as number | null };

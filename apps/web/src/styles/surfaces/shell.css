@@ -42,12 +42,12 @@
     z-index: var(--z-topbar);
     display: flex;
     align-items: center;
-    gap: var(--sp-4);
-    padding: env(safe-area-inset-top) max(var(--sp-6), env(safe-area-inset-right)) 0
-      max(var(--sp-6), env(safe-area-inset-left));
+    gap: var(--space-sm);
+    padding: env(safe-area-inset-top) max(var(--space-md), env(safe-area-inset-right)) 0
+      max(var(--space-md), env(safe-area-inset-left));
     background: var(--topbar-bg);
     color: var(--chrome-ink);
-    box-shadow: var(--elev-3);
+    box-shadow: var(--elevation-floating);
   }
   .topbar .logo {
     height: 26px;
@@ -62,7 +62,7 @@
     white-space: nowrap;
   } /* chips never wrap or shrink; the search absorbs the squeeze */
   .topbar .muted {
-    color: color-mix(in oklch, var(--chrome-ink) 72%, transparent);
+    color: var(--chrome-ink-muted);
     white-space: nowrap;
   }
   .topbar .call {
@@ -70,7 +70,7 @@
   }
   .topbar .call input {
     width: 92px;
-    background: color-mix(in oklch, var(--chrome-ink) 10%, transparent);
+    background: var(--chrome-field-bg);
     color: var(--chrome-ink);
     border-color: color-mix(in oklch, var(--chrome-ink) 25%, transparent);
     font-family: var(--font-mono);
@@ -78,12 +78,12 @@
   }
   /* chrome tint for the top-bar chips; icon buttons keep the bare icon look of button.icon */
   .topbar button:where(:not(.icon)) {
-    background: color-mix(in oklch, var(--chrome-ink) 13%, transparent);
+    background: var(--chrome-field-bg);
     border-color: color-mix(in oklch, var(--chrome-ink) 30%, transparent);
     color: var(--chrome-ink);
   }
   .topbar button:hover {
-    background: color-mix(in oklch, var(--chrome-ink) 26%, transparent);
+    background: var(--chrome-hover-bg);
   }
   .topbar button.primary {
     background: var(--accent);
@@ -102,7 +102,7 @@
     height: 48px;
     border: none;
     background: none;
-    border-radius: var(--r-md);
+    border-radius: var(--radius-control);
     color: var(--muted);
     cursor: pointer;
     display: flex;
@@ -110,7 +110,7 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    font-size: var(--fs-3xs);
+    font-size: var(--text-micro);
     letter-spacing: 0.01em;
   }
   .rail button:hover {
@@ -118,7 +118,7 @@
     color: var(--ink);
   }
   .rail button.on {
-    background: color-mix(in oklch, var(--brand) 24%, transparent);
+    background: var(--selected-bg);
     color: var(--heading);
   }
   .rail button:focus-visible {
@@ -134,8 +134,8 @@
       flex: 0 0 var(--rail-w);
       flex-direction: column;
       align-items: center;
-      gap: var(--sp-1);
-      padding: var(--sp-5) 0;
+      gap: var(--space-xs);
+      padding: var(--space-md) 0;
       background: var(--rail-bg);
       border-right: 1px solid var(--hair);
       z-index: var(--z-rail);
@@ -183,22 +183,22 @@
   .idchip {
     display: inline-flex;
     align-items: center;
-    gap: var(--sp-2);
+    gap: var(--space-xs);
     height: 34px;
-    padding: 0 var(--sp-5);
+    padding: 0 var(--space-md);
     flex: none;
     white-space: nowrap;
-    background: color-mix(in oklch, var(--chrome-ink) 10%, transparent);
+    background: var(--chrome-field-bg);
     border: 1px solid color-mix(in oklch, var(--chrome-ink) 22%, transparent);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     color: var(--chrome-ink);
     cursor: pointer;
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
   }
   .idchip:hover {
-    background: color-mix(in oklch, var(--chrome-ink) 18%, transparent);
+    background: var(--chrome-hover-bg);
   }
   /* a verified call: a firmer outline and a tick in the chrome ink — never a trust-tier colour */
   .idchip.ok {
@@ -210,8 +210,8 @@
   .idchip-x {
     font-family: var(--font-system);
     font-weight: 500;
-    font-size: var(--fs-xs);
-    color: color-mix(in oklch, var(--chrome-ink) 60%, transparent);
+    font-size: var(--text-caption);
+    color: var(--chrome-ink-muted);
   }
   /* bottom tab bar — mobile-first primary navigation (hidden on desktop) */
   .tabbar {
@@ -245,9 +245,9 @@
       display: none;
     }
     .topbar {
-      gap: var(--sp-3);
-      padding: env(safe-area-inset-top) max(var(--sp-4), env(safe-area-inset-right)) 0
-        max(var(--sp-4), env(safe-area-inset-left));
+      gap: var(--space-sm);
+      padding: env(safe-area-inset-top) max(var(--space-sm), env(safe-area-inset-right)) 0
+        max(var(--space-sm), env(safe-area-inset-left));
     }
     .topbar .call input {
       width: 80px;
@@ -258,8 +258,8 @@
       height: 21px;
     }
     .idchip {
-      padding: 0 var(--sp-3);
-      gap: var(--sp-1);
+      padding: 0 var(--space-sm);
+      gap: var(--space-xs);
     }
     .tabbar {
       display: flex;
@@ -272,26 +272,26 @@
       height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
       background: var(--topbar-bg);
       border-top: 1px solid var(--line);
-      box-shadow: var(--elev-up);
+      box-shadow: var(--elevation-floating-up);
       padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
     .tabbar button {
       flex: 1;
       border: none;
       background: none;
-      color: color-mix(in oklch, var(--chrome-ink) 72%, transparent);
+      color: var(--chrome-ink-muted);
       cursor: pointer;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: var(--sp-0);
-      font-size: var(--fs-xs);
+      gap: var(--space-2xs);
+      font-size: var(--text-caption);
       border-radius: 0;
       padding: 0;
     }
     .tabbar button .ic {
-      font-size: var(--fs-3xl);
+      font-size: var(--text-title);
       line-height: 1;
     }
     .tabbar button.on {
@@ -309,14 +309,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: var(--fs-5xl);
-      box-shadow: var(--elev-4);
+      font-size: var(--text-title-lg);
+      box-shadow: var(--elevation-floating);
       border: 3px solid var(--topbar-bg);
     }
     .tabbar button.fab span:last-child {
-      color: var(--accent);
+      color: var(--chrome-ink); /* on the chrome; the green stays in the button */
       font-weight: 700;
-      margin-top: var(--sp-0);
+      margin-top: var(--space-2xs);
     }
 
     /* panels become bottom sheets — dynamic-viewport height so they clear mobile browser chrome,
@@ -326,26 +326,26 @@
     .panel.right {
       top: auto;
       bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
-      left: max(var(--sp-2), env(safe-area-inset-left));
-      right: max(var(--sp-2), env(safe-area-inset-right));
+      left: max(var(--space-xs), env(safe-area-inset-left));
+      right: max(var(--space-xs), env(safe-area-inset-right));
       width: auto;
       max-width: none;
       max-height: 74vh;
-      border-radius: var(--r-10) var(--r-10) 0 0;
-      padding: var(--sp-6) var(--sp-6) var(--sp-8);
+      border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+      padding: var(--space-md) var(--space-md) var(--space-lg);
     }
     .panel::before {
       content: "";
       display: block;
       width: 38px;
       height: 4px;
-      border-radius: var(--r-2);
+      border-radius: var(--radius-tick);
       background: var(--line);
-      margin: -4px auto var(--sp-4);
+      margin: -4px auto var(--space-sm);
     }
     .geo-banner {
       top: auto;
-      bottom: calc(var(--tabbar-h) + var(--sp-5) + env(safe-area-inset-bottom));
+      bottom: calc(var(--tabbar-h) + var(--space-md) + env(safe-area-inset-bottom));
     }
   }
   @supports (height: 1dvh) {
@@ -383,7 +383,8 @@
     min-height: 100dvh;
     display: grid;
     place-items: center;
-    padding: max(var(--sp-7), env(safe-area-inset-top)) var(--sp-7) max(var(--sp-7), env(safe-area-inset-bottom));
+    padding: max(var(--space-lg), env(safe-area-inset-top)) var(--space-lg)
+      max(var(--space-lg), env(safe-area-inset-bottom));
     background: var(--surface);
     color: var(--ink);
   }
@@ -391,11 +392,11 @@
     width: min(32rem, 100%);
   }
   .crash-title {
-    margin: 0 0 var(--sp-3);
-    font-size: var(--fs-xl);
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-input);
   }
   .crash-msg {
-    padding: var(--sp-3);
+    padding: var(--space-sm);
     border-left: 3px solid var(--bad);
     background: color-mix(in oklch, var(--bad) 10%, transparent);
     overflow-wrap: anywhere;

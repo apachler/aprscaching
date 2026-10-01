@@ -41,12 +41,19 @@ never kept as a second hand-made colour. Every colour has one role:
 | Lines | `--line`, `--hair` | Borders of controls; hairline dividers |
 | Brand | `--brand`, `--topbar-bg`, `--rail-bg`, `--chrome-ink` | The chrome: top bar, rail, and text on them |
 | Action | `--accent` (fill), `--accent-text` (text, links, icons), `--accent-ink` (text on the fill) | The one primary action per screen |
-| Trust | `--tier-a`, `--tier-b`, `--tier-c` | Tier A Radio-verified, Tier B Location-verified, Tier C Logged |
-| Status | `--ok`, `--warn`, `--bad` | Success, warning, error and danger |
+| Chrome text | `--chrome-ink-muted`, `--chrome-field-bg`, `--chrome-hover-bg` | Secondary text on the chrome; fields and chips in the top bar; their hover |
+| Selection | `--selected-bg` | The selected rail item, segment or chip, under `--heading` text |
+| Trust | `--tier-a`, `--tier-b`, `--tier-c` (fills); `--tier-a-text`, `--tier-b-text`, `--tier-c-text` | Tier A Radio-verified, Tier B Location-verified, Tier C Logged |
+| Status | `--ok`, `--warn`, `--bad` (fills); `--ok-text`, `--warn-text`, `--bad-text` | Success, warning, error and danger |
+| Map controls | `--map-control-ink` | Glyphs on MapLibre's control stack, which is white in every theme |
 
 **The accent has two roles.** The brand green fills the primary button, with dark ink on it. As text, a link or an
 icon on a light surface, the same green is too light to read, so text uses `--accent-text`: a darker green in
 the light theme and the same green in dark. A colour that plays two roles gets two tokens.
+
+**Hues as text.** A tier or status colour used as text, an icon or a badge's lettering is its `-text` token: the
+base mixed toward `--ink` by `--hue-text`. On a dark surface that lifts it, on a light one it deepens it, from one
+formula; Phosphor keeps its own ramp. A per-item colour (a cache type) is mixed the same way where it is set.
 
 **Contrast.** Every foreground/background pair a stylesheet uses meets WCAG 2.2 AA in every theme: 4.5:1 for
 text, 3:1 for large text, icons, borders that identify a control, and focus indicators.

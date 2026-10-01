@@ -2,14 +2,14 @@
 @layer components {
   .seg-chips {
     display: flex;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-6);
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
   }
   .seg-chips button {
     flex: 1;
     padding: 7px 0;
-    border-radius: var(--r-sm);
-    font-size: var(--fs-sm);
+    border-radius: var(--radius-control);
+    font-size: var(--text-label);
     font-weight: 600;
     border: 1px solid var(--line);
     background: transparent;
@@ -17,7 +17,7 @@
     cursor: pointer;
   }
   .seg-chips button.on {
-    background: color-mix(in oklch, var(--brand) 20%, transparent);
+    background: var(--selected-bg);
     border-color: color-mix(in oklch, var(--brand) 45%, var(--line));
     color: var(--heading);
   }
@@ -29,7 +29,7 @@
   .seg {
     display: inline-flex;
     border: 1px solid var(--line);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
   }
   .seg.verify-methods {
     overflow: hidden; /* wraps onto several rows; its buttons are already full-size targets */
@@ -39,18 +39,18 @@
     border-radius: 0;
     background: var(--surface);
     color: var(--muted);
-    padding: 5px var(--sp-5);
+    padding: 5px var(--space-md);
     text-transform: capitalize;
   }
   /* the end buttons carry the bar's rounding instead of an overflow clip, so the coarse-pointer hit
      area of each button can reach past the bar */
   .seg:not(.verify-methods) > button:first-child {
-    border-start-start-radius: calc(var(--r-6) - 1px);
-    border-end-start-radius: calc(var(--r-6) - 1px);
+    border-start-start-radius: calc(var(--radius-control) - 1px);
+    border-end-start-radius: calc(var(--radius-control) - 1px);
   }
   .seg:not(.verify-methods) > button:last-child {
-    border-start-end-radius: calc(var(--r-6) - 1px);
-    border-end-end-radius: calc(var(--r-6) - 1px);
+    border-start-end-radius: calc(var(--radius-control) - 1px);
+    border-end-end-radius: calc(var(--radius-control) - 1px);
   }
   .seg button + button {
     border-left: 1px solid var(--line);

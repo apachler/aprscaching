@@ -18,27 +18,27 @@
   button.icon {
     border: none;
     background: none;
-    font-size: var(--fs-xl);
+    font-size: var(--text-input);
     color: var(--ink);
   }
   /* big one-tap primary (Log a find) + filter type chips */
   .log-primary {
     width: 100%;
-    font-size: var(--fs-xl);
+    font-size: var(--text-input);
     padding: 11px;
   }
   .chip-btn {
-    border-radius: var(--r-9);
-    font-size: var(--fs-md);
+    border-radius: var(--radius-sheet);
+    font-size: var(--text-data);
   }
   /* inline text-button (e.g. "remove" beside a list row) */
   .link-btn {
     background: none;
     border: 0;
-    padding: 0 var(--sp-0);
-    margin-left: var(--sp-3);
+    padding: 0 var(--space-2xs);
+    margin-left: var(--space-sm);
     color: var(--muted);
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
     cursor: pointer;
     text-decoration: underline;
   }
@@ -49,7 +49,7 @@
   /* the red hover is reserved for destructive link-buttons (remove/delete rows) */
   .link-btn.danger:hover,
   .link-btn.danger:focus-visible {
-    color: var(--bad);
+    color: var(--bad-text);
   }
   button.link {
     border: none;
@@ -67,9 +67,9 @@
     background: none;
     color: var(--muted);
     cursor: pointer;
-    padding: var(--sp-0);
+    padding: var(--space-2xs);
     display: inline-flex;
-    border-radius: var(--r-5);
+    border-radius: var(--radius-chip);
   }
   .iconbtn:hover {
     color: var(--ink);
@@ -79,7 +79,7 @@
     outline-offset: 2px;
   }
   button.danger {
-    color: var(--bad);
+    color: var(--bad-text);
     border-color: color-mix(in oklch, var(--bad) 45%, var(--line));
   }
   button.danger:hover {

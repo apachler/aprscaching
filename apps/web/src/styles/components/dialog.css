@@ -9,25 +9,25 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--sp-7);
+    padding: var(--space-lg);
   }
   .confirm-dialog {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    box-shadow: var(--elev-9);
-    padding: var(--sp-7);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elevation-overlay);
+    padding: var(--space-lg);
     width: 100%;
     max-width: 26rem;
   }
   .confirm-dialog h3 {
-    margin: 0 0 var(--sp-3);
-    font-size: var(--fs-lg);
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-body);
   }
   .confirm-body {
     color: var(--muted);
-    font-size: var(--fs-md-up);
-    margin-bottom: var(--sp-6);
+    font-size: var(--text-data);
+    margin-bottom: var(--space-md);
   }
   .confirm-actions {
     justify-content: flex-end;

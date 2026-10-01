@@ -6,7 +6,7 @@
   .demo-bench {
     min-height: 100vh;
     background: var(--surface);
-    padding: var(--sp-9);
+    padding: var(--space-lg);
   }
   @supports (height: 1dvh) {
     .demo-shell {
@@ -20,18 +20,18 @@
     background: var(--surface-2);
   }
   .demo-head {
-    margin-bottom: var(--sp-6);
+    margin-bottom: var(--space-md);
   }
   .demo-head h1 {
     margin: 0;
-    font-size: var(--fs-4xl);
+    font-size: var(--text-title);
   }
   .demo-head p {
-    margin: var(--sp-1) 0 0;
+    margin: var(--space-xs) 0 0;
   }
   .demo-row {
     display: flex;
-    gap: var(--sp-9);
+    gap: var(--space-lg);
     align-items: flex-start;
     flex-wrap: wrap;
   }

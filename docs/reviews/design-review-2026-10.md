@@ -52,15 +52,15 @@ The work item is the handover item that fixes it.
 
 | ID | Sev. | Finding | Evidence | Work item | Resolution |
 |---|---|---|---|---|---|
-| R-01 | blocker | There is no light theme to choose. `Theme` is `modern \| phosphor`; `normalizeTheme` maps dark, light and auto to Modern. The rules require dark *and* light (ui-ux §7). | `format.ts` | DSN-06 | |
-| R-02 | major | In light, 17 token pairs fail contrast:<br>• accent as text, and white on the green button: 2.28:1<br>• top-bar text: 3.87:1<br>• tier, status and found/DNF badges: 1.7–2.7:1<br>• tier chip letters: 2–2.5:1<br>• secondary text on raised controls and the rail: 4.3–4.4:1 | contrast test; `*-light-*` | DSN-07 | |
-| R-03 | major | In dark, the DNF badge is 3.98:1. axe also flags `.typechip`, `.danger` and small `.mono` text on some surfaces. | contrast test; `detail-dark-*`, `settings-dark-*` | DSN-07 | |
-| R-04 | major | In light, the map's locate button is invisible: its glyph uses `--ink-tier`, which is white in light, on MapLibre's white control. | `map-light-*` | DSN-07 | |
-| R-05 | major | The scales sprawl, and are named by size rather than role (`--fs-md-up`, `--r-7`, `--elev-6`), so nobody can tell which step a heading or a card should use. | `tokens.css` | DSN-04a | |
+| R-01 | blocker | There is no light theme to choose. `Theme` is `modern \| phosphor`; `normalizeTheme` maps dark, light and auto to Modern. The rules require dark *and* light (ui-ux §7). | `format.ts` | DSN-06 || Appearance: Auto · Light · Dark · Phosphor, Dark by default (Phase 3). |
+| R-02 | major | In light, 17 token pairs fail contrast:<br>• accent as text, and white on the green button: 2.28:1<br>• top-bar text: 3.87:1<br>• tier, status and found/DNF badges: 1.7–2.7:1<br>• tier chip letters: 2–2.5:1<br>• secondary text on raised controls and the rail: 4.3–4.4:1 | contrast test; `*-light-*` | DSN-07 || Fixed: `--accent-text`, `--*-text` hue roles, a deeper light top bar, dark ink on the green fill and on tier chips; 0 failing pairs (Phase 3). |
+| R-03 | major | In dark, the DNF badge is 3.98:1. axe also flags `.typechip`, `.danger` and small `.mono` text on some surfaces. | contrast test; `detail-dark-*`, `settings-dark-*` | DSN-07 || Fixed: `--bad-text` and the hue roles; the type chip mixes its hue toward the ink (Phase 3). |
+| R-04 | major | In light, the map's locate button is invisible: its glyph uses `--ink-tier`, which is white in light, on MapLibre's white control. | `map-light-*` | DSN-07 || Fixed: `--map-control-ink` on MapLibre's white stack (Phase 3). |
+| R-05 | major | The scales sprawl, and are named by size rather than role (`--fs-md-up`, `--r-7`, `--elev-6`), so nobody can tell which step a heading or a card should use. | `tokens.css` | DSN-04a || Fixed: role scales rolled out, size-named steps removed (Phases 2–3). |
 | R-06 | major | Two icon systems. The phone tab bar and panel titles use emoji in Modern (🗺 📍 ⚡ 👤, 📡 Shack, 📻 Packet terminal, ✉ Messages, ⚙ Settings), beside SVG line icons in the rail and buttons. | `map-dark-phone`, `shack-*`, `terminal-*` | DSN-08 (G3) | |
 | R-07 | major | Primitives are bypassed: 193 raw buttons and 10 inline styles. Tabs and segments are styled differently in the BBS (filled pills), the terminal (outlined chips) and Nearby (boxed buttons). | code counts; `bbs-*`, `nearby-*` | DSN-08 | |
 | R-08 | major | A render error in one panel takes down the whole app. There is only one `ErrorBoundary`, at the root. Seen when the BBS met an unexpected response: "The app stopped with an error". | `bbs-*` (first run) | DSN-09 (local fix) | |
-| R-09 | minor | `theme-color` is fixed at `#2D8BAB` in every theme, so the browser chrome stays blue in Phosphor and in dark. | `index.html` | DSN-06 | |
+| R-09 | minor | `theme-color` is fixed at `#2D8BAB` in every theme, so the browser chrome stays blue in Phosphor and in dark. | `index.html` | DSN-06 || Fixed: one `theme-color` per scheme, set from the top bar of an explicit theme (Phase 3). |
 | R-10 | minor | Map colours are literals that don't follow the theme:<br>• MapTools ring and measure lines;<br>• the track replay;<br>• the offline graticule (light under dark and Phosphor). | code; `*-phosphor-*` | DSN-11 | |
 | R-11 | major | In Phosphor, MapLibre's control stack (zoom, locate) stays bright white, and pins keep the Modern hues. | `map-phosphor-*`, `settings-phosphor-desktop` | DSN-11 | |
 
@@ -90,7 +90,7 @@ The work item is the handover item that fixes it.
 | R-25 | minor | Landing | The page's sections are:<br>• the "How a find works" cards;<br>• the trust model;<br>• six Shack cards with three small screenshots;<br>• four "An APRS map that forgets" cards;<br>• four "Run it anywhere" tiles;<br>• "Free in full".<br><br>All of them use the same card grid on the same dark band. Issues:<br>• the screenshots are too small to read;<br>• the small green eyebrows and the tier badges fail contrast;<br>• on a phone, the terminal card cuts its lines ("· t…"). | `landing-*` | DSN-12 | |
 | R-26 | minor | Nearby | The filter is four boxed buttons ("Up for adoption" wraps onto two lines) rather than the segmented control the rules name for 2–4 modes. | `nearby-*-desktop` | DSN-08 | |
 | R-27 | polish | Map | Under the dark theme the basemap is light: OpenFreeMap liberty, or the light graticule offline. G9 keeps one basemap for all themes; a dark basemap is in TODO. | `map-dark-*` | DSN-11 (TODO) | |
-| R-28 | minor | Tab bar | The active tab's label fails contrast in light (axe `.tabbar > .on span`). | `*-light-phone` | DSN-07 | |
+| R-28 | minor | Tab bar | The active tab's label fails contrast in light (axe `.tabbar > .on span`). | `*-light-phone` | DSN-07 || Fixed: `--chrome-ink-muted` for secondary text on the chrome (Phase 3). |
 
 ### Not reached by the harness
 

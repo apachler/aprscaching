@@ -6,30 +6,30 @@
     .decoded dl.fields {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      column-gap: var(--sp-6);
+      column-gap: var(--space-md);
     }
   }
   /* shack packet decoder */
   .decoded .kind {
     display: inline-block;
-    margin: var(--sp-2) 0;
+    margin: var(--space-xs) 0;
     font-weight: 700;
     color: var(--heading);
     text-transform: capitalize;
     background: var(--chip-bg);
-    border-radius: var(--r-7);
+    border-radius: var(--radius-card);
     padding: 1px 9px;
-    font-size: var(--fs-sm);
+    font-size: var(--text-label);
   }
   .decoded dl.fields {
     margin: 0;
   }
   .decoded dl.fields > div {
     display: flex;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
     padding: 3px 0;
     border-top: 1px solid var(--line);
-    font-size: var(--fs-md);
+    font-size: var(--text-data);
   }
   .decoded dt {
     color: var(--muted);
@@ -42,19 +42,19 @@
     word-break: break-word;
   }
   .wx {
-    margin-top: var(--sp-2);
-    font-size: var(--fs-md);
+    margin-top: var(--space-xs);
+    font-size: var(--text-data);
   }
   /* field station — local RF stations + inbox, two columns on wide, stacked narrow */
   .field-station {
-    margin: var(--sp-4) 0;
-    padding: var(--sp-3) var(--sp-4);
+    margin: var(--space-sm) 0;
+    padding: var(--space-sm) var(--space-sm);
     border: 1px solid var(--line);
-    border-radius: var(--r-md);
+    border-radius: var(--radius-control);
   }
   .field-station .fs-cols {
     display: grid;
-    gap: var(--sp-5);
+    gap: var(--space-md);
   }
   @container panel (min-width: 34rem) {
     .field-station .fs-cols {
@@ -65,21 +65,21 @@
   .shack-apps {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--sp-3);
-    margin: var(--sp-4) 0 var(--sp-1);
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 var(--space-xs);
   }
   .shack-app {
     position: relative;
   }
   .shack-app-launch {
     display: flex;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
     align-items: flex-start;
     width: 100%;
     text-align: left;
-    padding: var(--sp-4) 34px var(--sp-4) var(--sp-5);
+    padding: var(--space-sm) 34px var(--space-sm) var(--space-md);
     border: 1px solid var(--line);
-    border-radius: var(--r-7);
+    border-radius: var(--radius-card);
     background: var(--surface-2);
     cursor: pointer;
     color: inherit;
@@ -95,7 +95,7 @@
   .shack-app-t {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-0);
+    gap: var(--space-2xs);
     min-width: 0;
   }
   .shack-app-label {
@@ -103,13 +103,13 @@
   }
   .shack-app-op {
     font-weight: 400;
-    font-size: var(--fs-2xs-up);
+    font-size: var(--text-caption);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .shack-app-blurb {
-    font-size: var(--fs-xs-up);
+    font-size: var(--text-caption);
     line-height: 1.25;
   }
   .shack-pin {
@@ -124,28 +124,28 @@
     opacity: 1;
   }
   .shack-pin.on {
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .rigctl {
     display: grid;
-    gap: var(--sp-3);
+    gap: var(--space-sm);
   }
   .rigctl .row {
     align-items: center;
-    gap: var(--sp-4);
+    gap: var(--space-sm);
   }
   .rigctl input,
   .rigctl select {
     min-height: 32px;
   }
   .spot-tune {
-    margin-top: var(--sp-3);
+    margin-top: var(--space-sm);
     width: 100%;
     min-height: 38px;
     border: 1px solid var(--accent);
-    border-radius: var(--r-6);
+    border-radius: var(--radius-control);
     background: color-mix(in oklch, var(--accent) 16%, transparent);
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: 600;
     cursor: pointer;
   }

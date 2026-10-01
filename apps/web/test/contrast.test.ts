@@ -37,7 +37,14 @@ const PAIRS: Pair[] = [
     min: 4.5,
   },
   { name: "headings and links on a panel", fg: "var(--heading)", bg: "var(--surface)", min: 4.5 },
-  { name: "accent as text on a panel", fg: "var(--accent)", bg: "var(--surface)", min: 4.5 },
+  { name: "accent as text on a panel", fg: "var(--accent-text)", bg: "var(--surface)", min: 4.5 },
+  {
+    name: "accent as text on the page",
+    fg: "var(--accent-text)",
+    bg: "var(--page-bg)",
+    behind: "var(--page-bg)",
+    min: 4.5,
+  },
   { name: "text on the accent (primary button)", fg: "var(--accent-ink)", bg: "var(--accent)", min: 4.5 },
   {
     name: "text on the top bar",
@@ -46,12 +53,64 @@ const PAIRS: Pair[] = [
     behind: "var(--topbar-bg)",
     min: 4.5,
   },
-  { name: "Tier A badge", fg: "var(--tier-a)", bg: tint("--tier-a", 20), min: 4.5 },
-  { name: "Tier B badge", fg: "var(--tier-b)", bg: tint("--tier-b", 20), min: 4.5 },
-  { name: "Tier C badge", fg: "var(--muted)", bg: tint("--tier-c", 16), min: 4.5 },
-  { name: "found badge", fg: "var(--ok)", bg: tint("--ok", 20), min: 4.5 },
-  { name: "DNF badge", fg: "var(--bad)", bg: tint("--bad", 20), min: 4.5 },
-  { name: "warning badge", fg: "var(--warn)", bg: tint("--warn", 20), min: 4.5 },
+  {
+    name: "inactive tab label on the tab bar",
+    fg: "var(--chrome-ink-muted)",
+    bg: "var(--topbar-bg)",
+    behind: "var(--topbar-bg)",
+    min: 4.5,
+  },
+  {
+    name: "search placeholder on the top bar",
+    fg: "var(--chrome-ink-muted)",
+    bg: "var(--chrome-field-bg)",
+    behind: "var(--topbar-bg)",
+    min: 4.5,
+  },
+  {
+    name: "identity chip on the top bar",
+    fg: "var(--chrome-ink)",
+    bg: "var(--chrome-field-bg)",
+    behind: "var(--topbar-bg)",
+    min: 4.5,
+  },
+  {
+    name: "active rail item",
+    fg: "var(--heading)",
+    bg: "var(--selected-bg)",
+    behind: "var(--rail-bg)",
+    min: 4.5,
+  },
+  { name: "selected segment or chip", fg: "var(--heading)", bg: "var(--selected-bg)", min: 4.5 },
+  {
+    name: "Tier B badge on the page",
+    fg: "var(--tier-b-text)",
+    bg: tint("--tier-b", 20),
+    behind: "var(--page-bg)",
+    min: 4.5,
+  },
+  {
+    name: "warning badge on the page",
+    fg: "var(--warn-text)",
+    bg: tint("--warn", 20),
+    behind: "var(--page-bg)",
+    min: 4.5,
+  },
+  {
+    name: "status badge on a warning card",
+    fg: "var(--bad-text)",
+    bg: tint("--bad", 20),
+    behind: "color-mix(in oklch, var(--warn) 8%, var(--surface))",
+    min: 4.5,
+  },
+  { name: "Tier A badge", fg: "var(--tier-a-text)", bg: tint("--tier-a", 20), min: 4.5 },
+  { name: "Tier B badge", fg: "var(--tier-b-text)", bg: tint("--tier-b", 20), min: 4.5 },
+  { name: "Tier C badge", fg: "var(--tier-c-text)", bg: tint("--tier-c", 16), min: 4.5 },
+  { name: "found badge", fg: "var(--ok-text)", bg: tint("--ok", 20), min: 4.5 },
+  { name: "DNF badge", fg: "var(--bad-text)", bg: tint("--bad", 20), min: 4.5 },
+  { name: "warning badge", fg: "var(--warn-text)", bg: tint("--warn", 20), min: 4.5 },
+  { name: "danger text on a panel", fg: "var(--bad-text)", bg: "var(--surface)", min: 4.5 },
+  { name: "success text on a panel", fg: "var(--ok-text)", bg: "var(--surface)", min: 4.5 },
   { name: "award chip", fg: "var(--award-ink)", bg: "var(--award-bg)", min: 4.5 },
   { name: "letter on a Tier A chip", fg: "var(--ink-tier)", bg: "var(--tier-a)", min: 4.5 },
   { name: "letter on a Tier B chip", fg: "var(--ink-tier)", bg: "var(--tier-b)", min: 4.5 },
@@ -59,39 +118,20 @@ const PAIRS: Pair[] = [
   // MapLibre's control stack is white in every theme
   {
     name: "map control glyph on MapLibre's white",
-    fg: "var(--ink-tier)",
+    fg: "var(--map-control-ink)",
     bg: "oklch(1 0 0)",
     behind: "oklch(1 0 0)",
     min: 3,
   },
-  { name: "Tier A icon on a panel", fg: "var(--tier-a)", bg: "var(--surface)", min: 3 },
-  { name: "Tier B icon on a panel", fg: "var(--tier-b)", bg: "var(--surface)", min: 3 },
+  { name: "Tier A icon on a panel", fg: "var(--tier-a-text)", bg: "var(--surface)", min: 3 },
+  { name: "Tier B icon on a panel", fg: "var(--tier-b-text)", bg: "var(--surface)", min: 3 },
   { name: "rail focus ring on the rail", fg: "var(--heading)", bg: "var(--rail-bg)", behind: "var(--rail-bg)", min: 3 },
 ];
 
 const THEMES: Theme[] = ["dark", "light", "phosphor"];
 
-/** Failing today; each entry leaves this list when the pair is fixed. */
-const KNOWN_FAILURES = new Set<string>([
-  "dark: DNF badge",
-  "light: secondary text on a raised control",
-  "light: secondary text on the rail",
-  "light: accent as text on a panel",
-  "light: text on the accent (primary button)",
-  "light: text on the top bar",
-  "light: Tier A badge",
-  "light: Tier B badge",
-  "light: Tier C badge",
-  "light: found badge",
-  "light: DNF badge",
-  "light: warning badge",
-  "light: letter on a Tier A chip",
-  "light: letter on a Tier B chip",
-  "light: letter on a Tier C chip",
-  "light: map control glyph on MapLibre's white",
-  "light: Tier A icon on a panel",
-  "light: Tier B icon on a panel",
-]);
+/** Pairs accepted as failing, each with the item that fixes it; an entry leaves the list once its pair passes. */
+const KNOWN_FAILURES = new Set<string>([]);
 
 describe("token contrast", () => {
   it("measures black on white as 21:1 and a colour on itself as 1:1", () => {
