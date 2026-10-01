@@ -20,7 +20,7 @@ The **Manual** icon in the top bar opens this manual.
 ## The map
 
 - **Search & filter** (the funnel icon): search by code or title, filter by **Cache type**, include
-  **unvetted network data** from other instances, and turn on **Live layers** — live APRS stations and
+  **unvetted network data** from other instances, and turn on **Live layers** — live [APRS](../glossary.md#aprs) stations and
   POTA/SOTA activations.
   ![Search & filter](../assets/shots/filter-desktop.webp){ width="720" loading=lazy }
 - **Basemap**: **Map**, **Topo** or **Sat**.
@@ -40,12 +40,14 @@ heard, never the whole network:
 - **Via the MeshCom server** — the node got it from the MeshCom server, not over the air here; the pin has a
   dashed outline.
 
-Stations that reach APRS-IS through a LoRa-APRS IGate show as ordinary APRS stations.
+Stations that reach [APRS-IS](../glossary.md#aprs-is) through a LoRa-APRS [IGate](../glossary.md#igate) show as ordinary APRS
+stations.
 
 Open a MeshCom station for how it was last heard, its device and firmware, its battery and signal, and a
-link to its page on MeshMap. When its latest message named relays (its *via* list), the panel shows "Sent via
-relays …": the sender limited forwarding to those nodes. That is its plan, not the path the message took. Visitors see the battery and signal as *high / medium / low* and
-*strong / usable / weak*; signed in, you see the percentage, RSSI and SNR.
+link to its page on MeshMap. When its latest message named relays (its *via* list), the panel shows "Sent
+via relays …": the sender limited forwarding to those nodes. That is its plan, not the path the message
+took. Visitors see the battery and signal as *high / medium / low* and *strong / usable / weak*; signed in,
+you see the battery percentage and the signal as RSSI (strength) and SNR (signal-to-noise ratio).
 
 **MeshCom links** (off by default; shown once MeshCom is on) draws the links your node(s) heard in the last
 24 hours: a solid line for a direct hearing, a dashed line for each leg of a relay path, wider for a stronger
@@ -105,7 +107,7 @@ callsign, it can also be **announced to APRS-IS**.
 
 No signal at the cache? The find is **Saved — offline, will sync when you're back online**.
 
-**Couldn't find it** records a DNF; **Add a note** posts a note to the logbook.
+**Couldn't find it** records a [DNF](../glossary.md#dnf); **Add a note** posts a note to the logbook.
 
 ### Log from your radio
 
@@ -122,21 +124,21 @@ unless the instance names another:
 The dash in the code is optional. Your callsign must be verified on your account (**Settings → Account**);
 the log goes to the account that holds it.
 
-- **Heard by one of the instance's own receiving stations** (its attested sites), the message is logged at
-  once.
+- **Heard by one of the instance's own receiving stations** (its [attested
+  sites](../glossary.md#attested-site)), the message is logged at once.
 - **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message), it waits under **You →
   Logs sent over the air** until you tap **Confirm** — anyone can put your callsign on an internet message,
   so the app asks you first. Unconfirmed messages expire after seven days.
 
 The find is verified the usual way, at the time you sent the message: beacon your position near the cache
-first, and a find heard by an independent receiving station reaches **Tier A**. A radio message carries no
-phone location, so without such a beacon it is recorded at **Tier C**.
+first, and a find heard by an independent receiving station reaches **[Tier A](../glossary.md#tier)**. A radio
+message carries no phone location, so without such a beacon it is recorded at **Tier C**.
 
-Your radio gets an acknowledgement for a numbered message, sent back the way your message came: from the
-receiving station's own radio when it can transmit (no internet needed), through the MeshCom node that heard
-you, or over APRS-IS. A text reply ("AC-1234 found, logged Tier A") comes only if the operator has turned
-replies on; `HELP` is always answered. At most ten commands per hour are accepted from one callsign, all
-its SSIDs together; more are ignored, without an acknowledgement.
+Your radio gets an acknowledgement when it numbers the message (radios add a number when they want one), sent
+back the way your message came: from the receiving station's own radio when it can transmit (no internet
+needed), through the MeshCom node that heard you, or over APRS-IS. A text reply ("AC-1234 found, logged Tier
+A") comes only if the operator has turned replies on; `HELP` is always answered. At most ten commands per hour
+are accepted from one callsign, all its SSIDs together; more are ignored, without an acknowledgement.
 
 ### The "you're near" prompt
 
@@ -166,12 +168,15 @@ A multi-stage cache shows **Stages · 1/3 unlocked**. Unlock the next stage by:
 5. Tap **Hide cache**. It gets a code like `AC-1234`.
 
 Add photos afterwards from the cache's **Media** section. A **Living (APRS)** cache asks for the station
-callsign it follows; you can also create one from **Settings → My stations**. The minimum tier for a cache and
-its stages are set through the [HTTP API](../reference/api.md).
+callsign it follows; you can also create one from **Settings → My stations**.
+
+The hide form does not set a cache's stages or raise its minimum tier. Both are owner updates through the
+[HTTP API](../reference/api.md) (`PATCH /api/caches/:id`, `POST /api/caches/:id/stages`); if you don't use
+the API, ask the instance's sysop.
 
 ## Adopt a cache
 
-When a cache's owner leaves — they erased their account, or stopped looking after it — the sysop can put the
+When a cache's owner leaves — they erased their account, or stopped looking after it — the [sysop](../glossary.md#sysop) can put the
 cache up for adoption. **Nearby → Up for adoption** lists those caches, nearest first; most are archived, so
 they are not on the map.
 

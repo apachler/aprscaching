@@ -65,7 +65,8 @@ Restart the box. Its log shows:
 
 Players can log a find by sending a MeshCom direct message such as `FOUND AC-1234` to `APRSCG`
 ([Log from your radio](../guides/caching.md#log-from-your-radio)). To let the box acknowledge those
-messages — and send the instance's text replies — through the node that heard them, set on the box:
+messages — and send the instance's text replies — through the node that heard them, set on the box. The node
+then transmits automatically under your callsign: read [Amateur-radio compliance](rf-regulatory.md) first.
 
 ```
 BOX_ID=pi-home

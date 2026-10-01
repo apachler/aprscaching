@@ -1,5 +1,10 @@
 # Federation
 
+This page is for the [sysop](../glossary.md#sysop) who connects an instance to others. As a player you
+need none of it: caches from the instances yours trusts appear on your map, and your finds travel to them.
+In plain words, federation lets independent instances share caches, finds and keys as signed records, so
+none of them has to trust the network in between.
+
 Any instance — Cloudflare-edge or self-hosted — can join one open network. Federation is built on
 **signed feeds and verified mirrors**, never on trusting a transport. Because a record's authenticity is
 in its signature and not its path, the same signed records travel over any transport — HTTPS, plain HTTP

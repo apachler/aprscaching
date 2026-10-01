@@ -71,6 +71,7 @@ nav:
       - The Shack: guides/shack.md
       - Federation: guides/federation.md
   - Core concepts: concepts.md
+  - Glossary: glossary.md
   - Operating an instance:
       - Deployment: operate/deployment.md
       - Running in Docker: operate/docker.md

@@ -4,6 +4,10 @@ Beyond APRS, aprscaching is a connected-mode packet station: an AX.25 data-link 
 a store-and-forward BBS that forwards mail with the wider packet network. These run on the operator-local
 ingest box over a KISS TNC, or over an AXUDP link to other nodes when the box has no radio.
 
+!!! warning "These services transmit automatically"
+    The NET/ROM node, the BBS and FBB forwarding answer and send on the air without an operator at the key,
+    over the KISS TNC. Read [Amateur-radio compliance](rf-regulatory.md) before you enable them on RF.
+
 ## Connected-mode AX.25
 
 The data-link layer (`@aprscaching/ax25`) is a pure, event-driven AX.25 v2.2 (LAPB-derived) state machine — no
@@ -32,6 +36,10 @@ a bidirectional AXUDP port (`AXUDP_PEERS`). It:
 - accepts **L4 circuits** terminating at the node (bound to the node command line) and supports
   **connect-through** (`C <dest>`) that routes and bridges a caller onward;
 - mirrors its learned NODES table and MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`).
+
+**Check it worked:** the box logs `[netrom] node <ALIAS>:<CALL> active on <port>` and, once it answers connects,
+`[netrom] node CLI answering inbound connects on <CALL>`. Learned routes log as `[netrom] learned … route(s)`
+and appear in the **NET/ROM node** app in the Shack.
 
 ### INP3 (Improved NET/ROM)
 

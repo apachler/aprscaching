@@ -1,6 +1,6 @@
 # aprscaching
 
-**Find real places on the air.** aprscaching is an APRS geocaching game and ham-radio **Shack**. You hide a cache, go find it, and log the find *verified by radio* — not just by
+**Find real places on the air.** aprscaching is an [APRS](glossary.md#aprs) geocaching game and ham-radio **Shack**. You hide a cache, go find it, and log the find *verified by radio* — not just by
 tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
 with other instances into one open network.
 
@@ -27,8 +27,8 @@ walk into a cache's geofence. Leaderboards, profiles, badges, and imported herit
 (SOTA / POTA / WWFF / castles / islands) share the same map.
 
 **The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live
-station map, run a store-and-forward BBS and a NET/ROM node, digipeat and IGate over a KISS TNC, control a
-transceiver over CAT, decode CW and PSK31 off the air, and extend it all with signed tool plugins. The
+station map, run a store-and-forward BBS and a [NET/ROM](glossary.md#netrom) node, digipeat and [IGate](glossary.md#igate) over a [KISS](glossary.md#kiss) [TNC](glossary.md#tnc), control a
+transceiver over [CAT](glossary.md#cat), decode CW and PSK31 off the air, and extend it all with signed tool plugins. The
 caching side is the *product*; the Shack is the *platform* it rides on.
 
 ## Trust follows the radio, not the transport
@@ -40,7 +40,7 @@ Every find earns one of three honest tiers ([Core concepts](concepts.md#verifica
 
 | Tier | Means | Earned by |
 |------|-------|-----------|
-| **A** | Radio-verified | Heard directly on the air by an attested receiving site that isn't yours — through that site's own ingest, never an APRS-IS copy — on a plausible track |
+| **A** | Radio-verified | Heard directly on the air by an attested receiving site that isn't yours — through that site's own ingest, never an [APRS-IS](glossary.md#aprs-is) copy — on a plausible track |
 | **B** | Location-verified | Your device's first-party geolocation matches the cache at log time |
 | **C** | Logged | Nothing independent placed you at the cache (a bare APRS-IS beacon at most) — on record, but unverified |
 
