@@ -32,7 +32,8 @@ Three shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker 
 on a Pi, mini-PC or VM, reached through Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind
 Cloudflare's CDN · **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations embedded) ·
 **Cloudflare split** — Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`) plus the operator's
-ingest-only box. **Tri-runtime, all CI-conformance-green:**
+ingest-only box. **Pocket** (`deploy/pocket/`) runs the Self-host gateway and ingest on an Android phone in
+Termux, as a field station. **Tri-runtime, all CI-conformance-green:**
 Node+SQLite (Self-host, `servers/node`) · CF Worker+D1 (Cloudflare split, `workers/gateway`) · Bun+`bun:sqlite`
 (Desktop, `servers/bun` — smoke+geofence pass under Bun). RF ingest is ALWAYS operator-local in every shape
 (local `apps/ingest` / `compose.ingest-only.yml` *or* browser Web Serial/BLE). `deploy/setup.sh` writes a
@@ -75,7 +76,7 @@ pnpm --filter @aprscaching/node-gateway dev                      # same app on N
 pnpm dev:ingest       # needs .env (copy .env.example)
 pnpm dev:web
 ```
-`apps/web`'s `test` runs two guard scripts (no emoji, tour anchors resolve) and a vitest suite over its
+`apps/web`'s `test` runs three guard scripts (no emoji, tour anchors resolve, vendored MapLibre) and a vitest suite over its
 pure logic modules (`apps/web/test/*.test.ts`, no DOM); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
 the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
@@ -142,7 +143,8 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
   tombstones, signed account-move records, and owner-field redaction (`fed_scope`).
 - **`packages/*` stay MIT-clean** and embeddable; never add AGPL-only deps there.
 
-Post-1.0 deferred work is tracked in `TODO.md`.
+The launch list and post-1.0 deferred work are tracked in `TODO.md`. Docs and comments follow
+`.claude/rules/docs-and-comments.md`; `tools/checks/docs.mjs` enforces it in CI.
 
 ## Licensing
 Monorepo licensed by unit (see `LICENSE`, per-package `LICENSE`, README "License"): hosted app &

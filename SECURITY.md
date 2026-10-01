@@ -10,6 +10,8 @@ federation traffic from peers we don't control. We take reports seriously.
 | 1.0.x   | ✅ security fixes |
 | < 1.0   | ❌ pre-release, unsupported |
 
+No version is released yet. Until 1.0.0 is tagged, report against the `dev` branch; fixes land there.
+
 Self-hosters: run a supported version, and because the app is AGPL, keep your published source
 (`SOURCE_REPO`) current so your users can see what you're running.
 
@@ -33,7 +35,8 @@ Given the threat model (hostile RF, hostile peers, a public read API, unattended
 - **Trust-model bypass** — anything that lets a find reach Tier A/B without genuine corroboration
   (`workers/gateway/src/verify.ts`, `caches.ts`, `corroborate.ts`).
 - **Federation** — signature/replay/namespace attacks, tombstone forgery, peer impersonation or
-  key-rotation bypass (`federation*.ts`, `tombstones.ts`).
+  key-rotation bypass (`federation.ts`, `fed*.ts` — every signed frame is admitted by `fedapply.ts`
+  `admitFrame()` — and `tombstones.ts`).
 - **Auth & sessions** — WebAuthn/passkey flows, the magic-link path, session forgery, callsign
   control-verification: the on-air `VERIFY` challenge (APRS and MeshCom — any way to make a copy that no
   attested site heard directly count), the ampr.org DNS method (anything that verifies without

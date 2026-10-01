@@ -76,25 +76,25 @@ the real benefit, not novelty.
   detail), reduced-motion-aware, never decorative.
 - **MAY** use anchor positioning / `popover` for tooltips and menus **behind `@supports`** with a
   sane fallback.
-- **MAY** use scroll-snap, `:target`, and `details/summary` for genuinely simple disclosure —
-  provided accessibility is intact (see WON'T).
+- **MAY** use scroll-snap for sheet stops. Disclosure is always a real `<button>`-driven component
+  (ui-ux.md §3), never `:target` or `details/summary`.
 
 ## WON'T — MUST NOT use CSS for these
 
-- **MUST NOT** rebuild interactive widgets as CSS-only hacks** — no checkbox/`:target`-driven
+- **MUST NOT** rebuild interactive widgets as CSS-only hacks — no checkbox/`:target`-driven
   tabs, carousels, accordions, modals, or dropdowns. These break keyboard and screen-reader
   behavior. Use accessible components with real semantics + ARIA, styled by CSS.
-- **MUST NOT** replace semantic elements with `div` + CSS** (no styled-div buttons/links/lists).
+- **MUST NOT** replace semantic elements with `div` + CSS (no styled-div buttons/links/lists).
   Use `<button>`, `<a>`, `<ul>`, `<nav>`, `<dialog>` and style those.
-- **MUST NOT** animate layout/paint-heavy properties over the map** — no animating `top/left/
+- **MUST NOT** animate layout/paint-heavy properties over the map — no animating `top/left/
   width/height/box-shadow/filter` on large or frequently-updating surfaces. Animate only
   **compositor-friendly** `transform` and `opacity`.
-- **MUST NOT** blanket the map in `backdrop-filter`/large blurs** — one frosted sheet max; never
+- **MUST NOT** blanket the map in `backdrop-filter`/large blurs — one frosted sheet max; never
   blur full-screen layers stacked over MapLibre (repaint cost + battery).
-- **MUST NOT** ship scroll-driven / cinematic animations** (`animation-timeline: scroll()/view()`,
+- **MUST NOT** ship scroll-driven / cinematic animations (`animation-timeline: scroll()/view()`,
   parallax, scroll-spectacle) on the cacher surface. Showcase, not value; competes with map
   rendering. (A subtle, reduced-motion-aware touch in a non-map view MAY be allowed.)
-- **MUST NOT** rely on a modern feature without support-guarding it** if it's load-bearing — gate
+- **MUST NOT** rely on a modern feature without support-guarding it if it's load-bearing — gate
   with `@supports` and provide a usable fallback (see baseline below).
 
 ---
@@ -138,7 +138,7 @@ the real benefit, not novelty.
 @layer tokens {
   :root {
     color-scheme: dark light;
-    --accent:  oklch(0.72 0.13 200);          /* our own accent — NOT APRStac teal */
+    --accent:  oklch(0.73 0.18 128);          /* our own green accent — NOT APRStac teal */
     --tier-a:  oklch(0.70 0.15 145);          /* RF-corroborated  */
     --tier-b:  oklch(0.78 0.13 250);          /* app-corroborated */
     --tier-c:  oklch(0.72 0.04 250);          /* IS-only / unverified */

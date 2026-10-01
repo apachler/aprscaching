@@ -27,7 +27,7 @@ good it otherwise is. They are documented in `CLAUDE.md` and `.claude/rules/`; t
 
 ## Prerequisites
 
-- **Node 22+** and **pnpm 9+** (`corepack enable` gets you pnpm).
+- **Node 22+** (CI uses 24) and **pnpm** at the version `package.json` pins (`corepack enable` gets you it).
 - Optional: **Bun** (for the `servers/bun` runtime), a Chromium (for the audio e2e), and a KISS TNC /
   Web-Serial radio if you're working on RF ingest.
 
@@ -35,24 +35,23 @@ good it otherwise is. They are documented in `CLAUDE.md` and `.claude/rules/`; t
 
 ```sh
 pnpm install
-pnpm -r build      # typecheck + build every package (tsc --noEmit where applicable)
-pnpm -r test       # every unit suite (includes the no-emoji guard)
+pnpm run check     # build every unit, run every unit suite (and the web guards), typecheck and build the web app
 ```
 
 ## The inner loop
 
 | Command | What it does |
 |---|---|
-| `pnpm -r test` | all unit suites |
-| `pnpm -r build` | typecheck/build all units |
-| `tools/dev/check.sh` | fast gate: build + all unit tests, no servers |
-| `tools/dev/smoke.sh` | runtime conformance: boots a Node/SQLite gateway, runs the smoke + geofence suites |
-| `pnpm verify` | the full pre-PR gate: `check.sh` then `smoke.sh` |
+| `pnpm run check` | fast gate: build + all unit tests + web typecheck and build, no servers |
+| `pnpm run smoke` | runtime conformance: boots a Node/SQLite gateway, runs the smoke + geofence suites |
+| `tools/dev/smoke.sh federation` | the two-instance federation e2e CI runs (a publisher and a subscriber) |
+| `pnpm verify` | the full pre-PR gate: `check` then `smoke` |
+| `pnpm --filter <package> exec vitest run test/foo.test.ts -t "name"` | one file or one test |
 | `pnpm --filter @aprscaching/web dev` | run the web app |
 | `pnpm --filter @aprscaching/gateway dev` | run the Cloudflare Worker gateway (needs a local D1) |
 
-Run **`pnpm verify` before you open a PR.** For federation changes, the two-instance e2e
-(`tools/smoke/federation.mjs`) is what CI runs — see `.github/workflows/ci.yml` for how it's wired.
+Run **`pnpm verify` before you open a PR**, and `tools/dev/smoke.sh federation` too for federation changes.
+[Testing & verification](docs/reference/testing.md) maps every suite and CI job.
 
 ## Linting & formatting
 
@@ -60,9 +59,14 @@ The repo uses **ESLint (flat config) + Prettier**. Formatting is enforced in CI.
 
 ```sh
 pnpm lint          # eslint
+pnpm lint:types    # type-aware eslint over workers/ and packages/ (slower; CI runs it)
 pnpm format        # prettier --write (fix formatting)
 pnpm format:check  # prettier --check (what CI runs)
 ```
+
+CI also runs the guards under `tools/checks/`, among them `docs.mjs`, which holds the documentation to
+[`.claude/rules/docs-and-comments.md`](.claude/rules/docs-and-comments.md) and to the configuration the code
+reads.
 
 Keep the rule set light — this is a low-friction project. If a rule is fighting legitimate code,
 raise it in the PR rather than sprinkling `eslint-disable`.
@@ -99,6 +103,14 @@ docs: document the AGPL source-link obligation for self-hosters
 
 Keep one concern per PR. If your change needs another PR that hasn't merged, wait for it, then rebase your
 branch onto the updated `dev` rather than basing it on the other branch.
+
+### Dependencies
+
+- `pnpm-workspace.yaml` sets `minimumReleaseAge: 720`: a package version younger than 12 hours fails
+  `pnpm install --frozen-lockfile`. A fresh Dependabot PR that fails only at install needs a re-run later.
+- Merge dependency PRs that touch `pnpm-lock.yaml` one at a time, each rebased onto the current `dev` first.
+  GitHub merges the lockfile as text and can produce duplicate keys (`ERR_PNPM_BROKEN_LOCKFILE`) even while
+  it reports the PR as mergeable.
 
 ## Sign your work (DCO)
 
