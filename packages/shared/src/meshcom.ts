@@ -27,6 +27,11 @@ export interface MeshcomMeta {
   firmware?: string;
   /** Battery, percent. */
   batt?: number;
+  /**
+   * On a message only: the relays its sender allowed to forward it (the `--via` list), empty when it named
+   * none. The sender's plan, never the route taken.
+   */
+  via?: string[];
 }
 
 const CALL = /^(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{3,7}(?:-[A-Z0-9]{1,2})?$/;
@@ -56,6 +61,7 @@ export function sanitizeMeshcomMeta(v: unknown): MeshcomMeta | null {
   if (inRange(o.hwId, 0, 255) && Number.isInteger(o.hwId)) m.hwId = o.hwId;
   if (typeof o.firmware === "string" && FIRMWARE.test(o.firmware)) m.firmware = o.firmware;
   if (inRange(o.batt, 0, 100)) m.batt = Math.round(o.batt);
+  if (Array.isArray(o.via) && o.via.length <= MAX_PATH && o.via.every(isCall)) m.via = [...new Set(o.via)];
   return Object.keys(m).length ? m : null;
 }
 

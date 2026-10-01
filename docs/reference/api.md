@@ -71,7 +71,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
 | GET | `/api/stations`, `/api/stations/:call`, `/:call/series`, `/:call/packets` | Live registry, detail, telemetry series, raw packets | public |
-| GET | `/api/meshcom/nodes?bbox=&call=&maxAge=&limit=` | MeshCom nodes with a known position as this instance's node(s) heard them: how (`direct`, `relayed`, `server`, `node`), device, firmware, a signal-quality and battery bucket; signed-in members also get the exact battery, RSSI and SNR (`exact: true`). `bbox` is `minLon,minLat,maxLon,maxLat`; `call` narrows to one callsign; `maxAge` ≤ 7 d (default 1 d); `limit` ≤ 1000 | public |
+| GET | `/api/meshcom/nodes?bbox=&call=&maxAge=&limit=` | MeshCom nodes with a known position as this instance's node(s) heard them: how (`direct`, `relayed`, `server`, `node`), device, firmware, a signal-quality and battery bucket; signed-in members also get the exact battery, RSSI and SNR (`exact: true`). `sentVia` lists the relays the node's latest message allowed (its via list), absent when it named none. `bbox` is `minLon,minLat,maxLon,maxLat`; `call` narrows to one callsign; `maxAge` ≤ 7 d (default 1 d); `limit` ≤ 1000 | public |
 | GET | `/api/meshcom/links?bbox=&maxAge=&limit=` | Links between MeshCom nodes whose both ends have a known position (`direct`, or a `relay` leg), with a quality bucket; exact averages for signed-in members. `maxAge` ≤ 48 h (default 24 h) | public |
 | POST | `/api/decode` | Decode a raw TNC2 line | public |
 | GET | `/api/ports` · `/api/messages` | Transport status · APRS message log | public |
@@ -131,7 +131,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) |
 | POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only) |
-| GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most). Sysop or `x-operator-secret` |
+| GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most). Sysop or `x-operator-secret` |
 | GET | `/api/admin/setup/44net` | The read-only 44Net self-check: A record, `_aprscaching` TXT and descriptor endpoint, each pass/warn/fail with a fix (sysop or x-operator-secret) |
 | GET/POST | `/api/node/nodes` · GET `/api/node/mheard` | NET/ROM NODES table (public read; the POST mirror takes x-ingest-secret, sysop or x-operator-secret) · MHeard |
 | GET/POST/DELETE | `/api/bbs/forward`, `/forward/:id`, `/partners`, `/partners/:id` | FBB forwarding rules + partners (the partner-list read is also open to x-ingest-secret, for the ingest box's scheduler) |

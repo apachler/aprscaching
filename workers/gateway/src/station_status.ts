@@ -14,6 +14,7 @@ import { json } from "./app.js";
 import { adminCalls, requireSysop } from "./admin.js";
 import { nowS } from "./util/time.js";
 import { isCallsignVerified } from "./callsign.js";
+import { ownMeshcomVia } from "./meshcom.js";
 
 const HOUR = 3600;
 /** How far back `since` may reach, and how many messages one answer carries. */
@@ -26,6 +27,11 @@ export interface StationStatus {
   ports: { port: string; rxRecent: number; lastHeard: number | null }[];
   /** The first ADMIN_CALLSIGNS call is control-verified: the gate the station's transmit paths share. */
   operatorVerified: boolean;
+  /**
+   * The Via setting of the operator's own MeshCom node(s): with Via on, everything sent through a node is
+   * forwarded only by its listed relays. Unknown until the node has sent a message.
+   */
+  meshcomVia: { node: string; state: "on" | "off" | "unknown"; relays: string[] }[];
   messages: { id: number; ts: number; from: string; to: string; body: string }[];
 }
 
@@ -81,6 +87,7 @@ export async function handleStationStatus(req: Request, env: Env): Promise<Respo
     stationsLastHour: stations?.n ?? 0,
     operatorVerified: calls.length > 0 && (await isCallsignVerified(env, calls[0]!)),
     ports: [...ports.values()].sort((a, b) => a.port.localeCompare(b.port)),
+    meshcomVia: await ownMeshcomVia(env),
     messages,
   };
   return json(body);

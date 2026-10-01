@@ -62,6 +62,8 @@ compose() {
         const since = (t) => { const d = now - t; return d < 90 ? `${d} s` : d < 5400 ? `${Math.round(d / 60)} min` : `${Math.round(d / 3600)} h`; };
         if (mc) out.push(mc.lastHeard && now - mc.lastHeard < 900 ? `MeshCom heard ${since(mc.lastHeard)} ago` : `MeshCom silent${mc.lastHeard ? " " + since(mc.lastHeard) : ""}`);
         if (is) out.push(is.lastHeard && now - is.lastHeard < 300 ? "APRS-IS live" : "APRS-IS quiet (offline?)");
+        // with Via on, the node sends replies only through its listed relays; never shown as "off" before it is known
+        for (const v of j.meshcomVia ?? []) if (v.state === "on") out.push(`MeshCom Via on: ${v.relays.join(", ")}`);
         process.stdout.write(out.join(" · "));
       });')"
   else

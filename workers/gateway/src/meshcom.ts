@@ -7,7 +7,9 @@
  * state of each node heard (`meshcom_nodes`) and the links between nodes (`meshcom_links`): a direct
  * hearing is one link, origin → receiver; a relayed frame gives each leg of its path, and only the last
  * leg, into the receiver, carries a signal report. A frame the MeshCom server relayed adds no link: it
- * says nothing about who hears whom on the air around this operator.
+ * says nothing about who hears whom on the air around this operator. Links come from the source path and the
+ * receiver only, never from a message's via list: that names the relays its sender allowed, not the ones a
+ * frame took. A node's latest via list is kept as display information on its row (`sent_via`).
  *
  * Writes stay small: one row per node and per link, rewritten only when a shown value changes (device,
  * firmware, a 10 % battery step, how it was heard, the receiver, the signal quality) or once
@@ -81,7 +83,7 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
   if (!obs.length) return [];
   const minS = metaMinS(env);
   // one node row per sender per batch: later fields win, a missing field keeps the earlier one
-  const nodes = new Map<string, { ts: number; meta: MeshcomMeta; via: MeshcomVia }>();
+  const nodes = new Map<string, { ts: number; meta: MeshcomMeta; via: MeshcomVia; msgAt: number | null }>();
   const links = new Map<string, Link & { ts: number; receiver: string }>();
   for (const o of [...obs].sort((a, b) => a.ts - b.ts)) {
     const prev = nodes.get(o.src);
@@ -89,6 +91,8 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
       ts: o.ts,
       meta: { ...(prev?.meta ?? {}), ...o.meta },
       via: meshcomVia(o.src, o.meta),
+      // only a message says whether its sender named relays
+      msgAt: o.meta.via ? o.ts : (prev?.msgAt ?? null),
     });
     for (const l of meshcomLinks(o.src, o.meta))
       links.set(`${l.from}>${l.to}>${l.kind}`, { ...l, ts: o.ts, receiver: o.meta.receiver! });
@@ -99,10 +103,11 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
     const fresh = n.via === "direct" || n.via === "relayed";
     const rssi = fresh ? (m.rssi ?? null) : null;
     const snr = fresh ? (m.snr ?? null) : null;
+    const sentVia = n.msgAt !== null && m.via?.length ? JSON.stringify(m.via) : null;
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO meshcom_nodes (callsign, last_heard, hw_id, firmware, batt, last_via, last_rssi, last_snr, quality, receiver, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        `INSERT INTO meshcom_nodes (callsign, last_heard, hw_id, firmware, batt, last_via, last_rssi, last_snr, quality, receiver, updated_at, sent_via, msg_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(callsign) DO UPDATE SET
            last_heard = excluded.last_heard,
            hw_id = COALESCE(excluded.hw_id, meshcom_nodes.hw_id),
@@ -113,6 +118,8 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
            last_snr = CASE WHEN excluded.quality IS NULL THEN meshcom_nodes.last_snr ELSE excluded.last_snr END,
            quality = COALESCE(excluded.quality, meshcom_nodes.quality),
            receiver = COALESCE(excluded.receiver, meshcom_nodes.receiver),
+           sent_via = CASE WHEN excluded.msg_at IS NULL THEN meshcom_nodes.sent_via ELSE excluded.sent_via END,
+           msg_at = COALESCE(excluded.msg_at, meshcom_nodes.msg_at),
            updated_at = excluded.updated_at
          WHERE excluded.updated_at >= meshcom_nodes.updated_at + ?
             OR (excluded.hw_id IS NOT NULL AND excluded.hw_id IS NOT meshcom_nodes.hw_id)
@@ -120,7 +127,8 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
             OR (excluded.batt IS NOT NULL AND (meshcom_nodes.batt IS NULL OR excluded.batt / 10 != meshcom_nodes.batt / 10))
             OR excluded.last_via IS NOT meshcom_nodes.last_via
             OR (excluded.receiver IS NOT NULL AND excluded.receiver IS NOT meshcom_nodes.receiver)
-            OR (excluded.quality IS NOT NULL AND excluded.quality IS NOT meshcom_nodes.quality)`,
+            OR (excluded.quality IS NOT NULL AND excluded.quality IS NOT meshcom_nodes.quality)
+            OR (excluded.msg_at IS NOT NULL AND (meshcom_nodes.msg_at IS NULL OR excluded.sent_via IS NOT meshcom_nodes.sent_via))`,
       ).bind(
         call,
         n.ts,
@@ -133,6 +141,8 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
         fresh ? meshcomQuality({ rssi, snr }) : null,
         m.receiver ?? null,
         n.ts,
+        sentVia,
+        n.msgAt,
         minS,
       ),
     );
@@ -160,6 +170,25 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
       ).bind(l.from, l.to, l.kind, l.ts, l.rssi ?? null, l.snr ?? null, l.receiver, l.ts, minS),
     );
   return stmts;
+}
+
+/**
+ * The Via setting of the operator's own MeshCom node(s), read from their own messages (`node` frames): on
+ * with its relays when the latest names any, off when it names none, unknown until one has been seen. Only a
+ * node's own echoes count — another station's via list says nothing about this node.
+ */
+export async function ownMeshcomVia(
+  env: Env,
+): Promise<{ node: string; state: "on" | "off" | "unknown"; relays: string[] }[]> {
+  const rows = (
+    await env.DB.prepare(
+      "SELECT callsign, sent_via, msg_at FROM meshcom_nodes WHERE last_via = 'node' ORDER BY callsign",
+    ).all<{ callsign: string; sent_via: string | null; msg_at: number | null }>()
+  ).results;
+  return rows.map((r) => {
+    const relays = sentVia(r.sent_via);
+    return { node: r.callsign, state: r.msg_at === null ? "unknown" : relays.length ? "on" : "off", relays };
+  });
 }
 
 /** Nightly: drop nodes and links not heard within their windows. */
@@ -203,6 +232,18 @@ interface NodeRow {
   last_snr: number | null;
   quality: string | null;
   receiver: string | null;
+  sent_via: string | null;
+}
+
+/** The relays stored for a node, or none: the column holds a JSON array the gateway itself wrote. */
+function sentVia(v: string | null): string[] {
+  if (!v) return [];
+  try {
+    const a: unknown = JSON.parse(v);
+    return Array.isArray(a) ? a.filter((c): c is string => typeof c === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 /** GET /api/meshcom/nodes — MeshCom nodes with a known position, as the operator's node(s) heard them; `call` picks one. */
@@ -216,7 +257,7 @@ export async function handleMeshcomNodes(req: Request, env: Env): Promise<Respon
   const rows = (
     await env.DB.prepare(
       `SELECT n.callsign, s.lat, s.lon, s.symbol, n.last_heard, n.hw_id, n.firmware, n.batt, n.last_via,
-              n.last_rssi, n.last_snr, n.quality, n.receiver
+              n.last_rssi, n.last_snr, n.quality, n.receiver, n.sent_via
          FROM meshcom_nodes n JOIN stations s ON s.callsign = n.callsign
         WHERE s.lat IS NOT NULL AND n.last_heard >= ?${bb ? " AND s.lat BETWEEN ? AND ? AND s.lon BETWEEN ? AND ?" : ""}${call ? " AND n.callsign = ?" : ""}
         ORDER BY n.last_heard DESC LIMIT ?`,
@@ -238,6 +279,7 @@ export async function handleMeshcomNodes(req: Request, env: Env): Promise<Respon
       firmware: r.firmware,
       quality: r.quality,
       battLevel: meshcomBattLevel(r.batt),
+      ...(r.sent_via ? { sentVia: sentVia(r.sent_via) } : {}),
       ...(exact ? { batt: r.batt, rssi: r.last_rssi, snr: r.last_snr } : {}),
     })),
   });

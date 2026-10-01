@@ -20,6 +20,7 @@ import {
   MeshcomDedup,
   MESHCOM_MAX_DATAGRAM,
   type MeshcomEvent,
+  type MeshcomMsgEvent,
 } from "@aprscaching/aprs";
 import { sanitizeMeshcomMeta, type MeshcomMeta, type Packet } from "@aprscaching/shared";
 
@@ -130,6 +131,8 @@ export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined)
     ...(p.rf ? { rssi: p.rssi, snr: p.snr } : {}),
     firmware: p.firmware,
     ...(e.type === "pos" ? { hwId: e.hwId, batt: e.batt } : {}),
+    // a message carries its sender's via list, empty when it named none (display only)
+    ...(e.type === "msg" ? { via: e.via ?? [] } : {}),
   });
 }
 
@@ -172,6 +175,8 @@ export class MeshcomListener {
   private readonly dedup = new MeshcomDedup();
   private readonly buckets = new Map<string, Bucket>();
   private readonly fwWarned = new Set<string>();
+  /** The via list each own node's latest message named ("" for none), to log its Via setting once per change. */
+  private readonly ownVia = new Map<string, string>();
   private lastSeen = 0;
   private startedAt = Date.now();
   private staleWarned = false;
@@ -230,6 +235,7 @@ export class MeshcomListener {
     const e = d.event;
     this.checkFirmware(e, node);
     if (e.type === "msg" && e.viaDropped) this.counters.viaDropped += e.viaDropped;
+    if (e.type === "msg") this.checkOwnVia(e);
     if (e.type === "tele") {
       this.counters.tele++;
       return null;
@@ -253,6 +259,24 @@ export class MeshcomListener {
   }
 
   /** Warn once per node when its own frames report firmware with the ExtUDP crash. */
+  /**
+   * The node echoes the messages it sends with its own `--via` list in the destination path. With Via on, the
+   * node forwards everything sent through it — replies, find confirmations — only through those relays, so
+   * the operator hears about it once per change. Only the node's own echoes count, and nothing here ever
+   * changes the node's setting.
+   */
+  private checkOwnVia(e: MeshcomMsgEvent) {
+    if (e.provenance.srcType !== "node") return; // "node" frames are the node's own traffic
+    const relays = (e.via ?? []).join(",");
+    if (this.ownVia.get(e.src) === relays) return;
+    this.ownVia.set(e.src, relays);
+    if (relays)
+      this.log.warn(
+        `[meshcom] node ${e.src} has Via on: messages sent through it, replies included, are forwarded only by ${relays.replaceAll(",", ", ")}`,
+      );
+    else this.log.log(`[meshcom] node ${e.src} has Via off`);
+  }
+
   private checkFirmware(e: MeshcomEvent, node: MeshcomNode) {
     if (e.provenance.srcType !== "node" || !e.provenance.firmware || this.fwWarned.has(node.ip)) return;
     const risk = firmwareRisk(e.provenance.firmware);
