@@ -90,6 +90,23 @@ for (const o of tfOutputs) if (!schema.outputs.has(o)) fail(`schema.yaml is miss
 for (const o of schema.outputs)
   if (!tfOutputs.has(o)) fail(`schema.yaml declares output "${o}", which main.tf does not emit`);
 
+// ---- the defaults stay inside an Always-Free-only tenancy's allowance ----
+const defaultOf = (name) => {
+  const block = new RegExp(`^variable "${name}" \\{([\\s\\S]*?)^\\}`, "m").exec(mainTf);
+  const m = block && /^\s*default\s*=\s*([^\n]+)$/m.exec(block[1]);
+  return m ? m[1].trim() : undefined;
+};
+for (const [name, max] of [
+  ["ocpus", 2],
+  ["memory_in_gbs", 12],
+  ["boot_volume_size_in_gbs", 200],
+]) {
+  const d = Number(defaultOf(name));
+  if (!(d > 0 && d <= max))
+    fail(`main.tf's ${name} default (${defaultOf(name)}) is outside the Always Free allowance (≤ ${max})`);
+}
+if (defaultOf("allow_beyond_always_free") !== "false") fail("main.tf's allow_beyond_always_free must default to false");
+
 // ---- cloud-init placeholders ↔ the templatefile() vars map ----
 const tmplBlock = /templatefile\("\$\{path\.module\}\/cloud-init\.yaml",\s*\{([\s\S]*?)\}\)\)/.exec(mainTf);
 if (!tmplBlock) fail("main.tf no longer calls templatefile() on cloud-init.yaml in the expected shape");
