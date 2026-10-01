@@ -126,7 +126,8 @@ const navFiles = [...navBlock.matchAll(/(?:^\s*-\s+|:\s+)"?([\w./-]+\.md)"?\s*$/
 for (const p of navFiles)
   if (!existsSync(join(root, "docs", p))) fail("mkdocs.yml", 0, `nav entry ${p} does not exist`);
 const notInNav = [...(mk.match(/^not_in_nav: \|\n((?: {2}.*\n)+)/m)?.[1] ?? "").matchAll(/^ {2}(\S+)/gm)].map(
-  (m) => new RegExp(`^${m[1].replace(/[.]/g, "\\.").replace(/\*/g, ".*")}$`),
+  // a gitignore-style glob: escape every regex metacharacter, then let `*` match any run of characters
+  (m) => new RegExp(`^${m[1].replace(/[\\^$.|?+()[\]{}]/g, "\\$&").replace(/\*/g, ".*")}$`),
 );
 for (const f of tracked.filter((f) => f.startsWith("docs/") && f.endsWith(".md"))) {
   const page = f.slice("docs/".length);
