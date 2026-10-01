@@ -33,6 +33,63 @@ rows_counts_json() {
     awk 'BEGIN{printf "{"} {printf "%s\"%s\":%d", (NR>1?",":""), $2, $1} END{printf "}"}'
 }
 
+# ---- OCI Object Storage (OCI_BUCKET) -------------------------------------------------------------------------
+# Archives go to the bucket under archives/; the bucket's lifecycle rule expires them, so nothing here deletes
+# from it and the uploading principal needs no delete right. On the OCI stack's VM, `oci` authenticates as the
+# instance (instance principal).
+BK_BUCKET_PREFIX="archives/"
+
+bk_bucket() { [ -z "${SHAPE_ENV:-}" ] || env_file_get "$SHAPE_ENV" OCI_BUCKET; }
+
+# bk_upload ARCHIVE: copies ARCHIVE to the bucket when OCI_BUCKET is set; fails when it is set and cannot be.
+bk_upload() {
+  local bucket name
+  bucket="$(bk_bucket)"
+  name="$BK_BUCKET_PREFIX$(basename "$1")"
+  [ -n "$bucket" ] || return 0
+  have oci || die "OCI_BUCKET is set, but the oci CLI is not installed." "The archive stays at $1."
+  oci os object put -bn "$bucket" --file "$1" --name "$name" --force >/dev/null ||
+    die "The upload to the bucket $bucket failed." "The archive stays at $1."
+  info "uploaded: oci://$bucket/$name"
+  # the bucket keeps the history; this disk keeps the newest three
+  find "$(dirname "$1")" -maxdepth 1 -name "aprscaching-$SHAPE-*.tar.gz" -type f | sort -r | tail -n +4 |
+    while IFS= read -r old; do rm -f "$old"; done
+}
+
+# The newest archive in the bucket, as an object name; empty when there is none.
+bk_bucket_newest() {
+  oci os object list -bn "$1" --prefix "$BK_BUCKET_PREFIX" --all \
+    --query 'max_by(data, &"time-created").name' --raw-output 2>/dev/null | grep -v '^null$' || true
+}
+
+# The newest archive's upload time, as epoch seconds; empty when there is none or the bucket is unreachable.
+bk_bucket_newest_time() {
+  local t
+  t="$(oci os object list -bn "$1" --prefix "$BK_BUCKET_PREFIX" --all \
+    --query 'max_by(data, &"time-created")."time-created"' --raw-output 2>/dev/null || true)"
+  [ -n "$t" ] && [ "$t" != null ] || return 0
+  date -d "$t" +%s 2>/dev/null || true
+}
+
+# bk_fetch oci://BUCKET/OBJECT DIR: downloads one archive (OBJECT "latest" is the newest) and prints its path.
+bk_fetch() {
+  local rest="${1#oci://}" bucket object
+  bucket="${rest%%/*}"
+  object="${rest#*/}"
+  [ -n "$bucket" ] && [ "$object" != "$rest" ] && [ -n "$object" ] ||
+    die "A bucket archive is oci://<bucket>/<object>, or oci://<bucket>/latest."
+  have oci || die "Restoring from a bucket needs the oci CLI."
+  if [ "$object" = latest ]; then
+    object="$(bk_bucket_newest "$bucket")"
+    [ -n "$object" ] || die "No archive under $BK_BUCKET_PREFIX in the bucket $bucket."
+  fi
+  info "downloading oci://$bucket/$object" >&2
+  oci os object get -bn "$bucket" --name "$object" --file "$2/$(basename "$object")" >/dev/null ||
+    die "Downloading oci://$bucket/$object failed."
+  chmod 600 "$2/$(basename "$object")"
+  printf '%s' "$2/$(basename "$object")"
+}
+
 # The newest place backups go: --dest, else BACKUP_DIR, else deploy/backups.
 backup_dest_default() {
   local d=""
@@ -98,6 +155,7 @@ run_backup() {
   chmod 600 "$archive"
   # shellcheck disable=SC2034 # the pre-update backup, read by update.sh
   BACKUP_LAST="$archive"
+  bk_upload "$archive"
   if [ "$APRS_JSON" = 1 ]; then
     printf '{"archive":%s,"schema":%s,"sensitive":true}\n' "$(json_str "$archive")" "$(json_str "$schema")"
   else
@@ -109,16 +167,17 @@ run_backup() {
 # The archive's manifest field (a string or a number), without jq.
 manifest_get() { sed -n -E "s/^ *\"$2\": *\"?([^\",]*)\"?,?$/\\1/p" "$1/manifest.json" | head -n 1; }
 
-# restore <file> [--dry-run] [--no-settings]
+# restore <file | oci://bucket/object | oci://bucket/latest> [--dry-run] [--no-settings]
 run_restore() {
-  local file="" dry=0 settings=1 tmp schema src newest forward key line
+  local file="" dry=0 settings=1 tmp fetched schema src newest forward key line
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) dry=1 ;;
       --no-settings) settings=0 ;;
       -h | --help)
         printf '%s\n' "deploy/aprscaching restore <archive> [--dry-run] [--no-settings]" \
-          "Replaces this instance's data with the archive's; --dry-run shows what would change and changes nothing."
+          "Replaces this instance's data with the archive's; --dry-run shows what would change and changes nothing." \
+          "<archive> may be oci://<bucket>/<object>, or oci://<bucket>/latest for the newest one there."
         return 0
         ;;
       -*) die "Unknown option $1." ;;
@@ -126,6 +185,12 @@ run_restore() {
     esac
     shift
   done
+  case "$file" in
+    oci://*)
+      bk_tmpdir fetched
+      file="$(bk_fetch "$file" "$fetched")"
+      ;;
+  esac
   [ -f "$file" ] || die "No archive at '$file'."
   bk_tmpdir tmp
   tar -xzf "$file" -C "$tmp" 2>/dev/null || die "$file is not a backup archive."

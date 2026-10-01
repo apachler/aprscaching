@@ -29,7 +29,8 @@ mock() { # mock NAME BODY
 }
 # apt-get: installing docker-ce makes `docker compose version` succeed from then on
 mock apt-get 'case "$*" in *docker-ce*) mkdir -p "$MOCK_STATE" && : >"$MOCK_STATE/docker" ;; esac'
-mock curl 'while [ $# -gt 0 ]; do [ "$1" = -o ] && { echo key >"$2"; shift; }; shift; done'
+mock curl 'case "$*" in *opc/v2/vnics*) echo "[{\"vnicId\":\"ocid1.vnic.oc1..vm\"}]"; exit 0 ;; esac
+while [ $# -gt 0 ]; do [ "$1" = -o ] && { echo key >"$2"; shift; }; shift; done'
 mock gpg 'case "$*" in
   *--show-keys*) printf "pub:-:4096:1:8D81803C0EBFCD88:1487788586:::-:::scESA::::::23::0:\nfpr:::::::::%s:\n" "$MOCK_FPR" ;;
   *--dearmor*) while [ $# -gt 0 ]; do [ "$1" = -o ] && { echo bin >"$2"; shift; }; shift; done ;;
@@ -42,6 +43,7 @@ mock shred '[ "$1" = -u ] && rm -f "$2"'
 # git: a clone creates the checkout with a deploy/aprscaching that records its arguments
 mock git 'case "$*" in
   clone*) for d; do :; done; mkdir -p "$d/.git" "$d/deploy"
+    mkdir -p "$d/deploy/oci" && : >"$d/deploy/oci/oci-cli-requirements.txt" && : >"$d/deploy/oci/aprscaching-backup.service" && : >"$d/deploy/oci/aprscaching-backup.timer"
     printf "#!/usr/bin/env bash\necho \"aprscaching \$*\" >>\"\$MOCK_LOG\"\ncase \"\$1\" in init) echo APRSIS_PASSCODE=x >\"\$(dirname \"\$0\")/.env\" ;; esac\n" >"$d/deploy/aprscaching"
     chmod +x "$d/deploy/aprscaching" ;;
   *"rev-parse HEAD"*) echo "$MOCK_HEAD" ;;
@@ -50,14 +52,22 @@ mock docker 'case "$*" in
   "compose version") [ -f "$MOCK_STATE/docker" ] ;;
   *"ps gateway"*) echo healthy ;;
 esac'
+# python3 -m venv: a venv whose pip and oci are mocks too; anything else is the real python3
+REAL_PY="$(command -v python3)"
+mock python3 'if [ "$1" = -m ] && [ "$2" = venv ]; then
+  mkdir -p "$3/bin"
+  printf "#!/usr/bin/env bash\necho \"pip \$*\" >>\"\$MOCK_LOG\"\n[ -z \"\$MOCK_PIP_FAIL\" ]\n" >"$3/bin/pip"
+  printf "#!/usr/bin/env bash\necho \"oci[\$OCI_CLI_AUTH] \$*\" >>\"\$MOCK_LOG\"\ncase \"\$*\" in *\"vnic get\"*) echo 203.0.113.7 ;; esac\n" >"$3/bin/oci"
+  chmod +x "$3/bin/pip" "$3/bin/oci"
+else exec '"$REAL_PY"' "$@"; fi'
 export PATH="$TMP/bin:$PATH"
 
-# setup NAME [PINNED_COMMIT] [PASSCODE]: a fresh root for one run
+# setup NAME [PINNED_COMMIT] [PASSCODE] [DOMAIN] [BUCKET]: a fresh root for one run
 setup() {
   R="$TMP/$1"
   mkdir -p "$R/etc" "$R/cloud/instances/i-1" "$R/units"
-  printf 'CALL=OE8APR\nPASSCODE=%s\nFILTER=r/47.07/15.42/300 b/OE8*\nDOMAIN=%s\nREPO_URL=https://github.com/apachler/aprscaching\nREPO_REF=v1.0.0\nPINNED_COMMIT=%s\n' \
-    "${3:-}" "${4:-:80}" "${2:-}" >"$R/etc/firstboot.env"
+  printf 'CALL=OE8APR\nPASSCODE=%s\nFILTER=r/47.07/15.42/300 b/OE8*\nDOMAIN=%s\nREPO_URL=https://github.com/apachler/aprscaching\nREPO_REF=v1.0.0\nPINNED_COMMIT=%s\nBUCKET=%s\n' \
+    "${3:-}" "${4:-:80}" "${2:-}" "${5:-}" >"$R/etc/firstboot.env"
   echo "user data with ${3:-nothing}" >"$R/cloud/instances/i-1/user-data.txt"
   : >"$MOCK_LOG"
   rm -rf "$MOCK_STATE"
@@ -65,7 +75,8 @@ setup() {
 run() {
   APRS_FB_SETTINGS="$R/etc/firstboot.env" APRS_FB_LOG="$R/firstboot.log" APRS_FB_CONSOLE="$R/nonexistent/console" \
     APRS_FB_DIR="$R/opt" APRS_FB_KEYRING="$R/keyrings/docker.gpg" APRS_FB_APT_LIST="$R/docker.list" \
-    APRS_FB_CLOUD_DIR="$R/cloud" APRS_FB_UNIT_DIR="$R/units" "$SCRIPT"
+    APRS_FB_CLOUD_DIR="$R/cloud" APRS_FB_UNIT_DIR="$R/units" APRS_FB_OCI_VENV="$R/oci-cli" APRS_FB_OCI_BIN="$R/bin-oci" \
+    "$SCRIPT"
 }
 fails() { ! "$@"; }
 logged() { grep -q -- "$1" "$R/firstboot.log"; }
@@ -95,6 +106,23 @@ check "  … keeps Docker as installed" logged "Docker is installed; kept"
 setup nopass "$HEAD_SHA" "" aprs.example.net
 check "no passcode: init runs receive-only, with the hostname" run
 check "  … and passes no --passcode" bash -c "called() { grep -q -- \"\$1\" '$MOCK_LOG'; }; ! called '--passcode' && called '--domain aprs.example.net'"
+
+check "  … and without a bucket installs no OCI CLI and no backup timer" bash -c "[ ! -e '$R/bin-oci' ] && [ ! -e '$R/units/aprscaching-backup.timer' ]"
+
+setup bucket "$HEAD_SHA" "" ":80" aprscaching-backups-1a2b3c4d
+check "with a bucket the first boot succeeds" run
+check "  … installs the OCI CLI from hash-pinned wheels only" \
+  called "pip install --quiet --require-hashes --no-deps --only-binary :all: -r $R/opt/deploy/oci/oci-cli-requirements.txt"
+check "  … whose oci signs in as the instance" bash -c "'$R/bin-oci' os ns get && grep -q '^oci\[instance_principal\] os ns get' '$MOCK_LOG'"
+check "  … serves :80 on the public address from the API" called "--lan-host 203.0.113.7"
+check "  … sets OCI_BUCKET" grep -qx 'OCI_BUCKET=aprscaching-backups-1a2b3c4d' "$R/opt/deploy/.env"
+check "  … installs and starts the nightly timer" bash -c "[ -e '$R/units/aprscaching-backup.timer' ] && grep -q 'systemctl enable --now aprscaching-backup.timer' '$MOCK_LOG'"
+check "  … and takes the first backup" bash -c "grep -q 'systemctl start aprscaching-backup.service' '$MOCK_LOG' && grep -q 'the first backup is in the bucket' '$R/firstboot.log'"
+
+setup nocli "$HEAD_SHA" "" ":80" aprscaching-backups-1a2b3c4d
+check "an OCI CLI that does not install still brings the instance up" env MOCK_PIP_FAIL=1 bash -c "$(declare -f run); SCRIPT='$SCRIPT' R='$R' run"
+check "  … says there are no backups, and sets no timer" bash -c "grep -q 'WARNING: the OCI CLI did not install' '$R/firstboot.log' && [ ! -e '$R/units/aprscaching-backup.timer' ]"
+check "  … and falls back to the private address" called "--lan-host 10.0.1.5"
 
 setup branch ""
 check "a branch deploys" run

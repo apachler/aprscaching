@@ -1,0 +1,12 @@
+# Nightly, at a random moment in the hour after 02:30, so many instances do not hit Object Storage at once;
+# a night the VM was off runs at the next boot.
+[Unit]
+Description=Nightly aprscaching backup to the OCI bucket
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

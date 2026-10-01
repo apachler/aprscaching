@@ -28,6 +28,12 @@ provider "oci" {
   region = var.region
 }
 
+# IAM changes (the dynamic group and policy behind the backups) are made in the tenancy's home region.
+provider "oci" {
+  alias  = "home"
+  region = local.home_region
+}
+
 # ---- injected by Resource Manager ----
 variable "tenancy_ocid" {
   type        = string
@@ -136,6 +142,18 @@ variable "bastion_client_cidrs" {
   default     = ["0.0.0.0/0"]
 }
 
+# ---- backups ----
+variable "create_backup_bucket" {
+  type        = bool
+  description = "Create a private Object Storage bucket the VM backs up to every night, and the dynamic group and policy that let this VM (and only it) write there. Needs rights to manage dynamic groups and policies; a tenancy administrator has them."
+  default     = true
+}
+variable "boot_volume_backups" {
+  type        = bool
+  description = "Also back up the whole boot volume weekly, keeping four (Always Free includes five volume backups)."
+  default     = false
+}
+
 # ---- source ----
 variable "repo_url" {
   type        = string
@@ -159,6 +177,14 @@ variable "repo_ref" {
   }
 }
 
+data "oci_identity_tenancy" "this" {
+  tenancy_id = var.tenancy_ocid
+}
+data "oci_identity_regions" "all" {}
+data "oci_objectstorage_namespace" "this" {
+  compartment_id = var.tenancy_ocid
+}
+
 data "oci_identity_availability_domains" "ads" {
   compartment_id = var.tenancy_ocid
 }
@@ -175,6 +201,10 @@ data "oci_core_images" "ubuntu" {
 }
 
 locals {
+  home_region = one([for r in data.oci_identity_regions.all.regions : r.name if r.key == data.oci_identity_tenancy.this.home_region_key])
+  # names that are unique per tenancy (dynamic group) or namespace and region (bucket), stable for this stack
+  name_suffix = substr(sha1("${var.compartment_ocid}/${var.region}"), 0, 8)
+  bucket_name = "aprscaching-backups-${local.name_suffix}"
   # sizing beyond the Always-Free allowance is an explicit opt-in
   beyond_free = var.ocpus > 2 || var.memory_in_gbs > 12
   reserve_ip  = var.use_reserved_ip && var.existing_reserved_ip_id == ""
@@ -199,6 +229,7 @@ locals {
     "REPO_URL=${var.repo_url}",
     "REPO_REF=${var.repo_ref}",
     "PINNED_COMMIT=${local.pinned_commit}",
+    "BUCKET=${var.create_backup_bucket ? local.bucket_name : ""}",
     "",
   ])
   cloud_init = base64encode(templatefile("${path.module}/cloud-init.yaml", {
@@ -290,6 +321,16 @@ resource "oci_core_security_list" "this" {
       max = 443
     }
   }
+
+  # HTTP/3 (QUIC), which Caddy serves beside HTTPS
+  ingress_security_rules {
+    protocol = "17"
+    source   = "0.0.0.0/0"
+    udp_options {
+      min = 443
+      max = 443
+    }
+  }
 }
 
 resource "oci_core_subnet" "this" {
@@ -346,6 +387,84 @@ resource "oci_core_instance" "this" {
       error_message = "More than 2 OCPUs or 12 GB is beyond an Always-Free-only tenancy's A1 allowance. Set allow_beyond_always_free = true to go ahead (and check what your tenancy bills)."
     }
   }
+}
+
+# ---- backups ----
+# A private bucket the VM writes its nightly archive to (deploy/aprscaching backup, under archives/). The VM's
+# own identity (instance principal) may manage objects in this bucket only; it cannot delete the bucket or
+# reach any other. A lifecycle rule expires archives after 14 days, so the VM never needs to delete anything.
+resource "oci_objectstorage_bucket" "backups" {
+  count          = var.create_backup_bucket ? 1 : 0
+  compartment_id = var.compartment_ocid
+  namespace      = data.oci_objectstorage_namespace.this.namespace
+  name           = local.bucket_name
+  access_type    = "NoPublicAccess"
+  versioning     = "Disabled"
+  storage_tier   = "Standard"
+}
+
+resource "oci_identity_dynamic_group" "vm" {
+  count          = var.create_backup_bucket ? 1 : 0
+  provider       = oci.home
+  compartment_id = var.tenancy_ocid
+  name           = "aprscaching-${local.name_suffix}"
+  description    = "The aprscaching VM, for its backups"
+  matching_rule  = "ALL {instance.id = '${oci_core_instance.this.id}'}"
+}
+
+resource "oci_identity_policy" "vm" {
+  count          = var.create_backup_bucket ? 1 : 0
+  provider       = oci.home
+  compartment_id = var.compartment_ocid
+  name           = "aprscaching-${local.name_suffix}"
+  description    = "The aprscaching VM writes its backups to its own bucket; Object Storage expires them"
+  statements = [
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to manage objects in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read buckets in compartment id ${var.compartment_ocid} where target.bucket.name = '${local.bucket_name}'",
+    # the VM looks up its own public address, for APP_URL when no hostname is given
+    "Allow dynamic-group ${oci_identity_dynamic_group.vm[0].name} to read vnics in compartment id ${var.compartment_ocid}",
+    # lifecycle rules run as the Object Storage service, which needs this to delete expired objects
+    "Allow service objectstorage-${var.region} to manage object-family in compartment id ${var.compartment_ocid}",
+  ]
+}
+
+resource "oci_objectstorage_object_lifecycle_policy" "backups" {
+  count     = var.create_backup_bucket ? 1 : 0
+  namespace = data.oci_objectstorage_namespace.this.namespace
+  bucket    = oci_objectstorage_bucket.backups[0].name
+  rules {
+    name        = "expire-archives"
+    action      = "DELETE"
+    is_enabled  = true
+    time_amount = 14
+    time_unit   = "DAYS"
+    object_name_filter {
+      inclusion_prefixes = ["archives/"]
+    }
+  }
+  depends_on = [oci_identity_policy.vm]
+}
+
+# Weekly incremental backups of the boot volume, four kept: within Always Free's five volume backups.
+resource "oci_core_volume_backup_policy" "weekly" {
+  count          = var.boot_volume_backups ? 1 : 0
+  compartment_id = var.compartment_ocid
+  display_name   = "aprscaching-weekly"
+  schedules {
+    backup_type       = "INCREMENTAL"
+    period            = "ONE_WEEK"
+    day_of_week       = "SUNDAY"
+    hour_of_day       = 3
+    offset_type       = "STRUCTURED"
+    retention_seconds = 2419200
+    time_zone         = "UTC"
+  }
+}
+
+resource "oci_core_volume_backup_policy_assignment" "boot" {
+  count     = var.boot_volume_backups ? 1 : 0
+  asset_id  = oci_core_instance.this.boot_volume_id
+  policy_id = oci_core_volume_backup_policy.weekly[0].id
 }
 
 # ---- reserved public IP ----
@@ -406,6 +525,11 @@ output "assign_reserved_ip_command" {
     "oci network public-ip update --public-ip-id ${var.existing_reserved_ip_id} --private-ip-id ${local.primary_private_ip_id}" :
     "(nothing to do)"
   )
+}
+
+output "backup_bucket" {
+  description = "The bucket the VM backs up to (empty without create_backup_bucket)."
+  value       = var.create_backup_bucket ? local.bucket_name : ""
 }
 
 output "url" {

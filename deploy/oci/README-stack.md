@@ -32,6 +32,8 @@ aarch64 image itself, so it never asks for an OCID you would have to go and find
 | Availability domain | Raise it and re-apply if OCI reports it is out of host capacity. |
 | Reserved public IP | On by default; see below. |
 | Bastion client networks | Who may open SSH sessions; IAM and your key authenticate each one. |
+| Nightly backups to a bucket | On by default; see [Backups](#backups). Needs rights to create a dynamic group and a policy. |
+| Weekly boot volume backups | Off by default; four weekly copies of the whole disk. |
 
 Then **Plan**, then **Apply**. Point DNS at the `public_ip` output (with an existing reserved IP, run
 `assign_reserved_ip_command` first); the *Open the instance* link goes straight there. The first boot builds the
@@ -54,9 +56,10 @@ Everything it prints goes to `/var/log/aprscaching-firstboot.log` and to the ser
 is there: the checkout stays at its commit, `.env` keeps its values and secrets, and the data stays in its Docker
 volumes. Update with `deploy/aprscaching update`.
 
-**Without a hostname** (`:80`) the VM cannot see its own public address, so `APP_URL` starts as its private
-address. Set `APP_URL=http://<public_ip>` in `/opt/aprscaching/deploy/.env`, then restart (below). A hostname with
-TLS is the recommended setup: passkeys and location need https.
+**Without a hostname** (`:80`) the VM asks the OCI API for its public address (the guest only sees its private
+one) and serves plain http there. That needs the backup bucket's policy; without it, `APP_URL` starts as the
+private address: set `APP_URL=http://<public_ip>` in `/opt/aprscaching/deploy/.env`, then restart (below). A
+hostname with TLS is the recommended setup: passkeys and location need https.
 
 ## Secrets and the stack's state
 
@@ -77,6 +80,63 @@ deploy/oci/bastion-ssh.sh
 sudo nano /opt/aprscaching/deploy/.env           # APRSIS_PASSCODE=<your passcode>
 cd /opt/aprscaching/deploy && sudo docker compose up -d
 ```
+
+## Backups
+
+With **Nightly backups to a bucket** (the default) the stack creates:
+
+- a private Object Storage bucket, `aprscaching-backups-<suffix>` (the `backup_bucket` output), versioning off;
+- a lifecycle rule that deletes archives after **14 days**;
+- a dynamic group that matches this VM only, and a policy that lets it manage objects in that one bucket and
+  read its own network card (for its public address). The policy also lets the Object Storage service of the
+  region expire objects, which lifecycle rules need.
+
+Every night, at a random time between 02:30 and 03:30 UTC, the `aprscaching-backup.timer` runs
+`deploy/aprscaching backup --with-media`. The archive holds the database, the settings, the generated secrets
+and the media. It goes to the bucket under `archives/`, signed in as the VM itself (instance principal; no
+API key on the VM). The VM keeps the newest three on its own disk. The first backup runs at the end of the
+first boot, so a broken policy shows in the boot log at once. `deploy/aprscaching doctor` reports the age of
+the newest archive in the bucket.
+
+The archive holds the instance's secrets, so the bucket is private, and only this VM and your tenancy's
+administrators can read it.
+
+**Apply fails at the dynamic group** (`NotAuthorizedOrNotFound`, or a 404 on `oci_identity_dynamic_group`)?
+Dynamic groups and policies are tenancy-level and are written in the tenancy's home region, which needs
+rights to manage both — a tenancy administrator has them. Either ask an administrator to apply the stack, or
+untick *Nightly backups to a bucket* and back up another way ([Backups](https://github.com/apachler/aprscaching/blob/main/docs/operate/deployment.md#backups)).
+
+**What it costs.** Always Free includes 20 GB of Object Storage and 50,000 API requests a month. A nightly
+upload uses a handful of requests, so 14 archives fit as long as each stays under about 1.4 GB; `doctor` and
+the bucket's size in the console show where you are.
+
+**Weekly boot volume backups** (off by default) add a weekly incremental backup of the whole boot volume,
+keeping four. Always Free includes five volume backups. They restore the whole VM, including Docker and the
+system, from the console (*Block Storage → Boot volume backups*).
+
+### Restore after losing the VM
+
+1. In Resource Manager, run **Apply** on the stack again. It creates a new VM; the bucket, the reserved IP and
+   the policy stay.
+2. Wait for the first boot to finish (the serial console, or `/var/log/aprscaching-firstboot.log`).
+3. Log in through the Bastion and restore the newest archive from the bucket:
+
+   ```bash
+   cd /opt/aprscaching
+   sudo deploy/aprscaching restore oci://<backup_bucket>/latest --dry-run   # what it would restore
+   sudo deploy/aprscaching restore oci://<backup_bucket>/latest
+   ```
+
+   `oci://<bucket>/archives/<name>.tar.gz` restores an older one; `oci os object list -bn <bucket> --prefix
+   archives/` lists them. The restore stops the stack, puts back the database, the settings, the secrets and
+   the media, starts it again and runs `doctor`.
+
+A re-created VM is a new instance, so the dynamic group follows it once Apply updates its matching rule.
+
+## HTTP/3
+
+Caddy serves HTTP/3 (QUIC) on UDP port 443 beside HTTPS on TCP 443, and the security list lets UDP 443 in.
+Browsers fall back to TCP when UDP is blocked on their path, so it is never required.
 
 ## The public IP
 

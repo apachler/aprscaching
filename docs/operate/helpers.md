@@ -121,6 +121,7 @@ deploy/aprscaching backup                         # one archive: database rows, 
 deploy/aprscaching backup --with-media --dest /mnt/usb
 deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz --dry-run
 deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz
+deploy/aprscaching restore oci://aprscaching-backups/latest     # the newest archive in an OCI bucket
 ```
 
 `backup` writes one portable archive, `aprscaching-<shape>-<UTC time>.tar.gz`, to `--dest`, else `BACKUP_DIR`,
@@ -136,6 +137,12 @@ else `deploy/backups`. It holds:
 
 The archive holds the instance's secrets, so it is created readable by its owner only. Keep it off shared
 folders.
+
+With `OCI_BUCKET` set, `backup` also uploads the archive to that bucket under `archives/` (it needs the `oci`
+CLI) and keeps only the newest three on the local disk. It never deletes from the bucket: expire `archives/`
+with a lifecycle rule. `restore` takes `oci://<bucket>/<object>`, or `oci://<bucket>/latest` for the newest
+archive there. The OCI one-click stack sets all of this up, including a nightly timer
+(`deploy/oci/README-stack.md`).
 
 `restore` replaces the instance's data with an archive's:
 
@@ -153,7 +160,8 @@ with `wrangler secret put` and lists the plain settings to put in `wrangler.toml
 the archive; see [Backups](deployment.md#backups).
 
 `deploy/backup.sh` stays the scheduled snapshot for cron: it uploads to a bucket. `doctor` counts both kinds
-when it checks the age of the newest backup.
+when it checks the age of the newest backup; for `OCI_BUCKET` it reads the age of the newest archive in the
+bucket when the `oci` CLI is installed.
 
 ### Moving between shapes
 

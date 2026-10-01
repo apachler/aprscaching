@@ -708,8 +708,8 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`OCI_BUCKET`",
-        "`deploy/backup.sh`",
-        "Back up to this OCI Object Storage bucket (needs the `oci` CLI configured)",
+        "`deploy/backup.sh`, `deploy/aprscaching backup`",
+        "Back up to this OCI Object Storage bucket (needs the `oci` CLI configured): `backup.sh` snapshots under `db/`, `deploy/aprscaching backup` archives under `archives/`",
         "—",
       ],
       [

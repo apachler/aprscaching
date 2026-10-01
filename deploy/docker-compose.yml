@@ -93,7 +93,8 @@ services:
 
   caddy: # TLS + static SPA + reverse proxy
     image: caddy:2
-    ports: ["80:80", "443:443"]
+    # 443/udp is HTTP/3 (QUIC), which Caddy serves beside HTTPS
+    ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       DOMAIN: ${DOMAIN:-:80}
     volumes:
