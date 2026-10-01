@@ -452,6 +452,8 @@ doc_backup_destination() {
     # backup.sh's snapshots (db/) and deploy/aprscaching backup's archives
     DOC_BACKUP_DIR="$dir"
     DOC_BACKUP_GLOB="db/*.db.gz aprscaching-*.tar.gz"
+  elif [ -n "$(doc_get OCI_BUCKET)" ] && have oci; then
+    doc_bucket_backup_age "$(doc_get OCI_BUCKET)"
   elif [ -n "$(doc_get OCI_BUCKET)$(doc_get BACKUP_BUCKET)" ]; then
     pass resources.backup "backups go to a bucket (their age is not checked from here)"
   elif compgen -G "$DEPLOY_DIR/backups/aprscaching-*.tar.gz" >/dev/null; then
@@ -462,6 +464,23 @@ doc_backup_destination() {
   else
     failc resources.backup "no backup destination is set" "set BACKUP_DIR, OCI_BUCKET or BACKUP_BUCKET, then schedule deploy/aprscaching backup" \
       "$DOCS_URL/deployment.md#backups"
+  fi
+}
+
+# The newest archive deploy/aprscaching backup uploaded to the OCI bucket, by its upload time.
+doc_bucket_backup_age() {
+  local when age
+  when="$(bk_bucket_newest_time "$1")"
+  if [ -z "$when" ]; then
+    failc resources.backup "no backup archive in the bucket $1, or the bucket is unreachable" \
+      "deploy/aprscaching backup; on the OCI stack, systemctl status aprscaching-backup.timer" "$DOCS_URL/deployment.md#backups"
+    return 0
+  fi
+  age=$((($(date +%s) - when) / 86400))
+  if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
+    warnc resources.backup "the newest backup in the bucket $1 is $age days old" "check the scheduled backup" "$DOCS_URL/deployment.md#backups"
+  else
+    pass resources.backup "the newest backup in the bucket $1 is $age days old"
   fi
 }
 

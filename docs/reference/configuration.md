@@ -243,7 +243,7 @@ Read by the scripts under `deploy/`, not by the gateway or the ingest box. They 
 | `DOMAIN` | `deploy/Caddyfile` | What Caddy serves: a hostname gets automatic Let's Encrypt TLS, `:80` serves plain HTTP (local or off-grid). `deploy/setup.sh` writes it | — |
 | `TUNNEL_TOKEN` | `deploy/compose.home.yml` | The Cloudflare Tunnel token for a named tunnel created in the Cloudflare dashboard | — |
 | `BACKUP_DIR` | `deploy/backup.sh` | Back up to this local or mounted directory — use a mount that is not the database's disk | — |
-| `OCI_BUCKET` | `deploy/backup.sh` | Back up to this OCI Object Storage bucket (needs the `oci` CLI configured) | — |
+| `OCI_BUCKET` | `deploy/backup.sh`, `deploy/aprscaching backup` | Back up to this OCI Object Storage bucket (needs the `oci` CLI configured): `backup.sh` snapshots under `db/`, `deploy/aprscaching backup` archives under `archives/` | — |
 | `BACKUP_BUCKET` / `R2_ENDPOINT` | `deploy/backup.sh` | Back up to this S3-compatible bucket (Cloudflare R2, AWS S3) at this endpoint URL; both are required, and the `aws` CLI must be configured | — |
 | `BACKUP_RETENTION_DAYS` | `deploy/backup.sh` | Snapshots in `BACKUP_DIR` older than this many days are deleted; with `BACKUP_PRUNE_BUCKET=1`, bucket snapshots too | `30` |
 | `BACKUP_PRUNE_BUCKET` | `deploy/backup.sh` | `1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../operate/deployment.md#backups)) | off |

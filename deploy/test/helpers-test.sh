@@ -374,6 +374,57 @@ else
 fi
 check "  … the settings are untouched" eq "$(env_file_get "$PDATA/.env" APP_URL)" "http://192.168.43.1:8787"
 
+# ---- OCI bucket: upload, restore from it, and its age in doctor (the oci CLI mocked) --------------------------
+mkdir -p "$TMP/ocibin"
+cat >"$TMP/ocibin/oci" <<'MOCK'
+#!/usr/bin/env bash
+echo "oci $*" >>"$OCI_LOG"
+case "$*" in
+  *"object list"*)
+    case "$*" in *'."time-created"'*) echo "${OCI_NEWEST_TIME:-null}" ;; *) echo "${OCI_NEWEST:-null}" ;; esac ;;
+  *"object get"*) while [ $# -gt 0 ]; do [ "$1" = --file ] && cp "$OCI_ARCHIVE" "$2"; shift; done ;;
+  *"object put"*) ;;
+  *) exit 1 ;;
+esac
+MOCK
+chmod +x "$TMP/ocibin/oci"
+export OCI_LOG="$TMP/oci.log" OCI_ARCHIVE="$TMP/a.tar.gz"
+: >"$OCI_LOG"
+oci_restore_dry() { PATH="$TMP/ocibin:$PATH" OCI_NEWEST="archives/aprscaching-selfhost-20261001T020000Z.tar.gz" restore_dry "$@"; }
+check "restore takes the newest archive from a bucket" oci_restore_dry oci://acs-backups/latest --dry-run
+check "  … downloads that one" grep -q "object get -bn acs-backups --name archives/aprscaching-selfhost-20261001T020000Z.tar.gz" "$OCI_LOG"
+check "  … and describes it" grep -q "settings restored: APP_URL ADMIN_CALLSIGNS" "$TMP/out"
+if oci_restore_dry oci://acs-backups --dry-run; then bad "a bucket address without an object is refused"; else ok "a bucket address without an object is refused"; fi
+if PATH="$TMP/ocibin:$PATH" OCI_NEWEST=null restore_dry oci://acs-backups/latest --dry-run; then
+  bad "an empty bucket is refused"
+else
+  ok "an empty bucket is refused"
+fi
+bk() { # bk ENVFILE FUNCTION ARGS…: one function of backup.sh, with the mocked oci on PATH
+  local env="$1"
+  shift
+  PATH="$TMP/ocibin:$PATH" bash -c ". '$DEPLOY/lib/common.sh'; . '$DEPLOY/lib/env.sh'; DEPLOY_DIR='$DEPLOY'; SHAPE_ENV='$env'
+    . '$DEPLOY/lib/backup.sh'; . '$DEPLOY/lib/doctor.sh'; DOCS_URL=x
+    SHAPE=\"\${SHAPE:-}\"; pass() { echo \"pass \$2\"; }; warnc() { echo \"warn \$2\"; }; failc() { echo \"fail \$2\"; }; \"\$@\"" _ "$@"
+}
+printf 'OCI_BUCKET=acs-backups\n' >"$TMP/bucket.env"
+: >"$OCI_LOG"
+check "an archive goes to OCI_BUCKET under archives/" bk "$TMP/bucket.env" bk_upload "$TMP/a.tar.gz"
+check "  … by its own name" grep -q "object put -bn acs-backups --file $TMP/a.tar.gz --name archives/a.tar.gz --force" "$OCI_LOG"
+: >"$OCI_LOG"
+mkdir -p "$TMP/arch-local"
+for d in 01 02 03 04 05; do cp "$TMP/a.tar.gz" "$TMP/arch-local/aprscaching-selfhost-202610${d}T020000Z.tar.gz"; done
+check "after an upload this disk keeps the newest three archives" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' SHAPE=selfhost bk '$TMP/bucket.env' bk_upload '$TMP/arch-local/aprscaching-selfhost-20261005T020000Z.tar.gz' >/dev/null"
+check "  … and drops the older ones" eq "$(cd "$TMP/arch-local" && ls | tr '\n' ' ')" \
+  "aprscaching-selfhost-20261003T020000Z.tar.gz aprscaching-selfhost-20261004T020000Z.tar.gz aprscaching-selfhost-20261005T020000Z.tar.gz "
+: >"$OCI_LOG"
+check "without OCI_BUCKET nothing is uploaded" bk "$TMP/a.env" bk_upload "$TMP/a.tar.gz"
+check "  … not even tried" test ! -s "$OCI_LOG"
+check "doctor reads the newest bucket backup's age" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' OCI_NEWEST_TIME='$(date -u +%Y-%m-%dT%H:%M:%S+00:00)' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^pass the newest backup in the bucket acs-backups is 0 days old'"
+check "  … warns when it is ten days old" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' OCI_NEWEST_TIME='$(date -u -d '10 days ago' +%Y-%m-%dT%H:%M:%S+00:00)' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^warn .* 10 days old'"
+check "  … fails when the bucket has none" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^fail no backup archive in the bucket'"
+
 check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"
 check "  … 4.36 too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.36 4 35 t"
 check "  … 4.35s is not" bash -c ". '$DEPLOY/lib/doctor.sh'; ! fw_at_least 4.35s 4 35 t"

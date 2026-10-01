@@ -36,6 +36,10 @@ variableGroups:
       - use_reserved_ip
       - existing_reserved_ip_id
       - bastion_client_cidrs
+  - title: Backups
+    variables:
+      - create_backup_bucket
+      - boot_volume_backups
   - title: Sizing and source
     visible: false
     variables:
@@ -173,6 +177,17 @@ variables:
     required: true
     default: main
 
+  create_backup_bucket:
+    type: boolean
+    title: Nightly backups to a bucket
+    description: A private Object Storage bucket the VM backs up to every night, keeping 14 days. The stack also creates a dynamic group and a policy that let this VM write to that bucket only, which needs rights to manage dynamic groups and policies (a tenancy administrator has them). Untick it if Apply fails on the dynamic group.
+    default: true
+  boot_volume_backups:
+    type: boolean
+    title: Weekly boot volume backups
+    description: Also back up the whole boot volume every Sunday, keeping four. Always Free includes five volume backups.
+    default: false
+
 outputs:
   public_ip:
     type: string
@@ -189,6 +204,10 @@ outputs:
   assign_reserved_ip_command:
     type: copyableString
     title: Assign your existing reserved IP
+    visible: true
+  backup_bucket:
+    type: string
+    title: Backup bucket
     visible: true
   login_command:
     type: copyableString
@@ -214,6 +233,7 @@ outputGroups:
       - public_ip
       - reserved_ip_id
       - assign_reserved_ip_command
+      - backup_bucket
   - title: SSH through the Bastion
     outputs:
       - login_command

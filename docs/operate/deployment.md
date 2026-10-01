@@ -196,7 +196,9 @@ baseline global feed, but that is never the only way to get RF in. See
 
 `deploy/aprscaching backup` writes a portable archive on every shape — database rows, settings and generated
 secrets — that `deploy/aprscaching restore` puts back on the same shape or another
-([Backup and restore](helpers.md#backup-and-restore)). For scheduled, off-host copies:
+([Backup and restore](helpers.md#backup-and-restore)). With `OCI_BUCKET` set it also uploads the archive to
+that bucket, and `restore oci://<bucket>/latest` brings it back; the OCI one-click stack schedules it nightly
+into a bucket it creates. For scheduled, off-host copies:
 
 - **Self-host and Desktop (SQLite):** cron `deploy/backup.sh`. It takes a consistent SQLite `.backup`
   snapshot, gzips it, and uploads it to `BACKUP_DIR`, an OCI bucket or any S3-compatible endpoint (see

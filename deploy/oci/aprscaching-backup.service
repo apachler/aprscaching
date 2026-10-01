@@ -1,0 +1,11 @@
+# The OCI stack's nightly backup: one archive with the database, the settings, the secrets and the media,
+# uploaded to the stack's bucket (OCI_BUCKET) as the VM's own identity. Installed by firstboot.sh.
+[Unit]
+Description=aprscaching backup to the OCI bucket
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=OCI_CLI_AUTH=instance_principal
+ExecStart=/opt/aprscaching/deploy/aprscaching --non-interactive backup --with-media

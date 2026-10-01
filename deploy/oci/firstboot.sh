@@ -23,6 +23,10 @@ APT_LIST="${APRS_FB_APT_LIST:-/etc/apt/sources.list.d/docker.list}"
 CLOUD_DIR="${APRS_FB_CLOUD_DIR:-/var/lib/cloud}"
 UNIT_DIR="${APRS_FB_UNIT_DIR:-/etc/systemd/system}"
 HEALTH_WAIT_S="${APRS_FB_HEALTH_WAIT_S:-1200}"
+OCI_VENV="${APRS_FB_OCI_VENV:-/opt/oci-cli}"
+OCI_BIN="${APRS_FB_OCI_BIN:-/usr/local/bin/oci}"
+IMDS="${APRS_FB_IMDS:-http://169.254.169.254/opc/v2}"
+IP_WAIT_S="${APRS_FB_IP_WAIT_S:-600}"
 
 # Docker's release signing key. apt trusts the downloaded key only when its fingerprint is this one, so a
 # tampered download or mirror cannot slip in packages.
@@ -46,7 +50,7 @@ stop() {
 }
 
 # ---- settings --------------------------------------------------------------------------------------------
-CALL="" PASSCODE="" FILTER="" DOMAIN=":80" REPO_URL="" REPO_REF="" PINNED_COMMIT=""
+CALL="" PASSCODE="" FILTER="" DOMAIN=":80" REPO_URL="" REPO_REF="" PINNED_COMMIT="" BUCKET=""
 ENV_FILE="$DIR/deploy/.env"
 if [ ! -f "$SETTINGS" ]; then
   # a first boot that finished removed them; what it set up is all a re-run needs
@@ -65,6 +69,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     REPO_URL) REPO_URL="$value" ;;
     REPO_REF) REPO_REF="$value" ;;
     PINNED_COMMIT) PINNED_COMMIT="$value" ;;
+    BUCKET) BUCKET="$value" ;;
   esac
 done <"$SETTINGS"
 if [ "$SETTINGS" != /dev/null ]; then
@@ -122,6 +127,44 @@ else
   fi
 fi
 
+# ---- the OCI CLI, for the backups ---------------------------------------------------------------------------
+# Every package pinned by hash (deploy/oci/oci-cli-requirements.txt), wheels only. The `oci` on PATH signs in as
+# this VM (instance principal), which the stack's policy lets write to its bucket and read its own VNIC.
+if [ -n "$BUCKET" ]; then
+  if [ ! -x "$OCI_VENV/bin/oci" ]; then
+    apt-get install -y -q python3-venv
+    if python3 -m venv "$OCI_VENV" &&
+      "$OCI_VENV/bin/pip" install --quiet --require-hashes --no-deps --only-binary :all: \
+        -r "$DIR/deploy/oci/oci-cli-requirements.txt"; then
+      say "installed the OCI CLI from hash-pinned wheels"
+    else
+      rm -rf "$OCI_VENV"
+      say "WARNING: the OCI CLI did not install, so there are no backups to the bucket $BUCKET" \
+        "Re-run $0 once the cause is fixed."
+      BUCKET=""
+    fi
+  fi
+  if [ -n "$BUCKET" ]; then
+    printf '#!/bin/sh\nexport OCI_CLI_AUTH="${OCI_CLI_AUTH:-instance_principal}"\nexec %s/bin/oci "$@"\n' "$OCI_VENV" >"$OCI_BIN"
+    chmod 755 "$OCI_BIN"
+  fi
+fi
+
+# The public address of this VM, through the OCI API (the guest only sees its private one). A reserved IP is
+# attached after the VM starts, and the policy may take a while, so it asks for a while.
+public_ip() {
+  local vnic ip waited=0
+  vnic="$(curl -fsS -H 'Authorization: Bearer Oracle' "$IMDS/vnics/" 2>/dev/null |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["vnicId"])' 2>/dev/null)" || return 1
+  while [ "$waited" -lt "$IP_WAIT_S" ]; do
+    ip="$("$OCI_BIN" network vnic get --vnic-id "$vnic" --query 'data."public-ip"' --raw-output 2>/dev/null || true)"
+    case "$ip" in [0-9]*.[0-9]*.[0-9]*.[0-9]*) printf '%s' "$ip"; return 0 ;; esac
+    sleep 10
+    waited=$((waited + 10))
+  done
+  return 1
+}
+
 # ---- settings file -------------------------------------------------------------------------------------------
 if [ -f "$ENV_FILE" ]; then
   say "kept the existing $ENV_FILE and its secrets"
@@ -132,15 +175,19 @@ else
   if [ "$DOMAIN" != ":80" ]; then
     args+=(--domain "$DOMAIN")
   else
-    # The VM cannot see its own public address (OCI maps it outside the guest), so a plain-http
-    # instance starts on its private one; the log says how to correct it.
-    host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    # OCI maps the public address outside the guest: ask the API for it, else start on the private one
+    if [ -n "$BUCKET" ] && host="$(public_ip)"; then
+      say "no hostname given; serving plain http on the public address $host"
+    else
+      host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+      say "NOTE: no hostname given; APP_URL is http://${host:-localhost} until you set the public address" \
+        "(APP_URL in $ENV_FILE). A hostname with TLS is the recommended setup."
+    fi
     args+=(--lan-host "${host:-localhost}")
-    say "NOTE: no hostname given; APP_URL is http://${host:-localhost} until you set the public address" \
-      "(APP_URL in $ENV_FILE). A hostname with TLS is the recommended setup."
   fi
   "$DIR/deploy/aprscaching" init selfhost "${args[@]}" || stop "deploy/aprscaching init selfhost failed"
   grep -q '^SOURCE_REPO=' "$ENV_FILE" || printf 'SOURCE_REPO=%s\n' "$REPO_URL" >>"$ENV_FILE"
+  [ -z "$BUCKET" ] || grep -q '^OCI_BUCKET=' "$ENV_FILE" || printf 'OCI_BUCKET=%s\n' "$BUCKET" >>"$ENV_FILE"
   chmod 600 "$ENV_FILE"
   say "wrote $ENV_FILE (INGEST_SECRET and OPERATOR_SECRET generated here)"
 fi
@@ -159,6 +206,23 @@ until [ "$(docker compose ps gateway --format '{{.Health}}' 2>/dev/null)" = heal
   sleep 10
   waited=$((waited + 10))
 done
+
+# ---- nightly backups -----------------------------------------------------------------------------------------
+if [ -n "$BUCKET" ]; then
+  cp "$DIR/deploy/oci/aprscaching-backup.service" "$DIR/deploy/oci/aprscaching-backup.timer" "$UNIT_DIR/"
+  systemctl daemon-reload
+  systemctl enable --now aprscaching-backup.timer
+  say "nightly backups to the bucket $BUCKET (systemctl list-timers aprscaching-backup.timer)"
+  # the first one now, which proves the bucket, the policy and the upload; a new policy can take a minute
+  for attempt in 1 2 3 4 5; do
+    if systemctl start aprscaching-backup.service; then
+      say "the first backup is in the bucket $BUCKET"
+      break
+    fi
+    [ "$attempt" = 5 ] && say "WARNING: the first backup failed; see journalctl -u aprscaching-backup" && break
+    sleep 60
+  done
+fi
 
 say "doctor:"
 "$DIR/deploy/aprscaching" doctor || say "doctor reported problems (above); fix them, then run deploy/aprscaching doctor"
