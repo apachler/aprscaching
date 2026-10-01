@@ -4,9 +4,10 @@
 # prompts for real inputs instead of raw OCIDs; tools/checks/oci-stack.mjs enforces that pairing.
 title: APRScaching
 description: >-
-  An APRS geocaching game and a full ham-radio Shack, on one Always-Free Ampere A1 VM. The stack
-  builds its own network, resolves the Ubuntu image itself, and boots the Docker stack via
-  cloud-init — you supply your callsign and an SSH key.
+  An APRS geocaching game and a full ham-radio Shack, on one Always-Free Ampere A1 VM (2 OCPUs, 12 GB,
+  a reserved public IP). The stack builds its own network, resolves the Ubuntu image itself, and boots
+  the Docker stack via cloud-init — you supply your callsign and an SSH key. SSH goes through OCI Bastion
+  only; port 22 is closed to the internet.
 schemaVersion: 1.1.0
 version: "1"
 locale: en
@@ -31,11 +32,17 @@ variableGroups:
     variables:
       - ssh_public_key
       - availability_domain_number
+  - title: Network
+    variables:
+      - use_reserved_ip
+      - existing_reserved_ip_id
+      - bastion_client_cidrs
   - title: Sizing and source
     visible: false
     variables:
       - ocpus
       - memory_in_gbs
+      - allow_beyond_always_free
       - boot_volume_size_in_gbs
       - repo_url
       - repo_ref
@@ -104,7 +111,9 @@ variables:
   ocpus:
     type: number
     title: Cores
-    description: Ampere A1 cores. The Always-Free allowance is 4 in total across all instances.
+    description: >-
+      Ampere A1 cores. An Always-Free-only tenancy has 2 in total across all instances (1,500 OCPU hours a
+      month, since mid-2026); more needs "Allow beyond Always Free".
     required: true
     default: 2
     minimum: 1
@@ -112,15 +121,49 @@ variables:
   memory_in_gbs:
     type: number
     title: Memory (GB)
-    description: The Always-Free allowance is 24 GB in total across all instances.
+    description: >-
+      An Always-Free-only tenancy has 12 GB in total across all instances (9,000 GB hours a month); more needs
+      "Allow beyond Always Free".
     required: true
     default: 12
     minimum: 6
     maximum: 24
+  allow_beyond_always_free:
+    type: boolean
+    title: Allow beyond Always Free
+    description: >-
+      Allow more than 2 OCPUs or 12 GB. Above that an Always-Free-only tenancy is billed; a Pay As You Go
+      tenancy may still have a larger free A1 allowance (see Limits, Quotas and Usage).
+    default: false
+  use_reserved_ip:
+    type: boolean
+    title: Reserved public IP
+    description: >-
+      Keep the VM's address (and your DNS) when it is re-created. Free of charge; free-tier tenancies reportedly
+      have one. Deleting the stack releases a reserved IP it created.
+    default: true
+  existing_reserved_ip_id:
+    type: string
+    title: Existing reserved IP (OCID)
+    description: >-
+      Reuse a reserved public IP you already have: the stack creates none and outputs the command that assigns
+      yours to the VM. Deleting the stack then keeps it. Leave empty to create one.
+    required: false
+    default: ""
+  bastion_client_cidrs:
+    type: array
+    items:
+      type: string
+    title: Bastion client networks
+    description: >-
+      Addresses allowed to open SSH sessions through the Bastion. IAM and your SSH key authenticate every
+      session; narrow it to your own network if you like.
+    default:
+      - 0.0.0.0/0
   boot_volume_size_in_gbs:
     type: number
     title: Boot volume (GB)
-    description: The Always-Free allowance is 200 GB in total.
+    description: Always Free includes 200 GB of block storage in total (boot volumes included).
     required: true
     default: 50
     minimum: 50
@@ -146,11 +189,43 @@ outputs:
     type: link
     title: Open the instance
     visible: true
+  reserved_ip_id:
+    type: string
+    title: Reserved IP (OCID)
+    visible: true
+  assign_reserved_ip_command:
+    type: copyableString
+    title: Assign your existing reserved IP
+    visible: true
+  login_command:
+    type: copyableString
+    title: Log in through the Bastion
+    visible: true
+  bastion_id:
+    type: string
+    title: Bastion
+    visible: true
+  instance_id:
+    type: string
+    title: Instance
+    visible: true
+  private_ip:
+    type: string
+    title: Private IP
+    visible: true
 
 outputGroups:
   - title: Your instance
     outputs:
       - url
       - public_ip
+      - reserved_ip_id
+      - assign_reserved_ip_command
+  - title: SSH through the Bastion
+    outputs:
+      - login_command
+      - bastion_id
+      - instance_id
+      - private_ip
 
 primaryOutputButton: url

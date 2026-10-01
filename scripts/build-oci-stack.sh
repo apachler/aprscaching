@@ -13,7 +13,7 @@ ZIP="aprscaching-oci-stack.zip"
 
 # Kept in step with tools/checks/oci-stack.mjs, which fails the build if this list and the contents
 # of deploy/oci/ ever drift apart.
-FILES=(main.tf cloud-init.yaml schema.yaml README-stack.md)
+FILES=(main.tf cloud-init.yaml schema.yaml README-stack.md bastion-ssh.sh)
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
