@@ -45,26 +45,39 @@ variable "region" {
 # ---- station ----
 variable "aprsis_callsign" {
   type        = string
-  description = "Your amateur-radio callsign, used to log in to APRS-IS."
+  description = "Your amateur-radio callsign, without an SSID: you administer the instance with it, and it logs in to APRS-IS."
+  validation {
+    condition     = can(regex("^[A-Za-z0-9]{3,7}$", var.aprsis_callsign))
+    error_message = "aprsis_callsign is a callsign without an SSID, such as OE8APR."
+  }
 }
 variable "aprsis_passcode" {
   type        = string
-  description = "Your APRS-IS passcode for that callsign."
+  description = "Your APRS-IS passcode for that callsign. Optional: blank runs receive-only until you set it on the VM."
+  default     = ""
+  sensitive   = true
+  validation {
+    condition     = can(regex("^(-1|[0-9]{1,5})?$", var.aprsis_passcode))
+    error_message = "aprsis_passcode is blank, -1 or up to five digits."
+  }
 }
 variable "aprsis_filter" {
   type        = string
   description = "APRS-IS server-side filter. r/<lat>/<lon>/<km> keeps the feed local to your area."
   default     = "r/47.07/15.42/300"
+  validation {
+    condition     = !can(regex("[\\r\\n]", var.aprsis_filter))
+    error_message = "aprsis_filter is one line."
+  }
 }
 variable "domain" {
   type        = string
   description = "Public hostname for automatic TLS. Leave as :80 to serve plain HTTP over the IP address."
   default     = ":80"
-}
-variable "ingest_secret" {
-  type        = string
-  description = "Shared secret authorising the ingest worker's writes. Use a long random string."
-  sensitive   = true
+  validation {
+    condition     = var.domain == ":80" || can(regex("^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$", var.domain))
+    error_message = "domain is a hostname such as aprs.example.net, or :80."
+  }
 }
 
 # ---- host ----
@@ -128,14 +141,22 @@ variable "repo_url" {
   type        = string
   description = "Git repository cloned onto the host."
   default     = "https://github.com/apachler/aprscaching"
+  validation {
+    condition     = can(regex("^https://[^\\s]+$", var.repo_url))
+    error_message = "repo_url is an https URL."
+  }
 }
 # scripts/build-oci-stack.sh stamps the published tag over this default when it builds the release
 # zip, so a stack downloaded from a release deploys exactly that release rather than tracking main.
 # Keep the line shape: the build script rewrites it and tools/checks/oci-stack.mjs asserts the match.
 variable "repo_ref" {
   type        = string
-  description = "Branch or tag to deploy."
+  description = "Branch or tag to deploy. A release stack deploys its own tag, checked against the tag's commit."
   default     = "main"
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.repo_ref))
+    error_message = "repo_ref is a branch or tag name."
+  }
 }
 
 data "oci_identity_availability_domains" "ads" {
@@ -163,14 +184,26 @@ locals {
   ) - 1
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[local.ad_index].name
   image_id            = data.oci_core_images.ubuntu.images[0].id
+  # scripts/build-oci-stack.sh stamps a release's tag and its commit here. While repo_ref is that tag, the VM
+  # deploys only that commit; any other ref deploys unverified. Keep the line shapes: the build script
+  # rewrites them and tools/checks/oci-stack.mjs asserts the match.
+  release_ref    = ""
+  release_commit = ""
+  pinned_commit  = var.repo_ref == local.release_ref ? local.release_commit : ""
+  # firstboot.sh reads these as KEY=VALUE lines; the variable validations keep every value on one line
+  firstboot_settings = join("\n", [
+    "CALL=${var.aprsis_callsign}",
+    "PASSCODE=${var.aprsis_passcode}",
+    "FILTER=${var.aprsis_filter}",
+    "DOMAIN=${var.domain}",
+    "REPO_URL=${var.repo_url}",
+    "REPO_REF=${var.repo_ref}",
+    "PINNED_COMMIT=${local.pinned_commit}",
+    "",
+  ])
   cloud_init = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-    REPO_URL        = var.repo_url
-    REPO_REF        = var.repo_ref
-    DOMAIN          = var.domain
-    APRSIS_CALLSIGN = var.aprsis_callsign
-    APRSIS_PASSCODE = var.aprsis_passcode
-    APRSIS_FILTER   = var.aprsis_filter
-    INGEST_SECRET   = var.ingest_secret
+    SETTINGS_B64  = base64encode(local.firstboot_settings)
+    FIRSTBOOT_B64 = filebase64("${path.module}/firstboot.sh")
   }))
 }
 
