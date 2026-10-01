@@ -103,6 +103,28 @@ describe("TX-IGate pacing", () => {
     expect(sent).toHaveLength(3);
   });
 
+  it("transmits an APRS-IS client message as third-party traffic under its own call", () => {
+    const { sent, kiss } = radio();
+    const igate = new Igate(kiss, {
+      host: "localhost",
+      port: 14580,
+      call: "OE8APR-10",
+      pass: "-1",
+      txPath: ["WIDE1-1"],
+    });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    igate.onRf(heard("OE3ABC-7"));
+    igate.onIsLine("DL1XYZ>APRS,TCPIP*,qAC,T2AUSTRIA::OE3ABC-7 :hello{1");
+    expect(sent).toEqual([
+      {
+        src: "OE8APR-10",
+        dst: "APZACG",
+        path: ["WIDE1-1"],
+        payload: "}DL1XYZ>APRS,TCPIP,OE8APR-10*::OE3ABC-7 :hello{1",
+      },
+    ]);
+  });
+
   it("spends no token on a line it would not gate", () => {
     const { sent, kiss } = radio();
     const igate = new Igate(kiss, { host: "localhost", port: 14580, call: "OE8APR-10", pass: "-1", burst: 1 });

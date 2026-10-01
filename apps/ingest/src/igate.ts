@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
-import { parseTNC2, shouldRxIgate, rxIgateLine, txIgateTarget } from "@aprscaching/aprs";
+import { parseTNC2, shouldRxIgate, rxIgateLine, txIgateTarget, txIgateFrame } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
 import type { KissTnc } from "./kiss.js";
 import { Backoff } from "./backoff.js";
@@ -13,6 +13,7 @@ export interface IgateOpts {
   pass: string;
   filter?: string; // APRS-IS server-side filter for the IS->RF direction (default messages)
   localTtlSec?: number; // how long a station counts as "heard locally"
+  txPath?: string[]; // RF path of gated messages (default none: the addressee was heard locally)
   retryMs?: number;
   idleMs?: number; // destroy a silently-dead uplink after this long with no bytes
   canTx?: () => boolean; // runtime RF-transmit switch for the APRS-IS -> RF direction (default always on)
@@ -87,7 +88,7 @@ export class Igate {
       console.warn(`[igate] rate limited — message for ${addr} not gated to RF (next in ${this.bucket.waitSec()} s)`);
       return;
     }
-    if (this.kiss.send({ src: f.src, dst: f.dst, path: [`${this.o.call}*`], payload: f.payload }))
+    if (this.kiss.send(txIgateFrame(f, this.o.call, { path: this.o.txPath })))
       console.log(`[igate] TX->RF message for ${addr}`);
   }
 

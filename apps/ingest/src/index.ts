@@ -177,6 +177,10 @@ if (env.KISS_TNC_HOST) {
       pass: env.IGATE_PASS,
       filter: env.IGATE_FILTER,
       localTtlSec: env.IGATE_LOCAL_TTL ? Number(env.IGATE_LOCAL_TTL) : undefined,
+      txPath: (env.IGATE_TX_PATH ?? "")
+        .split(",")
+        .map((p) => p.trim().toUpperCase())
+        .filter(Boolean),
       canTx: () => station.tx && station.igate === true,
       ...txLimitFromEnv("igate"),
     });
