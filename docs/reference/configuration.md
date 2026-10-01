@@ -57,9 +57,6 @@ app do not read these.
 | `HTTPS_PORT` | Port of the https listener. It runs the same gateway, web app and live socket as the plain port, and the links it builds from a request say `https`. With it set, the plain port answers a page load from another device (a `GET` that accepts HTML, for a web-app route) with a `302` to the same host on `HTTPS_PORT`; loopback requests, the API, `/auth`, `/ingest`, `/federation`, `/ws`, a request a declared proxy (`TRUST_PROXY=1`) carried over https, and `/pocket-ca.crt` are served where they arrive. An operator sign-in link may then name `https://<private IPv4 address>:<HTTPS_PORT>` (see `OPERATOR_LINKS_FOR_ANY_CALL`). The server refuses to boot when it is set without `TLS_CERT` and `TLS_KEY` | off |
 | `TLS_CERT` / `TLS_KEY` | PEM certificate (with any intermediate chain) and private key for `HTTPS_PORT`. `SIGHUP` reloads both without a restart — a certificate re-issued for a new hotspot address takes effect for new connections, and a file that fails to load keeps the previous one | — |
 | `TLS_CA_CERT` | A CA certificate served read-only at `/pocket-ca.crt` (`application/x-x509-ca-cert`) on both ports, so a visitor can download and install the station's CA before trusting it. Only that fixed path reads it; unset ⇒ the path is a `404` | — |
-The desktop app also reads `HOST` (`127.0.0.1`; set `0.0.0.0` or a LAN
-address to serve the local network) and `DATA_DIR`, and generates its `INGEST_SECRET`, `OPERATOR_SECRET`
-and `SESSION_SECRET` on first run into the data directory unless the environment sets them.
 
 ## Gateway — verification & retention
 
@@ -79,9 +76,9 @@ and `SESSION_SECRET` on first run into the data directory unless the environment
 | `RETENTION` | How long the nightly job keeps the diagnostic and telemetry tables, as JSON naming only what you change, e.g. `{"packetsHours":6,"sensorDays":90}`. Keys: `packetsHours` (Shack raw-packet ring), `messagesDays`, `sensorDays` (weather/telemetry), `portStatsDays`, `alertsDays` (seen watch alerts), `mheardDays` (node MHeard). A missing, non-numeric or non-positive value keeps the default | `24` h / `7` / `30` / `7` / `30` / `7` d |
 | `MESHCOM_META_MIN_S` | Seconds between rewrites of a MeshCom node's or link's row for the map when nothing shown changed (a new device, firmware, battery step, way of hearing, receiver or signal quality is written at once) | `300` |
 | `MESHCOM_NODE_TTL_DAYS` / `MESHCOM_LINK_TTL_HOURS` | MeshCom nodes and links not heard for this long are pruned nightly | `7` d / `48` h |
-| `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](../operate/deployment.md#cost-on-d1). `0` stores every fix | `25` |
+| `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](cloudflare-costs.md#cost-on-d1). `0` stores every fix | `25` |
 | `POS_MIN_INTERVAL_S` | Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix | `600` |
-| `D1_DAILY_WRITE_BUDGET` | Rows a day the gateway may write before it sheds low-value writes, counted from 00:00 UTC. From 80 % the raw packet log pauses and a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6; from 100 % only protected stations' fixes, RF hearings, finds, radio commands, messages to or from a protected call, account and federation data are stored, and everything else reaches the live map without being saved. The sysop gets one banner and one digest line per threshold per day. Workers Free: `90000`. `0` turns it off. See [Write budget](../operate/deployment.md#write-budget) | Worker: `1500000`; Node/Bun: off |
+| `D1_DAILY_WRITE_BUDGET` | Rows a day the gateway may write before it sheds low-value writes, counted from 00:00 UTC. From 80 % the raw packet log pauses and a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6; from 100 % only protected stations' fixes, RF hearings, finds, radio commands, messages to or from a protected call, account and federation data are stored, and everything else reaches the live map without being saved. The sysop gets one banner and one digest line per threshold per day. Workers Free: `90000`. `0` turns it off. See [Write budget](cloudflare-costs.md#write-budget) | Worker: `1500000`; Node/Bun: off |
 
 ## Gateway — federation
 
@@ -170,11 +167,14 @@ systemd, through `EnvironmentFile`. Put comments on their own lines — systemd 
 
 ## Desktop app
 
-The single-file desktop build (`deploy/desktop/`) runs the gateway and the web app together.
+The single-file desktop build (`deploy/desktop/`) runs the gateway and the web app together. It generates its
+`INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` on first run into the data directory unless the
+environment sets them.
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `PORT` | Local port for the app | `8787` |
+| `HOST` | Address to listen on; `0.0.0.0` or a LAN address serves the local network | `127.0.0.1` |
 | `DATA_DIR` | Where the database and media live | `%APPDATA%\aprscaching` · `~/Library/Application Support/aprscaching` · `$XDG_DATA_HOME/aprscaching` (`~/.local/share/aprscaching`) |
 | `WEB_DIST` / `MIGRATIONS_DIR` | Serve the web app / apply migrations from disk instead of the copies built into the binary | built in |
 
