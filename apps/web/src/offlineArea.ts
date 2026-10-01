@@ -3,8 +3,8 @@
  * offlineArea.ts — "download this area" for off-grid caching. Persists the last-fetched map
  * caches so Nearby / the map / cache detail / Log-find all render with **no network**; the logged find
  * still queues + syncs when back online (`flushLogQueue`). `listCaches` write-throughs here on every
- * successful fetch (so browsing an area caches it) and reads back here when the network is down. Tiles are
- * handled separately by the offline basemap style + the service worker. localStorage keeps it simple and
+ * successful fetch (so browsing an area caches it) and reads back here when the network is down. Map tiles
+ * are not stored: offline, the map shows the self-contained graticule (offlineBasemap.ts). localStorage keeps it simple and
  * synchronous; a few hundred lightweight map rows fit comfortably (IndexedDB is the scale-up path).
  */
 import type { MapCache } from "@aprscaching/shared";

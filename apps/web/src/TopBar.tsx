@@ -17,6 +17,9 @@ export function TopBar(props: {
   onHide: () => void;
   count: number;
   queued: number;
+  /** Queued logs the instance refused, waiting for the user's choice. */
+  attention: number;
+  onQueue: () => void;
   onFilters: () => void;
   filtered: boolean;
   q: string;
@@ -52,11 +55,17 @@ export function TopBar(props: {
       <span className="muted">
         · {props.count} caches{props.filtered ? " (filtered)" : " in view"}
       </span>
-      {props.queued > 0 && (
-        <span className="muted" title="finds saved offline">
-          · <Ico e="📴 " />
-          {props.queued} queued
-        </span>
+      {(props.queued > 0 || props.attention > 0) && (
+        <button
+          className={`link queue-chip${props.attention > 0 ? " attn" : ""}`}
+          onClick={props.onQueue}
+          title="Logs made without a connection"
+        >
+          <Ico e="📴 " />
+          {[props.queued > 0 && `${props.queued} queued`, props.attention > 0 && `${props.attention} need attention`]
+            .filter(Boolean)
+            .join(" · ")}
+        </button>
       )}
       <span className="spacer" />
       {/* Manual: the single entry point on every breakpoint — a compact icon in the top chrome. */}

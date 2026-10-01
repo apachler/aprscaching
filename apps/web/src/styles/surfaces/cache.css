@@ -235,6 +235,33 @@
   .logs .comment {
     margin-top: var(--sp-0);
   }
+  /* logs to sync: one entry per queued or refused log, its actions on a wrapping row */
+  .outbox {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--sp-3);
+  }
+  .outbox-item {
+    display: grid;
+    gap: var(--sp-2);
+    padding: var(--sp-3) 0;
+    border-top: 1px solid var(--line);
+  }
+  .outbox-item .row {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+  .outbox-item p {
+    margin: 0;
+  }
+  /* the top bar's way into it: a quiet text button that reads as status */
+  .queue-chip {
+    min-height: var(--hit);
+    color: var(--muted);
+  }
+  .queue-chip.attn {
+    color: var(--bad);
+  }
   /* min-verification-tier card (kept neutral for C — unverified ≠ error) */
   .mintier {
     display: flex;

@@ -22,7 +22,15 @@ const NO_DB = {} as Env;
 describe("the log path takes device readings only", () => {
   it("the evidence shape is exactly the device reading", () => {
     expect(Object.keys(AppGeo.shape).sort()).toEqual(["accuracyM", "lat", "lon", "ts"]);
-    expect(Object.keys(LogRequest.shape).sort()).toEqual(["appGeo", "author", "comment", "logType", "loggerCall"]);
+    // `offline` only labels an unsigned queued log; it moves no time and is no evidence
+    expect(Object.keys(LogRequest.shape).sort()).toEqual([
+      "appGeo",
+      "author",
+      "comment",
+      "logType",
+      "loggerCall",
+      "offline",
+    ]);
   });
 
   it("rejects an appGeo that carries a source marker", () => {

@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import {
+  type AttentionLog,
+  type FlushResult,
+  type QueuedLog,
+  type QueueStore,
+  type SendFailure,
+  discardAttention,
+  enqueue,
+  flush,
+  loadAttention,
+  loadQueue,
+  retryAttention,
+} from "./log/logQueue.js";
 import type {
   CacheSummary,
   CacheDetail,
@@ -1138,60 +1151,73 @@ export interface AuthorSig {
   authorSig: string;
   signedAt: number;
 }
-type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
+export type LogBody = { loggerCall: string; logType: LogType; comment?: string; appGeo?: AppGeo; author?: AuthorSig };
 
-// ---- offline-tolerant logging: queue a find if the network is down, sync when back ----
-const QKEY = "acs.logqueue";
-interface Queued {
-  cacheId: number;
-  body: LogBody;
-}
-const loadQueue = (): Queued[] => {
-  try {
-    return JSON.parse(localStorage.getItem(QKEY) || "[]");
-  } catch {
-    return [];
-  }
-};
-const saveQueue = (q: Queued[]) => {
-  try {
-    localStorage.setItem(QKEY, JSON.stringify(q));
-  } catch {
-    /* ignore */
-  }
+// ---- offline-tolerant logging: queue a log if the network is down, sync when back (log/logQueue.ts) ----
+const browserStore: QueueStore = {
+  get: (k) => localStorage.getItem(k),
+  set: (k, v) => localStorage.setItem(k, v),
 };
 const isOffline = (e: unknown) => !navigator.onLine || e instanceof TypeError; // fetch network errors throw TypeError
+const queueChanged = () => {
+  try {
+    window.dispatchEvent(new Event("acs-queued"));
+  } catch {
+    /* ssr */
+  }
+};
 
-export function logFind(cacheId: number, body: LogBody): Promise<LogResult> {
+/** Log against a cache; with no connection the log is queued (signed and timed now) and sent later. */
+export function logFind(cacheId: number, body: LogBody, label?: string): Promise<LogResult> {
   return call<LogResult>(`/api/caches/${cacheId}/logs`, { method: "POST", body: JSON.stringify(body) }).catch((e) => {
     if (!isOffline(e)) throw e;
-    const q = loadQueue();
-    q.push({ cacheId, body });
-    saveQueue(q);
-    try {
-      window.dispatchEvent(new Event("acs-queued"));
-    } catch {
-      /* ssr */
-    }
+    enqueue(browserStore, { cacheId, body, ...(label && { label }) }, Date.now());
+    queueChanged();
     return { logged: true, queued: true, logType: body.logType, accountVerified: false, verified: false };
   });
 }
 
-export const queuedLogCount = (): number => loadQueue().length;
-/** Retry queued finds (the original timestamp/signature is preserved). Returns how many synced. */
-export async function flushLogQueue(): Promise<number> {
-  const q = loadQueue();
-  if (!q.length) return 0;
-  const keep: Queued[] = [];
-  for (const it of q) {
-    try {
-      await call(`/api/caches/${it.cacheId}/logs`, { method: "POST", body: JSON.stringify(it.body) });
-    } catch (e) {
-      if (isOffline(e)) keep.push(it); /* else drop a rejected log */
-    }
-  }
-  saveQueue(keep);
-  return q.length - keep.length;
+export const queuedLogs = (): QueuedLog<LogBody>[] => loadQueue<LogBody>(browserStore);
+export const attentionLogs = (): AttentionLog<LogBody>[] => loadAttention<LogBody>(browserStore);
+
+/**
+ * Send the queued logs that are due (the signature and its time are kept, so the instance verifies each
+ * at the time it was made). A refused log moves to needs-attention, never away.
+ */
+export async function flushLogQueue(): Promise<FlushResult> {
+  if (!queuedLogs().length) return { sent: 0, refused: 0 };
+  const res = await flush<LogBody>(
+    browserStore,
+    async (it) => {
+      try {
+        await call(`/api/caches/${it.cacheId}/logs`, {
+          method: "POST",
+          body: JSON.stringify({ ...it.body, offline: true }),
+        });
+      } catch (e) {
+        if (isOffline(e)) throw { kind: "offline" } satisfies SendFailure;
+        const status = e instanceof ApiError ? e.status : 0;
+        if (status === 0 || status >= 500 || status === 408 || status === 429)
+          throw { kind: "retry" } satisfies SendFailure;
+        throw { kind: "refused", status, reason: (e as Error).message } satisfies SendFailure;
+      }
+    },
+    Date.now(),
+  );
+  if (res.sent || res.refused) queueChanged();
+  return res;
+}
+
+/** Queue a refused log again (optionally with a new comment) and try it at once. */
+export function retryAttentionLog(index: number, comment?: string): Promise<FlushResult> {
+  retryAttention(browserStore, index, Date.now(), comment);
+  queueChanged();
+  return flushLogQueue();
+}
+/** Remove a refused log for good. */
+export function discardAttentionLog(index: number): void {
+  discardAttention(browserStore, index);
+  queueChanged();
 }
 
 export function registerKey(body: { callsign: string; publicKey: string; label?: string }): Promise<{ ok: boolean }> {
@@ -1386,12 +1412,30 @@ export async function loginPasskey(callsign: string): Promise<{ ok: boolean; cal
 }
 
 let instanceCache: Promise<string> | null = null;
-/** This instance's federation id (cached), used to build the canonical authorship message. */
+const INSTANCE_KEY = "acs.instance";
+/**
+ * This instance's federation id, used to build the canonical authorship message. It is remembered once
+ * known, so a log made offline is still signed for its instance; a failed lookup is not cached.
+ */
 export function getInstance(): Promise<string> {
   if (!instanceCache)
     instanceCache = call<{ instance: string }>(`/.well-known/aprscaching`)
-      .then((d) => d.instance)
-      .catch(() => "");
+      .then((d) => {
+        try {
+          localStorage.setItem(INSTANCE_KEY, d.instance);
+        } catch {
+          /* storage unavailable */
+        }
+        return d.instance;
+      })
+      .catch(() => {
+        instanceCache = null; // ask again next time instead of remembering the failure
+        try {
+          return localStorage.getItem(INSTANCE_KEY) ?? "";
+        } catch {
+          return "";
+        }
+      });
   return instanceCache;
 }
 

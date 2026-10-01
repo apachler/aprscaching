@@ -62,6 +62,7 @@ import { DetailPanel } from "./caches/DetailPanel.js";
 import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
+import { OutboxPanel } from "./log/OutboxPanel.js";
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { ShackPanel } from "./shack/ShackPanel.js";
@@ -565,8 +566,8 @@ export default function Platform({ session, startTour }: { session: SessionState
     void refresh();
   }, [includeUnvetted, refresh]);
 
-  // finds queued while offline flush on load and whenever connectivity returns
-  const queued = useLogQueue(() => void refresh());
+  // logs queued while offline flush on load, whenever connectivity returns, and as backoffs come due
+  const logQueue = useLogQueue(() => void refresh());
 
   // re-subscribe when the callsign changes so prompts are addressed to you
   useEffect(() => {
@@ -740,7 +741,9 @@ export default function Platform({ session, startTour }: { session: SessionState
             onAccount={() => openView(panel(session.signedIn ? "settings" : "signin"))}
             onHide={() => openView(panel("hide"))}
             count={shown.length}
-            queued={queued}
+            queued={logQueue.queued}
+            attention={logQueue.attention}
+            onQueue={() => openView(panel("outbox"))}
             onFilters={() => openView(panel("filter"))}
             filtered={filters.types.length > 0 || filters.q.length > 0}
             q={filters.q}
@@ -792,6 +795,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               />
             )}
             {isPanel("activity") && <ActivityPanel onBoard={() => openView(panel("ranks"))} onClose={closeView} />}
+            {isPanel("outbox") && <OutboxPanel onClose={closeView} />}
             {isPanel("messages") && <MessagesPanel onClose={closeView} />}
             {isPanel("filter") && (
               <FilterPanel

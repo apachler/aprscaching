@@ -7,7 +7,7 @@
 import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
-import { retentionFrom } from "./retention.js";
+import { POSITION_RETENTION_S, retentionFrom } from "./retention.js";
 import { handleIngest, handleIngestCheck } from "./ingest.js";
 import {
   handleLog,
@@ -251,7 +251,7 @@ export async function runScheduled(env: Env): Promise<void> {
     const r = await env.DB.prepare(
       "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ? LIMIT 5000)",
     )
-      .bind(now - 7 * 24 * 3600)
+      .bind(now - POSITION_RETENTION_S)
       .run();
     if ((r.meta?.changes ?? 0) < 5000) break;
   }

@@ -99,6 +99,18 @@ describe("when a later attempt is queued", () => {
     expect(JSON.parse(String(row?.query)).callsign).toBe(LOGGER);
   });
 
+  it("asks about the find time of a find synced late, and is due at once", async () => {
+    const { hub, p2, cache } = await setup(1);
+    await hub.DB.prepare("UPDATE fed_peers SET trust='unvetted' WHERE url=?").bind(P2).run();
+    stubFetch({ [P1]: down, [P2]: serve(p2.env) });
+    const at = now() - 8 * 3600; // a find queued offline, scored at its signed field time
+    const { logId } = await logFind(hub, cache, at);
+    const row = await retryRow(hub, logId);
+    expect(JSON.parse(String(row?.query)).until).toBe(at);
+    expect(row?.next_at).toBe(at + RETRY_AFTER_S[0]!);
+    expect(Number(row?.next_at)).toBeLessThan(now());
+  });
+
   it("counts a rate limit and a server error as not reached, a refusal as an answer", async () => {
     const a = await setup(2);
     stubFetch({ [P1]: status(429), [P2]: status(503) });

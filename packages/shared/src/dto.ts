@@ -142,6 +142,8 @@ export const LogRequest = z.object({
   comment: z.string().max(2000).optional(),
   appGeo: AppGeo.optional(),
   author: AuthorSig.optional(),
+  // the log waited in the client's offline queue; only labels an unsigned log, whose time is its arrival
+  offline: z.boolean().optional(),
 });
 export type LogRequest = z.infer<typeof LogRequest>;
 
@@ -212,6 +214,9 @@ export interface CacheLogEntry {
   corroboratedBy?: string | null; // peer instance that corroborated a Tier-A find
   corroboratedLaterAt?: number | null; // when a later attempt lifted the find to Tier A (unix seconds)
   signerKey?: string | null; // logger's device key that signed this find
+  receivedAt?: number | null; // when the instance received the log; ts is the find time (unix seconds)
+  // why ts is the receive time and not the signed field time (future, too_old, before_cache, before_key, unsigned)
+  fieldTimeRejected?: string | null;
 }
 
 export interface CacheDetail extends CacheSummary {
