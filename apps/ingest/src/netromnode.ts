@@ -34,6 +34,7 @@ import {
 } from "@aprscaching/packet";
 import { decodeFrame, parseAddr, addrStr, PID_NETROM, type Ax25Address } from "@aprscaching/ax25";
 import type { FrameLink } from "./link.js";
+import { gatewayFetch } from "./gatewayauth.js";
 
 const NODES_DST = { call: "NODES", ssid: 0 };
 
@@ -484,7 +485,7 @@ export class NetromNodeRunner {
   private async mirror(): Promise<void> {
     if (!this.o.gatewayBase || !this.o.secret) return;
     const post = (path: string, body: unknown) =>
-      fetch(`${this.o.gatewayBase}${path}`, {
+      gatewayFetch(`${this.o.gatewayBase}${path}`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-ingest-secret": this.o.secret! },
         body: JSON.stringify(body),

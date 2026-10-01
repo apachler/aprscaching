@@ -25,6 +25,7 @@
  * that heard it. They pass the same opt-in, transmit switch and age gates. The poll reports what the box
  * can send, so the gateway only routes answers here while it can deliver them.
  */
+import { gatewayFetch } from "./gatewayauth.js";
 import { encodeAprsMessage, encodeAprsPosition } from "@aprscaching/aprs";
 import { TokenBucket } from "./txlimit.js";
 
@@ -129,7 +130,7 @@ export class BoxPoller {
 
   constructor(private o: BoxPollerOpts) {
     this.now = o.now ?? (() => Date.now());
-    this.fetch = o.fetch ?? fetch;
+    this.fetch = o.fetch ?? gatewayFetch;
     this.log = o.log ?? ((m) => console.log(m));
     this.bucket = new TokenBucket({ burst: o.burst ?? 3, refillSec: o.refillSec ?? 60, now: this.now });
     this.startedAt = this.now();

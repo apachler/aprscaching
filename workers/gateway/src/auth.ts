@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { boxPrincipal } from "./boxprincipal.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
@@ -654,8 +655,12 @@ export function secretOk(given: string | null | undefined, expected: string | un
 }
 
 /** The ingest-plane credential: does the request carry the ingest box's INGEST_SECRET? */
+/**
+ * The ingest plane's credential: the shared INGEST_SECRET, or a request an enrolled box signed with its own
+ * key (verified by route() before any handler runs; boxkeys.ts).
+ */
 export function ingestSecretOk(req: Request, env: Env): boolean {
-  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) || boxPrincipal(req) !== null;
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */

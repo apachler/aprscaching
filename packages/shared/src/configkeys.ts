@@ -177,6 +177,7 @@ export const CONFIG_KEYS = {
   IGATE_TX_REFILL_SEC: { type: "number", units: ["ingest"], default: "10" },
   RF_SITE_CALL: { type: "string", units: ["ingest", "pocket"] },
   BOX_ID: { type: "string", units: ["ingest"] },
+  BOX_KEY: { type: "string", units: ["ingest"], secret: true },
   BOX_TX: { type: "enum", units: ["ingest"], values: ["0", "1", "false"] },
   BOX_CALL: { type: "string", units: ["ingest"] },
   BOX_TX_PATH: { type: "list", units: ["ingest"], default: "WIDE1-1,WIDE2-1" },

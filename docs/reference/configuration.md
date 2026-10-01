@@ -164,6 +164,7 @@ only when its variable is present.
 |---|---|---|
 | `INGEST_URL` | Gateway ingest endpoint to POST batches to | `http://127.0.0.1:8787/ingest` |
 | `INGEST_SECRET` | Sent as `x-ingest-secret`. The only gateway secret an ingest box holds — never give it `OPERATOR_SECRET` or `SESSION_SECRET` | `change-me` |
+| `BOX_ID` / `BOX_KEY` | An enrolled box's id and private Ed25519 key (PKCS#8, base64url), both written by enrollment with a one-time code from Instance admin (`apps/ingest/src/enroll.ts`). With them the box signs every gateway request with its own key and needs no `INGEST_SECRET`; revoking the box in Instance admin cuts off that box alone. `BOX_ID` also names the box for remote control (below) | — |
 | `BATCH_MS` | Batch flush interval | `1500` (`2000` in the Docker stack) |
 | `INGEST_SPOOL_MAX` | Undelivered-packet spool bound (drop-oldest) during a gateway outage | `5000` |
 | `APRSIS_HOST` / `APRSIS_PORT` | APRS-IS server | `rotate.aprs2.net` / `14580` |

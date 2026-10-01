@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
 import { ingestSecretOk } from "./auth.js";
+import { boxPrincipal } from "./boxprincipal.js";
+import { siteAllowed } from "./boxkeys.js";
 import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
@@ -65,13 +67,13 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
 const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * GET /ingest/check — does this ingest credential work? 200 with the instance id for a valid
- * x-ingest-secret, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
+ * GET /ingest/check — does this ingest credential work? 200 with the instance id (and the box, for an
+ * enrolled box's signed request) for a valid credential, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
  * doctor`) can test its settings without posting a batch, draining the outbox or leasing a command.
  */
 export function handleIngestCheck(req: Request, env: Env): Response {
   if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
-  return json({ ok: true, instance: env.INSTANCE ?? null });
+  return json({ ok: true, instance: env.INSTANCE ?? null, box: boxPrincipal(req)?.box ?? null });
 }
 
 /** Receive batched packets from the ingest box, persist positions, enrich the shack, fan out live. */
@@ -129,8 +131,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // [now − 7 d, now + 60 s] before anything is persisted.
   const now = nowS();
   const clampTs = (t: number) => Math.min(Math.max(t, now - 7 * 24 * 3600), now + 60);
+  // An enrolled box names only its own box id, and a box enrolled for a callsign only receiving sites of
+  // that base call: a site or receiver of another call is dropped, never attested on its word.
+  const principal = boxPrincipal(req);
   for (const p of packets) {
     p.ts = clampTs(p.ts);
+    if (principal) {
+      if (!siteAllowed(req, p.igateCall)) delete p.igateCall;
+      if (!siteAllowed(req, p.rxCall)) delete p.rxCall;
+      if (p.box && p.box !== principal.box) delete p.box;
+    }
     portRx.set(p.port, (portRx.get(p.port) ?? 0) + 1);
     if (p.ts > maxTs) maxTs = p.ts;
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;

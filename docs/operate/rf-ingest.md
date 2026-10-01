@@ -19,6 +19,22 @@ The APRS-IS feed is always available: set `APRSIS_FILTER` (and optionally `APRSI
 `APRSIS_PASSCODE` for a logged-in feed). Every transport below is opt-in and starts only when its variable is
 present. Each stamps its own `port`, visible at `GET /api/ports`.
 
+## Enrolling the box
+
+A box reaches its gateway with either the gateway's shared `INGEST_SECRET` or its own key. To get a key, ask
+the gateway's sysop for a one-time enrollment code ([Enrolling ingest boxes](administration.md#enrolling-ingest-boxes)),
+then, with `INGEST_URL` set:
+
+```bash
+cd apps/ingest
+node --import tsx src/enroll.ts --code ABCD-EFGH-JKLM-NPQR [--box shack-1] [--label "home TNC"] >> ../../.env
+```
+
+It generates the box's Ed25519 key, registers the public half with the code and appends `BOX_ID` and
+`BOX_KEY` to the settings. `BOX_KEY` is the private key: keep it in the settings file, owner-only, and never
+on a screen. From then on the box signs its requests and needs no `INGEST_SECRET`. `GET /ingest/check`
+answers whether the gateway accepts the box's credential.
+
 ## Transports
 
 | Transport | Enable with | What it does |
