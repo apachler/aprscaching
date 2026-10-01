@@ -27,8 +27,11 @@
     border-radius: var(--radius-control);
     color: var(--chrome-ink-muted);
   }
+  /* the focus ring frames the whole field in the chrome ink (WCAG 2.4.7) */
   .topsearch:focus-within {
     border-color: color-mix(in oklch, var(--chrome-ink) 40%, transparent);
+    outline: 2px solid var(--chrome-ink);
+    outline-offset: 2px;
   }
   .topsearch input {
     flex: 1;

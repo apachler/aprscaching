@@ -90,7 +90,23 @@ export function useCacheMarkers(
       };
     }
     prune(markers.current, seen);
+    focusOnlyVisible(map, markers.current);
   }, [map, caches, phosphor, pick]);
+  // Keyboard focus reaches only the pins on screen: a pin outside the view is not something to land on
+  // (WCAG 2.4.3), and the Nearby list reaches every cache anyway.
+  useEffect(() => {
+    if (!map) return;
+    const sync = () => focusOnlyVisible(map, markers.current);
+    map.on("moveend", sync);
+    return () => {
+      map.off("moveend", sync);
+    };
+  }, [map]);
+}
+
+function focusOnlyVisible(map: maplibregl.Map, markers: Map<string, maplibregl.Marker>): void {
+  const bounds = map.getBounds();
+  for (const m of markers.values()) m.getElement().tabIndex = bounds.contains(m.getLngLat()) ? 0 : -1;
 }
 
 /** Live station pins. Glyph precedence: station role → the station's own APRS symbol → moving/idle dot. */

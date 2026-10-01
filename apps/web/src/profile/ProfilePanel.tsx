@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { getProfile, getLicence, type Licence, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Panel, Group, Badge, CallVerifiedBadge, LicenceBadge, ErrorState, Icon } from "../ui/index.js";
+import { badgeInfo } from "./badges.js";
 import { RadioLogs } from "./RadioLogs.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { TermHelp } from "../platform/TermHelp.js";
 
 /** Profile — your identity and the one door to the advanced APRS tools. */
 export function ProfilePanel(props: {
@@ -124,16 +126,20 @@ export function ProfilePanel(props: {
           )}
           {profile && (profile.corroborations ?? 0) > 0 && (
             <p title="Finds your receiving stations heard on the air and made Radio-verified">
-              <Badge kind="tierA">⇅ Infrastructure</Badge> <strong>{profile.corroborations}</strong> finds corroborated
+              <Badge kind="tierA">⇅ Infrastructure</Badge> <strong>{profile.corroborations}</strong> finds corroborated{" "}
+              <TermHelp term="corroboration" />
             </p>
           )}
           {profile && profile.badges.length > 0 && (
             <div className="badges">
-              {profile.badges.map((b) => (
-                <span key={b.badge} className="award">
-                  {b.badge}
-                </span>
-              ))}
+              {profile.badges.map((b) => {
+                const info = badgeInfo(b.badge);
+                return (
+                  <span key={b.badge} className="award" title={info.how || undefined}>
+                    {info.name}
+                  </span>
+                );
+              })}
             </div>
           )}
         </>

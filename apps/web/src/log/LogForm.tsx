@@ -8,6 +8,7 @@ import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon } from "../ui/inde
 import type { LogType } from "@aprscaching/shared";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
+import { TermHelp } from "../platform/TermHelp.js";
 
 /**
  * How near a device reading must be to verify a find: the gateway's match radius plus the reading's own
@@ -160,6 +161,9 @@ export function LogForm(props: {
                 {result.duplicate
                   ? "A cache takes one find from each callsign, and your first log stands as it was scored."
                   : findWhy(result, fmt, geoAway, hadGeo)}
+              </p>
+              <p className="muted fine">
+                <TermHelp term="tier">How finds are verified</TermHelp>
               </p>
               {!result.verified && !hadGeo && (
                 <LocateStatus waiting={null} problem={loc.problem} onCancel={loc.cancel} />

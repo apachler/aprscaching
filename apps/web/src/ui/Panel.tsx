@@ -5,7 +5,9 @@
  * close button right. `.panel` is a query container (styles/components/panel.css), so its contents
  * adapt to the slot; the docked↔sheet swap is a viewport media query (styles/surfaces/shell.css).
  */
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { ErrorBoundary } from "./ErrorBoundary.js";
+import { Icon } from "./Icon.js";
 
 export function Panel(props: {
   title: ReactNode;
@@ -21,6 +23,7 @@ export function Panel(props: {
   density?: "compact";
 }) {
   const ref = useRef<HTMLElement>(null);
+  const titleId = useId();
   const { onClose } = props;
   // Move focus into the drawer on open so keyboard/AT users land inside it, and return focus to the
   // control that opened it on close (ui-ux.md §7). Not a modal focus-trap — the panel coexists with
@@ -45,18 +48,19 @@ export function Panel(props: {
     <aside
       ref={ref}
       tabIndex={-1}
+      aria-labelledby={titleId}
       onKeyDown={onKeyDown}
       data-shell={props.wide ? "terminal" : undefined}
       data-density={props.wide ? "compact" : props.density}
       className={`panel ${props.side ?? "right"}${props.wide ? " panel-wide" : ""}`}
     >
       <div className="row between">
-        <h2>{props.title}</h2>
+        <h2 id={titleId}>{props.title}</h2>
         <span className="spacer" />
         {props.actions}
         {onClose && (
           <button className="icon" aria-label="Close" onClick={onClose}>
-            ✕
+            <Icon name="close" cp437="×" />
           </button>
         )}
       </div>
@@ -67,7 +71,7 @@ export function Panel(props: {
           Best on a wider screen — this Shack app is built for desktop.
         </p>
       )}
-      {props.children}
+      <ErrorBoundary scope="panel">{props.children}</ErrorBoundary>
     </aside>
   );
 }

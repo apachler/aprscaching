@@ -246,6 +246,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [spotFilters]);
   const [locSettings, setLocSettings] = useState<LocaleSettings>(loadSettings);
   const [docSlug, setDocSlug] = useState("index"); // deep-link seed for the manual reader
+  const [docAnchor, setDocAnchor] = useState("");
   const [sysop, setSysop] = useState(false); // signed-in account is this instance's operator
   const [sysopKnown, setSysopKnown] = useState(false); // the operator check has answered (or nobody is signed in)
   const sysopRef = useRef(sysop);
@@ -780,7 +781,15 @@ export default function Platform({ session, startTour }: { session: SessionState
   const pinnedApps = pins.map(appById).filter((a): a is ShackApp => !!a && (sysop || !a.sysop));
   const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedApps.map((a) => a.id)]);
   const tabKeys = new Set(TAB_ITEMS.map((i) => i.key));
-  const ctx = useMemo(() => ({ session, map }), [session, map]);
+  const openDocs = useCallback(
+    (slug: string, anchor = "") => {
+      setDocSlug(slug);
+      setDocAnchor(anchor);
+      openView(panel("docs"));
+    },
+    [openView],
+  );
+  const ctx = useMemo(() => ({ session, map, openDocs }), [session, map, openDocs]);
 
   return (
     <PlatformContext.Provider value={ctx}>
@@ -911,6 +920,10 @@ export default function Platform({ session, startTour }: { session: SessionState
                 operatorPending={operatorPending}
                 onSignIn={() => openView(panel("signin"))}
                 onDocs={() => openView(panel("docs"))}
+                onTour={() => {
+                  openView(MAP);
+                  setTourOpen(true);
+                }}
                 onClose={closeView}
               />
             )}
@@ -925,7 +938,12 @@ export default function Platform({ session, startTour }: { session: SessionState
             )}
             {isPanel("docs") && (
               <Suspense fallback={null}>
-                <DocsPanel initialSlug={docSlug} onClose={closeView} />
+                <DocsPanel
+                  key={`${docSlug}#${docAnchor}`}
+                  initialSlug={docSlug}
+                  initialAnchor={docAnchor}
+                  onClose={closeView}
+                />
               </Suspense>
             )}
 

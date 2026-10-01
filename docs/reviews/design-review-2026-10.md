@@ -59,7 +59,7 @@ The work item is the handover item that fixes it.
 | R-05 | major | The scales sprawl, and are named by size rather than role (`--fs-md-up`, `--r-7`, `--elev-6`), so nobody can tell which step a heading or a card should use. | `tokens.css` | DSN-04a || Fixed: role scales rolled out, size-named steps removed (Phases 2–3). |
 | R-06 | major | Two icon systems. The phone tab bar and panel titles use emoji in Modern (🗺 📍 ⚡ 👤, 📡 Shack, 📻 Packet terminal, ✉ Messages, ⚙ Settings), beside SVG line icons in the rail and buttons. | `map-dark-phone`, `shack-*`, `terminal-*` | DSN-08 (G3) || Fixed: one line-icon set (`Icon`, 17 new glyphs), CP437 in Phosphor through the same component; `Ico` removed (Phase 4). |
 | R-07 | major | Primitives are bypassed: 193 raw buttons and 10 inline styles. Tabs and segments are styled differently in the BBS (filled pills), the terminal (outlined chips) and Nearby (boxed buttons). | code counts; `bbs-*`, `nearby-*` | DSN-08 || Fixed: every button outside `ui/` is `Button` (8 variants, tested); `Segmented`, `Tabs` and `ChipToggle` primitives; the colour inline styles are `data-ctype` + `--type-*` tokens; the six left pass data (bearing, percentages) as custom properties (Phase 4). |
-| R-08 | major | A render error in one panel takes down the whole app. There is only one `ErrorBoundary`, at the root. Seen when the BBS met an unexpected response: "The app stopped with an error". | `bbs-*` (first run) | DSN-09 (local fix) | |
+| R-08 | major | A render error in one panel takes down the whole app. There is only one `ErrorBoundary`, at the root. Seen when the BBS met an unexpected response: "The app stopped with an error". | `bbs-*` (first run) | DSN-09 (local fix) || Fixed: every `Panel` has its own error boundary; a failing panel says so and offers to try again, the rest keeps working (Phase 5). |
 | R-09 | minor | `theme-color` is fixed at `#2D8BAB` in every theme, so the browser chrome stays blue in Phosphor and in dark. | `index.html` | DSN-06 || Fixed: one `theme-color` per scheme, set from the top bar of an explicit theme (Phase 3). |
 | R-10 | minor | Map colours are literals that don't follow the theme:<br>• MapTools ring and measure lines;<br>• the track replay;<br>• the offline graticule (light under dark and Phosphor). | code; `*-phosphor-*` | DSN-11 | |
 | R-11 | major | In Phosphor, MapLibre's control stack (zoom, locate) stays bright white, and pins keep the Modern hues. | `map-phosphor-*`, `settings-phosphor-desktop` | DSN-11 | |
@@ -69,23 +69,23 @@ The work item is the handover item that fixes it.
 | ID | Sev. | Finding | Evidence | Work item | Resolution |
 |---|---|---|---|---|---|
 | R-12 | major | **2.5.8 Target size** fails on 62 renders:<br>• the Shack launcher's pin buttons;<br>• the terminal's channel close `.pt-x`;<br>• `<summary>` disclosures in Settings and the cache detail;<br>• disclosure buttons (`button[aria-controls]`). | axe `target-size` | DSN-10 | |
-| R-13 | major | **2.4.7 Focus visible:** the top-bar search and the Settings search remove the outline (`outline: none`). The only cue is the wrapper's border going from 18 % to 40 % of the chrome ink. | keyboard walk: map stop 2, settings stop 2 | DSN-10 | |
-| R-14 | major | **2.4.3 / 2.4.11:** cache pins outside the visible map stay in the tab order. Keyboard focus lands on markers nobody can see (map stops 21 and 23). | keyboard walk | DSN-10 | |
+| R-13 | major | **2.4.7 Focus visible:** the top-bar search and the Settings search remove the outline (`outline: none`). The only cue is the wrapper's border going from 18 % to 40 % of the chrome ink. | keyboard walk: map stop 2, settings stop 2 | DSN-10 || Fixed: both search fields draw a 2px ring around the whole field (Phase 5). |
+| R-14 | major | **2.4.3 / 2.4.11:** cache pins outside the visible map stay in the tab order. Keyboard focus lands on markers nobody can see (map stops 21 and 23). | keyboard walk | DSN-10 || Fixed: only pins inside the view are focusable, re-checked after every move (Phase 5). |
 | R-15 | major | **2.1.1:** the landing page's terminal card is a scrollable region that cannot get keyboard focus. | axe `scrollable-region-focusable` on `landing-*`, `signin-*` | DSN-12 | |
 | R-16 | critical | **4.1.2:** the packet terminal's channel bar has `role="tablist"` without `tab` children. | axe `aria-required-children` on `packet-harness-*` | DSN-08 || Fixed: `Tabs` is a pure tablist (Delete closes a channel, the × is pointer-only) (Phase 4). |
 | R-16a | major | **1.3.1:** on a phone, the BBS message list is a `<ul>` with children other than `<li>`. | axe `list` on `bbs-*-phone` | DSN-08 || Fixed: each row is a `Button` inside its `<li>` (Phase 4). |
-| R-17 | major | **2.5.7 Dragging:** the map has zoom buttons, but no keyboard pan, and no on-screen way to move without dragging except search (desktop only) and Nearby. Unverified against MapLibre's keyboard handler, which pans with the arrow keys once the canvas has focus. The UI doesn't say so. | — | DSN-10 | |
-| R-18 | minor | 2.4.11 (sheets covering focus), 3.2.6 (consistent help), 3.3.7 (redundant entry) and 3.3.8 (accessible authentication) are not yet verified. Passkeys and the email link look compliant; it needs a check. | — | DSN-10 | |
+| R-17 | major | **2.5.7 Dragging:** the map has zoom buttons, but no keyboard pan, and no on-screen way to move without dragging except search (desktop only) and Nearby. Unverified against MapLibre's keyboard handler, which pans with the arrow keys once the canvas has focus. The UI doesn't say so. | — | DSN-10 || Fixed: the map canvas is named with its keys ("arrow keys pan; plus and minus zoom; Nearby lists every cache"); zoom buttons, Nearby and the Hide form's coordinate field are the non-drag ways (Phase 5). |
+| R-18 | minor | 2.4.11 (sheets covering focus), 3.2.6 (consistent help), 3.3.7 (redundant entry) and 3.3.8 (accessible authentication) are not yet verified. Passkeys and the email link look compliant; it needs a check. | — | DSN-10 || 2.4.11: panels keep scroll padding clear of the tab bar. 3.2.6: the manual button sits in the top bar on every surface, and Settings → Help & credits repeats it. 3.3.7: no journey asked for the same entry twice. 3.3.8: passkey or email link, no puzzle or transcription (Phase 5). |
 
 ### Surfaces
 
 | ID | Sev. | Surface | Finding | Evidence | Work item | Resolution |
 |---|---|---|---|---|---|---|
 | R-19 | major | Instance admin, operator apps | A `?view=admin` (or node, remote) deep link was dropped: it ran before the operator check answered. | `admin-dark-desktop` (first run) | — | **Fixed in this PR**: the deep link waits for the operator check. |
-| R-20 | major | Search | The top bar has search only from 960 px up. A phone finds caches through Nearby, and has no way to search stations or a grid. | `map-*-phone` | G7 proposal | |
-| R-21 | major | Phone navigation | The phone tab bar holds Map, Nearby, Hide, Activity and You. It is not obvious how to reach Messages, Ranks, the Shack, Settings and Offline: Settings is under the identity chip, and the Shack under You → Advanced. | `*-phone` | G7 proposal | |
-| R-22 | minor | Packet terminal | Before a TNC is open, the surface is blank below its title. There is no empty state saying what it does, what it needs (Web Serial or BLE, a KISS TNC) or what to press. | `terminal-*` | DSN-09 | |
-| R-23 | minor | Profile | Badges show their raw ids ("finder-50", "rover-hunter"), with no name or explanation. | `profile-*` | DSN-09 | |
+| R-20 | major | Search | The top bar has search only from 960 px up. A phone finds caches through Nearby, and has no way to search stations or a grid. | `map-*-phone` | G7 proposal || Proposed: `design-ia-proposal-2026-10.md`, Proposal 1 — waiting for the owner (G7). |
+| R-21 | major | Phone navigation | The phone tab bar holds Map, Nearby, Hide, Activity and You. It is not obvious how to reach Messages, Ranks, the Shack, Settings and Offline: Settings is under the identity chip, and the Shack under You → Advanced. | `*-phone` | G7 proposal || Proposed: same document, Proposal 2; the walk confirms Messages has no path on a phone — waiting for the owner (G7). |
+| R-22 | minor | Packet terminal | Before a TNC is open, the surface is blank below its title. There is no empty state saying what it does, what it needs (Web Serial or BLE, a KISS TNC) or what to press. | `terminal-*` | DSN-09 || Fixed: an empty state says what the terminal is for, what it needs, and offers *Open KISS TNC…* (Phase 5). |
+| R-23 | minor | Profile | Badges show their raw ids ("finder-50", "rover-hunter"), with no name or explanation. | `profile-*` | DSN-09 || Fixed: badges show their names, with how each was earned as the tooltip (Phase 5). |
 | R-24 | minor | Manual reader | An admonition title keeps its Markdown: `New here? [Start here](start-here.md)`. Links in the light theme use the green accent (2.28:1). | `docs-light-desktop` | DSN-13/14, DSN-07 | |
 | R-25 | minor | Landing | The page's sections are:<br>• the "How a find works" cards;<br>• the trust model;<br>• six Shack cards with three small screenshots;<br>• four "An APRS map that forgets" cards;<br>• four "Run it anywhere" tiles;<br>• "Free in full".<br><br>All of them use the same card grid on the same dark band. Issues:<br>• the screenshots are too small to read;<br>• the small green eyebrows and the tier badges fail contrast;<br>• on a phone, the terminal card cuts its lines ("· t…"). | `landing-*` | DSN-12 | |
 | R-26 | minor | Nearby | The filter is four boxed buttons ("Up for adoption" wraps onto two lines) rather than the segmented control the rules name for 2–4 modes. | `nearby-*-desktop` | DSN-08 || Fixed: the filter is `Segmented` (chips look); "For adoption" fits on one line (Phase 4). |
@@ -104,7 +104,27 @@ These aren't rendered yet; Phase 5 walks them by hand:
 - the Hide form's validation;
 - Instance admin on a phone (no rail; the deep link now works).
 
+## Journeys (Phase 5)
+
+`apps/web/test/visual/journeys.mjs` walks seven tasks with the visible controls, by name, on a phone and a
+desktop; `out/journeys/log.txt` lists every step. Results:
+
+| Journey | Phone | Desktop | Friction found, and what happened to it |
+|---|---|---|---|
+| First visit: landing → Explore → tour → skip | ok | ok | The tour is three steps and skippable; there was no way back to it → *Settings → Help & credits → Take the tour again* |
+| Sign in | ok | ok | One field, then Continue; passkey or email link |
+| Find nearby → Navigate → Log a find → result | ok | ok | The result names the tier and the distance, but not what the tiers mean → *How finds are verified* opens the glossary; the cache sheet's *Verification* gains *What's this?* |
+| Hide a cache | ok | ok | Coordinates and *Use my location* are the non-drag ways to place the pin |
+| Settings: search "units" | ok | ok | The search field had no visible focus ring → fixed (R-13) |
+| Shack: open → launch the BBS → back | **stuck** | ok | No path from the map on a phone → proposal (R-21) |
+| Sysop first hour: Instance admin → Setup | ok | ok | The deep link was dropped before the operator check → fixed (R-19) |
+
+Terms in context: *What's this?* links (`platform/TermHelp.tsx`) open the manual's glossary at the term, so the
+app and the manual share one vocabulary. They sit at the cache's verification, the log result, the profile's
+corroborations and the Shack introduction.
+
 ## Proposals for the owner (G7)
 
 Changes to information architecture or behaviour are collected as one batch with before/after mocks, and wait
-for approval (Phase 5). The candidates so far are R-20 (search on phones) and R-21 (phone navigation).
+for approval: `design-ia-proposal-2026-10.md` — search on every screen size (R-20), one *More* destination on
+the phone (R-21), and attention dots on the rail and the More sheet.

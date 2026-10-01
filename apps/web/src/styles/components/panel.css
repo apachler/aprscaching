@@ -4,6 +4,8 @@
    (slim docked drawer vs wide tablet sheet), per css.md "responsive component layout MUST use
    container queries". The panel↔sheet swap itself is viewport-coarse, so it stays a media query. */
   .panel {
+    /* a focused control scrolled into view stays clear of the panel's edges and the phone's tab bar (WCAG 2.4.11) */
+    scroll-padding-block: var(--space-xl) calc(var(--tabbar-h) + env(safe-area-inset-bottom));
     position: absolute;
     top: var(--space-md);
     bottom: var(--space-md);

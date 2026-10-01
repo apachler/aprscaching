@@ -401,4 +401,12 @@
     background: color-mix(in oklch, var(--bad) 10%, transparent);
     overflow-wrap: anywhere;
   }
+  /* a panel's own crash: the rest of the app keeps working */
+  .crash-panel {
+    margin: var(--space-md) 0;
+    padding: var(--pad-card);
+    border: 1px solid color-mix(in oklch, var(--bad) 45%, var(--line));
+    border-radius: var(--radius-card);
+    background: color-mix(in oklch, var(--bad) 8%, var(--surface));
+  }
 }

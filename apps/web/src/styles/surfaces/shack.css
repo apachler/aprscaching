@@ -112,12 +112,18 @@
     font-size: var(--text-caption);
     line-height: 1.25;
   }
+  /* the pin sits in the card's corner over the launch button: a full 32px target of its own (WCAG 2.5.8),
+     and dimmed only as far as its icon still reads (3:1, WCAG 1.4.11) */
   .shack-pin {
     position: absolute;
-    top: 7px;
-    right: 7px;
-    opacity: 0.45;
-    padding: 3px;
+    top: var(--space-2xs);
+    right: var(--space-2xs);
+    display: grid;
+    place-items: center;
+    min-width: 32px;
+    min-height: 32px;
+    opacity: 0.7;
+    padding: 0;
   }
   .shack-pin:hover,
   .shack-pin.on {

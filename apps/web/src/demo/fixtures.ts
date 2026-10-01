@@ -31,6 +31,7 @@ import type {
   AdminAdoptions,
   FederationSync,
   Licence,
+  LogResult,
   SetupItem,
   SourceInfo,
   SupportInfo,
@@ -596,6 +597,22 @@ const ROUTES: Route[] = [
   ],
   ["GET", /^\/api\/caches$/, () => ({ caches: MAP_CACHES })],
   ["GET", /^\/api\/caches\/(\d+)$/, (m) => ({ cache: DETAILS.get(Number(m[1])) ?? DETAILS.get(1) })],
+  // a find logged from the app: located by the device, Tier B
+  [
+    "POST",
+    /^\/api\/caches\/\d+\/logs$/,
+    () =>
+      ({
+        logged: true,
+        logType: "found",
+        accountVerified: true,
+        verified: true,
+        tier: "B",
+        method: "app_geo",
+        distanceM: 6,
+      }) satisfies LogResult,
+  ],
+  ["POST", /^\/keys\/register$/, () => ({ ok: true })],
   ["GET", /^\/api\/caches\/(\d+)\/logs$/, (m) => page({ logs: LOGS.filter((l) => l.cacheId === Number(m[1])) })],
   ["GET", /^\/api\/caches\/\d+\/stages$/, () => ({ stages: STAGES })],
   ["GET", /^\/api\/caches\/\d+\/media$/, () => ({ media: [] })],

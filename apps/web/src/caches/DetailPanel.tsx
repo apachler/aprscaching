@@ -44,6 +44,7 @@ import { CacheMedia } from "./CacheMedia.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
+import { TermHelp } from "../platform/TermHelp.js";
 
 /** A point on the globe. */
 type LatLon = { lat: number; lon: number };
@@ -273,6 +274,9 @@ export function DetailPanel(props: {
         label={`Verification · ${TIER_NAME[minTier]}${minTier === "B" ? " or better" : ""}`}
       >
         <MinTier tier={minTier} />
+        <p className="muted fine">
+          Tier A, B and C say how a find was confirmed. <TermHelp term="tier" />
+        </p>
       </Disclosure>
 
       <CacheMedia cacheId={c.id} isOwner={callsign.toUpperCase() === c.ownerCall.toUpperCase()} onToast={toast} />

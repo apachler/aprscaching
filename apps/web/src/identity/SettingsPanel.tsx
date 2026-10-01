@@ -52,6 +52,8 @@ export function SettingsPanel(props: {
   operatorPending?: boolean;
   onSignIn: () => void;
   onDocs?: () => void;
+  /** start the first-run tour again */
+  onTour?: () => void;
   onClose: () => void;
 }) {
   const { callsign, verified, session } = usePlatform();
@@ -319,15 +321,20 @@ export function SettingsPanel(props: {
         </Group>
       )}
 
-      {match("About credits attribution Bruninga WB4APR APRS trademark licence open source") && (
-        <Group title="About & credits" defaultOpen={false}>
-          {props.onDocs && (
-            <p>
+      {match("Help manual tour guide about credits attribution Bruninga WB4APR APRS trademark licence open source") && (
+        <Group title="Help & credits" defaultOpen={false}>
+          <p className="row gap-2">
+            {props.onDocs && (
               <Button variant="quiet" onClick={props.onDocs}>
-                Read the full manual
+                Read the manual
               </Button>
-            </p>
-          )}
+            )}
+            {props.onTour && (
+              <Button variant="quiet" onClick={props.onTour}>
+                Take the tour again
+              </Button>
+            )}
+          </p>
           <p className="muted">
             APRScaching is an APRS geocaching game and ham-radio Shack by <span className="mono">OE8APR</span>.
           </p>
