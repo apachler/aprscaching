@@ -19,7 +19,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 | `.env.example` | all config with sane defaults (generated from the schema by `tools/config/generate.mjs`) |
 | `Caddyfile` | TLS + SPA + reverse proxy |
 | `cloudflared/config.yml` | named-tunnel ingress (alternative to `TUNNEL_TOKEN`) |
-| `systemd/*.service` | bare-metal alternative to Docker |
+| `systemd/*.service` | bare-metal alternative to Docker; `aprscaching init baremetal` installs them |
 | `oci/main.tf`, `oci/schema.yaml`, `oci/cloud-init.yaml`, `oci/README-stack.md` | OCI one-click self-host stack (published per release by `scripts/build-oci-stack.sh`) |
 | `cloudflare/deploy-cf.sh` | **Cloudflare split** one-shot (D1/R2/Worker/Pages) |
 | `cloudflare/cache-rules.sh` | self-host behind Cloudflare's CDN: cache/bypass rules |

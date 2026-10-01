@@ -74,8 +74,9 @@ reachable without port forwarding, even behind CGNAT — and publish its federat
 A public box may put Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`, `TRUST_CF=1`). Oracle
 Cloud users can start the same stack with the
 [one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip).
-Bare metal without Docker: the systemd units in `deploy/systemd/` run the same gateway and ingest from a
-checkout.
+Bare metal without Docker: `deploy/aprscaching init baremetal` installs the same gateway and ingest from a
+checkout under systemd, as a dedicated system user, with the gateway serving the web app on its own port
+(see [Deployment helpers](helpers.md#bare-metal)). The units it installs are `deploy/systemd/`'s.
 
 ### Desktop
 

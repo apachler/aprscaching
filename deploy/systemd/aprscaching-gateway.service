@@ -10,6 +10,8 @@ WorkingDirectory=/opt/aprscaching
 EnvironmentFile=/opt/aprscaching/deploy/.env
 Environment=DB_PATH=/opt/aprscaching/data/aprscaching.db
 Environment=PORT=8080
+# The built web app (pnpm --filter @aprscaching/web build), served on the same origin as the API.
+Environment=WEB_DIST=/opt/aprscaching/apps/web/dist
 ExecStart=/usr/bin/pnpm --filter @aprscaching/node-gateway start
 Restart=always
 RestartSec=5

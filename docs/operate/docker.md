@@ -47,7 +47,18 @@ curl -fsS https://<your domain>/health # off-grid: http://<LAN address>/health (
 site call, then writes `ADMIN_CALLSIGNS`, `APP_URL`, `DOMAIN`, `APRSIS_*`, `RF_SITE_CALL` +
 `FIRST_PARTY_SITES`, `INGEST_SECRET`, `OPERATOR_SECRET` and `FED_PRIVATE_KEY`. A value already in `.env` is
 kept unless you confirm the change, so re-running it is safe. For scripts: `./setup.sh --non-interactive
---call OE8APR --domain aprs.example.net` (`--help` lists every flag).
+--call OE8APR --domain aprs.example.net` (`--help` lists every flag). `deploy/aprscaching init selfhost` runs
+the same wizard and records the shape for the other [helper commands](helpers.md).
+
+A public instance (a domain, with or without a tunnel) also gets the safe federation posture written out:
+`FED_AUTO_PROMOTE=0` and `FED_CORROBORATION_QUORUM=2`, with discovery left unset (any value of
+`FED_DISCOVER` turns it on). The wizard asks for the peers you know (`--fed-peers`, https only), refuses a
+44Net peer there, since a listed peer starts `trusted` (onboard 44Net peers from Instance admin, which admits
+them `unvetted`), and can add the instance's 44Net name to `FED_ENDPOINTS` (`--net44-name`). On a hub
+(`FED_SUBMIT_SECRET` set) it requires the spoke list (`--fed-submit-instances`); with a registry it requires
+the pinned authority key (`--fed-registry-key`). A value you chose stays, with a warning when it is unsafe. A
+LAN instance starts with federation off. `D1_DAILY_WRITE_BUDGET=0` is written on every instance: SQLite costs
+the same whatever it writes. See [Running federation safely](../guides/federation.md#running-federation-safely).
 
 Every setting in `deploy/.env` reaches both the gateway and the ingest container, so the whole
 [first-hour checklist](first-hour.md) — `ADMIN_CALLSIGNS`, `FIRST_PARTY_SITES`, `OPERATOR_*`,

@@ -682,17 +682,10 @@ lands with a regression test that fails without it.
 - [x] **Low-severity items and operator guidance** — signed-ingest replay cache, erasure of mirrored
   key bindings and moves, a signed migration proof on account moves, domain prefixes on standalone JSON
   signatures, and a "Running federation safely" guide.
-- [ ] **Federation safe-mode defaults in `setup.sh` and the one-click stacks** *(P2 · S)* — the gateway's
-  own defaults are already safe: discovery off, `FED_AUTO_PROMOTE=0`, `FED_CORROBORATION_QUORUM=2`, a
-  registry refused without a pinned `FED_REGISTRY_KEY`, and 44net peers admitted `unvetted`. What the
-  provisioning still lacks is to write that posture out: `deploy/setup.sh`, the OCI stack and
-  `deploy/.env.example` set only `FED_PRIVATE_KEY`, so a sysop never sees the knobs, and enabling a hub
-  (`FED_SUBMIT_SECRET`) leaves `FED_SUBMIT_INSTANCES` at "any non-self". The wizard and the stacks write
-  discovery off, auto-promotion off, quorum ≥ 2 and an explicit `FED_SUBMIT_INSTANCES` whenever the hub is
-  on, ask for the registry authority key before any `FED_REGISTRY`/`FED_REGISTRY_DNS`, and never place a
-  44net peer in `FED_PEERS` (which starts `trusted`). Waits for the next federation-hardening round, so the
-  written defaults match its final settings. See
-  [`docs/guides/federation.md`](docs/guides/federation.md#running-federation-safely).
+- [x] **Federation safe-mode defaults in `setup.sh` and the one-click stacks** — the wizard writes
+  auto-promotion off and a quorum of 2, leaves discovery unset, takes only https non-44Net peers for
+  `FED_PEERS`, requires the spoke list on a hub and the pinned key with a registry, and keeps a LAN instance
+  unfederated; `deploy/.env.example`, which the OCI stack copies, carries the same posture.
 - [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/operate/44net.md`](docs/operate/44net.md):
   a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
   signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
