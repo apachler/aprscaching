@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk } from "./auth.js";
+import { ingestSecretOk, sessionIdentity, accountHoldsCall } from "./auth.js";
 /**
  * bbs.ts — store-and-forward message BBS (connectionless). A message base of personal mail
  * + bulletins. Personal mail is *held* until the addressee is next *heard* (deliverHeld, called from
@@ -21,6 +21,26 @@ const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 const relayCall = (env: Env) => (env.BBS_CALL ?? "APRSCG").toUpperCase();
 const instanceOf = (env: Env, req: Request) => env.INSTANCE ?? new URL(req.url).host;
 
+// ---------------------------------------------------------------- mailbox access
+/** The callsign a mailbox address names: `OE1TST @ OE1BBB.OE.EU` → `OE1TST`. */
+const mailboxCall = (addr: string): string => (addr.split("@")[0] ?? "").trim().toUpperCase();
+
+/**
+ * May the caller act for `call`'s mailbox? The ingest box may (it carries mail for every station it hears
+ * and forwards, and its FBB scheduler delivers inbound mail); a signed-in session may when its account holds
+ * the call's base call. Anyone else reading or writing a callsign's personal mail would be reading another
+ * operator's mail or posting in their name. Returns the response to send, or null to proceed.
+ */
+async function requireMailbox(req: Request, env: Env, call: string): Promise<Response | null> {
+  if (ingestSecretOk(req, env)) return null;
+  if (req.headers.get("x-ingest-secret") !== null) return new Response("unauthorized", { status: 401 });
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in to use the BBS" }, { status: 401 });
+  if (!(await accountHoldsCall(env, me.accountId, mailboxCall(call))))
+    return json({ error: "this mailbox belongs to a callsign your account does not hold" }, { status: 403 });
+  return null;
+}
+
 // ---------------------------------------------------------------- post
 export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   const b = (await req.json().catch(() => ({}))) as {
@@ -33,6 +53,9 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
     replyTo?: number;
   };
   if (!b.fromCall || !b.toCall || !b.body) return json({ error: "fromCall, toCall, body required" }, { status: 400 });
+  // a message is sent in its sender's name, so only the sender's mailbox may post it
+  const denied = await requireMailbox(req, env, b.fromCall);
+  if (denied) return denied;
   const from = b.fromCall.toUpperCase(),
     to = b.toCall.toUpperCase();
   const type = b.type === "B" || b.type === "P" || b.type === "T" ? b.type : BULLETIN_TO.test(to) ? "B" : "P";
@@ -78,9 +101,21 @@ export async function handleBbsThread(req: Request, env: Env, id: number): Promi
   const msgs = (
     await env.DB.prepare("SELECT * FROM bbs_messages WHERE thread_id=? OR id=? ORDER BY posted_at ASC LIMIT 200")
       .bind(threadId, threadId)
-      .all()
+      .all<{ type: string; from_call: string; to_call: string }>()
   ).results;
-  return json({ threadId, messages: msgs.map(row) });
+  // Bulletins are public; personal mail in a thread shows only to the ingest box and to the parties.
+  const me = ingestSecretOk(req, env) ? null : await sessionIdentity(req, env);
+  const held = new Map<string, boolean>();
+  const holds = async (addr: string): Promise<boolean> => {
+    const cs = mailboxCall(addr);
+    if (!held.has(cs)) held.set(cs, !!me && (await accountHoldsCall(env, me.accountId, cs)));
+    return held.get(cs)!;
+  };
+  const visible = [];
+  for (const m of msgs)
+    if (ingestSecretOk(req, env) || m.type === "B" || (await holds(m.from_call)) || (await holds(m.to_call)))
+      visible.push(m);
+  return json({ threadId, messages: visible.map(row) });
 }
 
 // ---------------------------------------------------------------- read views
@@ -104,6 +139,8 @@ export async function handleBbsList(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const to = u.searchParams.get("to");
   if (!to) return json({ error: "to (callsign) required" }, { status: 400 });
+  const denied = await requireMailbox(req, env, to);
+  if (denied) return denied;
   const cs = to.toUpperCase();
   const msgs = (
     await env.DB.prepare(
@@ -147,6 +184,11 @@ export async function handleBbsBulletins(req: Request, env: Env): Promise<Respon
   return json({ bulletins: rows.map(row) });
 }
 export async function handleBbsRead(req: Request, env: Env, id: number): Promise<Response> {
+  const msg = await env.DB.prepare("SELECT to_call FROM bbs_messages WHERE id=?").bind(id).first<{ to_call: string }>();
+  if (!msg) return json({ error: "no such message" }, { status: 404 });
+  // only the addressee marks its mail read
+  const denied = await requireMailbox(req, env, msg.to_call);
+  if (denied) return denied;
   await env.DB.prepare("UPDATE bbs_messages SET read_at=? WHERE id=? AND read_at IS NULL").bind(nowS(), id).run();
   return json({ ok: true });
 }
@@ -204,6 +246,8 @@ export async function handleBbsKill(req: Request, env: Env): Promise<Response> {
 export async function handleBbsSent(req: Request, env: Env): Promise<Response> {
   const from = new URL(req.url).searchParams.get("from");
   if (!from) return json({ error: "from (callsign) required" }, { status: 400 });
+  const denied = await requireMailbox(req, env, from);
+  if (denied) return denied;
   const msgs = (
     await env.DB.prepare(
       `SELECT m.*, d.status AS delivery, d.line_no AS lineNo, d.attempts, d.acked_at AS ackedAt

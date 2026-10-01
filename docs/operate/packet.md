@@ -71,7 +71,7 @@ There are two BBS surfaces:
 - **Connectionless store-and-forward.** The gateway holds personal mail and bulletins; personal mail is
   **held until the addressee is next heard**, then delivered as a standard APRS message with line-number ack
   tracking. The relay callsign is `BBS_CALL` (default `APRSCG`). Message format (P/B type + BID) is
-  MBL/FBB-compatible. See the public BBS endpoints in the [API reference](../reference/api.md#bbs-public).
+  MBL/FBB-compatible. See the public BBS endpoints in the [API reference](../reference/api.md#bbs).
 
 ### FBB forwarding
 

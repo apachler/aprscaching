@@ -181,21 +181,21 @@ secret; the others need a signed-in sysop.
 | GET · POST | `/api/push/key` · `/api/push/subscribe` · `/api/push/unsubscribe` | Web-push public key · (un)subscribe this browser | session |
 | GET/POST · GET | `/api/views` · `/v/:id` | Saved map views · resolve a shared view | session · public |
 
-## BBS (public)
+## BBS
 
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
-| POST · GET | `/api/bbs/messages`, `?to=`, `/api/bbs/sent?from=`, `/api/bbs/bulletins`, `/api/bbs/thread/:id` | Store-and-forward mail + bulletins | none — see the note below |
-| POST | `/api/bbs/messages/:id/read` | Mark a message read | none — see the note below |
+| POST | `/api/bbs/messages` | Post mail or a bulletin `{ fromCall, toCall, body, subject?, type?, replyTo? }`; sent in `fromCall`'s name | session holding `fromCall`, or x-ingest-secret |
+| GET | `/api/bbs/messages?to=` · `/api/bbs/sent?from=` | A callsign's personal mail: received · sent, with delivery state | session holding the call, or x-ingest-secret |
+| POST | `/api/bbs/messages/:id/read` | Mark a message read | session holding the addressee's call, or x-ingest-secret |
+| GET | `/api/bbs/thread/:id` | A conversation; personal messages appear only to their sender and addressee | public (filtered) |
+| GET | `/api/bbs/bulletins` | Bulletins | public |
 | GET | `/api/bbs/route` | Hierarchical routing lookup | public |
-| GET · POST | `/api/bbs/wp` | White Pages: look up · set a callsign's home BBS (`{ callsign, homeBbs }`) | none — see the note below |
+| GET · POST | `/api/bbs/wp` | White Pages: look up · set a callsign's home BBS (`{ callsign, homeBbs }`), which steers where FBB forwarding sends its mail | public · x-ingest-secret, sysop or x-operator-secret |
 
-!!! warning "Known issue: the web BBS routes are not authenticated"
-    `POST /api/bbs/messages` accepts any `fromCall`; `GET /api/bbs/messages?to=` and `/api/bbs/sent?from=`
-    return any callsign's personal mail; `POST /api/bbs/messages/:id/read` marks any message read; and
-    `POST /api/bbs/wp` sets any callsign's home BBS, which steers where FBB forwarding sends that callsign's
-    mail. None of them checks a session or a secret (`workers/gateway/src/bbs.ts`, `forward.ts`). Treat the
-    web BBS as open until these are gated.
+A mailbox is its callsign's: a session reaches it when its account holds the call's base call (any SSID),
+and a hierarchical address (`OE1TST @ OE1BBB.OE.EU`) is the mailbox of its callsign. The ingest box reaches
+every mailbox, since it carries the mail of the stations it hears and forwards.
 
 ## Misc
 
