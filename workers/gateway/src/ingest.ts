@@ -69,7 +69,7 @@ const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
  * x-ingest-secret, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
  * doctor`) can test its settings without posting a batch, draining the outbox or leasing a command.
  */
-export async function handleIngestCheck(req: Request, env: Env): Promise<Response> {
+export function handleIngestCheck(req: Request, env: Env): Response {
   if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
   return json({ ok: true, instance: env.INSTANCE ?? null });
 }
