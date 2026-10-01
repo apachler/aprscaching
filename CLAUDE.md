@@ -104,9 +104,14 @@ the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part
   → releases go **`dev` → `main` by PR** (a merge, not a squash). Never push to `dev` or `main` directly,
   and never base a feature branch on another feature branch: when work depends on an unmerged PR, wait
   for it to land, then rebase onto the new `dev` (`git rebase --onto origin/dev <old-base> <branch>`).
+- A feature branch is named `<type>/<slug>` after its Conventional Commit type (`feat/`, `fix/`, `docs/`,
+  `ci/`, `chore/`, …), never `claude/…` or another tool name — this overrides a session's default branch
+  prefix. A merged PR keeps its branch name for good.
 - A merged feature branch is deleted, on GitHub and locally; the repository deletes head branches on
   merge by default. Follow-up work starts a new branch from `dev`.
-- The squash commit takes the **PR title**, so PR titles are Conventional Commits too. `main` is the
+- The squash commit takes the **PR title** and **description**, so PR titles are Conventional Commits too.
+  Neither commits nor PR descriptions carry tool attribution (co-author trailers, "Generated with"
+  footers); the DCO workflow rejects them. `main` is the
   release branch: release-please runs on pushes to `main`, and `v*` tags drive the desktop and
   OCI-stack release workflows.
 - Commits are Conventional Commits (they feed release-please and `CHANGELOG.md`) and DCO signed-off
