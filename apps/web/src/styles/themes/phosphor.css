@@ -233,4 +233,23 @@
       }
     }
   }
+  /* MapLibre's control stack (zoom, locate, attribution) in the terminal's colours, not its stock white */
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--glow);
+  }
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group button + button {
+    border-top-color: var(--line);
+  }
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    filter: invert(1) sepia(1) saturate(4) hue-rotate(70deg);
+  }
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-group button.locate-btn {
+    color: var(--ink);
+  }
+  :where(:root[data-theme="phosphor"]) .maplibregl-ctrl-attrib {
+    background: var(--surface);
+    color: var(--muted);
+  }
 }

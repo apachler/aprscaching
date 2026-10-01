@@ -41,6 +41,7 @@ import { invalidatePackTiles } from "./packTiles.js";
 import { planTiles, tileBudget, type ArchiveInfo, type TileReader, type TilesConfig } from "./tiles.js";
 import { PMTiles } from "pmtiles";
 import type { PackMeta } from "./store.js";
+import { tokenHex } from "../map/mapPaint.js";
 
 /** The instance's offline map, when it offers one: its settings, the archive's header and a tile reader. */
 async function offlineMap(): Promise<{ config: TilesConfig; info: ArchiveInfo; reader: TileReader } | null> {
@@ -540,7 +541,7 @@ function useSquareOutline(map: maplibregl.Map | null, locator: string | null) {
         id: OUTLINE,
         type: "line",
         source: OUTLINE,
-        paint: { "line-color": "#2D8BAB", "line-width": 2, "line-dasharray": [2, 1] },
+        paint: { "line-color": tokenHex("--map-ring"), "line-width": 2, "line-dasharray": [2, 1] },
       });
     } catch {
       /* the style is still loading: no outline this time */

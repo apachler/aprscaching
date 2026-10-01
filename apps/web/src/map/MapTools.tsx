@@ -13,6 +13,18 @@ import {
 } from "@aprscaching/aprs";
 import { useFmt } from "../format.js";
 import { usePoll, Button, Icon } from "../ui/index.js";
+import { paintFromTokens, tokenHex, useAppliedTheme, type TokenPaint, whenStyleReady } from "./mapPaint.js";
+
+/** The tools' token colours, repainted on a theme change (map/mapPaint.ts). */
+const TOOL_PAINT: TokenPaint = {
+  "mt-night-l": { "fill-color": "--map-night" },
+  "mt-grid-l": { "line-color": "--map-grid" },
+  "mt-rings-l": { "line-color": "--map-ring" },
+  "mt-ruler-l": { "line-color": "--map-measure" },
+  "mt-ruler-p": { "circle-color": "--map-measure", "circle-stroke-color": "--pin-edge" },
+  "mt-arc-l": { "line-color": "--map-arc" },
+  "mt-home-p": { "circle-color": "--map-arc", "circle-stroke-color": "--pin-edge" },
+};
 
 /**
  * Map field-navigation tools: a Maidenhead/lat-lon grid overlay, concentric range rings
@@ -128,6 +140,12 @@ export function MapTools(props: {
   const setData = (m: maplibregl.Map, id: string, data: GeoJSON.FeatureCollection) =>
     (m.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 
+  // the overlay colours follow the theme: painted again whenever it changes
+  const theme = useAppliedTheme();
+  useEffect(() => {
+    if (props.map?.isStyleLoaded()) paintFromTokens(props.map, TOOL_PAINT);
+  }, [props.map, theme]);
+
   // one-time: add empty sources + cheap line/circle layers
   useEffect(() => {
     const m = props.map;
@@ -140,28 +158,33 @@ export function MapTools(props: {
           id: "mt-night-l",
           type: "fill",
           source: SRC.night,
-          paint: { "fill-color": "#0b1726", "fill-opacity": 0.32 },
+          paint: { "fill-color": tokenHex("--map-night"), "fill-opacity": 0.32 },
         });
       if (!m.getLayer("mt-grid-l"))
         m.addLayer({
           id: "mt-grid-l",
           type: "line",
           source: SRC.grid,
-          paint: { "line-color": "#6f97ad", "line-width": 0.6, "line-opacity": 0.45 },
+          paint: { "line-color": tokenHex("--map-grid"), "line-width": 0.6, "line-opacity": 0.45 },
         });
       if (!m.getLayer("mt-rings-l"))
         m.addLayer({
           id: "mt-rings-l",
           type: "line",
           source: SRC.rings,
-          paint: { "line-color": "#2D8BAB", "line-width": 1.1, "line-opacity": 0.7, "line-dasharray": [2, 2] },
+          paint: {
+            "line-color": tokenHex("--map-ring"),
+            "line-width": 1.1,
+            "line-opacity": 0.7,
+            "line-dasharray": [2, 2],
+          },
         });
       if (!m.getLayer("mt-ruler-l"))
         m.addLayer({
           id: "mt-ruler-l",
           type: "line",
           source: SRC.rulerLine,
-          paint: { "line-color": "#e5532d", "line-width": 2 },
+          paint: { "line-color": tokenHex("--map-measure"), "line-width": 2 },
         });
       if (!m.getLayer("mt-ruler-p"))
         m.addLayer({
@@ -170,8 +193,8 @@ export function MapTools(props: {
           source: SRC.rulerPts,
           paint: {
             "circle-radius": 4,
-            "circle-color": "#e5532d",
-            "circle-stroke-color": "#fff",
+            "circle-color": tokenHex("--map-measure"),
+            "circle-stroke-color": tokenHex("--pin-edge"),
             "circle-stroke-width": 2,
           },
         });
@@ -180,7 +203,7 @@ export function MapTools(props: {
           id: "mt-arc-l",
           type: "line",
           source: SRC.arc,
-          paint: { "line-color": "#7c5cff", "line-width": 1.8, "line-dasharray": [3, 2] },
+          paint: { "line-color": tokenHex("--map-arc"), "line-width": 1.8, "line-dasharray": [3, 2] },
         });
       if (!m.getLayer("mt-home-p"))
         m.addLayer({
@@ -189,18 +212,17 @@ export function MapTools(props: {
           source: SRC.homePt,
           paint: {
             "circle-radius": 5,
-            "circle-color": "#7c5cff",
-            "circle-stroke-color": "#fff",
+            "circle-color": tokenHex("--map-arc"),
+            "circle-stroke-color": tokenHex("--pin-edge"),
             "circle-stroke-width": 2,
           },
         });
     };
-    if (m.isStyleLoaded()) setup();
-    else m.once("load", setup);
+    const cancel = whenStyleReady(m, setup);
     // Remove our sources/layers on unmount, and deregister the one-shot load handler if we
     // unmount before it fires. Re-runs on styleEpoch (theme setStyle) to re-add — setup is idempotent.
     return () => {
-      m.off("load", setup);
+      cancel();
       for (const id of ["mt-night-l", "mt-grid-l", "mt-rings-l", "mt-ruler-l", "mt-ruler-p", "mt-arc-l", "mt-home-p"])
         if (m.getLayer(id)) m.removeLayer(id);
       for (const id of Object.values(SRC)) if (m.getSource(id)) m.removeSource(id);
@@ -342,6 +364,7 @@ export function MapTools(props: {
           className={grid ? "on" : ""}
           aria-pressed={grid}
           title="Grid overlay"
+          aria-label="Grid overlay"
           onClick={() => setGrid((v) => !v)}
         >
           ▦
@@ -350,6 +373,7 @@ export function MapTools(props: {
           className={rings ? "on" : ""}
           aria-pressed={rings}
           title="Range rings"
+          aria-label="Range rings"
           onClick={() => setRings((v) => !v)}
         >
           ◎
@@ -358,6 +382,7 @@ export function MapTools(props: {
           className={ruler ? "on" : ""}
           aria-pressed={ruler}
           title="Ruler (distance + bearing)"
+          aria-label="Ruler"
           onClick={() => {
             setRuler((v) => !v);
             if (ruler) clearRuler();
@@ -369,6 +394,7 @@ export function MapTools(props: {
           className={term ? "on" : ""}
           aria-pressed={term}
           title="Day/night terminator"
+          aria-label="Day and night"
           onClick={() => setTerm((v) => !v)}
         >
           ☾
@@ -377,6 +403,7 @@ export function MapTools(props: {
           className={arc ? "on" : ""}
           aria-pressed={arc}
           disabled={!home}
+          aria-label="Bearing from home"
           title={
             home ? "Bearing from home QTH to the selected cache" : "Set your home locator in your profile to enable"
           }

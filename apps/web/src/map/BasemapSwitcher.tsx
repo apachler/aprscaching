@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
 import { Segmented } from "../ui/index.js";
+import { whenStyleReady } from "./mapPaint.js";
 
 /**
  * Basemap layer switcher: Vector (default) · Topo · Satellite. Raster is OPT-IN per
@@ -76,8 +77,7 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null; styleEpoch?
       m.setLayoutProperty("bm-topo-l", "visibility", base === "topo" ? "visible" : "none");
       m.setLayoutProperty("bm-sat-l", "visibility", base === "satellite" ? "visible" : "none");
     };
-    if (m.isStyleLoaded()) apply();
-    else m.once("load", apply);
+    const cancel = whenStyleReady(m, apply);
     try {
       localStorage.setItem("acs.basemap", base);
     } catch {
@@ -86,7 +86,7 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null; styleEpoch?
     // Deregister the one-shot load handler so toggling while the style is unloaded doesn't
     // restack listeners. Re-runs on styleEpoch (theme setStyle) → ensureRaster re-adds the wiped layers.
     return () => {
-      m.off("load", apply);
+      cancel();
     };
   }, [props.map, base, props.styleEpoch]);
 
