@@ -89,6 +89,48 @@ describe("meshcom trust hint (no internet or relayed frame can name a gate)", ()
   });
 });
 
+describe("meshcom via paths (the sender's plan, never trust)", () => {
+  const VIA = ["OE1KBC-24", "OE1KFR-12"];
+  const decode = (o: object) => ok(decodeMeshcom(j(o), { receiverCalls: ["OE8APR-12"] }));
+
+  it("the destination is the last token and the via list is everything before it", () => {
+    for (const [dst, want, kind] of [
+      ["OE1KBC-24,*", "*", "all"],
+      ["OE1KBC-24,262", "262", "group"],
+      ["OE1KBC-24,OE8APR-12", "OE8APR-12", "call"],
+    ] as const) {
+      const e = decode({ ...MSG, dst });
+      if (e.type !== "msg") throw new Error("not a message");
+      expect([e.dst, e.dstKind, e.via]).toEqual([want, kind, ["OE1KBC-24"]]);
+    }
+  });
+
+  it("a via path changes neither direct/relayed, the provenance nor the gate", () => {
+    for (const src of ["DH1FR-1", "DH1FR-1,OE1XOR-12"])
+      for (const src_type of ["lora", "udp", "node"]) {
+        const plain = decode({ ...MSG, src, src_type });
+        const routed = decode({ ...MSG, src, src_type, dst: `${VIA.join(",")},${MSG.dst}` });
+        expect(routed.provenance).toEqual(plain.provenance);
+        expect(meshcomTransportHint(routed.provenance, "OE8APR-12")).toEqual(
+          meshcomTransportHint(plain.provenance, "OE8APR-12"),
+        );
+      }
+  });
+
+  it("a via message to a call maps to an APRS message for that call, never for the relay", () => {
+    const a = meshcomToAprs(decode({ ...MSG, dst: "OE1KBC-24,OE8APR-12", msg: "hi{1" }))!;
+    expect(a.payload).toBe(":OE8APR-12:hi{1");
+    expect(a.path).toEqual([]);
+    const b = meshcomToAprs(decode({ ...MSG, dst: "OE1KBC-24,*" }))!;
+    expect(b).toMatchObject({ kind: "other", payload: "{MG*:hi" });
+  });
+
+  it("a message without a via path carries no via field", () => {
+    const e = decode(MSG);
+    expect("via" in e || "viaDropped" in e).toBe(false);
+  });
+});
+
 describe("meshcom APRS mapping", () => {
   it("direct messages become APRS messages; group and broadcast text stays out of the message log", () => {
     const dm = meshcomToAprs(ok(decodeMeshcom(j({ ...MSG, msg: "Hello{034" }))))!;

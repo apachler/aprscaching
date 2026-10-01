@@ -1,0 +1,9 @@
+{
+  "description": "Telemetry (destination 100001) from a node with --via set passes the firmware's whole-path ExtUDP filter as <via>,100001; it is no message destination here.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1\",\"dst\":\"OE1KBC-24,100001\",\"msg\":\"{\\\"temp\\\":21}\",\"msg_id\":\"6A1B0009\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": false,
+    "reason": "bad-dst"
+  }
+}
