@@ -463,7 +463,8 @@ export default function Platform({ session, startTour }: { session: SessionState
   useEffect(() => {
     if (deepLinked.current) return;
     const v = viewFromQuery(initialQuery);
-    const operatorOnly = v && ((v.kind === "panel" && v.key === "admin") || (v.kind === "app" && !!appById(v.id)?.sysop));
+    const operatorOnly =
+      v && ((v.kind === "panel" && v.key === "admin") || (v.kind === "app" && !!appById(v.id)?.sysop));
     if (operatorOnly && !sysopKnown) return;
     deepLinked.current = true;
     if (!v) return;
