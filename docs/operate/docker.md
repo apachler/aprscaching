@@ -38,7 +38,7 @@ This is the [Self-host](deployment.md#self-host) shape — the recommended one: 
 ```bash
 cd deploy
 ./setup.sh                             # writes .env; prints the start, health and verify commands for your choice
-docker compose up -d --build
+SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build   # the commit names the source link's code
 docker compose ps                      # the gateway shows "healthy" once it is ready
 curl -fsS https://<your domain>/health # off-grid: http://<LAN address>/health (Caddy publishes 80/443; the gateway's 8080 is internal)
 ```
@@ -99,7 +99,7 @@ on it.
 
     ```bash
     cd deploy
-    docker compose -f docker-compose.yml -f compose.home.yml up -d --build
+    SOURCE_COMMIT=$(git rev-parse HEAD) docker compose -f docker-compose.yml -f compose.home.yml up -d --build
     ```
 
 5. **Verify.** The tunnel shows *HEALTHY* in the dashboard, `https://aprs.example.net/health`
@@ -141,7 +141,9 @@ is only the container's own interface, and the published port exposes it on your
 
 ## Upgrades, backups, logs
 
-- **Upgrade:** `git pull && docker compose up -d --build` — migrations apply automatically at
+- **Upgrade:** `deploy/aprscaching update`, or by hand
+  `git pull && SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build`. The image cannot see `.git`,
+  so `SOURCE_COMMIT` is how its source link names the commit it runs. Migrations apply automatically at
   gateway boot (forward-only, tracked in `_migrations`).
 - **Backup:** cron `deploy/backup.sh` — a consistent SQLite `.backup` snapshot, gzipped, uploaded
   to a directory / OCI bucket / any S3-compatible endpoint (see `deploy/.env.example`). It exits

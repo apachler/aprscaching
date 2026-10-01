@@ -314,8 +314,8 @@ fi
 
 # ---- next steps ------------------------------------------------------------------------------------------
 [ "$NEXT_STEPS" -eq 1 ] || exit 0
-UP="docker compose up -d --build"
-[ "$MODE" = tunnel ] && UP="docker compose -f docker-compose.yml -f compose.home.yml up -d --build"
+UP="SOURCE_COMMIT=\$(git rev-parse HEAD) docker compose up -d --build"
+[ "$MODE" = tunnel ] && UP="SOURCE_COMMIT=\$(git rev-parse HEAD) docker compose -f docker-compose.yml -f compose.home.yml up -d --build"
 cat <<EOF
 
 Next, from $HERE:

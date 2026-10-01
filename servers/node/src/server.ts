@@ -94,8 +94,8 @@ const env: Env = {
   ROOMS: roomNamespace(rooms),
   ...stringEnvFrom(process.env), // forward EVERY config key, not a hand-picked subset
   ...SECRETS.secrets, // the checked ingest/operator secrets and the resolved session secret
-  // AGPL §13 source: commit from env, else git (self-host-from-source)
-  SOURCE_COMMIT: process.env.SOURCE_COMMIT ?? gitHead(),
+  // AGPL §13 source: commit from env (an image bakes it in, possibly empty), else git (self-host-from-source)
+  SOURCE_COMMIT: process.env.SOURCE_COMMIT || gitHead(),
 };
 guardFederationFetches(env);
 

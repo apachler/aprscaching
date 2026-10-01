@@ -22,4 +22,4 @@ runcmd:
   - sed -i "s|^SESSION_SECRET=$|SESSION_SECRET=$(openssl rand -hex 32)|" /opt/aprscaching/deploy/.env
   # The AGPL §13 source link must resolve to the code this instance actually runs.
   - sed -i "s|^# *SOURCE_REPO=.*|SOURCE_REPO=${REPO_URL}|" /opt/aprscaching/deploy/.env
-  - cd /opt/aprscaching/deploy && docker compose up -d --build
+  - cd /opt/aprscaching/deploy && SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build
