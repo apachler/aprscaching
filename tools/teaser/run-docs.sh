@@ -11,4 +11,10 @@ SKIP_VIDEO=1 bash "$HERE/run-tour.sh" desktop mobile || rc=$?
 # 1 = some tour steps were skipped: the frames that exist are still usable; docs-shots.mjs fails on any
 # frame the manual needs that is missing.
 [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"
+# docs-shots.mjs launches its own browser: hand it the same Chromium run-tour.sh used.
+if [ -z "${PW_CHROMIUM:-}" ]; then
+  for c in /opt/pw-browsers/chromium-*/chrome-linux/chrome /opt/pw-browsers/chromium/chrome-linux/chrome; do
+    [ -x "$c" ] && export PW_CHROMIUM="$c" && break
+  done
+fi
 ( cd "$HERE" && FRAMES="$HERE/tour" DEST="$ROOT/docs/assets/shots" node docs-shots.mjs )
