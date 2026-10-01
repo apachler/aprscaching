@@ -96,7 +96,7 @@ gate were all found only against real partners). The protocol × partner matrix 
 updates it. Paths CI physically cannot host (Web Serial/BLE KISS, soundcard AFSK on air, real
 radios) stay documented validate-at-deploy entries — visible, never silently absent.
 
-**Nightly additions (`interop.yml`):**
+**Additions to the weekly `interop.yml`:**
 
 - [ ] **KISS TCP vs the kernel Linux AX.25 stack** *(P1 · M)* — `kissnetd` pty pair bridged to TCP
   via `socat`, peer services on `ax25d` (privileged job, same host-`modprobe ax25` pattern as the
@@ -107,7 +107,7 @@ radios) stay documented validate-at-deploy entries — visible, never silently a
   forward session: proposal, delivery, BID dedup, message visible in the FBB mailbox.
 
 **Weekly `transports.yml` (schedule + manual dispatch; the heavy/privileged legs stay out of the
-nightly budget):**
+interop run):**
 
 - [ ] **Direwolf leg** *(P1 · L)* — two Direwolf instances over an ALSA loopback pair
   (`snd-aloop`): a real Bell-202 AFSK modem path. Our KISS TCP client on one side and the AGWPE
@@ -756,7 +756,7 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
   Opt in via `NETROM_INP3=1`, alongside classic NODES so plain NET/ROM neighbours still interoperate. The
   live node bootstraps off NODES discovery — it adopts each broadcaster as a neighbour, seeds it with a
   self-RIP + an RTT probe, and advertises with split horizon, so two nodes converge with no static config
-  (verified live over the AXUDP wire in the nightly interop loop).
+  (verified live over the AXUDP wire in the interop loop).
 - [x] **Shared compression dictionary** — the `deflateDict1` preset dictionary ships in
   `packages/shared` (immutable wire contract, versioned by capability id); the zlib codec around it
   lives at the ingest box (`apps/ingest`), where compact-tier RF links terminate — with a zip-bomb
@@ -799,6 +799,6 @@ the reason given:
   (full stack + ingest-only: `docker compose up`, wait for the gateway healthcheck, smoke `/health`
   + the SPA) beyond the current tri-runtime conformance (Node / Worker / Bun), and exercise the
   federation push-to-hub **rendezvous relay's** corroboration path. Also: full telnet-mode FBB
-  forwarding in the nightly interop loop — register the partner user through the F6FBB sysop console
+  forwarding in the weekly interop loop — register the partner user through the F6FBB sysop console
   (`xfbbC -c -r`) in the container so the telnet driver forwards end-to-end (the kernel-AX.25 leg
   already auto-creates users and exercises forwarding over the air).
