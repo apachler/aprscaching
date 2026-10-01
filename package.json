@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
-  "description": "aprscaching \u2014 an APRS geocaching game and ham-radio Shack",
+  "description": "aprscaching — an APRS geocaching game and ham-radio Shack",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "axe-core": "^4.13.0",
     "esbuild": "0.28.2",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",

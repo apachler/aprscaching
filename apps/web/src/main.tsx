@@ -20,8 +20,23 @@ if (import.meta.env.PROD) void registerServiceWorker();
 const root = createRoot(document.getElementById("root")!);
 // `/?demo=packet|bbs|1` mounts the hardware-free design harness (real components + in-process simulator)
 // instead of the app — a durable bench for the packet/BBS shells (and the Phosphor terminal look).
-const demo = new URLSearchParams(location.search).get("demo");
-if (demo) {
+const params = new URLSearchParams(location.search);
+const demo = params.get("demo");
+if (demo === "app") {
+  // the whole app against canned gateway answers (demo/fixtures.ts): the design review's and the visual
+  // harness's bench. `&as=user|sysop|out` picks who is signed in.
+  import("./demo/fixtures.js").then(({ installAppFixtures }) => {
+    const as = params.get("as");
+    installAppFixtures(as === "sysop" || as === "out" ? as : "user");
+    root.render(
+      <React.StrictMode>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </React.StrictMode>,
+    );
+  });
+} else if (demo) {
   // the harness renders components directly (no Platform), so provide the format/theme context Ico needs
   import("./demo/DemoHarness.js").then(({ DemoHarness }) =>
     root.render(
