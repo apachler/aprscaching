@@ -27,6 +27,12 @@ describe("the Maidenhead locator", () => {
     expect(parsePackArea(new URLSearchParams(""))).toMatch(/Maidenhead/);
   });
 
+  it("reads the owner's pack, which spans the world", () => {
+    expect(parsePackArea(new URLSearchParams("mine=1"))).toEqual({ mine: true });
+    expect(packAreaQuery({ mine: true })).toBe("mine=1");
+    expect(inPackArea({ mine: true }, -33.9, 151.2)).toBe(true);
+  });
+
   it("tests a point against the square", () => {
     expect(inPackArea({ locator: "JN77sb" }, 47.06, 15.54)).toBe(true);
     expect(inPackArea({ locator: "JN77sb" }, 47.06, 15.6)).toBe(false);

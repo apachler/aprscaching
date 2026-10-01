@@ -71,6 +71,7 @@ nav:
   - Guides:
       - Your account: guides/account.md
       - Caching: guides/caching.md
+      - Hunting without signal: guides/offline.md
       - Your radio in the browser: guides/my-radio.md
       - The Shack: guides/shack.md
       - Rig control & weather: operate/rig-weather.md

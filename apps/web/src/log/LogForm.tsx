@@ -52,6 +52,8 @@ export function LogForm(props: {
   cacheLat: number | null;
   cacheLon: number | null;
   callsign: string;
+  /** The cache's owner: may log maintenance (queued offline like any log, e.g. from the owner's pack). */
+  isOwner?: boolean;
   onLogged: () => void;
   onSignIn: () => void;
 }) {
@@ -229,6 +231,15 @@ export function LogForm(props: {
         <div className="mt-2">
           <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="row end">
+            {props.isOwner && (
+              <button
+                disabled={busy === "maintenance" || !note.trim()}
+                onClick={() => doLog("maintenance", note.trim())}
+                title="As the owner: what you checked or fixed"
+              >
+                Post as maintenance
+              </button>
+            )}
             <button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
               Post note
             </button>

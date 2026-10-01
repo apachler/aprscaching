@@ -302,6 +302,7 @@ export function DetailPanel(props: {
         cacheLat={c.lat ?? null}
         cacheLon={c.lon ?? null}
         callsign={callsign}
+        isOwner={!!callsign && callsign.toUpperCase() === c.ownerCall.toUpperCase()}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
       />

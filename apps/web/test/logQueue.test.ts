@@ -7,6 +7,7 @@ import {
   flush,
   loadAttention,
   loadQueue,
+  removeQueued,
   retryAttention,
   type QueueStore,
   type SendFailure,
@@ -113,6 +114,14 @@ describe("the offline log queue", () => {
     const sent: number[] = [];
     await flush(s, async (it) => void sent.push(it.cacheId), T0, "here.example");
     expect(sent).toEqual([1, 3]);
+    expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
+  });
+
+  it("takes out a waiting log the user sent another way", async () => {
+    const s = memStore();
+    await enqueue(s, { cacheId: 1, body: body() }, T0);
+    await enqueue(s, { cacheId: 2, body: body() }, T0 + 1);
+    await removeQueued(s, 1, T0);
     expect((await loadQueue(s)).map((q) => q.cacheId)).toEqual([2]);
   });
 

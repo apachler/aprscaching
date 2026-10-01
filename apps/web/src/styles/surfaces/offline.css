@@ -86,4 +86,12 @@
     gap: var(--sp-2);
     align-items: baseline;
   }
+  /* the owner's pack: the caches that need a visit */
+  .pack-attention {
+    list-style: none;
+    padding: 0;
+    margin: var(--sp-2) 0 0;
+    display: grid;
+    gap: var(--sp-2);
+  }
 }

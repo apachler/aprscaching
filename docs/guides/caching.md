@@ -116,47 +116,9 @@ it again later shows **You already logged this** and leaves the first find as it
 Your find is signed with your device key (**signed with your device key ✍**); if you verified your
 callsign, it can also be **announced to APRS-IS**.
 
-**Without a connection.** Once you have opened the app with a connection, it opens without one too, on the
-phone where you used it (adding it to the home screen helps the phone keep it). It remembers who you
-signed in as, so you log finds offline. When a new version of the app is ready it says so, and updates
-only when you tap **Reload**.
-
-**Offline packs.** Before a trip, open **Offline** (or **Offline packs** in **Nearby**) and make a pack of a
-Maidenhead locator square: type it, or take the field (`JN`), square (`JN77`), subsquare (`JN77sb`) or
-extended square (`JN77sb42`) at the map centre — the square is outlined on the map, and a longer locator is
-a smaller pack. Optionally keep only some cache types. **Check size** shows how many caches it holds and
-what images would add — none, a thumbnail per cache, or every image — before anything is kept. A pack
-holds each cache's description, hint, latest 5 logs and the shape of its stages, at most 5000 caches and
-250 MB. Offline, the map shows the caches of every pack in view and says which pack and how old it is; a
-cache page shows its stored copy. If the instance offers an [offline map](../operate/offline-map.md), **Check size** also offers the map of the square — as detailed as fits the pack, without place names — and the offline map draws it; otherwise it shows a grid under the caches. **Refresh** brings a pack up to date, and costs almost nothing when
-nothing changed; a pack older than a week says so. The area you last browsed is kept automatically as well.
-**Multi-stage caches offline.** A pack shows a multi-stage cache's published start. An NFC stage whose tag code
-is long enough (the tag's serial, or nine or more random letters and digits) travels in the pack sealed under
-that code: scan the tag, or type its code, and the next stage opens on your phone with no connection; the
-instance confirms the unlock when you sync, and a refused one waits under **Needs attention**. A geo stage, or
-an NFC stage with a short code, unlocks only online: checking where you stand is the instance's job, and a short
-code could be guessed by anyone holding the pack. Never is a stage's position or clue in a pack in the clear.
-
-The browser is asked to keep your packs; if it may clear them when space runs low, the Offline panel says
-so.
-
-No signal at the cache? The find is **Saved — offline, will sync when you're back online**. It is signed
-with the time you logged it, and when it reaches the instance it is verified at that time, not at the
-time it synced: your APRS track and your phone's location are matched against the moment of the find,
-so it gets the same tier it would have had with signal. That holds for up to 7 days; the logbook then
-shows **logged offline at 10:02, synced 18:14**. A find without a device signature (a browser that cannot
-sign) counts from when it arrives. Log once with signal on a new phone first, so its key is registered.
-
-The top bar says what waits — **2 logs waiting · pack “JN77sb” 3 days old** — and opens **Logs to sync**, with
-**Sync now**. The app syncs on its own when it starts and when the connection returns: first the logs, then
-the packs older than a day, on Wi-Fi only unless **Offline → Sync → Refresh packs on mobile data** is on;
-**Sync now** also refreshes every pack. With the app closed, Chrome and Edge send waiting logs in the
-background (Background Sync); Safari, Firefox and iPhones have no Background Sync, so there the logs go when
-you next open the app. A log goes only to the instance it was made on; signed in elsewhere, it waits and
-says so.
-If the instance refuses a log when it syncs, for example because the cache was archived meanwhile, the log
-is not lost: it moves to **Needs attention** with the reason, where you retry it, edit its comment, or
-discard it.
+**No signal?** The app opens without a connection, and a find logged offline is saved, signed with the time
+you made it, and verified at that time when it syncs. Before a trip, make an **offline pack** of the area.
+[Hunting without signal](offline.md) has it all.
 
 **Couldn't find it** records a [DNF](../glossary.md#dnf); **Add a note** posts a note to the logbook.
 
