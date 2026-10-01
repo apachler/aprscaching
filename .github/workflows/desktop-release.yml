@@ -1,9 +1,18 @@
 name: desktop-release
+# Runs on a `v*` tag push, when release-please.yml calls it with the release tag, or by hand. A run
+# without a tag (a dispatch on a branch) only builds and uploads the workflow artifact; each binary
+# goes to a GitHub release only for a tag.
 on:
   push: { tags: ["v*"] }
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and attach to (e.g. v1.0.0)
+        type: string
+        required: true
 
-# Default read-only; the build job elevates to contents:write only to publish the release.
+# Default read-only; the build job elevates to contents:write only to attach the binaries to the release.
 permissions:
   contents: read
 
@@ -11,20 +20,26 @@ jobs:
   build:
     runs-on: ubuntu-latest # Bun cross-compiles every target from one runner
     permissions:
-      contents: write # create the GitHub release + upload the desktop binaries
+      contents: write # upload the desktop binaries to the GitHub release
+    env:
+      # The release tag: the caller's input, or the pushed tag; empty on a branch dispatch.
+      TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "${{ env.TAG }}" }
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with: { bun-version: latest }
       - run: pnpm install --frozen-lockfile
-      - run: bash deploy/desktop/build-exe.sh "${GITHUB_REF_NAME:-dev}"
+      - run: bash deploy/desktop/build-exe.sh "${TAG:-$GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: aprscaching-desktop, path: dist/desktop/* }
-      - if: startsWith(github.ref, 'refs/tags/')
+      # Attaches to the tag's existing release (release-please creates it), keeping its notes; a
+      # hand-pushed tag without a release gets a new one.
+      - if: env.TAG != ''
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with: { files: dist/desktop/* }
+        with: { tag_name: "${{ env.TAG }}", files: dist/desktop/* }
   # NOTE: signed/notarized macOS binaries need a macos runner + Apple Developer ID secrets;
   # signed Windows needs an Authenticode cert. Add a separate job when you have them.

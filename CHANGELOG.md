@@ -4,11 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 1.0.0 onward, releases and this file
 are maintained automatically by [release-please](https://github.com/googleapis/release-please) from
-[Conventional Commits](https://www.conventionalcommits.org/).
+[Conventional Commits](https://www.conventionalcommits.org/); each release's generated entry sits above
+the hand-written overview of 1.0.0.
 
-## [Unreleased]
+## 1.0.0 — overview
 
-The feature set awaiting the first public release (1.0.0): an APRS geocaching game wrapped around a
+The feature set of the first public release: an APRS geocaching game wrapped around a
 full ham-radio Shack, self-hostable on a Raspberry Pi, running as a Cloudflare Worker,
 or as a single Bun desktop binary, and federating with other instances into one open network.
 
@@ -42,5 +43,3 @@ or as a single Bun desktop binary, and federating with other instances into one 
   Low finding fixed, each with a regression test — trust-model corroboration legs, federation
   malicious-peer defenses, session/secret boot guards, ingest resilience, packet-stack robustness,
   tri-runtime parity, config validation, web-app lifecycle/device-key handling, and 24/7 runtime hygiene.
-
-[Unreleased]: https://github.com/apachler/aprscaching/commits/HEAD
