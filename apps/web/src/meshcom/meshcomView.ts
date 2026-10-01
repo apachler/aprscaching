@@ -60,6 +60,14 @@ export function deviceText(n: Pick<MeshcomNode, "hwId" | "firmware">): string | 
   return [dev, fw].filter(Boolean).join(", ") || null;
 }
 
+/** Explains a via list: the sender's plan, not the path the message took. */
+export const SENT_VIA_HINT = "The sender limited forwarding to these nodes.";
+
+/** The relays the node's latest message named, in words; null when it named none. */
+export function sentViaText(n: Pick<MeshcomNode, "sentVia">): string | null {
+  return n.sentVia?.length ? `Sent via relays ${n.sentVia.join(", ")}` : null;
+}
+
 /** The marker's classes: a MeshCom ring on the station pin, dashed for a node heard only via the server. */
 export function nodePinClass(n: Pick<MeshcomNode, "via">): string {
   return `station-pin meshcom${n.via === "server" ? " via-server" : ""}`;

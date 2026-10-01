@@ -169,3 +169,29 @@ describe("GET /api/meshcom/links", () => {
     expect(box.data.links.map((l: { from: string }) => l.from)).toEqual(["DL1AAA-1"]);
   });
 });
+
+describe("MeshCom via lists in the node API", () => {
+  it("shows the relays a node's latest message named, and nothing for a node that named none", async () => {
+    const e = env();
+    await seed(e);
+    const r = await call(
+      e,
+      "POST",
+      "/ingest",
+      {
+        packets: [
+          {
+            ...pkt("OE8XYZ-1", 47.1, 15.5, { direct: true, path: ["OE8XYZ-1"], via: ["OE1KBC-24"] }),
+            payload: ":OE8APR-12:hi{1",
+            kind: "message",
+          },
+        ],
+      },
+      SECRET,
+    );
+    expect(r.status).toBe(200);
+    const nodes = (await call(e, "GET", "/api/meshcom/nodes")).data.nodes as { callsign: string; sentVia?: string[] }[];
+    expect(nodes.find((n) => n.callsign === "OE8XYZ-1")?.sentVia).toEqual(["OE1KBC-24"]);
+    expect(nodes.find((n) => n.callsign === "OE8RLY-2")).not.toHaveProperty("sentVia");
+  });
+});

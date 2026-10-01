@@ -2,11 +2,21 @@
 import { useEffect, useState } from "react";
 import { getMeshcomNodes, type MeshcomNode } from "../api.js";
 import { useFmt } from "../format.js";
-import { batteryText, deviceText, meshmapUrl, MESHMAP_ATTRIBUTION, signalText, viaText } from "./meshcomView.js";
+import {
+  batteryText,
+  deviceText,
+  meshmapUrl,
+  MESHMAP_ATTRIBUTION,
+  SENT_VIA_HINT,
+  sentViaText,
+  signalText,
+  viaText,
+} from "./meshcomView.js";
 
 /**
  * The station panel's MeshCom section: the device, battery, how and when this instance's MeshCom node last
- * heard the station, and the signal. Nothing shows for a station no MeshCom node heard. Signed-in members
+ * heard the station, the signal, and the relays its latest message allowed (never the route it took; for
+ * this instance's own node, the relays everything sent through it uses). Nothing shows for a station no MeshCom node heard. Signed-in members
  * see the exact battery and signal figures; visitors see them in words.
  */
 export function MeshcomSection(props: { callsign: string }) {
@@ -24,6 +34,7 @@ export function MeshcomSection(props: { callsign: string }) {
   }, [props.callsign]);
   if (!node) return null;
   const lines = [deviceText(node), batteryText(node), signalText(node)].filter(Boolean) as string[];
+  const sent = sentViaText(node);
   return (
     <section className="mc-section mt-3" aria-label="MeshCom">
       <h4>MeshCom</h4>
@@ -35,6 +46,11 @@ export function MeshcomSection(props: { callsign: string }) {
           {l}
         </p>
       ))}
+      {sent && (
+        <p className="muted" title={SENT_VIA_HINT}>
+          {sent}. {node.via === "node" ? "Everything sent through this node is forwarded only by them." : SENT_VIA_HINT}
+        </p>
+      )}
       <p className="fine">
         <a href={meshmapUrl(node.callsign)} target="_blank" rel="noopener noreferrer">
           Open MeshMap

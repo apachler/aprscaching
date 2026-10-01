@@ -64,6 +64,23 @@ describe("station status", () => {
     expect(s.operatorVerified).toBe(true);
   });
 
+  it("reports the own MeshCom node's Via setting from its own messages only, unknown until one is seen", async () => {
+    const row = sqlite.prepare(
+      "INSERT OR REPLACE INTO meshcom_nodes (callsign, last_heard, last_via, sent_via, msg_at, updated_at) VALUES (?,?,?,?,?,?)",
+    );
+    row.run("OE8APR-12", now, "node", null, null, now); // heard only by its position so far
+    row.run("OE3XYZ-1", now, "direct", '["OE1KBC-24"]', now, now); // another station's via list
+    let s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.meshcomVia).toEqual([{ node: "OE8APR-12", state: "unknown", relays: [] }]);
+    row.run("OE8APR-12", now, "node", '["OE1KBC-24","OE1KFR-12"]', now, now);
+    s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.meshcomVia).toEqual([{ node: "OE8APR-12", state: "on", relays: ["OE1KBC-24", "OE1KFR-12"] }]);
+    row.run("OE8APR-12", now, "node", null, now, now);
+    s = (await (await status({ "x-operator-secret": SECRET })).json()) as StationStatus;
+    expect(s.meshcomVia).toEqual([{ node: "OE8APR-12", state: "off", relays: [] }]);
+    sqlite.prepare("DELETE FROM meshcom_nodes").run();
+  });
+
   it("answers only the operator", async () => {
     expect((await status({})).status).toBe(403);
     expect((await status({ "x-operator-secret": "wrong" })).status).toBe(401);

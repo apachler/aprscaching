@@ -150,7 +150,7 @@ describe("MeshCom listener — VERIFY to the service call", () => {
       ts: at / 1000,
       // display metadata for the map; the gateway never reads it for trust
       parsed: {
-        meshcom: { srcType: "lora", direct: true, path: ["OE8APR-1"], receiver: CALL, rssi: -90, snr: 4 },
+        meshcom: { srcType: "lora", direct: true, path: ["OE8APR-1"], receiver: CALL, rssi: -90, snr: 4, via: [] },
       },
     });
   });
@@ -186,6 +186,26 @@ describe("MeshCom listener — dedup", () => {
     expect(out).toHaveLength(1);
     expect(out[0]!.payload).toBe(`:${CALL.padEnd(9, " ")}:hi{12`);
     expect(l.counters.viaDropped).toBe(1);
+  });
+  it("carries a message's via list in the MeshCom metadata, empty when it names none", () => {
+    const { l, out } = make();
+    l.receive(msg({ dst: `OE1KBC-24,${CALL}`, msg_id: "A1" }), NODE);
+    l.receive(msg({ msg_id: "A2" }), NODE);
+    const via = out.map((p) => (p.parsed as { meshcom?: { via?: string[] } }).meshcom?.via);
+    expect(via).toEqual([["OE1KBC-24"], []]);
+  });
+  it("logs the own node's Via setting once per change, from its own echoes only", () => {
+    const { l, logs } = make();
+    const own = (dst: string, id: string) => msg({ src_type: "node", src: CALL, dst, msg_id: id, rssi: 0, snr: 0 });
+    l.receive(msg({ src: "OE3XYZ-1", dst: `OE1KBC-24,${CALL}`, msg_id: "B0" }), NODE); // another station's via
+    expect(logs.filter((m) => m.includes("has Via"))).toEqual([]);
+    l.receive(own("OE1KBC-24,OE1KFR-12,OE3XYZ-1", "B1"), NODE);
+    l.receive(own("OE1KBC-24,OE1KFR-12,*", "B2"), NODE);
+    l.receive(own("OE3XYZ-1", "B3"), NODE);
+    expect(logs.filter((m) => m.includes("has Via"))).toEqual([
+      expect.stringMatching(/^WARN .*node OE8APR-12 has Via on: .*forwarded only by OE1KBC-24, OE1KFR-12$/),
+      expect.stringMatching(/node OE8APR-12 has Via off$/),
+    ]);
   });
   it("counts telemetry without forwarding it", () => {
     const { l, out } = make();

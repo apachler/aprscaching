@@ -53,11 +53,28 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 
 `src_type`, `type`, `src`, `dst`, `msg`, `msg_id`, `firmware`, `fw_sub`, `rssi`, `snr`.
 
-- `dst` is `*` (everyone), a group number (`1`–`99999`; group 9 carries emergency traffic), or a callsign
-  with optional SSID.
+- `dst` is the whole destination path, `[<via>,…,]<destination>`. The **destination** is the last token:
+  `*` (everyone), a group number (`1`–`99999`; group 9 carries emergency traffic), or a callsign with
+  optional SSID. The tokens before it are the sender's **via list** (`--via`), the relays it allows to
+  forward the message:
+
+  | `dst` | Destination | Via list |
+  |---|---|---|
+  | `OE8XYZ-7` | OE8XYZ-7 | — |
+  | `OE1KBC-24,*` | everyone | OE1KBC-24 |
+  | `OE1KBC-24,OE1KFR-12,262` | group 262 | OE1KBC-24, OE1KFR-12 |
+  | `OE1KBC-24,OE8XYZ-7` | OE8XYZ-7 | OE1KBC-24 |
+  | `OE1KBC-24,` | none (the frame is rejected) | OE1KBC-24 |
+
+  This is how the firmware's APRS decoder splits it (`msg_destination_call` is the text after the last
+  comma, empty after a trailing comma). The firmware does not check via tokens; aprscaching keeps the
+  callsigns among them, drops the rest and counts them (`viaDropped`). A via list is the sender's plan, not
+  the route the frame took — that is `src`. Firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8): `checkVia()` in `src/via_functions.cpp`, the
+  destination split in `src/aprs_functions.cpp`.
 - `msg` is UTF-8. A direct message may end in an APRS message number (`Hello{034`).
 - A direct message neither to nor from the node is suppressed when the node runs `--nopmother on`.
-- Telemetry frames addressed to `100001` are never forwarded as text.
+- Telemetry frames addressed to `100001` are never forwarded as text. The firmware compares the whole path,
+  so from a node with Via on telemetry arrives as `<via>,100001`; aprscaching rejects that destination.
 
 ### Telemetry (`type: "tele"`)
 
@@ -98,7 +115,8 @@ air. A frame whose origin is the receiving node's own callsign is therefore neve
 - Invalid JSON, a missing field, or a length outside the limits is dropped silently.
 - `{"type":"tele", "temp":…, "hum":…, "press":…, "temp2":…, "qnh":…, "gasres":…, "co2":…}` sets the
   node's own sensor values instead of sending text.
-- The node frames the text as `:{<dst>}<msg>` and transmits it under its own callsign.
+- The node frames the text as `:{<dst>}<msg>` and transmits it under its own callsign. With `--via` on, it
+  puts its own via list in front of the destination, as for anything it sends.
 
 ## Node setup
 
@@ -128,6 +146,7 @@ approximate. Against the firmware:
 |---|---|
 | Examples use typographic quotes and misplaced braces | Plain JSON as shown on this page |
 | `src_type: node` includes LoRa reception | `node` is the node's own traffic; LoRa reception is `lora` |
+| `dst` is the destination | `dst` is the destination path: an optional via list, then the destination as the last token |
 | `lora` means heard over LoRa | Also used for the node's own back-pressure notices |
 | `alt` in metres | Raw `/A=` value, feet or metres per the sending node's setting |
 | `msg` up to 150 characters | Up to 150 **bytes** |

@@ -219,3 +219,36 @@ describe("pruning and trust", () => {
     expect(await rows(direct())).toEqual(await rows(null));
   });
 });
+
+describe("MeshCom via lists (display only, never links)", () => {
+  const MSG = { payload: ":OE8XYZ-7 :hi{1", kind: "message" };
+  const message = (src: string, ts: number, meta: Meta) => ({ ...pkt(src, ts, meta, MSG), parsed: { meshcom: meta } });
+
+  it("keeps the relays a node's latest message named, and clears them when the next names none", async () => {
+    const { sqlite, env } = setup();
+    const t = now();
+    await ingest(env, [message("OE8XYZ-1", t, direct({ via: ["OE1KBC-24", "OE1KFR-12"] }))]);
+    expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: '["OE1KBC-24","OE1KFR-12"]', msg_at: t });
+    await ingest(env, [message("OE8XYZ-1", t + 10, direct({ via: [] }))]);
+    expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: null, msg_at: t + 10 });
+    await ingest(env, [pkt("OE8XYZ-1", t + 20, direct())]); // a position says nothing about via
+    expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: null, msg_at: t + 10 });
+  });
+
+  it("a via message heard directly is one direct link: its via relays draw nothing", async () => {
+    const { sqlite, env } = setup();
+    await ingest(env, [message("OE8XYZ-1", now(), direct({ via: ["OE1KBC-24", "OE1KFR-12"] }))]);
+    expect(links(sqlite)).toEqual([
+      { from_call: "OE8XYZ-1", to_call: RX, kind: "direct", samples: 1, rssi_avg: -100, snr_avg: 6 },
+    ]);
+  });
+
+  it("a relayed via message draws the legs of its source path, never its via list", async () => {
+    const { sqlite, env } = setup();
+    await ingest(env, [
+      message("OE8XYZ-1", now(), direct({ direct: false, path: ["OE8XYZ-1", "OE8RLY-2"], via: ["OE1KBC-24"] })),
+    ]);
+    const calls = (links(sqlite) as { from_call: string; to_call: string }[]).flatMap((l) => [l.from_call, l.to_call]);
+    expect(new Set(calls)).toEqual(new Set(["OE8XYZ-1", "OE8RLY-2", RX]));
+  });
+});
