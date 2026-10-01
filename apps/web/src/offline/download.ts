@@ -144,7 +144,8 @@ export async function storePack(
   const keep = new Set(wanted.map((i) => imageKey(i, meta.images)));
   for (const k of have) if (!keep.has(k) && !k.startsWith("tile:")) await store.deleteBlob(meta.id, k);
   let tiles = meta.tiles;
-  if (opts.tiles && meta.area) {
+  // map tiles cover a locator square; the owner's pack spans the world and takes none
+  if (opts.tiles && meta.area && "locator" in meta.area) {
     const { reader, plan, attribution } = opts.tiles;
     const got = await downloadTiles(store, meta.id, reader, plan, locatorBounds(meta.area.locator), {
       signal: opts.signal,
@@ -168,6 +169,8 @@ export async function storePack(
     sizeBytes: bytes,
   };
   await store.putPack(full, data.caches);
+  // the service call the instance takes radio logs on, for the queue's "send by radio" text offline
+  if (data.serviceCall) await store.kvSet("acs.serviceCall", data.serviceCall);
   return full;
 }
 

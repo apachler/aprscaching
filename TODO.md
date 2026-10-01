@@ -426,6 +426,12 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   a standing upstream-maintenance cost, and the dashboard is worth running with no first-party server
   at all — that property is the answer to how HamClock died, so it ships proven first.
 
+- [ ] **Station packs for offline use** _(P3 · M)_ — an offline pack also carries the digipeaters, IGates, MeshCom
+  nodes and BBS contacts of its square, for EmComm exercises and for knowing where to beacon with no data. Builds
+  on the locator packs (`GET /api/offline/pack`) and the station read APIs.
+- [ ] **Offline cache drafts** _(P3 · M)_ — hide a cache on site with no connection: a draft with measured
+  coordinates, photos (scaled and thumbnailed in the browser, as uploads are) and text, kept in IndexedDB and
+  submitted for publishing when back online, with its media uploaded then and a review step before it goes live.
 - [x] **PWA offline app shell** — the service worker (`apps/web/public/sw.js`) stores the app shell the
       build lists (`apps/web/vite-sw.ts`), opens the app from it with no network, waits for the user before a
       new version replaces the running one, and keeps Web Push; the last signed-in call is remembered on the

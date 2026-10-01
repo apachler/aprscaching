@@ -22,9 +22,10 @@ export const PACK_LOGS_PER_CACHE = 5;
  * 20° × 10°), a square (`JN77`, 2° × 1°), a subsquare (`JN77sb`, about 6 × 4.6 km here), or an extended
  * square (`JN77sb42`, about 600 × 460 m). A longer locator is a smaller pack.
  */
-export interface PackArea {
-  locator: string;
-}
+export type PackArea =
+  | { locator: string }
+  /** The signed-in owner's own caches, wherever they are: the owner's maintenance pack. */
+  | { mine: true };
 
 /** One image of a cache, as its page lists it. */
 export interface PackImage {
@@ -55,10 +56,14 @@ export interface PackCache
   stages: { stageNo: number; unlock: string; sealed?: SealedStage; open?: StagePayload }[];
   logs: CacheLogEntry[];
   images: PackImage[];
+  /** In the owner's maintenance pack: why the cache needs a visit (several DNFs, no find for months, disabled). */
+  attention?: string[];
 }
 
 export interface PackResponse {
   instance: string;
+  /** The instance's service call: a log made offline can be sent to it from a radio as an APRS message. */
+  serviceCall?: string;
   /** Changes whenever anything in the pack would; the ETag. */
   generation: string;
   builtAt: number;
@@ -100,21 +105,24 @@ export function locatorBounds(locator: string): [number, number, number, number]
 }
 
 /** The query string for an area. */
-export const packAreaQuery = (area: PackArea): string => `grid=${encodeURIComponent(area.locator)}`;
+export const packAreaQuery = (area: PackArea): string =>
+  "mine" in area ? "mine=1" : `grid=${encodeURIComponent(area.locator)}`;
 
 /** Read and check an area from query parameters; a string says what is wrong. */
 export function parsePackArea(q: URLSearchParams): PackArea | string {
+  if (q.get("mine") === "1") return { mine: true };
   const locator = normalizeLocator(q.get("grid") ?? "");
   if (!locator)
     return "grid is a Maidenhead locator: a field (JN), square (JN77), subsquare (JN77sb) or extended (JN77sb42)";
   return { locator };
 }
 
-/** The bounding box of an area, [minLon, minLat, maxLon, maxLat]. */
-export const areaBounds = (area: PackArea): [number, number, number, number] => locatorBounds(area.locator);
+/** The bounding box of an area, [minLon, minLat, maxLon, maxLat]; the whole world for the owner's pack. */
+export const areaBounds = (area: PackArea): [number, number, number, number] =>
+  "mine" in area ? [-180, -90, 180, 90] : locatorBounds(area.locator);
 
 /** Is the point inside the area? A point on the shared edge of two squares belongs to both. */
 export function inPackArea(area: PackArea, lat: number, lon: number): boolean {
-  const [minLon, minLat, maxLon, maxLat] = locatorBounds(area.locator);
+  const [minLon, minLat, maxLon, maxLat] = areaBounds(area);
   return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
 }

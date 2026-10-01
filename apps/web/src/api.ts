@@ -11,6 +11,7 @@ import {
   loadAttention,
   loadQueue,
   retryAttention,
+  removeQueued,
 } from "./log/logQueue.js";
 import type {
   CacheSummary,
@@ -1494,6 +1495,17 @@ export async function retryAttentionLog(index: number, comment?: string): Promis
   queueChanged();
   return flushLogQueue();
 }
+/** Remove a waiting log the user sent another way (by radio). */
+export async function removeQueuedLog(cacheId: number, queuedAt: number): Promise<void> {
+  await removeQueued(queueStore, cacheId, queuedAt);
+  queueChanged();
+}
+
+/** The instance's service call, as the last pack downloaded named it (for logging from a radio offline). */
+export async function knownServiceCall(): Promise<string | null> {
+  return (await offlineReady()).kvGet("acs.serviceCall");
+}
+
 /** Remove a refused log for good. */
 export async function discardAttentionLog(index: number): Promise<void> {
   await discardAttention(queueStore, index);

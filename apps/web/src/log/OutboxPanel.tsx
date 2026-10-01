@@ -9,13 +9,26 @@ import {
   attentionLogs,
   discardAttentionLog,
   getInstance,
+  knownServiceCall,
   queuedLogs,
+  removeQueuedLog,
   retryAttentionLog,
   type QueueBody,
 } from "../api.js";
+import { radioLogText } from "./radioText.js";
 import { runSync } from "../offline/sync.js";
 import { useFmt } from "../format.js";
-import { Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from "../ui/index.js";
+import {
+  Badge,
+  Button,
+  CommandBlock,
+  Disclosure,
+  EmptyState,
+  Group,
+  Panel,
+  useConfirm,
+  useToast,
+} from "../ui/index.js";
 import type { AttentionLog, QueuedLog } from "./logQueue.js";
 
 /** When the log was made: its signed time, else when it was queued. */
@@ -30,7 +43,11 @@ export function OutboxPanel(props: { onClose: () => void }) {
   const [attention, setAttention] = useState<AttentionLog<QueueBody>[]>([]);
   const [busy, setBusy] = useState(false);
   const [instance, setInstance] = useState("");
-  useEffect(() => void getInstance().then(setInstance), []);
+  const [serviceCall, setServiceCall] = useState<string | null>(null);
+  useEffect(() => {
+    void getInstance().then(setInstance);
+    void knownServiceCall().then(setServiceCall);
+  }, []);
   const reread = async () => {
     setQueue(await queuedLogs());
     setAttention(await attentionLogs());
@@ -109,6 +126,7 @@ export function OutboxPanel(props: { onClose: () => void }) {
                         l.instance !== instance &&
                         ` · signed for ${l.instance}: it goes only there`}
                     </div>
+                    <RadioFallback log={l} serviceCall={serviceCall} />
                   </li>
                 ))}
               </ul>
@@ -174,5 +192,31 @@ function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; whe
         </Button>
       </div>
     </li>
+  );
+}
+
+/**
+ * No data, but a radio: the APRS message that logs this from a handheld, sent to the instance's service call.
+ * Once sent, the user takes it out of the queue so it is not logged twice.
+ */
+function RadioFallback(props: { log: QueuedLog<QueueBody>; serviceCall: string | null }) {
+  const confirm = useConfirm();
+  const text = radioLogText(props.log);
+  if (!text || !props.serviceCall) return null;
+  const sent = async () => {
+    const ok = await confirm({
+      title: "Sent by radio?",
+      message: `This ${props.log.body.logType} log leaves the queue, so it is not logged twice. The radio message counts by the radio path's own rules.`,
+      confirmLabel: "Sent, remove it",
+    });
+    if (ok) await removeQueuedLog(props.log.cacheId, props.log.queuedAt);
+  };
+  return (
+    <Disclosure label="Send it from a radio">
+      <CommandBlock label={`APRS message to ${props.serviceCall}`} command={text} />
+      <Button variant="link" onClick={() => void sent()}>
+        I sent it by radio
+      </Button>
+    </Disclosure>
   );
 }

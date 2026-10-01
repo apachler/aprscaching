@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * GET /api/offline/pack — one offline pack in one answer: the caches of an area (a box, a circle, or a
- * corridor along a route; packages/shared offlinepack.ts) with the details the cache page needs, the
- * latest logs, each cache's stage shape and the list of its images. Federated caches the map shows are
- * included and marked as mirrored. Read-only and public, like the map and the cache page it mirrors.
+ * GET /api/offline/pack — one offline pack in one answer: the caches of a Maidenhead locator square
+ * (`grid=`; packages/shared offlinepack.ts) with the details the cache page needs, the latest logs, each
+ * cache's stage shape and the list of its images. Federated caches the map shows are included and marked as
+ * mirrored. Read-only and public, like the map and the cache page it mirrors.
  *
- * Secrets stay out: a stage is only its number and how it unlocks, never its coordinates, clue or code.
- * A refresh sends the pack's generation as If-None-Match and gets 304 when nothing in the area changed,
- * which costs a few aggregate queries. A full build is rate-limited per address, and an area with more
- * than PACK_MAX_CACHES caches is refused with its count, so the user narrows it.
+ * `mine=1` is the owner's maintenance pack instead: every cache the signed-in account owns, wherever it is,
+ * each with what calls for a visit (several did-not-finds in a row, no find for months, disabled).
+ *
+ * Secrets stay out: a later stage is only its number and how it unlocks, or its reveal sealed under its tag
+ * code. A refresh sends the pack's generation as If-None-Match and gets 304 when nothing in the pack changed,
+ * which costs a few aggregate queries. A full build is rate-limited per address, and a pack of more than
+ * PACK_MAX_CACHES caches is refused with its count, so the user narrows it.
  */
 import {
   PACK_LOGS_PER_CACHE,
@@ -25,6 +28,8 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { nowS } from "./util/time.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
+import { sessionIdentity } from "./auth.js";
+import { serviceCall } from "./radiolog.js";
 import {
   toSummary,
   nativeMapCache,
@@ -39,6 +44,10 @@ import {
 const PACK_BUILDS_PER_HOUR = 30;
 
 const NATIVE_IN_BOX = "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived'";
+/** A cache unfound for this long is flagged in the owner's pack. */
+const QUIET_S = 180 * 86_400;
+/** The most calls of one account the owner's pack matches (D1 binds at most 100 parameters). */
+const MAX_OWN_CALLS = 8;
 
 export async function handleOfflinePack(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
@@ -51,8 +60,27 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     .slice(0, 12); // D1 binds at most 100 parameters, and the generation query repeats the list four times
   const includeUnvetted = u.searchParams.get("includeUnvetted") === "1";
   const instance = env.INSTANCE ?? u.host;
-  const [minLon, minLat, maxLon, maxLat] = areaBounds(area);
-  const box = [minLat, maxLat, minLon, maxLon];
+  const mine = "mine" in area;
+  // Which native caches the pack takes: those in the locator's box, or those the signed-in account owns.
+  let scopeSql = NATIVE_IN_BOX;
+  let scopeBinds: (string | number)[];
+  if (mine) {
+    const me = await sessionIdentity(req, env);
+    if (!me) return json({ error: "sign in to pack your own caches" }, { status: 401 });
+    const calls = (
+      await env.DB.prepare("SELECT callsign FROM account_callsigns WHERE account_id = ? LIMIT ?")
+        .bind(me.accountId, MAX_OWN_CALLS)
+        .all<{ callsign: string }>()
+    ).results.map((r) => r.callsign.toUpperCase());
+    if (!calls.length) calls.push(me.base);
+    // an owner call is the base call or one of its SSIDs
+    scopeSql = `status != 'archived' AND (${calls.map(() => "owner_call = ? OR owner_call LIKE ?").join(" OR ")})`;
+    scopeBinds = calls.flatMap((c) => [c, `${c}-%`]);
+  } else {
+    const [minLon, minLat, maxLon, maxLat] = areaBounds(area);
+    scopeBinds = [minLat, maxLat, minLon, maxLon];
+  }
+  const box = scopeBinds;
   const typeSql = types.length ? ` AND type IN (${types.map(() => "?").join(",")})` : "";
   const trustSql =
     "COALESCE(fp.trust, 'unvetted') != 'blocked' AND (? = 1 OR COALESCE(fp.trust, 'unvetted') = 'trusted')";
@@ -61,19 +89,32 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   // change costs no build.
   const stat = await env.DB.prepare(
     `SELECT
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0) FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) AS c,
+       (SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0) FROM caches WHERE ${scopeSql}${typeSql}) AS c,
        (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_logs
-          WHERE cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql})) AS l,
+          WHERE cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql})) AS l,
        (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) FROM cache_media
-          WHERE cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql})) AS m,
-       (SELECT COUNT(*) || ':' || COALESCE(MAX(rc.mirrored_at), 0) FROM remote_caches rc
+          WHERE cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql})) AS m,
+       ${
+         mine
+           ? "'' AS r"
+           : `(SELECT COUNT(*) || ':' || COALESCE(MAX(rc.mirrored_at), 0) FROM remote_caches rc
           LEFT JOIN fed_peers fp ON fp.instance = rc.origin
          WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'${typeSql.replace("type", "rc.type")}
-           AND ${trustSql}) AS r`,
+           AND ${trustSql}) AS r`
+       }`,
   )
-    .bind(...box, ...types, ...box, ...types, ...box, ...types, ...box, ...types, includeUnvetted ? 1 : 0)
+    .bind(
+      ...box,
+      ...types,
+      ...box,
+      ...types,
+      ...box,
+      ...types,
+      ...(mine ? [] : [...box, ...types, includeUnvetted ? 1 : 0]),
+    )
     .first<{ c: string; l: string; m: string; r: string }>();
-  const key = `${u.searchParams.toString()}|${stat?.c}|${stat?.l}|${stat?.m}|${stat?.r}`;
+  const who = mine ? `${(await sessionIdentity(req, env))?.accountId}|` : "";
+  const key = `${who}${u.searchParams.toString()}|${stat?.c}|${stat?.l}|${stat?.m}|${stat?.r}`;
   const generation = await sha256Hex(key);
   const etag = `"${generation}"`;
   if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag } });
@@ -86,29 +127,33 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   const tooMany = () =>
     json({ error: `more than ${PACK_MAX_CACHES} caches in this area; narrow it`, count: null }, { status: 413 });
   const nativeRows = (
-    await env.DB.prepare(`SELECT * FROM caches WHERE ${NATIVE_IN_BOX}${typeSql} LIMIT ?`)
+    await env.DB.prepare(`SELECT * FROM caches WHERE ${scopeSql}${typeSql} LIMIT ?`)
       .bind(...box, ...types, scan)
       .all<CacheDbRow>()
   ).results;
   if (nativeRows.length === scan) return tooMany();
-  const native = nativeRows.filter((r) => r.lat != null && r.lon != null && inPackArea(area, r.lat, r.lon));
-  const remoteRows = (
-    await env.DB.prepare(
-      `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust FROM remote_caches rc
+  const native = mine
+    ? nativeRows
+    : nativeRows.filter((r) => r.lat != null && r.lon != null && inPackArea(area, r.lat, r.lon));
+  const remoteRows = mine
+    ? []
+    : (
+        await env.DB.prepare(
+          `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust FROM remote_caches rc
          LEFT JOIN fed_peers fp ON fp.instance = rc.origin
         WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'${typeSql.replace("type", "rc.type")}
           AND ${trustSql} LIMIT ?`,
-    )
-      .bind(...box, ...types, includeUnvetted ? 1 : 0, scan)
-      .all<
-        RemoteCacheRow & {
-          hint: string | null;
-          description: string | null;
-          created_at: number | null;
-          updated_at: number | null;
-        }
-      >()
-  ).results;
+        )
+          .bind(...box, ...types, includeUnvetted ? 1 : 0, scan)
+          .all<
+            RemoteCacheRow & {
+              hint: string | null;
+              description: string | null;
+              created_at: number | null;
+              updated_at: number | null;
+            }
+          >()
+      ).results;
   if (remoteRows.length === scan) return tooMany();
   const remote = remoteRows.filter((r) => r.lat != null && r.lon != null && inPackArea(area, r.lat, r.lon));
   const count = native.length + remote.length;
@@ -125,8 +170,8 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     await env.DB.prepare(
       `SELECT * FROM (
          SELECT l.*, ROW_NUMBER() OVER (PARTITION BY l.cache_id ORDER BY l.ts DESC, l.id DESC) AS rn
-           FROM cache_logs l WHERE l.cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql})
-       ) WHERE rn <= ?`,
+           FROM cache_logs l WHERE l.cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql})
+       ) WHERE rn <= ? ORDER BY cache_id, ts DESC, id DESC`,
     )
       .bind(...box, ...types, PACK_LOGS_PER_CACHE)
       .all<LogDbRow>()
@@ -134,7 +179,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   const stages = (
     await env.DB.prepare(
       `SELECT cache_id, stage_no, unlock, sealed, lat, lon, clue, media_key FROM cache_stages
-        WHERE cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) ORDER BY stage_no`,
+        WHERE cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql}) ORDER BY stage_no`,
     )
       .bind(...box, ...types)
       .all<{
@@ -151,7 +196,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   const media = (
     await env.DB.prepare(
       `SELECT id, cache_id, media_key, content_type, title, bytes, thumb_key, thumb_bytes FROM cache_media
-        WHERE kind = 'image' AND cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) ORDER BY created_at`,
+        WHERE kind = 'image' AND cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql}) ORDER BY created_at`,
     )
       .bind(...box, ...types)
       .all<{
@@ -171,6 +216,34 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
     return m;
   };
   const logsOf = byCache(logs);
+  // the owner's pack: when each cache was last found, for the "no find for months" flag
+  const lastFound = new Map<number, number>();
+  if (mine)
+    for (const r of (
+      await env.DB.prepare(
+        `SELECT cache_id, MAX(ts) AS ts FROM cache_logs WHERE log_type = 'found'
+           AND cache_id IN (SELECT id FROM caches WHERE ${scopeSql}${typeSql}) GROUP BY cache_id`,
+      )
+        .bind(...box, ...types)
+        .all<{ cache_id: number; ts: number }>()
+    ).results)
+      lastFound.set(r.cache_id, r.ts);
+  const now = nowS();
+  /** What calls for the owner's visit. */
+  const attentionOf = (r: CacheDbRow, recent: LogDbRow[]): string[] => {
+    const out: string[] = [];
+    let dnfs = 0;
+    for (const l of recent.filter((l) => l.log_type === "found" || l.log_type === "dnf")) {
+      if (l.log_type !== "dnf") break;
+      dnfs++;
+    }
+    if (dnfs >= 3) out.push(`${dnfs} did-not-finds in a row`);
+    const found = lastFound.get(r.id);
+    if (found != null ? now - found > QUIET_S : now - r.created_at > QUIET_S)
+      out.push(found != null ? `no find for ${Math.floor((now - found) / (30 * 86_400))} months` : "never found");
+    if (r.status === "disabled") out.push("disabled");
+    return out;
+  };
   const stagesOf = byCache(stages);
   const mediaOf = byCache(media);
 
@@ -209,6 +282,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
               : {}),
         })),
         logs: (logsOf.get(r.id) ?? []).map(toLogEntry),
+        ...(mine && { attention: attentionOf(r, logsOf.get(r.id) ?? []) }),
         images: (mediaOf.get(r.id) ?? []).map((m): PackImage => ({
           id: m.id,
           url: `/api/media/${m.media_key}`,
@@ -238,7 +312,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
       images: [],
     })),
   ];
-  const body: PackResponse = { instance, generation, builtAt: nowS(), caches };
+  const body: PackResponse = { instance, serviceCall: serviceCall(env), generation, builtAt: now, caches };
   return json(body, { headers: { etag, "cache-control": "no-cache" } });
 }
 

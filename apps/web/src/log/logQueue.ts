@@ -161,6 +161,15 @@ export async function retryAttention(store: QueueStore, index: number, now: numb
   );
 }
 
+/** Remove a waiting log at the user's request (it was sent another way, e.g. by radio). */
+export async function removeQueued(store: QueueStore, cacheId: number, queuedAt: number): Promise<void> {
+  await write(
+    store,
+    QUEUE_KEY,
+    (await loadQueue(store)).filter((q) => !(q.cacheId === cacheId && q.queuedAt === queuedAt)),
+  );
+}
+
 /** Remove a refused log for good, at the user's request. */
 export async function discardAttention(store: QueueStore, index: number): Promise<void> {
   await write(

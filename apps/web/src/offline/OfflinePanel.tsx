@@ -14,7 +14,19 @@ import { API_BASE, offlineReady } from "../api.js";
 import { useFmt } from "../format.js";
 import { TYPE_META, TYPE_ORDER } from "../cacheTypes.js";
 import { usePlatform } from "../platform/PlatformContext.js";
-import { Advanced, Badge, Button, EmptyState, Group, Panel, Row, Switch, useConfirm, useToast } from "../ui/index.js";
+import {
+  Advanced,
+  Badge,
+  Button,
+  Disclosure,
+  EmptyState,
+  Group,
+  Panel,
+  Row,
+  Switch,
+  useConfirm,
+  useToast,
+} from "../ui/index.js";
 import { mobileDataAllowed, setMobileDataAllowed } from "./sync.js";
 import {
   estimatePack,
@@ -86,6 +98,7 @@ export function OfflinePanel(props: { onClose: () => void }) {
       <Group title="New pack" status={online ? undefined : "needs a connection"}>
         <NewPack onSaved={reload} disabled={!online} />
       </Group>
+      <OwnerPack packs={packs ?? []} onSaved={reload} disabled={!online} />
       <SyncSettings />
       <StorageLine />
     </Panel>
@@ -136,6 +149,7 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
         {p.images === "none" ? "no images" : p.images === "thumbs" ? "thumbnails" : "full images"} · refreshed{" "}
         {fmt.ago(Math.floor(p.refreshedAt / 1000))}
       </div>
+      {p.area && "mine" in p.area && <OwnerAttention packId={p.id} />}
       {progress ? (
         <progress max={progress.total || 1} value={progress.done} aria-label={`Refreshing ${p.name}`} />
       ) : (
@@ -151,6 +165,92 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
     </li>
   );
 }
+
+/** The caches of the owner's pack that need a visit, and why. */
+function OwnerAttention(props: { packId: string }) {
+  const [due, setDue] = useState<{ code: string; title: string; why: string[] }[] | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const caches = await (await offlineReady()).packCaches(props.packId);
+      setDue(
+        caches.filter((c) => c.attention?.length).map((c) => ({ code: c.code, title: c.title, why: c.attention! })),
+      );
+    })();
+  }, [props.packId]);
+  if (!due) return null;
+  if (!due.length) return <p className="muted fine">None of your caches needs a visit.</p>;
+  return (
+    <Disclosure label={`${due.length} ${due.length === 1 ? "cache needs" : "caches need"} a visit`}>
+      <ul className="pack-attention">
+        {due.map((d) => (
+          <li key={d.code}>
+            <span className="mono">{d.code}</span> {d.title}
+            <div className="muted fine">{d.why.join(" · ")}</div>
+          </li>
+        ))}
+      </ul>
+    </Disclosure>
+  );
+}
+
+/**
+ * The owner's maintenance pack in one tap: every cache the signed-in owner holds, flagged where a visit is
+ * due; maintenance logged in the field waits in the queue like any log. Refreshes the pack when it exists.
+ */
+function OwnerPack(props: { packs: PackMeta[]; onSaved: () => void; disabled: boolean }) {
+  const { callsign } = usePlatform();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!callsign) return null;
+  const existing = props.packs.find((p) => p.area && "mine" in p.area);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const store = await offlineReady();
+      if (existing) await refreshPack(store, fetcher, API_BASE, existing, Date.now());
+      else {
+        const data = await fetchPackData(fetcher, API_BASE, { mine: true }, { types: [] });
+        if (data === "unchanged") return;
+        const now = Date.now();
+        await storePack(
+          store,
+          fetcher,
+          API_BASE,
+          {
+            id: `mine-${now.toString(36)}`,
+            name: "My caches",
+            area: { mine: true },
+            filters: { types: [] },
+            images: "thumbs",
+            createdAt: now,
+            refreshedAt: now,
+          },
+          data,
+        );
+      }
+      toast(existing ? "Your caches are up to date" : "Your caches are packed");
+      props.onSaved();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Group title="Your caches" status="owner maintenance" defaultOpen={false}>
+      <p className="muted fine">
+        Every cache you own, with thumbnails, flagged where a visit is due. Maintenance you log in the field is sent
+        when you are back online.
+      </p>
+      <Button onClick={() => void run()} disabled={props.disabled || busy}>
+        {busy ? "Packing…" : existing ? "Refresh my caches" : "Pack my caches"}
+      </Button>
+    </Group>
+  );
+}
+
+/** A pack of a locator square (the form's kind; the owner's pack has its own button). */
+type SquareArea = Extract<PackArea, { locator: string }>;
 
 /** The four locator sizes, from big to small. */
 const SIZES = [
@@ -176,7 +276,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const [input, setInput] = useState("");
   const [name, setName] = useState("");
   const [types, setTypes] = useState<CacheType[]>([]);
-  const [data, setData] = useState<{ area: PackArea; data: PackResponse; est: PackEstimate } | null>(null);
+  const [data, setData] = useState<{ area: SquareArea; data: PackResponse; est: PackEstimate } | null>(null);
   const [images, setImages] = useState<PackMeta["images"]>("thumbs");
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [progress, setProgress] = useState<SaveProgress | null>(null);
@@ -199,7 +299,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
 
   const check = async () => {
     if (!locator) return setErr("Enter a Maidenhead locator, such as JN77 or JN77sb.");
-    const area: PackArea = { locator };
+    const area: SquareArea = { locator };
     setBusy("check");
     setErr(null);
     try {
