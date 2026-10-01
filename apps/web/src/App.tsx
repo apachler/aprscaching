@@ -6,6 +6,7 @@ import { useSession } from "./identity/useSession.js";
 import { Landing } from "./Landing.js";
 import { SignIn } from "./identity/SignIn.js";
 import { ASSET } from "./brand.js";
+import { UpdateNotice } from "./shell/UpdateNotice.js";
 
 // The signed-in / explore platform owns MapLibre (~1 MB) plus all the map code. Lazy-load it so the
 // signed-out marketing landing paints without ever fetching the map bundle: the
@@ -66,6 +67,7 @@ export function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
+        <UpdateNotice />
         {session.loading ? (
           <Splash />
         ) : !active ? (

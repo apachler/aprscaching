@@ -13,6 +13,30 @@
     align-items: center;
     pointer-events: none;
   }
+  /* a new version is ready: a bar at the top that waits for the user (never a forced reload) */
+  .update-notice {
+    position: fixed;
+    top: calc(var(--sp-3) + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    max-width: calc(100vw - 2 * var(--sp-4));
+    background: var(--surface-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--r-11);
+    padding: var(--sp-2) var(--sp-4);
+    font-size: var(--fs-md);
+    box-shadow: var(--elev-5);
+  }
+  .update-notice button {
+    min-height: var(--hit);
+  }
   .toast {
     background: var(--surface-2);
     color: var(--ink);
