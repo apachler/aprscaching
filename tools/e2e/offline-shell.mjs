@@ -10,7 +10,8 @@
  *   3. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
  *      call, with the map (MapLibre comes from the shell too).
  *
- * If no Chromium is found it prints SKIP and exits 0, like audio-mic.mjs; the e2e-offline CI job installs one.
+ * If no Chromium is found it prints SKIP and exits 0, like audio-mic.mjs, and fails in CI (`CI` set), where
+ * the e2e-offline job installs one.
  * Browser resolution: $CHROMIUM_PATH, then /opt/pw-browsers/chromium-*, then playwright-core's registry.
  */
 import { chromium } from "playwright-core";
@@ -81,7 +82,12 @@ function serve() {
 async function main() {
   const exe = findChromium();
   if (!exe) {
-    console.log("SKIP offline-shell: no Chromium found (set CHROMIUM_PATH or install one with playwright)");
+    // in CI a missing browser is a broken job, never a pass
+    if (process.env.CI)
+      throw new Error("no Chromium in CI: install it with pnpm exec playwright-core install --with-deps chromium");
+    console.log(
+      "SKIP offline-shell: no Chromium found (set CHROMIUM_PATH or `pnpm exec playwright-core install chromium`)",
+    );
     return;
   }
   if (
