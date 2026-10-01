@@ -78,6 +78,7 @@ nav:
   - Glossary: glossary.md
   - Operating an instance:
       - Deployment: operate/deployment.md
+      - Deployment helpers: operate/helpers.md
       - Running in Docker: operate/docker.md
       - "Pocket: a station on a phone": operate/pocket.md
       - Your first hour as sysop: operate/first-hour.md

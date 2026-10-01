@@ -6,13 +6,21 @@ import { Digipeater, ConnectedDigipeater } from "./digipeater.js";
 import { Igate } from "./igate.js";
 import { parseTNC2, classifyQ, parsePosition } from "@aprscaching/aprs";
 import type { ParsedFrame } from "@aprscaching/aprs";
-import type { Packet } from "@aprscaching/shared";
+import { validateConfig, type Packet } from "@aprscaching/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
 import { txLimitFromEnv } from "./txlimit.js";
 import type { BoxRadio, BoxState } from "./boxpoll.js";
 
 loadDotEnv(); // `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
 const env = process.env;
+// A malformed setting (a port that is not a number, an unknown on/off value) stops the start instead of
+// falling back silently to a default the operator did not choose.
+const CONFIG_PROBLEMS = validateConfig(env, "ingest");
+if (CONFIG_PROBLEMS.length) {
+  for (const p of CONFIG_PROBLEMS) console.error(`[ingest] FATAL: ${p.message}`);
+  console.error("[ingest] See docs/reference/configuration.md for each setting's accepted values.");
+  process.exit(1);
+}
 const INGEST_URL = env.INGEST_URL ?? "http://127.0.0.1:8787/ingest";
 const SECRET = env.INGEST_SECRET ?? "change-me";
 const BATCH_MS = numEnv("BATCH_MS", 1500, { min: 100 }); // floor so a blank value can't tight-loop

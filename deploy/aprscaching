@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# aprscaching: one command for every deployment shape — set an instance up, check it, update it, back
+# it up and restore it, the same way on a Docker host, a Cloudflare account, an ingest-only box, a bare-metal
+# server, a phone in Termux or a desktop.
+#
+#   deploy/aprscaching init <shape> [options]   set up a shape: selfhost, cloudflare, ingest-box, baremetal,
+#                                               pocket or desktop (options: deploy/aprscaching init <shape> --help)
+#   deploy/aprscaching status                   is it running, and where
+#   deploy/aprscaching doctor                   check the whole installation; changes nothing
+#   deploy/aprscaching update                   update to a newer release
+#   deploy/aprscaching backup                   write a backup archive
+#   deploy/aprscaching restore <file>           restore a backup archive into this shape
+#   deploy/aprscaching rotate-secret <name>     replace one secret, e.g. INGEST_SECRET
+#   deploy/aprscaching help
+#
+# Options for every command:
+#   --shape SHAPE        act on this shape instead of the one init recorded (deploy/.shape)
+#   --non-interactive    ask nothing: every question takes its default, a missing required value fails
+#   --yes                confirm every change without asking
+#   --json               machine-readable output on stdout (progress goes to stderr)
+#
+# The commands other than init act on the shape init recorded; without a record they probe the host.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=deploy/lib/common.sh
+. "$HERE/lib/common.sh"
+# shellcheck source=deploy/lib/env.sh
+. "$HERE/lib/env.sh"
+# shellcheck source=deploy/lib/config.sh
+. "$HERE/lib/config.sh"
+# shellcheck source=deploy/lib/shape.sh
+. "$HERE/lib/shape.sh"
+
+SHAPE=""
+ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --shape)
+      [ $# -ge 2 ] || die "--shape needs a value."
+      SHAPE="$2"
+      shift
+      ;;
+    --shape=*) SHAPE="${1#--shape=}" ;;
+    --non-interactive) APRS_INTERACTIVE=0 ;;
+    --yes) APRS_ASSUME_YES=1 ;;
+    --json) APRS_JSON=1 ;;
+    *) ARGS+=("$1") ;;
+  esac
+  shift
+done
+export APRS_INTERACTIVE APRS_ASSUME_YES APRS_JSON
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+CMD="${1:-help}"
+[ $# -gt 0 ] && shift
+
+usage() { script_usage "$0"; }
+
+# Load the module of a shape: it defines shape_<command> for each command the shape supports, and sets
+# SHAPE_ENV, the .env file it keeps its settings in, unless init recorded one (empty where settings live
+# elsewhere).
+load_shape() {
+  shape_valid "$1" || die "Unknown shape '$1'." "Shapes: $SHAPES."
+  # the .env init recorded for this shape wins over the module's usual place
+  SHAPE_ENV=""
+  [ "$(shape_recorded || true)" = "$1" ] && SHAPE_ENV="$(shape_env_file || true)"
+  # a shape without a module has no helper commands in this version
+  if [ -f "$HERE/lib/shapes/$1.sh" ]; then
+    # shellcheck source=/dev/null # one of deploy/lib/shapes/*.sh
+    . "$HERE/lib/shapes/$1.sh"
+  fi
+}
+
+# Run COMMAND for the loaded shape, or explain that the shape has none.
+run_shape_cmd() {
+  local cmd="$1" fn
+  shift
+  fn="shape_${cmd//-/_}"
+  declare -F "$fn" >/dev/null || die "'$cmd' is not available for the $SHAPE shape." \
+    "deploy/aprscaching help lists the commands; docs/operate/helpers.md says which shape supports which."
+  "$fn" "$@"
+}
+
+# Secrets the helper can rotate, and what changes when one does.
+rotate_effect() {
+  case "$1" in
+    INGEST_SECRET) echo "every ingest box must get the new value before it can post again" ;;
+    OPERATOR_SECRET) echo "scripts that send x-operator-secret need the new value" ;;
+    SESSION_SECRET) echo "every user is signed out" ;;
+    FED_SUBMIT_SECRET) echo "the hub and every spoke must share the new value" ;;
+    FED_RELAY_SECRET) echo "every relay participant must share the new value" ;;
+    FED_CORROBORATION_SECRET) echo "trusted peers that ask for corroboration need the new value" ;;
+    *) return 1 ;;
+  esac
+}
+
+# rotate-secret NAME for a shape whose secrets live in SHAPE_ENV; a shape whose secrets live elsewhere
+# (Cloudflare) defines shape_rotate_secret itself.
+rotate_env_secret() {
+  local name="$1" effect value
+  effect="$(rotate_effect "$name")" ||
+    die "$name is not a secret this helper rotates." \
+      "Rotatable: INGEST_SECRET OPERATOR_SECRET SESSION_SECRET FED_SUBMIT_SECRET FED_RELAY_SECRET FED_CORROBORATION_SECRET." \
+      "The federation signing key rotates with tools/fedkey/rotatekey.mjs, which keeps peers' pins valid."
+  [ -n "$SHAPE_ENV" ] && [ -f "$SHAPE_ENV" ] || die "No settings file for the $SHAPE shape." "Run deploy/aprscaching init $SHAPE first."
+  info "Rotating $name in $SHAPE_ENV: $effect."
+  confirm "Replace $name?" || die "Kept $name." "Pass --yes to rotate without asking."
+  value="$(gen_secret)"
+  env_file_set "$SHAPE_ENV" "$name" "$value"
+  info "$name replaced; restart the instance to apply it."
+  if [ "$name" = INGEST_SECRET ]; then
+    # shown once, because every ingest box needs it; it is not written anywhere else
+    info "The new value, for your ingest boxes (shown only now): $value"
+  fi
+}
+
+case "$CMD" in
+  help | -h | --help) usage ;;
+  init)
+    [ $# -ge 1 ] || die "init needs a shape." "Shapes: $SHAPES."
+    SHAPE="$1"
+    shift
+    load_shape "$SHAPE"
+    run_shape_cmd init "$@"
+    ;;
+  status | doctor | update | backup | restore | rotate-secret)
+    [ -n "$SHAPE" ] || SHAPE="$(shape_detect)"
+    [ -n "$SHAPE" ] || die "No installation found here." "Set one up with: deploy/aprscaching init <shape>" \
+      "or name it with --shape ($SHAPES)."
+    load_shape "$SHAPE"
+    if [ "$CMD" = restore ] && [ $# -lt 1 ]; then die "restore needs the archive: deploy/aprscaching restore <file>"; fi
+    if [ "$CMD" = rotate-secret ]; then
+      [ $# -ge 1 ] || die "rotate-secret needs a name, e.g. deploy/aprscaching rotate-secret INGEST_SECRET"
+      if declare -F shape_rotate_secret >/dev/null; then shape_rotate_secret "$@"; else rotate_env_secret "$1"; fi
+    else
+      run_shape_cmd "$CMD" "$@"
+    fi
+    ;;
+  *) die "Unknown command '$CMD'." "deploy/aprscaching help lists the commands." ;;
+esac

@@ -28,20 +28,10 @@ pocket_paths() {
 }
 pocket_paths
 
-step() { printf '\n==> %s\n' "$*"; }
-info() { printf '    %s\n' "$*"; }
-warn() { printf '    WARNING: %s\n' "$*" >&2; }
-die() {
-  printf '\nERROR: %s\n' "$1" >&2
-  shift
-  local line
-  for line in "$@"; do printf '       %s\n' "$line" >&2; done
-  exit 1
-}
-have() { command -v "$1" >/dev/null 2>&1; }
-
-# The usage block: the comment lines after the shebang, up to the first line that is not a comment.
-pocket_usage() { awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$1"; }
+# Logging (step, info, warn, die), have and the usage reader are the deploy helpers' (deploy/lib/common.sh).
+# shellcheck source=deploy/lib/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/common.sh"
+pocket_usage() { script_usage "$1"; }
 
 # Read one KEY from the .env without exporting the rest (last assignment wins, quotes stripped).
 env_get() {

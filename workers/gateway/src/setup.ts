@@ -10,7 +10,7 @@
  * existing sysop surfaces; the web panel links each DB-sourced item to the surface that manages it.
  */
 import { nowS } from "./util/time.js";
-import { applyDerivedDefaults, type Env } from "./env.js";
+import { applyDerivedDefaults, configProblems, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
@@ -64,6 +64,19 @@ async function count(env: Env, sql: string, ...binds: unknown[]): Promise<number
 function envItems(env: Env): SetupItem[] {
   const items: SetupItem[] = [];
   const push = (i: SetupItem) => items.push(i);
+
+  // ---- malformed settings — the Node/Bun servers refuse to start on one; the Worker reports it here.
+  // Each detail names the key and what it expects, never the value.
+  const problems = configProblems(env);
+  push({
+    key: "config",
+    label: "Settings are well-formed",
+    group: "security",
+    level: "blocking",
+    status: problems.length ? "missing" : "ok",
+    source: "env",
+    detail: problems.length ? problems.map((p) => p.message).join("; ") : "every setting has a value of its type",
+  });
 
   // ---- security — the env-only core; the gateway fails closed without it
   push({

@@ -7,6 +7,8 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 ## Files
 | File | Purpose |
 |---|---|
+| `aprscaching` | one command for every shape: `init`, `status`, `backup`, `rotate-secret`, … (`docs/operate/helpers.md`) |
+| `lib/` | the helpers' shared shell library, a module per shape, and the configuration schema's export (`config-keys.tsv`, generated) |
 | `setup.sh` | first-run wizard: writes `.env` (operator call, `APP_URL`, APRS-IS feed, site call, secrets, federation key); safe to re-run; `--non-interactive` for scripts |
 | `desktop/` | **Desktop** — single-binary app (Bun `--compile`); see `desktop/README.md` |
 | `pocket/` | the gateway and the ingest on an Android phone in Termux (a field-day station); see `pocket/README.md` |
@@ -14,7 +16,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 | `docker-compose.yml` | **Self-host** stack: gateway + ingest + Caddy |
 | `compose.home.yml` | self-host override: Cloudflare Tunnel ingress (no open ports) |
 | `compose.ingest-only.yml` | operator RF box → a remote gateway (the **Cloudflare split**, or any gateway elsewhere) |
-| `.env.example` | all config with sane defaults |
+| `.env.example` | all config with sane defaults (generated from the schema by `tools/config/generate.mjs`) |
 | `Caddyfile` | TLS + SPA + reverse proxy |
 | `cloudflared/config.yml` | named-tunnel ingress (alternative to `TUNNEL_TOKEN`) |
 | `systemd/*.service` | bare-metal alternative to Docker |

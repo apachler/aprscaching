@@ -14,6 +14,7 @@ run() { echo "→ $*"; "$@"; }
 if [[ "$mode" == "all" || "$mode" == "--build" ]]; then
   echo "== build (typecheck all units) =="
   run pnpm -r build
+  run node tools/config/generate.mjs --check
 fi
 if [[ "$mode" == "all" || "$mode" == "--test" ]]; then
   echo "== unit tests (all packages) =="

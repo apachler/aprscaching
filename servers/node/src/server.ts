@@ -21,6 +21,7 @@ import Database from "better-sqlite3";
 import { createGatewayServer, readTls, reloadTls, tlsFromEnv } from "./listen.js";
 import { federationConfigError } from "@aprscaching/gateway/federation";
 import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
+import { validateConfig } from "@aprscaching/shared";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { resolveServerSecrets } from "./secrets.js";
 import { makeD1 } from "./d1.js";
@@ -41,6 +42,15 @@ const DB_PATH = process.env.DB_PATH ?? path.resolve(HERE, "../data/aprscaching.d
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.resolve(HERE, "../../../db/migrations");
 const MEDIA_DIR = process.env.MEDIA_DIR ?? path.resolve(HERE, "../data/media");
 const WEB_DIST = process.env.WEB_DIST ? path.resolve(process.env.WEB_DIST) : undefined;
+
+// Boot guard: a malformed setting (a port that is not a number, an unknown on/off value, JSON that does not
+// parse) stops the start instead of falling back silently to a default the operator did not choose.
+const CONFIG_PROBLEMS = validateConfig(process.env, ["gateway", "server"]);
+if (CONFIG_PROBLEMS.length) {
+  for (const p of CONFIG_PROBLEMS) console.error(`FATAL: ${p.message}`);
+  console.error("See docs/reference/configuration.md for each setting's accepted values.");
+  process.exit(1);
+}
 
 // Boot guards: a strong INGEST_SECRET, an OPERATOR_SECRET of its own if set, and SESSION_SECRET from
 // the environment or generated once and kept beside the database (so a single box needs no setup).

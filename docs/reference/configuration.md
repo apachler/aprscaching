@@ -4,6 +4,13 @@ Every setting is an environment variable. The **gateway** reads its configuratio
 environment (Cloudflare `wrangler.toml` vars / secrets, or the process environment for the Node and Bun
 servers). The **ingest box** and the **web build** have their own separate variable namespaces.
 
+Every setting has a type: a whole number, a number, one of a fixed set of values, a list, JSON, a URL or
+free text. A set value that does not fit its type stops the Node and Bun servers and the ingest box from
+starting. The Worker reports it in **Instance admin → Setup**.
+
+<!-- The key tables below are generated from the configuration schema (packages/shared/src/config.ts,
+configkeys.ts, configdocs.ts): edit them there and run `node tools/config/generate.mjs`. -->
+
 !!! warning "Secrets stay in the environment"
     `INGEST_SECRET`, `OPERATOR_SECRET`, `SESSION_SECRET`, `FED_PRIVATE_KEY`, `ADMIN_CALLSIGNS`,
     `FED_SUBMIT_SECRET`, and `FED_RELAY_SECRET` are
@@ -21,6 +28,7 @@ servers). The **ingest box** and the **web build** have their own separate varia
 
 ## Gateway — core & instance
 
+<!-- config-table:gateway-core -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `INGEST_SECRET` | The ingest-plane credential (`x-ingest-secret`): posting packets to `/ingest`, draining the outbox, BBS delivery and the FBB forwarding pool, the NET/ROM node mirror, heard federation frames, the catalog importer, finds logged over APRS, and remote-box polling and pairing. It authorises nothing operator-level and never signs a session. **Required** — the Node/Bun servers refuse to boot while it is unset or `change-me` | *(required)* |
@@ -42,24 +50,36 @@ servers). The **ingest box** and the **web build** have their own separate varia
 | `OPERATOR_NAME` / `OPERATOR_ADDRESS` / `OPERATOR_EMAIL` | Operator identity for the per-instance `/imprint` + `/privacy` pages ("," separates address lines). A public instance **must** set these — until then both pages render a visible not-configured warning | — |
 | `BBS_CALL` | Relay callsign personal mail is delivered from, and the service call radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to | `APRSCG` |
 | `RADIO_REPLIES` | `1` sends a fixed text reply to each radio command; the protocol ack and the `HELP` reply go out regardless. Answers go back through the ingest box that heard the message when it can transmit (`BOX_ID`, `BOX_TX=1`, and a TNC or `MESHCOM_TX=1`); otherwise APRS answers go through the box's APRS-IS uplink (`APRSIS_SERVICE_CALL`) | off |
+<!-- /config-table -->
 
-Node/Bun servers also read plain runtime knobs that are not part of the gateway config object: `PORT`
-(`8787`), `DB_PATH`, `MIGRATIONS_DIR` (`db/migrations`), `MEDIA_DIR`, and `FED_SYNC_INTERVAL_MS` (`300000`;
-`0` disables scheduled peer sync). The Node server also reads `WEB_DIST`: the built web app
-(`apps/web/dist`), which it then serves on the same origin as the API, for a box with no reverse proxy in front.
+The Node and Bun servers also read plain runtime knobs that are not part of the gateway config object:
+
+<!-- config-table:gateway-server -->
+| Variable | Purpose | Default |
+|---|---|---|
+| `PORT` | Port the server listens on | `8787` |
+| `DB_PATH` | The SQLite database file | `data/aprscaching.db` beside the server |
+| `MIGRATIONS_DIR` | Where the schema migrations are read from | `db/migrations` of the checkout |
+| `MEDIA_DIR` | Where cache media is stored | `data/media` beside the server |
+| `FED_SYNC_INTERVAL_MS` | Milliseconds between scheduled peer syncs; `0` disables them | `300000` |
+| `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front | — |
+<!-- /config-table -->
 
 The Node server can also listen for https itself, beside its plain port, for a station whose visitors reach
 it on a Wi-Fi hotspot with no proxy in front. Off unless `HTTPS_PORT` is set; the Bun server and the desktop
 app do not read these.
 
+<!-- config-table:gateway-https -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `HTTPS_PORT` | Port of the https listener. It runs the same gateway, web app and live socket as the plain port, and the links it builds from a request say `https`. With it set, the plain port answers a page load from another device (a `GET` that accepts HTML, for a web-app route) with a `302` to the same host on `HTTPS_PORT`; loopback requests, the API, `/auth`, `/ingest`, `/federation`, `/ws`, a request a declared proxy (`TRUST_PROXY=1`) carried over https, and `/pocket-ca.crt` are served where they arrive. An operator sign-in link may then name `https://<private IPv4 address>:<HTTPS_PORT>` (see `OPERATOR_LINKS_FOR_ANY_CALL`). The server refuses to boot when it is set without `TLS_CERT` and `TLS_KEY` | off |
 | `TLS_CERT` / `TLS_KEY` | PEM certificate (with any intermediate chain) and private key for `HTTPS_PORT`. `SIGHUP` reloads both without a restart — a certificate re-issued for a new hotspot address takes effect for new connections, and a file that fails to load keeps the previous one | — |
 | `TLS_CA_CERT` | A CA certificate served read-only at `/pocket-ca.crt` (`application/x-x509-ca-cert`) on both ports, so a visitor can download and install the station's CA before trusting it. Only that fixed path reads it; unset ⇒ the path is a `404` | — |
+<!-- /config-table -->
 
 ## Gateway — verification & retention
 
+<!-- config-table:gateway-verification -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `FIRST_PARTY_SITES` | Allowlist of receiving-site callsigns you operate and attest — the only Tier-A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way | — |
@@ -79,9 +99,11 @@ app do not read these.
 | `POS_MIN_MOVE_M` | Metres a station must move since its last stored fix before the next fix is stored. Every fix of a protected station is stored regardless: a call an account holds or has verified (any SSID), a registered station, a call with a find open (a find logged or radio command sent in the verification window, or a radio command pending), the station of a living cache — and so is every fix heard directly on RF (a TNC or MeshCom port). A fix that is not stored still reaches the live map, watch alerts and rendezvous. See [Cost on D1](cloudflare-costs.md#cost-on-d1). `0` stores every fix | `25` |
 | `POS_MIN_INTERVAL_S` | Seconds after a station's last stored fix at which its next fix is stored even if it has not moved. The station list and the TAK/CoT feed allow for it, since a stationary station's last-heard time refreshes once per interval. `0` stores every fix | `600` |
 | `D1_DAILY_WRITE_BUDGET` | Rows a day the gateway may write before it sheds low-value writes, counted from 00:00 UTC. From 80 % the raw packet log pauses and a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6; from 100 % only protected stations' fixes, RF hearings, finds, radio commands, messages to or from a protected call, account and federation data are stored, and everything else reaches the live map without being saved. The sysop gets one banner and one digest line per threshold per day. Workers Free: `90000`. `0` turns it off. See [Write budget](cloudflare-costs.md#write-budget) | Worker: `1500000`; Node/Bun: off |
+<!-- /config-table -->
 
 ## Gateway — federation
 
+<!-- config-table:gateway-federation -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `FED_PRIVATE_KEY` | Ed25519 signing key (base64 JSON) — if set, feeds are signed | — |
@@ -98,9 +120,11 @@ app do not read these.
 | `FED_SUBMIT_INSTANCES` | Hub allowlist of submitter instances | any non-self |
 | `FED_HUB_URL` | Spoke: a reachable hub to push signed records to | — |
 | `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key | — |
+<!-- /config-table -->
 
 ## Gateway — read API, spots, email/push
 
+<!-- config-table:gateway-api -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `API_RATE_WINDOW_SEC` / `API_RATE_ANON` / `API_RATE_KEYED` | Public read-API rate limits | `60` / `60` / `600` |
@@ -113,17 +137,20 @@ app do not read these.
 | `BASEMAP_STYLE` | Basemap of the embeddable map widget (`/embed`): a MapLibre style URL, or `offline` for the self-contained grid, which loads nothing from outside the instance. The widget's content-security policy lets it fetch only from this gateway and the style's origin. A value that is neither `offline` nor an http(s) URL counts as `offline`. The web app's own basemap is the build-time `VITE_BASEMAP` / `VITE_BASEMAP_STYLE` | OpenFreeMap `liberty` |
 | `BASEMAP_HOSTS` | Extra origins the `BASEMAP_STYLE` style loads tiles, glyphs or sprites from, comma-separated (`https://tiles.example.net,https://fonts.example.net`), for a style that spreads them over several hosts | — |
 | `SUPPORT_LINKS` | Donation links surfaced on `/support` (recognition only), as a JSON array in display order: `[{"label":"Liberapay","url":"https://liberapay.com/…"}]`. Entries need a label and an http(s) URL | — |
+<!-- /config-table -->
 
 ## Licence-register import
 
 Read by `tools/licence/import.mjs` on the operator's machine, not by the gateway. See
 [Licence registers](licence-sources.md).
 
+<!-- config-table:licence -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `LICENCE_SOURCES` | Registers to import when no `--source` is given, comma-separated: `fcc`, `ised`, `acma`, `at`, `de` (or `all`) | — |
 | `BASE` | Gateway to import into | `http://127.0.0.1:8787` |
 | `OPERATOR_SECRET` | The gateway's operator secret; authorises the import (an import rewrites instance-wide data) | — |
+<!-- /config-table -->
 
 ## Ingest box
 
@@ -132,6 +159,7 @@ only when its variable is present.
 
 **Core / APRS-IS feed**
 
+<!-- config-table:ingest-core -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `INGEST_URL` | Gateway ingest endpoint to POST batches to | `http://127.0.0.1:8787/ingest` |
@@ -140,9 +168,11 @@ only when its variable is present.
 | `INGEST_SPOOL_MAX` | Undelivered-packet spool bound (drop-oldest) during a gateway outage | `5000` |
 | `APRSIS_HOST` / `APRSIS_PORT` | APRS-IS server | `rotate.aprs2.net` / `14580` |
 | `APRSIS_CALLSIGN` / `APRSIS_PASSCODE` / `APRSIS_FILTER` | IS login + server-side filter | `N0CALL` / `-1` / `r/47.07/15.42/300` |
+<!-- /config-table -->
 
 **RF transports** — full details and semantics in [RF ingest & transports](../operate/rf-ingest.md).
 
+<!-- config-table:ingest-transports -->
 | Subsystem | Variables |
 |---|---|
 | KISS TNC (gates digi/node/BBS/IGate) | `KISS_TNC_HOST`, `KISS_TNC_PORT` (`8001`) |
@@ -159,6 +189,7 @@ only when its variable is present.
 | Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway. Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station |
 | Remote control (Shack → Remote box) | `BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../operate/rf-regulatory.md#transmit-pacing) |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
+<!-- /config-table -->
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the
 top of the checkout. Under Docker, `deploy/.env` reaches the container through the compose file; under
@@ -171,17 +202,20 @@ The single-file desktop build (`deploy/desktop/`) runs the gateway and the web a
 `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` on first run into the data directory unless the
 environment sets them.
 
+<!-- config-table:desktop -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `PORT` | Local port for the app | `8787` |
 | `HOST` | Address to listen on; `0.0.0.0` or a LAN address serves the local network | `127.0.0.1` |
 | `DATA_DIR` | Where the database and media live | `%APPDATA%\aprscaching` · `~/Library/Application Support/aprscaching` · `$XDG_DATA_HOME/aprscaching` (`~/.local/share/aprscaching`) |
 | `WEB_DIST` / `MIGRATIONS_DIR` | Serve the web app / apply migrations from disk instead of the copies built into the binary | built in |
+<!-- /config-table -->
 
 ## Web build
 
 Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 
+<!-- config-table:web -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `VITE_API_BASE` | Gateway base URL. Set it whenever the API lives on another host (Pages + a Worker). A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost | dev server: `http://127.0.0.1:8787` · production build: same origin |
@@ -190,11 +224,13 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 | `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOX Sentinel-2 cloudless 2016 (CC-BY 4.0) |
 | `VITE_TOOL_REGISTRY` | Signed tool-registry URL | `/tools/registry.json` |
 | `VITE_TOOL_REGISTRY_AUTHORITY` | Pinned Ed25519 authority key the registry is verified against | (built-in) |
+<!-- /config-table -->
 
 ## Deploy scripts
 
 Read by the scripts under `deploy/`, not by the gateway or the ingest box. They live in the same `.env`.
 
+<!-- config-table:deploy -->
 | Variable | Read by | Purpose | Default |
 |---|---|---|---|
 | `DOMAIN` | `deploy/Caddyfile` | What Caddy serves: a hostname gets automatic Let's Encrypt TLS, `:80` serves plain HTTP (local or off-grid). `deploy/setup.sh` writes it | — |
@@ -205,10 +241,12 @@ Read by the scripts under `deploy/`, not by the gateway or the ingest box. They 
 | `BACKUP_RETENTION_DAYS` | `deploy/backup.sh` | Snapshots in `BACKUP_DIR` older than this many days are deleted; with `BACKUP_PRUNE_BUCKET=1`, bucket snapshots too | `30` |
 | `BACKUP_PRUNE_BUCKET` | `deploy/backup.sh` | `1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../operate/deployment.md#backups)) | off |
 | `CF_API_TOKEN` / `CF_ZONE_ID` | `deploy/cloudflare/cache-rules.sh` | Cloudflare API token and zone for the CDN cache rules when Self-host runs behind Cloudflare | required by that script |
+<!-- /config-table -->
 
 `deploy/backup.sh` uses the first destination that is set, in the order above. The Pocket extras read
 these from `~/.aprscaching/.env`:
 
+<!-- config-table:pocket -->
 | Variable | Purpose | Default |
 |---|---|---|
 | `POCKET_ALERTS` | `1`: vibrate on a new direct message to your call (MeshCom or APRS) | off |
@@ -216,3 +254,4 @@ these from `~/.aprscaching/.env`:
 | `POCKET_ALERTS_SPEAK_BODY` | `1`: speak message bodies too — they may be private, and a phone speaks aloud | off |
 | `POCKET_BATTERY_LOW` | Below this battery percentage, on battery, the station switches to a saver profile (APRS-IS narrowed to your own call, shorter raw-packet retention); `0` turns it off | `20` |
 | `POCKET_SYNC_MOBILE` | `1`: `extras/sync-now.sh` may sync over mobile data, not only Wi-Fi | off |
+<!-- /config-table -->
