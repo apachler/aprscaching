@@ -74,7 +74,7 @@ async function relaySigningBytes(
 }
 
 /** Headers that authenticate a relay request as this instance (its federation key signs it). */
-async function signRelayRequest(
+export async function signRelayRequest(
   env: Env,
   method: string,
   url: string,
@@ -104,7 +104,12 @@ async function signRelayRequest(
  * Is this request signed by `instance`'s federation key? The hub must already hold that key (the
  * spoke is a known peer: pulled, in the registry, or registered by a push-to-hub submission).
  */
-async function spokeAuth(req: Request, env: Env, instance: string, body: Uint8Array<ArrayBuffer>): Promise<boolean> {
+export async function spokeAuth(
+  req: Request,
+  env: Env,
+  instance: string,
+  body: Uint8Array<ArrayBuffer>,
+): Promise<boolean> {
   if (!instance || req.headers.get("x-relay-instance")?.toLowerCase() !== instance) return false;
   const at = Number(req.headers.get("x-relay-at"));
   const sig = req.headers.get("x-relay-sig") ?? "";

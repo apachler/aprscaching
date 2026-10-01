@@ -22,6 +22,8 @@
     "./gossip": "./src/gossip.ts",
     "./keys": "./src/keys.ts",
     "./relay": "./src/relay.ts",
+    "./fedcatchup": "./src/fedcatchup.ts",
+    "./fedpush": "./src/fedpush.ts",
     "./fetchguard": "./src/fetchguard.ts",
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
     "./radiolog": "./src/radiolog.ts",

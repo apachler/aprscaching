@@ -109,7 +109,8 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/federation/sync` | Pull from all peers; an optional JSON body `{types?, maxPages?}` narrows it to some feeds (deletes always come too) and a page cap. Answers the counts and the bytes read | sysop or x-operator-secret |
 | POST | `/federation/corroborate` | Cross-instance corroboration query | public (rate-limited; `x-fed-secret` if configured) |
 | POST | `/federation/notify` | Gossip "come pull" ping | public |
-| POST | `/federation/submit` | Hub accepts a spoke's signed records | x-fed-secret (`FED_SUBMIT_SECRET`) |
+| POST | `/federation/submit` | Hub accepts a spoke's signed records; the answer's `mark` (`{type, cursor, id?}`) is where that feed of the spoke now stands here | x-fed-secret (`FED_SUBMIT_SECRET`) |
+| GET | `/federation/submit/marks` | Where each of the calling spoke's feeds stands here, `{marks: {type: {cursor, id?}}}`: the spoke resumes from it after a restart or an outage | x-fed-secret and spoke-signed |
 | POST | `/federation/frames` | Connected-mode delivery of a CBOR sync page (AX.25/NET-ROM binding); frames are signature-verified | x-ingest-secret, sysop or x-operator-secret |
 | GET · POST | `/federation/beacon` | Beacon-tier presence: serve our signed single-frame record · apply a heard one (trust-gated) | public · x-ingest-secret, sysop or x-operator-secret |
 | POST | `/federation/bbs/enqueue` | Queue federation records for the FBB store-and-forward carrier | sysop or x-operator-secret |
@@ -142,6 +143,8 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) | sysop |
 | POST | `/api/admin/boxes/codes` | A one-time box enrollment code `{label?, callsign?, ttlMin?}` → `{code, expiresAt}`, shown once | sysop or x-operator-secret |
 | GET | `/api/admin/boxes` | Enrolled boxes (who, when, last seen, revoked) and the codes still open | sysop or x-operator-secret |
+| GET | `/api/admin/federation/sync` | Pushing to the hub (last push, records waiting per feed, offline since) and, on a hub, each spoke's last submission with a stale flag | sysop or x-operator-secret |
+| POST | `/api/admin/federation/sync` | Sync now: pull from the peers and push to the hub in the background (`202`) | sysop or x-operator-secret |
 | POST | `/api/admin/boxes/:id/revoke` | Revoke a box's key at once | sysop or x-operator-secret |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only), and the D1 write budget | sysop or x-operator-secret |
 | GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most) | sysop or x-operator-secret |

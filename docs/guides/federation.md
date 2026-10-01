@@ -193,6 +193,14 @@ A peer that can't be dialled inbound can still contribute:
   instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A spoke that
   rotated its key sends its rotation records with each push (`FED_ROTATIONS`), so the hub follows the
   rotation from the key it pinned. A submission body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
+  The spoke keeps how far it has pushed each feed in its database and advances it only when the hub
+  accepts a page, so a restart resumes instead of sending its history again. The hub records where each
+  spoke's feeds stand and returns it; a spoke reads it when it starts and after an outage, so a backup
+  restored on either side resumes from what the hub holds. After a network failure a Node or Bun spoke
+  probes the hub's `/health?live` (30 s, backing off to 10 minutes) and pushes the moment it answers; while
+  more pages wait than one cycle sends, the next cycle follows a few seconds later. **Instance admin →
+  Federation** shows the last push, the records waiting and since when the hub is unreachable, with **Sync
+  now**; on a hub it lists each spoke's last submission, stale after `FED_SPOKE_STALE_HOURS`.
 - **Rendezvous relay.** A poll-based relay lets a firewalled peer's feed be served through a hub with no
   tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). The secret is what
   admits a requester — enqueueing and reading results carry no signature. A requester gets a

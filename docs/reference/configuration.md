@@ -118,7 +118,8 @@ app do not read these.
 | `FED_ALLOW_PRIVATE` | `1`: federation may fetch private and loopback addresses (Node/Bun; configured `FED_PEERS`/`FED_HUB_URL` are always allowed) | off |
 | `FED_SUBMIT_SECRET` | **Hub:** enables `POST /federation/submit`. **Spoke:** the push secret. Records are signed either way; the secret decides who may register a new spoke's key on the hub | — |
 | `FED_SUBMIT_INSTANCES` | Hub allowlist of submitter instances | any non-self |
-| `FED_HUB_URL` | Spoke: a reachable hub to push signed records to | — |
+| `FED_HUB_URL` | Spoke: a reachable hub to push signed records to. Each feed resumes where the hub's marks say it stands; after a network failure the spoke probes the hub (30 s backing off to 10 min) and pushes as soon as it answers | — |
+| `FED_SPOKE_STALE_HOURS` | Hub: hours without a submission before Instance admin shows a spoke as stale | 24 |
 | `FED_RELAY_SECRET` | Enables the rendezvous relay and gates enqueueing and results — the requester side, which carries no signature; spokes lease and answer by signing with their own key | — |
 <!-- /config-table -->
 

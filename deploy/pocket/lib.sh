@@ -110,6 +110,32 @@ station_status() {
     "$(gateway_base)/api/admin/station-status${1:+?since=$1}" 2>/dev/null
 }
 
+# The local gateway's federation sync endpoint (/api/admin/federation/sync), with the OPERATOR_SECRET from
+# the .env: GET reads the state, `fed_sync POST` starts a sync. Empty output when the gateway does not answer.
+fed_sync() {
+  local secret
+  secret="$(env_get OPERATOR_SECRET)"
+  [ -n "$secret" ] || return 1
+  curl -fsS --max-time 5 -X "${1:-GET}" -H @<(printf 'x-operator-secret: %s\n' "$secret") \
+    "$(gateway_base)/api/admin/federation/sync" 2>/dev/null
+}
+# The sync state as lines for status.sh and sync.sh: the hub push, then any spokes pushing here.
+fed_sync_lines() {
+  fed_sync | node -e '
+    let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      let j; try { j = JSON.parse(s); } catch { return; }
+      const ago = (t) => { const m = Math.round((Date.now() / 1000 - t) / 60); return m < 120 ? m + " min ago" : Math.round(m / 60) + " h ago"; };
+      const h = j.hub;
+      if (h) {
+        const wait = Object.entries(h.waiting).filter(([, n]) => n > 0).map(([t, n]) => (n >= h.waitingCap ? n + "+" : n) + " " + t);
+        console.log("hub " + h.url + ": " + (h.offlineSince ? "OFFLINE since " + ago(h.offlineSince) + ", retrying" : h.lastOkAt ? "last push " + ago(h.lastOkAt) : "not pushed yet"));
+        console.log("waiting to push: " + (wait.length ? wait.join(", ") : "nothing"));
+        if (h.lastError && !h.offlineSince) console.log("last error: " + h.lastError);
+      }
+      for (const sp of j.spokes) console.log("spoke " + sp.instance + ": last submit " + ago(sp.lastSubmitAt) + (sp.stale ? " (STALE)" : ""));
+    });'
+}
+
 # ---- networks ----------------------------------------------------------------------------------------
 # One field of a JSON object on stdin (node is always there; jq may not be).
 json_field() {

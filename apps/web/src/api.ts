@@ -709,6 +709,35 @@ export interface FedPeer {
 export function listFederationPeers(): Promise<{ peers: FedPeer[] }> {
   return call(`/federation/peers`);
 }
+
+/** How pushing to the hub stands (a spoke) and when each spoke last submitted (a hub). */
+export interface FederationSync {
+  hub: {
+    url: string;
+    lastAttemptAt: number | null;
+    lastOkAt: number | null;
+    lastError: string | null;
+    offlineSince: number | null;
+    /** Records past the push cursor per feed, counted up to `waitingCap`. */
+    waiting: Record<string, number>;
+    waitingCap: number;
+  } | null;
+  spokes: {
+    instance: string;
+    trust: string | null;
+    lastSubmitAt: number;
+    newestCacheChange: number | null;
+    stale: boolean;
+  }[];
+  staleHours: number;
+}
+export function getFederationSync(): Promise<FederationSync> {
+  return call(`/api/admin/federation/sync`);
+}
+/** Operator: pull from the peers and push to the hub now (runs in the background). */
+export function syncFederationNow(): Promise<{ ok: boolean; started: boolean }> {
+  return call(`/api/admin/federation/sync`, { method: "POST" });
+}
 /** Operator: promote/demote/quarantine a federation peer (sysop-gated). */
 export function setPeerTrust(url: string, trust: "trusted" | "unvetted" | "blocked"): Promise<{ ok: boolean }> {
   return call(`/federation/peers/trust`, { method: "POST", body: JSON.stringify({ url, trust }) });

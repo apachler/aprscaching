@@ -2,6 +2,8 @@
 import { useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import {
+  getFederationSync,
+  syncFederationNow,
   listFederationPeers,
   setPeerTrust,
   add44netPeer,
@@ -1034,6 +1036,7 @@ function FederationAdmin() {
   };
   return (
     <>
+      <FederationSyncStatus onSynced={refresh} />
       <Fed44netWizard onAdmitted={refresh} />
       {list.error ? (
         <ErrorState onRetry={refresh}>Couldn't load the peer list.</ErrorState>
@@ -1078,6 +1081,90 @@ function FederationAdmin() {
         ))}
       </ul>
     </>
+  );
+}
+
+const FEED_LABEL: Record<string, string> = { tombstone: "deletions", cache: "caches", find: "finds", key: "keys" };
+
+/**
+ * Sync state at a glance. On a spoke: the hub, the last push, the records still to push and, during an
+ * outage, since when; Sync now pulls and pushes at once. On a hub: each spoke's last submission, stale
+ * after the configured hours. Display only.
+ */
+function FederationSyncStatus(props: { onSynced: () => void }) {
+  const fmt = useFmt();
+  const toast = useToast();
+  const st = useLoad(getFederationSync, []);
+  const [busy, setBusy] = useState(false);
+  const s = st.data;
+  if (st.error) return <ErrorState onRetry={st.reload}>Couldn't load the sync state.</ErrorState>;
+  if (!s || (!s.hub && s.spokes.length === 0)) return null;
+  const syncNow = async () => {
+    setBusy(true);
+    try {
+      await syncFederationNow();
+      toast("Sync started");
+      // the sync runs in the background; read its outcome a little later
+      setTimeout(() => {
+        st.reload();
+        props.onSynced();
+        setBusy(false);
+      }, 4000);
+    } catch (e) {
+      toast((e as Error).message);
+      setBusy(false);
+    }
+  };
+  const hub = s.hub;
+  const waiting = hub
+    ? Object.entries(hub.waiting)
+        .filter(([, n]) => n > 0)
+        .map(([t, n]) => `${n >= hub.waitingCap ? `${n}+` : n} ${FEED_LABEL[t] ?? t}`)
+    : [];
+  return (
+    <div className="fed-sync">
+      {hub && (
+        <div className="fed-sync-hub">
+          <div className="row">
+            <Badge kind={hub.offlineSince ? "dnf" : hub.lastOkAt ? "found" : "warn"}>
+              {hub.offlineSince ? "offline" : hub.lastOkAt ? "ok" : "new"}
+            </Badge>
+            <span>
+              Hub <span className="mono">{hub.url}</span>
+            </span>
+          </div>
+          <div className="comment">
+            {hub.lastOkAt ? `last push ${fmt.ago(hub.lastOkAt)}` : "not pushed yet"}
+            {" · "}
+            {waiting.length ? `waiting: ${waiting.join(", ")}` : "nothing waiting"}
+            {hub.offlineSince && ` · offline since ${fmt.dateTime(hub.offlineSince)}, retrying`}
+          </div>
+          {hub.lastError && !hub.offlineSince && <div className="comment error">{hub.lastError}</div>}
+        </div>
+      )}
+      {s.spokes.length > 0 && (
+        <>
+          <h4>Spokes pushing here</h4>
+          <ul className="logs">
+            {s.spokes.map((sp) => (
+              <li key={sp.instance}>
+                <Badge kind={sp.stale ? "warn" : "found"}>{sp.stale ? "stale" : "ok"}</Badge>
+                <span className="mono">{sp.instance}</span>
+                <span className="muted"> · {sp.trust ?? "unknown"}</span>
+                <div className="comment">
+                  last submit {fmt.ago(sp.lastSubmitAt)}
+                  {sp.newestCacheChange ? ` · newest cache change ${fmt.dateTime(sp.newestCacheChange)}` : ""}
+                  {sp.stale && ` · nothing for over ${s.staleHours} h`}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <Button onClick={() => void syncNow()} disabled={busy}>
+        {busy ? "Syncing…" : "Sync now"}
+      </Button>
+    </div>
   );
 }
 

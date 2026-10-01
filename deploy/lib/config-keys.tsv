@@ -25,6 +25,7 @@ FED_CORROBORATION_QUORUM	int	gateway	2		0	0	selfhost,cloudflare,baremetal,pocket
 FED_AUTO_PROMOTE	int	gateway	0		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Confirmed corroborations that promote an unvetted peer to trusted (0 = off)
 FED_CORROBORATION_SECRET	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	Shared secret corroboration questions must carry (x-fed-secret)
 FED_CORROBORATION_REQUIRE_KNOWN	enum	gateway		0|1	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 answers corroboration questions only from known, non-blocked peers
+FED_SPOKE_STALE_HOURS	number	gateway	24		0	0	selfhost,cloudflare,baremetal,pocket,desktop	On a hub, hours without a submission before a spoke shows as stale
 FED_REVEAL_IGATE	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 includes the exact IGate in corroboration answers
 FED_SYNC_REGION	string	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	S,W,N,E box in decimal degrees: pull only the caches inside it from peers
 FED_ENDPOINTS	json	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	JSON array of this instance's transport endpoints {transport,address,priority}

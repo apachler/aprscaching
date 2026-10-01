@@ -5,7 +5,8 @@
  * commit, and the scheduled jobs.
  */
 import { execSync } from "node:child_process";
-import { runScheduled, runFrequentSync } from "@aprscaching/gateway/app";
+import { runScheduled } from "@aprscaching/gateway/app";
+import { catchUp } from "@aprscaching/gateway/fedcatchup";
 import { operatorOrigins } from "@aprscaching/gateway/fetchguard";
 import type { Env } from "@aprscaching/gateway/env";
 import type { LiveEnvelope } from "@aprscaching/gateway/live";
@@ -67,8 +68,14 @@ export function startSchedules(env: Env, fedSyncMs: number): void {
   const nightly = () => void runScheduled(env).catch((e) => console.error("scheduled:", e));
   nightly();
   setInterval(nightly, 24 * 3600 * 1000);
-  if ((env.FED_PEERS || env.FED_HUB_URL) && fedSyncMs > 0)
-    setInterval(() => void runFrequentSync(env).catch((e) => console.error("federation sync:", e)), fedSyncMs);
+  if ((env.FED_PEERS || env.FED_HUB_URL) && fedSyncMs > 0) {
+    // between intervals: probe an unreachable hub and catch up the moment it answers, and run again soon
+    // while a backlog remains (fedcatchup.ts)
+    const loop = catchUp(env);
+    const frequent = () => void loop.run().catch((e) => console.error("federation sync:", e));
+    frequent();
+    setInterval(frequent, fedSyncMs);
+  }
 }
 
 /** FED_SYNC_INTERVAL_MS: the frequent federation cadence (default 5 min; 0 disables it). */

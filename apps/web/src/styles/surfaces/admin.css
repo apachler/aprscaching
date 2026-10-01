@@ -12,6 +12,21 @@
     padding-left: var(--sp-3);
     border-left: 1px solid var(--hair);
   }
+  /* federation sync state: the hub line, the spokes, and Sync now */
+  .fed-sync {
+    display: grid;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--hair);
+  }
+  .fed-sync .comment {
+    font-size: var(--fs-sm);
+  }
+  .fed-sync > button {
+    justify-self: start;
+    min-height: var(--hit);
+  }
   /* 44net onboarding wizard (Instance admin → Federation): add-a-peer row, the no-DNSSEC confirm
    card (warn-tinted via color-mix — no hand-maintained hex), and the be-reachable disclosure. */
   .fed44net {

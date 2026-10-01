@@ -28,10 +28,10 @@ import { decodeFedFrame } from "@aprscaching/shared";
 import { type TrustLevel, ours } from "./fedpeers.js";
 import { applyFrames } from "./fedapply.js";
 import { MAX_PAGES } from "./fedpull.js";
+import { signRelayRequest, spokeAuth } from "./relay.js";
 
 /** The feeds a spoke pushes — tombstones first, matching the sync ordering so a delete suppresses re-mirror. */
 const PUSH_FEEDS: FeedServeDef[] = [TOMBSTONE_FEED, CACHE_FEED, FIND_FEED, KEY_FEED];
-const PUSH_CURSORS = new Map<string, { cursor: number; id?: number }>(); // "hub|type" -> last pushed position (in-memory; re-push on restart is idempotent)
 /** Largest submission body the hub reads: a full page of frames fits well inside it. */
 const MAX_SUBMIT_BYTES = 4 * 1024 * 1024;
 
@@ -82,7 +82,60 @@ export async function handleFederationSubmit(req: Request, env: Env): Promise<Re
     }
   }
   if (!submitKey) return json({ ok: false, error: "no verifiable frames" }, { status: 400 });
-  return submitFrames(env, page.instance, submitKey, page.frames, rotations);
+  return submitFrames(env, page.instance, submitKey, page.frames, rotations, page);
+}
+
+/** A spoke's position in one feed: its cursor and, mid-pass in a composite feed, the id tie-breaker. */
+interface PushMark {
+  cursor: number;
+  id?: number;
+}
+
+/** The feed a page carries: the record kind of its first decodable frame (a spoke pushes one feed per page). */
+function pageFeed(frames: Uint8Array[]): string | null {
+  for (const fb of frames) {
+    try {
+      return decodeFedFrame(fb).record.kind;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function recordMark(env: Env, instance: string, type: string, mark: PushMark): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO fed_submit_marks (instance, type, cursor, cursor_id, submitted_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (instance, type) DO UPDATE SET cursor = excluded.cursor, cursor_id = excluded.cursor_id,
+       submitted_at = excluded.submitted_at`,
+  )
+    .bind(instance, type, mark.cursor, mark.id ?? null, nowS())
+    .run();
+}
+
+/**
+ * HUB endpoint: where each of the calling spoke's feeds stands here — its cursor after the last page this
+ * hub admitted. A spoke asks when it starts and when it comes back online, and resumes from these marks:
+ * restored from a backup it skips what the hub has; after the hub was restored it re-pushes what the hub
+ * lost. Needs the submit secret and a request signed with the spoke's federation key, so a spoke reads
+ * only its own marks.
+ */
+export async function handleSubmitMarks(req: Request, env: Env): Promise<Response> {
+  const secret = env.FED_SUBMIT_SECRET;
+  if (!secret) return json({ ok: false, error: "submit disabled" }, { status: 403 });
+  if (!secretOk(req.headers.get("x-fed-secret"), secret))
+    return json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const instance = (req.headers.get("x-relay-instance") ?? "").toLowerCase();
+  if (!(await spokeAuth(req, env, instance, new Uint8Array(0))))
+    return json({ ok: false, error: "not signed by a spoke this hub knows" }, { status: 401 });
+  const rows = (
+    await env.DB.prepare("SELECT type, cursor, cursor_id FROM fed_submit_marks WHERE instance = ?")
+      .bind(instance)
+      .all<{ type: string; cursor: number; cursor_id: number | null }>()
+  ).results;
+  const marks: Record<string, PushMark> = {};
+  for (const r of rows) marks[r.type] = { cursor: r.cursor, ...(r.cursor_id != null && { id: r.cursor_id }) };
+  return json({ ok: true, instance, marks });
 }
 
 /**
@@ -96,6 +149,7 @@ async function submitFrames(
   publicKey: string,
   frames: Uint8Array[],
   rotations: RotationRecord[] = [],
+  page?: { nextCursor: number; nextId?: number },
 ): Promise<Response> {
   if (instance === ours(env)) return json({ ok: false, error: "cannot submit as this instance" }, { status: 400 });
   const allow = (env.FED_SUBMIT_INSTANCES ?? "")
@@ -167,50 +221,187 @@ async function submitFrames(
     keysFor: () => Promise.resolve([publicKey]),
     mirrorOnly: true,
   });
-  return json({ ok: true, applied, rejected });
+  // How far this spoke's feed now stands here, returned so the spoke resumes from what the hub holds.
+  const type = page ? pageFeed(frames) : null;
+  let mark: (PushMark & { type: string }) | undefined;
+  if (page && type) {
+    mark = { type, cursor: page.nextCursor, ...(page.nextId !== undefined && { id: page.nextId }) };
+    await recordMark(env, instance, type, mark);
+  }
+  return json({ ok: true, applied, rejected, ...(mark && { mark }) });
+}
+
+/** How one push cycle ended: what it sent, whether more waits, and why it stopped early. */
+export interface PushResult {
+  pushed: number;
+  /** A feed still had pages past this cycle's MAX_PAGES: run again soon rather than at the next interval. */
+  backlog: boolean;
+  /** `network`: the hub did not answer (offline, or a gateway in front of it reporting it down). */
+  failure?: "network" | "refused";
+}
+
+/** Hubs whose marks this process has read since it started; reconnecting reads them again. */
+const MARKS_READ = new Set<string>();
+
+const loadCursor = async (env: Env, hub: string, type: string): Promise<PushMark> => {
+  const r = await env.DB.prepare("SELECT cursor, cursor_id FROM fed_push_cursors WHERE hub = ? AND type = ?")
+    .bind(hub, type)
+    .first<{ cursor: number; cursor_id: number | null }>();
+  return r ? { cursor: r.cursor, ...(r.cursor_id != null && { id: r.cursor_id }) } : { cursor: 0 };
+};
+const saveCursor = (env: Env, hub: string, type: string, m: PushMark) =>
+  env.DB.prepare(
+    `INSERT INTO fed_push_cursors (hub, type, cursor, cursor_id, updated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (hub, type) DO UPDATE SET cursor = excluded.cursor, cursor_id = excluded.cursor_id,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(hub, type, m.cursor, m.id ?? null, nowS())
+    .run();
+
+/** Record how a push cycle went, for the operator's view and the reconnect probe. */
+async function recordHubStatus(env: Env, hub: string, failure: PushResult["failure"], error?: string): Promise<void> {
+  const t = nowS();
+  if (!failure)
+    await env.DB.prepare(
+      `INSERT INTO fed_hub_status (hub, last_attempt_at, last_ok_at, last_error, offline_since) VALUES (?, ?, ?, NULL, NULL)
+       ON CONFLICT (hub) DO UPDATE SET last_attempt_at = excluded.last_attempt_at, last_ok_at = excluded.last_ok_at,
+         last_error = NULL, offline_since = NULL`,
+    )
+      .bind(hub, t, t)
+      .run();
+  else
+    await env.DB.prepare(
+      `INSERT INTO fed_hub_status (hub, last_attempt_at, last_error, offline_since) VALUES (?, ?, ?, ?)
+       ON CONFLICT (hub) DO UPDATE SET last_attempt_at = excluded.last_attempt_at, last_error = excluded.last_error,
+         offline_since = CASE WHEN excluded.offline_since IS NULL THEN NULL
+                              ELSE COALESCE(fed_hub_status.offline_since, excluded.offline_since) END`,
+    )
+      .bind(hub, t, (error ?? failure).slice(0, 300), failure === "network" ? t : null)
+      .run();
+}
+
+/** A hub answer that means the hub itself is unreachable (its proxy or tunnel reports it down). */
+const hubDown = (status: number) => status === 502 || status === 503 || status === 504;
+
+/**
+ * Take the hub's marks for our feeds as the cursors: they say what the hub actually holds, which after a
+ * backup restore on either side differs from our own cursors. A feed without a mark starts from 0, and a
+ * hub without the endpoint (404) keeps our cursors. Returns a failure when the hub could not be reached.
+ */
+async function readMarks(
+  env: Env,
+  hub: string,
+  secret: string,
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response>,
+): Promise<PushResult["failure"] | null> {
+  const url = `${hub}/federation/submit/marks`;
+  const signed = await signRelayRequest(env, "GET", url);
+  if (!signed) return null;
+  let res: Response;
+  try {
+    res = await fetchFn(url, { headers: { "x-fed-secret": secret, ...signed }, signal: AbortSignal.timeout(5000) });
+  } catch {
+    return "network";
+  }
+  if (hubDown(res.status)) return "network";
+  if (res.ok) {
+    const body = (await res.json().catch(() => null)) as { marks?: Record<string, PushMark> } | null;
+    if (body?.marks)
+      for (const def of PUSH_FEEDS) {
+        const m = body.marks[def.type];
+        // no mark: the hub holds nothing of this feed from us (it was restored, or never got it), so from 0
+        await saveCursor(env, hub, def.type, m && Number.isFinite(m.cursor) ? m : { cursor: 0 });
+      }
+  }
+  MARKS_READ.add(hub);
+  return null;
 }
 
 /**
  * SPOKE side: push our signed records to a configured hub (push-mode mirroring) when we can't be
- * pulled — a sync page of fedwire frames, the same signed bytes as every other carrier. Incremental
- * via in-memory cursors; idempotent (the hub upserts by global id), so a restart that re-pushes
- * from 0 is harmless. No-op unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
+ * pulled — a sync page of fedwire frames, the same signed bytes as every other carrier. Each feed resumes
+ * from its persisted cursor, which advances only after the hub's 2xx, to the mark the hub returns; the
+ * hub's marks are read once per process and again with `resync` (after an outage), so a restore on either
+ * side resumes from what the hub holds. Re-sending a page is harmless (the hub upserts by global id).
+ * Null unless FED_HUB_URL + FED_SUBMIT_SECRET + a signing key are present.
  */
 export async function pushToHub(
   env: Env,
   fetchFn: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fedFetch(env, u, i),
-): Promise<{ pushed: number } | null> {
+  opts: { resync?: boolean } = {},
+): Promise<PushResult | null> {
   const hub = env.FED_HUB_URL ? trimTrailingSlashes(env.FED_HUB_URL) : undefined;
   const secret = env.FED_SUBMIT_SECRET;
   if (!hub || !secret || !env.INSTANCE) return null;
+  const stop = async (r: PushResult, error?: string): Promise<PushResult> => {
+    await recordHubStatus(env, hub, r.failure, error);
+    return r;
+  };
+  if (opts.resync || !MARKS_READ.has(hub)) {
+    const failure = await readMarks(env, hub, secret, fetchFn);
+    if (failure) return stop({ pushed: 0, backlog: false, failure }, "the hub did not answer");
+  }
   let pushed = 0;
+  let backlog = false;
   for (const def of PUSH_FEEDS) {
-    const ckey = `${hub}|${def.type}`;
-    let { cursor, id } = PUSH_CURSORS.get(ckey) ?? { cursor: 0 };
-    for (let page = 0; page < MAX_PAGES; page++) {
+    let { cursor, id } = await loadCursor(env, hub, def.type);
+    for (let page = 0; ; page++) {
+      if (page === MAX_PAGES) {
+        backlog = true;
+        break;
+      }
       const built = await buildFedFrames(env, env.INSTANCE, def.type, cursor, 500, id);
       if (!built) return null; // no signing key — nothing verifiable to push
       if (!built.frames.length) break;
       const complete = built.frames.length < 500;
-      const res = await fetchFn(`${hub}/federation/submit`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/cbor",
-          "x-fed-secret": secret,
-          // our rotation records, so a hub that pinned an earlier key can follow the rotation
-          ...(env.FED_ROTATIONS ? { "x-fed-rotations": env.FED_ROTATIONS } : {}),
-        },
-        body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames, built.nextId) as BodyInit,
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok) return { pushed }; // stop; retry next cycle from the same cursor
+      let res: Response;
+      try {
+        res = await fetchFn(`${hub}/federation/submit`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/cbor",
+            "x-fed-secret": secret,
+            // our rotation records, so a hub that pinned an earlier key can follow the rotation
+            ...(env.FED_ROTATIONS ? { "x-fed-rotations": env.FED_ROTATIONS } : {}),
+          },
+          body: encodeFedSyncPage(env.INSTANCE, built.nextCursor, complete, built.frames, built.nextId) as BodyInit,
+          signal: AbortSignal.timeout(5000),
+        });
+      } catch (e) {
+        return stop({ pushed, backlog, failure: "network" }, (e as Error).message);
+      }
+      // stop; the cursor stays, so the next cycle sends this page again
+      if (!res.ok)
+        return stop(
+          { pushed, backlog, failure: hubDown(res.status) ? "network" : "refused" },
+          `hub answered ${res.status}`,
+        );
       // as on the pull side, the id tie-breaker is kept only while more pages of this pass remain
-      PUSH_CURSORS.set(ckey, { cursor: built.nextCursor, id: complete ? undefined : built.nextId });
+      const sent: PushMark = {
+        cursor: built.nextCursor,
+        ...(!complete && built.nextId !== undefined && { id: built.nextId }),
+      };
+      const answer = (await res.json().catch(() => null)) as { mark?: PushMark & { type?: string } } | null;
+      const mark = answer?.mark?.type === def.type && Number.isFinite(answer.mark.cursor) ? answer.mark : null;
+      const next: PushMark = mark
+        ? { cursor: mark.cursor, ...(mark.id != null && !complete && { id: mark.id }) }
+        : sent;
+      await saveCursor(env, hub, def.type, next);
       pushed += built.frames.length;
       if (complete || (built.nextCursor === cursor && built.nextId === id)) break;
-      cursor = built.nextCursor;
-      id = built.nextId;
+      cursor = next.cursor;
+      id = next.id;
     }
   }
-  return { pushed };
+  return stop({ pushed, backlog });
+}
+
+/** Records past the persisted push cursor, per feed, counted up to `cap` (more shows as the cap). */
+export async function pushBacklog(env: Env, hub: string, cap = 1000): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const def of PUSH_FEEDS) {
+    const { cursor, id } = await loadCursor(env, hub, def.type);
+    out[def.type] = (await def.selectRows(env, cursor, cap, def.composite ? id : undefined)).length;
+  }
+  return out;
 }
