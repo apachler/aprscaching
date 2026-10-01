@@ -2,8 +2,11 @@ name: DCO
 
 # Verify every commit in a PR carries a `Signed-off-by:` trailer (Developer Certificate of Origin).
 # Self-contained — no external action to trust. Contributors sign off with `git commit -s`.
+# The same job rejects coding-assistant attribution (co-author trailers, "Generated with" footers)
+# in commits and the PR description: the squash commit is built from both.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -38,3 +41,26 @@ jobs:
             exit 1
           fi
           echo "All commits signed off."
+      - name: No coding-assistant attribution
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          pattern='noreply@anthropic\.com|^Co-authored-by: Claude|Generated with \[?Claude Code'
+          found=0
+          for sha in $(git rev-list "$BASE..$HEAD"); do
+            if git show -s --format='%B' "$sha" | grep -qiE "$pattern"; then
+              echo "::error::Commit $sha carries coding-assistant attribution."
+              found=1
+            fi
+          done
+          if printf '%s\n' "$PR_BODY" | grep -qiE "$pattern"; then
+            echo "::error::The PR description carries coding-assistant attribution."
+            found=1
+          fi
+          if [ "$found" -ne 0 ]; then
+            echo "Remove the attribution lines: git rebase -i $BASE with reword, or edit the PR description."
+            exit 1
+          fi
+          echo "No coding-assistant attribution."

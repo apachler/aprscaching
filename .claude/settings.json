@@ -1,5 +1,5 @@
 {
-  "attribution": { "coAuthoredBy": false, "sessionUrl": false },
+  "attribution": { "commit": "", "pr": "", "sessionUrl": false },
   "hooks": {
     "SessionStart": [
       {
