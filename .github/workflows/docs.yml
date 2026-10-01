@@ -5,6 +5,7 @@ name: docs
 # issue templates point people at, so it has to be reachable without a git checkout.
 on:
   push:
+    branches: [main, dev]
     paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
   pull_request:
     paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
