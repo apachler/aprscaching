@@ -1,0 +1,57 @@
+name: release-verify
+# Makes a release verifiable. Once its other artifacts are attached, this adds the downloads an operator
+# starts from — the release as a git bundle (clone it, and the checkout updates like any other), the source
+# archive and the Pocket installer — then a SHA256SUMS over every asset and a signed build-provenance
+# attestation for each (Sigstore, keyless: the signature names this repository's workflow, so there is no
+# signing key to keep). Operators check them with `sha256sum -c` and `gh attestation verify`
+# (docs/operate/helpers.md, Verified downloads).
+#
+# release-please.yml calls it with the new tag after the OCI stack and the desktop binaries; it also runs
+# by hand for a tag.
+on:
+  workflow_call:
+    inputs:
+      tag: { type: string, required: true }
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to make verifiable (e.g. v1.0.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the bundle, the source archive, pocket.sh and SHA256SUMS
+      id-token: write # the Sigstore signing identity of the attestations
+      attestations: write
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "${{ inputs.tag }}", fetch-depth: 0 }
+      - name: Build the downloads and collect the release's assets
+        run: |
+          set -euo pipefail
+          git fetch --quiet --tags origin
+          out=dist/release
+          mkdir -p "$out"
+          git bundle create "$out/aprscaching-$TAG.bundle" "refs/tags/$TAG"
+          git archive --format=tar.gz --prefix="aprscaching-$TAG/" -o "$out/aprscaching-$TAG-source.tar.gz" "$TAG"
+          cp deploy/pocket/pocket.sh "$out/pocket.sh"
+          # the OCI stack and the desktop binaries, attached by the jobs before this one
+          gh release download "$TAG" --dir "$out" --pattern 'aprscaching-oci-stack.zip' --pattern 'aprscaching-*-x64*' \
+            --pattern 'aprscaching-*-arm64' || true
+          rm -f "$out/SHA256SUMS"
+          (cd "$out" && sha256sum -- * >SHA256SUMS)
+          cat "$out/SHA256SUMS"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: { subject-path: "dist/release/*" }
+      - name: Attach the downloads and the checksums
+        run: |
+          gh release upload "$TAG" --clobber "dist/release/aprscaching-$TAG.bundle" \
+            "dist/release/aprscaching-$TAG-source.tar.gz" dist/release/pocket.sh dist/release/SHA256SUMS

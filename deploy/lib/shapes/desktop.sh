@@ -1,6 +1,6 @@
 # Desktop: the single-file app from a release (deploy/desktop/), which keeps its own data directory and
 # generates its secrets on first start. There is nothing to configure before it runs, so init explains where
-# to get the binary. Sourced by deploy/aprscaching.
+# to get the binary and how to check it. Sourced by deploy/aprscaching.
 # shellcheck shell=bash
 # shellcheck disable=SC2034 # DOC_* is the doctor context, read by deploy/lib/doctor.sh
 
@@ -11,9 +11,11 @@ shape_init() {
     return 0
   fi
   step "Desktop"
-  info "Download the binary for your system from the project's release page and run it;"
-  info "it serves the app on http://127.0.0.1:8787."
-  info "Steps and options: docs/operate/deployment.md (Desktop) and deploy/desktop/README.md."
+  info "Download the binary for your system and SHA256SUMS from the project's release page, check them:"
+  info "  sha256sum -c --ignore-missing SHA256SUMS"
+  info "  gh attestation verify <the binary> --repo apachler/aprscaching"
+  info "then run it; it serves the app on http://127.0.0.1:8787."
+  info "Steps and options: docs/operate/helpers.md (Verified downloads) and deploy/desktop/README.md."
 }
 
 shape_status() {

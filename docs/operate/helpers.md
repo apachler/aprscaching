@@ -25,6 +25,37 @@ act on that shape. On an installation set up without the helper, they work out t
 
 `--shape <shape>` overrides both.
 
+## Verified downloads
+
+Every release carries, beside the OCI stack and the desktop binaries:
+
+- `aprscaching-<version>.bundle` — the release as a git bundle. Clone it, and the checkout updates like any
+  other.
+- `aprscaching-<version>-source.tar.gz` — the source.
+- `pocket.sh` — the Pocket installer.
+- `SHA256SUMS` — the checksum of every asset.
+
+Each asset also has a signed build-provenance attestation. It is keyless (Sigstore), and it shows that this
+repository's release workflow built the file. A checksum alone shows only that the file arrived intact. Start a
+new installation from a checked download, never from a script piped into a shell:
+
+```bash
+VER=v1.0.0
+curl -fsSLO https://github.com/apachler/aprscaching/releases/download/$VER/aprscaching-$VER.bundle
+curl -fsSLO https://github.com/apachler/aprscaching/releases/download/$VER/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+gh attestation verify aprscaching-$VER.bundle --repo apachler/aprscaching   # the GitHub CLI, signed in
+git clone --branch $VER aprscaching-$VER.bundle aprscaching
+cd aprscaching && git remote set-url origin https://github.com/apachler/aprscaching.git
+deploy/aprscaching init selfhost
+```
+
+The desktop binaries and the OCI stack check the same way. `init baremetal` does all of this itself for a
+release tag: it downloads the bundle and `SHA256SUMS`, checks both, and clones from the bundle. It stops
+when either check fails. Without the GitHub CLI it stops too, unless `--checksum-only` accepts the checksum
+alone. For a branch, or a release without a bundle, it installs from git and says the checkout is
+unverified.
+
 ## Options
 
 | Option | Effect |

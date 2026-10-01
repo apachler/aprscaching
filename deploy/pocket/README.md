@@ -41,14 +41,19 @@ checkout or the data are not in `~/aprscaching` and `~/.aprscaching`.
 ## Install
 
 Use Termux from [F-Droid](https://f-droid.org/packages/com.termux/) or its
-[GitHub releases](https://github.com/termux/termux-app/releases), then in Termux, one command:
+[GitHub releases](https://github.com/termux/termux-app/releases), then in Termux download `pocket.sh` from
+the latest release, check it and run it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
+curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/pocket.sh
+curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+gh attestation verify pocket.sh --repo apachler/aprscaching   # pkg install gh; gh auth login
+bash pocket.sh --call <YOURCALL>
 ```
 
-**Known issue:** until the first release reaches `main`, the `main` URLs here answer 404. Use `dev` in the
-URL and pass `--branch dev` to install the development branch.
+**Known issue:** until the first release, the release URLs answer 404. Download `pocket.sh` from the `dev`
+branch's raw URL instead, read it, and pass `--branch dev` to install the development branch.
 
 `pocket.sh` upgrades Termux (`apt-get update && apt-get dist-upgrade`, after `termux-change-repo` when no mirror is
 chosen yet and a terminal is attached), runs `install.sh` from the same branch with the options passed on, starts the station and

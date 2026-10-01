@@ -28,6 +28,7 @@ web build, the .env (the Self-host questions), and the gateway and ingest units.
   --ref REF        the tag or branch to install               (default the newest v* tag, else main)
   --port PORT      the gateway's port; it serves the web app  (default 8080)
   --no-start       install the units without enabling or starting them
+  --checksum-only  install a release verified by its checksum alone, when gh is not installed
   --dry-run        print every step, run none
 Any other option goes to setup.sh (--call, --passcode, --filter, --domain, --lan-host, --fed-peers, …).
 EOF
@@ -74,6 +75,45 @@ bm_render_unit() {
     { print }' "$src"
 }
 
+# The GitHub owner/name of a repository URL, or nothing for another host.
+bm_github_repo() { printf '%s' "$1" | sed -n -E 's#^https://github\.com/([^/]+/[^/.]+)(\.git)?/?$#\1#p'; }
+
+# A release's git bundle, verified: its checksum in the release's SHA256SUMS and its signed provenance
+# (gh attestation verify). Prints the bundle's path. Returns 1 when the release has no bundle (the caller
+# installs from git, warned) and 2 when a bundle does not verify (the caller stops): it runs in a command
+# substitution, where a die would end only the subshell.
+bm_verified_bundle() {
+  local gh_repo="$1" tag="$2" dir base
+  gh_repo="$(bm_github_repo "$gh_repo")"
+  [ -n "$gh_repo" ] || return 1
+  dir="$(mktemp -d)"
+  chmod 755 "$dir" # the service user clones from here
+  base="https://github.com/$gh_repo/releases/download/$tag"
+  curl -fsSL -o "$dir/aprscaching-$tag.bundle" "$base/aprscaching-$tag.bundle" 2>/dev/null &&
+    curl -fsSL -o "$dir/SHA256SUMS" "$base/SHA256SUMS" 2>/dev/null || {
+    rm -rf "$dir"
+    return 1
+  }
+  if ! (cd "$dir" && grep " aprscaching-$tag.bundle\$" SHA256SUMS | sha256sum -c --quiet -) >&2; then
+    printf '\nERROR: the release bundle does not match its checksum.\n' >&2
+    return 2
+  fi
+  if have gh; then
+    if ! gh attestation verify "$dir/aprscaching-$tag.bundle" --repo "$gh_repo" >&2; then
+      printf "\nERROR: the release bundle's signed provenance does not verify.\n" >&2
+      return 2
+    fi
+  elif [ "$BM_ALLOW_UNSIGNED" != 1 ]; then
+    printf '\nERROR: the GitHub CLI (gh) is needed to verify the release signature.\n' >&2
+    printf '       Install it (https://cli.github.com), or pass --checksum-only to rely on the checksum alone.\n' >&2
+    return 2
+  else
+    warn "only the checksum was checked (--checksum-only): it proves the file intact, not who made it"
+  fi
+  chmod 644 "$dir/aprscaching-$tag.bundle"
+  printf '%s' "$dir/aprscaching-$tag.bundle"
+}
+
 bm_preflight() {
   local major
   [ "$(uname -s)" = Linux ] || die "Bare metal installs on Linux with systemd."
@@ -90,8 +130,9 @@ bm_preflight() {
 }
 
 shape_init() {
-  local repo="https://github.com/apachler/aprscaching" ref="" start=1 setup=() kind tmp unit
+  local repo="https://github.com/apachler/aprscaching" ref="" start=1 setup=() kind tmp unit bundle=""
   BM_DRY=0
+  BM_ALLOW_UNSIGNED=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --dir) BM_DIR="$2"; shift ;;
@@ -100,6 +141,7 @@ shape_init() {
       --ref) ref="$2"; shift ;;
       --port) BM_PORT="$2"; shift ;;
       --no-start) start=0 ;;
+      --checksum-only) BM_ALLOW_UNSIGNED=1 ;;
       --dry-run) BM_DRY=1 ;;
       -h | --help) bm_usage; return 0 ;;
       *) setup+=("$1") ;;
@@ -128,8 +170,18 @@ shape_init() {
   info "  2. create $BM_DIR, owned by $BM_USER"
   info "  3. install $BM_UNITS into $BM_UNIT_DIR"
   [ "$start" = 0 ] || info "  4. systemctl daemon-reload, and enable and start both units"
-  warn "$ref ($kind) is installed without verification: nothing checks a signature on a git checkout."
-  confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
+  local rc=1
+  if [ "$kind" = tag ] && [ "$BM_DRY" != 1 ]; then
+    bundle="$(bm_verified_bundle "$repo" "$ref")" && rc=0 || rc=$?
+  fi
+  [ "$rc" != 2 ] || die "The release $ref did not verify." "Nothing was installed."
+  if [ "$rc" = 0 ]; then
+    info "the release $ref is verified: its checksum and its signed provenance"
+    confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
+  else
+    warn "$ref ($kind) is installed without verification: only a release's bundle carries a checksum and a signature."
+    confirm "Install $ref?" || die "Nothing was installed." "Pass --yes to install without asking."
+  fi
 
   step "System user"
   if id "$BM_USER" >/dev/null 2>&1; then
@@ -139,7 +191,18 @@ shape_init() {
   fi
 
   step "Checkout"
-  if [ -d "$BM_DIR/.git" ]; then
+  if [ -n "$bundle" ]; then
+    # from the verified bundle; origin stays the repository, for later updates
+    if [ -d "$BM_DIR/.git" ]; then
+      bm_user git -C "$BM_DIR" fetch --quiet "$bundle" "refs/tags/$ref:refs/tags/$ref"
+    else
+      bm_root install -d -o "$BM_USER" -g "$BM_USER" -m 755 "$BM_DIR"
+      bm_user git clone --quiet "$bundle" "$BM_DIR"
+      bm_user git -C "$BM_DIR" remote set-url origin "$repo"
+    fi
+    bm_user git -C "$BM_DIR" -c advice.detachedHead=false checkout --quiet "$ref"
+    rm -rf "$(dirname "$bundle")"
+  elif [ -d "$BM_DIR/.git" ]; then
     bm_user git -C "$BM_DIR" fetch --quiet --tags origin
     bm_user git -C "$BM_DIR" checkout --quiet "$ref"
     [ "$kind" = tag ] || bm_user git -C "$BM_DIR" merge --quiet --ff-only "origin/$ref"

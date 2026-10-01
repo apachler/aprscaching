@@ -7,7 +7,8 @@ name: release-please
 #
 # A tag pushed with the workflow's own GITHUB_TOKEN starts no other workflow, so the release
 # artifacts (the OCI stack zip and the desktop binaries) are built here, as called workflows, once
-# release-please reports a new release.
+# release-please reports a new release; release-verify then adds the git bundle, the checksums and the
+# signed attestations over all of them.
 on:
   push:
     branches: [main]
@@ -46,5 +47,16 @@ jobs:
     permissions:
       contents: write # attach the desktop binaries to the release
     uses: ./.github/workflows/desktop-release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+
+  verify:
+    needs: [release-please, oci-stack, desktop]
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write # attach the bundle, the source archive and SHA256SUMS
+      id-token: write # sign the attestations
+      attestations: write
+    uses: ./.github/workflows/release-verify.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
