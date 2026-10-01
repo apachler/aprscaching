@@ -488,6 +488,22 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       gateway alike (`aprs_is`); telling them apart needs the ingest to pass the distinction on. The node's own
       firmware, hardware and battery reach only the ingest log. Display only: no tier changes.
 
+- [ ] **OCI warm standby (HA)** _(P3 · L)_ — a second instance that takes over when the OCI VM dies, still
+      inside the free tier. What the free tier offers: the A1 allowance (2 OCPUs / 12 GB) splits into two 1 OCPU
+      / 6 GB VMs; two E2.1.Micro VMs; one Network Load Balancer; one flexible Load Balancer at 10 Mbps. The
+      constraints decide the design:
+      - SQLite has one writer, so it is **active + warm standby**, never active-active. Federation does not
+        help: it does not replicate accounts, sessions or finds.
+      - Replication: Litestream to the bucket at its default one-second sync would exceed 50,000 requests a
+        month; replicate over SFTP to the standby instead, or sync far less often.
+      - Failover: the NLB with exactly one healthy backend, or a watchdog that moves the reserved IP to the
+        standby (a reserved IP can move between private IPs in the region).
+      - TLS: both nodes need the certificate, so DNS-01 on both.
+      - The ingest (APRS-IS login, RF) runs on the active node only.
+      - A passive standby meets idle reclamation, so it needs Pay As You Go; both nodes need A1 capacity.
+      - Alternatives: the Cloudflare split for availability, or containers on Pay As You Go, which still need
+        persistent storage.
+
 - [ ] **FCC ULS email verification** _(S/M · blocked on a data source)_ — verify a US call by mailing a code
       to the address the licensee gave the FCC, storing only `sha256(lowercased email)` per call. Blocked: the
       public amateur bulk file (`data.fcc.gov/download/pub/uls/complete/l_amat.zip`, `EN.dat`) carries the

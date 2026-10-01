@@ -201,10 +201,51 @@ Discovery needs the "fragmentation needed" message (ICMP type 3 code 4) to reach
 allows it from anywhere — as OCI's default security list does — and the rest of ICMP type 3 from within the
 network. Without it, large TCP replies can hang while small requests work.
 
-Capacity tip: Always-Free A1 capacity moves around. **Frankfurt (eu-frankfurt-1)** is a good bet for
-central Europe; if Apply fails with "out of host capacity", raise the availability domain and retry.
-
 To put Cloudflare's CDN in front afterwards, see `../cloudflare/`.
+
+## Staying on the free tier
+
+What Oracle states, as of 1 October 2026 — check the linked pages, they change:
+
+- **The allowance.** An Always-Free-only tenancy gets 1,500 OCPU hours and 9,000 GB hours of Ampere A1 a month
+  (2 OCPUs / 12 GB around the clock), 200 GB of block storage with five volume backups, 20 GB of Object Storage
+  with 50,000 API requests a month, and 10 TB of outbound traffic a month
+  ([Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)). Oracle halved
+  the A1 allowance from 4 OCPUs / 24 GB around 15 June 2026
+  ([InfoQ](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-limits/)). Pay As You Go tenancies
+  reportedly keep the larger allowance free; **Unverified** — check *Governance → Limits, Quotas and Usage*. An
+  instance created above the new allowance may run on but not be re-creatable.
+- **Idle instances are reclaimed.** Oracle may stop an Always Free A1 instance when, over seven days, its CPU
+  use (95th percentile), its network use and its memory use all stay under 20 %
+  ([Free Tier FAQ](https://www.oracle.com/cloud/free/faq/)). A quiet aprscaching instance can fall under that.
+  Pay As You Go tenancies are exempt.
+- **Idle accounts.** A free account with no sign-in or activity for 30 days may be suspended (same FAQ).
+- **The home region is permanent.** You choose it at sign-up, and Always Free resources live there.
+
+**The recommendation:** upgrade the tenancy to **Pay As You Go** and set a **budget alert** (*Billing → Budgets*,
+for example 1 € a month with an alert at 100 %). Always Free resources stay free on Pay As You Go, the instance
+is not reclaimed for being idle, and the alert tells you the moment anything would cost money. The stack's
+defaults stay within the allowance, and it refuses more unless you set *Allow beyond Always Free*. Do not run
+tools that keep the VM busy to dodge reclamation: they burn the allowance and are against the spirit of the
+offer.
+
+**Capacity.** Always Free A1 capacity varies by region and over time. If Apply fails with "out of host capacity",
+raise the availability domain and apply again, or try later. Frankfurt (eu-frankfurt-1) usually works for
+central Europe; Zurich and Milan are alternatives — but only for a home region you have not chosen yet.
+
+### Containers on OCI
+
+The stack runs the Docker Compose stack on the A1 VM. That is the supported way, and the rest are not:
+
+- **Container Instances** are free on A1 only for paid tenancies (sharing the A1 allowance), and their storage is
+  ephemeral, so the database would need a volume they cannot keep
+  ([pricing](https://www.oracle.com/cloud/cloud-native/container-instances/pricing/)).
+- **Kubernetes (OKE)**: a Basic cluster's control plane is free and its workers can be A1
+  ([pricing](https://www.oracle.com/cloud/cloud-native/kubernetes-engine/pricing/)), but it is far more to run
+  than one instance needs, and the SQLite database has one writer anyway (see the warm-standby item in
+  `TODO.md`).
+- **Container Registry** is free, but images count against the 20 GB of Object Storage. The stack builds its
+  images on the VM and needs none.
 
 ## Building the zip yourself
 

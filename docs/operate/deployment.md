@@ -87,6 +87,14 @@ one Always-Free A1 VM within an Always-Free-only tenancy's allowance (2 OCPUs an
 reserved public IP, and SSH only through OCI Bastion. Its first boot installs Docker from Docker's signed apt
 repository, deploys the release's checked commit through `deploy/aprscaching init selfhost`, and generates the
 secrets on the VM (`deploy/oci/README-stack.md`).
+
+**Staying on the free tier.** Oracle may reclaim an Always Free A1 instance that stays idle for seven days
+(CPU, network and memory all under 20 %), and may suspend a free account unused for 30 days
+([Free Tier FAQ](https://www.oracle.com/cloud/free/faq/), as of 1 October 2026). Upgrade the tenancy to Pay
+As You Go and set a budget alert: Always Free resources stay free, and the instance is not reclaimed. The
+stack runs Docker Compose on the VM; Container Instances and Kubernetes do not suit one SQLite instance on
+the free tier (`deploy/oci/README-stack.md`, *Staying on the free tier*).
+
 Bare metal without Docker: `deploy/aprscaching init baremetal` installs the same gateway and ingest from a
 checkout under systemd, as a dedicated system user, with the gateway serving the web app on its own port
 (see [Deployment helpers](helpers.md#bare-metal)). The units it installs are `deploy/systemd/`'s.

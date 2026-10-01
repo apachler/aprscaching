@@ -51,7 +51,9 @@ cd aprscaching && git remote set-url origin https://github.com/apachler/aprscach
 deploy/aprscaching init selfhost
 ```
 
-The desktop binaries and the OCI stack check the same way. `init baremetal` does all of this itself for a
+The desktop binaries and the OCI stack's zip check the same way. A release's OCI stack also names its tag's
+commit, and the VM's first boot stops when the cloned tag is any other commit; it then sets up through `init
+selfhost`, like any Self-host install (`deploy/oci/README-stack.md`). `init baremetal` does all of this itself for a
 release tag: it downloads the bundle and `SHA256SUMS`, checks both, and clones from the bundle. It stops
 when either check fails. Without the GitHub CLI it stops too, unless `--checksum-only` accepts the checksum
 alone. For a branch, or a release without a bundle, it installs from git and says the checkout is
