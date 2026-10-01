@@ -286,3 +286,19 @@ jobs:
       # so audio-mic.mjs (which resolves via chromium.executablePath()) finds it. Version pinned to match.
       - run: npx --yes playwright@1.61.1 install --with-deps chromium
       - run: node tools/e2e/audio-mic.mjs
+
+  e2e-offline:
+    name: e2e (offline app shell — Chromium)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # the built app with its service worker, opened once online, then again with the connection cut
+      - run: pnpm --filter @aprscaching/web... build
+      - run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - run: node tools/e2e/offline-shell.mjs

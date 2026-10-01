@@ -4,6 +4,10 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { ErrorBoundary } from "./ui/index.js";
 import { loadSettings, resolveTheme, resolveCrt, makeFormatters, FormatContext } from "./format.js";
+import { registerServiceWorker } from "./shell/serviceWorker.js";
+
+// The offline app shell (public/sw.js). Development serves unhashed modules, so there is nothing to store.
+if (import.meta.env.PROD) void registerServiceWorker();
 
 // Apply the saved theme to <html> before first paint so a Phosphor user doesn't flash the modern
 // palette while the (lazily-loaded) Platform mounts.

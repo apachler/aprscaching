@@ -5,13 +5,13 @@ walks through the app. New here? Start with [Start here](../start-here.md) and [
 
 ## Finding your way around
 
-| On a phone (bottom bar) | On a computer (left rail) | What it is |
-|---|---|---|
-| **Map** | **Map** | The map with caches and live stations |
-| **Nearby** | **Nearby** | The closest caches and stations, nearest first |
-| **Hide** / **Log** (centre button) | **+ Hide a cache** (top bar) | Hide a cache — or, when a cache is selected, log it |
-| **Activity** | **Activity** | Recent finds, top finders, top corroborators |
-| **You** | **You**, **Ranks**, **Messages**, **Shack**, **Settings** | Your profile; on a phone the Shack and Settings are under **You → Advanced** |
+| On a phone (bottom bar)            | On a computer (left rail)                                 | What it is                                                                   |
+| ---------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Map**                            | **Map**                                                   | The map with caches and live stations                                        |
+| **Nearby**                         | **Nearby**                                                | The closest caches and stations, nearest first                               |
+| **Hide** / **Log** (centre button) | **+ Hide a cache** (top bar)                              | Hide a cache — or, when a cache is selected, log it                          |
+| **Activity**                       | **Activity**                                              | Recent finds, top finders, top corroborators                                 |
+| **You**                            | **You**, **Ranks**, **Messages**, **Shack**, **Settings** | Your profile; on a phone the Shack and Settings are under **You → Advanced** |
 
 The **Manual** icon in the top bar opens this manual.
 
@@ -55,9 +55,9 @@ Stations that reach [APRS-IS](../glossary.md#aprs-is) through a LoRa-APRS [IGate
 stations.
 
 Open a MeshCom station for how it was last heard, its device and firmware, its battery and signal, and a
-link to its page on MeshMap. When its latest message named relays (its *via* list), the panel shows "Sent
+link to its page on MeshMap. When its latest message named relays (its _via_ list), the panel shows "Sent
 via relays …": the sender limited forwarding to those nodes. That is its plan, not the path the message
-took. Visitors see the battery and signal as *high / medium / low* and *strong / usable / weak*; signed in,
+took. Visitors see the battery and signal as _high / medium / low_ and _strong / usable / weak_; signed in,
 you see the battery percentage and the signal as RSSI (strength) and SNR (signal-to-noise ratio).
 
 **MeshCom links** (off by default; shown once MeshCom is on) draws the links your node(s) heard in the last
@@ -68,13 +68,13 @@ legend and the filter panel link to [MeshMap](https://meshmap.oevsv.at/), the ne
 
 ## Cache types
 
-| Type | What it is |
-|---|---|
-| **Traditional** | One container at a fixed spot. |
-| **Multi-stage** | Several stages; each stage's position is revealed when you unlock the previous one. |
-| **Virtual** | A place to visit, with no container. |
-| **Audio** | A stage unlocked by an audio clue. |
-| **Living (APRS)** | Moves with an APRS station — you find it by meeting the station. |
+| Type                                                         | What it is                                                                              |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| **Traditional**                                              | One container at a fixed spot.                                                          |
+| **Multi-stage**                                              | Several stages; each stage's position is revealed when you unlock the previous one.     |
+| **Virtual**                                                  | A place to visit, with no container.                                                    |
+| **Audio**                                                    | A stage unlocked by an audio clue.                                                      |
+| **Living (APRS)**                                            | Moves with an APRS station — you find it by meeting the station.                        |
 | **SOTA summit · POTA park · WWFF reserve · Bunker · Castle** | Places from the ham-radio award programs and landmarks, often imported by the instance. |
 
 ## Open a cache
@@ -101,20 +101,25 @@ your phone.
 
 The result shows how well your find is verified:
 
-| Badge | Tier | Meaning |
-|---|---|---|
-| **Radio-verified** | A | Your APRS position was heard on the air near the cache, by a receiving station the instance runs and that isn't yours, on a believable track. Peer instances can also confirm this. |
-| **Location-verified** | B | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy). |
-| **Logged** | C | Nothing independent placed you at the cache — at most an internet (APRS-IS) position. The find is recorded but not verified. |
+| Badge                 | Tier | Meaning                                                                                                                                                                             |
+| --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Radio-verified**    | A    | Your APRS position was heard on the air near the cache, by a receiving station the instance runs and that isn't yours, on a believable track. Peer instances can also confirm this. |
+| **Location-verified** | B    | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy).                                                                         |
+| **Logged**            | C    | Nothing independent placed you at the cache — at most an internet (APRS-IS) position. The find is recorded but not verified.                                                        |
 
 Under the badge, one line says why in plain words — for example how far your phone was from the cache. If a
 cache requires a higher tier than your find reached, the find is recorded as **Logged**.
 
-If your phone places you farther from the cache than it can verify, the app asks first: *"You're 34 km from
-the cache — log anyway?"* Each cache takes one find from each callsign, scored when you log it, so logging
+If your phone places you farther from the cache than it can verify, the app asks first: _"You're 34 km from
+the cache — log anyway?"_ Each cache takes one find from each callsign, scored when you log it, so logging
 it again later shows **You already logged this** and leaves the first find as it was.
 Your find is signed with your device key (**signed with your device key ✍**); if you verified your
 callsign, it can also be **announced to APRS-IS**.
+
+**Without a connection.** Once you have opened the app with a connection, it opens without one too, on the
+phone where you used it (adding it to the home screen helps the phone keep it). It remembers who you
+signed in as, so you log finds offline; the map shows the caches of the area you last browsed. When a new
+version of the app is ready it says so, and updates only when you tap **Reload**.
 
 No signal at the cache? The find is **Saved — offline, will sync when you're back online**. It is signed
 with the time you logged it, and when it reaches the instance it is verified at that time, not at the
@@ -135,12 +140,12 @@ discard it.
 No phone with you? Send an APRS text message from your radio to the instance's service call — `APRSCG`
 unless the instance names another:
 
-| Message | Logs |
-|---|---|
-| `FOUND AC-1234 nice spot` | a find, with optional log text |
-| `DNF AC-1234 muggles` | a did-not-find |
-| `NOTE AC-1234 log is full` | a note |
-| `HELP` | replies with the command list |
+| Message                    | Logs                           |
+| -------------------------- | ------------------------------ |
+| `FOUND AC-1234 nice spot`  | a find, with optional log text |
+| `DNF AC-1234 muggles`      | a did-not-find                 |
+| `NOTE AC-1234 log is full` | a note                         |
+| `HELP`                     | replies with the command list  |
 
 The dash in the code is optional. Your callsign must be verified on your account (**Settings → Account**);
 the log goes to the account that holds it.

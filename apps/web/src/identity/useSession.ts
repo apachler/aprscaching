@@ -1,30 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { getSession, logout, logoutAll, type Session } from "../api.js";
+import { ApiError, getSession, logout, logoutAll, type Session } from "../api.js";
+import { forgetSession, recallSession, rememberSession, type SessionStore } from "./sessionMemory.js";
 
-/** The signed-in session: identity comes from the server cookie, not localStorage. */
+const store: SessionStore = {
+  get: (k) => localStorage.getItem(k),
+  set: (k, v) => localStorage.setItem(k, v),
+  remove: (k) => localStorage.removeItem(k),
+};
+
+/**
+ * The signed-in session: identity comes from the server cookie. Without a connection the app falls back
+ * to the last session it saw (sessionMemory.ts), marked `offline`, and asks again when the connection
+ * returns.
+ */
 export function useSession() {
   const [s, setS] = useState<Session>({ callsign: null });
+  const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
     try {
-      setS(await getSession());
-    } catch {
-      setS({ callsign: null });
+      const fresh = await getSession();
+      rememberSession(store, fresh);
+      setS(fresh);
+      setOffline(false);
+    } catch (e) {
+      // the server answered (an error status): that is no session; no answer at all: the remembered one
+      const remembered = e instanceof ApiError ? null : recallSession(store);
+      setS(remembered ?? { callsign: null });
+      setOffline(remembered != null);
     } finally {
       setLoading(false);
     }
   }, []);
   useEffect(() => {
-    refresh();
+    void refresh();
+    const online = () => void refresh();
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
   }, [refresh]);
   const signOut = useCallback(async () => {
     await logout().catch(() => {});
+    forgetSession(store);
     setS({ callsign: null });
   }, []);
   /** Sign out on every device; throws when the server refused, so the caller can say so. */
   const signOutEverywhere = useCallback(async () => {
     await logoutAll();
+    forgetSession(store);
     setS({ callsign: null });
   }, []);
   return {
@@ -32,6 +55,8 @@ export function useSession() {
     verified: !!s.verified,
     email: s.email ?? null,
     signedIn: !!s.callsign,
+    /** The session is the remembered one: the app has no connection to its instance. */
+    offline,
     loading,
     refresh,
     signOut,

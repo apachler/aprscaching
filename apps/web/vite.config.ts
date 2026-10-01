@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { docsPlugin } from "./vite-docs.js";
 import { vendorMaplibrePlugin } from "./vite-vendor.js";
+import { serviceWorkerPlugin } from "./vite-sw.js";
 
 // The manual lives in the repo-root `docs/` tree; bundle it into the SPA at build time (vite-docs.ts).
 const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs");
@@ -17,7 +18,7 @@ const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
 //    for it into index.html; the signed-out landing therefore never fetches it. It loads on demand when
 //    Platform mounts (explore / sign-in). The warning limit reflects MapLibre's real size.
 export default defineConfig({
-  plugins: [react(), docsPlugin(docsDir), vendorMaplibrePlugin()],
+  plugins: [react(), docsPlugin(docsDir), vendorMaplibrePlugin(), serviceWorkerPlugin()],
   build: {
     chunkSizeWarningLimit: 1100, // MapLibre's real chunk size (~1.05 MB)
     modulePreload: {
