@@ -1,7 +1,7 @@
 # aprscaching
 
-**Find real places on the air.** aprscaching is an [APRS](glossary.md#aprs) geocaching game and ham-radio **Shack**. You hide a cache, go find it, and log the find *verified by radio* — not just by
-tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
+**Find real places on the air.** aprscaching is an [APRS](glossary.md#aprs) geocaching game and ham-radio
+**Shack**. You hide a cache, go find it, and log the find *verified by radio* — not just by tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
 with other instances into one open network.
 
 !!! tip "New here? [Start here](start-here.md)"
@@ -9,15 +9,14 @@ with other instances into one open network.
     your first find — no installation needed. [Start here](start-here.md) walks you through it in five
     minutes.
 
-This manual describes the platform as it is. It has three audiences:
+| I want to… | Start with |
+|---|---|
+| **Play** — find and hide caches, connect my radio | [Start here](start-here.md), then the [Guides](guides/caching.md) |
+| **Run an instance** — for my club, my region, or off-grid | [Deployment](operate/deployment.md), then [Your first hour as sysop](operate/first-hour.md) |
+| **Build on it** — the read API, signed feeds, federation | [HTTP API](reference/api.md) and [Federation wire format](reference/federation-wire.md) |
+| **Contribute** — run the code, test, change it | [Run from source](getting-started.md) and [Testing & verification](reference/testing.md) |
 
-- **Cachers** play the game — see [Start here](start-here.md), [Your account](guides/account.md) and
-  [Caching](guides/caching.md).
-- **Operators** connect radios and run an instance — see
-  [Your radio in the browser](guides/my-radio.md), [Connect a radio: quick starts](operate/quickstarts.md)
-  and [Deployment](operate/deployment.md).
-- **Integrators** talk to the platform's open, signed feeds and read API — see [Reference](reference/api.md)
-  and [Federation](guides/federation.md).
+A term you don't know is in the [Glossary](glossary.md).
 
 ## Two things in one application
 
@@ -26,23 +25,22 @@ Browse a map, pick a nearby cache, and log a find when you get there — the app
 walk into a cache's geofence. Leaderboards, profiles, badges, and imported heritage summits and parks
 (SOTA / POTA / WWFF / castles / islands) share the same map.
 
-**The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live
-station map, run a store-and-forward BBS and a [NET/ROM](glossary.md#netrom) node, digipeat and [IGate](glossary.md#igate) over a [KISS](glossary.md#kiss) [TNC](glossary.md#tnc), control a
-transceiver over [CAT](glossary.md#cat), decode CW and PSK31 off the air, and extend it all with signed tool plugins. The
-caching side is the *product*; the Shack is the *platform* it rides on.
+**The Shack (for the operator).** A real packet-radio bench: decode any APRS frame, watch a live station map,
+run a store-and-forward BBS and a [NET/ROM](glossary.md#netrom) node, digipeat and [IGate](glossary.md#igate)
+over a [KISS](glossary.md#kiss) [TNC](glossary.md#tnc), control a transceiver over [CAT](glossary.md#cat),
+decode CW and PSK31 off the air, and extend it all with signed tool plugins. The caching side is the
+*product*; the Shack is the *platform* it rides on.
 
 ## Trust follows the radio, not the transport
 
 The single idea that shapes the whole platform: **a packet arriving over the internet proves nothing on its
 own.** aprscaching only *believes* a find when independent evidence corroborates it, and that evidence has to
 come from the air or from a first-party device reading — never merely from the wire a packet travelled on.
-Every find earns one of three honest tiers ([Core concepts](concepts.md#verification-tiers)):
-
-| Tier | Means | Earned by |
-|------|-------|-----------|
-| **A** | Radio-verified | Heard directly on the air by an attested receiving site that isn't yours — through that site's own ingest, never an [APRS-IS](glossary.md#aprs-is) copy — on a plausible track |
-| **B** | Location-verified | Your device's first-party geolocation matches the cache at log time |
-| **C** | Logged | Nothing independent placed you at the cache (a bare APRS-IS beacon at most) — on record, but unverified |
+Every find earns one of three honest tiers: **Radio-verified** (A) when a receiving station that isn't yours
+heard you on the air near the cache, **Location-verified** (B) when your own device's location matched it,
+and **Logged** (C) when nothing independent placed you there — never more than that for a position that only
+reached the instance over [APRS-IS](glossary.md#aprs-is). The badges are explained for players in
+[Caching](guides/caching.md#log-a-find) and as precise rules in [Core concepts](concepts.md#verification-tiers).
 
 ## A map that forgets
 

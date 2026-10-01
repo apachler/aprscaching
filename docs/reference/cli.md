@@ -106,25 +106,11 @@ TOOL_PRIVATE_KEY=… node tools/toolkey/sign.mjs registry registry.json  # sign 
 The signer canonicalises exactly as the app's verifier does, so the app verifies byte-for-byte what you
 signed.
 
-## Development & conformance — `tools/dev/`
+## Development & conformance
 
-```bash
-pnpm run check          # tools/dev/check.sh — build (typecheck) every unit + run every unit test suite
-pnpm run smoke          # tools/dev/smoke.sh — a throwaway Node/SQLite gateway + the runtime conformance suites
-pnpm run verify         # tools/dev/verify.sh — check + smoke, the full pre-commit gate
-pnpm run conformance:meshcom   # the MeshCom core on Node, Bun and workerd (tools/conformance/meshcom.mjs)
-```
-
-CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent,
-`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code, `dead-exports.mjs`
-fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
-present-tense, every configuration key the code reads documented (and every documented key read), the
-manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
-interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc); see its README.
-
-The smoke suites themselves live in `tools/smoke/` (`smoke.mjs`, `geofence.mjs`, and the two-instance
-`federation.mjs`) and run against any running gateway via `BASE=…`. `tools/e2e/audio-mic.mjs` drives the live
-microphone decode path headlessly in Chromium (used by CI).
+The contributor commands — `pnpm run check`, `smoke`, `verify`, `conformance:meshcom` — the smoke and e2e
+suites, the CI guards under `tools/checks/` and the interop tests are described in
+[Testing & verification](testing.md).
 
 !!! note
     `tools/teaser/` and `tools/webauthn/` are internal build/marketing and test helpers, not operator tools.

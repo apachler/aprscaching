@@ -51,16 +51,11 @@ More in [Caching](guides/caching.md).
 
 ### How finds are verified
 
-Every find gets a badge:
-
-| Badge | Tier | What it means |
-|---|---|---|
-| **Radio-verified** | A | Your APRS position was heard **on the air** near the cache by a receiving station the instance runs, and that isn't yours. |
-| **Location-verified** | B | Your phone's location, taken when you logged, matched the cache. |
-| **Logged** | C | Nothing independent placed you at the cache (at most an internet [APRS-IS](glossary.md#aprs-is) position) — the find is on record but not verified. |
-
-A position that only travelled over the internet proves nothing about where you were, so it can never count
-as more than tier C. Most finds are tier B; tier A appears wherever operators run their own receivers and
+Every find gets a badge: **Radio-verified** (A) when your APRS position was heard **on the air** near the
+cache by a receiving station the instance runs and that isn't yours, **Location-verified** (B) when your
+phone's location matched the cache, or **Logged** (C) when nothing independent placed you there. A position
+that only travelled over the internet ([APRS-IS](glossary.md#aprs-is)) proves nothing about where you were,
+so it can never count as more than tier C. [Log a find](guides/caching.md#log-a-find) shows each badge. Most finds are tier B; tier A appears wherever operators run their own receivers and
 vouch for them. The full rules are in [Core concepts](concepts.md).
 
 ## Connect your radio

@@ -29,6 +29,17 @@ The **Manual** icon in the top bar opens this manual.
 - The corner readout shows the cursor position as **Lat / Lon**, **Grid** (Maidenhead) and **MGRS**.
 - **Nearby → Download this area** keeps the caches of the current area for use without mobile coverage.
 
+### Live stations and spots
+
+Turn on **Search & filter → Live layers → Live stations** to see APRS stations on the map as they are heard;
+the browser remembers the switch. Moving stations show a heading arrow. Tap a station for its page: symbol,
+speed and course, altitude, recent track, weather, and its raw packets. Signed in, **+ Add to my stations**
+puts it in your stations; a station already there shows **In your stations**, and one another operator
+registered says so.
+
+**Spots** — when the operator enables them, POTA and SOTA activations (and DX-cluster, RBN and
+PSKReporter spots) appear on the map; filter them under **Search & filter → Live layers**.
+
 ### MeshCom on the map
 
 When the instance runs a [MeshCom](../operate/meshcom.md) node, **Search & filter → Live layers → MeshCom**
