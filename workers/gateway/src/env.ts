@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { SqlDatabase, ObjectStore, MediaStore, RoomNamespace } from "./runtime.js";
+import type { SqlDatabase, TileArchive, MediaStore, RoomNamespace } from "./runtime.js";
 import { keysOf, validateConfig, type ConfigKeysOf, type ConfigProblem } from "@aprscaching/shared";
 
 /**
@@ -16,7 +16,7 @@ const ENV_STRING_KEYS = keysOf("gateway").filter((k): k is GatewayStringKey => k
 /** Bindings the gateway needs, in runtime-neutral terms (see runtime.ts), plus every string setting. */
 export type Env = {
   DB: SqlDatabase;
-  TILES: ObjectStore;
+  TILES?: TileArchive; // the offline map archive (tiles.ts); absent when the operator provides none
   MEDIA?: MediaStore; // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
   // The ingest-plane credential: the ingest box presents it (x-ingest-secret) to post packets, drain the

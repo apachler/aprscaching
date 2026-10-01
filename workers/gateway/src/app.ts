@@ -99,6 +99,7 @@ import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotify
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
 import { handleOfflinePack } from "./offlinepack.js";
+import { TILES_PATH, handleOfflineTiles, handleTileArchive } from "./tiles.js";
 import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
 import { handleFederationSubmit, handleSubmitMarks, pushToHub, type PushResult } from "./fedpush.js";
 import { pruneMeshcom, handleMeshcomNodes, handleMeshcomLinks } from "./meshcom.js";
@@ -189,7 +190,7 @@ export { syncAllPeers } from "./fedpull.js";
  * A test reads every route in route() below and checks it is claimed here.
  */
 const GATEWAY_PATH =
-  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:api|auth|verify|keys|badge|federation|feeds|embed|v|outbox|ingest|tiles|\.well-known)(?:\/|$)|^\/(?:ws|source|support|imprint|privacy|health|sitemap|sitemap\.xml|robots\.txt)$/;
 
 export const isGatewayPath = (pathname: string): boolean => GATEWAY_PATH.test(pathname);
 
@@ -591,6 +592,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // caching REST
   if (p === "/api/caches" && m === "GET") return handleCachesInBBox(req, env);
   if (p === "/api/offline/pack" && m === "GET") return handleOfflinePack(req, env); // a trip's offline pack
+  if (p === "/api/offline/tiles" && m === "GET") return handleOfflineTiles(req, env); // where the offline map is
+  if (p === TILES_PATH && (m === "GET" || m === "HEAD")) return handleTileArchive(req, env);
   if (p === "/api/caches" && m === "POST") return handleCreateCache(req, env);
 
   // enriched as-you-type search across caches + stations

@@ -28,10 +28,15 @@ export interface ExecCtx {
   waitUntil(promise: Promise<unknown>): void;
 }
 
-/** R2-like blob store — a reserved seam (instance-served offline tile packs); keeps Env runtime-neutral. */
-export interface ObjectStore {
-  get?(key: string): Promise<unknown>;
-  put?(key: string, value: unknown): Promise<unknown>;
+/**
+ * The instance's offline map: one PMTiles archive the operator provides (an R2 object on Cloudflare, a
+ * file on Node and Bun), read by byte range so a phone fetches only the tiles of its pack.
+ */
+export interface TileArchive {
+  /** The archive's size and a tag that changes with its content; null when there is no archive. */
+  stat(): Promise<{ size: number; etag: string } | null>;
+  /** `length` bytes from `offset` (fewer at the end of the archive). */
+  read(offset: number, length: number): Promise<Uint8Array>;
 }
 
 /** Media blob store (audio clues etc.) — implemented by R2 on CF and the filesystem on Node. */

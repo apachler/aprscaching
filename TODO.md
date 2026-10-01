@@ -584,11 +584,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       owner change a cache's title, hint, description, D/T and status, but the SPA has no edit form, so an owner
       corrects a listing only through the API. Natural shape: an owner-only "Edit" action on the cache sheet
       that reuses the sectioned hide-a-cache form.
-- [ ] **Instance-served offline tile packs** _(P3 · M)_ — serve basemap tile packs from the instance
-      (R2 on Cloudflare, filesystem self-host) behind the reserved `TILES` binding, so off-grid deployments
-      get full-detail maps without any third-party tile provider. Natural shape: a Protomaps PMTiles
-      extract + a self-hosted MapLibre style wired in via `VITE_BASEMAP_STYLE` — which also removes the
-      hosted default's dependency on the volunteer-run OpenFreeMap service.
+- [x] **Instance-served offline tile packs** — the operator's regional PMTiles archive is served at
+  `/tiles/offline.pmtiles` (a file on Node/Bun, the `TILES` bucket on Cloudflare, or `OFFLINE_TILES_URL`);
+  an offline pack keeps the tiles of its square and the offline map draws them
+  ([The offline map](docs/operate/offline-map.md)).
 - [ ] **Load the map's data without the base style** _(P3 · S)_ — the first cache fetch runs on MapLibre's
       `load` event (`apps/web/src/platform/useMapInstance.ts`), which fires only once the base style has loaded.
       When the online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty

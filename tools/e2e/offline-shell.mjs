@@ -9,8 +9,10 @@
  *   2. Open the app: the service worker installs, stores the shell and takes control.
  *   3. Make an offline pack of the locator square at the map centre in the Offline panel (the stand-in
  *      gateway answers with one cache in the middle of the square), so it lands in IndexedDB.
+ *      The instance offers an offline map (a one-tile PMTiles archive, read by byte range), which the pack
+ *      takes along.
  *   4. Cut the connection and reload: the app starts from the stored shell, signed in as the remembered
- *      call, with the map (MapLibre comes from the shell too) showing the pack's caches.
+ *      call, with the map (MapLibre comes from the shell too) drawing the pack's tiles and showing its caches.
  *
  * If no Chromium is found it prints SKIP and exits 0, like audio-mic.mjs, and fails in CI (`CI` set), where
  * the e2e-offline job installs one.
@@ -22,6 +24,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { locatorBounds } from "../../packages/shared/src/offlinepack.ts";
+import { buildArchive } from "../../apps/web/test/fixtures/pmtiles.ts";
+
+/** The instance's offline map: one world tile at zoom 0, enough for a pack to hold and draw. */
+const ARCHIVE = buildArchive([{ z: 0, x: 0, y: 0, bytes: [0x1a, 0x00] }]);
+const MAP_ATTRIBUTION = "© E2E test map";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIST = path.join(ROOT, "apps/web/dist");
@@ -114,6 +121,23 @@ function serve() {
       return send(200, TYPES[".json"], JSON.stringify({ instance: "e2e.test" }));
     if (url.pathname === "/api/caches") return send(200, TYPES[".json"], JSON.stringify({ caches: [] }));
     if (url.pathname === "/api/offline/pack") return send(200, TYPES[".json"], JSON.stringify(pack(url)));
+    if (url.pathname === "/api/offline/tiles")
+      return send(
+        200,
+        TYPES[".json"],
+        JSON.stringify({ url: "/tiles/offline.pmtiles", attribution: MAP_ATTRIBUTION, maxZoom: 14 }),
+      );
+    if (url.pathname === "/tiles/offline.pmtiles") {
+      const m = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? "");
+      if (!m) return send(416, "text/plain", "ask for a range");
+      const start = Number(m[1]),
+        end = Math.min(Number(m[2]), ARCHIVE.length - 1);
+      res.writeHead(206, {
+        "content-type": "application/vnd.pmtiles",
+        "content-range": `bytes ${start}-${end}/${ARCHIVE.length}`,
+      });
+      return res.end(Buffer.from(ARCHIVE.subarray(start, end + 1)));
+    }
     if (/^\/(api|auth|federation|ws|health)\b/.test(url.pathname))
       return send(404, TYPES[".json"], JSON.stringify({ error: "not in this test" }));
     let file = path.join(DIST, path.normalize(decodeURIComponent(url.pathname)));
@@ -190,6 +214,11 @@ async function main() {
       .then(() => true)
       .catch(() => false);
     check("offline: the map loads from the shell", map);
+    const offlineMap = await page
+      .waitForSelector(`.maplibregl-ctrl-attrib:has-text("${MAP_ATTRIBUTION}")`, { state: "attached", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    check("offline: the map draws the pack's own tiles (its attribution shows)", offlineMap);
     const banner = await page
       .waitForSelector('.offline-banner:has-text("caches from pack")', { timeout: 15_000 })
       .then(() => true)

@@ -27,6 +27,7 @@ import { resolveServerSecrets } from "./secrets.js";
 import { makeD1 } from "./d1.js";
 import { migrate } from "./migrate.js";
 import { makeFsMedia } from "./media.js";
+import { fileTiles } from "./tiles.js";
 import {
   fedSyncInterval,
   gitHead,
@@ -89,7 +90,7 @@ console.log(ran.length ? `migrations applied: ${ran.join(", ")}` : "migrations u
 const rooms = new RoomsCore();
 const env: Env = {
   DB: makeD1(sqlite),
-  TILES: {}, // reserved seam (offline tile packs)
+  TILES: fileTiles(process.env.OFFLINE_TILES_PATH), // the offline map archive, when the operator provides one
   MEDIA: makeFsMedia(MEDIA_DIR),
   ROOMS: roomNamespace(rooms),
   ...stringEnvFrom(process.env), // forward EVERY config key, not a hand-picked subset

@@ -81,6 +81,7 @@ nav:
       - Deployment helpers: operate/helpers.md
       - Running in Docker: operate/docker.md
       - "Pocket: a station on a phone": operate/pocket.md
+      - The offline map: operate/offline-map.md
       - Your first hour as sysop: operate/first-hour.md
       - "Connect a radio: quick starts": operate/quickstarts.md
       - RF ingest & transports: operate/rf-ingest.md

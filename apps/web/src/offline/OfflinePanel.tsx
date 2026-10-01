@@ -24,7 +24,33 @@ import {
   type SaveProgress,
 } from "./download.js";
 import { userPacks } from "./packs.js";
+import { invalidatePackTiles } from "./packTiles.js";
+import { planTiles, tileBudget, type ArchiveInfo, type TileReader, type TilesConfig } from "./tiles.js";
+import { PMTiles } from "pmtiles";
 import type { PackMeta } from "./store.js";
+
+/** The instance's offline map, when it offers one: its settings, the archive's header and a tile reader. */
+async function offlineMap(): Promise<{ config: TilesConfig; info: ArchiveInfo; reader: TileReader } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/offline/tiles`);
+    const config = (await res.json()) as TilesConfig;
+    if (!res.ok || !config.url) return null;
+    const archive = new PMTiles(/^https?:/.test(config.url) ? config.url : API_BASE + config.url);
+    const h = await archive.getHeader();
+    return {
+      config,
+      info: {
+        minZoom: h.minZoom,
+        maxZoom: h.maxZoom,
+        numTileContents: h.numTileContents,
+        tileDataLength: h.tileDataLength,
+      },
+      reader: archive,
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** A pack older than this shows as stale. */
 const STALE_DAYS = 7;
@@ -94,6 +120,7 @@ function PackRow(props: { pack: PackMeta; onChanged: () => void }) {
     )
       return;
     await (await offlineReady()).deletePack(p.id);
+    invalidatePackTiles();
     props.onChanged();
   };
   return (
@@ -153,6 +180,9 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   const [progress, setProgress] = useState<SaveProgress | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  // the instance's offline map, read when the size is checked: its settings, the archive's header, a reader
+  const [mapSrc, setMapSrc] = useState<{ config: TilesConfig; info: ArchiveInfo; reader: TileReader } | null>(null);
+  const [withMap, setWithMap] = useState(true);
   const locator = normalizeLocator(input);
   useSquareOutline(map, locator);
 
@@ -176,6 +206,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
       const est = estimatePack(d);
       setData({ area, data: d, est });
       if (!est.fullFits && images === "full") setImages("thumbs");
+      setMapSrc(await offlineMap());
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -205,8 +236,15 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
           refreshedAt: now,
         },
         data.data,
-        { onProgress: setProgress, signal: abort.current.signal },
+        {
+          onProgress: setProgress,
+          signal: abort.current.signal,
+          ...(withMap &&
+            mapSrc &&
+            plan && { tiles: { reader: mapSrc.reader, plan, attribution: mapSrc.config.attribution } }),
+        },
       );
+      invalidatePackTiles();
       if (first && navigator.storage?.persist) {
         const kept = await navigator.storage.persist().catch(() => false);
         toast(kept ? "Pack saved; the browser keeps it" : "Pack saved; the browser may clear it when space runs low");
@@ -225,6 +263,16 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
   };
 
   const est = data?.est;
+  const imageBytes = !est ? 0 : images === "full" ? est.fullBytes : images === "thumbs" ? est.thumbsBytes : 0;
+  const plan =
+    est && mapSrc && data
+      ? planTiles(
+          mapSrc.info,
+          locatorBounds(data.area.locator),
+          mapSrc.config.maxZoom,
+          tileBudget(est.dataBytes + imageBytes),
+        )
+      : null;
   return (
     <div className="newpack">
       <label>
@@ -306,13 +354,32 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
               {!est!.fullFits && " — more than a pack holds"}
             </label>
           </fieldset>
+          {!mapSrc ? (
+            <p className="muted fine">
+              This instance offers no offline map: offline, the map shows a grid under the caches.
+            </p>
+          ) : plan ? (
+            <label>
+              <input type="checkbox" checked={withMap} onChange={(e) => setWithMap(e.target.checked)} /> The map, zoom{" "}
+              {plan.minZoom}–{plan.maxZoom}: about {mb(plan.estBytes)}
+              {plan.maxZoom < Math.min(mapSrc.info.maxZoom, mapSrc.config.maxZoom) && " (less detail, to fit the pack)"}
+            </label>
+          ) : (
+            <p className="muted fine">
+              The square is too large for its map to fit a pack; take a smaller square for the map.
+            </p>
+          )}
           <label>
             Name
             <input value={name} placeholder={data.area.locator} onChange={(e) => setName(e.target.value)} />
           </label>
           {progress ? (
             <div className="row">
-              <progress max={progress.total || 1} value={progress.done} aria-label="Downloading images" />
+              <progress
+                max={progress.total || 1}
+                value={progress.done}
+                aria-label={progress.what === "map" ? "Downloading the map" : "Downloading images"}
+              />
               <Button onClick={() => abort.current?.abort()}>Stop</Button>
             </div>
           ) : (

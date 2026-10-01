@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Env } from "./env.js";
-import type { ExecCtx, MediaStore } from "./runtime.js";
+import type { ExecCtx, MediaStore, TileArchive } from "./runtime.js";
 import { handle, runScheduled, runFrequentSync } from "./app.js";
 import { applyWorkerDefaults } from "./budget.js";
 export { RegionRoom } from "./room.js";
@@ -23,11 +23,34 @@ function adaptR2(bucket: any): MediaStore | undefined {
   };
 }
 
+/** The offline map archive in the TILES bucket, read by range; absent when the object is not there. */
+function adaptTiles(bucket: any, key: string): TileArchive | undefined {
+  if (!bucket) return undefined;
+  return {
+    stat: async () => {
+      const o = await bucket.head(key);
+      return o ? { size: o.size as number, etag: o.etag as string } : null;
+    },
+    read: async (offset, length) => {
+      const o = await bucket.get(key, { range: { offset, length } });
+      return o ? new Uint8Array(await o.arrayBuffer()) : new Uint8Array(0);
+    },
+  };
+}
+
 export default {
   // The Worker's own defaults (the D1 write budget is on here, off on Node/Bun) are applied only in this
   // entry, which the self-host servers never load.
   fetch(req: Request, env: Env, ctx: ExecCtx): Promise<Response> {
-    return handle(req, applyWorkerDefaults({ ...env, MEDIA: adaptR2((env as any).MEDIA) }), ctx);
+    return handle(
+      req,
+      applyWorkerDefaults({
+        ...env,
+        MEDIA: adaptR2((env as any).MEDIA),
+        TILES: adaptTiles((env as any).TILES, env.OFFLINE_TILES_KEY || "offline.pmtiles"),
+      }),
+      ctx,
+    );
   },
   scheduled(event: { cron?: string }, env: Env): Promise<void> {
     applyWorkerDefaults(env);

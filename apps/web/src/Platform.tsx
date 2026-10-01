@@ -29,7 +29,8 @@ import { TopBar } from "./TopBar.js";
 import { Tour, TOUR_STEPS, Ico, Button, useToast } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET, MAP_MARKER } from "./brand.js";
-import { buildGraticuleStyle, buildPhosphorStyle } from "./offlineBasemap.js";
+import { buildGraticuleStyle, buildPackTileStyle, buildPhosphorStyle } from "./offlineBasemap.js";
+import { packTilesSummary, registerPackTiles } from "./offline/packTiles.js";
 import {
   FormatContext,
   makeFormatters,
@@ -65,7 +66,10 @@ import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { OutboxPanel } from "./log/OutboxPanel.js";
 import { OfflinePanel } from "./offline/OfflinePanel.js";
 import type { OfflineSource } from "./offline/packs.js";
-import type { OfflineFrom } from "./api.js";
+import { offlineReady, type OfflineFrom } from "./api.js";
+
+// offline packs' map tiles answer acs-pack:// requests (offline/packTiles.ts)
+registerPackTiles(offlineReady);
 import { CommunityPanel } from "./activity/CommunityPanel.js";
 import { ProfilePanel } from "./profile/ProfilePanel.js";
 import { ShackPanel } from "./shack/ShackPanel.js";
@@ -400,8 +404,33 @@ export default function Platform({ session, startTour }: { session: SessionState
     }
     themeAtMount.current = locSettings.theme;
     m.setStyle(baseStyle());
+    styleKind.current = "base";
     m.once("idle", () => setStyleEpoch((e) => e + 1)); // idle (not styledata) → no setData feedback loop
   }, [locSettings.theme, mapRef]);
+
+  // Offline, the map draws the packs' tiles when any pack holds them (else the grid stays); back online,
+  // the configured basemap returns. Overlays re-add themselves on the style epoch, as on a theme switch.
+  const styleKind = useRef<"base" | "packs">("base");
+  const showingOffline = offlineMap != null;
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    let live = true;
+    void (async () => {
+      let next: StyleSpecification | string | null = null;
+      if (showingOffline && styleKind.current === "base") {
+        const tiles = await packTilesSummary(await offlineReady());
+        if (tiles) next = buildPackTileStyle(tiles.maxZoom, tiles.attribution);
+      } else if (!showingOffline && styleKind.current === "packs") next = baseStyle();
+      if (!live || !next) return;
+      styleKind.current = showingOffline ? "packs" : "base";
+      m.setStyle(next);
+      m.once("idle", () => setStyleEpoch((e) => e + 1));
+    })();
+    return () => {
+      live = false;
+    };
+  }, [showingOffline, mapRef]);
 
   // ---- browser history: the back button closes what is open (see nav.ts createViewHistory) ----
   // The deep link is read at mount, before the first sync rewrites the query.
