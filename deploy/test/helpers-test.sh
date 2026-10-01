@@ -97,7 +97,7 @@ run() { "$H" "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
 check "help prints the commands" bash -c "'$H' help | grep -q 'rotate-secret'"
 check "an unknown command fails" bash -c "! '$H' frob 2>/dev/null"
 check "an unknown shape fails" bash -c "! '$H' init mainframe 2>/dev/null"
-check "a shape without a command explains it" bash -c "'$H' --shape desktop update 2>&1 | grep -q 'not available for the desktop shape'"
+check "a shape without a command explains it" bash -c "'$H' --shape ingest-box restore x.tar.gz 2>&1 | grep -q 'not available for the ingest-box shape'"
 check "status --json is JSON" bash -c "'$H' --shape desktop --json status | node -e 'JSON.parse(require(\"fs\").readFileSync(0,\"utf8\"))' 2>/dev/null || ! have node"
 
 E2="$TMP/selfhost.env"
@@ -312,6 +312,39 @@ fi
 check "  … and says what it costs" grep -q "D1 bills every row written" "$TMP/out"
 check "  … and recorded nothing" test ! -e "$APRSCACHING_SHAPE_FILE"
 check "init ingest-box --help lists its options" bash -c "'$H' init ingest-box --help | grep -q -- '--code CODE'"
+
+# ---- backup archives (the parts that need no database) -----------------------------------------------------
+NEWEST="$(find "$DEPLOY/../db/migrations" -name '*.sql' -exec basename {} \; | sort | tail -n 1)"
+mkarchive() { # mkarchive FILE SCHEMA: a minimal archive with a manifest, rows and settings
+  local d="$TMP/arch"
+  rm -rf "$d" && mkdir -p "$d/secrets"
+  printf '{\n  "format": "aprscaching-backup/1",\n  "createdAt": 1790000000,\n  "shape": "selfhost",\n  "schema": "%s",\n  "sensitive": true\n}\n' "$2" >"$d/manifest.json"
+  printf -- '-- aprscaching rows/1 schema=%s\nINSERT INTO "caches" ("id") VALUES(1);\nINSERT INTO "caches" ("id") VALUES(2);\nINSERT INTO "watches" ("callsign") VALUES(\x27A\x27);\n' "$2" >"$d/rows.sql"
+  printf 'APP_URL=https://aprs.example.net\nDB_PATH=/elsewhere/x.db\nADMIN_CALLSIGNS=OE8APR\n' >"$d/settings.env"
+  tar -czf "$1" -C "$d" .
+}
+mkarchive "$TMP/a.tar.gz" "$NEWEST"
+tar -xzf "$TMP/a.tar.gz" -C "$TMP" ./rows.sql
+check "rows are counted per table" eq "$(bash -c ". '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/backup.sh'; rows_counts_json '$TMP/rows.sql'")" '{"caches":2,"watches":1}'
+PDATA="$TMP/pk"
+mkdir -p "$PDATA"
+printf 'APP_URL=http://192.168.43.1:8787\nDB_PATH=%s/aprscaching.db\n' "$PDATA" >"$PDATA/.env"
+restore_dry() { APRSCACHING_DATA="$PDATA" "$H" --shape pocket restore "$@" </dev/null >"$TMP/out" 2>"$TMP/err"; }
+check "a dry run describes the restore" restore_dry "$TMP/a.tar.gz" --dry-run
+check "  … names the instance settings it would restore, not the host's" bash -c "grep -q 'settings restored: APP_URL ADMIN_CALLSIGNS\$' '$TMP/out'"
+check "  … and changes nothing" eq "$(env_file_get "$PDATA/.env" APP_URL)" "http://192.168.43.1:8787"
+check "  … says the move between shapes keeps APP_URL" grep -q "keep the same APP_URL" "$TMP/out"
+mkarchive "$TMP/future.tar.gz" "9999_from_the_future.sql"
+if restore_dry "$TMP/future.tar.gz" --dry-run; then bad "a backup newer than the checkout is refused"; else ok "a backup newer than the checkout is refused"; fi
+check "  … with the way out" grep -q "Update this installation first" "$TMP/err"
+printf 'not an archive' >"$TMP/junk.tar.gz"
+if restore_dry "$TMP/junk.tar.gz" --dry-run; then bad "a file that is not an archive is refused"; else ok "a file that is not an archive is refused"; fi
+if APRSCACHING_DATA="$PDATA" "$H" --non-interactive --shape pocket restore "$TMP/a.tar.gz" </dev/null >/dev/null 2>&1; then
+  bad "a restore without --yes changes nothing when nobody can be asked"
+else
+  ok "a restore without --yes changes nothing when nobody can be asked"
+fi
+check "  … the settings are untouched" eq "$(env_file_get "$PDATA/.env" APP_URL)" "http://192.168.43.1:8787"
 
 check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"
 check "  … 4.36 too" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least v4.36 4 35 t"

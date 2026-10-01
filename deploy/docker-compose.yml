@@ -21,6 +21,8 @@ services:
         required: false
     environment:
       DB_PATH: /data/aprscaching.db
+      # cache media in the data volume, so it survives a rebuild of the image
+      MEDIA_DIR: /data/media
       PORT: "8080"
       # The gateway refuses to boot without a real INGEST_SECRET — without this passthrough the
       # container restart policy would just crash-loop it. An empty SESSION_SECRET is generated on first

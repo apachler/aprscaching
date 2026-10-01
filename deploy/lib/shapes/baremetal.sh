@@ -264,12 +264,62 @@ shape_status() {
   while IFS= read -r line; do [ -z "$line" ] || info "$line"; done <<<"$states"
 }
 
-# backup: deploy/backup.sh with this installation's settings and database, as the service user.
-shape_backup() {
-  local dir
-  [ -f "$SHAPE_ENV" ] || die "$SHAPE_ENV is missing." "Run deploy/aprscaching init baremetal first."
-  dir="$(dirname "$(dirname "$SHAPE_ENV")")"
+# ---- backup and restore (deploy/lib/backup.sh): the installation's own checkout and data directory, as
+# the service user.
+bm_dir() { dirname "$(dirname "$SHAPE_ENV")"; }
+bm_ctx() {
   BM_DRY=0
   BM_HOME="/var/lib/$BM_USER"
-  bm_user bash -c "set -a && . '$SHAPE_ENV' && set +a && DB_PATH='$dir/data/aprscaching.db' exec '$dir/deploy/backup.sh'"
+  [ -f "$SHAPE_ENV" ] || die "$SHAPE_ENV is missing." "Run deploy/aprscaching init baremetal first."
+}
+shape_db_dump() {
+  bm_ctx
+  bm_user node "$(bm_dir)/tools/backup/db.mjs" dump "$(bm_dir)/data/aprscaching.db"
+}
+shape_db_restore() {
+  local dir ts f
+  bm_ctx
+  dir="$(bm_dir)"
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  bm_user rm -f "$dir/data/restore.db"
+  bm_user node "$dir/tools/backup/db.mjs" restore "$dir/data/restore.db" "$dir/db/migrations" "$2" ${3:+--exact} <"$1" >&2
+  for f in aprscaching.db aprscaching.db-wal aprscaching.db-shm; do
+    if [ -e "$dir/data/$f" ]; then bm_user mv "$dir/data/$f" "$dir/data/before-restore-$ts-$f"; fi
+  done
+  bm_user mv "$dir/data/restore.db" "$dir/data/aprscaching.db"
+}
+shape_secrets_dump() {
+  bm_ctx
+  bm_user sh -c 'cd "$0" && set -- *.secret && if [ -e "$1" ]; then tar -cf - "$@"; else tar -cf - -T /dev/null; fi' "$(bm_dir)/data" |
+    tar -xf - -C "$1"
+}
+shape_secrets_restore() {
+  bm_ctx
+  tar -cf - -C "$1" . | bm_user sh -c 'cd "$0" && tar -xf - && chmod 600 ./*.secret' "$(bm_dir)/data"
+}
+shape_media_dump() {
+  bm_ctx
+  bm_user sh -c 'mkdir -p "$0" && cd "$0" && tar -cf - .' "$(bm_dir)/data/media" | tar -xf - -C "$1"
+}
+shape_media_restore() {
+  bm_ctx
+  tar -cf - -C "$1" . | bm_user sh -c 'mkdir -p "$0" && cd "$0" && tar -xf -' "$(bm_dir)/data/media"
+}
+# shellcheck disable=SC2086 # two unit names
+shape_stop() { bm_root systemctl stop $BM_UNITS; }
+# shellcheck disable=SC2086 # two unit names
+shape_start() { bm_root systemctl start $BM_UNITS; }
+
+# ---- update (deploy/lib/update.sh): the installation's checkout as the service user, its dependencies and
+# web build, then the units restarted; the gateway applies new migrations when it starts.
+shape_git() {
+  bm_ctx
+  bm_user git -C "$(bm_dir)" "$@"
+}
+shape_update_apply() {
+  bm_ctx
+  bm_user bash -c "cd '$(bm_dir)' && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @aprscaching/web build" ||
+    return 1
+  # shellcheck disable=SC2086 # two unit names
+  bm_root systemctl restart $BM_UNITS
 }

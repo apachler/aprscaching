@@ -186,3 +186,8 @@ shape_doctor_signed_check() {
   ib_compose exec -T -w /app/apps/ingest ingest node --import tsx src/check.ts 2>/dev/null ||
     echo "0 the ingest container is not running"
 }
+
+# ---- update (deploy/lib/update.sh): this checkout, the ingest image rebuilt and the container restarted.
+# An ingest box holds no database, so its update rolls back the code alone.
+shape_git() { git -C "$DEPLOY_DIR/.." "$@"; }
+shape_update_apply() { ib_compose up -d --build ingest; }

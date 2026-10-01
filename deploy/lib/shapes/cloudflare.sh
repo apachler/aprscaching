@@ -99,3 +99,77 @@ shape_doctor_extra() {
     failc pages.api_base "the app at $DOC_PUBLIC was built for another gateway" "rebuild it with VITE_API_BASE=$DOC_BASE and redeploy"
   fi
 }
+
+# ---- backup and restore (deploy/lib/backup.sh) through wrangler, on the remote D1 database. R2 media is not
+# part of these archives: D1 Time Travel and an R2 copy cover them (docs/operate/deployment.md, Backups).
+cf_db() { sed -n 's/^database_name *= *"\(.*\)"/\1/p' "$CF_WORKER_DIR/wrangler.toml" | head -n 1; }
+cf_wrangler() { (cd "$CF_WORKER_DIR" && wrangler "$@"); }
+cf_need() { have wrangler || die "wrangler is not installed." "npm i -g wrangler, then wrangler login."; }
+
+# A one-value SQL query on the remote database, the value on stdout.
+cf_query() {
+  cf_wrangler d1 execute "$(cf_db)" --remote --json --command "$1" 2>/dev/null |
+    node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));const r=(j[0]||j).results||[];for(const x of r)console.log(Object.values(x)[0])'
+}
+
+shape_db_dump() {
+  local schema out
+  cf_need
+  schema="$(cf_query "SELECT name FROM d1_migrations ORDER BY name DESC LIMIT 1" | head -n 1)"
+  [ -n "$schema" ] || die "The D1 database reports no applied migration."
+  out="$(mktemp)"
+  cf_wrangler d1 export "$(cf_db)" --remote --no-schema --output "$out" >&2
+  node "$DEPLOY_DIR/../tools/backup/db.mjs" from-d1 "$schema" <"$out"
+  rm -f "$out"
+}
+
+shape_db_restore() {
+  local current tables sql
+  cf_need
+  current="$(cf_query "SELECT name FROM d1_migrations ORDER BY name DESC LIMIT 1" | head -n 1)"
+  [ "$current" = "$2" ] || die "D1 is at $current, the backup at $2." \
+    "Restore into D1 at the backup's schema: apply its migrations, or restore on a self-hosted shape first."
+  info "D1 Time Travel can undo this restore; the bookmark of the present moment:"
+  cf_wrangler d1 time-travel info "$(cf_db)" >&2 || true
+  tables="$(cf_query "SELECT name FROM sqlite_master WHERE type = 'table'" | paste -sd, -)"
+  sql="$(mktemp)"
+  node "$DEPLOY_DIR/../tools/backup/db.mjs" to-d1 "$tables" <"$1" >"$sql"
+  cf_wrangler d1 execute "$(cf_db)" --remote --yes --file "$sql" >&2
+  rm -f "$sql"
+}
+
+# The Worker keeps its settings as secrets and vars: secrets go back with wrangler, vars are listed.
+shape_settings_restore() {
+  local key value vars=()
+  cf_need
+  while IFS= read -r key; do
+    case "$BACKUP_HOST_KEYS" in *" $key "*) continue ;; esac
+    cfg_known "$key" && [[ "$(cfg_field "$key" 3)" == *gateway* ]] || continue
+    value="$(env_file_get "$1" "$key")"
+    [ -n "$value" ] || continue
+    if cfg_secret "$key"; then
+      printf '%s' "$value" | cf_wrangler secret put "$key" >/dev/null
+      info "secret $key set in the Worker"
+    else
+      vars+=("$key")
+    fi
+  done < <(env_file_keys "$1")
+  [ "${#vars[@]}" = 0 ] || info "Set these in wrangler.toml [vars] from the backup's settings: ${vars[*]}"
+}
+
+# ---- update (deploy/lib/update.sh): this checkout, published with cloudflare/publish.sh (migrations, the
+# Worker, the app). A rollback takes D1 back with Time Travel to the moment before the update.
+shape_git() { git -C "$DEPLOY_DIR/.." "$@"; }
+shape_update_apply() {
+  local api
+  cf_need
+  api="${APRSCACHING_API_BASE:-$(cf_recorded api || true)}"
+  [ -n "$api" ] || die "The Worker's URL is not known here." "Set APRSCACHING_API_BASE=https://…"
+  API_BASE="$api" bash "$DEPLOY_DIR/cloudflare/publish.sh"
+}
+shape_rollback_db() {
+  local at
+  at="$(date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ)"
+  cf_wrangler d1 time-travel restore "$(cf_db)" --timestamp="$at" ||
+    die "D1 Time Travel did not restore." "Run it yourself: (cd workers/gateway && wrangler d1 time-travel restore $(cf_db) --timestamp=$at)"
+}

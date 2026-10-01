@@ -69,7 +69,7 @@ What comes up:
 
 | Service | Role | Notes |
 |---|---|---|
-| `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one); also takes `OPERATOR_SECRET` and `SESSION_SECRET` (an empty session secret is generated into the `data` volume) |
+| `gateway` | Node + SQLite gateway on `:8080` inside the stack (not published; Caddy proxies to it) | DB and cache media (`/data/media`) in the `data` volume; healthcheck on `/health`; **requires `INGEST_SECRET`** (it refuses to boot with the default — `setup.sh` generates one); also takes `OPERATOR_SECRET` and `SESSION_SECRET` (an empty session secret is generated into the `data` volume) |
 | `ingest` | APRS-IS (and optional RF) feed | Waits for the gateway healthcheck; config from `.env`, with `OPERATOR_SECRET`, `SESSION_SECRET` and `FED_PRIVATE_KEY` blanked — the ingest box holds only `INGEST_SECRET` |
 | `webdist` | one-shot | Copies the SPA built inside the image into the volume Caddy serves (a fresh clone has no host `apps/web/dist` — it is gitignored) |
 | `caddy` | TLS + SPA + reverse proxy | `DOMAIN=:80` = plain HTTP (local/off-grid); `DOMAIN=your.host` = automatic Let's Encrypt |

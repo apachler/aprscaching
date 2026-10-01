@@ -46,3 +46,40 @@ shape_doctor_context() {
   [ -n "${OPERATOR_SECRET:-}" ] || OPERATOR_SECRET="$(cat "$dir/operator.secret" 2>/dev/null || true)"
   [ -n "${INGEST_SECRET:-}" ] || INGEST_SECRET="$(cat "$dir/ingest.secret" 2>/dev/null || true)"
 }
+
+# Portable backups of the desktop app's data directory, with Node.js and this checkout. The app must be
+# closed for a restore: it holds the database open.
+dk_need_node() { have node || die "Node.js is needed here to read the desktop app's database." "Or copy its data directory: $(desktop_data_dir)"; }
+shape_db_dump() {
+  dk_need_node
+  node "$DEPLOY_DIR/../tools/backup/db.mjs" dump "$(desktop_data_dir)/aprscaching.db"
+}
+shape_db_restore() {
+  local dir ts f
+  dk_need_node
+  dir="$(desktop_data_dir)"
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  rm -f "$dir/restore.db"
+  node "$DEPLOY_DIR/../tools/backup/db.mjs" restore "$dir/restore.db" "$DEPLOY_DIR/../db/migrations" "$2" ${3:+--exact} <"$1" >&2
+  for f in aprscaching.db aprscaching.db-wal aprscaching.db-shm; do
+    if [ -e "$dir/$f" ]; then mv "$dir/$f" "$dir/before-restore-$ts-$f"; fi
+  done
+  mv "$dir/restore.db" "$dir/aprscaching.db"
+}
+shape_secrets_dump() { (cd "$(desktop_data_dir)" && for f in *.secret; do if [ -e "$f" ]; then cp -p "$f" "$1/"; fi; done); }
+shape_secrets_restore() { cp -p "$1"/*.secret "$(desktop_data_dir)/" && chmod 600 "$(desktop_data_dir)"/*.secret; }
+shape_media_dump() { if [ -d "$(desktop_data_dir)/media" ]; then cp -a "$(desktop_data_dir)/media/." "$1/"; fi; }
+shape_media_restore() { mkdir -p "$(desktop_data_dir)/media" && cp -a "$1/." "$(desktop_data_dir)/media/"; }
+shape_stop() {
+  if curl -fsS -o /dev/null --max-time 3 "http://${HOST:-127.0.0.1}:${PORT:-8787}/health" 2>/dev/null; then
+    die "The desktop app is running." "Quit it, then restore again."
+  fi
+}
+
+# The desktop app updates by replacing its binary; its data directory stays.
+shape_update() {
+  step "Updating the desktop app"
+  info "Download the new binary for your system from the project's release page and replace the old one."
+  info "Its data directory ($(desktop_data_dir)) stays; the app applies new migrations when it starts."
+  info "Take a backup first: deploy/aprscaching backup"
+}

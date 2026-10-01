@@ -43,9 +43,9 @@ The output is plain text with no colour codes, so it reads the same in a termina
 | `init` | `setup.sh` | `cloudflare/deploy-cf.sh`, after a cost warning | enrollment, feeds, radios, start | user, checkout, build, `.env`, units | `pocket/wizard.sh` | how to get the binary |
 | `status` | health + containers | Worker health | containers | health + units | `pocket/status.sh` | health |
 | `doctor` | yes | yes | yes | yes | yes | yes |
-| `backup` | `backup.sh` | — | — | `backup.sh` | `pocket/backup.sh` | — |
-| `restore <file>` | — | — | — | — | `pocket/backup.sh --restore` | — |
-| `update` | — | — | — | — | `pocket/update.sh` | — |
+| `backup` | portable archive | portable archive (D1 export) | — | portable archive | portable archive | portable archive (needs Node.js) |
+| `restore <file>` | yes | yes (D1 at the backup's schema) | — | yes | yes; Pocket's own archives too | yes, with the app closed |
+| `update` | rollback | rollback (D1 Time Travel) | code only | rollback | `pocket/update.sh` | how to replace the binary |
 | `rotate-secret <name>` | `deploy/.env` | `wrangler secret put` | `deploy/.env` | `<dir>/deploy/.env` | `~/.aprscaching/.env` | — |
 
 A command a shape does not support says so and exits without changing anything. The existing scripts
@@ -81,6 +81,87 @@ settings are not readable from your machine: `doctor` checks it over the interne
 when `OPERATOR_SECRET` is in the environment. `APRSCACHING_API_BASE` and `APRSCACHING_APP_URL` name the
 Worker's and the app's URLs when `init` did not record them. The desktop app's secrets are read from its
 data directory.
+
+## Backup and restore
+
+```bash
+deploy/aprscaching backup                         # one archive: database rows, settings, generated secrets, manifest
+deploy/aprscaching backup --with-media --dest /mnt/usb
+deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz --dry-run
+deploy/aprscaching restore aprscaching-selfhost-20261001T120000Z.tar.gz
+```
+
+`backup` writes one portable archive, `aprscaching-<shape>-<UTC time>.tar.gz`, to `--dest`, else `BACKUP_DIR`,
+else `deploy/backups`. It holds:
+
+- `rows.sql` — every row of the database as SQL, with the newest migration it had. The rows are read in one
+  transaction, so the gateway may keep running.
+- `settings.env` — the `.env` (`--no-settings` leaves it out).
+- `secrets/` — the secrets the gateway generated beside its database (`session.secret`; on the desktop also
+  the ingest and operator secrets).
+- `media/` — only with `--with-media`.
+- `manifest.json` — the shape, the time, the schema, the commit and the row counts.
+
+The archive holds the instance's secrets, so it is created readable by its owner only. Keep it off shared
+folders.
+
+`restore` replaces the instance's data with an archive's:
+
+1. It refuses an archive from a newer schema than this checkout knows: update first.
+2. `--dry-run` shows what it would restore and changes nothing.
+3. It stops the instance and builds a new database: the migrations up to the archive's schema, then its rows,
+   then every newer migration. The old database stays beside it as `before-restore-<time>-*`.
+4. It restores the instance settings: identity, secrets, federation, operator. It keeps this host's own:
+   `INGEST_URL`, paths, ports, `DOMAIN`, the tunnel token, `TRUST_PROXY`/`TRUST_CF`, and the box's key.
+5. It restores the secret files and any media, starts the instance and runs `doctor`.
+
+On the Cloudflare split, `backup` exports D1 with `wrangler d1 export --no-schema`. `restore` needs D1 at the
+archive's schema, prints a Time Travel bookmark first, then replaces D1's rows. It sets the archive's secrets
+with `wrangler secret put` and lists the plain settings to put in `wrangler.toml`. R2 media is not part of
+the archive; see [Backups](deployment.md#backups).
+
+`deploy/backup.sh` stays the scheduled snapshot for cron: it uploads to a bucket. `doctor` counts both kinds
+when it checks the age of the newest backup.
+
+### Moving between shapes
+
+Take a backup on the old shape, `init` the new one, then `restore` there. For example, Pocket → Self-host, or
+Self-host → bare metal. Keep these the same:
+
+- **`APP_URL`**, and with it `RP_ID`: passkeys are bound to that domain, and a new one locks every member's
+  passkey out.
+- **The federation signing key**, which moves inside the archive: peers pin it, and a new key breaks their
+  trust.
+
+After the move, point the ingest box at the new address, or enroll it again.
+
+## Update
+
+```bash
+deploy/aprscaching update                 # to the newest release tag, else the branch's head
+deploy/aprscaching update --ref v1.2.0
+```
+
+1. It fetches, refuses a checkout with local changes, and shows the current and target versions with the
+   commits in between.
+2. It runs `doctor` and takes a backup.
+3. It moves the checkout to the target and brings the instance onto it:
+   - Self-host: rebuild and restart with compose;
+   - bare metal: install, build the web app, restart the units;
+   - Cloudflare: `cloudflare/publish.sh`;
+   - ingest box: rebuild the container.
+
+   The gateway applies new migrations when it starts.
+4. It runs `doctor` again. If a check fails that did not fail before the update, it rolls back:
+   1. the database to the pre-update backup, held at the backup's schema;
+   2. then the code, rebuilt and restarted.
+
+   This happens automatically while the backup is younger than `--rollback-window` (15 minutes). After that
+   it asks first, because a database rollback loses what was written since. On the Cloudflare split, the
+   database goes back with D1 Time Travel. An ingest box has no database, so only its code rolls back.
+
+A failure that existed before the update does not trigger a rollback. Pocket updates with
+`pocket/update.sh`. The desktop app updates by replacing its binary.
 
 ## Self-host
 

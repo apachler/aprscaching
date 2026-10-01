@@ -8,7 +8,7 @@ callsign and support key management, signing, and verification.
 ```bash
 cd deploy && ./setup.sh                  # first-run wizard: writes .env (operator call, APP_URL, APRS-IS feed, site call, INGEST_SECRET, OPERATOR_SECRET, FED_PRIVATE_KEY)
 deploy/setup.sh --non-interactive --call OE8APR --domain aprs.example.net   # the same from flags (--help lists them)
-deploy/aprscaching init <shape>          # set up any shape, then status, backup, rotate-secret, … (see Deployment helpers)
+deploy/aprscaching init <shape>          # set up any shape, then status, doctor, update, backup, restore, rotate-secret (see Deployment helpers)
 deploy/backup.sh                         # SQLite snapshot, uploaded to BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET — run nightly from cron
 deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1 + R2 + Pages); needs wrangler + Cloudflare login
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID

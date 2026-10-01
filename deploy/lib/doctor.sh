@@ -449,10 +449,16 @@ doc_backup_destination() {
   local dir
   dir="$(doc_get BACKUP_DIR)"
   if [ -n "$dir" ]; then
-    DOC_BACKUP_DIR="$dir/db"
-    DOC_BACKUP_GLOB="*.db.gz"
+    # backup.sh's snapshots (db/) and deploy/aprscaching backup's archives
+    DOC_BACKUP_DIR="$dir"
+    DOC_BACKUP_GLOB="db/*.db.gz aprscaching-*.tar.gz"
   elif [ -n "$(doc_get OCI_BUCKET)$(doc_get BACKUP_BUCKET)" ]; then
     pass resources.backup "backups go to a bucket (their age is not checked from here)"
+  elif compgen -G "$DEPLOY_DIR/backups/aprscaching-*.tar.gz" >/dev/null; then
+    DOC_BACKUP_DIR="$DEPLOY_DIR/backups"
+    DOC_BACKUP_GLOB="aprscaching-*.tar.gz"
+    warnc resources.backup_place "backups are only on this host's disk ($DOC_BACKUP_DIR)" \
+      "set BACKUP_DIR to another disk or mount, or copy the archives off this host" "$DOCS_URL/deployment.md#backups"
   else
     failc resources.backup "no backup destination is set" "set BACKUP_DIR, OCI_BUCKET or BACKUP_BUCKET, then schedule deploy/aprscaching backup" \
       "$DOCS_URL/deployment.md#backups"
