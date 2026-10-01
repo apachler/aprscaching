@@ -93,9 +93,10 @@ docs: document the AGPL source-link obligation for self-hosters
 
 ## Branches and pull requests
 
-1. Cut a feature branch from `dev` (`git switch -c feat/my-change origin/dev`).
-2. Open a pull request into `dev`. It is **squash-merged**, so the PR title becomes the commit on `dev`:
-   write it as a Conventional Commit (`feat(ingest): …`, `fix(web): …`).
+1. Cut a feature branch from `dev`, named after its Conventional Commit type
+   (`git switch -c feat/my-change origin/dev`; also `fix/`, `docs/`, `ci/`, `chore/`, …).
+2. Open a pull request into `dev`. It is **squash-merged**, so the PR title and description become the
+   commit on `dev`: write the title as a Conventional Commit (`feat(ingest): …`, `fix(web): …`).
 3. Releases: a pull request from `dev` into `main`, merged (not squashed). release-please then opens the
    release PR on `main`.
 4. After a pull request merges, its feature branch is deleted (GitHub does this on merge); delete your
