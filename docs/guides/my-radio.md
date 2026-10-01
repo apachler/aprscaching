@@ -13,10 +13,10 @@ install. The browser decodes what your radio hears, shows it live, and can pass 
 
 | You have | Button | Notes |
 |---|---|---|
-| A USB KISS TNC, or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
+| A USB [KISS](../glossary.md#kiss) [TNC](../glossary.md#tnc), or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
 | A Bluetooth Low Energy KISS TNC (e.g. a Mobilinkd) | **Connect Bluetooth** | |
-| Just an audio cable from the radio's speaker/data jack to the computer's soundcard | **Soundcard AFSK** | Decodes 1200 baud APRS audio — no TNC needed |
-| A Meshtastic node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed/ham mode on, callsign as long name), shown under their callsign; licence-free nodes are ignored |
+| Just an audio cable from the radio's speaker/data jack to the computer's soundcard | **Soundcard AFSK** | Decodes 1200 baud [APRS](../glossary.md#aprs) audio ([AFSK](../glossary.md#afsk)) — no TNC needed |
+| A [Meshtastic](../glossary.md#meshtastic) node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed/ham mode on, callsign as long name), shown under their callsign; licence-free nodes are ignored |
 
 Only the buttons your browser supports are shown.
 
@@ -39,10 +39,10 @@ gateway**; the **Auth** choice appears below it:
 
 - **signed (YOURCALL)** — for a public instance such as aprscaching.net. Packets are signed with your
   browser's key; no password is needed. A public instance accepts only **your own station's** packets this
-  way (any SSID of your callsign), so a stranger can't inject traffic in your name — which also means other
+  way (any [SSID](../glossary.md#ssid) of your callsign), so a stranger can't inject traffic in your name — which also means other
   stations your radio hears, and Meshtastic nodes, stay in your browser.
 - **secret (self-host)** — for your own instance. Enter the **Gateway base URL** and the instance's
-  **Ingest secret** (the `INGEST_SECRET` its sysop set). The URL is remembered in this browser; the secret is kept in memory for the session only and is entered again after a reload.
+  **Ingest secret** (the `INGEST_SECRET` its [sysop](../glossary.md#sysop) set). The URL is remembered in this browser; the secret is kept in memory for the session only and is entered again after a reload.
   With the secret, everything your radio hears is forwarded.
 
 Packets heard through your browser never verify a find — at most it is **Logged** (tier C): your own radio
@@ -67,9 +67,9 @@ transmit.
 
 ## Rig control
 
-**Shack → Rig control** tunes a radio over USB (CAT) from the same browser:
+**Shack → Rig control** tunes a radio over USB ([CAT](../glossary.md#cat)) from the same browser:
 
-1. Choose the **Radio** family — *Kenwood / modern Yaesu (ASCII)*, *Icom (CI-V)* (set the **CI-V addr**) or
+1. Choose the **Radio** family — *Kenwood / modern Yaesu (ASCII)*, *Icom ([CI-V](../glossary.md#ci-v))* (set the **CI-V addr**) or
    *Yaesu classic (FT-817/857/897)* — and the **Baud** rate your radio's menu is set to.
 2. **Connect rig**, then tap **144.800 (EU APRS)** / **144.390 (NA APRS)**, or type a frequency and **Tune**.
 

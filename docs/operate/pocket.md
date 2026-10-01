@@ -38,6 +38,9 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
     ```
 
+    Piping into `bash` runs the script unseen. To read it first, download it, look, then run it:
+    `curl -fsSLO <the same URL> && less pocket.sh && bash pocket.sh --call <YOURCALL>`.
+
     It upgrades Termux first (`apt-get update && apt-get dist-upgrade`, choosing a mirror with
     `termux-change-repo` when none is set), installs the packages, clones the repository to `~/aprscaching`,
     compiles `better-sqlite3` for Android, builds the web app, writes `~/.aprscaching/.env` with new secrets,

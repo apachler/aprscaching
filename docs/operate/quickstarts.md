@@ -153,6 +153,8 @@ DIGI_ALIASES=WIDE1,WIDE2
 
 The box logs `[digi] enabled as OE8APR-10 …` and `[digi] repeated …` for each repeat. `DIGI_VISCOUS_MS=3000`
 waits and skips a repeat when a better-placed digipeater was heard doing it first. Needs a KISS TNC with PTT.
+A digipeater is an automatically controlled station: read [Amateur-radio compliance](rf-regulatory.md) before
+you enable it.
 
 ## Meshtastic
 

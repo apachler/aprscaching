@@ -1,6 +1,6 @@
 # Your account
 
-Your account is your callsign. There is no username and, if you use a passkey, no password.
+Your account is your callsign. There is no username and, if you use a [passkey](../glossary.md#passkey), no password.
 
 ## Sign in
 
@@ -29,22 +29,22 @@ Changing your active callsign also signs your other devices out.
 ## Verify your callsign
 
 Signing in claims a callsign; **verifying** proves you actually control it. Verification unlocks your place
-on the leaderboard, announcing finds on APRS-IS, and transmitting from the browser. Receiving never needs it.
+on the leaderboard, announcing finds on [APRS-IS](../glossary.md#aprs-is), and transmitting from the browser. Receiving never needs it.
 
 Open **Settings → Account** and tap **verify** next to the callsign, then pick how to prove control:
 
 | Method | What you need | What it proves |
 |---|---|---|
-| **On the air** (default) | An APRS radio, or a MeshCom node, within range of one of the instance's receiving stations | A station this instance runs heard your call transmit |
+| **On the air** (default) | An [APRS](../glossary.md#aprs) radio, or a [MeshCom](../glossary.md#meshcom) node, within range of one of the instance's receiving stations | A station this instance runs heard your call transmit |
 | **ampr.org DNS** | Your ARDC-delegated `<call>.ampr.org` name | ARDC reviewed your licence before delegating the name to you |
-| **LoTW certificate** | Your ARRL Logbook of The World callsign certificate, saved from TQSL as a `.p12` file | ARRL checked your licence before issuing the certificate |
+| **[LoTW](../glossary.md#lotw) certificate** | Your ARRL Logbook of The World callsign certificate, saved from TQSL as a `.p12` file | ARRL checked your licence before issuing the certificate |
 
 **On the air** needs a receiving station run by the instance. An instance without one says *This instance
 has no receiving station yet — ask the operator, or use another method* and opens on **ampr.org DNS**
 instead; where there are stations, the app names the calls that are listening. **LoTW certificate** shows
 only where the operator has set it up.
 
-If none of these is within reach, ask the instance's operator: a sysop can verify a call by hand after
+If none of these is within reach, ask the instance's operator: a [sysop](../glossary.md#sysop) can verify a call by hand after
 checking your licence, and the verification lists who did it and how.
 
 Every verification records its method and who vouched for it (the receiving station, the ampr.org name, the
@@ -55,7 +55,7 @@ LoTW certificate authority, or the sysop). Your data export lists it.
 1. Tap **Get a code**. The app shows the message to send: **To** the instance's service call (usually
    `APRSCG`), **Message** `VERIFY` and a six-digit code, for example `VERIFY 482913`, and the receiving
    stations listening for it (**Receiving stations:** `OE8XXX`). Nothing is sent to you.
-2. Send that message from the callsign or any SSID of it (`-7`, `-9`, …): as an APRS message from your radio,
+2. Send that message from the callsign or any [SSID](../glossary.md#ssid) of it (`-7`, `-9`, …): as an APRS message from your radio,
    or as a MeshCom direct message to the service call from your MeshCom node.
 3. The app waits while it listens. Once one of the instance's own receiving stations hears the message on
    the air, it shows **… is verified** and your radio gets an ack.
@@ -86,12 +86,14 @@ proves control.
    costs nothing.
 5. Tap **Check**. The instance looks the record up and verifies the call when it carries the current code.
 
-The code is valid for **48 hours**. The answer has to be authentic, and the instance accepts it one of two
-ways. A DNSSEC-validated answer settles it on its own. Without DNSSEC (ampr.org is not DNSSEC-signed, as
-checked on 2026-09-30), several independent public DNS resolvers (by default Cloudflare, Google and Quad9)
-must all return the same record carrying the code; if any of them sees something else, **Check** refuses.
-Publish the TXT record at that name itself, not as a CNAME: an answer through an alias does not count. An
-instance can require DNSSEC; there, **Check** refuses while ampr.org is unsigned, and you verify another way.
+The code is valid for **48 hours**. Publish the TXT record at that name itself, not as an alias (CNAME).
+
+??? note "How the instance knows the record is genuine"
+    A DNSSEC-validated answer settles it on its own. Without DNSSEC (ampr.org is not DNSSEC-signed, as
+    checked on 2026-09-30), several independent public DNS resolvers (by default Cloudflare, Google and
+    Quad9) must all return the same record carrying the code; if any of them sees something else, **Check**
+    refuses. An answer through an alias does not count. An instance can require DNSSEC; there, **Check**
+    refuses while ampr.org is unsigned, and you verify another way.
 
 ### LoTW certificate
 
@@ -121,7 +123,7 @@ One account can hold several licensed base calls — a club call, or a call from
 - **Settings → Account → Add a callsign**, type it, tap **Add**, then **verify** it like the first one.
 - **Set active** chooses which call you are operating as. Past finds stay with the call they were logged
   under.
-- SSIDs need no extra verification: `-7` (handheld), `-9` (mobile), `-10` (IGate) and so on inherit their
+- SSIDs need no extra verification: `-7` (handheld), `-9` (mobile), `-10` ([IGate](../glossary.md#igate)) and so on inherit their
   base call's status.
 
 ## Your finds are signed

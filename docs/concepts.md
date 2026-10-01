@@ -1,7 +1,8 @@
 # Core concepts
 
 This page explains the rules behind aprscaching in detail — for operators deciding how their instance
-verifies finds, and for developers integrating with it.
+verifies finds, and for developers integrating with it. For a one-line definition of any term, see the
+[Glossary](glossary.md).
 
 **In plain words:** a find counts as *radio-verified* only when your APRS position was heard on the air near
 the cache by a receiving station that isn't yours. A position that only travelled over the internet proves

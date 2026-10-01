@@ -11,8 +11,7 @@ You need **Node 22 or newer** and **pnpm** (`corepack enable` provides the pinne
 
 ```bash
 pnpm install
-pnpm -r test      # run every package's unit suite
-pnpm -r build     # typecheck + build all units
+pnpm run check    # build every unit, run every unit suite, typecheck and build the web app
 ```
 
 ## Run the gateway
@@ -20,10 +19,17 @@ pnpm -r build     # typecheck + build all units
 The gateway is the API and data plane. Pick one runtime — all three serve the same API and pass the same
 conformance suite.
 
+Every runtime needs an **ingest secret**: the gateway refuses to start without one, and the ingest box sends
+the same value. Make one and keep it for the steps below:
+
+```bash
+openssl rand -hex 24
+```
+
 === "Node + SQLite (simplest)"
 
     ```bash
-    pnpm --filter @aprscaching/node-gateway start
+    INGEST_SECRET=<your secret> pnpm --filter @aprscaching/node-gateway start
     # serves /health, /ingest, /api/*, /ws on http://127.0.0.1:8787
     ```
 
@@ -31,6 +37,9 @@ conformance suite.
     (`DB_PATH`, default under `servers/node/data/`).
 
 === "Cloudflare Worker + D1"
+
+    Put `INGEST_SECRET=<your secret>` in `workers/gateway/.dev.vars` (git-ignored) first; `wrangler dev` reads
+    its secrets from there.
 
     ```bash
     cd workers/gateway
@@ -42,8 +51,10 @@ conformance suite.
 === "Bun (single-file desktop)"
 
     ```bash
-    bun run servers/bun/server.ts
+    INGEST_SECRET=<your secret> bun run servers/bun/server.ts
     ```
+
+**Check it worked:** `curl -fsS http://127.0.0.1:8787/health` answers.
 
 ## Run the web app
 
@@ -66,8 +77,9 @@ cp .env.example .env
 pnpm --filter @aprscaching/ingest dev
 ```
 
-Edit `.env` at the top of the checkout first: set `APRSIS_FILTER` and `INGEST_SECRET`, and add
-`KISS_TNC_HOST`, `MESHTASTIC_HOST`, … as needed.
+Edit `.env` at the top of the checkout first: set `APRSIS_FILTER`, set `INGEST_SECRET` to the **same value
+the gateway runs with**, and add `KISS_TNC_HOST`, `MESHTASTIC_HOST`, … as needed. **Check it worked:** the
+gateway's `/api/ports` lists the ingest's ports, and stations appear on the map.
 
 With just `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
 node, or an AXUDP/AXIP link and each forwards to the gateway on its own port. See
