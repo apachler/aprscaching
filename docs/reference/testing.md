@@ -105,7 +105,7 @@ tiers (full detail in `tools/interop/README.md`):
   into the BPQ BBS and that the real `xfbbd` answers with its FBB banner. The F6FBB container
   (`fbbcomp` on) is the live-validation peer for LZHUF-B1 compressed forwarding.
 
-These run in the **nightly** `interop` workflow (scheduled + manual dispatch), never the PR loop —
+These run in the **weekly** `interop` workflow (scheduled + manual dispatch), never the PR loop —
 peer downloads and kernel modules are not PR-gating dependencies.
 
 ## Key & signing tools used by tests
@@ -120,7 +120,7 @@ peer downloads and kernel modules are not PR-gating dependencies.
 | Workflow | Trigger | Gating? |
 |---|---|---|
 | `ci.yml` — lint · lint-types · unit tests + builds · conformance on Node, Worker, Bun · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
-| `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | nightly + manual | Informational |
+| `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — `mkdocs build --strict` | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
