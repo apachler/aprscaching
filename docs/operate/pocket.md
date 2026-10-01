@@ -466,7 +466,7 @@ restored elsewhere makes a new one.
 |---|---|---|---|---|
 | SHIFTphone 8 (SHIFTOS-L, microG, no Google services) | 15 | 0.118.3 (F-Droid) | 24.18.0 | install (`better-sqlite3` compiled in 2 min 35 s); restart after a killed gateway; 45 min screen off with Termux battery unrestricted and the child-process limit on, nothing killed; backup; https for a visitor on the hotspot with location; a MeshCom node through the home router and on the hotspot in flight mode |
 
-The weekly `pocket-termux` workflow installs and starts Pocket in the `termux/termux-docker` image on
+The monthly `pocket-termux` workflow installs and starts Pocket in the `termux/termux-docker` image on
 aarch64, the phones' architecture, with everything built inside Termux, and on x86_64 with the web app built
 on the runner and handed in with `--web-dist`: Rolldown, the web build's bundler, has Android builds for arm
 only, so an x86 Android device (a Chromebook, an emulator) takes its web build from a PC. The image has no

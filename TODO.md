@@ -207,7 +207,7 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 
 - [x] **Pocket: a station on an Android phone** — the gateway and the ingest in Termux, without root:
   one-command install, supervised processes, https for hotspot visitors, a MeshCom node on the hotspot or a
-  router, backup, and a weekly install check in `termux/termux-docker`
+  router, backup, and a monthly install check in `termux/termux-docker`
   ([`docs/operate/pocket.md`](docs/operate/pocket.md)). A field-day and demo station, not a server.
 - [x] **Pocket extras** — the setup questions, a status notification, home-screen shortcuts, a battery saver,
   field alerts, a scheduled backup, a USB KISS TNC through `termux-usb`, 44Net status and https on the ampr.org

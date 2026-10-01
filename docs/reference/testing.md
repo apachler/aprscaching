@@ -119,10 +119,16 @@ peer downloads and kernel modules are not PR-gating dependencies.
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint · lint-types · unit tests + builds · conformance on Node, Worker, Bun · two-instance federation · audio e2e | push + PR | **Yes** |
+| `ci.yml` — lint · lint-types · unit tests + builds · conformance on Node, Worker, Bun · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | nightly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
-| `docs.yml` — `mkdocs build --strict` | docs changes | Yes (docs) |
+| `docs.yml` — `mkdocs build --strict` | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
 | `release-please.yml` — versioning + changelog | push (main) | Release |
+
+A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
+`ci.yml`'s type-aware lint, unit tests, conformance legs and audio e2e: its `changed paths` job reads the diff
+and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/` or `ci.yml` changes.
+When the diff cannot be read, every job runs.

@@ -1,7 +1,9 @@
 name: CI
 
+# A feature branch is tested once, by its pull request; a push runs CI only on the long-lived branches.
 on:
   push:
+    branches: [main, dev]
   pull_request:
 
 # Least privilege: every job here only reads the repo.
@@ -14,6 +16,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What the change touches. A change to docs only (docs/, mkdocs.yml, Markdown) or to the Pocket scripts only
+  # (deploy/pocket/) skips the type-aware lint, the unit tests, the conformance legs and the e2e run: none of
+  # them reads those files. Skipped jobs report as skipped, which a required check accepts. When the diff
+  # cannot be read, everything runs.
+  changes:
+    name: changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+      pocket: ${{ steps.paths.outputs.pocket }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 2 }
+      - id: paths
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ] \
+            && git fetch --quiet --depth=1 origin "$BASE" && files=$(git diff --name-only "$BASE" HEAD); then
+            code=false
+            pocket=false
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              case "$f" in
+                deploy/pocket/* | .github/workflows/ci.yml) pocket=true ;;
+              esac
+              case "$f" in
+                docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;
+                *) code=true ;;
+              esac
+            done <<< "$files"
+          else
+            code=true
+            pocket=true
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "pocket=$pocket" >> "$GITHUB_OUTPUT"
+          echo "code=$code pocket=$pocket"
+
   lint:
     name: lint + format
     runs-on: ubuntu-latest
@@ -30,6 +71,8 @@ jobs:
 
   pocket:
     name: Pocket scripts (shellcheck, ruff, Python tests)
+    needs: changes
+    if: needs.changes.outputs.pocket == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,6 +86,8 @@ jobs:
 
   lint-types:
     name: lint (type-aware, slow)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,6 +101,8 @@ jobs:
 
   test:
     name: unit tests + builds
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +120,8 @@ jobs:
 
   conformance-node:
     name: conformance (Node + SQLite)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -101,6 +150,8 @@ jobs:
 
   conformance-worker:
     name: conformance (Cloudflare Worker)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,6 +178,8 @@ jobs:
 
   conformance-federation:
     name: conformance (federation — 2 instances)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,6 +217,8 @@ jobs:
 
   conformance-bun:
     name: conformance (Bun + bun:sqlite)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -193,6 +248,8 @@ jobs:
 
   e2e-audio:
     name: e2e (live mic decode — Chromium fake-audio)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
