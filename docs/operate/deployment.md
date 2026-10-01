@@ -5,8 +5,9 @@ aprscaching separates two concerns that deploy independently:
 - the **gateway** (API + data plane), which runs on any of three interchangeable runtimes, and
 - the **RF ingest**, which is always operator-local.
 
-You pick one of three shapes — **Self-host**, **Desktop** or **Cloudflare split** — or run Self-host on a
-phone as **Pocket**. Once it is up, work
+You pick **Self-host** or **Desktop**, or run Self-host on a phone as **Pocket**. Self-host can sit behind
+Cloudflare's Tunnel and CDN at no extra cost. The **Cloudflare split**, which runs the gateway on Cloudflare
+itself, is an advanced option whose bill grows with your feed. Once it is up, work
 through [Your first hour as sysop](first-hour.md) — the ordered checklist from "it boots" to a public,
 verified, backed-up instance (mirrored live in the app under **Instance admin → Setup**).
 
@@ -24,9 +25,14 @@ verified, backed-up instance (mirrored live in the app under **Instance admin �
   single operator off-grid.
 - **On a phone** — [Pocket](pocket.md) runs the Self-host gateway and ingest on an Android phone in Termux:
   a field-day and demo station with its own hotspot and a MeshCom node, not an always-on server.
-- **Cloudflare split** — no server of your own to maintain for the gateway: Cloudflare runs it, and your
-  own box runs only the RF ingest. D1 bills every row written, so the cost grows with your feed. It suits
-  small regional feeds and operators who want no maintenance; big or global feeds belong on Self-host.
+- **Want Cloudflare?** Run [Self-host behind Cloudflare](#self-host-behind-cloudflare): a Cloudflare Tunnel
+  (no open ports, no static IP) and optionally its CDN in front of your own box. You get Cloudflare's edge TLS,
+  DDoS protection and caching on its free plan, and the data stays in SQLite on your box, so the cost does not
+  grow with your feed.
+- **Cloudflare split** *(advanced)* — the gateway itself runs on Cloudflare (Worker, D1, R2), and your own
+  box runs only the RF ingest. D1 bills every row written, so the cost grows with your feed; the
+  [write budget](../reference/cloudflare-costs.md#write-budget) caps it by shedding low-value writes. Choose
+  it only when no box of yours can run the gateway.
 
 ## The three gateway runtimes
 
@@ -50,7 +56,7 @@ vs in-process intervals, D1/R2 vs SQLite/filesystem). See the
 |-------|---------|---------|-----------------------|-------------|
 | [**Self-host**](#self-host) (recommended) | Node + SQLite in the Docker stack | Caddy with automatic TLS, or a Cloudflare Tunnel; optionally Cloudflare's CDN in front | the stack's own `ingest` service, or `compose.ingest-only.yml` on the radio box | [Running in Docker](docker.md) |
 | [**Desktop**](#desktop) | Bun single binary | none — `127.0.0.1`, or the LAN with `HOST=0.0.0.0` | the browser RF bridge, or `apps/ingest` beside it | `deploy/desktop/README.md` |
-| [**Cloudflare split**](#cloudflare-split) | Worker + D1 + R2, SPA on Pages | Cloudflare's edge | `compose.ingest-only.yml` on your own box | `deploy/README.md` |
+| [**Cloudflare split**](#cloudflare-split) (advanced) | Worker + D1 + R2, SPA on Pages | Cloudflare's edge | `compose.ingest-only.yml` on your own box | `deploy/README.md` |
 
 In every shape the RF ingest runs on your own equipment (`compose.ingest-only.yml` points it at any
 gateway), and the browser can bridge a USB or Bluetooth radio with no server at all.
@@ -71,12 +77,25 @@ A licensed operator can also give the box a static 44.x address over a 44Net Con
 reachable without port forwarding, even behind CGNAT — and publish its federation identity under
 `<call>.ampr.org`: see [Run an instance on 44Net](44net.md).
 
-A public box may put Cloudflare's CDN in front (`deploy/cloudflare/cache-rules.sh`, `TRUST_CF=1`). Oracle
+Oracle
 Cloud users can start the same stack with the
 [one-click OCI stack](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/apachler/aprscaching/releases/latest/download/aprscaching-oci-stack.zip).
 Bare metal without Docker: `deploy/aprscaching init baremetal` installs the same gateway and ingest from a
 checkout under systemd, as a dedicated system user, with the gateway serving the web app on its own port
 (see [Deployment helpers](helpers.md#bare-metal)). The units it installs are `deploy/systemd/`'s.
+
+### Self-host behind Cloudflare
+
+The way to use Cloudflare. The gateway and its data stay on your box; Cloudflare only carries the traffic.
+
+- **Tunnel** — choose the Cloudflare Tunnel in `setup.sh` (or `deploy/aprscaching init selfhost`). The box
+  opens no port and needs no static IP; `compose.home.yml` runs the connector. TLS ends at Cloudflare's edge,
+  and `TRUST_CF=1` (which the tunnel overlay sets) keeps the visitor's address for rate limits.
+- **CDN** — proxy the hostname through Cloudflare and run `deploy/cloudflare/cache-rules.sh`
+  (`CF_API_TOKEN`, `CF_ZONE_ID`) to cache the web app and bypass the API. Without the tunnel, restrict ports 80
+  and 443 to Cloudflare's address ranges and set `TRUST_CF=1`.
+
+Both work on Cloudflare's free plan, and neither bills by what the instance writes.
 
 ### Desktop
 
@@ -85,6 +104,12 @@ SQLite in the OS data directory and generates `INGEST_SECRET`, `OPERATOR_SECRET`
 first run. Best for one operator, a field day, or trying it out; it works off-grid.
 
 ### Cloudflare split
+
+!!! warning "Advanced: the bill grows with your feed"
+    D1 bills every row written. A regional feed fits the included allowance; a large or global APRS-IS filter
+    does not. Size it with [Cloudflare D1 costs](../reference/cloudflare-costs.md) before you deploy, and keep
+    the write budget on. [Self-host behind Cloudflare](#self-host-behind-cloudflare) gives the same edge
+    without the per-write cost.
 
 A managed core: the Worker gateway with D1 and R2, and the SPA on Pages, set up by
 `deploy/cloudflare/deploy-cf.sh`. Nothing of yours runs in the cloud except that; the RF ingest runs on your

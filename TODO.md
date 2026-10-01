@@ -661,6 +661,11 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
   **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
   `.json()`/`unknown` returns under `projectService` (auto-fixing it would strip load-bearing casts).
+- [ ] **Retire the Worker runtime** *(P3 · L)* — once no instance the project runs depends on the Cloudflare
+  split, drop `workers/gateway`'s Worker entry, the D1/R2/Durable Object bindings, the D1 write budget,
+  `deploy/cloudflare/deploy-cf.sh` and the Worker conformance job, keeping the gateway app itself as the shared
+  core of the Node and Bun servers. Self-host behind a Cloudflare Tunnel and CDN covers the Cloudflare use case
+  without per-write billing.
 
 ## Federation hardening (validation findings)
 

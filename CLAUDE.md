@@ -31,7 +31,8 @@ Worker, Node, Bun, browser). packages/shared = zod contracts.
 Three shapes (`deploy/`): **Self-host** (recommended: flat cost) — the Docker stack (gateway + ingest + Caddy)
 on a Pi, mini-PC or VM, reached through Caddy TLS or a Cloudflare Tunnel (`compose.home.yml`), optionally behind
 Cloudflare's CDN · **Desktop** — the Bun single binary (`deploy/desktop/`, SPA + migrations embedded) ·
-**Cloudflare split** — Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`) plus the operator's
+**Cloudflare split** (advanced: D1 bills per row written, so Self-host behind a Cloudflare Tunnel/CDN is the
+recommended way to use Cloudflare) — Worker + D1 + R2 + Pages (`deploy/cloudflare/deploy-cf.sh`) plus the operator's
 ingest-only box. **Pocket** (`deploy/pocket/`) runs the Self-host gateway and ingest on an Android phone in
 Termux, as a field station. **Tri-runtime, all CI-conformance-green:**
 Node+SQLite (Self-host, `servers/node`) · CF Worker+D1 (Cloudflare split, `workers/gateway`) · Bun+`bun:sqlite`
