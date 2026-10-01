@@ -10,7 +10,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
 import { haversineMeters } from "@aprscaching/aprs";
-import { StageUnlockRequest } from "@aprscaching/shared";
+import { STAGE_MIN_CODE_BITS, StageUnlockRequest, codeEntropyBits, sealStage } from "@aprscaching/shared";
 
 interface StageRow {
   stage_no: number;
@@ -41,6 +41,49 @@ async function unlockedSet(env: Env, cacheId: number, callsign: string): Promise
       .all<{ stage_no: number }>()
   ).results;
   return new Set(rows.map((r) => r.stage_no));
+}
+
+/** Whether a stage unlocks offline, and why not when it does not. */
+interface StageOffline {
+  stageNo: number;
+  offline: boolean;
+  reason?: string;
+}
+
+/**
+ * Seal what unlocking an NFC stage reveals under its tag code, so an offline pack can carry it
+ * (packages/shared stageseal.ts); clear it for any other stage, or when the code is too weak to stand up to
+ * offline guessing. Runs whenever what a stage reveals changes.
+ */
+async function resealStage(env: Env, cacheId: number, stageNo: number): Promise<StageOffline> {
+  const s = await env.DB.prepare("SELECT * FROM cache_stages WHERE cache_id=? AND stage_no=?")
+    .bind(cacheId, stageNo)
+    .first<StageRow>();
+  const clear = async (reason: string): Promise<StageOffline> => {
+    await env.DB.prepare("UPDATE cache_stages SET sealed=NULL WHERE cache_id=? AND stage_no=?")
+      .bind(cacheId, stageNo)
+      .run();
+    return { stageNo, offline: false, reason };
+  };
+  if (!s || stageNo === 0) return { stageNo, offline: true }; // the published start needs no unlock
+  if (s.unlock !== "nfc")
+    return clear(s.unlock === "geo" ? "a geo stage checks the finder's position online" : "unlocks online");
+  if (!s.unlock_secret) return clear("no tag code set");
+  const bits = codeEntropyBits(s.unlock_secret);
+  if (bits < STAGE_MIN_CODE_BITS)
+    return clear(
+      `the tag code is too short to carry offline (about ${bits} bits, ${STAGE_MIN_CODE_BITS} needed): use the tag's serial, or 9 or more random letters and digits`,
+    );
+  const sealed = await sealStage(s.unlock_secret, {
+    lat: s.lat,
+    lon: s.lon,
+    clue: s.clue,
+    mediaUrl: s.media_key ? `/api/media/${s.media_key}` : null,
+  });
+  await env.DB.prepare("UPDATE cache_stages SET sealed=? WHERE cache_id=? AND stage_no=?")
+    .bind(JSON.stringify(sealed), cacheId, stageNo)
+    .run();
+  return { stageNo, offline: true };
 }
 
 // ---- owner: set the stage list (replaces existing) ----
@@ -102,7 +145,10 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
       /* best-effort */
     }
   }
-  return json({ ok: true, stages: b.stages.length });
+  // which stages a finder can unlock without a connection, and why not the others
+  const offline: StageOffline[] = [];
+  for (const s of b.stages) offline.push(await resealStage(env, cacheId, s.stageNo));
+  return json({ ok: true, stages: b.stages.length, offline });
 }
 
 // ---- owner: upload an audio clue for a stage ----
@@ -123,6 +169,7 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   await env.DB.prepare("UPDATE cache_stages SET media_key=? WHERE cache_id=? AND stage_no=?")
     .bind(key, cacheId, stageNo)
     .run();
+  await resealStage(env, cacheId, stageNo); // the sealed payload names the audio clue
   return json({ ok: true, mediaKey: key });
 }
 

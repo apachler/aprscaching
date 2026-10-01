@@ -19,6 +19,7 @@ import {
   type PackCache,
   type PackImage,
   type PackResponse,
+  type SealedStage,
 } from "@aprscaching/shared";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
@@ -132,11 +133,20 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
   ).results;
   const stages = (
     await env.DB.prepare(
-      `SELECT cache_id, stage_no, unlock FROM cache_stages
-        WHERE stage_no > 0 AND cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) ORDER BY stage_no`,
+      `SELECT cache_id, stage_no, unlock, sealed, lat, lon, clue, media_key FROM cache_stages
+        WHERE cache_id IN (SELECT id FROM caches WHERE ${NATIVE_IN_BOX}${typeSql}) ORDER BY stage_no`,
     )
       .bind(...box, ...types)
-      .all<{ cache_id: number; stage_no: number; unlock: string | null }>()
+      .all<{
+        cache_id: number;
+        stage_no: number;
+        unlock: string | null;
+        sealed: string | null;
+        lat: number | null;
+        lon: number | null;
+        clue: string | null;
+        media_key: string | null;
+      }>()
   ).results;
   const media = (
     await env.DB.prepare(
@@ -180,7 +190,24 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
         description: r.description,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
-        stages: (stagesOf.get(r.id) ?? []).map((s) => ({ stageNo: s.stage_no, unlock: s.unlock ?? "geo" })),
+        stages: (stagesOf.get(r.id) ?? []).map((s) => ({
+          stageNo: s.stage_no,
+          unlock: s.unlock ?? "geo",
+          // what a later stage reveals, sealed under its tag code (never the code or the clear payload); the
+          // published start is public
+          ...(s.stage_no === 0
+            ? {
+                open: {
+                  lat: s.lat,
+                  lon: s.lon,
+                  clue: s.clue,
+                  mediaUrl: s.media_key ? `/api/media/${s.media_key}` : null,
+                },
+              }
+            : s.sealed
+              ? { sealed: JSON.parse(s.sealed) as SealedStage }
+              : {}),
+        })),
         logs: (logsOf.get(r.id) ?? []).map(toLogEntry),
         images: (mediaOf.get(r.id) ?? []).map((m): PackImage => ({
           id: m.id,

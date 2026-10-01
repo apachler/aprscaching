@@ -11,7 +11,7 @@ import {
   getInstance,
   queuedLogs,
   retryAttentionLog,
-  type LogBody,
+  type QueueBody,
 } from "../api.js";
 import { runSync } from "../offline/sync.js";
 import { useFmt } from "../format.js";
@@ -19,14 +19,15 @@ import { Badge, Button, EmptyState, Group, Panel, useConfirm, useToast } from ".
 import type { AttentionLog, QueuedLog } from "./logQueue.js";
 
 /** When the log was made: its signed time, else when it was queued. */
-const madeAt = (l: QueuedLog<LogBody>) => l.body.author?.signedAt ?? Math.floor(l.queuedAt / 1000);
-const what = (l: QueuedLog<LogBody>) => l.label ?? `cache #${l.cacheId}`;
+const madeAt = (l: QueuedLog<QueueBody>) => l.body.author?.signedAt ?? Math.floor(l.queuedAt / 1000);
+const what = (l: QueuedLog<QueueBody>) =>
+  `${l.kind === "unlock" ? `stage ${l.stageNo} of ` : ""}${l.label ?? `cache #${l.cacheId}`}`;
 
 export function OutboxPanel(props: { onClose: () => void }) {
   const fmt = useFmt();
   const toast = useToast();
-  const [queue, setQueue] = useState<QueuedLog<LogBody>[]>([]);
-  const [attention, setAttention] = useState<AttentionLog<LogBody>[]>([]);
+  const [queue, setQueue] = useState<QueuedLog<QueueBody>[]>([]);
+  const [attention, setAttention] = useState<AttentionLog<QueueBody>[]>([]);
   const [busy, setBusy] = useState(false);
   const [instance, setInstance] = useState("");
   useEffect(() => void getInstance().then(setInstance), []);
@@ -101,7 +102,7 @@ export function OutboxPanel(props: { onClose: () => void }) {
                     </div>
                     <div className="muted fine">
                       made {fmt.dateTime(madeAt(l))}
-                      {!l.body.author && " · unsigned: it counts from when it arrives"}
+                      {l.kind !== "unlock" && !l.body.author && " · unsigned: it counts from when it arrives"}
                       {l.nextAt != null && ` · next try ${fmt.time(Math.floor(l.nextAt / 1000))}`}
                       {instance &&
                         l.instance &&
@@ -122,7 +123,7 @@ export function OutboxPanel(props: { onClose: () => void }) {
   );
 }
 
-function AttentionItem(props: { log: AttentionLog<LogBody>; index: number; when: string }) {
+function AttentionItem(props: { log: AttentionLog<QueueBody>; index: number; when: string }) {
   const l = props.log;
   const confirm = useConfirm();
   const toast = useToast();

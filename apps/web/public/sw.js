@@ -137,14 +137,23 @@ async function flushQueue() {
       keep.push(item);
       continue;
     }
+    // a stage unlocked offline is confirmed at its unlock endpoint; a log is posted to the logbook
+    const unlock = item.kind === "unlock";
     let res;
     try {
-      res = await fetch(`${apiBase}/api/caches/${item.cacheId}/logs`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...item.body, offline: true }),
-      });
+      res = await fetch(
+        unlock
+          ? `${apiBase}/api/caches/${item.cacheId}/stages/${item.stageNo}/unlock`
+          : `${apiBase}/api/caches/${item.cacheId}/logs`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            unlock ? { callsign: item.body.loggerCall, code: item.body.code } : { ...item.body, offline: true },
+          ),
+        },
+      );
     } catch {
       offline = true;
       keep.push(item);
