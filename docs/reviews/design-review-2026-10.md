@@ -61,8 +61,8 @@ The work item is the handover item that fixes it.
 | R-07 | major | Primitives are bypassed: 193 raw buttons and 10 inline styles. Tabs and segments are styled differently in the BBS (filled pills), the terminal (outlined chips) and Nearby (boxed buttons). | code counts; `bbs-*`, `nearby-*` | DSN-08 || Fixed: every button outside `ui/` is `Button` (8 variants, tested); `Segmented`, `Tabs` and `ChipToggle` primitives; the colour inline styles are `data-ctype` + `--type-*` tokens; the six left pass data (bearing, percentages) as custom properties (Phase 4). |
 | R-08 | major | A render error in one panel takes down the whole app. There is only one `ErrorBoundary`, at the root. Seen when the BBS met an unexpected response: "The app stopped with an error". | `bbs-*` (first run) | DSN-09 (local fix) || Fixed: every `Panel` has its own error boundary; a failing panel says so and offers to try again, the rest keeps working (Phase 5). |
 | R-09 | minor | `theme-color` is fixed at `#2D8BAB` in every theme, so the browser chrome stays blue in Phosphor and in dark. | `index.html` | DSN-06 || Fixed: one `theme-color` per scheme, set from the top bar of an explicit theme (Phase 3). |
-| R-10 | minor | Map colours are literals that don't follow the theme:<br>• MapTools ring and measure lines;<br>• the track replay;<br>• the offline graticule (light under dark and Phosphor). | code; `*-phosphor-*` | DSN-11 | |
-| R-11 | major | In Phosphor, MapLibre's control stack (zoom, locate) stays bright white, and pins keep the Modern hues. | `map-phosphor-*`, `settings-phosphor-desktop` | DSN-11 | |
+| R-10 | minor | Map colours are literals that don't follow the theme:<br>• MapTools ring and measure lines;<br>• the track replay;<br>• the offline graticule (light under dark and Phosphor). | code; `*-phosphor-*` | DSN-11 || Fixed: the overlays (grid, rings, ruler, arc, night shade, tracks, a pack's outline, MeshCom links) and the offline graticule are `--map-*` tokens, read as hex at paint time and repainted on a theme change (Phase 6). |
+| R-11 | major | In Phosphor, MapLibre's control stack (zoom, locate) stays bright white, and pins keep the Modern hues. | `map-phosphor-*`, `settings-phosphor-desktop` | DSN-11 || Fixed: MapLibre's controls and attribution take the terminal's colours in Phosphor; pins and overlays use the Phosphor ramp (Phase 6). |
 
 ### Accessibility (WCAG 2.2 AA)
 
@@ -89,7 +89,7 @@ The work item is the handover item that fixes it.
 | R-24 | minor | Manual reader | An admonition title keeps its Markdown: `New here? [Start here](start-here.md)`. Links in the light theme use the green accent (2.28:1). | `docs-light-desktop` | DSN-13/14, DSN-07 | |
 | R-25 | minor | Landing | The page's sections are:<br>• the "How a find works" cards;<br>• the trust model;<br>• six Shack cards with three small screenshots;<br>• four "An APRS map that forgets" cards;<br>• four "Run it anywhere" tiles;<br>• "Free in full".<br><br>All of them use the same card grid on the same dark band. Issues:<br>• the screenshots are too small to read;<br>• the small green eyebrows and the tier badges fail contrast;<br>• on a phone, the terminal card cuts its lines ("· t…"). | `landing-*` | DSN-12 | |
 | R-26 | minor | Nearby | The filter is four boxed buttons ("Up for adoption" wraps onto two lines) rather than the segmented control the rules name for 2–4 modes. | `nearby-*-desktop` | DSN-08 || Fixed: the filter is `Segmented` (chips look); "For adoption" fits on one line (Phase 4). |
-| R-27 | polish | Map | Under the dark theme the basemap is light: OpenFreeMap liberty, or the light graticule offline. G9 keeps one basemap for all themes; a dark basemap is in TODO. | `map-dark-*` | DSN-11 (TODO) | |
+| R-27 | polish | Map | Under the dark theme the basemap is light: OpenFreeMap liberty, or the light graticule offline. G9 keeps one basemap for all themes; a dark basemap is in TODO. | `map-dark-*` | DSN-11 (TODO) || Kept by G9: one basemap in every theme; a dark vector basemap is in TODO. The offline graticule follows the theme (Phase 6). |
 | R-28 | minor | Tab bar | The active tab's label fails contrast in light (axe `.tabbar > .on span`). | `*-light-phone` | DSN-07 || Fixed: `--chrome-ink-muted` for secondary text on the chrome (Phase 3). |
 
 ### Not reached by the harness
@@ -122,6 +122,16 @@ desktop; `out/journeys/log.txt` lists every step. Results:
 Terms in context: *What's this?* links (`platform/TermHelp.tsx`) open the manual's glossary at the term, so the
 app and the manual share one vocabulary. They sit at the cache's verification, the log result, the profile's
 corroborations and the Shack introduction.
+
+## The map over every basemap (Phase 6)
+
+With the demo's `&net=1` (real tiles allowed), the map was rendered on the vector basemap, OpenTopoMap and
+Sentinel-2 satellite in Dark, Light and Phosphor, with the grid, the range rings and the night shade on. Pins,
+rings and controls read on all of them. The check found a bug outside the design work: the map tools, a station's
+track and the raster basemaps waited for MapLibre's one-time "load" when the style was busy, and never drew when
+they mounted after it (another overlay's new sources keep the style "not loaded" for a moment). They now set up
+through `whenStyleReady` (tested), as the MeshCom links already did. The map-tool buttons were also named by
+their glyph ("▦"); they now have names.
 
 ## Proposals for the owner (G7)
 

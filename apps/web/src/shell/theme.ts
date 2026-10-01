@@ -7,6 +7,7 @@
  * installed app shows on its splash screen, before any theme is known.
  */
 import { resolveCrt, resolveTheme, type LocaleSettings, type ResolvedTheme } from "../format.js";
+import { tokenHex } from "./tokenColor.js";
 
 /** The slice of `window.matchMedia` the watcher uses (a test passes its own). */
 export type MatchMedia = (query: string) => {
@@ -25,25 +26,6 @@ function prefersDark(mm: MatchMedia | undefined): boolean {
   }
 }
 
-/** A colour token of the applied theme as #rrggbb, through a 1×1 canvas (meta theme-color wants a plain colour). */
-function tokenHex(name: string): string | null {
-  try {
-    const probe = document.createElement("span");
-    probe.style.color = `var(${name})`;
-    document.body.append(probe);
-    const css = getComputedStyle(probe).color;
-    probe.remove();
-    const c = document.createElement("canvas").getContext("2d");
-    if (!c) return null;
-    c.fillStyle = css;
-    c.fillRect(0, 0, 1, 1);
-    const [r = 0, g = 0, b = 0] = c.getImageData(0, 0, 1, 1).data;
-    return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Point the browser chrome (`theme-color`) at the applied theme's top bar. index.html carries one meta per
  * system scheme for the first paint; an explicit theme overrides both, and "auto" leaves each on its scheme.
@@ -53,7 +35,7 @@ function applyThemeColor(theme: LocaleSettings["theme"]): void {
   const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
   for (const m of metas) {
     if (!m.dataset.scheme) m.dataset.scheme = m.content; // the shipped value, for "auto"
-    m.content = theme === "auto" ? m.dataset.scheme : (tokenHex("--topbar-bg") ?? m.dataset.scheme);
+    m.content = theme === "auto" ? m.dataset.scheme : tokenHex("--topbar-bg", m.dataset.scheme);
   }
 }
 

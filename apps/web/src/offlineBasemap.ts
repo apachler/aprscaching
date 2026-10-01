@@ -2,7 +2,8 @@
 // maplibre-gl does not declare the ambient GeoJSON namespace; import it explicitly.
 import type * as GeoJSON from "geojson";
 import type { StyleSpecification } from "maplibre-gl";
-import { GRATICULE_PALETTE, type GridPalette } from "@aprscaching/shared";
+import type { GridPalette } from "@aprscaching/shared";
+import { graticulePalette } from "./map/mapPaint.js";
 
 /** The shared lat/lon graticule geometry + layers, recoloured per palette. Fully self-contained
  *  (no network/tiles) — for air-gapped/field use and deterministic rendering. */
@@ -61,9 +62,10 @@ function graticule(pal: GridPalette, stepDeg: number): StyleSpecification {
   } as StyleSpecification;
 }
 
-/** Tinted ocean + blue world-grid — the classic APRS identity (Modern theme / offline). */
+/** Tinted ocean + blue world-grid — the classic APRS identity, offline and keyless. Its colours are the
+ *  applied theme's `--map-graticule-*` tokens: a dark sea in Dark, a light one in Light. */
 export function buildGraticuleStyle(stepDeg = 0.1): StyleSpecification {
-  return graticule(GRATICULE_PALETTE, stepDeg);
+  return graticule(graticulePalette(), stepDeg);
 }
 
 /** The Phosphor map: near-black phosphor field + a dim green grid, glowing on the whole

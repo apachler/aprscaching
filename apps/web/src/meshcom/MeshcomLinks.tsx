@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { MeshcomLink } from "../api.js";
 import { LINKS_VIEWPOINT, MESHMAP_ATTRIBUTION, linkFeatures, meshmapUrl } from "./meshcomView.js";
+import { tokenHex, whenStyleReady } from "../map/mapPaint.js";
 
 /**
  * MeshCom links as the operator's own node(s) heard them: a solid line for a direct hearing, a dashed one
@@ -14,14 +15,8 @@ import { LINKS_VIEWPOINT, MESHMAP_ATTRIBUTION, linkFeatures, meshmapUrl } from "
 const SRC = "mc-links";
 const LAYERS = ["mc-links-direct", "mc-links-relay"];
 
-/** The layer colour from the theme token (maplibre paint takes no CSS variables). */
-function lineColor(): string {
-  try {
-    return getComputedStyle(document.documentElement).getPropertyValue("--meshcom-map").trim() || "#b0417f";
-  } catch {
-    return "#b0417f";
-  }
-}
+/** The layer colour from the theme token, as MapLibre needs it (map/mapPaint.ts). */
+const lineColor = (): string => tokenHex("--meshcom", "#b0417f");
 
 export function MeshcomLinks(props: { map: maplibregl.Map | null; links: MeshcomLink[]; styleEpoch: number }) {
   const { map, links, styleEpoch } = props;
@@ -64,22 +59,9 @@ export function MeshcomLinks(props: { map: maplibregl.Map | null; links: Meshcom
         });
       for (const l of LAYERS) m.on("click", l, onClick);
     };
-    // The layer can mount long after the map's own load event, while tiles are still loading and
-    // isStyleLoaded() is false: set up at the first moment the style is complete.
-    const trySetup = () => {
-      if (!m.isStyleLoaded()) return;
-      m.off("styledata", trySetup);
-      m.off("idle", trySetup);
-      setup();
-    };
-    if (m.isStyleLoaded()) setup();
-    else {
-      m.on("styledata", trySetup);
-      m.on("idle", trySetup);
-    }
+    const cancel = whenStyleReady(m, setup);
     return () => {
-      m.off("styledata", trySetup);
-      m.off("idle", trySetup);
+      cancel();
       popup.remove();
       for (const l of LAYERS) {
         m.off("click", l, onClick);

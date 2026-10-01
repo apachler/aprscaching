@@ -8,7 +8,8 @@
  *
  * Personas (`&as=`): `user` (default, OE8APR signed in), `sysop` (the same call, operator of the instance) and
  * `out` (signed out, the landing page). Third-party requests (map tiles, styles) are refused, so the map draws
- * its offline graticule and nothing leaves the page.
+ * its offline graticule and nothing leaves the page; `&net=1` lets them through, to check the overlays on the
+ * real basemaps.
  */
 import type {
   ActivityItem,
@@ -689,12 +690,13 @@ export function fixtureAnswer(method: string, path: string, persona: Persona): u
 }
 
 /** Answer the app's gateway requests from the fixtures; refuse third-party requests. */
-export function installAppFixtures(persona: Persona): void {
+export function installAppFixtures(persona: Persona, network = false): void {
   const real = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
     const url = new URL(req.url, location.href);
     if (url.origin !== location.origin && !/^https?:\/\/127\.0\.0\.1:8787$/.test(url.origin)) {
+      if (network) return real(input, init);
       return new Response("third-party request refused by the demo fixtures", { status: 503 });
     }
     if (url.origin === location.origin && !/^\/(api|auth|verify|federation|\.well-known|keys|v)\b/.test(url.pathname))

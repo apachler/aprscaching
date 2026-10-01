@@ -84,7 +84,17 @@
     --type-clay: oklch(0.64 0.09 48); /* POTA park, castle */
     --type-sand: oklch(0.7 0.11 75); /* audio */
     --meshcom: oklch(0.55 0.16 350); /* MeshCom ring, tag and links */
-    --meshcom-map: #b0417f; /* the same hue for maplibre paint, which takes no CSS colour functions */
+    /* the map's own overlays, painted by map/mapPaint.ts (MapLibre reads them as hex at paint time) */
+    --map-night: oklch(0.2 0.035 255); /* the night side of the terminator */
+    --map-grid: oklch(0.66 0.055 233); /* the Maidenhead grid */
+    --map-ring: oklch(0.6 0.098 225); /* range rings, a pack's outline, a station's track */
+    --map-measure: oklch(0.63 0.19 35); /* the ruler, a track's head */
+    --map-arc: oklch(0.6 0.23 286); /* the great-circle arc to home */
+    --map-heard-rf: oklch(0.68 0.15 154); /* a fix heard on the air */
+    --map-heard-app: oklch(0.7 0.16 258); /* a fix from the app's location */
+    --map-heard-is: oklch(0.7 0.04 246); /* a fix from APRS-IS only */
+    --map-graticule-bg: oklch(0.26 0.02 228); /* the offline grid map: dark sea */
+    --map-graticule-line: oklch(0.68 0.08 228);
     --qr-bg: oklch(1 0 0); /* QR quiet zone — MUST stay light so codes scan (a token, not a stray literal) */
     --fav: oklch(0.64 0.17 15); /* favourite heart */
     --award-bg: oklch(0.3 0.05 95); /* recognition/award chip — gold family, derived in OKLCH */
@@ -238,6 +248,8 @@
     --heading: oklch(0.5 0.072 230);
     --topbar-bg: oklch(0.5 0.085 232); /* the brand blue deep enough for white text */
     --chrome-field-bg: color-mix(in oklch, var(--shade) 16%, transparent); /* darker than the bar, not lighter */
+    --map-graticule-bg: oklch(0.95 0.012 226); /* the offline grid map: light sea */
+    --map-graticule-line: oklch(0.6 0.098 225);
     --chrome-hover-bg: color-mix(in oklch, var(--shade) 28%, transparent);
     --chip-bg: oklch(0.96 0.004 220);
     --shadow: oklch(0 0 0 / 0.16);
@@ -291,7 +303,14 @@
     --ink-tier: oklch(0.14 0.02 155);
     --pin-station: oklch(0.8 0.11 150);
     --meshcom: oklch(0.86 0.17 110);
-    --meshcom-map: #c8e05a;
+    --map-night: oklch(0.12 0.02 155);
+    --map-grid: oklch(0.6 0.12 150);
+    --map-ring: oklch(0.82 0.12 195);
+    --map-measure: oklch(0.85 0.15 90);
+    --map-arc: oklch(0.86 0.19 145);
+    --map-heard-rf: oklch(0.86 0.19 145);
+    --map-heard-app: oklch(0.82 0.12 195);
+    --map-heard-is: oklch(0.66 0.05 150);
     --fav: oklch(0.72 0.18 20);
 
     /* cache types on the phosphor ramp, like the tiers */

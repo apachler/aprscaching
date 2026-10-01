@@ -6,6 +6,7 @@ import type * as maplibregl from "maplibre-gl";
 import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, usePoll, Segmented } from "../ui/index.js";
+import { paintFromTokens, tokenHex, useAppliedTheme, type TokenPaint, whenStyleReady } from "../map/mapPaint.js";
 
 /**
  * Track history + time-replay. Browse a station's / living-cache's past positions by
@@ -18,17 +19,20 @@ import { Button, usePoll, Segmented } from "../ui/index.js";
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const SRC = { line: "trk-line", pts: "trk-pts", head: "trk-head" };
 
-// colour each fix by trust source: RF-corroborable (green) · app-geo (blue) · IS-only (grey)
-const VIA_COLOR: maplibregl.ExpressionSpecification = [
+// colour each fix by trust source: RF-corroborable · app-geo · IS-only (tokens, read at paint time)
+const viaColor = (): maplibregl.ExpressionSpecification => [
   "match",
   ["get", "via"],
   "rf",
-  "#36b36b",
+  tokenHex("--map-heard-rf"),
   "app",
-  "#5b9dff",
-  /* default */ "#8aa0b4",
+  tokenHex("--map-heard-app"),
+  /* default */ tokenHex("--map-heard-is"),
 ];
-
+const TRACK_PAINT: TokenPaint = {
+  "trk-line-l": { "line-color": "--map-ring" },
+  "trk-head-l": { "circle-color": "--pin-edge", "circle-stroke-color": "--map-measure" },
+};
 const WINDOWS = [
   { d: 1, label: "24h" },
   { d: 7, label: "7d" },
@@ -58,6 +62,15 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
   const setData = (id: string, data: GeoJSON.FeatureCollection) =>
     (props.map?.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 
+  // the track's colours follow the theme
+  const theme = useAppliedTheme();
+  useEffect(() => {
+    const m = props.map;
+    if (!m?.isStyleLoaded()) return;
+    paintFromTokens(m, TRACK_PAINT);
+    if (m.getLayer("trk-pts-l")) m.setPaintProperty("trk-pts-l", "circle-color", viaColor());
+  }, [props.map, theme]);
+
   // one-time: add empty sources + cheap line/circle layers; remove them when this view goes away
   useEffect(() => {
     const m = props.map;
@@ -69,14 +82,14 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
           id: "trk-line-l",
           type: "line",
           source: SRC.line,
-          paint: { "line-color": "#2D8BAB", "line-width": 2, "line-opacity": 0.7 },
+          paint: { "line-color": tokenHex("--map-ring"), "line-width": 2, "line-opacity": 0.7 },
         });
       if (!m.getLayer("trk-pts-l"))
         m.addLayer({
           id: "trk-pts-l",
           type: "circle",
           source: SRC.pts,
-          paint: { "circle-radius": 3, "circle-color": VIA_COLOR, "circle-opacity": 0.85 },
+          paint: { "circle-radius": 3, "circle-color": viaColor(), "circle-opacity": 0.85 },
         });
       if (!m.getLayer("trk-head-l"))
         m.addLayer({
@@ -85,16 +98,15 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
           source: SRC.head,
           paint: {
             "circle-radius": 7,
-            "circle-color": "#fff",
-            "circle-stroke-color": "#e5532d",
+            "circle-color": tokenHex("--pin-edge"),
+            "circle-stroke-color": tokenHex("--map-measure"),
             "circle-stroke-width": 3,
           },
         });
     };
-    if (m.isStyleLoaded()) setup();
-    else m.once("load", setup);
+    const cancel = whenStyleReady(m, setup);
     return () => {
-      m.off("load", setup); // deregister the one-shot if we unmount before it fires
+      cancel();
       for (const l of ["trk-line-l", "trk-pts-l", "trk-head-l"]) if (m.getLayer(l)) m.removeLayer(l);
       for (const id of Object.values(SRC)) if (m.getSource(id)) m.removeSource(id);
     };

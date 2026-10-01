@@ -90,6 +90,7 @@ import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
 import { NO_WEBGL_TEXT, fallbackBbox } from "./platform/mapSupport.js";
 import { useCacheMarkers, useStationMarkers, useSpotMarkers, useMeshcomMarkers } from "./platform/markerLayers.js";
 import { MeshcomLinks } from "./meshcom/MeshcomLinks.js";
+import { GRATICULE_PAINT, paintFromTokens, useAppliedTheme } from "./map/mapPaint.js";
 // The manual reader carries the whole bundled docs tree — lazy-load it so it never weighs on the map.
 const DocsPanel = lazy(() => import("./docs/DocsPanel.js").then((m) => ({ default: m.DocsPanel })));
 
@@ -393,6 +394,14 @@ export default function Platform({ session, startTour }: { session: SessionState
   // run is skipped: the map was just created with the right style.
   // Dark, light and auto share one basemap; only Phosphor has its own.
   const phosphorStyle = locSettings.theme === "phosphor";
+  // the offline graticule follows the theme without a style swap: repaint its sea and lines
+  const appliedTheme = useAppliedTheme();
+  useEffect(() => {
+    const m = mapRef.current;
+    const graticuleUp = !!m?.getLayer("grid-major") && appliedTheme !== "phosphor";
+    if (m?.isStyleLoaded() && graticuleUp && styleKind.current === "base") paintFromTokens(m, GRATICULE_PAINT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapRef/styleKind are refs; the theme is the trigger
+  }, [appliedTheme]);
   const themeAtMount = useRef(phosphorStyle);
   const [styleEpoch, setStyleEpoch] = useState(0);
   useEffect(() => {

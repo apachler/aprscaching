@@ -488,6 +488,12 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       gateway alike (`aprs_is`); telling them apart needs the ingest to pass the distinction on. The node's own
       firmware, hardware and battery reach only the ingest log. Display only: no tier changes.
 
+- [ ] **A dark vector basemap** _(P3 · M)_ — the online basemap (OpenFreeMap "liberty") is light in every theme,
+      so a dark or Phosphor app opens onto a bright map. A dark style from the same tiles would follow the
+      Appearance setting; the offline grid map already does (`--map-graticule-*`). It needs a style the operator
+      can self-host beside the tiles, chosen at style-load time by the applied theme, and the cache and station
+      pins checked for contrast on it.
+
 - [ ] **OCI warm standby (HA)** _(P3 · L)_ — a second instance that takes over when the OCI VM dies, still
       inside the free tier. What the free tier offers: the A1 allowance (2 OCPUs / 12 GB) splits into two 1 OCPU
       / 6 GB VMs; two E2.1.Micro VMs; one Network Load Balancer; one flexible Load Balancer at 10 Mbps. The
