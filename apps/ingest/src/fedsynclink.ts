@@ -11,6 +11,7 @@
  *     the circuit and delivers them to OUR gateway's /federation/frames, where the trust-gated
  *     pipeline verifies every frame. The ingest holds no keys and makes no trust decisions.
  */
+import { gatewayFetch } from "./gatewayauth.js";
 import { FedSyncApp, FedSyncLinkClient, type LinkPayloadCodec } from "@aprscaching/packet";
 import { decodeFedSyncPage, FED_DEFLATE_DICT_ID, type LinkCaps } from "@aprscaching/shared";
 import { compressDict1, decompressDict1 } from "./fedcompress.js";
@@ -36,7 +37,7 @@ export function makeFedSyncApp(opts: {
   fetchFn?: FetchFn;
   codec?: LinkPayloadCodec;
 }): FedSyncApp {
-  const f = opts.fetchFn ?? fetch;
+  const f = opts.fetchFn ?? gatewayFetch;
   return new FedSyncApp(
     opts.caps ?? VHF_COMPACT_CAPS,
     async (type, since, limit) => {
@@ -74,7 +75,7 @@ export async function pullFedSync(opts: {
   maxPages?: number;
   fetchFn?: FetchFn;
 }): Promise<FedSyncPullResult> {
-  const f = opts.fetchFn ?? fetch;
+  const f = opts.fetchFn ?? gatewayFetch;
   const out: FedSyncPullResult = { pages: 0, frames: 0, applied: 0, quarantined: 0, rejected: 0 };
   let since = opts.since ?? 0;
   const maxPages = opts.maxPages ?? 50;

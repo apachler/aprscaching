@@ -9,6 +9,7 @@ import type { ParsedFrame } from "@aprscaching/aprs";
 import { validateConfig, type Packet } from "@aprscaching/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
 import { txLimitFromEnv } from "./txlimit.js";
+import { gatewayFetch, loadBoxKey, useBoxKey } from "./gatewayauth.js";
 import type { BoxRadio, BoxState } from "./boxpoll.js";
 
 loadDotEnv(); // `pnpm dev`/`start` run plain tsx/node — load a .env before reading env
@@ -19,6 +20,13 @@ const CONFIG_PROBLEMS = validateConfig(env, "ingest");
 if (CONFIG_PROBLEMS.length) {
   for (const p of CONFIG_PROBLEMS) console.error(`[ingest] FATAL: ${p.message}`);
   console.error("[ingest] See docs/reference/configuration.md for each setting's accepted values.");
+  process.exit(1);
+}
+// An enrolled box signs its gateway requests with its own key; otherwise the shared secret is sent.
+try {
+  useBoxKey(loadBoxKey(env));
+} catch (e) {
+  console.error(`[ingest] FATAL: ${(e as Error).message}`);
   process.exit(1);
 }
 const INGEST_URL = env.INGEST_URL ?? "http://127.0.0.1:8787/ingest";
@@ -68,7 +76,7 @@ async function shutdown(signal: string): Promise<void> {
   spool = [];
   if (packets.length) {
     try {
-      await fetch(INGEST_URL, {
+      await gatewayFetch(INGEST_URL, {
         method: "POST",
         headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
         body: JSON.stringify({ packets }),
@@ -341,7 +349,7 @@ setInterval(async () => {
   spool = [];
   if (!packets.length) return;
   try {
-    const res = await fetch(INGEST_URL, {
+    const res = await gatewayFetch(INGEST_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
       body: JSON.stringify({ packets }),
@@ -434,7 +442,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
   let outboxLoggedAt = 0;
   setInterval(async () => {
     try {
-      const r = await fetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
+      const r = await gatewayFetch(`${base}/outbox`, { headers: { "x-ingest-secret": SECRET } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`); // a 401/500 poll is a failure, not "no items"
       const { items } = (await r.json()) as { items: any[] };
       const sent: number[] = [];
@@ -443,7 +451,7 @@ if (SERVICE_CALL && env.APRSIS_SERVICE_PASS) {
         if (link.publish(it)) sent.push(it.id);
       }
       if (sent.length)
-        await fetch(`${base}/outbox/ack`, {
+        await gatewayFetch(`${base}/outbox/ack`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-ingest-secret": SECRET },
           body: JSON.stringify({ ids: sent }),

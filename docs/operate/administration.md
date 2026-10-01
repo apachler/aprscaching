@@ -28,7 +28,7 @@ Two shared secrets reach the gateway from machines, and they never overlap:
 
 | Secret | Header | Authorises | Held by |
 |---|---|---|---|
-| `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
+| `INGEST_SECRET`, or an enrolled box's key | `x-ingest-secret`, or a signed request ([Enrolling ingest boxes](#enrolling-ingest-boxes)) | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
 | `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: reading the Setup checklist (`GET /api/admin/setup`, which `deploy/aprscaching doctor` relays), `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
 
 The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a
@@ -37,6 +37,29 @@ links ([Off-grid sign-in](first-hour.md#off-grid-sign-in)): on an instance with 
 `ADMIN_CALLSIGNS` calls, on an off-grid instance for any account — keep it on the gateway host. Leave `OPERATOR_SECRET` unset to close the
 machine paths altogether; the web operator surface is unaffected. Sessions are signed with the separate
 `SESSION_SECRET`.
+
+## Enrolling ingest boxes
+
+Instead of copying `INGEST_SECRET` to a box, you can enroll it. The box then holds its own Ed25519 key and
+signs every request to the gateway with it. Revoking that box cuts it off alone; boxes on the shared secret
+keep working beside enrolled ones.
+
+1. Create a one-time code (`POST /api/admin/boxes/codes`, as the sysop or with `OPERATOR_SECRET`). It is
+   shown once, holds 80 random bits, expires after 15 minutes (`ttlMin`, 10–15) and works for one box. Give it
+   a `label`, and optionally a `callsign`: a box enrolled for a callsign names only receiving sites of that base
+   call.
+2. On the box, enroll with the code (`node --import tsx src/enroll.ts --code ABCD-EFGH-JKLM-NPQR` in
+   `apps/ingest`; see [RF ingest](rf-ingest.md#enrolling-the-box)). It writes `BOX_ID` and `BOX_KEY` into the
+   box's settings, which replace `INGEST_SECRET` there.
+3. The box now appears in `GET /api/admin/boxes`, with who enrolled it, when, and when it was last seen. You
+   own it for [remote control](#remote-control-of-your-box) without a separate pairing step.
+4. Revoke a box with `POST /api/admin/boxes/<id>/revoke`. Its key stops working at once; it comes back only
+   with a fresh code and key.
+
+A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.
+Enrolling grants nothing beyond the ingest plane: what a box hears counts for Tier A only when you list its
+receiving site in `FIRST_PARTY_SITES`, exactly as for a box on the shared secret. The code and box records,
+with who created, enrolled and revoked each, are the enrollment's audit trail.
 
 ## Sessions
 

@@ -73,6 +73,14 @@ import {
 import { handleSpots } from "./spots.js";
 import { handleApiV1 } from "./readapi.js";
 import { handleEmbed, handleQr } from "./embed.js";
+import {
+  authenticateBox,
+  boxMayActAs,
+  handleCreateEnrollCode,
+  handleEnroll,
+  handleListBoxes,
+  handleRevokeBox,
+} from "./boxkeys.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog, handleBoxPair, handleBoxClaim } from "./box.js";
 import {
   handleRelayEnqueue,
@@ -330,6 +338,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const url = new URL(req.url);
   const p = url.pathname,
     m = req.method;
+  // A box's signed request is verified here, once, before any handler reads the credential (boxkeys.ts).
+  await authenticateBox(req, env);
 
   if (p === "/health") return handleHealth(req, env);
 
@@ -399,6 +409,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   const box = /^\/api\/box\/([A-Za-z0-9_.-]+)\/(command|commands|commands\/ack|log|pair|claim)$/.exec(p);
   if (box) {
     const [boxId, op] = [box[1]!, box[2]!];
+    // an enrolled box signs only for itself; the shared secret and the operator act for any box
+    if (!boxMayActAs(req, boxId))
+      return json({ error: "this box's key does not act for another box" }, { status: 403 });
     if (op === "command" && m === "POST") return handleBoxEnqueue(req, env, boxId);
     if (op === "commands" && m === "GET") return handleBoxPoll(req, env, boxId);
     if (op === "commands/ack" && m === "POST") return handleBoxAck(req, env, boxId);
@@ -485,6 +498,11 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   // ingest <-> worker
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);
   if (p === "/ingest/check" && m === "GET") return handleIngestCheck(req, env);
+  if (p === "/ingest/enroll" && m === "POST") return handleEnroll(req, env);
+  if (p === "/api/admin/boxes" && m === "GET") return handleListBoxes(req, env);
+  if (p === "/api/admin/boxes/codes" && m === "POST") return handleCreateEnrollCode(req, env);
+  const revoke = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/revoke$/.exec(p);
+  if (revoke && m === "POST") return handleRevokeBox(req, env, revoke[1]!);
   if (p === "/outbox" && m === "GET") return outboxPending(req, env);
   if (p === "/outbox/ack" && m === "POST") return outboxAck(req, env);
 

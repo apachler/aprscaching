@@ -31,6 +31,8 @@ export const SIG_DOMAIN = {
   rotation: "acs-rot/1\n",
   registry: "acs-reg/1\n",
   ingest: "acs-ing/1\n",
+  box: "acs-box/1\n",
+  boxEnroll: "acs-box-enroll/1\n",
 } as const;
 
 export function authorshipMessage(a: Authorship): string {
@@ -65,6 +67,36 @@ export function accountActionMessage(a: { action: string; callsign: string; inst
  * batch count + digest of the canonical packets, so a signature can't be replayed for other content.
  * The gateway verifies the signature against a key registered to `callsign` (callsign_keys).
  */
+/**
+ * What an enrolled ingest box signs on each request to its gateway: the method, the path with its query,
+ * the time (unix seconds), a random nonce and the SHA-256 of the body. Any change to one of them breaks the
+ * signature, and the gateway accepts each signature once.
+ */
+export function boxRequestMessage(a: {
+  box: string;
+  method: string;
+  path: string;
+  at: number;
+  nonce: string;
+  digest: string;
+}): string {
+  return stableStringify({
+    v: 1,
+    kind: "box-request",
+    box: a.box,
+    method: a.method.toUpperCase(),
+    path: a.path,
+    at: a.at,
+    nonce: a.nonce,
+    digest: a.digest,
+  });
+}
+
+/** What a box signs when it enrolls with a one-time code: proof that it holds the key it registers. */
+export function boxEnrollMessage(a: { box: string; key: string; code: string; at: number }): string {
+  return stableStringify({ v: 1, kind: "box-enroll", box: a.box, key: a.key, code: a.code, at: a.at });
+}
+
 export function ingestMessage(a: { callsign: string; at: number; count: number; digest: string }): string {
   return stableStringify({
     v: 1,

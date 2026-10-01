@@ -22,6 +22,12 @@ path returns `204`. The stable, versioned, rate-limited read surface is `/api/v1
 Cross-origin requests carry credentials only from `APP_URL` and `CORS_ORIGINS`; with neither set the
 gateway answers `Access-Control-Allow-Origin: *` without credentials.
 
+An enrolled ingest box sends no `x-ingest-secret`: it signs each request with its own Ed25519 key in the
+headers `x-box-id`, `x-box-at` (unix seconds), `x-box-nonce` and `x-box-sig`. The signature covers the
+method, the path with its query, the time, the nonce and the body's SHA-256, with the domain prefix
+`acs-box/1` (`boxRequestMessage` in `packages/shared`). It is fresh for five minutes and accepted once, and it
+carries the ingest plane's rights for that box alone ([Enrolling ingest boxes](../operate/administration.md#enrolling-ingest-boxes)).
+
 ## Public read API
 
 ```bash
@@ -134,6 +140,9 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 | DELETE | `/api/admin/adoptions/:cacheId` | Withdraw an offer (cancels its pending requests) | sysop |
 | POST | `/api/admin/adoptions/:cacheId/assign` | Hand a cache to a control-verified call (`{ callsign, note, activate? }`) | sysop |
 | POST | `/api/admin/adoptions/requests/:id/approve` · `/decline` | Decide an adoption request (`{ note? }`) | sysop |
+| POST | `/api/admin/boxes/codes` | A one-time box enrollment code `{label?, callsign?, ttlMin?}` → `{code, expiresAt}`, shown once | sysop or x-operator-secret |
+| GET | `/api/admin/boxes` | Enrolled boxes (who, when, last seen, revoked) and the codes still open | sysop or x-operator-secret |
+| POST | `/api/admin/boxes/:id/revoke` | Revoke a box's key at once | sysop or x-operator-secret |
 | GET | `/api/admin/setup` | The first-hour setup checklist, checked live (secrets reported as set/unset only), and the D1 write budget | sysop or x-operator-secret |
 | GET | `/api/admin/station-status` | A read-only summary for the operator's scripts: stations heard in the last hour, each port's recent packets and last hearing, the Via setting of the operator's own MeshCom node(s) (`meshcomVia`: `on` with its relays, `off`, or `unknown` until the node has sent a message), and received messages to the operator's calls (any SSID) since `?since=<unix time>` (default the last hour, at most a week back, 20 at most) | sysop or x-operator-secret |
 | GET | `/api/admin/setup/44net` | The read-only 44Net self-check: A record, `_aprscaching` TXT and descriptor endpoint, each pass/warn/fail with a fix | sysop or x-operator-secret |
@@ -148,7 +157,8 @@ secret; the others need a signed-in sysop.
 | Method | Path | Purpose | Auth |
 |--------|------|---------|------|
 | POST | `/ingest` | Ingest positions/finds/packets | x-ingest-secret, or a batch signed on the device |
-| GET | `/ingest/check` | Whether the ingest credential works: `200 {ok, instance}`, else `401`; reads and writes nothing | x-ingest-secret |
+| GET | `/ingest/check` | Whether the ingest credential works: `200 {ok, instance, box}`, else `401`; reads and writes nothing | x-ingest-secret, or a box's signed request |
+| POST | `/ingest/enroll` | A box enrolls with a one-time code: `{code, box, key, at, sig}`, the request signed with the new key → `201 {box, instance, label, callsign}`; rate-limited per address | the code |
 | GET · POST | `/outbox` · `/outbox/ack` | Box pulls / acks queued APRS-IS messages | x-ingest-secret |
 | GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box | x-ingest-secret |
 | GET · POST | `/api/bbs/session` · `/api/bbs/kill` | Connected-mode BBS session state · end a session | x-ingest-secret |

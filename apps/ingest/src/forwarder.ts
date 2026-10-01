@@ -13,6 +13,7 @@ import net from "node:net";
 import { kissWrap, kissFrames } from "@aprscaching/aprs";
 import type { FrameLink } from "./link.js";
 import { TokenBucket } from "./txlimit.js";
+import { gatewayFetch } from "./gatewayauth.js";
 import { ConnectedLink, encodeFrame, decodeFrame, parseAddr, type Ax25Frame, type LinkState } from "@aprscaching/ax25";
 import {
   BbsForwarder,
@@ -39,17 +40,17 @@ export class GatewayApi implements ForwardApi {
     return { "content-type": "application/json", "x-ingest-secret": this.secret };
   }
   async partners(): Promise<GwPartner[]> {
-    const r = await fetch(`${this.base}/api/bbs/partners`, { headers: { "x-ingest-secret": this.secret } });
+    const r = await gatewayFetch(`${this.base}/api/bbs/partners`, { headers: { "x-ingest-secret": this.secret } });
     return ((await r.json()) as { partners?: GwPartner[] }).partners ?? [];
   }
   async pool(call: string): Promise<FbbMessage[]> {
-    const r = await fetch(`${this.base}/api/bbs/forward/pool?partner=${encodeURIComponent(call)}`, {
+    const r = await gatewayFetch(`${this.base}/api/bbs/forward/pool?partner=${encodeURIComponent(call)}`, {
       headers: { "x-ingest-secret": this.secret },
     });
     return ((await r.json()) as { messages?: FbbMessage[] }).messages ?? [];
   }
   async inbound(message: FbbMessage, origin: string): Promise<void> {
-    await fetch(`${this.base}/api/bbs/forward/inbound`, {
+    await gatewayFetch(`${this.base}/api/bbs/forward/inbound`, {
       method: "POST",
       headers: this.h(),
       body: JSON.stringify({ message, origin }),
@@ -57,7 +58,7 @@ export class GatewayApi implements ForwardApi {
   }
   async markSent(partner: string, bids: string[]): Promise<void> {
     if (!bids.length) return;
-    await fetch(`${this.base}/api/bbs/forward/sent`, {
+    await gatewayFetch(`${this.base}/api/bbs/forward/sent`, {
       method: "POST",
       headers: this.h(),
       body: JSON.stringify({ partner, bids }),
@@ -70,7 +71,7 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
   const h = () => ({ "content-type": "application/json", "x-ingest-secret": secret });
   return {
     load: async (call) => {
-      const r = await fetch(`${base}/api/bbs/session?call=${encodeURIComponent(call)}`, {
+      const r = await gatewayFetch(`${base}/api/bbs/session?call=${encodeURIComponent(call)}`, {
         headers: { "x-ingest-secret": secret },
       });
       return ((await r.json()) as { messages?: BbsMsgFull[] }).messages ?? [];
@@ -83,7 +84,7 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
       body: string;
       replyTo?: number | null;
     }) => {
-      const r = await fetch(`${base}/api/bbs/messages`, {
+      const r = await gatewayFetch(`${base}/api/bbs/messages`, {
         method: "POST",
         headers: h(),
         body: JSON.stringify({
@@ -98,10 +99,10 @@ export function gatewayBbsBackend(base: string, secret: string): CachedBbsBacken
       return ((await r.json().catch(() => ({}))) as { id?: number }).id ?? 0;
     },
     markRead: async (id) => {
-      await fetch(`${base}/api/bbs/messages/${id}/read`, { method: "POST", headers: h() });
+      await gatewayFetch(`${base}/api/bbs/messages/${id}/read`, { method: "POST", headers: h() });
     },
     kill: async (id, call) => {
-      await fetch(`${base}/api/bbs/kill`, { method: "POST", headers: h(), body: JSON.stringify({ id, call }) });
+      await gatewayFetch(`${base}/api/bbs/kill`, { method: "POST", headers: h(), body: JSON.stringify({ id, call }) });
     },
   };
 }

@@ -245,6 +245,17 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
     savedViews: await q("SELECT slug, name, state, public, created_at FROM saved_views WHERE $CALLS", by("owner_call")),
     pushSubscriptions: await rows(env, "SELECT endpoint, topics, created_at FROM push_subs WHERE account_id=?", acct),
     boxes: await rows(env, "SELECT box_id, created_at FROM boxes WHERE account_id=?", acct),
+    enrolledBoxes: await rows(
+      env,
+      "SELECT box_id, label, callsign, enrolled_at, revoked_at FROM box_keys WHERE enrolled_by=? OR revoked_by=?",
+      acct,
+      acct,
+    ),
+    boxEnrollmentCodes: await rows(
+      env,
+      "SELECT label, callsign, created_at, expires_at, used_at, box_id FROM box_enrollment_codes WHERE created_by=?",
+      acct,
+    ),
     ratings: await q("SELECT cache_id, callsign, stars, ts FROM cache_ratings WHERE $CALLS", by("callsign")),
     cacheMedia: await q(
       "SELECT m.cache_id, m.kind, m.content_type, m.title, m.bytes, m.created_at FROM cache_media m JOIN caches c ON c.id=m.cache_id WHERE $CALLS",
@@ -479,6 +490,10 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
         accountId,
       ),
       env.DB.prepare("DELETE FROM boxes WHERE account_id=?").bind(accountId),
+      // the boxes this account enrolled lose their keys with it, and its codes and revocations are forgotten
+      env.DB.prepare("DELETE FROM box_keys WHERE enrolled_by=?").bind(accountId),
+      env.DB.prepare("UPDATE box_keys SET revoked_by='erased' WHERE revoked_by=?").bind(accountId),
+      env.DB.prepare("DELETE FROM box_enrollment_codes WHERE created_by=?").bind(accountId),
     );
   await env.DB.batch(stmts);
 }
