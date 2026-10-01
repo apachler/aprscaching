@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Panel, Ico } from "../ui/index.js";
+import { Panel, Icon } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { appById, type ShackApp, type ShackAppId, type ShackAppProps } from "./apps.js";
 
@@ -18,7 +18,7 @@ function AppPanel(props: { app: ShackApp; onClose: () => void; children: React.R
     <Panel
       title={
         <>
-          <Ico e={`${props.app.emoji} `} />
+          <Icon name={props.app.icon} cp437="" className="lead-ic" />
           {props.app.title}
         </>
       }

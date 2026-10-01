@@ -26,7 +26,7 @@ import {
   type SearchHitStation,
 } from "./api.js";
 import { TopBar } from "./TopBar.js";
-import { Tour, TOUR_STEPS, Ico, Button, useToast } from "./ui/index.js";
+import { Tour, TOUR_STEPS, Button, useToast, Icon } from "./ui/index.js";
 import type { GeofencePrompt } from "@aprscaching/shared";
 import { ASSET, MAP_MARKER } from "./brand.js";
 import { buildGraticuleStyle, buildPackTileStyle, buildPhosphorStyle } from "./offlineBasemap.js";
@@ -959,9 +959,9 @@ export default function Platform({ session, startTour }: { session: SessionState
                       ? `caches from ${offlineMap.source.auto ? "" : "pack "}“${offlineMap.source.name}”, ${ageText(offlineMap.source.refreshedAt)}${offlineMap.source.packs > 1 ? ` (+${offlineMap.source.packs - 1} more)` : ""}`
                       : "no offline pack covers this area"}
                   </span>
-                  <button className="link" onClick={() => openView(panel("offline"))}>
+                  <Button variant="quiet" onClick={() => openView(panel("offline"))}>
                     Packs
-                  </button>
+                  </Button>
                 </div>
               )}
               {/* the viewer's own fix: the cache sheet shows the distance to it */}
@@ -987,7 +987,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               {nearPrompt && !hiding && (
                 <div className="geo-banner">
                   <span>
-                    <Ico e="📍 " />
+                    <Icon name="place" cp437="" className="lead-ic" />
                     You're near <strong>{nearPrompt.code}</strong> — {nearPrompt.title}
                     <span className="muted"> · {fmt.distance(nearPrompt.distanceM)}</span>
                   </span>
@@ -1003,9 +1003,9 @@ export default function Platform({ session, startTour }: { session: SessionState
                   >
                     Log it
                   </Button>
-                  <button className="icon" aria-label="Dismiss" onClick={() => setNearPrompt(null)}>
+                  <Button variant="icon" aria-label="Dismiss" onClick={() => setNearPrompt(null)}>
                     ✕
-                  </button>
+                  </Button>
                 </div>
               )}
               {pickedSpot && !hiding && (

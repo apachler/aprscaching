@@ -4,7 +4,7 @@ import { getStation, createStation, type StationDetail } from "../api.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
-import { Panel, Badge, ErrorState, Ico, useToast, Card } from "../ui/index.js";
+import { Panel, Badge, ErrorState, useToast, Card, Button, Icon } from "../ui/index.js";
 import { TrackReplay } from "../shack/TrackReplay.js";
 import { StationGraphs } from "../shack/StationGraphs.js";
 import { StationPackets } from "../shack/StationPackets.js";
@@ -54,7 +54,7 @@ export function StationPanel(props: {
     <Panel
       title={
         <>
-          <Ico e="📡 " />
+          <Icon name="antenna" cp437="" className="lead-ic" />
           <span className="mono">{props.picked}</span>
         </>
       }
@@ -88,15 +88,15 @@ export function StationPanel(props: {
             <div className="wx">
               {station.wx.tempC != null && (
                 <>
-                  <Ico e="🌡 " c="T " />
+                  <Icon name="thermo" cp437="T" className="lead-ic" />
                   {fmt.temp(station.wx.tempC)} ·{" "}
                 </>
               )}
-              <Ico e="💧 " c="RH " />
+              <Icon name="drop" cp437="RH" className="lead-ic" />
               {station.wx.humidity ?? "—"}% ·{" "}
               {station.wx.windKn != null && (
                 <>
-                  <Ico e="🌬 " c="WND " />
+                  <Icon name="wind" cp437="WND" className="lead-ic" />
                   {fmt.speed(station.wx.windKn)} ·{" "}
                 </>
               )}
@@ -111,7 +111,7 @@ export function StationPanel(props: {
             ) : station.registered ? (
               <span className="muted">Registered by another operator</span>
             ) : (
-              <button
+              <Button
                 onClick={async () => {
                   try {
                     await createStation({ callsign: station.callsign });
@@ -123,9 +123,9 @@ export function StationPanel(props: {
                 }}
               >
                 + Add to my stations
-              </button>
+              </Button>
             )}
-            <button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</button>
+            <Button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</Button>
           </div>
           <MeshcomSection callsign={station.callsign} />
           <TrackReplay map={map} callsign={station.callsign} />

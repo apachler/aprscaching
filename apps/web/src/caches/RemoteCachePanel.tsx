@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { CSSProperties } from "react";
 import { typeMeta } from "../cacheTypes.js";
 import { Panel, Badge } from "../ui/index.js";
 import type { MapCache } from "../api.js";
@@ -13,8 +12,7 @@ export function RemoteCachePanel(props: { cache: MapCache; onClose: () => void }
       onClose={props.onClose}
       title={
         <>
-          <span className="dot" style={{ ["--tc"]: meta.color } as CSSProperties} />{" "}
-          <span className="code">{c.code}</span>
+          <span className="dot" data-ctype={props.cache.type} /> <span className="code">{c.code}</span>
         </>
       }
     >

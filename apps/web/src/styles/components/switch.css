@@ -47,4 +47,12 @@
       transition: none;
     }
   }
+  /* an inline disclosure's toggle (Hint, Verification): a text control, at least 24px tall (WCAG 2.5.8) */
+  .disclosure > button.link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-height: 24px;
+    padding-block: var(--space-2xs);
+  }
 }

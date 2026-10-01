@@ -31,9 +31,9 @@ export function DecoderPanel() {
         placeholder="paste a raw TNC2 / APRS-IS line…"
       />
       <div className="row between mt-2">
-        <button className="link" onClick={() => setRaw(SAMPLE)}>
+        <Button variant="quiet" onClick={() => setRaw(SAMPLE)}>
           use a sample
-        </button>
+        </Button>
         <Button variant="primary" onClick={decode} disabled={!raw.trim()}>
           Decode
         </Button>

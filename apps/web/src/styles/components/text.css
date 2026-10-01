@@ -21,4 +21,11 @@
   .fine {
     font-size: var(--text-label);
   }
+  /* an icon leading a title or a label, sitting on the text's baseline */
+  .lead-ic {
+    display: inline-block;
+    vertical-align: -0.15em;
+    margin-inline-end: var(--space-xs);
+    flex: none;
+  }
 }

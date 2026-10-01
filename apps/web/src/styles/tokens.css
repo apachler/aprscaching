@@ -71,6 +71,13 @@
     --pin-edge: oklch(1 0 0); /* map-marker outline + glyph — white ring reads on any basemap */
     --map-control-ink: oklch(0.25 0.02 245); /* glyphs on MapLibre's control stack, which is white in every theme */
     --pin-station: oklch(0.86 0.012 230); /* default (roleless) station-pin fill */
+    /* cache types: the pin fill and the type chip's hue (the brand palette) */
+    --type-green: oklch(0.71 0.18 128); /* traditional */
+    --type-blue: oklch(0.6 0.085 232); /* multi-stage, living, virtual */
+    --type-forest: oklch(0.57 0.14 128); /* WWFF reserve */
+    --type-grey: oklch(0.41 0.008 220); /* SOTA summit, bunker */
+    --type-clay: oklch(0.64 0.09 48); /* POTA park, castle */
+    --type-sand: oklch(0.7 0.11 75); /* audio */
     --meshcom: oklch(0.55 0.16 350); /* MeshCom ring, tag and links */
     --meshcom-map: #b0417f; /* the same hue for maplibre paint, which takes no CSS colour functions */
     --qr-bg: oklch(1 0 0); /* QR quiet zone — MUST stay light so codes scan (a token, not a stray literal) */

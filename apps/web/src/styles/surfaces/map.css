@@ -19,6 +19,7 @@
   }
   /* map pins */
   .cache-pin {
+    background: var(--tc, var(--type-grey));
     width: 25px;
     height: 25px;
     border-radius: 50% 50% 50% 0;
@@ -515,5 +516,10 @@
     max-width: 30rem;
     margin: 0;
     text-align: start;
+  }
+  /* MapLibre's compact attribution toggle: big enough to hit (WCAG 2.5.8) */
+  .maplibregl-ctrl-attrib-button {
+    min-width: 24px;
+    min-height: 24px;
   }
 }

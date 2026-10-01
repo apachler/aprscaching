@@ -174,6 +174,6 @@ export function makeFormatters(settings: LocaleSettings): Formatters {
 export const FormatContext = createContext<Formatters>(makeFormatters(defaultSettings()));
 export const useFmt = (): Formatters => useContext(FormatContext);
 /** The applied theme, reactively: the setting from context, with "auto" resolved against the system scheme.
- *  Phosphor is emoji-free, so components gate decorative glyphs on this (see ui/Ico). */
+ *  Phosphor draws its CP437 glyphs on this (see ui/Icon). */
 export const useTheme = (): ResolvedTheme =>
   resolveTheme(normalizeTheme(useContext(FormatContext).settings.theme), systemPrefersDark());

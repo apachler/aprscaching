@@ -118,13 +118,14 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
             </Button>
           )}
           {!probe.exists && canPasskey && (
-            <button
-              className="primary log-primary"
+            <Button
+              variant="primary"
+              className="log-primary"
               disabled={busy}
               onClick={() => run(() => registerPasskey(callsign, email.trim() || undefined))}
             >
               <Icon name="shield-check" size={18} /> Create account with a passkey
-            </button>
+            </Button>
           )}
 
           <div className="adv-body">
@@ -148,20 +149,21 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
               />
             </label>
             <div className="row end mt-2">
-              <button disabled={busy} onClick={sendEmail}>
+              <Button disabled={busy} onClick={sendEmail}>
                 Email me a link
-              </button>
+              </Button>
             </div>
           </div>
-          <button
-            className="link mt-3"
+          <Button
+            variant="quiet"
+            className="mt-3"
             onClick={() => {
               setProbe(null);
               setErr(null);
             }}
           >
             ← different callsign
-          </button>
+          </Button>
         </>
       )}
       {err && (

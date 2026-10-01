@@ -93,7 +93,7 @@ export function MyStations(props: { callsign: string }) {
         finds Radio-verified when it hears them. It&apos;s recognised, never gated.
       </p>
       <div className="row end">
-        <button onClick={becomeCache}>★ Become a cache</button>
+        <Button onClick={becomeCache}>★ Become a cache</Button>
       </div>
 
       {stations.error && stations.items.length === 0 ? (
@@ -162,7 +162,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
 
   return (
     <div className="station-card">
-      <button className="station-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <Button className="station-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="mono station-call">{props.station.callsign}</span>
         <span className="badges">
           {props.station.roles.map((r) => (
@@ -170,7 +170,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
           ))}
         </span>
         <span className="muted">{open ? "▾" : "▸"}</span>
-      </button>
+      </Button>
       {open && (
         <div className="station-body">
           <StationFields value={edit} onChange={setEdit} />
@@ -183,7 +183,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
             </Button>
           </div>
           <div className="row end mt-1">
-            <button
+            <Button
               onClick={async () => {
                 // a real three-way decision — Cancel commits nothing (ui-ux.md §1.8)
                 const kind = await choose({
@@ -204,7 +204,7 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
               }}
             >
               ⚑ Turn into a cache
-            </button>
+            </Button>
           </div>
           {props.station.roles.includes("weather") && <StationWxKeyPanel stationId={props.station.id} />}
         </div>
@@ -350,35 +350,35 @@ function StationWxKeyPanel(props: { stationId: number }) {
                 value={info.ecowittPath ?? ""}
                 onFocus={(e) => e.currentTarget.select()}
               />
-              <button
-                className="iconbtn"
+              <Button
+                variant="icon-subtle"
                 aria-label="Copy Ecowitt URL"
                 onClick={() => void copy(info.ecowittPath ?? "", "Ecowitt URL")}
               >
                 Copy
-              </button>
+              </Button>
             </span>
           </label>
           <label>
             Weather Underground — Rapidfire URL
             <span className="copyrow">
               <input className="mono" readOnly value={info.wuUrl ?? ""} onFocus={(e) => e.currentTarget.select()} />
-              <button
-                className="iconbtn"
+              <Button
+                variant="icon-subtle"
                 aria-label="Copy Weather Underground URL"
                 onClick={() => void copy(info.wuUrl ?? "", "WU URL")}
               >
                 Copy
-              </button>
+              </Button>
             </span>
           </label>
           <p className="muted fine">Last reading: {info.lastSeen ? fmt.dateTime(info.lastSeen) : "—"}.</p>
           <h5 className="mt-2">Transmit (optional)</h5>
           <WxTxToggles stationId={props.stationId} txIs={info.txIs} txCwop={info.txCwop} verified={info.verified} />
           <div className="row end">
-            <button onClick={issue} disabled={busy}>
+            <Button onClick={issue} disabled={busy}>
               Re-issue key
-            </button>
+            </Button>
           </div>
         </>
       )}

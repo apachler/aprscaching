@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
 import { getStationSeries, type StationSeries } from "../api.js";
+import { Button } from "../ui/index.js";
 
 /**
  * Telemetry & weather graphs for a station. uPlot is heavy-ish (canvas + its own
@@ -131,9 +132,9 @@ export function StationGraphs(props: { callsign: string }) {
 
   return (
     <div className="station-graphs">
-      <button className="link" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <Button variant="quiet" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? "▾" : "▸"} Graphs (24h)
-      </button>
+      </Button>
       {open &&
         (err ? (
           <p className="muted">Couldn't load graphs: {err}</p>

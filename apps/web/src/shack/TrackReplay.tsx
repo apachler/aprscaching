@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { getStationTrack, type StationTrackPoint } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, usePoll } from "../ui/index.js";
+import { Button, usePoll, Segmented } from "../ui/index.js";
 
 /**
  * Track history + time-replay. Browse a station's / living-cache's past positions by
@@ -208,21 +208,15 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
     <div className="trackreplay">
       <div className="tr-head">Track history</div>
       <div className="tr-controls">
-        <div className="seg" role="group" aria-label="Window">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.d}
-              className={!day && days === w.d ? "on" : ""}
-              aria-pressed={!day && days === w.d}
-              onClick={() => {
-                setDay("");
-                setDays(w.d);
-              }}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Window"
+          value={day ? "" : String(days)}
+          onChange={(v) => {
+            setDay("");
+            setDays(Number(v));
+          }}
+          options={WINDOWS.map((w) => ({ value: String(w.d), label: w.label }))}
+        />
         <input
           type="date"
           aria-label="Specific date"
@@ -248,7 +242,7 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
             </span>
           </div>
           <div className="tr-player">
-            <button
+            <Button
               className="tr-play"
               aria-label={playing ? "Pause" : "Play"}
               onClick={() => {
@@ -257,7 +251,7 @@ export function TrackReplay(props: { map: maplibregl.Map | null; callsign: strin
               }}
             >
               {playing ? "⏸" : "▶"}
-            </button>
+            </Button>
             <input
               type="range"
               min={0}

@@ -16,8 +16,11 @@
     gap: 5px;
     align-items: center;
   }
-  .pt-cbtn-wrap {
-    display: inline-flex;
+  /* the channel tabs and the connect field share one wrapping row */
+  .pt-chanbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
     align-items: center;
   }
   .pt-cbtn {
@@ -27,7 +30,7 @@
     font-size: var(--text-label);
     padding: var(--space-xs) 9px;
     border: 1px solid var(--line);
-    border-radius: var(--radius-control) 0 0 var(--radius-control);
+    border-radius: var(--radius-control);
     background: var(--surface-2);
     cursor: pointer;
   }
@@ -40,21 +43,19 @@
     color: var(--muted);
     text-transform: uppercase;
   }
-  /* channel close — a sibling <button>, tucked against the tab so the pair reads as one pill */
-  .pt-x {
-    border: 1px solid var(--line);
-    border-left: none;
-    border-radius: 0 var(--radius-control) var(--radius-control) 0;
-    background: var(--surface-2);
+  /* a channel's close mark: inside the tab, for the pointer; the keyboard closes with Delete */
+  .pt-cbtn .tab-x {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+    min-height: 24px;
+    margin: -4px -5px -4px 2px;
     color: var(--muted);
-    cursor: pointer;
-    font-size: var(--text-label);
-    line-height: 1;
-    padding: 5px 7px;
-    align-self: stretch;
+    border-radius: var(--radius-chip);
   }
-  .pt-x:hover {
+  .pt-cbtn .tab-x:hover {
     color: var(--ink);
+    background: color-mix(in oklch, var(--ink) 10%, transparent);
   }
   .pt-cbtn .pt-count {
     color: var(--muted);

@@ -1,0 +1,46 @@
+/* Tabs: the view tabs of a surface (an underline under the selected one) and the base the channel tabs build on. */
+@layer components {
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+  }
+  .tabs-view {
+    border-bottom: 1px solid var(--line);
+    margin-bottom: var(--space-md);
+  }
+  .tabs-view .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-height: var(--hit);
+    padding: 0 var(--space-md);
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    border-radius: var(--radius-control) var(--radius-control) 0 0;
+    background: none;
+    color: var(--muted);
+    font-weight: var(--weight-strong);
+    cursor: pointer;
+  }
+  .tabs-view .tab:hover {
+    color: var(--ink);
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+  }
+  .tabs-view .tab.on {
+    color: var(--heading);
+    border-bottom-color: var(--accent-text);
+  }
+  .tabs .tab:focus-visible {
+    outline: 2px solid var(--heading);
+    outline-offset: -2px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tabs-view .tab {
+      transition:
+        color var(--motion-fast) var(--ease-standard),
+        border-color var(--motion-fast) var(--ease-standard);
+    }
+  }
+}

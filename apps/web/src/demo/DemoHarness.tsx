@@ -12,7 +12,7 @@ import { RigControl } from "../shack/RigControl.js";
 import { RemoteControl } from "../shack/RemoteControl.js";
 import { NavRail } from "../NavRail.js";
 import { TopBar } from "../TopBar.js";
-import { Ico } from "../ui/index.js";
+import { Button, Icon } from "../ui/index.js";
 import { makeSimTransport } from "./simPeer.js";
 import { installBbsSim } from "./simBbsApi.js";
 import { installBoxSim } from "./simBoxApi.js";
@@ -75,9 +75,9 @@ function AppShell({
             <div className="row between">
               <h2>{title}</h2>
               <span className="spacer" />
-              <button className="icon" aria-label="Close">
+              <Button variant="icon" aria-label="Close">
                 ✕
-              </button>
+              </Button>
             </div>
             {children}
           </aside>
@@ -122,7 +122,7 @@ export function DemoHarness({ which }: { which: string }) {
         active="shack"
         title={
           <>
-            <Ico e="📻 " />
+            <Icon name="radio" cp437="" className="lead-ic" />
             Packet terminal
           </>
         }
@@ -147,7 +147,7 @@ export function DemoHarness({ which }: { which: string }) {
         active="shack"
         title={
           <>
-            <Ico e="🎚 " />
+            <Icon name="settings" cp437="" className="lead-ic" />
             Rig control (CAT)
           </>
         }
@@ -162,7 +162,7 @@ export function DemoHarness({ which }: { which: string }) {
         active="shack"
         title={
           <>
-            <Ico e="🛰 " />
+            <Icon name="satellite" cp437="" className="lead-ic" />
             Remote control — your box
           </>
         }
@@ -186,7 +186,7 @@ export function DemoHarness({ which }: { which: string }) {
           <aside className="panel right demo-surface" data-shell="terminal">
             <div className="row between">
               <h2>
-                <Ico e="📻 " />
+                <Icon name="radio" cp437="" className="lead-ic" />
                 Packet terminal
               </h2>
               <span className="spacer" />

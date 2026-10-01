@@ -43,7 +43,7 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
               <Button variant="primary" onClick={props.onSignIn}>
                 Sign in with your callsign
               </Button>
-              <button onClick={props.onExplore}>Explore the live map</button>
+              <Button onClick={props.onExplore}>Explore the live map</Button>
             </div>
           </div>
           <div className="landing-term" aria-label="A find verified on the air">

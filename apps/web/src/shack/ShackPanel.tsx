@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Panel, Icon, Ico } from "../ui/index.js";
+import { Panel, Icon, Button } from "../ui/index.js";
 import type { ShackApp, ShackAppId } from "./apps.js";
 
 /**
@@ -19,7 +19,7 @@ export function ShackPanel(props: {
     <Panel
       title={
         <>
-          <Ico e="📡 " />
+          <Icon name="antenna" cp437="" className="lead-ic" />
           Shack
         </>
       }
@@ -36,7 +36,7 @@ export function ShackPanel(props: {
           const pinned = props.pinned.includes(app.id);
           return (
             <div key={app.id} className="shack-app" role="listitem">
-              <button className="shack-app-launch" onClick={() => props.onLaunchApp(app.id)}>
+              <Button className="shack-app-launch" onClick={() => props.onLaunchApp(app.id)}>
                 <Icon name={app.icon} size={22} />
                 <span className="shack-app-t">
                   <span className="shack-app-label">
@@ -50,15 +50,16 @@ export function ShackPanel(props: {
                   </span>
                   <span className="shack-app-blurb muted">{app.blurb}</span>
                 </span>
-              </button>
-              <button
-                className={`icon shack-pin${pinned ? " on" : ""}`}
+              </Button>
+              <Button
+                variant="icon"
+                className={`shack-pin${pinned ? " on" : ""}`}
                 aria-pressed={pinned}
                 title={pinned ? `Unpin ${app.label} from the rail` : `Pin ${app.label} to the rail`}
                 onClick={() => props.onTogglePin(app.id)}
               >
                 <Icon name={pinned ? "pin-off" : "pin"} size={16} />
-              </button>
+              </Button>
             </div>
           );
         })}

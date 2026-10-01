@@ -24,7 +24,7 @@ import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
-import { Button, Disclosure } from "../ui/index.js";
+import { Button, Disclosure, Tabs, tabPanelId } from "../ui/index.js";
 
 /** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
 export interface TermTransport extends Transport {
@@ -292,12 +292,12 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         </span>
         <span className="spacer" />
         {portOpen && (
-          <button className="pt-ans" onClick={exportAns} title="Export this pane as ANSI art (.ans)">
+          <Button className="pt-ans" onClick={exportAns} title="Export this pane as ANSI art (.ans)">
             ↓ .ans
-          </button>
+          </Button>
         )}
         {portOpen ? (
-          <button onClick={closePort}>Close TNC</button>
+          <Button onClick={closePort}>Close TNC</Button>
         ) : (
           <Button variant="primary" onClick={openPort}>
             Open KISS TNC…
@@ -310,43 +310,47 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         <>
           {/* GP numbered channel bar (top): channel 0 = Monitor (all heard traffic), 1..N = connected-
               mode channels; a free slot's connect field sits inline. Click a slot to show it below. */}
-          <div className="pt-chanbar" role="tablist">
-            <button
-              role="tab"
-              aria-selected={viewMon}
-              className={`pt-cbtn pt-cbtn-mon${viewMon ? " on" : ""}`}
-              onClick={() => setViewMon(true)}
-            >
-              <span className="pt-ch-n">0</span> Monitor <span className="pt-count">{monitor.length}</span>
-            </button>
-            {session?.channels.map((ch, i) => (
-              // tab + close are sibling real <button>s (a button can't nest inside a button, and the
-              // close must be independently keyboard-reachable) wrapped in a presentational container.
-              <span key={ch.id} className="pt-cbtn-wrap" role="presentation">
-                <button
-                  role="tab"
-                  aria-selected={!viewMon && ch.id === active?.id}
-                  className={`pt-cbtn st-${namesRef.current.classify(ch.remoteCall)}${!viewMon && ch.id === active?.id ? " on" : ""}`}
-                  onClick={() => {
-                    setViewMon(false);
-                    setActiveId(ch.id);
-                  }}
-                >
-                  <span className="pt-ch-n">{i + 1}</span> {ch.remoteCall}{" "}
-                  <span className="pt-state">{ch.state[0]}</span>
-                </button>
-                <button
-                  className="pt-x"
-                  aria-label={`Close channel ${ch.remoteCall}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    session!.close(ch.id);
-                  }}
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
+          <div className="pt-chanbar-row">
+            <Tabs
+              label="Channels"
+              idBase="pt"
+              look="channel"
+              className="pt-chanbar"
+              value={viewMon || !active ? "mon" : String(active.id)}
+              onChange={(k: string) => {
+                if (k === "mon") setViewMon(true);
+                else {
+                  setViewMon(false);
+                  setActiveId(Number(k));
+                }
+              }}
+              onClose={(k: string) => {
+                if (k !== "mon") session?.close(Number(k));
+              }}
+              items={[
+                {
+                  key: "mon",
+                  closable: false,
+                  className: "pt-cbtn pt-cbtn-mon",
+                  label: (
+                    <>
+                      <span className="pt-ch-n">0</span> Monitor <span className="pt-count">{monitor.length}</span>
+                    </>
+                  ),
+                },
+                ...(session?.channels ?? []).map((ch, i) => ({
+                  key: String(ch.id),
+                  className: `pt-cbtn st-${namesRef.current.classify(ch.remoteCall)}`,
+                  title: `Channel ${i + 1}: ${ch.remoteCall} (Delete closes it)`,
+                  label: (
+                    <>
+                      <span className="pt-ch-n">{i + 1}</span> {ch.remoteCall}{" "}
+                      <span className="pt-state">{ch.state[0]}</span>
+                    </>
+                  ),
+                })),
+              ]}
+            />
             <div className="pt-connect-inline">
               <input
                 value={remoteCall}
@@ -357,14 +361,18 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                   if (e.key === "Enter") connect();
                 }}
               />
-              <button onClick={connect} disabled={remoteCall.trim().length < 3}>
+              <Button onClick={connect} disabled={remoteCall.trim().length < 3}>
                 Connect
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* the single central window — the selected channel, or channel 0 (monitor) */}
-          <div className="pt-window">
+          <div
+            className="pt-window"
+            role="tabpanel"
+            id={tabPanelId("pt", viewMon || !active ? "mon" : String(active.id))}
+          >
             {viewMon ? (
               <pre className="pt-out pt-mon-out" aria-live="polite">
                 {monitor.slice(-300).map((m, i) => {
@@ -429,9 +437,9 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                 }}
                 disabled={viewMon || !active || active.state !== "connected"}
               />
-              <button onClick={() => sendCmd()} disabled={viewMon || !active || active.state !== "connected"}>
+              <Button onClick={() => sendCmd()} disabled={viewMon || !active || active.state !== "connected"}>
                 Send
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -439,7 +447,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
           <div className="pt-fnbar">
             <div className="pt-macros">
               {macros.map((m: { key: string; label: string; text: string }) => (
-                <button
+                <Button
                   key={m.key}
                   className="pt-macro"
                   disabled={viewMon || !active || active.state !== "connected"}
@@ -447,7 +455,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                   onClick={() => sendCmd(m.text)}
                 >
                   {m.key} {m.label}
-                </button>
+                </Button>
               ))}
             </div>
             <Disclosure className="pt-ctext" label="CTEXT">

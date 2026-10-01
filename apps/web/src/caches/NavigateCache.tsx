@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type CSSProperties } from "react";
-import { Icon } from "../ui/index.js";
+import { Icon, Button } from "../ui/index.js";
 import { useFmt } from "../format.js";
 import { bearingDeg, bearing8, haversine, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS } from "../geo/location.js";
@@ -56,9 +56,9 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
 
   return (
     <div className="navcache">
-      <button className="navcache-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <Button className="navcache-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Icon name="navigation" size={15} /> Navigate
-      </button>
+      </Button>
       {open && (
         <div className="navcache-body">
           <div className="navcache-links">
@@ -82,9 +82,9 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
                 {fix.typed && <span className="muted"> from the typed point</span>}
               </p>
             )}
-            <button className="link" onClick={() => void locate()} disabled={!!loc.waiting}>
+            <Button variant="quiet" onClick={() => void locate()} disabled={!!loc.waiting}>
               {loc.waiting ? "Getting a fix…" : fix ? "Update from here" : "Show bearing & distance from here"}
-            </button>
+            </Button>
             <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
             <form
               className="row coord-entry"
@@ -107,9 +107,9 @@ export function NavigateCache(props: { lat: number; lon: number; title: string }
                   }}
                 />
               </label>
-              <button type="submit" disabled={!typed.trim()}>
+              <Button type="submit" disabled={!typed.trim()}>
                 Show
-              </button>
+              </Button>
             </form>
             {typedErr && (
               <p className="error fine" role="alert">

@@ -149,19 +149,19 @@ export function AccountSettings(props: {
               {c.verified ? (
                 <CallVerifiedBadge />
               ) : (
-                <button
-                  className="link"
+                <Button
+                  variant="quiet"
                   disabled={busy || verifying === c.callsign}
                   aria-expanded={verifying === c.callsign}
                   onClick={() => setVerifying(c.callsign)}
                 >
                   verify
-                </button>
+                </Button>
               )}
               {!c.active && (
-                <button disabled={busy} onClick={() => setActive(c.callsign)}>
+                <Button disabled={busy} onClick={() => setActive(c.callsign)}>
                   Set active
-                </button>
+                </Button>
               )}
             </div>
           </li>
@@ -199,9 +199,9 @@ export function AccountSettings(props: {
         </div>
       )}
       <div className="row end wrap gap-2 mt-3">
-        <button onClick={endEverywhere} disabled={busy}>
+        <Button onClick={endEverywhere} disabled={busy}>
           Sign out everywhere
-        </button>
+        </Button>
         <Button variant="danger" onClick={signOut}>
           Sign out
         </Button>
@@ -236,7 +236,7 @@ function OperatorVerify(props: { callsign: string; onDone: () => void }) {
         label="From a checkout (OPERATOR_SECRET from your .env)"
         command={`BASE=${trimTrailingSlashes(API_BASE || window.location.origin)} OPERATOR_SECRET=<operator secret> ${script}`}
       />
-      <button onClick={props.onDone}>I&apos;ve run it — check again</button>
+      <Button onClick={props.onDone}>I&apos;ve run it — check again</Button>
     </div>
   );
 }

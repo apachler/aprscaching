@@ -5,7 +5,7 @@ import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Panel, Row, Switch, Advanced } from "../ui/index.js";
+import { Button, Panel, Row, Switch, Advanced, Segmented } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprscaching/shared";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -141,9 +141,9 @@ export function HidePanel(props: {
       <LocateStatus waiting={loc.waiting} problem={loc.problem} onCancel={loc.cancel} />
       {canLocate && (
         <div className="row">
-          <button type="button" disabled={!!loc.waiting} onClick={() => void locate()}>
+          <Button type="button" disabled={!!loc.waiting} onClick={() => void locate()}>
             {loc.waiting ? "Locating…" : "Use my location"}
-          </button>
+          </Button>
         </div>
       )}
       <form
@@ -169,9 +169,9 @@ export function HidePanel(props: {
             }}
           />
         </label>
-        <button type="submit" disabled={!typed.trim()}>
+        <Button type="submit" disabled={!typed.trim()}>
           Place pin
-        </button>
+        </Button>
       </form>
       <p id="hide-coord-help" className={typedErr ? "error fine" : "muted fine"}>
         {typedErr
@@ -275,25 +275,18 @@ export function HidePanel(props: {
             <option value="off">Nobody (disabled)</option>
           </select>
         </label>
-        <div className="badges" role="radiogroup" aria-label="Federation scope">
-          {SCOPES.map((s) => (
-            <button
-              key={s.v}
-              type="button"
-              role="radio"
-              aria-checked={fedScope === s.v}
-              className={`chip-btn${fedScope === s.v ? " primary" : ""}`}
-              onClick={() => setFedScope(s.v)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Federation scope"
+          look="chips"
+          value={fedScope}
+          onChange={setFedScope}
+          options={SCOPES.map((sc) => ({ value: sc.v, label: sc.label }))}
+        />
         <p className="muted">{SCOPES.find((s) => s.v === fedScope)?.help} The hint is never federated.</p>
       </Advanced>
       {err && <p className="error">{err}</p>}
       <div className="row end">
-        <button onClick={props.onCancel}>Cancel</button>
+        <Button onClick={props.onCancel}>Cancel</Button>
         <Button variant="primary" disabled={!ready || busy} onClick={submit}>
           {busy ? "Hiding…" : "Hide cache"}
         </Button>

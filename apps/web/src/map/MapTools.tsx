@@ -12,7 +12,7 @@ import {
   terminatorLatitude,
 } from "@aprscaching/aprs";
 import { useFmt } from "../format.js";
-import { Ico, usePoll } from "../ui/index.js";
+import { usePoll, Button, Icon } from "../ui/index.js";
 
 /**
  * Map field-navigation tools: a Maidenhead/lat-lon grid overlay, concentric range rings
@@ -338,23 +338,23 @@ export function MapTools(props: {
   return (
     <div className="maptools">
       <div className="maptools-bar" role="group" aria-label="Map tools">
-        <button
+        <Button
           className={grid ? "on" : ""}
           aria-pressed={grid}
           title="Grid overlay"
           onClick={() => setGrid((v) => !v)}
         >
           ▦
-        </button>
-        <button
+        </Button>
+        <Button
           className={rings ? "on" : ""}
           aria-pressed={rings}
           title="Range rings"
           onClick={() => setRings((v) => !v)}
         >
           ◎
-        </button>
-        <button
+        </Button>
+        <Button
           className={ruler ? "on" : ""}
           aria-pressed={ruler}
           title="Ruler (distance + bearing)"
@@ -363,17 +363,17 @@ export function MapTools(props: {
             if (ruler) clearRuler();
           }}
         >
-          <Ico e="📏" c="∟" />
-        </button>
-        <button
+          <Icon name="ruler" cp437="∟" className="lead-ic" />
+        </Button>
+        <Button
           className={term ? "on" : ""}
           aria-pressed={term}
           title="Day/night terminator"
           onClick={() => setTerm((v) => !v)}
         >
           ☾
-        </button>
-        <button
+        </Button>
+        <Button
           className={arc ? "on" : ""}
           aria-pressed={arc}
           disabled={!home}
@@ -383,7 +383,7 @@ export function MapTools(props: {
           onClick={() => setArc((v) => !v)}
         >
           ➶
-        </button>
+        </Button>
       </div>
       {rings && radii.length > 0 && (
         <div className="maptools-legend">rings: {radii.map((r) => fmt.distance(r)).join(" · ")}</div>
@@ -394,9 +394,9 @@ export function MapTools(props: {
             <>
               <strong>{fmt.distance(measure.d)}</strong> · {measure.b.toFixed(0)}°
               {pts.length === 2 && (
-                <button className="link" onClick={clearRuler}>
+                <Button variant="quiet" onClick={clearRuler}>
                   clear
-                </button>
+                </Button>
               )}
             </>
           ) : (

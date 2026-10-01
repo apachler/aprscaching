@@ -6,7 +6,7 @@
  * teaser shows the same chrome everywhere (ui-ux §6: one component, no bespoke one-offs).
  */
 import { ASSET } from "./brand.js";
-import { Button, Icon, Ico } from "./ui/index.js";
+import { Button, Icon } from "./ui/index.js";
 import { SearchSuggest } from "./search/SearchSuggest.js";
 import type { SearchHitCache, SearchHitStation } from "@aprscaching/shared";
 
@@ -38,14 +38,15 @@ export function TopBar(props: {
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
-      <button
-        className={`icon filter-ic${props.filtered ? " on" : ""}`}
+      <Button
+        variant="icon"
+        className={`filter-ic${props.filtered ? " on" : ""}`}
         onClick={props.onFilters}
         title="Filter by type"
         aria-label="Filter caches by type"
       >
         <Icon name="filter" size={16} />
-      </button>
+      </Button>
       <SearchSuggest
         q={props.q}
         onChange={props.onSearch}
@@ -57,21 +58,22 @@ export function TopBar(props: {
         · {props.count} caches{props.filtered ? " (filtered)" : " in view"}
       </span>
       {props.syncLine && (
-        <button
-          className={`link queue-chip${props.attention > 0 ? " attn" : ""}`}
+        <Button
+          variant="quiet"
+          className={`queue-chip${props.attention > 0 ? " attn" : ""}`}
           onClick={props.onQueue}
           title="Offline logs and packs"
         >
-          <Ico e="📴 " />
+          <Icon name="offline" cp437="" className="lead-ic" />
           {props.syncLine}
-        </button>
+        </Button>
       )}
       <span className="spacer" />
       {/* Manual: the single entry point on every breakpoint — a compact icon in the top chrome. */}
-      <button className="icon help-ic" onClick={props.onDocs} title="Manual" aria-label="Open the manual">
+      <Button variant="icon" className="help-ic" onClick={props.onDocs} title="Manual" aria-label="Open the manual">
         <Icon name="info" size={16} />
-      </button>
-      <button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
+      </Button>
+      <Button className={`idchip${props.verified ? " ok" : ""}`} onClick={props.onAccount} title="Account & callsigns">
         {props.callsign ? (
           <>
             <span className="mono">{props.callsign}</span>
@@ -82,18 +84,18 @@ export function TopBar(props: {
             <Icon name="profile" size={15} /> Sign in
           </>
         )}
-      </button>
+      </Button>
       <span className="nav-desktop">
-        <button onClick={props.onNearby}>Nearby</button>
-        <button onClick={props.onActivity}>Activity</button>
+        <Button onClick={props.onNearby}>Nearby</Button>
+        <Button onClick={props.onActivity}>Activity</Button>
         {props.sysop && props.onAdmin && (
-          <button onClick={props.onAdmin} title="Instance admin — operator only">
-            <Ico e="🛡" c="ADM" />
-          </button>
+          <Button onClick={props.onAdmin} title="Instance admin — operator only">
+            <Icon name="shield-check" cp437="ADM" className="lead-ic" />
+          </Button>
         )}
-        <button onClick={props.onProfile} title="Profile — identity & advanced tools">
-          <Ico e="👤" c="ME" />
-        </button>
+        <Button onClick={props.onProfile} title="Profile — identity & advanced tools">
+          <Icon name="profile" cp437="ME" className="lead-ic" />
+        </Button>
       </span>
       <Button variant="primary" className="hide-cta" onClick={props.onHide}>
         + Hide a cache

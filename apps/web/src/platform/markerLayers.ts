@@ -72,7 +72,7 @@ export function useCacheMarkers(
         } else {
           const btn = document.createElement("button");
           btn.className = `cache-pin${c.mirrored ? " mirrored" : ""}`;
-          btn.style.background = meta.color;
+          btn.dataset.ctype = c.type;
           btn.innerHTML = `<span>${phosphor ? meta.cog : meta.glyph}</span>`;
           el = btn;
         }

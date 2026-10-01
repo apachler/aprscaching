@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getBbsInbox, getBulletins, getBbsSent, postBbsMessage, markBbsRead, type BbsMessage } from "../api.js";
 import { useFmt } from "../format.js";
-import { Button, Panel, Badge, EmptyState, ErrorState, Ico } from "../ui/index.js";
+import { Button, Panel, Badge, EmptyState, ErrorState, Icon, Tabs, tabPanelId } from "../ui/index.js";
 import { useToolHost } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
 
@@ -132,36 +132,29 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
   }
 
   const DELIVERY: Record<string, string> = { held: "held", sent: "sent", acked: "✓ delivered", expired: "✕ expired" };
-  const tabBtn = (key: Tab, label: string, badge?: number) => (
-    <button
-      className={tab === key ? "primary" : ""}
-      onClick={() => {
-        setTab(key);
-        setSelected(null);
-      }}
-    >
+  const tabLabel = (label: string, badge?: number) => (
+    <>
       {label}
       {badge ? <Badge className="ml-1">{badge}</Badge> : null}
-    </button>
+    </>
   );
 
   // one compact list row (from/date/subject) for the master list; clicking loads the reading pane.
   const listRow = (m: BbsMessage, kind: "inbox" | "bulletins") => (
-    <li
-      key={m.id}
-      className={`bbs-row${kind === "inbox" && m.readAt == null ? " bbs-unread" : ""}${selected?.id === m.id ? " on" : ""}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => openMessage(m)}
-      onKeyDown={rowKey(() => openMessage(m))}
-    >
-      <div className="bbs-row-h">
-        {kind === "inbox" && m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
-        {kind === "bulletins" && <Badge>{m.toCall}</Badge>}
-        <strong>{m.fromCall}</strong>
-        <span className="muted bbs-row-date">{fmt.dateTime(m.postedAt)}</span>
-      </div>
-      {m.subject && <div className="bbs-subj">{m.subject}</div>}
+    <li key={m.id}>
+      <Button
+        className={`bbs-row${kind === "inbox" && m.readAt == null ? " bbs-unread" : ""}${selected?.id === m.id ? " on" : ""}`}
+        aria-current={selected?.id === m.id ? "true" : undefined}
+        onClick={() => openMessage(m)}
+      >
+        <span className="bbs-row-h">
+          {kind === "inbox" && m.readAt == null && <span className="bbs-dot" aria-label="unread" />}
+          {kind === "bulletins" && <Badge>{m.toCall}</Badge>}
+          <strong>{m.fromCall}</strong>
+          <span className="muted bbs-row-date">{fmt.dateTime(m.postedAt)}</span>
+        </span>
+        {m.subject && <span className="bbs-subj">{m.subject}</span>}
+      </Button>
     </li>
   );
 
@@ -171,9 +164,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
     const tree = threadTree(selected);
     return (
       <article className="bbs-read">
-        <button className="link bbs-back" onClick={() => setSelected(null)}>
+        <Button variant="quiet" className="bbs-back" onClick={() => setSelected(null)}>
           ← Messages
-        </button>
+        </Button>
         <h3>{selected.subject || "(no subject)"}</h3>
         <dl className="bbs-hdr">
           <div>
@@ -239,106 +232,117 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
     <Panel
       title={
         <>
-          <Ico e="✉ " />
+          <Icon name="message" cp437="" className="lead-ic" />
           BBS
         </>
       }
       onClose={props.onClose}
       wide
     >
-      <div className="row gap-2 bbs-tabs">
-        {tabBtn("inbox", "Inbox", unread)}
-        {tabBtn("sent", "Sent")}
-        {tabBtn("bulletins", "Bulletins")}
-        {tabBtn("compose", "Compose")}
+      <Tabs
+        label="Mail"
+        idBase="bbs"
+        className="bbs-tabs"
+        value={tab}
+        onChange={(t) => {
+          setTab(t);
+          setSelected(null);
+        }}
+        items={[
+          { key: "inbox", label: tabLabel("Inbox", unread) },
+          { key: "sent", label: "Sent" },
+          { key: "bulletins", label: "Bulletins" },
+          { key: "compose", label: "Compose" },
+        ]}
+      />
+      <div role="tabpanel" id={tabPanelId("bbs", tab)}>
+        {tab === "inbox" &&
+          (!signedIn ? (
+            <EmptyState>Set your callsign to see your mail.</EmptyState>
+          ) : inbox.length === 0 ? (
+            err ? (
+              <ErrorState onRetry={load} />
+            ) : (
+              <EmptyState>No messages for {props.callsign}.</EmptyState>
+            )
+          ) : (
+            <div className="bbs-body" data-sel={selected ? "1" : "0"}>
+              <ul className="bbs-list">{inbox.map((m) => listRow(m, "inbox"))}</ul>
+              <div className="bbs-reader">{reader()}</div>
+            </div>
+          ))}
+
+        {tab === "sent" &&
+          (!signedIn ? (
+            <EmptyState>Set your callsign to see your sent mail.</EmptyState>
+          ) : sent.length === 0 ? (
+            err ? (
+              <ErrorState onRetry={load} />
+            ) : (
+              <EmptyState>You haven't sent any mail yet.</EmptyState>
+            )
+          ) : (
+            <ul className="logs">
+              {sent.map((m) => (
+                <li key={m.id}>
+                  <span className="muted">to</span> <strong>{m.toCall}</strong>{" "}
+                  <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
+                  <Badge className="ml-2">{DELIVERY[m.delivery ?? "held"] ?? "held"}</Badge>
+                  {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
+                  <div className="comment">{m.body}</div>
+                </li>
+              ))}
+            </ul>
+          ))}
+
+        {tab === "bulletins" &&
+          (bulletins.length === 0 ? (
+            err ? (
+              <ErrorState onRetry={load} />
+            ) : (
+              <EmptyState>No bulletins.</EmptyState>
+            )
+          ) : (
+            <div className="bbs-body" data-sel={selected ? "1" : "0"}>
+              <ul className="bbs-list">{bulletins.map((m) => listRow(m, "bulletins"))}</ul>
+              <div className="bbs-reader">{reader()}</div>
+            </div>
+          ))}
+
+        {tab === "compose" && (
+          <>
+            {replyTo != null && <p className="muted">↳ reply to message #{replyTo} (threaded)</p>}
+            <label>
+              Type
+              <select value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
+                <option value="P">Personal</option>
+                <option value="B">Bulletin</option>
+                <option value="T">Traffic (NTS)</option>
+              </select>
+            </label>
+            <label>
+              To <span className="muted">(callsign, or ALL/BLN… for a bulletin)</span>
+              <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="OE8APR" />
+            </label>
+            <label>
+              Subject <span className="muted">(optional)</span>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={60} placeholder="net" />
+            </label>
+            <label>
+              Message <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={300} />
+            </label>
+            <div className="row end">
+              <Button variant="primary" onClick={send}>
+                Send
+              </Button>
+            </div>
+            <p className="muted">
+              From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded
+              over APRS when the recipient is next heard; bulletins propagate to federated instances.
+            </p>
+          </>
+        )}
       </div>
-
-      {tab === "inbox" &&
-        (!signedIn ? (
-          <EmptyState>Set your callsign to see your mail.</EmptyState>
-        ) : inbox.length === 0 ? (
-          err ? (
-            <ErrorState onRetry={load} />
-          ) : (
-            <EmptyState>No messages for {props.callsign}.</EmptyState>
-          )
-        ) : (
-          <div className="bbs-body" data-sel={selected ? "1" : "0"}>
-            <ul className="bbs-list">{inbox.map((m) => listRow(m, "inbox"))}</ul>
-            <div className="bbs-reader">{reader()}</div>
-          </div>
-        ))}
-
-      {tab === "sent" &&
-        (!signedIn ? (
-          <EmptyState>Set your callsign to see your sent mail.</EmptyState>
-        ) : sent.length === 0 ? (
-          err ? (
-            <ErrorState onRetry={load} />
-          ) : (
-            <EmptyState>You haven't sent any mail yet.</EmptyState>
-          )
-        ) : (
-          <ul className="logs">
-            {sent.map((m) => (
-              <li key={m.id}>
-                <span className="muted">to</span> <strong>{m.toCall}</strong>{" "}
-                <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
-                <Badge className="ml-2">{DELIVERY[m.delivery ?? "held"] ?? "held"}</Badge>
-                {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
-                <div className="comment">{m.body}</div>
-              </li>
-            ))}
-          </ul>
-        ))}
-
-      {tab === "bulletins" &&
-        (bulletins.length === 0 ? (
-          err ? (
-            <ErrorState onRetry={load} />
-          ) : (
-            <EmptyState>No bulletins.</EmptyState>
-          )
-        ) : (
-          <div className="bbs-body" data-sel={selected ? "1" : "0"}>
-            <ul className="bbs-list">{bulletins.map((m) => listRow(m, "bulletins"))}</ul>
-            <div className="bbs-reader">{reader()}</div>
-          </div>
-        ))}
-
-      {tab === "compose" && (
-        <>
-          {replyTo != null && <p className="muted">↳ reply to message #{replyTo} (threaded)</p>}
-          <label>
-            Type
-            <select value={type} onChange={(e) => setType(e.target.value as "P" | "B" | "T")}>
-              <option value="P">Personal</option>
-              <option value="B">Bulletin</option>
-              <option value="T">Traffic (NTS)</option>
-            </select>
-          </label>
-          <label>
-            To <span className="muted">(callsign, or ALL/BLN… for a bulletin)</span>
-            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="OE8APR" />
-          </label>
-          <label>
-            Subject <span className="muted">(optional)</span>
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={60} placeholder="net" />
-          </label>
-          <label>
-            Message <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={300} />
-          </label>
-          <div className="row end">
-            <Button variant="primary" onClick={send}>
-              Send
-            </Button>
-          </div>
-          <p className="muted">
-            From <strong>{props.callsign || "(set callsign)"}</strong>. Personal mail is held and store-and-forwarded
-            over APRS when the recipient is next heard; bulletins propagate to federated instances.
-          </p>
-        </>
-      )}
       {msg && <p className="muted">{msg}</p>}
       <ToolPanels host={toolHost} surface="bbs" />
     </Panel>

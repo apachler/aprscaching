@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import { getActivity, getLeaderboard, getCorroborators, type BBox } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad } from "../ui/index.js";
+import { Panel, Badge, TierBadge, EmptyState, ErrorState, LoadMore, usePaged, useLoad, Button } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Activity — recent finds feed + a glance at the top finders (full board one tap away). */
@@ -52,9 +52,9 @@ export function ActivityPanel(props: { onBoard: () => void; onClose: () => void 
       <LoadMore hasMore={feed.hasMore} loading={feed.loading} onClick={feed.loadMore} />
       <div className="row between">
         <h4>Top finders</h4>
-        <button className="link" onClick={props.onBoard}>
+        <Button variant="quiet" onClick={props.onBoard}>
           full leaderboard →
-        </button>
+        </Button>
       </div>
       <ol className="board">
         {top.map((e) => (

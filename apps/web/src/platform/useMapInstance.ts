@@ -61,6 +61,7 @@ export function useMapInstance(
         center: init.current.center,
         zoom: init.current.zoom,
         hash: true,
+        attributionControl: false,
       });
     } catch (e) {
       console.error(e);
@@ -68,6 +69,9 @@ export function useMapInstance(
       return;
     }
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+    // The attribution joins the top-left stack: the bottom corners carry the app's own overlays (the
+    // coordinate readout, the map tools), which would cover it.
+    m.addControl(new maplibregl.AttributionControl({ compact: true }), "top-left");
     // the locate button joins this stack from LocateControl, driven by the app's own location helper
     // A remote style that cannot load (offline, or the tile service down) never fires "load", so the
     // map would show nothing and load no caches: switch to the self-contained fallback once.

@@ -3,7 +3,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useFmt, useTheme } from "../format.js";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
 import { haversine, bearing8, maidenhead } from "../map/geo.js";
-import { Panel, EmptyState, ErrorState, Icon, Badge } from "../ui/index.js";
+import { Panel, EmptyState, ErrorState, Icon, Badge, Button, Segmented } from "../ui/index.js";
 import { listAdoptions, type AdoptionListing, type MapCache, type StationSummary } from "../api.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -49,11 +49,11 @@ function AdoptionList(props: {
             const d = props.dist(a);
             return (
               <li key={a.cacheId}>
-                <button
+                <Button
                   className={`ccard${a.cacheId === props.selectedId ? " active" : ""}`}
                   onClick={() => props.onPick(a.cacheId)}
                 >
-                  <span className="ccard-ico" style={{ ["--tc"]: meta.color } as CSSProperties}>
+                  <span className="ccard-ico" data-ctype={a.type}>
                     {typeGlyph(meta, phosphor)}
                   </span>
                   <span className="ccard-b">
@@ -66,7 +66,7 @@ function AdoptionList(props: {
                       <span className="ccard-dist">{d === Infinity ? "" : fmt.distance(d)}</span>
                     </span>
                   </span>
-                </button>
+                </Button>
               </li>
             );
           })}
@@ -104,30 +104,31 @@ export function NearbyPanel(props: {
     .slice(0, 60);
   const showCaches = filter === "all" || filter === "caches";
   const showStations = filter === "all" || filter === "stations";
-  const chip = (key: Filter, label: string) => (
-    <button className={filter === key ? "on" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
-      {label}
-    </button>
-  );
   return (
     <Panel title="Nearby" onClose={props.onClose}>
       <div className="nearby-h">
         <span className="muted">nearest first</span>
         {grid && <span className="nearby-grid">{grid}</span>}
-        <button
+        <Button
           className="fine"
           title="Offline packs: caches, details and images for a trip without signal"
           onClick={props.onOffline}
         >
           Offline packs
-        </button>
+        </Button>
       </div>
-      <div className="seg-chips">
-        {chip("all", "All")}
-        {chip("caches", "Caches")}
-        {chip("stations", "Stations")}
-        {chip("adopt", "Up for adoption")}
-      </div>
+      <Segmented
+        label="Show"
+        look="chips"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: "all", label: "All" },
+          { value: "caches", label: "Caches" },
+          { value: "stations", label: "Stations" },
+          { value: "adopt", label: "For adoption", title: "Caches whose owners are handing them on" },
+        ]}
+      />
 
       {filter === "adopt" && <AdoptionList dist={dist} selectedId={props.selectedId} onPick={props.onPick} />}
 
@@ -144,12 +145,12 @@ export function NearbyPanel(props: {
                 const src = m.source === "native" ? "APRScaching" : (m.sourceName ?? m.source);
                 return (
                   <li key={m.globalId}>
-                    <button
+                    <Button
                       className={`ccard${m.id === props.selectedId ? " active" : ""}`}
                       disabled={m.id == null}
                       onClick={() => m.id != null && props.onPick(m.id)}
                     >
-                      <span className="ccard-ico" style={{ ["--tc"]: meta.color } as CSSProperties}>
+                      <span className="ccard-ico" data-ctype={m.type}>
                         {typeGlyph(meta, phosphor)}
                       </span>
                       <span className="ccard-b">
@@ -168,7 +169,7 @@ export function NearbyPanel(props: {
                           </span>
                         </span>
                       </span>
-                    </button>
+                    </Button>
                   </li>
                 );
               })}

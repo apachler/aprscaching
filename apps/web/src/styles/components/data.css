@@ -124,6 +124,29 @@
   .tcol.C {
     color: var(--tier-c-text);
   }
+  /* the cache type's colour on any element that names it (pin, chip, list icon, dot) */
+  [data-ctype="traditional"] {
+    --tc: var(--type-green);
+  }
+  [data-ctype="multi"],
+  [data-ctype="aprs_living"],
+  [data-ctype="virtual"] {
+    --tc: var(--type-blue);
+  }
+  [data-ctype="wwff"] {
+    --tc: var(--type-forest);
+  }
+  [data-ctype="sota"],
+  [data-ctype="bunker"] {
+    --tc: var(--type-grey);
+  }
+  [data-ctype="pota"],
+  [data-ctype="castle"] {
+    --tc: var(--type-clay);
+  }
+  [data-ctype="audio"] {
+    --tc: var(--type-sand);
+  }
   /* cache-type chip (keeps OUR cache-type glyph + colour; --tc carries the per-type colour) */
   .typechip {
     display: inline-flex;

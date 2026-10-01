@@ -75,7 +75,7 @@
   :where(:root[data-theme="phosphor"]) .ccard:not(.active):hover,
   :where(:root[data-theme="phosphor"]) button.heart:hover,
   :where(:root[data-theme="phosphor"]) .pt-cbtn:not(.on):hover,
-  :where(:root[data-theme="phosphor"]) .pt-x:hover {
+  :where(:root[data-theme="phosphor"]) .pt-cbtn .tab-x:hover {
     background: color-mix(in oklch, var(--accent) 15%, transparent);
   }
   :where(:root[data-theme="phosphor"]) .topbar button.primary:hover {

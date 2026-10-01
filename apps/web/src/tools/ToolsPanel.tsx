@@ -330,11 +330,11 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 </option>
               ))}
             </select>
-            <button onClick={runDecode}>Decode</button>
+            <Button onClick={runDecode}>Decode</Button>
             {audioDecodeSupported() && (decodeKind === "cw" || decodeKind === "psk31") && (
-              <button onClick={listenToggle} className={listening ? "primary" : ""}>
+              <Button onClick={listenToggle} className={listening ? "primary" : ""}>
                 {listening ? "Stop" : "Listen (mic)"}
-              </button>
+              </Button>
             )}
           </div>
           {listening && (
@@ -367,7 +367,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 if (e.key === "Enter") runCmd();
               }}
             />
-            <button onClick={runCmd}>Run</button>
+            <Button onClick={runCmd}>Run</Button>
           </div>
           <label className="row gap-1 fine muted">
             <input type="checkbox" checked={asRemote} onChange={(e) => setAsRemote(e.target.checked)} /> as a remote
@@ -392,14 +392,14 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 <Badge kind="found">verified</Badge>
                 {e.description && <div className="muted fine">{e.description}</div>}
               </div>
-              <button
+              <Button
                 onClick={() => {
                   setImportUrl(e.entry);
                   startImport(e.entry);
                 }}
               >
                 Import…
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -416,7 +416,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
             placeholder="https://…/tool.json"
             aria-label="Tool manifest URL"
           />
-          <button onClick={() => startImport()}>Import…</button>
+          <Button onClick={() => startImport()}>Import…</Button>
         </div>
         <p className="muted fine">
           Signed tools are verified against their author key; unsigned tools import with a warning. An invalid signature
@@ -454,7 +454,7 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
                 <code>network</code> capability. TX still requires your verified callsign.
               </p>
               <div className="row gap-2 end">
-                <button onClick={() => setPrompt(null)}>Cancel</button>
+                <Button onClick={() => setPrompt(null)}>Cancel</Button>
                 <Button variant="primary" onClick={approveImport}>
                   Approve + run
                 </Button>

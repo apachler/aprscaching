@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Ico } from "../ui/index.js";
+import { Icon, Button } from "../ui/index.js";
 import { TAB_ITEMS, type NavItem } from "../nav.js";
 
 /**
@@ -13,7 +13,7 @@ export function TabBar(props: {
   fabLabel: "Log" | "Hide";
 }) {
   const tab = (item: NavItem) => (
-    <button
+    <Button
       key={item.key}
       className={props.active === item.key ? "on" : ""}
       aria-current={props.active === item.key ? "page" : undefined}
@@ -21,19 +21,25 @@ export function TabBar(props: {
       data-tour={item.key === "nearby" ? "nearby" : undefined}
     >
       <span className="ic">
-        <Ico e={item.tab!.glyph} c={item.tab!.cog} />
+        <Icon name={item.icon} cp437={item.tab!.cog} size={22} />
       </span>
       <span>{item.label}</span>
-    </button>
+    </Button>
   );
   const half = Math.ceil(TAB_ITEMS.length / 2);
   return (
     <nav className="tabbar" aria-label="Primary">
       {TAB_ITEMS.slice(0, half).map(tab)}
-      <button className="fab" onClick={props.onFab}>
-        <span className="ic">{props.fabLabel === "Log" ? "✓" : "＋"}</span>
+      <Button className="fab" onClick={props.onFab}>
+        <span className="ic">
+          <Icon
+            name={props.fabLabel === "Log" ? "check" : "plus"}
+            cp437={props.fabLabel === "Log" ? "√" : "+"}
+            size={26}
+          />
+        </span>
         <span>{props.fabLabel}</span>
-      </button>
+      </Button>
       {TAB_ITEMS.slice(half).map(tab)}
     </nav>
   );

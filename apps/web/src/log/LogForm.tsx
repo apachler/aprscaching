@@ -4,7 +4,7 @@ import { getInstance, registerKey, logFind, errorText, type LogResult, type AppG
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
 import { haversine } from "../map/geo.js";
-import { Button, TierBadge, TIER_NAME, Ico, useConfirm, Card } from "../ui/index.js";
+import { Button, TierBadge, TIER_NAME, useConfirm, Card, Icon } from "../ui/index.js";
 import type { LogType } from "@aprscaching/shared";
 import { EVIDENCE_MAX_AGE_MS, toAppGeo } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
@@ -147,7 +147,7 @@ export function LogForm(props: {
         </div>
         {result.queued ? (
           <div className="muted mt-1">
-            <Ico e="📴 " />
+            <Icon name="offline" cp437="" className="lead-ic" />
             offline — will sync when you're back online
           </div>
         ) : (
@@ -170,7 +170,7 @@ export function LogForm(props: {
         {result.announced && <div className="muted mt-1">announced to APRS-IS</div>}
         {result.signerKey && (
           <div className="muted">
-            signed with your device key <Ico e="✍" />
+            signed with your device key <Icon name="edit" cp437="" className="lead-ic" />
           </div>
         )}
         {result.logType === "found" &&
@@ -178,20 +178,20 @@ export function LogForm(props: {
             <div className="mt-3">
               <textarea rows={2} placeholder="Add a note…" value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="row end">
-                <button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
+                <Button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
                   Post
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
-            <button className="link mt-3" onClick={() => setNoteOpen(true)}>
+            <Button variant="quiet" className="mt-3" onClick={() => setNoteOpen(true)}>
               Add a note
-            </button>
+            </Button>
           ))}
         {!found && (
-          <button className="link mt-3" onClick={() => setResult(null)}>
+          <Button variant="quiet" className="mt-3" onClick={() => setResult(null)}>
             Back
-          </button>
+          </Button>
         )}
       </Card>
     );
@@ -220,29 +220,29 @@ export function LogForm(props: {
         skipLabel="Log without location"
       />
       <div className="row between mt-3">
-        <button className="link" disabled={!!busy} onClick={() => doLog("dnf")}>
+        <Button variant="quiet" disabled={!!busy} onClick={() => doLog("dnf")}>
           {busy === "dnf" ? "…" : "Couldn't find it"}
-        </button>
-        <button className="link" onClick={() => setNoteOpen((v) => !v)}>
+        </Button>
+        <Button variant="quiet" onClick={() => setNoteOpen((v) => !v)}>
           Add a note
-        </button>
+        </Button>
       </div>
       {noteOpen && (
         <div className="mt-2">
           <textarea rows={2} placeholder="Note…" value={note} onChange={(e) => setNote(e.target.value)} />
           <div className="row end">
             {props.isOwner && (
-              <button
+              <Button
                 disabled={busy === "maintenance" || !note.trim()}
                 onClick={() => doLog("maintenance", note.trim())}
                 title="As the owner: what you checked or fixed"
               >
                 Post as maintenance
-              </button>
+              </Button>
             )}
-            <button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
+            <Button disabled={busy === "note" || !note.trim()} onClick={() => doLog("note", note.trim())}>
               Post note
-            </button>
+            </Button>
           </div>
         </div>
       )}

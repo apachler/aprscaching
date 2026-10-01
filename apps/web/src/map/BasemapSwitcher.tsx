@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type * as maplibregl from "maplibre-gl";
 import { notePrefChange, PREFS_EVENT } from "../prefs.js";
+import { Segmented } from "../ui/index.js";
 
 /**
  * Basemap layer switcher: Vector (default) · Topo · Satellite. Raster is OPT-IN per
@@ -96,22 +97,15 @@ export function BasemapSwitcher(props: { map: maplibregl.Map | null; styleEpoch?
     { key: "satellite", label: "Sat", title: "Satellite imagery" },
   ];
   return (
-    <div className="basemap-switch" role="radiogroup" aria-label="Basemap">
-      {opts.map((o) => (
-        <button
-          key={o.key}
-          role="radio"
-          aria-checked={base === o.key}
-          title={o.title}
-          className={base === o.key ? "on" : ""}
-          onClick={() => {
-            setBase(o.key);
-            notePrefChange();
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      label="Basemap"
+      look="overlay"
+      value={base}
+      onChange={(v) => {
+        setBase(v);
+        notePrefChange();
+      }}
+      options={opts.map((o) => ({ value: o.key, label: o.label, title: o.title }))}
+    />
   );
 }

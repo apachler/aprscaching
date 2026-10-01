@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getLeaderboard, getProfile, type LeaderboardEntry, type Profile } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, EmptyState, Ico } from "../ui/index.js";
+import { Panel, Badge, EmptyState, Button, Icon } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Community — area leaderboard, drill into a finder's profile. */
@@ -42,7 +42,7 @@ export function CommunityPanel(props: { onClose: () => void }) {
           </>
         }
       >
-        <button onClick={() => setProfile(null)}>← leaderboard</button>
+        <Button onClick={() => setProfile(null)}>← leaderboard</Button>
         <p className="mt-5">
           <strong>{profile.finds}</strong> finds · <strong>{profile.points}</strong> pts · {profile.hides} hidden
         </p>
@@ -74,21 +74,21 @@ export function CommunityPanel(props: { onClose: () => void }) {
     <Panel
       title={
         <>
-          <Ico e="🏆 " />
+          <Icon name="trophy" cp437="" className="lead-ic" />
           Leaderboard
         </>
       }
       onClose={props.onClose}
     >
       <div className="row">
-        <button className={metric === "points" ? "primary" : ""} onClick={() => setMetric("points")}>
+        <Button className={metric === "points" ? "primary" : ""} onClick={() => setMetric("points")}>
           Points
-        </button>
-        <button className={metric === "finds" ? "primary" : ""} onClick={() => setMetric("finds")}>
+        </Button>
+        <Button className={metric === "finds" ? "primary" : ""} onClick={() => setMetric("finds")}>
           Finds
-        </button>
+        </Button>
         <span className="spacer" />
-        <button onClick={load}>↻ this area</button>
+        <Button onClick={load}>↻ this area</Button>
       </div>
       {loading && <p className="muted">Loading…</p>}
       {!loading && !rows.length && <EmptyState>No verified finds in this area yet.</EmptyState>}
@@ -96,9 +96,9 @@ export function CommunityPanel(props: { onClose: () => void }) {
         {rows.map((r) => (
           <li key={r.loggerCall}>
             <span className="rank">{r.rank}</span>
-            <button className="link" onClick={() => getProfile(r.loggerCall).then(setProfile).catch(console.error)}>
+            <Button variant="quiet" onClick={() => getProfile(r.loggerCall).then(setProfile).catch(console.error)}>
               {r.loggerCall}
-            </button>
+            </Button>
             <span className="spacer" />
             <strong>{metric === "points" ? r.points : r.finds}</strong>
             <span className="muted">&nbsp;{metric === "points" ? "pts" : "finds"}</span>

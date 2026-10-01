@@ -31,6 +31,10 @@ const AXE = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const ALLOW = new Map([
   // MapLibre's canvas and its attribution control are third-party markup the app does not render
   ["region:.maplibregl-ctrl-attrib", "MapLibre's attribution control sits outside the app's landmarks"],
+  [
+    "target-size:summary",
+    "MapLibre's compact attribution toggle is 24×24 (styles/surfaces/map.css); axe flags it while MapLibre is still laying the control out",
+  ],
 ]);
 
 const VIEWS = {
