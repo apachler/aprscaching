@@ -1,5 +1,11 @@
 # Federation validation — September 2026
 
+!!! info "Review dated 28 September 2026"
+    This is a point-in-time review record. It describes the code as it stood on that date and is not
+    updated as the code moves; file and function names in the *Where* column may since have changed. The
+    current design is documented in the [federation guide](../guides/federation.md) and the
+    [wire reference](../reference/federation-wire.md).
+
 A validation of the federation layer against `dev` as of 28 September 2026. The wire and crypto layer
 holds up: canonical CBOR, domain-prefixed Ed25519 signatures over the verbatim payload bytes, and one
 verify pipeline shared by every carrier. The findings sit in two places — **identity binding**
@@ -7,9 +13,8 @@ verify pipeline shared by every carrier. The findings sit in two places — **id
 exchange that can mint Tier A across instances — plus a set of privacy, data-correctness and
 robustness items.
 
-Every fix lands with a regression test that fails without it. This page tracks each finding's status;
-the design it arrives at is documented in the [federation guide](../guides/federation.md) and the
-[wire reference](../reference/federation-wire.md).
+Every fix carries a regression test that fails without it. The status column records each finding's
+state on the review date.
 
 ## Identity binding
 
