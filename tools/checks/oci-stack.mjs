@@ -11,8 +11,9 @@
 //     longer exists (Resource Manager rejects the stack outright),
 //   • a placeholder used in cloud-init.yaml that main.tf's templatefile() call does not supply,
 //   • an output rendered in the console that main.tf does not emit,
-//   • the repo_ref default losing the line shape scripts/build-oci-stack.sh rewrites, which would
-//     silently publish a release stack that tracks main instead of pinning its tag.
+//   • the repo_ref default or the release_ref / release_commit locals losing the line shape
+//     scripts/build-oci-stack.sh rewrites, which would silently publish a release stack that tracks main
+//     instead of pinning its tag, or that deploys its tag without checking the commit.
 //
 // Terraform's own `validate` covers syntax and provider schema; it cannot see any of the above,
 // because schema.yaml and the build script are outside its world.
@@ -108,13 +109,21 @@ if (!stampTarget.test(mainTf))
 if (!/default {5}= \\"\$REF\\"/.test(buildSh))
   fail("scripts/build-oci-stack.sh no longer stamps the repo_ref default — its sed and main.tf have drifted apart");
 
+for (const local of ["release_ref", "release_commit"]) {
+  if (!new RegExp(`^ {2}${local} {1,}= ""$`, "m").test(mainTf))
+    fail(`main.tf has no \`  ${local} = ""\` line — scripts/build-oci-stack.sh could not stamp the release`);
+  if (!buildSh.includes(`s|^  ${local} `))
+    fail(`scripts/build-oci-stack.sh no longer stamps ${local} — its sed and main.tf have drifted apart`);
+}
+
 const filesLine = /^FILES=\(([^)]*)\)/m.exec(buildSh);
 if (!filesLine) fail("scripts/build-oci-stack.sh no longer declares a FILES=( … ) list");
 else {
   const packaged = new Set(filesLine[1].trim().split(/\s+/));
   // Resource Manager reads main.tf and schema.yaml from the zip ROOT; cloud-init is templated at
-  // plan time, so all three have to travel with it.
-  for (const required of ["main.tf", "cloud-init.yaml", "schema.yaml"])
+  // plan time and embeds the files main.tf reads with file()/filebase64(), so all of them travel with it.
+  const embedded = [...mainTf.matchAll(/file(?:base64)?\("\$\{path\.module\}\/([^"]+)"\)/g)].map((m) => m[1]);
+  for (const required of ["main.tf", "cloud-init.yaml", "schema.yaml", ...embedded])
     if (!packaged.has(required)) fail(`the stack zip would not contain ${required}`);
 }
 

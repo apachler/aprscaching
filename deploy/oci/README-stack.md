@@ -24,21 +24,59 @@ aarch64 image itself, so it never asks for an OCID you would have to go and find
 
 | Field | Notes |
 |-------|-------|
-| Callsign + APRS-IS passcode | Logs the instance in to APRS-IS. The passcode authenticates the feed; it verifies nothing about your licence. |
+| Callsign | Your call without an SSID. You administer the instance with it, and it logs the instance in to APRS-IS. |
+| APRS-IS passcode | Optional. Blank runs the feed receive-only until you set it on the VM (below). It authenticates the feed; it verifies nothing about your licence. |
 | Feed filter | `r/<lat>/<lon>/<km>` — keep it local to your area, both for relevance and for cost. |
 | Hostname | A name you point at the VM, for automatic TLS. Leave it as `:80` to serve plain HTTP over the IP address. |
-| Ingest secret | A long random string: `openssl rand -hex 24`. |
 | SSH public key | Login as the `ubuntu` user, through the Bastion (below). |
 | Availability domain | Raise it and re-apply if OCI reports it is out of host capacity. |
 | Reserved public IP | On by default; see below. |
 | Bastion client networks | Who may open SSH sessions; IAM and your key authenticate each one. |
 
-The instance generates its operator and session secrets itself on first boot (`OPERATOR_SECRET`,
-`SESSION_SECRET` in `/opt/aprscaching/deploy/.env`), so they never pass through Terraform state. Read
-`OPERATOR_SECRET` from that file over SSH (through the Bastion, below) to run `tools/admin/verify-call.mjs`.
-
 Then **Plan**, then **Apply**. Point DNS at the `public_ip` output (with an existing reserved IP, run
-`assign_reserved_ip_command` first); the *Open the instance* link goes straight there. The first boot builds the images, so allow a few minutes before the site answers.
+`assign_reserved_ip_command` first); the *Open the instance* link goes straight there. The first boot builds the
+images, so allow a few minutes before the site answers.
+
+## The first boot
+
+cloud-init runs `firstboot.sh` (in the zip) once, as root:
+
+1. installs Docker from Docker's own apt repository, trusting its signing key only when the key's fingerprint is
+   `9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88`;
+2. clones the release. A stack from a release names its tag's commit, and the boot stops if the tag points
+   anywhere else; another `repo_ref` (a branch) deploys unverified, and the log says so;
+3. writes `/opt/aprscaching/deploy/.env` with `deploy/aprscaching init selfhost`, which generates
+   `INGEST_SECRET` and `OPERATOR_SECRET` on the VM;
+4. starts the stack, waits for the gateway, and runs `deploy/aprscaching doctor`.
+
+Everything it prints goes to `/var/log/aprscaching-firstboot.log` and to the serial console (*Compute → Instances
+→ aprscaching → Console connection*), so you can watch the boot without SSH. Running it again changes nothing that
+is there: the checkout stays at its commit, `.env` keeps its values and secrets, and the data stays in its Docker
+volumes. Update with `deploy/aprscaching update`.
+
+**Without a hostname** (`:80`) the VM cannot see its own public address, so `APP_URL` starts as its private
+address. Set `APP_URL=http://<public_ip>` in `/opt/aprscaching/deploy/.env`, then restart (below). A hostname with
+TLS is the recommended setup: passkeys and location need https.
+
+## Secrets and the stack's state
+
+- **Generated on the VM, never in Terraform:** `INGEST_SECRET`, `OPERATOR_SECRET` and the federation key, in
+  `/opt/aprscaching/deploy/.env` (owner-only); the session secret in the gateway's data volume. Read
+  `OPERATOR_SECRET` from there over SSH (through the Bastion, below) to confirm your call with
+  `tools/admin/verify-call.mjs`. Replace one with `sudo deploy/aprscaching rotate-secret <NAME>`.
+- **In Resource Manager's state and the instance metadata:** what you typed into the stack — the callsign,
+  the filter, the hostname and, if you gave one, the APRS-IS passcode. The passcode is marked sensitive, so
+  plans and outputs hide it, but the state file holds it, and every process on the VM can read the instance
+  metadata. The VM removes cloud-init's copies of it from disk after each boot. To keep the passcode out of
+  OCI altogether, leave it blank and set it on the VM.
+
+**Set or change the passcode on the VM:**
+
+```bash
+deploy/oci/bastion-ssh.sh
+sudo nano /opt/aprscaching/deploy/.env           # APRSIS_PASSCODE=<your passcode>
+cd /opt/aprscaching/deploy && sudo docker compose up -d
+```
 
 ## The public IP
 

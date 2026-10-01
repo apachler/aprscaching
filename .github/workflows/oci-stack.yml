@@ -31,6 +31,12 @@ jobs:
       # consistency guard runs here too rather than trusting that CI saw this commit.
       - run: node tools/checks/oci-stack.mjs
       - run: bash scripts/build-oci-stack.sh "${TAG:-$GITHUB_REF_NAME}"
+      # A release stack must name its tag's commit, or the VM would deploy the tag unchecked.
+      - if: env.TAG != ''
+        run: |
+          want="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          unzip -p dist/oci/aprscaching-oci-stack.zip main.tf | grep -qx "  release_commit = \"$want\"" ||
+            { echo "the stack zip does not pin $TAG to $want" >&2; exit 1; }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: aprscaching-oci-stack, path: dist/oci/* }
       # releases/latest/download/aprscaching-oci-stack.zip is the button's stable target, so every

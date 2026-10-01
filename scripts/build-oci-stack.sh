@@ -5,7 +5,8 @@ set -euo pipefail
 #
 # Resource Manager reads main.tf and schema.yaml from the ZIP ROOT, so the files are staged flat
 # rather than under deploy/oci/. The ref (a tag on a release build) is stamped over the repo_ref
-# default, so a stack downloaded from a release deploys exactly that release.
+# default, so a stack downloaded from a release deploys exactly that release. For a tag, its commit is
+# stamped too, and the VM refuses a checkout of the tag that is not that commit.
 cd "$(dirname "$0")/.."                                     # repo root
 REF="${1:-$(git describe --tags --always 2>/dev/null || echo main)}"
 OUT="dist/oci"
@@ -13,7 +14,7 @@ ZIP="aprscaching-oci-stack.zip"
 
 # Kept in step with tools/checks/oci-stack.mjs, which fails the build if this list and the contents
 # of deploy/oci/ ever drift apart.
-FILES=(main.tf cloud-init.yaml schema.yaml README-stack.md bastion-ssh.sh)
+FILES=(main.tf cloud-init.yaml firstboot.sh schema.yaml README-stack.md bastion-ssh.sh)
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -27,6 +28,19 @@ grep -q "  default     = \"$REF\"" "$STAGE/main.tf" || {
   exit 1
 }
 
+# A tag names one commit, which the VM checks its clone against; a branch moves, so it stays unpinned.
+if COMMIT="$(git rev-parse -q --verify "refs/tags/$REF^{commit}")"; then
+  sed -i.bak -e "s|^  release_ref    = \"\"$|  release_ref    = \"$REF\"|" \
+    -e "s|^  release_commit = \"\"$|  release_commit = \"$COMMIT\"|" "$STAGE/main.tf"
+  rm -f "$STAGE/main.tf.bak"
+  grep -q "^  release_commit = \"$COMMIT\"$" "$STAGE/main.tf" && grep -q "^  release_ref    = \"$REF\"$" "$STAGE/main.tf" || {
+    echo "build-oci-stack: release commit not stamped — main.tf line shape changed" >&2
+    exit 1
+  }
+else
+  COMMIT="(none: $REF is not a tag, so the VM deploys it unverified)"
+fi
+
 mkdir -p "$OUT"
 rm -f "$OUT/$ZIP"
 ABS_OUT="$(cd "$OUT" && pwd)/$ZIP"
@@ -37,4 +51,4 @@ else
   (cd "$STAGE" && python3 -m zipfile -c "$ABS_OUT" "${FILES[@]}")
 fi
 
-echo ">> $OUT/$ZIP  (repo_ref=$REF)"
+echo ">> $OUT/$ZIP  (repo_ref=$REF, commit $COMMIT)"

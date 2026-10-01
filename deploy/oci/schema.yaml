@@ -27,7 +27,6 @@ variableGroups:
   - title: Public site
     variables:
       - domain
-      - ingest_secret
   - title: Host
     variables:
       - ssh_public_key
@@ -65,15 +64,15 @@ variables:
   aprsis_callsign:
     type: string
     title: Callsign
-    description: Your amateur-radio callsign. It logs the instance in to APRS-IS.
+    description: Your amateur-radio callsign, without an SSID. You administer the instance with it, and it logs the instance in to APRS-IS.
     required: true
-    pattern: "^[A-Za-z0-9]{1,6}(-[0-9]{1,2})?$"
+    pattern: "^[A-Za-z0-9]{3,7}$"
   aprsis_passcode:
-    type: string
+    type: password
     title: APRS-IS passcode
-    description: The passcode issued for that callsign. It authenticates the feed; it verifies nothing about your licence.
-    required: true
-    pattern: "^[0-9]{1,6}$"
+    description: Optional. The passcode issued for that callsign; it authenticates the feed and verifies nothing about your licence. Blank runs receive-only until you set it on the VM.
+    required: false
+    pattern: "^(-1|[0-9]{1,5})?$"
   aprsis_filter:
     type: string
     title: Feed filter
@@ -87,12 +86,6 @@ variables:
     description: A hostname you point at the VM, for automatic TLS. Leave it as :80 to serve plain HTTP over the IP address.
     required: true
     default: ":80"
-  ingest_secret:
-    type: password
-    title: Ingest secret
-    description: A long random string authorising the ingest worker's writes to the gateway. Generate one with openssl rand -hex 24.
-    required: true
-    minLength: 16
 
   ssh_public_key:
     type: oci:core:ssh:publickey

@@ -110,6 +110,8 @@ jobs:
       - run: bash deploy/test/helpers-test.sh
       # the OCI stack's Bastion login helper, against a mocked OCI CLI and ssh
       - run: bash deploy/oci/test/bastion-ssh-test.sh
+      # the OCI VM's first boot, against mocked apt, gpg, git and docker
+      - run: bash deploy/oci/test/firstboot-test.sh
       # the OCI stack itself: OpenTofu checks the syntax and the provider schema (tools/checks/oci-stack.mjs
       # checks what Terraform cannot see: schema.yaml, cloud-init placeholders, the release packaging)
       - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
