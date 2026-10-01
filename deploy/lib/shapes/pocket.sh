@@ -16,8 +16,38 @@ shape_status() {
   bash "$POCKET_DIR/status.sh" "$@"
 }
 shape_update() { bash "$POCKET_DIR/update.sh" "$@"; }
-shape_backup() { bash "$POCKET_DIR/backup.sh" "$@"; }
-shape_restore() { bash "$POCKET_DIR/backup.sh" --restore "$@"; }
+# Portable backups (deploy/lib/backup.sh), from this checkout with the station's settings. Pocket's own
+# archives (pocket/backup.sh, the scheduled phone backup) restore through pocket/backup.sh.
+pk_data() { dirname "$SHAPE_ENV"; }
+pk_db() {
+  local db
+  db="$(env_file_get "$SHAPE_ENV" DB_PATH)"
+  printf '%s' "${db:-$(pk_data)/aprscaching.db}"
+}
+pk_media() {
+  local m
+  m="$(env_file_get "$SHAPE_ENV" MEDIA_DIR)"
+  printf '%s' "${m:-$(pk_data)/media}"
+}
+shape_db_dump() { node "$DEPLOY_DIR/../tools/backup/db.mjs" dump "$(pk_db)"; }
+shape_db_restore() {
+  local db ts f
+  db="$(pk_db)"
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  rm -f "$db.restore"
+  node "$DEPLOY_DIR/../tools/backup/db.mjs" restore "$db.restore" "$DEPLOY_DIR/../db/migrations" "$2" ${3:+--exact} <"$1" >&2
+  for f in "$db" "$db-wal" "$db-shm"; do
+    if [ -e "$f" ]; then mv "$f" "$(dirname "$f")/before-restore-$ts-$(basename "$f")"; fi
+  done
+  mv "$db.restore" "$db"
+}
+shape_secrets_dump() { (cd "$(pk_data)" && for f in *.secret; do if [ -e "$f" ]; then cp -p "$f" "$1/"; fi; done); }
+shape_secrets_restore() { cp -p "$1"/*.secret "$(pk_data)/" && chmod 600 "$(pk_data)"/*.secret; }
+shape_media_dump() { if [ -d "$(pk_media)" ]; then cp -a "$(pk_media)/." "$1/"; fi; }
+shape_media_restore() { mkdir -p "$(pk_media)" && cp -a "$1/." "$(pk_media)/"; }
+shape_stop() { bash "$POCKET_DIR/stop.sh" || true; }
+shape_start() { bash "$POCKET_DIR/start.sh" --no-attach; }
+shape_restore_pocket_archive() { bash "$POCKET_DIR/backup.sh" --restore "$1"; }
 
 # doctor: the station on this phone; its backups in shared storage.
 shape_doctor_context() {

@@ -180,10 +180,15 @@ baseline global feed, but that is never the only way to get RF in. See
 
 ## Backups
 
+`deploy/aprscaching backup` writes a portable archive on every shape — database rows, settings and generated
+secrets — that `deploy/aprscaching restore` puts back on the same shape or another
+([Backup and restore](helpers.md#backup-and-restore)). For scheduled, off-host copies:
+
 - **Self-host and Desktop (SQLite):** cron `deploy/backup.sh`. It takes a consistent SQLite `.backup`
   snapshot, gzips it, and uploads it to `BACKUP_DIR`, an OCI bucket or any S3-compatible endpoint (see
-  `deploy/.env.example`); it exits non-zero when no destination is set. Uploaded cache media is stored as files (`MEDIA_DIR`),
-  not in the database — include that directory in your host backup.
+  `deploy/.env.example`); it exits non-zero when no destination is set. Uploaded cache media is stored as files (`MEDIA_DIR`;
+  in the Docker stack `/data/media` in the `data` volume), not in the database — include that directory in
+  your host backup, or pass `--with-media` to `deploy/aprscaching backup`.
 
     **Retention.** `BACKUP_DIR` snapshots older than `BACKUP_RETENTION_DAYS` (default 30) are deleted by the
     script. A bucket destination is append-only: the script never deletes from it, so the bucket key needs no

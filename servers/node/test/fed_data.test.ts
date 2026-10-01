@@ -54,6 +54,7 @@ describe("what stays home", () => {
 });
 
 describe("paging", () => {
+  // 1200 real inserts and a paged sync: seconds of work, longer on a loaded machine
   it("propagates 1200 caches archived in the same second", async () => {
     const { a, hub } = await pair();
     for (let i = 0; i < 1200; i++) await addCache(a, 5000);
@@ -61,7 +62,7 @@ describe("paging", () => {
     const r = await syncAllPeers(hub);
     expect(r.errors).toEqual([]);
     expect(await remoteCacheCount(hub, "a.example")).toBe(1200);
-  });
+  }, 20_000);
 });
 
 describe("one bad record never blocks the rest", () => {

@@ -85,14 +85,36 @@ shape_doctor_extra() {
   [ -z "$size" ] || pass resources.database "the database is $((size / 1024)) MiB"
 }
 
-# backup: deploy/backup.sh with this installation's settings (its destination comes from deploy/.env).
-shape_backup() {
-  [ -f "$SHAPE_ENV" ] || die "$SHAPE_ENV is missing." "Run deploy/aprscaching init selfhost first."
-  (
-    set -a
-    # shellcheck disable=SC1090 # the operator's own .env
-    . "$SHAPE_ENV"
-    set +a
-    exec "$DEPLOY_DIR/backup.sh" "$@"
-  )
+# ---- backup and restore (deploy/lib/backup.sh) — through one-off containers on the data volume, so they
+# work whether the gateway runs or not.
+selfhost_run() { selfhost_compose run --rm --no-deps -T "$@"; }
+
+shape_db_dump() { selfhost_run gateway node tools/backup/db.mjs dump /data/aprscaching.db; }
+
+shape_db_restore() {
+  # the new database is built beside the old one, which is kept as before-restore-<time>-*
+  selfhost_run gateway sh -c 'set -e
+    rm -f /data/restore.db
+    node tools/backup/db.mjs restore /data/restore.db db/migrations "$0" $1 >&2
+    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    for f in aprscaching.db aprscaching.db-wal aprscaching.db-shm; do
+      if [ -e "/data/$f" ]; then mv "/data/$f" "/data/before-restore-$ts-$f"; fi
+    done
+    mv /data/restore.db /data/aprscaching.db' "$2" "${3:+--exact}" <"$1"
 }
+
+shape_secrets_dump() {
+  selfhost_run gateway sh -c 'cd /data && set -- *.secret && if [ -e "$1" ]; then tar -cf - "$@"; else tar -cf - -T /dev/null; fi' |
+    tar -xf - -C "$1"
+}
+shape_secrets_restore() { tar -cf - -C "$1" . | selfhost_run gateway sh -c 'cd /data && tar -xf - && chmod 600 ./*.secret'; }
+shape_media_dump() { selfhost_run gateway sh -c 'mkdir -p /data/media && cd /data/media && tar -cf - .' | tar -xf - -C "$1"; }
+shape_media_restore() { tar -cf - -C "$1" . | selfhost_run gateway sh -c 'mkdir -p /data/media && cd /data/media && tar -xf -'; }
+shape_stop() { selfhost_compose stop gateway ingest; }
+shape_start() { selfhost_compose up -d; }
+
+
+# ---- update (deploy/lib/update.sh): this checkout, rebuilt and restarted by compose; the gateway applies
+# new migrations when it starts.
+shape_git() { git -C "$DEPLOY_DIR/.." "$@"; }
+shape_update_apply() { selfhost_compose up -d --build; }
