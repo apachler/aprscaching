@@ -1,0 +1,17 @@
+{
+  "description": "A broadcast from a node with --via set: checkVia() rewrites the destination path as <via>,*. The destination is the last token, so this is a broadcast, not a message to the relay.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1\",\"dst\":\"OE1KBC-24,*\",\"msg\":\"CQ via relay\",\"msg_id\":\"6A1B0001\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "type": "msg",
+    "src": "OE3XYZ-1",
+    "dst": "*",
+    "dstKind": "all",
+    "via": ["OE1KBC-24"],
+    "text": "CQ via relay",
+    "aprsKind": "other",
+    "rf": true,
+    "direct": true
+  }
+}

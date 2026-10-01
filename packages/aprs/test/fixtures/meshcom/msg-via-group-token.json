@@ -1,0 +1,11 @@
+{
+  "description": "A group number before the last token is no relay: the destination is OE8XYZ-7, and 262 is dropped as a via token.",
+  "firmware": "icssw-org/MeshCom-Firmware@1d4f5250d8ee5a7d136f6b8d03e15374392775f8 (checkVia in src/via_functions.cpp; msg_destination_call in src/aprs_functions.cpp; dst in src/extudp_functions.cpp)",
+  "datagram": "{\"src_type\":\"lora\",\"type\":\"msg\",\"src\":\"OE3XYZ-1\",\"dst\":\"262,OE8XYZ-7\",\"msg\":\"Hallo{014\",\"msg_id\":\"6A1B0007\",\"firmware\":35,\"fw_sub\":\"v\",\"rssi\":-101,\"snr\":7}",
+  "expect": {
+    "ok": true,
+    "dst": "OE8XYZ-7",
+    "dstKind": "call",
+    "viaDropped": 1
+  }
+}

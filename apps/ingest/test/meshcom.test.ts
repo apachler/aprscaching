@@ -180,6 +180,13 @@ describe("MeshCom listener — dedup", () => {
     expect(out.map((p) => p.heardVia)).toEqual(["aprs_is", "rf"]);
     expect(l.counters).toMatchObject({ deduped: 2, upgraded: 1, forwarded: 2 });
   });
+  it("addresses a via message to its final destination and counts dropped via tokens", () => {
+    const { l, out } = make();
+    l.receive(msg({ dst: `OE1KBC-24,junk token,${CALL}` }), NODE);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.payload).toBe(`:${CALL.padEnd(9, " ")}:hi{12`);
+    expect(l.counters.viaDropped).toBe(1);
+  });
   it("counts telemetry without forwarding it", () => {
     const { l, out } = make();
     l.receive(enc({ src_type: "node", type: "tele", src: CALL, temp1: 12 }), NODE);

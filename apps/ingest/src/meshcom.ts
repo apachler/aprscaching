@@ -110,6 +110,8 @@ export type MeshcomCounters = {
   udp: number;
   own: number;
   tele: number;
+  /** Via-path tokens dropped from messages because they are not callsigns; the messages themselves are kept. */
+  viaDropped: number;
   rejected: Record<string, number>;
 };
 
@@ -182,6 +184,7 @@ export class MeshcomListener {
     udp: 0,
     own: 0,
     tele: 0,
+    viaDropped: 0,
     rejected: {},
   };
 
@@ -226,6 +229,7 @@ export class MeshcomListener {
     if (!d.ok) return this.reject(d.reason);
     const e = d.event;
     this.checkFirmware(e, node);
+    if (e.type === "msg" && e.viaDropped) this.counters.viaDropped += e.viaDropped;
     if (e.type === "tele") {
       this.counters.tele++;
       return null;
