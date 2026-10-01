@@ -41,8 +41,15 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     It upgrades Termux first (`apt-get update && apt-get dist-upgrade`, choosing a mirror with
     `termux-change-repo` when none is set), installs the packages, clones the repository to `~/aprscaching`,
     compiles `better-sqlite3` for Android, builds the web app, writes `~/.aprscaching/.env` with new secrets,
-    starts the station and prints its addresses and a one-time sign-in link. Running it again upgrades,
+    starts the station and prints its addresses and a one-time sign-in link. It installs the `main`
+    (release) branch; `--branch dev` installs the development branch instead. Running it again upgrades,
     updates and restarts. The first run takes a few minutes; compiling `better-sqlite3` is the long part.
+
+    !!! warning "Known issue: no release on `main` yet"
+        Until the first release reaches `main`, the URL above answers 404. Fetch the script from `dev` and
+        install that branch:
+        `curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/dev/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL> --branch dev`
+
 3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
    `apt update && apt full-upgrade -y` first.
 4. After a first install `pocket.sh` offers the **setup questions**; they run any time with

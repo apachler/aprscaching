@@ -160,7 +160,7 @@ only when its variable is present.
 | BBS (inbound + forwarding) | `BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`) |
 | IGate | `IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL` |
 | Receiving site (Tier A) | `RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway. Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station |
-| Remote control (Shack → Remote control) | `BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`) |
+| Remote control (Shack → Remote box) | `BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`) |
 | Announce / WX uplink (opt-in TX) | `APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`) |
 
 Where the box reads these: the process environment first, then `.env` in `apps/ingest/`, then `.env` at the
@@ -190,3 +190,28 @@ Build-time variables (`import.meta.env.VITE_*`) baked into `apps/web`.
 | `VITE_SAT_TILES` / `VITE_SAT_ATTRIBUTION` | Satellite raster layer URL + attribution | EOX Sentinel-2 cloudless 2016 (CC-BY 4.0) |
 | `VITE_TOOL_REGISTRY` | Signed tool-registry URL | `/tools/registry.json` |
 | `VITE_TOOL_REGISTRY_AUTHORITY` | Pinned Ed25519 authority key the registry is verified against | (built-in) |
+
+## Deploy scripts
+
+Read by the scripts under `deploy/`, not by the gateway or the ingest box. They live in the same `.env`.
+
+| Variable | Read by | Purpose | Default |
+|---|---|---|---|
+| `DOMAIN` | `deploy/Caddyfile` | What Caddy serves: a hostname gets automatic Let's Encrypt TLS, `:80` serves plain HTTP (local or off-grid). `deploy/setup.sh` writes it | — |
+| `TUNNEL_TOKEN` | `deploy/compose.home.yml` | The Cloudflare Tunnel token for a named tunnel created in the Cloudflare dashboard | — |
+| `BACKUP_DIR` | `deploy/backup.sh` | Back up to this local or mounted directory — use a mount that is not the database's disk | — |
+| `OCI_BUCKET` | `deploy/backup.sh` | Back up to this OCI Object Storage bucket (needs the `oci` CLI configured) | — |
+| `BACKUP_BUCKET` / `R2_ENDPOINT` | `deploy/backup.sh` | Back up to this S3-compatible bucket (Cloudflare R2, AWS S3) at this endpoint URL; both are required, and the `aws` CLI must be configured | — |
+| `BACKUP_RETENTION_DAYS` | `deploy/backup.sh` | Snapshots in `BACKUP_DIR` older than this many days are deleted. Bucket destinations are not pruned by the script; set a lifecycle rule on the bucket | `30` |
+| `CF_API_TOKEN` / `CF_ZONE_ID` | `deploy/cloudflare/cache-rules.sh` | Cloudflare API token and zone for the CDN cache rules when Self-host runs behind Cloudflare | required by that script |
+
+`deploy/backup.sh` uses the first destination that is set, in the order above. The Pocket extras read
+these from `~/.aprscaching/.env`:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `POCKET_ALERTS` | `1`: vibrate on a new direct message to your call (MeshCom or APRS) | off |
+| `POCKET_ALERTS_SPEAK` | `1`: also say who the message is from | off |
+| `POCKET_ALERTS_SPEAK_BODY` | `1`: speak message bodies too — they may be private, and a phone speaks aloud | off |
+| `POCKET_BATTERY_LOW` | Below this battery percentage, on battery, the station switches to a saver profile (APRS-IS narrowed to your own call, shorter raw-packet retention); `0` turns it off | `20` |
+| `POCKET_SYNC_MOBILE` | `1`: `extras/sync-now.sh` may sync over mobile data, not only Wi-Fi | off |

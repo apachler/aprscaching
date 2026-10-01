@@ -80,7 +80,7 @@ with each other so caches and radio confirmations are shared across the network.
 2. [Running in Docker](operate/docker.md) — the usual way to install it; `deploy/setup.sh` writes the whole
    configuration.
 3. [Your first hour as sysop](operate/first-hour.md) — the checklist from "it starts" to a public instance.
-4. [Radio transports](operate/rf-ingest.md) — connect a TNC, an IGate, Meshtastic or MeshCom.
+4. [RF ingest & transports](operate/rf-ingest.md) — connect a TNC, an IGate, Meshtastic or MeshCom.
 
 Before you transmit anything automatically (IGate, digipeater, node), read
 [Amateur-radio compliance](operate/rf-regulatory.md).

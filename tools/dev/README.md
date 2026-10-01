@@ -14,7 +14,8 @@ Flags:
 - `tools/dev/smoke.sh smoke` — a single suite; `SUITES="smoke geofence" tools/dev/smoke.sh`.
 
 Notes:
-- The **federation** smoke is a two-instance (PUB+SUB) e2e and is exercised in CI separately, not by
-  `smoke.sh` (which covers the single-instance suites: `smoke`, `geofence`).
+- The **federation** smoke is a two-instance (PUB+SUB) e2e. `smoke.sh` runs the single-instance suites
+  (`smoke`, `geofence`) by default; `tools/dev/smoke.sh federation` boots a publisher and a subscriber with
+  the CI `conformance-federation` job's environment and runs it.
 - Bun conformance runs the same `tools/smoke/*` suites under Bun in CI.
 - These are dev conveniences; CI remains the source of truth.
