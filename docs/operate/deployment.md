@@ -63,6 +63,9 @@ gateway), and the browser can bridge a USB or Bluetooth radio with no server at 
 
 ### Self-host
 
+**With the helper:** `deploy/aprscaching init selfhost` (or `init baremetal` without Docker), then
+`deploy/aprscaching doctor` — see [Deployment helpers](helpers.md). The manual steps follow.
+
 The recommended shape. The Docker stack (`deploy/docker-compose.yml`: gateway, ingest, Caddy) runs on anything
 that runs Docker — a Pi at home, a mini-PC, an OCI or other cloud VM. `deploy/setup.sh` writes its whole
 configuration and asks how people reach it:
@@ -86,6 +89,8 @@ checkout under systemd, as a dedicated system user, with the gateway serving the
 
 ### Self-host behind Cloudflare
 
+**With the helper:** `deploy/aprscaching init selfhost`, choosing the Cloudflare Tunnel.
+
 The way to use Cloudflare. The gateway and its data stay on your box; Cloudflare only carries the traffic.
 
 - **Tunnel** — choose the Cloudflare Tunnel in `setup.sh` (or `deploy/aprscaching init selfhost`). The box
@@ -99,11 +104,16 @@ Both work on Cloudflare's free plan, and neither bills by what the instance writ
 
 ### Desktop
 
+**With the helper:** `deploy/aprscaching init desktop` says where to download the binary and how to check
+it ([Verified downloads](helpers.md#verified-downloads)).
+
 One executable (`bun build --compile`) with the gateway, the web app and the migrations inside. It keeps
 SQLite in the OS data directory and generates `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` there on
 first run. Best for one operator, a field day, or trying it out; it works off-grid.
 
 ### Cloudflare split
+
+**With the helper:** `deploy/aprscaching init cloudflare`, then `init ingest-box` on the RF box.
 
 !!! warning "Advanced: the bill grows with your feed"
     D1 bills every row written. A regional feed fits the included allowance; a large or global APRS-IS filter

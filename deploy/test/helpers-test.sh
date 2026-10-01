@@ -191,6 +191,34 @@ if have systemctl && have node && [ "$(node -p 'process.versions.node.split(".")
 else
   echo "skip bare metal (needs systemctl and Node.js 22+)"
 fi
+# A release download, verified: curl and gh stand in for GitHub (fixtures in $REL).
+REL="$TMP/rel"
+mkdir -p "$REL"
+printf 'a git bundle\n' >"$REL/aprscaching-v9.9.9.bundle"
+(cd "$REL" && sha256sum aprscaching-v9.9.9.bundle >SHA256SUMS)
+verify_release() { # verify_release MODE: good | tampered | missing | nogh | nogh-checksum
+  bash -c '
+    . "$1/lib/common.sh"; DEPLOY_DIR="$1"; . "$1/lib/shapes/baremetal.sh"
+    REL="$2"; MODE="$3"; BM_ALLOW_UNSIGNED=0
+    [ "$MODE" = nogh-checksum ] && BM_ALLOW_UNSIGNED=1
+    curl() { local out="" url=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done
+      [ "$MODE" = missing ] && return 22
+      cp "$REL/${url##*/}" "$out"
+      if [ "$MODE" = tampered ] && [ "${url##*/}" != SHA256SUMS ]; then echo evil >>"$out"; fi; }
+    have() { [ "$1" = gh ] && [ "${MODE#nogh}" != "$MODE" ] && return 1; command -v "$1" >/dev/null; }
+    gh() { [ "$1 $2" = "attestation verify" ]; }
+    bm_verified_bundle https://github.com/apachler/aprscaching v9.9.9
+  ' _ "$DEPLOY" "$REL" "$1"
+}
+check "a release whose checksum and signature verify gives its bundle" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; p=\$(verify_release good 2>/dev/null) && [ -f \"\$p\" ]"
+rc_of() { verify_release "$1" >/dev/null 2>&1 && echo 0 || echo $?; }
+check "a bundle that does not match its checksum stops the install" eq "$(rc_of tampered)" 2
+check "a release without a bundle falls back to the warned install" eq "$(rc_of missing)" 1
+check "  … quietly, for the warned install" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; [ -z \"\$(verify_release missing 2>&1)\" ]"
+check "without gh the signature cannot be checked, so it stops" eq "$(rc_of nogh)" 2
+check "  … unless --checksum-only accepts the checksum alone" bash -c "$(declare -f verify_release); DEPLOY='$DEPLOY' REL='$REL'; verify_release nogh-checksum >/dev/null 2>&1"
+check "a GitHub repository URL gives owner/name" bash -c ". '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh'; [ \"\$(bm_github_repo https://github.com/apachler/aprscaching.git)\" = apachler/aprscaching ] && [ -z \"\$(bm_github_repo https://git.example.org/a/b)\" ]"
+
 render() {
   bash -c "APRS_INTERACTIVE=0; . '$DEPLOY/lib/common.sh'; DEPLOY_DIR='$DEPLOY'; . '$DEPLOY/lib/shapes/baremetal.sh';
     BM_DIR=/srv/acs BM_USER=acs BM_PORT=8090; bm_render_unit '$DEPLOY/systemd/aprscaching-gateway.service'"
@@ -355,5 +383,15 @@ if have python3; then
     have() { [ \"\$1\" != node ] && command -v \"\$1\" >/dev/null; };
     doc_setup_items '{\"items\":[{\"key\":\"k\",\"label\":\"L\",\"level\":\"blocking\",\"status\":\"ok\",\"detail\":\"d\"}]}' | grep -q \$'k\tblocking\tok\tL: d'"
 fi
+
+# ---- the CLI reference names every option the help prints ---------------------------------------------------
+CLI="$DEPLOY/../docs/reference/cli.md"
+for c in "help" "init selfhost --help" "init baremetal --help" "init ingest-box --help" "init cloudflare --help" \
+  "--shape selfhost backup --help" "--shape selfhost restore x --help" "--shape selfhost update --help"; do
+  missing=""
+  # shellcheck disable=SC2086 # the words of the command
+  for f in $("$H" $c 2>&1 | grep -oE -- "--[a-z][a-z0-9-]+" | sort -u); do grep -qF -- "\`$f" "$CLI" || missing="$missing $f"; done
+  check "docs/reference/cli.md documents every option of '$c'" eq "${missing:-none}" none
+done
 
 if [ "$FAILED" = 0 ]; then echo; echo "all helper checks passed"; else echo; echo "helper checks FAILED"; exit 1; fi

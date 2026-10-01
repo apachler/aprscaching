@@ -20,6 +20,31 @@ See [Deployment](../operate/deployment.md), [Deployment helpers](../operate/help
 `setup.sh` keeps every value already in `.env` unless you confirm the change (or pass `--yes`), and never
 regenerates a secret that is set.
 
+### `deploy/aprscaching` {#deploy-aprscaching}
+
+One command for every shape ([Deployment helpers](../operate/helpers.md)). Every command takes these options:
+
+| Option | Effect |
+|---|---|
+| `--shape SHAPE` | act on `selfhost`, `cloudflare`, `ingest-box`, `baremetal`, `pocket` or `desktop` instead of the recorded shape |
+| `--non-interactive` | ask nothing; a required value without a default fails and names its flag |
+| `--yes` | confirm every change without asking |
+| `--json` | machine-readable output on stdout (`status`, `doctor`, `backup`) |
+| `--help` | the command's options |
+
+| Command | Options |
+|---|---|
+| `init selfhost` | `setup.sh`'s: `--call`, `--passcode`, `--filter`, `--domain`, `--tunnel-token`, `--lan-host`, `--site-call`, `--fed-peers`, `--fed-submit-instances`, `--fed-registry-key`, `--net44-name`, `--app-port`, `--no-tunnel`, `--no-next-steps`, `--env-file`, `--no-network` |
+| `init baremetal` | `--dir`, `--user`, `--repo`, `--ref`, `--port`, `--no-start`, `--checksum-only`, `--dry-run`, and `setup.sh`'s |
+| `init ingest-box` | `--gateway`, `--code`, `--shared-secret`, `--box`, `--label`, `--call`, `--passcode`, `--filter`, `--kiss`, `--meshcom`, `--site-call`, `--no-start` |
+| `init cloudflare` | `--api-base`, `--app-url` |
+| `init pocket`, `init desktop` | Pocket's `wizard.sh` options; none |
+| `status`, `doctor` | none |
+| `backup` | `--dest`, `--with-media`, `--no-settings` |
+| `restore <archive>` | `--dry-run`, `--no-settings` |
+| `update` | `--ref`, `--rollback-window` |
+| `rotate-secret <name>` | none |
+
 ## Operator callsign — `tools/admin/` {#operator-callsign}
 
 ```bash

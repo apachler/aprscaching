@@ -3,9 +3,10 @@
 # (start.sh) and print the URLs and a one-time sign-in link. Safe to run again: it upgrades, updates the
 # checkout, keeps the .env and restarts a running station on the new code.
 #
-#   curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call OE8APR
-#
-# or download it first and run it: bash pocket.sh --call OE8APR
+#   curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/pocket.sh
+#   curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/SHA256SUMS
+#   sha256sum -c --ignore-missing SHA256SUMS && gh attestation verify pocket.sh --repo apachler/aprscaching
+#   bash pocket.sh --call OE8APR
 #
 # Steps:
 #   1. apt-get update && apt-get dist-upgrade: a half-upgraded Termux breaks curl, and pkg with it; apt-get,
@@ -30,7 +31,7 @@ usage() {
   cat <<'EOF'
 pocket.sh: install and start aprscaching on an Android phone in Termux, in one command.
 
-  curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call OE8APR
+  bash pocket.sh --call OE8APR     (downloaded from a release and checked: docs/operate/pocket.md)
 
 Options:
   --call CALL          your callsign (asked on the terminal when a new .env needs it)

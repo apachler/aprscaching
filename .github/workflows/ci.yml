@@ -45,7 +45,7 @@ jobs:
                 deploy/pocket/* | deploy/lib/* | .github/workflows/ci.yml) pocket=true ;;
               esac
               case "$f" in
-                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | .github/workflows/ci.yml) helpers=true ;;
+                deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
                 docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;

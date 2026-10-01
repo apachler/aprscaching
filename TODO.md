@@ -661,6 +661,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
   **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
   `.json()`/`unknown` returns under `projectService` (auto-fixing it would strip load-bearing casts).
+- [ ] **A preinstalled Raspberry Pi image** *(P3 · L)* — a ready-to-flash image with the Self-host stack
+  and the deploy helpers, so a Pi needs no setup beyond `deploy/aprscaching init selfhost`. It is a large
+  build and maintenance effort (image builds per release, updates of the base system), so it waits until the
+  helpers have settled on real installations.
 - [ ] **Retire the Worker runtime** *(P3 · L)* — once no instance the project runs depends on the Cloudflare
   split, drop `workers/gateway`'s Worker entry, the D1/R2/Durable Object bindings, the D1 write budget,
   `deploy/cloudflare/deploy-cf.sh` and the Worker conformance job, keeping the gateway app itself as the shared

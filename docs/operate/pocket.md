@@ -32,14 +32,19 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
    [GitHub releases](https://github.com/termux/termux-app/releases). The Play Store build is a different,
    older line; do not mix the two. Also install **Termux:API** from the same source: the scripts use it for
    the battery, the Wi-Fi name and telling the hotspot apart from a joined Wi-Fi.
-2. In Termux, one command installs and starts everything:
+2. In Termux, download the installer from the latest release, check it, and run it:
 
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/main/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL>
+    pkg install -y gh && gh auth login     # once: the GitHub CLI checks the signature
+    curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/pocket.sh
+    curl -fsSLO https://github.com/apachler/aprscaching/releases/latest/download/SHA256SUMS
+    sha256sum -c --ignore-missing SHA256SUMS
+    gh attestation verify pocket.sh --repo apachler/aprscaching
+    bash pocket.sh --call <YOURCALL>
     ```
 
-    Piping into `bash` runs the script unseen. To read it first, download it, look, then run it:
-    `curl -fsSLO <the same URL> && less pocket.sh && bash pocket.sh --call <YOURCALL>`.
+    The checksum shows the file arrived intact; the attestation shows this repository's release workflow
+    built it ([Verified downloads](helpers.md#verified-downloads)).
 
     It upgrades Termux first (`apt-get update && apt-get dist-upgrade`, choosing a mirror with
     `termux-change-repo` when none is set), installs the packages, clones the repository to `~/aprscaching`,
@@ -48,10 +53,10 @@ The scripts are in `deploy/pocket/`; each takes `--help`, and the
     (release) branch; `--branch dev` installs the development branch instead. Running it again upgrades,
     updates and restarts. The first run takes a few minutes; compiling `better-sqlite3` is the long part.
 
-    !!! warning "Known issue: no release on `main` yet"
-        Until the first release reaches `main`, the URL above answers 404. Fetch the script from `dev` and
-        install that branch:
-        `curl -fsSL https://raw.githubusercontent.com/apachler/aprscaching/dev/deploy/pocket/pocket.sh | bash -s -- --call <YOURCALL> --branch dev`
+    !!! warning "Known issue: no release yet"
+        Until the first release, the release URLs above answer 404 and there is nothing signed to check.
+        Download the script from `dev`, read it, then install that branch:
+        `curl -fsSLO https://raw.githubusercontent.com/apachler/aprscaching/dev/deploy/pocket/pocket.sh && less pocket.sh && bash pocket.sh --call <YOURCALL> --branch dev`
 
 3. If `curl` itself fails with `cannot locate symbol "SSL_…"`, Termux is half-upgraded: run
    `apt update && apt full-upgrade -y` first.
