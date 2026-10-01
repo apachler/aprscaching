@@ -25,6 +25,7 @@ import { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { BunDb } from "./d1.ts";
 import { roomHandlers, type WsData } from "./rooms.ts";
 import { makeFsMedia } from "../node/src/media.ts";
+import { fileTiles } from "../node/src/tiles.ts";
 import { migrationsFromDir } from "../node/src/migrate.ts";
 import { resolveServerSecrets, type ServerSecrets } from "../node/src/secrets.ts";
 import {
@@ -83,7 +84,7 @@ export function createServer(opts: BunServerOptions): BunServer {
   const rooms = new RoomsCore();
   const env: Env = {
     DB: db,
-    TILES: {},
+    TILES: fileTiles(opts.environment.OFFLINE_TILES_PATH),
     MEDIA: makeFsMedia(opts.mediaDir),
     ROOMS: roomNamespace(rooms),
     ...stringEnvFrom(opts.environment), // forward EVERY config key so keys like ADMIN_CALLSIGNS reach the gateway

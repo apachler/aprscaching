@@ -28,6 +28,8 @@ export interface PackMeta {
   sizeBytes: number;
   /** The last area browsed, kept automatically; never listed with the user's own packs. */
   auto?: boolean;
+  /** The map tiles the pack holds (tiles.ts), when the instance offers an offline map. */
+  tiles?: { minZoom: number; maxZoom: number; count: number; bytes: number; attribution: string };
 }
 
 export interface OfflineStore {
@@ -38,6 +40,8 @@ export interface OfflineStore {
   packCaches(packId: string): Promise<PackCache[]>;
   deletePack(packId: string): Promise<void>;
   putBlob(packId: string, key: string, blob: Blob): Promise<void>;
+  /** Many blobs in one write. */
+  putBlobs(packId: string, entries: [key: string, blob: Blob][]): Promise<void>;
   deleteBlob(packId: string, key: string): Promise<void>;
   blob(packId: string, key: string): Promise<Blob | null>;
   /** The keys of a pack's stored blobs. */
@@ -125,6 +129,12 @@ export function idbStore(): OfflineStore {
       tx.objectStore("blobs").put({ packId, key, blob });
       await done(tx);
     },
+    async putBlobs(packId, entries) {
+      const tx = (await open()).transaction("blobs", "readwrite");
+      const st = tx.objectStore("blobs");
+      for (const [key, blob] of entries) st.put({ packId, key, blob });
+      await done(tx);
+    },
     async deleteBlob(packId, key) {
       const tx = (await open()).transaction("blobs", "readwrite");
       tx.objectStore("blobs").delete([packId, key]);
@@ -180,6 +190,11 @@ export function memoryStore(): OfflineStore {
       blobs.delete(id);
     },
     putBlob: async (id, k, b) => void blobs.set(id, (blobs.get(id) ?? new Map()).set(k, b)),
+    putBlobs: async (id, entries) => {
+      const m = blobs.get(id) ?? new Map<string, Blob>();
+      for (const [k, b] of entries) m.set(k, b);
+      blobs.set(id, m);
+    },
     deleteBlob: async (id, k) => void blobs.get(id)?.delete(k),
     blob: async (id, k) => blobs.get(id)?.get(k) ?? null,
     blobKeys: async (id) => [...(blobs.get(id)?.keys() ?? [])],

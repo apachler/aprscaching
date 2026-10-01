@@ -11,6 +11,7 @@
  */
 import {
   PACK_MAX_BYTES,
+  locatorBounds,
   packAreaQuery,
   type PackArea,
   type PackCache,
@@ -18,6 +19,7 @@ import {
   type PackResponse,
 } from "@aprscaching/shared";
 import type { OfflineStore, PackMeta } from "./store.js";
+import { downloadTiles, type TilePlan, type TileReader } from "./tiles.js";
 
 const PARALLEL = 4;
 
@@ -88,6 +90,8 @@ export const imageKey = (img: PackImage, option: PackMeta["images"]) =>
 export interface SaveProgress {
   done: number;
   total: number;
+  /** What is downloading: the images, then the map tiles. */
+  what?: "images" | "map";
 }
 
 /**
@@ -100,12 +104,17 @@ export async function storePack(
   base: string,
   meta: Omit<PackMeta, "sizeBytes" | "cacheCount" | "generation" | "instance">,
   data: PackResponse,
-  opts: { onProgress?: (p: SaveProgress) => void; signal?: AbortSignal } = {},
+  opts: {
+    onProgress?: (p: SaveProgress) => void;
+    signal?: AbortSignal;
+    /** The map tiles to keep with the pack (tiles.ts), downloaded after the images. */
+    tiles?: { reader: TileReader; plan: TilePlan; attribution: string };
+  } = {},
 ): Promise<PackMeta> {
   const wanted = data.caches.flatMap((c) => imagesFor(c, meta.images));
   const have = new Set(await store.blobKeys(meta.id));
   const todo = wanted.filter((i) => !have.has(imageKey(i, meta.images)));
-  let bytes = JSON.stringify(data.caches).length;
+  let bytes = JSON.stringify(data.caches).length + (meta.tiles?.bytes ?? 0);
   for (const k of have)
     if (wanted.some((i) => imageKey(i, meta.images) === k)) bytes += (await store.blob(meta.id, k))?.size ?? 0;
   let done = 0;
@@ -131,11 +140,28 @@ export async function storePack(
     }
   };
   await Promise.all(Array.from({ length: Math.min(PARALLEL, todo.length) }, worker));
-  // images the pack no longer lists (removed, or another image option) are dropped
+  // images the pack no longer lists (removed, or another image option) are dropped; its tiles stay
   const keep = new Set(wanted.map((i) => imageKey(i, meta.images)));
-  for (const k of have) if (!keep.has(k)) await store.deleteBlob(meta.id, k);
+  for (const k of have) if (!keep.has(k) && !k.startsWith("tile:")) await store.deleteBlob(meta.id, k);
+  let tiles = meta.tiles;
+  if (opts.tiles && meta.area) {
+    const { reader, plan, attribution } = opts.tiles;
+    const got = await downloadTiles(store, meta.id, reader, plan, locatorBounds(meta.area.locator), {
+      signal: opts.signal,
+      onProgress: (d, t) => opts.onProgress?.({ done: d, total: t, what: "map" }),
+    });
+    tiles = {
+      minZoom: plan.minZoom,
+      maxZoom: plan.maxZoom,
+      count: plan.count,
+      bytes: got + (meta.tiles?.bytes ?? 0),
+      attribution,
+    };
+    bytes += got;
+  }
   const full: PackMeta = {
     ...meta,
+    ...(tiles && { tiles }),
     instance: data.instance,
     generation: data.generation,
     cacheCount: data.caches.length,

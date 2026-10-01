@@ -61,6 +61,11 @@ The Node and Bun servers also read plain runtime knobs that are not part of the 
 | `DB_PATH` | The SQLite database file | `data/aprscaching.db` beside the server |
 | `MIGRATIONS_DIR` | Where the schema migrations are read from | `db/migrations` of the checkout |
 | `MEDIA_DIR` | Where cache media is stored | `data/media` beside the server |
+| `OFFLINE_TILES_PATH` | The offline map: a regional PMTiles archive of vector tiles, served at `/tiles/offline.pmtiles` for offline packs | none |
+| `OFFLINE_TILES_KEY` | Cloudflare: the offline map archive's key in the `TILES` R2 bucket, served the same way | `offline.pmtiles` |
+| `OFFLINE_TILES_URL` | The offline map archive hosted elsewhere (it must allow offline use and answer byte ranges with CORS); overrides the two above | none |
+| `OFFLINE_TILES_ATTRIBUTION` | Shown on the offline map | `© OpenStreetMap contributors` |
+| `OFFLINE_TILES_MAXZOOM` | The most detailed zoom a pack takes; a pack too large for it takes less | `14` |
 | `FED_SYNC_INTERVAL_MS` | Milliseconds between scheduled peer syncs; `0` disables them | `300000` |
 | `WEB_DIST` | Node only: the built web app (`apps/web/dist`), served on the same origin as the API, for a box with no reverse proxy in front | — |
 <!-- /config-table -->

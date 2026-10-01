@@ -128,7 +128,7 @@ a smaller pack. Optionally keep only some cache types. **Check size** shows how 
 what images would add — none, a thumbnail per cache, or every image — before anything is kept. A pack
 holds each cache's description, hint, latest 5 logs and the shape of its stages, at most 5000 caches and
 250 MB. Offline, the map shows the caches of every pack in view and says which pack and how old it is; a
-cache page shows its stored copy. **Refresh** brings a pack up to date, and costs almost nothing when
+cache page shows its stored copy. If the instance offers an [offline map](../operate/offline-map.md), **Check size** also offers the map of the square — as detailed as fits the pack, without place names — and the offline map draws it; otherwise it shows a grid under the caches. **Refresh** brings a pack up to date, and costs almost nothing when
 nothing changed; a pack older than a week says so. The area you last browsed is kept automatically as well.
 The browser is asked to keep your packs; if it may clear them when space runs low, the Offline panel says
 so.

@@ -74,3 +74,80 @@ export function buildPhosphorStyle(stepDeg = 0.1): StyleSpecification {
     stepDeg,
   );
 }
+
+/**
+ * The offline packs' map: the vector tiles of the operator's archive (the Protomaps basemap schema — earth,
+ * landcover, landuse, water, roads, buildings, boundaries), drawn from the packs through `acs-pack://`.
+ * It carries no labels, since text needs font files that a pack does not hold; the caches, the grid square
+ * readout and the distance to a cache carry the navigation. Literal colours, as in any MapLibre style.
+ */
+export function buildPackTileStyle(maxZoom: number, attribution: string): StyleSpecification {
+  const src = "packs";
+  const fill = (id: string, layer: string, color: string, filter?: unknown) => ({
+    id,
+    type: "fill",
+    source: src,
+    "source-layer": layer,
+    ...(filter ? { filter } : {}),
+    paint: { "fill-color": color },
+  });
+  const road = (id: string, kinds: string[], color: string, width: [number, number]) => ({
+    id,
+    type: "line",
+    source: src,
+    "source-layer": "roads",
+    filter: ["in", ["get", "kind"], ["literal", kinds]],
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      "line-color": color,
+      "line-width": ["interpolate", ["exponential", 1.6], ["zoom"], 8, width[0], 16, width[1]],
+    },
+  });
+  return {
+    version: 8,
+    sources: {
+      [src]: { type: "vector", tiles: ["acs-pack://{z}/{x}/{y}"], minzoom: 0, maxzoom: maxZoom, attribution },
+    },
+    layers: [
+      { id: "sea", type: "background", paint: { "background-color": "#cfe3ec" } },
+      fill("earth", "earth", "#f2efe9"),
+      fill("landcover-forest", "landcover", "#d6e8cf", ["in", ["get", "kind"], ["literal", ["forest", "wood"]]]),
+      fill("landcover-grass", "landcover", "#e4edd3", [
+        "in",
+        ["get", "kind"],
+        ["literal", ["grassland", "scrub", "farmland"]],
+      ]),
+      fill("landcover-ice", "landcover", "#f7fbfc", ["in", ["get", "kind"], ["literal", ["glacier", "barren"]]]),
+      fill("landuse-park", "landuse", "#d9ead0", [
+        "in",
+        ["get", "kind"],
+        ["literal", ["park", "nature_reserve", "forest", "wood"]],
+      ]),
+      fill("landuse-built", "landuse", "#ebe6df", [
+        "in",
+        ["get", "kind"],
+        ["literal", ["residential", "industrial", "commercial"]],
+      ]),
+      fill("water", "water", "#a9cde0"),
+      {
+        id: "boundaries",
+        type: "line",
+        source: src,
+        "source-layer": "boundaries",
+        paint: { "line-color": "#9a8fa6", "line-width": 1, "line-dasharray": [3, 2] },
+      },
+      road("roads-path", ["path"], "#b9a98f", [0.4, 1.4]),
+      road("roads-minor", ["minor_road", "other"], "#ffffff", [0.4, 4]),
+      road("roads-major", ["major_road"], "#fbe2a6", [0.8, 6]),
+      road("roads-highway", ["highway"], "#f4b878", [1, 8]),
+      {
+        id: "buildings",
+        type: "fill",
+        source: src,
+        "source-layer": "buildings",
+        minzoom: 14,
+        paint: { "fill-color": "#ddd6cc", "fill-outline-color": "#c9c0b4" },
+      },
+    ],
+  } as StyleSpecification;
+}

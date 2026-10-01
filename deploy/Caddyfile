@@ -2,7 +2,7 @@
 # DOMAIN=:80 -> plain HTTP (local/off-grid). DOMAIN=host -> automatic Let's Encrypt TLS.
 {$DOMAIN} {
 	encode zstd gzip
-	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /ingest/* /outbox* /federation/* /source /support /imprint /privacy /health /.well-known/* /feeds/* /sitemap /sitemap.xml /robots.txt /embed /embed/* /v/*
+	@dynamic path /api/* /auth/* /verify/* /keys/* /badge/* /ws* /ingest /ingest/* /outbox* /federation/* /source /support /imprint /privacy /health /.well-known/* /feeds/* /sitemap /sitemap.xml /robots.txt /embed /embed/* /v/* /tiles/*
 	# handle blocks, because Caddy runs try_files (a rewrite) before reverse_proxy: without them every
 	# gateway path would first be rewritten to /index.html and served the SPA
 	handle @dynamic {
