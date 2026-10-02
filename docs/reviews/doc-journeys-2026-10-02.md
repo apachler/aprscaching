@@ -6,7 +6,10 @@
     [Documentation inventory — October 2026](doc-inventory.md); the writing standard it applies is the
     [Style guide](../contribute/style-guide.md).
 
-## Status: waiting for the owner
+## Status: approved, and done
+
+The owner approved this plan as written on 2 October 2026; the record of what was done is under
+[Outcome](#outcome-2-october-2026) at the end. The status as it stood before the approval follows.
 
 The handover asks for this move map to be shown to the owner **before anything moves**. The owner is away, so
 this record and its pull request are where the plan waits, and nothing below has been moved. What went ahead,
@@ -985,3 +988,195 @@ two link-related checks:
 5. Update the docs.mjs header comment, its success message and the "CI guards" paragraph in
    `testing.md` (`contribute/testing.md` after the move). That paragraph says the check keeps "the links
    outside the manual whole".
+
+## Outcome, 2 October 2026
+
+The owner approved the move map as written on 2 October 2026, so the four questions above stand as proposed. The
+work landed in five pull requests:
+
+- #186: the move by audience, the link updates, the stale-reference check and the 404 page;
+- #187: the Play section;
+- #188: The Shack, Run an instance, Reference and Contribute;
+- #189: the screenshots;
+- this record.
+
+### How each decision was applied
+
+| Decision | Applied as |
+|---|---|
+| **G1** audience first | Five sections: Play · The Shack · Run an instance · Reference · Contribute, plus Glossary and About. Files sit under the section's folder. Play, The Shack, Run an instance and Contribute each open with a journey landing page, and Home is a "Who are you?" page. Every page ends with **Next**. |
+| **G2** cache types | An overview table, one page per game type in the style guide's template (Traditional, Multi-stage, Living, Audio, Virtual), and one shared page for the heritage types. |
+| **G3** Vale | Vale 3.24.0 runs in the docs workflow. Errors fail; title-case headings and Play-page readability warn; long sentences are suggestions. The headings rule's exceptions are whole names, so "a", "is" and "web" in a heading no longer warn. |
+| **G4** no redirects | Every reference to a moved page or heading was rewritten through one map of 486 old anchors to their new places. `tools/checks/docs.mjs` fails on any reference to a page or heading that does not exist. The forms it checks: `docs/…` paths, published URLs, in-app `doc=` slugs and `onDocs` calls, configuration-schema links, and every doctor check's troubleshooting entry. The not-found page offers the five sections. |
+
+### Moved pages
+
+| Old | New |
+|---|---|
+| `concepts.md` | `reference/trust-model.md` |
+| `design/design-language.md` | `contribute/design/design-language.md` |
+| `design/meshcom-tdeck-map.md` | `contribute/design/meshcom-tdeck-map.md` |
+| `design/meshcom.md` | `contribute/design/meshcom.md` |
+| `design/radio-find-logging.md` | `contribute/design/radio-find-logging.md` |
+| `getting-started.md` | `contribute/run-from-source.md` |
+| `guides/account.md` | `play/join.md` |
+| `guides/caching.md` | `play/index.md` |
+| `guides/federation.md` | `run/federation/index.md` |
+| `guides/my-radio.md` | `shack/my-radio.md` |
+| `guides/offline.md` | `play/offline.md` |
+| `guides/shack.md` | `shack/index.md` |
+| `operate/44net.md` | `run/networks/44net.md` |
+| `operate/administration.md` | `run/day-to-day/index.md` |
+| `operate/deployment.md` | `run/index.md` |
+| `operate/docker.md` | `run/install/self-host-docker.md` |
+| `operate/first-hour.md` | `run/first-hour.md` |
+| `operate/helpers.md` | `run/day-to-day/helper-command.md` |
+| `operate/meshcom.md` | `run/radios/meshcom.md` |
+| `operate/offline-map.md` | `run/install/offline-map.md` |
+| `operate/packet.md` | `run/radios/packet-node.md` |
+| `operate/pocket.md` | `run/install/pocket.md` |
+| `operate/quickstarts.md` | `run/radios/quick-starts.md` |
+| `operate/rf-ingest.md` | `run/radios/rf-ingest.md` |
+| `operate/rf-regulatory.md` | `shack/on-air.md` |
+| `operate/rig-weather.md` | `shack/rig-weather.md` |
+| `reference/specs.md` | `contribute/specs.md` |
+| `reference/testing.md` | `contribute/testing.md` |
+| `start-here.md` | `play/index.md` |
+
+`index.md` stays as Home. Its sections went to Play (the game), The Shack (the Shack), *How finds are
+verified* (trust) and Contribute (architecture).
+
+Besides the manual, the references updated were in these places:
+
+- `README.md`, `TODO.md`, `CONTRIBUTING.md` and the rules;
+- the web app's links (`Landing`, `AdminPanel`, `UiKit`) and a test;
+- the doctor's hints, which now all point at *Troubleshooting*;
+- the deploy, Pocket and setup scripts' messages;
+- workflow comments;
+- the configuration schema's links (with the generated configuration page and `.env.example` files regenerated);
+- package comments and the dated reviews.
+
+### Pages written, split and merged
+
+- **New pages:**
+  - Play: Your first find, Traditional, Living, Audio, Virtual, Getting to your instance, Help and FAQ.
+  - The Shack: The live map, Messages over APRS and MeshCom.
+  - Run an instance: Choose a shape, Check a download, Desktop, Off-grid and LAN, Cloudflare Tunnel and CDN, 44Net name and identity, HAMNET only, Troubleshooting, and the four Pocket field pages.
+  - Reference: Secrets and credentials, The trust model, How federation stays honest, Rig control library.
+  - Contribute: Contribute, Architecture and runtimes, The AX.25 stack, Writing a Shack plugin.
+- **Split by journey step:** caching, account, Pocket, deployment, helpers, Docker, administration, federation,
+  44Net, rf-regulatory, concepts, start-here.
+- **Merged, each to one owner:**
+  - the ingest box (five angles);
+  - backups (two tools);
+  - updates;
+  - one-time sign-in links (with Pocket's visitors);
+  - off-grid;
+  - the 44Net helper summary;
+  - rig control (two pages);
+  - the remote box;
+  - data protection (with federation's tombstones).
+
+### Coverage of the game
+
+| Topic | Status |
+|---|---|
+| Cache types | Documented: overview plus a page per type, markers in both themes. |
+| Stages and unlocks | Documented: geo (the previous stage's radius, 60 m default), audio and open (on request), NFC (sealed offline at 40 bits or more). Hiders cannot set stages in the app: code gap. |
+| Living caches and rendezvous | Documented: 150 m and 5 minutes for a find; 150 m, 15 minutes and 1 hour for a rendezvous. The cache page does not name the station: code gap. |
+| Finding and logging | Documented: in the app, offline (queued, needs attention) and by radio (the commands, the 7-day confirmation, 10 an hour). |
+| Verification | Documented in player words, with the real numbers and a diagram; the precise rules are on *The trust model*. |
+| Difficulty, terrain, hints, media, ratings | Documented. |
+| Favourites, watches, badges, ranks | Documented: the full badge list and the points formula. The per-cache watch has no UI and is not described as a feature. |
+| Adoption | Documented, for players and sysops. |
+| Heritage places | Documented: where they come from, that they log like any cache, and that their finds stay on this instance. |
+| Visibility and federation, player view | Documented: Public, Unlisted and Local only as the code has them; remote caches. |
+| Offline | Documented. |
+| Getting to your instance | Documented: the four ways in and what works on each. The app does not show them: code gap. |
+
+### Known issues
+
+The manual describes each of these as the code has it and marks it **Known issue**; none is fixed by the
+documentation work.
+
+- **Duplicate finds by SSID:** one find per exact callsign string in the app (each SSID can log the same cache), while radio allows one per person.
+- **Leaderboard and SSIDs:**
+  - Finds logged under an SSID never reach the leaderboard.
+  - The "you're near" prompt and Tier A match the exact callsign, SSID included.
+- **Archived and disabled caches** still accept finds, in the app, from the offline queue and by radio.
+- **Owners** can log finds on their own caches.
+- **Heritage types:**
+  - Players can hide SOTA and POTA caches, and earn the summit and park badges on them.
+  - WWFF, bunker and castle cannot be filtered on the map or in offline packs.
+  - Radio logging refuses cache codes with a slash, such as the SOTA reference `OE/ST-123`.
+- **Living caches:**
+  - A living cache's pin never moves, so a phone at the pin reaches Location-verified.
+  - Any station can be named as the one a living cache follows.
+  - Rendezvous are public, with place and time.
+- **Multi-stage caches:**
+  - A multi-stage find needs no stages.
+  - Replacing the stage list keeps the old unlocks.
+- **Minimum tier:** it is fixed at B. An owner who raises it cannot set it back, and the app cannot raise it.
+- **Unlisted caches** still show on the local map, in search and in RSS, and their title and position federate.
+- **APRS-IS announcements** are opt-in, but nothing in the app or the server opts in.
+- **The Packet terminal** keys the radio on connect without the verified-callsign check that every other transmit path makes.
+- **The Messages surface:** it shows no outgoing messages, so its **sent** badge never appears, and messages sent from the browser carry no message number, so nobody acknowledges them.
+
+### UX gaps (proposals, not built)
+
+- **Cache editing:** there is no in-app way to edit, disable, archive or reactivate a cache, add stages to it, or set its minimum tier.
+- **Instance details:** an "About this instance" card listing the ways in (https, 44Net, HAMNET names, the service call) and the sysop. The descriptor already carries `addresses` and `operator`.
+- **Messages on a phone:** Messages has no way in on a phone, from the bottom bar or from **You → Advanced**.
+- **Announce switch:** an APRS-IS announce switch for verified callsigns.
+- **Exports:** GPX, KML and ADIF exports in the app.
+- **Ranks:**
+  - a period picker (the server has month and year);
+  - badge names instead of ids on the profile opened from Ranks;
+  - a way to embed your badge.
+- **Living caches:**
+  - Name the station a living cache follows on its page.
+  - Let caches made from **My stations** opt into rendezvous.
+- **Filters:** tag and country filters; WWFF, bunker and castle in the type filters.
+- **Alerts:** an alert bell; today alerts live under **Settings → Notifications**.
+- **Radio commands:** rejected radio commands from unverified callsigns could show in the app with their reason.
+- **Bug reports:** a bug-report link in **Help & credits**.
+- **Rig control:** its fallback text names a Hamlib companion that does not exist.
+
+### Found in code and scripts, outside the manual
+
+- **Doctor backup checks:**
+  - Self-host looks for `BACKUP_DIR/db/*.db.gz`, while `deploy/backup.sh` writes `BACKUP_DIR/<timestamp>.db.gz`, so those snapshots never count.
+  - With `OCI_BUCKET` set, it looks only under `archives/`.
+  - On Pocket it misses where `deploy/aprscaching backup` writes.
+  - Desktop has no backup check.
+- **Other doctor findings:**
+  - `source.fork` fires when `SOURCE_REPO` is empty, not when it is the upstream.
+  - The `gateway.migrations` fix says "restart" where Self-host needs a rebuild.
+- **Cloudflare split:** `deploy/cloudflare/deploy-cf.sh` does not create the `aprscaching-assets` R2 bucket that the `TILES` binding names, so a first deploy may fail.
+- **Desktop README:** `deploy/desktop/README.md` backs up with `deploy/backup.sh`; the manual uses `deploy/aprscaching backup`.
+- **Configuration descriptions:**
+  - `DIGI_VISCOUS_MS` reaches only the connected-mode digipeater, while its configuration description reads as general.
+  - The configuration reference's description of `OPERATOR_LINKS_FOR_ANY_CALL` and the Remote control row read like a tutorial.
+
+### Journey test
+
+Each landing page's journey was walked link by link along **Next**, and the pages where Next did not lead to
+the journey's next step were fixed. Install pages are alternatives and all lead to *Your first hour*. Every
+page of the built site was loaded at phone width (390 px) and at desktop width (1280 px): no page scrolls
+sideways and no image is missing. The screenshots were regenerated from the current UI with
+`tools/teaser/run-docs.sh` and checked against their pages.
+
+### Style baseline
+
+On 93 manual pages, outside the dated reviews:
+
+- 0 errors and 0 warnings;
+- 228 suggestions, all sentences over 30 words;
+- all 19 Play pages within the readability target (Flesch-Kincaid grade 9 or below).
+
+### Not tested
+
+- The journeys were walked on the built site, never by a person on a real phone: no screen reader, no
+  outdoor reading.
+- The install pages' commands were checked against the scripts, not run on a fresh machine of each shape.
+- The ARDC and 44Net Connect statements keep their sources and **Unverified** marks; no 44Net account was used.
