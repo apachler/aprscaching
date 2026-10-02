@@ -34,9 +34,8 @@ to verify again. Your past finds stay with the callsign you logged them under.
 An [SSID](../glossary.md#ssid) needs no extra step. `-7` (handheld), `-9` (mobile), `-10`
 ([IGate](../glossary.md#igate)) and the rest share their base callsign's verification.
 
-!!! note "Known issue"
-    Finds logged under an SSID, such as `OE8APR-7`, never reach the leaderboard. Profiles and ratings also
-    count each SSID apart from its base callsign.
+Finds logged under an SSID, such as `OE8APR-7`, count for the base callsign: on the leaderboard, on your
+profile, for your badges, and for rating a cache you found.
 
 ## The licence badge
 

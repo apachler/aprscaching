@@ -38,6 +38,7 @@ import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import type { CacheRow } from "./verify.js";
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
+import { alreadyFound, logRefusal } from "./findrules.js";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -175,7 +176,14 @@ function heardAtAttestedSite(m: RadioMessage, attestedSites: Set<string>): boole
   ).firstPartyAttested;
 }
 
-type CacheForLog = CacheRow & { id: number; code: string; title: string };
+type CacheForLog = CacheRow & {
+  id: number;
+  code: string;
+  title: string;
+  status: string;
+  owner_call: string;
+  source: string | null;
+};
 
 interface CommandRow {
   id: number;
@@ -317,7 +325,10 @@ async function commitCommand(
   row: Pick<CommandRow, "from_call" | "account_id" | "command" | "body" | "sent_at">,
   cache: CacheForLog,
   score: FindScore | null,
-): Promise<{ logId?: number; duplicate?: boolean }> {
+): Promise<{ logId?: number; duplicate?: boolean; refused?: string }> {
+  // checked again at commit: a cache archived, or a find logged another way, while the command waited
+  const refused = await logRefusal(env, cache, row.from_call, row.command, row.account_id);
+  if (refused) return { refused };
   if (row.command === "found") {
     if (await alreadyFound(env, cache.id, row.from_call, row.account_id)) return { duplicate: true };
     const c = await commitFind(env, cache, row.from_call, row.sent_at, row.body, score!);
@@ -329,23 +340,6 @@ async function commitCommand(
 
 async function loadCache(env: Env, id: number): Promise<CacheForLog | null> {
   return env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheForLog>();
-}
-
-/**
- * Has this person already logged a found for the cache? A find counts once per person, so any SSID of the
- * sender's base call, or of any callsign on their account, holds it.
- */
-async function alreadyFound(env: Env, cacheId: number, loggerCall: string, accountId: string | null): Promise<boolean> {
-  const r = await env.DB.prepare(
-    `SELECT 1 AS x FROM cache_logs l WHERE l.cache_id = ? AND l.log_type = 'found' AND (
-       l.logger_call = ? OR l.logger_call LIKE ? || '-%'
-       OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
-                  AND (l.logger_call = ac.callsign OR l.logger_call LIKE ac.callsign || '-%'))
-     ) LIMIT 1`,
-  )
-    .bind(cacheId, baseCall(loggerCall), baseCall(loggerCall), accountId)
-    .first();
-  return !!r;
 }
 
 /**
@@ -422,6 +416,8 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ?").bind(parsed.code).first<CacheForLog>();
   if (!cache) return reject(`unknown cache ${parsed.code}`, { accountId: acct.account_id });
+  const refused = await logRefusal(env, cache, src, parsed.command, acct.account_id);
+  if (refused) return reject(refused, { accountId: acct.account_id, cache });
   if (parsed.command === "found" && (await alreadyFound(env, cache.id, src, acct.account_id)))
     return reject(`${cache.code} is already logged as found`, { accountId: acct.account_id, cache });
 
@@ -448,6 +444,7 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
     cache,
     score,
   );
+  if (c.refused) return reject(c.refused, { accountId: acct.account_id, cache });
   if (c.duplicate) return reject(`${cache.code} is already logged as found`, { accountId: acct.account_id, cache });
   const id = await insertRow(env, m, { ...base, status: "logged", logId: c.logId ?? null });
   await ack(env, m);
@@ -506,6 +503,10 @@ async function confirmRow(
     }
     const score = row.score ? (JSON.parse(row.score) as FindScore) : null;
     const c = await commitCommand(env, row, cache, score);
+    if (c.refused) {
+      await done("rejected", c.refused, null);
+      return { ok: false, reason: c.refused };
+    }
     if (c.duplicate) {
       await done("rejected", `${cache.code} is already logged as found`, null);
       return { ok: false, reason: `${cache.code} is already logged as found` };

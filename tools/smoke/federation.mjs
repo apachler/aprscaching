@@ -269,7 +269,7 @@ const sc = await call(PUB, "POST", "/api/caches", {
   type: "traditional",
   lat: 47.08,
   lon: 15.41,
-  ownerCall: "OE8APR",
+  ownerCall: "OE8SFO", // not the finder: an owner does not find their own cache
 });
 const scCode = sc.data?.cache?.code,
   scId = sc.data?.cache?.id;
@@ -465,8 +465,23 @@ const tCache = await call(PUB, "POST", "/api/caches", {
   lon: 16.37,
   ownerCall: "TOMB1",
 });
-await call(PUB, "POST", `/api/caches/${tCache.data?.cache?.id}/logs`, { loggerCall: "TOMB1", logType: "found" });
-ok("publisher created a TOMB1-owned cache + find", tCache.status === 201, JSON.stringify(tCache.data));
+// TOMB1's find goes on another owner's cache: an owner does not find their own
+const tFound = await call(PUB, "POST", "/api/caches", {
+  title: "Tombstone Find " + now(),
+  type: "traditional",
+  lat: 48.22,
+  lon: 16.38,
+  ownerCall: "OE8TFO",
+});
+const tLog = await call(PUB, "POST", `/api/caches/${tFound.data?.cache?.id}/logs`, {
+  loggerCall: "TOMB1",
+  logType: "found",
+});
+ok(
+  "publisher created a TOMB1-owned cache + a TOMB1 find",
+  tCache.status === 201 && tLog.status === 200,
+  JSON.stringify({ cache: tCache.data, log: tLog.data }),
+);
 
 // subscriber mirrors it onto its map
 const BBOXT = "16.2,48.0,16.6,48.4";

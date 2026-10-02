@@ -76,6 +76,9 @@ function useKnownPosition(from: LatLon | null | undefined): LatLon | null {
 }
 
 /** Cache detail + logbook — operator layout; single primary action (Log a find). */
+/** The base call of a callsign, without its SSID: an owner operating OE8APR-7 is the owner of OE8APR's cache. */
+const baseOf = (cs: string) => cs.toUpperCase().split("-")[0] ?? "";
+
 export function DetailPanel(props: {
   detail: CacheDetail;
   /** The viewer's position, when the map already knows it. */
@@ -306,7 +309,8 @@ export function DetailPanel(props: {
         cacheLat={c.lat ?? null}
         cacheLon={c.lon ?? null}
         callsign={callsign}
-        isOwner={!!callsign && callsign.toUpperCase() === c.ownerCall.toUpperCase()}
+        isOwner={!!callsign && baseOf(callsign) === baseOf(c.ownerCall)}
+        cacheStatus={c.status}
         onLogged={props.onLogged}
         onSignIn={props.onSignIn}
       />

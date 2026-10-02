@@ -96,12 +96,8 @@ verified.
 The app shows all-time ranks. The instance also keeps ranks for the last 30 and 365 days, which the app does
 not show yet.
 
-!!! note "Known issue"
-    Finds logged under an SSID, such as `OE8APR-7`, never reach the leaderboard. Log under your base callsign
-    to rank.
-
-!!! note "Known issue"
-    Owners can log finds on their own caches, and those finds earn points and badges.
+Finds you log under an SSID, such as `OE8APR-7`, count for your base callsign. Owners don't log their own
+caches as found, so a cache never earns its owner points.
 
 **Activity** shows recent finds in your area, the **Top finders**, and the **Top corroborators**. A
 corroborator is a receiving station whose radio heard finds on the air and made them **Radio-verified**

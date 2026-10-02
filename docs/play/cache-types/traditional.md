@@ -37,9 +37,8 @@ A find counts as verified at **Location-verified** or better. A hider can ask fo
 The cache sheet shows the rule under **Verification**. [How finds are verified](../verification.md) explains
 the tiers.
 
-!!! note "Known issue"
-    A disabled or archived cache still takes finds, in the app and over the radio. Owners can also log finds
-    on their own caches and earn points for them.
+A disabled or archived cache takes no finds, and an owner does not log their own cache as found
+([Caches that take no find](../log-a-find.md#caches-that-take-no-find)).
 
 ## What a hider sets
 

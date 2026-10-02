@@ -11,6 +11,8 @@ import { displayCall } from "./auth.js";
 import { isCallsignVerified } from "./callsign.js";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { actor } from "./caches.js";
+import { baseSql } from "./findrules.js";
+import { baseCall } from "@aprscaching/aprs";
 import { RateRequest } from "@aprscaching/shared";
 
 const DAY = 86400;
@@ -20,7 +22,9 @@ const POINTS =
   "(CASE l.tier WHEN 'A' THEN 10 WHEN 'B' THEN 5 ELSE 2 END) + COALESCE(c.difficulty,0) + COALESCE(c.terrain,0)";
 // competitive credit requires proven control of the callsign (anti-gaming): the logger's callsign
 // must be control-verified (an on-air VERIFY heard at an attested site, the operator bootstrap, or a sysop). Personal profiles still show all finds.
-const VERIFIED_LOGGER = "AND l.logger_call IN (SELECT callsign FROM callsign_verifications WHERE status='verified')";
+const VERIFIED_LOGGER = `AND ${baseSql("l.logger_call")} IN (SELECT callsign FROM callsign_verifications WHERE status='verified')`;
+// a person's finds: their base call and every SSID of it (finds are stored under the exact call logged with)
+const OF_PERSON = "(l.logger_call = ? OR l.logger_call LIKE ? || '-%')";
 
 function periodStart(period: string | null): number {
   if (period === "month") return nowS() - 30 * DAY;
@@ -46,12 +50,12 @@ export async function handleLeaderboard(req: Request, env: Env): Promise<Respons
 
   const rows = (
     await env.DB.prepare(
-      `SELECT logger_call AS loggerCall, SUM(pts) AS points, COUNT(*) AS finds FROM (
-       SELECT l.logger_call, l.cache_id, MAX(${POINTS}) AS pts
+      `SELECT person AS loggerCall, SUM(pts) AS points, COUNT(*) AS finds FROM (
+       SELECT ${baseSql("l.logger_call")} AS person, l.cache_id, MAX(${POINTS}) AS pts
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
        WHERE l.log_type='found' AND l.verified=1 AND l.ts >= ? ${VERIFIED_LOGGER}${bb.sql}
-       GROUP BY l.logger_call, l.cache_id
-     ) GROUP BY logger_call ORDER BY ${metric === "finds" ? "finds" : "points"} DESC, finds DESC LIMIT ?`,
+       GROUP BY person, l.cache_id
+     ) GROUP BY person ORDER BY ${metric === "finds" ? "finds" : "points"} DESC, finds DESC LIMIT ?`,
     )
       .bind(since, ...bb.binds, limit)
       .all<{ loggerCall: string; points: number; finds: number }>()
@@ -67,28 +71,29 @@ export async function handleLeaderboard(req: Request, env: Env): Promise<Respons
 // ---------------------------------------------------------------- profile
 export async function handleProfile(req: Request, env: Env, callsign: string): Promise<Response> {
   const cs = callsign.toUpperCase();
+  const person = baseCall(cs); // finds under any SSID count for the person
   const stat = await env.DB.prepare(
     `SELECT COUNT(*) AS finds, COALESCE(SUM(pts),0) AS points, MIN(firstTs) AS firstFind, MAX(lastTs) AS lastFind FROM (
        SELECT l.cache_id, MAX(${POINTS}) AS pts, MIN(l.ts) AS firstTs, MAX(l.ts) AS lastTs
        FROM cache_logs l JOIN caches c ON c.id = l.cache_id
-       WHERE l.logger_call=? AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
+       WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY l.cache_id)`,
   )
-    .bind(cs)
+    .bind(person, person)
     .first<{ finds: number; points: number; firstFind: number | null; lastFind: number | null }>();
 
   const byTier = (
     await env.DB.prepare(
-      "SELECT tier, COUNT(*) AS n FROM cache_logs WHERE logger_call=? AND log_type='found' AND verified=1 GROUP BY tier",
+      `SELECT tier, COUNT(*) AS n FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1 GROUP BY tier`,
     )
-      .bind(cs)
+      .bind(person, person)
       .all<{ tier: string | null; n: number }>()
   ).results;
   const byType = (
     await env.DB.prepare(
       `SELECT c.type, COUNT(DISTINCT l.cache_id) AS n FROM cache_logs l JOIN caches c ON c.id=l.cache_id
-      WHERE l.logger_call=? AND l.log_type='found' AND l.verified=1 GROUP BY c.type`,
+      WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1 GROUP BY c.type`,
     )
-      .bind(cs)
+      .bind(person, person)
       .all<{ type: string; n: number }>()
   ).results;
   const hides = await env.DB.prepare(
@@ -105,8 +110,10 @@ export async function handleProfile(req: Request, env: Env, callsign: string): P
     .bind(cs, `${cs}-%`)
     .first<{ n: number }>();
   const badges = (
-    await env.DB.prepare("SELECT badge, earned_at AS earnedAt FROM achievements WHERE callsign=? ORDER BY earned_at")
-      .bind(cs)
+    await env.DB.prepare(
+      "SELECT badge, MIN(earned_at) AS earnedAt FROM achievements WHERE callsign IN (?, ?) GROUP BY badge ORDER BY earnedAt",
+    )
+      .bind(person, cs)
       .all<{ badge: string; earnedAt: number }>()
   ).results;
   const acct = await env.DB.prepare(
@@ -279,9 +286,9 @@ async function mayRate(env: Env, cacheId: number, policy: RatingPolicy, callsign
   if (policy === "off") return false;
   if (policy === "all") return true;
   const found = await env.DB.prepare(
-    "SELECT 1 AS x FROM cache_logs WHERE cache_id=? AND logger_call=? AND log_type='found' AND verified=1 LIMIT 1",
+    `SELECT 1 AS x FROM cache_logs l WHERE cache_id=? AND ${OF_PERSON} AND log_type='found' AND verified=1 LIMIT 1`,
   )
-    .bind(cacheId, callsign.toUpperCase())
+    .bind(cacheId, baseCall(callsign), baseCall(callsign))
     .first();
   return !!found;
 }
@@ -367,7 +374,7 @@ const TYPE_BADGE: Record<string, string> = {
 };
 
 export async function awardFindBadges(env: Env, callsign: string): Promise<void> {
-  const cs = callsign.toUpperCase();
+  const cs = baseCall(callsign); // badges belong to the person: finds under any SSID count
   const grant = (badge: string) =>
     env.DB.prepare("INSERT OR IGNORE INTO achievements (callsign, badge, earned_at) VALUES (?,?,?)").bind(
       cs,
@@ -378,25 +385,25 @@ export async function awardFindBadges(env: Env, callsign: string): Promise<void>
   const finds =
     (
       await env.DB.prepare(
-        "SELECT COUNT(DISTINCT cache_id) AS n FROM cache_logs WHERE logger_call=? AND log_type='found' AND verified=1",
+        `SELECT COUNT(DISTINCT cache_id) AS n FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1`,
       )
-        .bind(cs)
+        .bind(cs, cs)
         .first<{ n: number }>()
     )?.n ?? 0;
   for (const b of FIND_BADGES) if (finds >= b.min) stmts.push(grant(b.badge));
   if (
     await env.DB.prepare(
-      "SELECT 1 AS x FROM cache_logs WHERE logger_call=? AND log_type='found' AND verified=1 AND tier='A' LIMIT 1",
+      `SELECT 1 AS x FROM cache_logs l WHERE ${OF_PERSON} AND log_type='found' AND verified=1 AND tier='A' LIMIT 1`,
     )
-      .bind(cs)
+      .bind(cs, cs)
       .first()
   )
     stmts.push(grant("rf-verified"));
   const types = (
     await env.DB.prepare(
-      "SELECT DISTINCT c.type FROM cache_logs l JOIN caches c ON c.id=l.cache_id WHERE l.logger_call=? AND l.log_type='found' AND l.verified=1",
+      `SELECT DISTINCT c.type FROM cache_logs l JOIN caches c ON c.id=l.cache_id WHERE ${OF_PERSON} AND l.log_type='found' AND l.verified=1`,
     )
-      .bind(cs)
+      .bind(cs, cs)
       .all<{ type: string }>()
   ).results;
   for (const t of types) if (TYPE_BADGE[t.type]) stmts.push(grant(TYPE_BADGE[t.type]!));
