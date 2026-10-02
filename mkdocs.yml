@@ -128,6 +128,7 @@ nav:
       - Testing & verification: reference/testing.md
       - Data model: reference/data-model.md
       - Specification registry: reference/specs.md
+      - Style guide for the manual: contribute/style-guide.md
   - Design notes:
       - Design language: design/design-language.md
       - MeshCom integration: design/meshcom.md

@@ -100,7 +100,7 @@ standing rule that transport is not trust:
   `lora`). An RF frame whose source path is the originator alone is *direct*. The listener forwards a
   direct frame as `heardVia: "rf"` with the node's call as `igateCall`; a relayed RF frame as `rf` with no
   gate; everything else as `aprs_is`, all on the `meshcom` port. The gateway's provenance derivation is
-  then the only Tier-A gate: `meshcom` is one of the two on-air transports it can attest (with a local
+  then the only Tier A gate: `meshcom` is one of the two on-air transports it can attest (with a local
   TNC), and it attests the frame only when the node's call is in `FIRST_PARTY_SITES`, and the usual
   independence rule stops an operator's own node from corroborating the operator's own find.
 - **Relayed and server frames never corroborate presence.** A relay proves the originator was near the

@@ -60,7 +60,7 @@ vouch for them. The full rules are in [Core concepts](concepts.md).
 
 ## Connect your radio
 
-If you have a radio with a [TNC](glossary.md#tnc) — a USB or Bluetooth [KISS](glossary.md#kiss) TNC, a Mobilinkd, or just an audio cable to your
+If you have a radio with a [TNC](glossary.md#tnc) — a USB or Bluetooth [KISS](glossary.md#kiss) TNC, a Mobilinkd, or only an audio cable to your
 computer's soundcard — you can feed what your radio hears into the platform straight from a Chrome or Edge
 browser, with no server. See [Your radio in the browser](guides/my-radio.md).
 

@@ -171,7 +171,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
-| `docs.yml` — the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |

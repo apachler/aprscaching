@@ -23,8 +23,8 @@ single find; a verified *callsign* (control of the licence) is a separate fact a
 wears a tier's name or colour.
 
 A bare internet packet can never reach Tier B by itself: Tier B requires the independent *app* reading, and
-Tier A requires independent *RF* evidence. Each instance sets a **minimum accepted tier** (site default
-**B**), and a cache owner may raise it per cache with `min_trust`.
+Tier A requires independent *RF* evidence. A find counts as verified from **Tier B** up on every instance,
+and a cache owner may raise that to Tier A per cache with `min_trust`.
 
 ### Corroboration and quorum
 
@@ -79,7 +79,7 @@ it. A test proves no other transport value grants attestation or changes a find'
   account may hold several base callsigns.
 - **Finds are signed on-device.** Each user holds an Ed25519 keypair in their browser and registers the public
   key to their callsign, so authorship is cryptographically attributable and stays attributable even after a
-  user moves instances. A browser without Ed25519 simply logs unsigned.
+  user moves instances. A browser without Ed25519 logs unsigned.
 - **Callsign control-verification** — proving you operate a callsign — is done by transmitting, or by a
   credential from a body that reviewed the licence. On the air, the holder sends `VERIFY <code>` to the
   instance's service call, and the call is verified only when an attested receiving site hears it on its own

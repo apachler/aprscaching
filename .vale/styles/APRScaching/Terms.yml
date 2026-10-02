@@ -1,0 +1,17 @@
+# The glossary's names, spelled one way everywhere (docs/glossary.md, docs/design/design-language.md "Words").
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: false
+swap:
+  "APRS IS|APRSIS|Aprs-IS|aprs-is": APRS-IS
+  "I-Gate|iGate|Igate|I-gate": IGate
+  "SysOp|Sys-op|sys-op": sysop
+  "call sign|call-sign|Call sign": callsign
+  "Tier-A": Tier A
+  "Tier-B": Tier B
+  "Tier-C": Tier C
+  "e-mail|E-mail": email
+  "Meshcom|MESHCOM": MeshCom
+  "Geo-caching|geo-caching": geocaching
+  "the shack": the Shack

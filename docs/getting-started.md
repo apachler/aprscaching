@@ -1,7 +1,7 @@
 # Run from source
 
 This page is for developers and for operators who want to run aprscaching from a checkout of the code: the
-gateway (API + data), the web app, and optionally the RF ingest box. To just use aprscaching, see
+gateway (API + data), the web app, and optionally the RF ingest box. To use aprscaching without running it, see
 [Start here](start-here.md); to install an instance, [Running in Docker](operate/docker.md) is the usual
 route.
 
@@ -81,7 +81,7 @@ Edit `.env` at the top of the checkout first: set `APRSIS_FILTER`, set `INGEST_S
 the gateway runs with**, and add `KISS_TNC_HOST`, `MESHTASTIC_HOST`, … as needed. **Check it worked:** the
 gateway's `/api/ports` lists the ingest's ports, and stations appear on the map.
 
-With just `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
+With only `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
 node, or an AXUDP/AXIP link and each forwards to the gateway on its own port. See
 [Connect a radio: quick starts](operate/quickstarts.md) for each link step by step, and
 [RF ingest & transports](operate/rf-ingest.md) for every setting.

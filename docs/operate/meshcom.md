@@ -121,7 +121,7 @@ directly, and only once you vouch for that node. Vouch for it on the gateway by 
 `FIRST_PARTY_SITES` (see [configuration](../reference/configuration.md)). As with every receiver, your own
 node never corroborates your own finds.
 
-Relays and server copies still show up on the map and in the monitor — they just prove nothing about where
+Relays and server copies still show up on the map and in the monitor — they prove nothing about where
 a station was.
 
 ### Callsign verification over MeshCom

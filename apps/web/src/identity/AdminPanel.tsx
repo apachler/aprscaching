@@ -905,7 +905,7 @@ function WriteBudgetBanner(props: { budget: WriteBudget; onDocs: (slug: string) 
           ? "Only protected stations, RF hearings, finds, accounts and federation data are stored; other stations reach the live map without being saved."
           : "The raw packet log is paused and stations nothing protects store fewer fixes."}{" "}
         The count starts again at 00:00 UTC.{" "}
-        <Button variant="inline" onClick={() => props.onDocs("operate/deployment")}>
+        <Button variant="inline" onClick={() => props.onDocs("reference/cloudflare-costs")}>
           About the write budget
         </Button>
       </p>

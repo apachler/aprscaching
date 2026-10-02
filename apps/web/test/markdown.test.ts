@@ -50,3 +50,12 @@ describe("renderMarkdown inline", () => {
     );
   });
 });
+
+describe("renderMarkdown comments", () => {
+  it("drops HTML comments, so a marker above a table leaves the table intact", () => {
+    expect(renderMarkdown("<!-- config-table:web -->\n| a | b |\n|---|---|\n| 1 | 2 |", "x")).toBe(
+      "<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>",
+    );
+    expect(renderMarkdown("Text <!-- vale Vale.Terms = NO -->here.", "x")).toBe("<p>Text here.</p>");
+  });
+});

@@ -1,0 +1,10 @@
+# Words that tell the reader how to feel about a step instead of helping with it.
+extends: existence
+message: "Leave out '%s': say what to do, not how easy it is."
+level: error
+ignorecase: true
+tokens:
+  - simply
+  - just
+  - easily
+  - powerful

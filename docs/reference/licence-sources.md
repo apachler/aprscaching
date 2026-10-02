@@ -23,8 +23,8 @@ published file. The operator chooses which ones to import.
 
 | Country | Source | URL | Format | Reuse terms | Status |
 |---------|--------|-----|--------|-------------|--------|
-| USA | FCC Universal Licensing System, amateur licences (`fcc`) | `https://data.fcc.gov/download/pub/uls/complete/l_amat.zip` (weekly full file) | Zip of pipe-delimited `.dat` files; `HD.dat` carries call sign, status (A/C/E/T), radio service (HA/HV) and expiry (MM/DD/YYYY) | US federal government data, public domain (17 U.S.C. § 105) | Implemented |
-| Canada | ISED amateur call sign list (`ised`) | `https://apc-cap.ic.gc.ca/datafiles/amateur_delim.zip` | Zip of `;`-delimited text, callsign in the first field; no expiry (certificates do not expire) | ISED terms: non-commercial reproduction allowed with attribution; commercial redistribution needs ISED's permission | Implemented |
+| USA | FCC Universal Licensing System, amateur licences (`fcc`) | `https://data.fcc.gov/download/pub/uls/complete/l_amat.zip` (weekly full file) | Zip of pipe-delimited `.dat` files; `HD.dat` carries callsign, status (A/C/E/T), radio service (HA/HV) and expiry (MM/DD/YYYY) | US federal government data, public domain (17 U.S.C. § 105) | Implemented |
+| Canada | ISED amateur callsign list (`ised`) | `https://apc-cap.ic.gc.ca/datafiles/amateur_delim.zip` | Zip of `;`-delimited text, callsign in the first field; no expiry (certificates do not expire) | ISED terms: non-commercial reproduction allowed with attribution; commercial redistribution needs ISED's permission | Implemented |
 | Australia | ACMA Register of Radiocommunications Licences (`acma`) | `https://web.acma.gov.au/rrl-updates/spectra_rrl.zip` | Zip of CSV tables: `licence.csv` (SV_ID 6 = Amateur, status, expiry) joined to `device_details.csv` (CALL_SIGN) | Licence in the archive (`LICENCE.TXT`): use and derivatives allowed, attribution "Based on Australian Communications and Media Authority information", no reproduction of natural persons' client details | Implemented — repeaters and beacons only; individual operators hold the class licence, which the register does not list |
 | Austria | Fernmeldebehörde, Rufzeichenliste österreichischer Amateurfunkstellen (`at`) | Linked from `https://www.fb.gv.at/Funk/amateurfunkdienst.html` | PDF table: callsign, name, location, address, licence class; opted-out holders appear as `*-*-*` with their callsign | Published under § 150 TKG 2021; only the callsign is kept | Implemented (via `pdftotext`) |
 | Germany | Bundesnetzagentur Rufzeichenliste (`de`) | `https://data.bundesnetzagentur.de/Bundesnetzagentur/SharedDocs/Downloads/DE/Sachgebiete/Telekommunikation/Unternehmen_Institutionen/Frequenzen/Amateurfunk/Rufzeichenliste/rufzeichenliste_afu.pdf` | PDF, entries `CALL, CLASS, holder…` typeset in columns | Official work under § 5 UrhG; published under AFuG § 6 / AFuV § 15 | Implemented (via `pdftotext`) — holders may object to publication, so absence proves nothing |
@@ -66,7 +66,7 @@ When several registers list a call, a current listing wins over an expired one, 
 
 ## Attribution
 
-Register data shown by an instance comes from these sources: FCC ULS; ISED Canada (amateur call sign list,
+Register data shown by an instance comes from these sources: FCC ULS; ISED Canada (amateur callsign list,
 reproduced from `https://ised-isde.canada.ca/site/amateur-radio-operator-certificate-services/en/downloads`);
 "Based on Australian Communications and Media Authority information"; Fernmeldebehörde (Austria);
 Bundesnetzagentur (Germany). An operator who imports the ISED list for a commercial service needs ISED's

@@ -16,6 +16,9 @@ on:
       - "apps/web/public/fonts/**"
       - "tools/dev/docs-theme.mjs"
       - "pnpm-lock.yaml"
+      # the house style (docs/contribute/style-guide.md)
+      - ".vale.ini"
+      - ".vale/**"
   pull_request:
     paths: *paths
 
@@ -32,6 +35,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Vale, pinned by version and checksum: an error (filler words, terminology) fails, the rest is shown
+      - name: vale (house style)
+        env:
+          VALE: "3.24.0"
+          VALE_SHA256: 867534ddb678abca7f214bc4706ead0922bd5252ffe8035fc227013f66c8b214
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/vale.tgz" \
+            "https://github.com/errata-ai/vale/releases/download/v${VALE}/vale_${VALE}_Linux_64-bit.tar.gz"
+          echo "$VALE_SHA256  $RUNNER_TEMP/vale.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/vale.tgz" -C "$RUNNER_TEMP" vale
+          "$RUNNER_TEMP/vale" docs
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 24, cache: pnpm }

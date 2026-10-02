@@ -367,7 +367,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`FIRST_PARTY_SITES`",
-        "Allowlist of receiving-site callsigns you operate and attest — the only Tier-A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
+        "Allowlist of receiving-site callsigns you operate and attest — the only Tier A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
         "—",
       ],
       [
