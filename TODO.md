@@ -613,10 +613,6 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       site attestation so a member's IGate can relay third-party RF — sysop-approved, or automated for
       hams with a 44net-verified hostname via the existing DoH/DNSSEC binding check. Tier-A stays gated
       on attestation, never on transport.
-- [ ] **Edit a cache in the web app** _(P3 · S)_ — `PATCH /api/caches/:id` (`UpdateCacheRequest`) lets an
-      owner change a cache's title, hint, description, D/T and status, but the SPA has no edit form, so an owner
-      corrects a listing only through the API. Natural shape: an owner-only "Edit" action on the cache sheet
-      that reuses the sectioned hide-a-cache form.
 - [x] **Instance-served offline tile packs** — the operator's regional PMTiles archive is served at
   `/tiles/offline.pmtiles` (a file on Node/Bun, the `TILES` bucket on Cloudflare, or `OFFLINE_TILES_URL`);
   an offline pack keeps the tiles of its square and the offline map draws them

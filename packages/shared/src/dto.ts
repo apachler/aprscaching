@@ -250,6 +250,8 @@ export interface CacheDetail extends CacheSummary {
   }[];
   // audio-cache
   stageCount: number;
+  /** For the cache's owner only: the settings the edit form starts from that the fields above do not carry. */
+  own?: { minTrust: "A" | "B" | null; rendezvous: boolean };
 }
 
 // ---- audio-cache: staged multi-cache ----
@@ -260,8 +262,10 @@ export interface CacheStage {
   mediaUrl: string | null;
   radiusM: number;
   unlocked: boolean;
-  lat: number | null; // revealed only when unlocked
+  lat: number | null; // revealed only when unlocked, and always to the cache's owner
   lon: number | null;
+  /** An NFC stage's tag code, for the cache's owner only. */
+  secret?: string | null;
 }
 
 // ---- enriched search: as-you-type suggestions across caches + stations ----

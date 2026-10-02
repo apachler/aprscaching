@@ -71,6 +71,21 @@
     gap: var(--space-xs);
     font-size: var(--text-data);
   }
+  /* the owner's stage list in the edit form: one card per stage */
+  .stage-edit-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-xs) 0 var(--gap-stack);
+    display: grid;
+    gap: var(--gap-stack);
+  }
+  .stage-edit {
+    display: grid;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
   /* cache media gallery */
   .cache-media {
     margin: var(--space-md) 0;

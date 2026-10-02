@@ -98,6 +98,18 @@ const SURFACES = [
     steps: [["click", ".ccard >> nth=0"]],
     after: ".detail-meta",
   },
+  // the owner's edit form, with its stages, from the cache the persona hid
+  {
+    name: "edit",
+    as: "user",
+    query: "?view=nearby",
+    wait: ".ccard",
+    steps: [
+      ["click", ".ccard:has-text('Schlossberg')"],
+      ["click", "button[title^='Edit']"],
+    ],
+    after: ".stage-edit-list",
+  },
   { name: "nearby", as: "user", query: "?view=nearby" },
   { name: "hide", as: "user", query: "?view=hide" },
   // the first-run tour: it starts when a visitor explores the map, with the tour not yet seen
