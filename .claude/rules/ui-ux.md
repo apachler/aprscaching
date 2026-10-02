@@ -180,7 +180,9 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
   skeletons, and on failure it shows nothing — never invented numbers. **Motion budget:** one entrance and the
   terminal card's sequence, `transform`/`opacity` only, nothing on scroll, none under reduced motion.
   **Performance budget:** landing JS ≤ ~150 KB gzip beyond the shell (no MapLibre), CLS < 0.05, LCP ≤ 2.5 s,
-  AVIF/WebP srcsets and a preloaded hero.
+  AVIF/WebP srcsets and a preloaded hero. The landing ships as HTML in `index.html` (prerendered at build,
+  `vite-prerender.ts`), so it paints before the JS has loaded; the app's own landing replaces it, which is why
+  `Landing` renders the same with no session and no data.
 - **The Shack:** an **app launcher**, not a config page. It lists the operator *apps* (packet
   terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
   into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching

@@ -22,14 +22,23 @@
       })();
     </script>
     <script>
-      /* The landing hero is the largest paint, and the app finds it only after its script has run: when the
-         landing is what opens (no remembered session, no visit to the platform this session, no deep link),
-         fetch it now. The widths match Landing.tsx's hero srcset. */
+      /* The landing is in this page as HTML (#landing-pre, vite-prerender.ts), and its hero is the largest paint:
+         when the landing is what opens (no remembered session, no visit to the platform this session, no deep
+         link), fetch the hero now; otherwise hide the prerendered landing before it paints. The widths match
+         Landing.tsx's hero srcset. */
       (function () {
         try {
           var q = new URLSearchParams(location.search);
-          if (localStorage.getItem("acs.session") || sessionStorage.getItem("acs.explore") === "1") return;
-          if (q.has("view") || q.has("v") || q.has("demo")) return;
+          var off =
+            localStorage.getItem("acs.session") ||
+            sessionStorage.getItem("acs.explore") === "1" ||
+            q.has("view") ||
+            q.has("v") ||
+            q.has("demo");
+          if (off) {
+            document.documentElement.dataset.prerender = "off";
+            return;
+          }
           var l = document.createElement("link");
           l.rel = "preload";
           l.as = "image";

@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 import { docsPlugin } from "./vite-docs.js";
 import { vendorMaplibrePlugin } from "./vite-vendor.js";
 import { serviceWorkerPlugin } from "./vite-sw.js";
+import { prerenderLandingPlugin } from "./vite-prerender.js";
 
 // The manual lives in the repo-root `docs/` tree; bundle it into the SPA at build time (vite-docs.ts).
 const webDir = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     docsPlugin(docsDir),
     vendorMaplibrePlugin(),
+    prerenderLandingPlugin(webDir),
     serviceWorkerPlugin(),
   ],
   build: {
