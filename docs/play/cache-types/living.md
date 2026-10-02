@@ -31,15 +31,14 @@ Log it like any cache: **✓ Log a find**, **Couldn't find it** or **Add a note*
 | Tier | You get it when |
 |---|---|
 | **Radio-verified** | A receiving station the instance runs, and that is not yours, heard your position next to the station's, as above. Your position must be from the 30 minutes before you log. |
-| **Location-verified** | Your phone's location, taken when you log, is within 150 m of the cache's pin, plus its accuracy. |
+| **Location-verified** | Your phone's location, taken when you log, is within 150 m of the station, plus its accuracy. The station's position counts when it was heard at most 5 minutes from that moment. |
 | **Logged** | Nothing independent placed you with the station. |
 
-Only **Radio-verified** checks that you met the station. A verified find on a living cache earns the
-**Rover hunter** badge.
+Both tiers check that you met the station; the place where the cache was hidden counts for nothing. A verified
+find on a living cache earns the **Rover hunter** badge.
 
-!!! note "Known issue"
-    A living cache's pin never moves. It stays where the cache was hidden, so a phone at that spot reaches
-    **Location-verified** even when the station is far away.
+The map pin follows the station: it sits at the station's last heard position, and at the place where the cache
+was hidden until the station is first heard.
 
 ## What a hider sets
 

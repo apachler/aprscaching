@@ -207,21 +207,48 @@ function tryLiving(cache: CacheRow, deps: VerifyDeps, policy: VerifyPolicy): Ver
   return null;
 }
 
-/** Tier B: first-party app geolocation at log time matches the cache. */
+/**
+ * Where a cache is at a moment: a fixed cache at its coordinates, a living cache at its station's fix nearest
+ * in time (within livingSkewSec). A living cache whose station was not heard near that moment is nowhere, so
+ * nothing matches it; its hiding place never stands in for the station.
+ */
+function cacheAt(
+  cache: CacheRow,
+  ts: number,
+  deps: VerifyDeps,
+  policy: VerifyPolicy,
+): { lat: number; lon: number } | null {
+  if (cache.type !== "aprs_living")
+    return cache.lat == null || cache.lon == null ? null : { lat: cache.lat, lon: cache.lon };
+  let best: PositionRow | null = null,
+    bestSkew = Infinity;
+  for (const c of deps.cacheStationPositions ?? []) {
+    const skew = Math.abs(c.ts - ts);
+    if (skew < bestSkew) {
+      bestSkew = skew;
+      best = c;
+    }
+  }
+  return best && bestSkew <= policy.livingSkewSec ? { lat: best.lat, lon: best.lon } : null;
+}
+
+/** Tier B: first-party app geolocation at log time matches the cache (a living cache: its station then). */
 function tryApp(
   cache: CacheRow,
   appGeo: AppGeo | undefined,
   deps: VerifyDeps,
   policy: VerifyPolicy,
 ): VerifyResult | null {
-  if (!appGeo || cache.lat == null || cache.lon == null) return null;
+  if (!appGeo) return null;
   // the reading must be contemporaneous with the log — an attacker-supplied `ts` that is
   // stale or fabricated (a days-old/replayed reading at the cache coords) must NOT reach Tier B. When
   // `now` is known (the request boundary passes it), require the reading within ±appMaxAgeSec.
   if (deps.now != null) {
     if (!Number.isFinite(appGeo.ts) || Math.abs(deps.now - appGeo.ts) > policy.appMaxAgeSec) return null;
   }
-  const d = haversineMeters(appGeo.lat, appGeo.lon, cache.lat, cache.lon);
+  const at = cacheAt(cache, appGeo.ts, deps, policy);
+  if (!at) return null;
+  const d = haversineMeters(appGeo.lat, appGeo.lon, at.lat, at.lon);
   // require the reading to be near AND not absurdly imprecise (clamp a bogus/negative accuracy)
   const acc = Number.isFinite(appGeo.accuracyM) ? Math.max(0, Math.min(appGeo.accuracyM, 200)) : 200;
   const tolerance = policy.radiusM + acc;
@@ -255,9 +282,10 @@ export function verifyFind(
   }
 
   // No corroboration. If we at least saw an IS beacon near the cache, record tier C.
-  if (cache.lat != null && cache.lon != null) {
-    for (const p of deps.loggerPositions) {
-      const d = haversineMeters(p.lat, p.lon, cache.lat, cache.lon);
+  for (const p of deps.loggerPositions) {
+    const at = cacheAt(cache, p.ts, deps, policy);
+    if (at) {
+      const d = haversineMeters(p.lat, p.lon, at.lat, at.lon);
       if (d <= policy.radiusM) {
         return {
           verified: rank("C") >= rank(min),

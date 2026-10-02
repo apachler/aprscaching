@@ -252,6 +252,15 @@ export async function listedOrOwn(
   };
 }
 
+/** A living cache at its station's last heard position; any other cache, or one whose station is unheard, as stored. */
+async function livingAt(env: Env, row: CacheDbRow): Promise<CacheDbRow> {
+  if (row.type !== "aprs_living" || !row.station_call) return row;
+  const st = await env.DB.prepare("SELECT lat, lon FROM stations WHERE callsign = ?")
+    .bind(row.station_call.toUpperCase())
+    .first<{ lat: number | null; lon: number | null }>();
+  return st?.lat != null && st.lon != null ? { ...row, lat: st.lat, lon: st.lon } : row;
+}
+
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const [minLon, minLat, maxLon, maxLat] = (u.searchParams.get("bbox") ?? "-180,-90,180,90").split(",").map(Number);
@@ -262,10 +271,20 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   const listed = await listedOrOwn(req, env);
   const native = await env.DB.prepare(
     `SELECT * FROM caches
-     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND ${listed.sql} LIMIT 1000`,
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND type != 'aprs_living'
+       AND ${listed.sql} LIMIT 1000`,
   )
     .bind(minLat, maxLat, minLon, maxLon, ...listed.binds)
     .all<CacheDbRow>();
+  // a living cache is where its station was last heard, and where it was hidden until the station is heard
+  const living = await env.DB.prepare(
+    `SELECT c.*, s.lat AS st_lat, s.lon AS st_lon FROM caches c
+       LEFT JOIN stations s ON s.callsign = UPPER(c.station_call)
+      WHERE c.type = 'aprs_living' AND c.status != 'archived' AND ${listed.sql}
+        AND COALESCE(s.lat, c.lat) BETWEEN ? AND ? AND COALESCE(s.lon, c.lon) BETWEEN ? AND ? LIMIT 500`,
+  )
+    .bind(...listed.binds, minLat, maxLat, minLon, maxLon)
+    .all<CacheDbRow & { st_lat: number | null; st_lon: number | null }>();
   // origin trust defaults to 'unvetted' when the origin peer is unknown (e.g. removed) — hidden by default.
   const remote = await env.DB.prepare(
     `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust
@@ -281,6 +300,9 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
 
   const caches: MapCache[] = [
     ...native.results.map((r) => nativeMapCache(r, instance)),
+    ...living.results.map(({ st_lat, st_lon, ...r }) =>
+      nativeMapCache(st_lat != null && st_lon != null ? { ...r, lat: st_lat, lon: st_lon } : r, instance),
+    ),
     ...remote.results.map(remoteMapCache),
   ];
   return json({ caches, includeUnvetted });
@@ -301,8 +323,9 @@ async function logbookPage(env: Env, id: number, cursor: Cursor | null, limit: n
 }
 
 export async function handleCacheDetail(req: Request, env: Env, id: number): Promise<Response> {
-  const row = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
-  if (!row) return json({ error: "no such cache" }, { status: 404 });
+  const stored = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
+  if (!stored) return json({ error: "no such cache" }, { status: 404 });
+  const row = await livingAt(env, stored);
   const logs = await logbookPage(env, id, null, LOGBOOK_PAGE);
   const finds = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ? AND log_type = 'found' AND verified = 1",
