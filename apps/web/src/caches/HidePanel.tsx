@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { createCache, type CacheSummary } from "../api.js";
+import { createCache, listMyStations, type CacheSummary } from "../api.js";
 import { TYPE_ORDER, TYPE_META } from "../cacheTypes.js";
 import { maidenhead, parseCoordinates } from "../map/geo.js";
 import { NAV_MAX_AGE_MS, locationSupport } from "../geo/location.js";
 import { LocateStatus, useLocate } from "../geo/useLocate.js";
-import { Button, Panel, Row, Switch, Advanced, Segmented } from "../ui/index.js";
+import { Button, Panel, Row, Switch, Advanced, Segmented, useLoad } from "../ui/index.js";
 import type { CacheType, FedScope } from "@aprscaching/shared";
 import { usePlatform } from "../platform/PlatformContext.js";
 
@@ -37,6 +37,11 @@ export function HidePanel(props: {
   const [hint, setHint] = useState("");
   const [description, setDescription] = useState("");
   const [stationCall, setStationCall] = useState("");
+  // a living cache follows one of your own stations (Settings → My stations), never someone else's beacon
+  const { data: myStations } = useLoad(
+    () => (type === "aprs_living" && callsign ? listMyStations().then((r) => r.stations) : Promise.resolve([])),
+    [type, callsign],
+  );
   const [driveIn, setDriveIn] = useState(false);
   const [country, setCountry] = useState("");
   const [tags, setTags] = useState("");
@@ -93,6 +98,10 @@ export function HidePanel(props: {
 
   async function submit() {
     if (!props.draft) return;
+    if (type === "aprs_living" && !stationCall) {
+      setErr("Pick the station this living cache follows.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -198,10 +207,26 @@ export function HidePanel(props: {
       </p>
       {type === "aprs_living" && (
         <>
-          <label>
-            Station callsign (the beaconing station that <em>is</em> the cache)
-            <input value={stationCall} onChange={(e) => setStationCall(e.target.value)} placeholder="OE8XYZ-9" />
-          </label>
+          {myStations && myStations.length > 0 ? (
+            <label>
+              Station (the beaconing station that <em>is</em> the cache)
+              <select value={stationCall} onChange={(e) => setStationCall(e.target.value)}>
+                <option value="">Pick one of your stations</option>
+                {myStations.map((s) => (
+                  <option key={s.id} value={s.callsign}>
+                    {s.callsign}
+                    {s.description ? ` — ${s.description}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="muted fine" role="status">
+              A living cache follows one of your own stations. Add the station under{" "}
+              <strong>Settings → My stations</strong> first, or use <strong>Become a cache</strong> there to follow your
+              own beacon.
+            </p>
+          )}
           <Row label="Log rendezvous when I meet other living caches">
             <Switch label="Log rendezvous" checked={rendezvous} onChange={setRendezvous} />
           </Row>

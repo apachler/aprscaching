@@ -342,5 +342,20 @@ export async function handleMeCache(req: Request, env: Env): Promise<Response> {
     return json({ error: "set a home locator (Settings → Profile) or beacon on APRS first" }, { status: 400 });
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const title = typeof b.title === "string" && b.title.trim() ? b.title.trim().slice(0, 120) : `${base} (live)`;
+  // a living cache follows one of the account's own stations: the beacon it follows joins My stations
+  const acct = (await sessionIdentity(req, env))!.accountId;
+  const listed = await env.DB.prepare("SELECT account_id FROM account_stations WHERE callsign = ?")
+    .bind(stationCall)
+    .first<{ account_id: string }>();
+  if (listed && listed.account_id !== acct)
+    return json({ error: `${stationCall} is registered to another operator's stations` }, { status: 409 });
+  if (!listed) {
+    const now = nowS();
+    await env.DB.prepare(
+      "INSERT INTO account_stations (account_id, callsign, lat, lon, roles, created_at, updated_at) VALUES (?,?,?,?, '', ?,?)",
+    )
+      .bind(acct, stationCall, lat, lon, now, now)
+      .run();
+  }
   return createVia(req, env, { title, type: "aprs_living", stationCall, lat, lon });
 }

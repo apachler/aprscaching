@@ -99,7 +99,8 @@ The hint never leaves this instance, whatever the scope.
 ([Multi-stage caches](cache-types/multi.md)). The app cannot add stages yet. Ask your sysop to add them.
 
 **Living caches.** A living cache moves with a beaconing APRS station ([Living caches](cache-types/living.md)).
-Pick **Living (APRS)** as the type and type the **Station callsign**, for example `OE8APR-9`. Switch on **Log
+Pick **Living (APRS)** as the type and, under **Station**, one of your own stations from **Settings → My
+stations**, for example `OE8APR-9`. Switch on **Log
 rendezvous when I meet other living caches** if you want meetings with other living caches recorded. You can
 also turn your own station into a cache: **Settings → My stations**, then **Become a cache** or **Turn into a
 cache**.

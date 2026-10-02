@@ -43,21 +43,20 @@ Only **Radio-verified** checks that you met the station. A verified find on a li
 
 ## What a hider sets
 
-There are three ways to make a living cache:
+A living cache follows a station of your own: one listed under **Settings → My stations**. Nobody can make a
+cache of another operator's beacon. There are three ways to make one:
 
-- **+ Hide a cache**, then pick **Living (APRS)** under **Type**. Fill in **Station callsign** with the
-  callsign of the station the cache follows, for example `OE8APR-9`. The other fields are those of a
-  [traditional cache](traditional.md#what-a-hider-sets).
+- **+ Hide a cache**, then pick **Living (APRS)** under **Type**. Under **Station**, pick one of your stations,
+  for example `OE8APR-9`; add it under **My stations** first if it is not there. The other fields are those of
+  a [traditional cache](traditional.md#what-a-hider-sets).
 - **Settings → My stations → ★ Become a cache** makes you the cache. It follows the callsign your beacon was
-  last heard with, and its pin goes to that beacon's position, or to your home locator.
+  last heard with, adds that callsign to **My stations** if it is not there yet, and puts the pin at that
+  beacon's position, or at your home locator.
 - **Settings → My stations**, open a station, then **⚑ Turn into a cache → Living cache** makes that station
   the cache.
 
 In the hide form, the switch **Log rendezvous when I meet other living caches** opts the cache into
 rendezvous. It is off by default. The two paths under **My stations** leave it off.
-
-!!! note "Known issue"
-    The **Station callsign** field takes any callsign. The station's operator is not asked.
 
 ### Rendezvous
 

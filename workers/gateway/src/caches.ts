@@ -337,6 +337,29 @@ export async function handleCacheLogs(req: Request, env: Env, id: number): Promi
   return json({ logs: page.items.map(toLogEntry), nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
+/**
+ * A living cache follows a station its hider operates: the station must be one of the signed-in account's own
+ * (Settings → My stations), so nobody turns someone else's beacon into a cache to be chased. The ingest plane,
+ * a trusted machine of the instance, is not asked.
+ */
+async function livingStationRefusal(
+  req: Request,
+  env: Env,
+  type: string,
+  stationCall: string | null | undefined,
+): Promise<string | null> {
+  if (type !== "aprs_living") return null;
+  const cs = stationCall?.trim().toUpperCase();
+  if (!cs) return "a living cache follows a station: pick one of your stations";
+  if (ingestOk(req, env)) return null;
+  const me = await sessionIdentity(req, env);
+  if (!me) return "sign in to hide a living cache";
+  const own = await env.DB.prepare("SELECT 1 AS x FROM account_stations WHERE account_id = ? AND callsign = ?")
+    .bind(me.accountId, cs)
+    .first();
+  return own ? null : `${cs} is not one of your stations: add it under Settings → My stations first`;
+}
+
 // ---------------------------------------------------------------- create ("hide a cache")
 /** The form of the codes the instance mints, `AC-` and the cache id. */
 const MINTED_CODE = /^AC-\d+$/i;
@@ -348,6 +371,8 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
 
   const owner = await actor(req, env, b.ownerCall);
   if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
+  const notOwn = await livingStationRefusal(req, env, b.type, b.stationCall);
+  if (notOwn) return json({ error: notOwn }, { status: 403 });
   if (b.code) {
     // An explicit code is for imports by the instance itself. A player who picked one could take a code the
     // instance mints later, or one that reads like another cache's.
@@ -437,6 +462,10 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     rating_policy: b.ratingPolicy ?? existing.rating_policy ?? "finders",
     rendezvous: b.rendezvous === undefined ? existing.rendezvous : b.rendezvous ? 1 : 0,
   };
+  if (m.type === "aprs_living" && (m.type !== existing.type || m.station_call !== existing.station_call)) {
+    const notOwn = await livingStationRefusal(req, env, m.type, m.station_call);
+    if (notOwn) return json({ error: notOwn }, { status: 403 });
+  }
   const now = nowS();
   await env.DB.prepare(
     `UPDATE caches SET title=?, type=?, status=?, difficulty=?, terrain=?, lat=?, lon=?,
