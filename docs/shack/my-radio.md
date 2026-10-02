@@ -87,5 +87,5 @@ Every transmission asks you to confirm first; nothing is sent automatically. To 
 
 ## Next
 
-- [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
 - [The live map](live-map.md): see the stations around you.
+- [Packet terminal & BBS](packet-and-bbs.md): connect to nodes, read and send mail.

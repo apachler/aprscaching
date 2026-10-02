@@ -47,4 +47,4 @@ iTAK.
 ## Next
 
 - [The deploy/aprscaching command](helper-command.md): the one command behind most of these tasks.
-- [A public instance's duties](../compliance/index.md): what a public instance owes its users.
+- [Backups and moving](backups.md): what to back up, and how.

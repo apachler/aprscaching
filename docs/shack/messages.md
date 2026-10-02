@@ -96,5 +96,5 @@ default; [Pocket extras](../run/pocket/extras.md) turns them on.
 
 ## Next
 
-- [Packet terminal & BBS](packet-and-bbs.md): send and read BBS mail.
+- [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
 - [On-air etiquette and rules](on-air.md): before you transmit.

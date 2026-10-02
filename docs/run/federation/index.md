@@ -160,4 +160,4 @@ ask for a pull after they write, so new records arrive sooner.
 ## Next
 
 - [Hubs, relays and the registry](hubs-and-relays.md): reach peers behind a firewall.
-- [How federation stays honest](../../reference/federation-trust.md): what a signature and a quorum prove.
+- [Instance admin at a glance](../day-to-day/index.md): running it day to day.

@@ -86,5 +86,5 @@ clause requires.
 
 ## Next
 
-- [Run from source](run-from-source.md): run the pieces on your machine.
+- [Testing & verification](testing.md): every check and how to run it.
 - [The trust model](../reference/trust-model.md): the rules the gateway enforces.

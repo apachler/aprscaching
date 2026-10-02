@@ -108,5 +108,5 @@ how.
 
 ## Next
 
+- [Hunting without signal](offline.md): prepare a hunt where the phone has no data.
 - [Log a find](log-a-find.md): log what happened at the cache.
-- [How finds are verified](verification.md): what each badge needs.

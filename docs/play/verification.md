@@ -89,5 +89,5 @@ own device can place you at a cache.
 
 ## Next
 
+- [Hide a cache](hide-a-cache.md): place a cache of your own.
 - [The trust model](../reference/trust-model.md): the precise rules behind the badges.
-- [Log a find](log-a-find.md): every way to log.

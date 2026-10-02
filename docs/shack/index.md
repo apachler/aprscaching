@@ -12,10 +12,11 @@ button next to an app puts it on the left rail.
 ## Your journey
 
 1. [Your radio in the browser](my-radio.md): connect a TNC, a Mobilinkd or a soundcard.
-2. [Packet terminal & BBS](packet-and-bbs.md): decode frames, connect to nodes, read and send mail.
-3. [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
-4. [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
-5. [On-air etiquette and rules](on-air.md): before you transmit.
+2. [The live map](live-map.md): stations, spots and MeshCom nodes as they are heard.
+3. [Packet terminal & BBS](packet-and-bbs.md): decode frames, connect to nodes, read and send mail.
+4. [Messages over APRS and MeshCom](messages.md): read, send and acknowledge messages.
+5. [Rig control & weather](rig-weather.md): tune your radio, report your weather station.
+6. [On-air etiquette and rules](on-air.md): before you transmit.
 
 ## The apps
 
