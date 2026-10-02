@@ -372,7 +372,7 @@ console.log(`[ingest] started -> ${INGEST_URL}`);
 
 // ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
 // Opt-in: needs a frame link (KISS TNC or AXUDP port) + a station call. Partners + routing are
-// configured in the gateway (Settings → Network); this box runs the sessions (ingest-locality).
+// configured in the gateway (Instance admin); this box runs the sessions (ingest-locality).
 if (env.BBS_FORWARD === "1" && env.BBS_FORWARD_CALL && (env.KISS_TNC_HOST || axudpPort)) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({

@@ -1,125 +1,132 @@
 # RF ingest & transports
 
-The **ingest box** is how real radio enters an instance. It is a Node process (`apps/ingest`) that runs on
-the operator's own machine, next to the radio or TNC — never in the cloud gateway. Only the box that
-physically touched RF can attest first-party reception, which is why ingest is always local.
+This page lists what the ingest box does with each radio link, and which frames can count toward Tier A. It
+is for the sysop who configures the box; step-by-step setups are in
+[Connect a radio: quick starts](quick-starts.md).
 
-!!! tip "Step by step"
-    [Connect a radio: quick starts](quick-starts.md) walks through each link below — APRS-IS, a KISS TNC with
-    Direwolf, your own IGate, Meshtastic, MeshCom, AXUDP — with the log line that shows it works.
+The **ingest box** (`apps/ingest`) is how real radio enters an instance. It runs on the operator's own
+machine, next to the radio or TNC, never inside a cloud gateway. Only the box that touched the radio can
+vouch for what it heard, which is why ingest is always local. Setting up a box for a gateway on another
+machine is in [Set up an ingest box](ingest-box.md).
 
 ## How the box works
 
-Every transport decodes into a normalized packet and pushes it into one batch. Every `BATCH_MS` (default
-1500 ms) the box POSTs the batch as JSON to `INGEST_URL` (default `http://127.0.0.1:8787/ingest`) with the
-`x-ingest-secret` header. Set `INGEST_SECRET` to match your gateway; point `INGEST_URL` at a gateway on
-`localhost`, your LAN, or a remote cloud — the box is gateway-location-agnostic.
+Every transport decodes into a normalised packet and adds it to one batch. Every `BATCH_MS` (default
+1500 ms; the Self-host stack's `docker-compose.yml` sets 2000 ms) the box posts the batch as JSON to `INGEST_URL` (default
+`http://127.0.0.1:8787/ingest`). It signs the request with its own key when it is enrolled (`BOX_ID`,
+`BOX_KEY`), and otherwise sends the shared `INGEST_SECRET` in the `x-ingest-secret` header. `INGEST_URL` can
+point at a gateway on `localhost`, on your LAN or in the cloud: the box works with a gateway anywhere.
+While the gateway is unreachable, the box keeps up to `INGEST_SPOOL_MAX` (5000) packets and drops the oldest.
 
-The APRS-IS feed is always available: set `APRSIS_FILTER` (and optionally `APRSIS_CALLSIGN` /
-`APRSIS_PASSCODE` for a logged-in feed). Every transport below is opt-in and starts only when its variable is
-present. Each stamps its own `port`, visible at `GET /api/ports`.
+The APRS-IS feed always runs: set `APRSIS_FILTER`, and `APRSIS_CALLSIGN` / `APRSIS_PASSCODE` for a
+logged-in feed. Every transport below is opt-in and starts only when its setting is present. Each stamps its
+own `port`, counted at `GET /api/ports`.
 
 ## Transports
 
-| Transport | Enable with | What it does |
+| Transport | Turn on with | What it does |
 |-----------|-------------|--------------|
-| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (e.g. Direwolf). Decodes AX.25, emits RF-heard packets, and exposes TX for the digipeater / IGate / node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. |
-| **AGWPE** | `AGWPE_HOST` (+ port, radio-port) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO); raw monitor in, keying out. |
-| **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. |
-| **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes uplink to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Only licensed nodes — licensed (ham) mode on, callsign as long name — are accepted, under their callsign; licence-free nodes are dropped. Always tier C. The browser-direct Web Serial path uses the same decoder and rule. |
-| **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Only configured node addresses are accepted, per-node rate-capped; a frame the node reports twice (LoRa and server) is forwarded once. Transmits only answers to radio commands, and only with `MESHCOM_TX=1`. Setup, firewall and troubleshooting: [MeshCom](meshcom.md). |
-| **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it's an RX-only listener; with `AXUDP_PEERS` it's a bidirectional port carrying NET/ROM crosslinks and FBB forwarding over the internet leg, and accepts frames only from the peers' addresses (host names are re-resolved every five minutes, so dynamic DNS works); anything else is dropped and counted. The RX-only listener accepts from any host and says so at startup — bind it to a LAN address with `AXUDP_BIND`. |
-| **AXIP** | `AXIP_ENABLE` or `AXIP_PEERS` | AX.25 in raw IP protocol 93 (JNOS/BPQ AXIP). Needs the optional `raw-socket` package and `CAP_NET_RAW`; absent, it logs and stays inert. RX-only with `AXIP_ENABLE`; bidirectional (RX + TX) with `AXIP_PEERS`, accepting frames only from the peers' addresses, like AXUDP. |
-
-!!! warning "MeshCom reaches Tier A only as a direct hearing at an attested node"
-    A MeshCom node also reports frames it got from the MeshCom server over the internet (`src_type: udp`),
-    frames relayed through other nodes, and its own traffic. Only a frame the node heard **directly** over
-    LoRa is forwarded as RF with the node as its receiving site, and it counts toward Tier A only when that
-    node's call (`MESHCOM_NODE=<ip>=<CALL>`) is in the gateway's `FIRST_PARTY_SITES`. Everything else is
-    Tier C. See [MeshCom](meshcom.md#how-meshcom-traffic-is-trusted).
+| **KISS-over-TCP** | `KISS_TNC_HOST` (+ `KISS_TNC_PORT`, 8001) | Connects to a KISS TNC (for example Direwolf). Decodes AX.25, emits RF-heard packets, and offers transmit to the digipeater, IGate and node. The digipeater and IGate need it; the NET/ROM node, BBS and FBB forwarder run over it, or over an AXUDP link when there is no TNC. |
+| **AGWPE** | `AGWPE_HOST` (+ `AGWPE_PORT`, 8000; `AGWPE_RADIO_PORT`, 0) | Connects to an AGW Packet Engine (Direwolf, SoundModem, UZ7HO) and reads its raw monitor. Receive only. |
+| **WA8DED hostmode** | `HOSTMODE_HOST` (+ `HOSTMODE_PORT`, 3694; `HOSTMODE_MYCALL`) | A TF-firmware TNC or TFPCX over TCP; monitor headers (`fm SRC to DST via DIGI* ctl … pid …`, or TNC2 form) become APRS lines. Receive only. |
+| **Meshtastic** | `MESHTASTIC_HOST` (+ `MESHTASTIC_PORT`, 4403) and/or `MESHTASTIC_MQTT_URL` (+ `MESHTASTIC_MQTT_TOPIC`, `msh/#`) | Reads the protobuf stream of a node's TCP API, or the protobuf ServiceEnvelopes nodes send to an MQTT broker ([quick start](quick-starts.md#meshtastic)). Accepts only licensed nodes (licensed ham mode on, callsign as long name), under their callsign; drops licence-free nodes. Always Tier C. The browser's Web Serial path uses the same decoder and rule. |
+| **MeshCom** | `MESHCOM_NODE` (+ `MESHCOM_BIND`, `MESHCOM_FANOUT`) | Listens for the ExtUDP JSON of one or more MeshCom nodes on the LAN (on the node: `--extudpip <ingest box IP>` and `--extudp on`). Positions reach the map, direct messages the message log, group and broadcast text only the port monitor. Accepts only configured node addresses, rate-capped per node; a frame the node reports twice (LoRa and server) is forwarded once. Transmits only answers to radio commands, and only with `MESHCOM_TX=1`. Setup, firewall, trust and troubleshooting: [MeshCom](meshcom.md). |
+| **AXUDP** | `AXUDP_PORT` (+ `AXUDP_PEERS`, `AXUDP_BIND`) | AX.25 over UDP (BPQ mesh, port 10093). Without peers it is a receive-only listener that accepts from any host and says so at start; bind it to a LAN address with `AXUDP_BIND`. With `AXUDP_PEERS` it is a two-way port that carries NET/ROM crosslinks and FBB forwarding over the internet, and accepts frames only from the peers' addresses. Host names are resolved again every five minutes, so dynamic DNS works; anything else is dropped and counted. |
+| **AXIP** | `AXIP_ENABLE` or `AXIP_PEERS` (+ `AXIP_BIND`) | AX.25 in raw IP protocol 93 (JNOS/BPQ AXIP). Needs the optional `raw-socket` package and `CAP_NET_RAW`; without them it logs and stays off. Receive only with `AXIP_ENABLE`; two-way with `AXIP_PEERS`, accepting frames only from the peers' addresses, like AXUDP. |
 
 !!! warning "Tunnelled frames are always Tier C"
-    AXUDP and AXIP frames are forwarded as `heardVia: aprs_is` on their own port, so the gateway's provenance
-    derivation stamps `firstPartyAttested = false` — and it refuses attestation to any position recorded
-    on the AXUDP, AXIP or Meshtastic transport, even one that names an attested site. A tunnelled frame can
-    **never** reach Tier A — transport is not trust. AXUDP/AXIP transmit is operator-config-gated node transport (you set `*_PEERS`), which is
-    distinct from on-air keying (that is the separate, verified-callsign gate).
+    A frame that arrives over AXUDP or AXIP came through an internet tunnel, and Meshtastic is a
+    licence-free carrier: no receiver you run heard either on amateur RF. The gateway never counts such a
+    frame as first-party evidence, even when it names an attested site, so it can never reach Tier A
+    ([transport is not trust](../../reference/trust-model.md#transport-is-not-trust)). Naming tunnel peers
+    in `AXUDP_PEERS` or `AXIP_PEERS` lets the node send over the tunnel; transmitting on the air is a
+    separate matter ([On-air legality](#on-air-legality)).
 
 ## Receiving site and Tier A
 
-Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its
-local TNCs — KISS, AGWPE or WA8DED host mode — hears **directly** carries that callsign to the gateway.
-A frame counts as heard directly only when no path hop shows a relay: no hop carries the has-been-repeated
-`*`, and the first hop is not a decremented `WIDEn-N` / `TRACEn-N` (N below n — `WIDE2-1`, `WIDE2`), which is
-how an untraced digipeater consumes a hop without marking it. Digipeaters consume hops in order, so the hops
-after an untouched first hop are exactly as the originator set them: `WIDE1-1,WIDE2-1` (the standard mobile
-path) and `WIDE1-1,WIDE2-2` count as direct. The rule is conservative: a station whose first hop is `WIDE2-1`
-looks the same as a decremented `WIDE2-2`, so its frames name no site. A gateway that lists
-the call in `FIRST_PARTY_SITES` then counts those frames as RF-corroborated evidence for Tier A, with no
-APRS-IS round trip, so it works off-grid too. Digipeated frames name no site: they show the originator was
-near the digipeater, not near your receiver. The gateway's independence rule still keeps your own
-receiver from corroborating your own finds.
+Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local
+TNCs (KISS, AGWPE or WA8DED host mode) hears **directly** carries that callsign to the gateway. A gateway that
+lists the call in `FIRST_PARTY_SITES` counts those frames as RF-corroborated evidence for Tier A, with no
+APRS-IS round trip, so it works off-grid too. The gateway's independence rule still keeps your own receiver
+from corroborating your own finds.
 
-Only this path attests. A frame that reaches the gateway over APRS-IS — even one tagged `qAR,<your site>` —
-stays Tier C, because APRS-IS passcodes are public and anyone can inject such a line. An IGate that is visible
-to your gateway only on APRS-IS therefore adds nothing to Tier A: for its hearings to count, run this ingest
-box on that IGate's receiver (its TNC as a KISS, AGWPE or host-mode port, with `RF_SITE_CALL` set), so its
-frames arrive through the ingest secret.
+A frame counts as heard directly only when no path hop shows a relay:
+
+- no hop carries the has-been-repeated `*`;
+- the first hop is not a decremented `WIDEn-N` or `TRACEn-N` (N below n, as in `WIDE2-1` from `WIDE2-2`),
+  which is how an untraced digipeater uses up a hop without marking it.
+
+Digipeaters use hops in order, so the hops after an untouched first hop are as the originator set them:
+`WIDE1-1,WIDE2-1` (the standard mobile path) and `WIDE1-1,WIDE2-2` count as direct. The rule is
+conservative: a station whose first hop is `WIDE2-1` looks the same as a decremented `WIDE2-2`, so its frames
+name no site. Digipeated frames name no site: they show the originator was near the digipeater, not near
+your receiver.
+
+Only this path attests. A frame that reaches the gateway over APRS-IS, even one tagged `qAR,<your site>`,
+stays Tier C: APRS-IS passcodes are public, and anyone can send such a line. An IGate that your gateway sees
+only on APRS-IS therefore adds nothing to Tier A. For its hearings to count, run an ingest box on that
+IGate's receiver (its TNC as a KISS, AGWPE or host-mode port, with `RF_SITE_CALL` set), so its frames arrive
+through the box's own credential.
+
+A MeshCom node is a receiving site in the same way: only a frame it heard directly over LoRa names it, and
+only when its call is in `FIRST_PARTY_SITES` ([How MeshCom traffic is trusted](meshcom.md#how-meshcom-traffic-is-trusted)).
 
 !!! warning "Only a TNC you operate"
     `RF_SITE_CALL` vouches that **your** receiver heard the frame. If `KISS_TNC_HOST` (or `AGWPE_HOST`,
-    `HOSTMODE_HOST`) points at a station you don't operate — a club digipeater, a remote HAMNET node —
-    leave `RF_SITE_CALL` unset: the frames still arrive, but naming someone else's receiver as your site
-    would attest hearings you cannot vouch for.
+    `HOSTMODE_HOST`) points at a station you don't operate, such as a club digipeater or a remote HAMNET
+    node, leave `RF_SITE_CALL` unset. The frames still arrive, but naming someone else's receiver as your
+    site would attest hearings you cannot vouch for.
 
 ## IGate
 
-An IGate bridges RF and APRS-IS in both directions. It needs a KISS TNC and both `IGATE_CALL` and
-`IGATE_PASS`:
+An IGate passes traffic between RF and APRS-IS in both directions. It needs a KISS TNC and both `IGATE_CALL`
+and `IGATE_PASS`.
 
-- **RX-IGate** relays each RF frame up to APRS-IS with a `qAR,<yourcall>` construct. That copy is for the
-  APRS-IS network: no instance attests it, because anyone with a (public) passcode can send the same line.
-  Your hearings count toward Tier A through the box's own batch to the gateway, as described above.
-- **TX-IGate** gates APRS-IS messages, acks and rejects included, down to RF, but only to stations heard
-  locally within `IGATE_LOCAL_TTL` (default 30 min) and only when the sender is not heard locally itself.
-  It honours the IS → RF do-not-gate tokens (`TCPXX`, `NOGATE`, `RFONLY`; the `TCPIP*` every APRS-IS client
-  message carries does not block it) and skips third-party frames and its own traffic. Each message goes out
-  under `IGATE_CALL` in third-party format, `}SENDER>DEST,TCPIP,IGATE_CALL*:<message>`, so the station
-  identifies as itself on air. `IGATE_TX_PATH` sets its RF path (default none, since the addressee was heard
-  locally; e.g. `WIDE1-1`).
+- **RX-IGate** passes each RF frame up to APRS-IS with a `qAR,<yourcall>` construct. That copy is for the
+  APRS-IS network: no instance attests it, because anyone with a public passcode can send the same line.
+  Your hearings count toward Tier A through the box's own batch to the gateway, as in
+  [Receiving site and Tier A](#receiving-site-and-tier-a).
+- **TX-IGate** passes APRS-IS messages, acks and rejects included, down to RF, but only to stations heard
+  locally within `IGATE_LOCAL_TTL` seconds (default 1800, 30 minutes) and only when the sender is not heard
+  locally itself. It honours the APRS-IS to RF do-not-gate tokens (`TCPXX`, `NOGATE`, `RFONLY`; the `TCPIP*`
+  every APRS-IS client message carries does not block it) and skips third-party frames and its own traffic.
+  Each message goes out under `IGATE_CALL` in third-party format, `}SENDER>DEST,TCPIP,IGATE_CALL*:<message>`,
+  so the station identifies as itself on air. `IGATE_TX_PATH` sets its RF path (default none, since the
+  addressee was heard locally; for example `WIDE1-1`). `IGATE_FILTER` is the APRS-IS filter for the traffic
+  it may pass to RF.
 
 ## Digipeater
 
-Set `DIGI_CALL` (and optionally `DIGI_ALIASES`, default `WIDE1,WIDE2`) to repeat traffic over a KISS TNC
-using the new n-N paradigm — insert your call with the has-been-repeated bit, decrement `WIDEn-N`, with a
-loop guard and a dedupe window.
+Set `DIGI_CALL`, and optionally `DIGI_ALIASES` (default `WIDE1,WIDE2`), to repeat traffic over a KISS TNC with
+the new n-N paradigm. It inserts your call with the has-been-repeated bit and decrements `WIDEn-N`, with a
+loop guard and a 30-second window that keeps it from repeating the same frame twice.
 
-Set `DIGI_CONNECTED=1` to also repeat connected-mode frames (SABM / I / RR …) whose next un-repeated hop is
-your call — this relays NET/ROM crosslinks and FBB traffic through you. `DIGI_VISCOUS_MS` enables **viscous**
-digipeating: hold a repeat briefly and cancel it if a better-placed digi is heard repeating the same frame.
+Set `DIGI_CONNECTED=1` to also repeat connected-mode frames (SABM, I, RR, …) whose next unrepeated hop is
+your call; this relays NET/ROM crosslinks and FBB traffic through you. `DIGI_VISCOUS_MS` makes this
+connected-mode digipeater **viscous**: it holds a repeat that long and cancels it when a better-placed
+digipeater is heard repeating the same frame.
 
 ## From a container
 
-A KISS TNC over TCP (`KISS_TNC_HOST`), AGWPE (Direwolf/SoundModem), and hostmode all reach the
-ingest container over the network — run the TNC software on the host (or another box) and point the
-env vars at it. From inside the container the host is not `localhost`: use the host's LAN address.
-For AXUDP no special privileges are needed. The AXIP transport (raw IP protocol 93) needs
-`CAP_NET_RAW`; add `cap_add: [NET_RAW]` to the ingest service if you use it.
+A KISS TNC over TCP (`KISS_TNC_HOST`), AGWPE (Direwolf, SoundModem) and hostmode all reach the ingest
+container over the network: run the TNC software on the host or another box, and point the settings at it.
+Inside the container the host is not `localhost`: use the host's LAN address. AXUDP needs no special
+privileges. AXIP (raw IP protocol 93) needs `CAP_NET_RAW`: add `cap_add: [NET_RAW]` to the ingest service.
 
 **MeshCom** nodes send UDP to port 1799 on the box, so the ingest container has to receive it. In
-`docker-compose.yml` (or `compose.ingest-only.yml`) un-comment the `ports:` line on the ingest service and
-put your host's LAN address in it, then set `MESHCOM_BIND=0.0.0.0` in `.env` — inside the container that
-is only the container's own interface, and the published port exposes it on your LAN address alone. See
+`deploy/docker-compose.yml` (or `deploy/compose.ingest-only.yml`), uncomment the `ports:` line on the ingest
+service and put your host's LAN address in it. Then set `MESHCOM_BIND=0.0.0.0` in `deploy/.env`: inside the
+container that is only the container's own interface, and the published port exposes it on your LAN address
+alone. To receive AXUDP in a container, publish its UDP port the same way, on one address only. See
 [MeshCom](meshcom.md).
 
 ## On-air legality
 
-Every transmit path above (digipeat, IGate, node, gated user TX) makes your station a control-operated —
-and, when automatic, unattended — amateur station. Before you enable TX, read
-[Automatic stations on the air](../compliance/on-air-stations.md): encryption is prohibited (aprscaching signs but never
-conceals), identification and automatic-station rules apply, and you are the responsible control operator.
+Every transmit path above (digipeater, IGate, node, BBS forwarding, answers to radio commands) makes your
+station an automatically controlled one. Read [Automatic stations on the air](../compliance/on-air-stations.md)
+before you turn on transmit.
 
 ## Next
 
-- [MeshCom](meshcom.md).
-- [Packet: BBS & NET/ROM node](packet-node.md).
+- [MeshCom](meshcom.md): a MeshCom node as a receiving site.
+- [Packet: BBS & NET/ROM node](packet-node.md): the node and BBS on top of these transports.

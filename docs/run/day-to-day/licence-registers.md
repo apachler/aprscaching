@@ -1,30 +1,52 @@
 # Licence registers
 
-The licence badge shows whether a public register lists a call as licensed ([Licence
-registers](../../reference/licence-sources.md)). It needs the registers imported. The import tool runs on the
-operator's machine — the ingest box, or any computer with Node 22+ — downloads each register, keeps only
-callsign, status and expiry, and posts them to the gateway with `OPERATOR_SECRET`:
+This page is for the sysop. It shows how to import the public licence registers that the licence badge reads,
+and how to keep them fresh on a schedule.
+
+The licence badge shows whether a public register lists a call as licensed
+([Licence registers](../../reference/licence-sources.md) lists the sources). It needs the registers imported;
+until then every call reads "not found in public registers", and nothing else changes.
+
+## Before you start
+
+- A machine with Node 22 or newer and a checkout: the ingest box, or any computer.
+- The instance's `OPERATOR_SECRET`, and the gateway's address.
+- For the PDF registers (`at`, `de`): `pdftotext`, from `apt install poppler-utils`.
+
+## Import the registers
+
+Run these in the checkout's root directory:
 
 ```bash
-BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,at,de
-node tools/licence/import.mjs --list              # the registers it knows
+node tools/licence/import.mjs --list                    # the registers it knows
+BASE=https://api.example.net OPERATOR_SECRET=… node tools/licence/import.mjs --source fcc,ised,acma,at,de
+node tools/licence/import.mjs --source all              # every register
+node tools/licence/import.mjs --source ised --dry-run   # parse and count, send nothing
 ```
 
-The PDF registers (`at`, `de`) need `pdftotext` (`apt install poppler-utils`). The FCC file is about 200 MB and
-lists about 1.6 million calls; allow a few minutes for its download and import. Each import replaces that
-register's rows, and calls it no longer lists are removed; an import that fails part-way removes nothing.
-Until a register is imported, every call reads "not found in public registers" — nothing else changes.
+The tool downloads each register, keeps only callsign, status and expiry, and posts them to the gateway.
+`BASE` defaults to `http://127.0.0.1:8787`. `--file <path>` reads a register already on disk instead of
+downloading it.
 
-**Keep it fresh on a schedule.** Set `LICENCE_SOURCES` and run the tool from cron or a systemd timer; the
-FCC rebuilds its full file weekly and the other registers change more slowly, so a weekly run is enough:
+The FCC file is about 200 MB and lists about 1.6 million calls; allow a few minutes for its download and import.
+Each import replaces that register's rows, and calls it no longer lists are removed. An import that fails
+part-way removes nothing. The tool exits non-zero when any register fails.
+
+## Keep it fresh on a schedule
+
+With no `--source`, the tool reads the registers from `LICENCE_SOURCES`, so a scheduled run needs only the
+environment. The FCC rebuilds its full file weekly and the other registers change more slowly, so a weekly run
+is enough. With cron:
 
 ```bash
-# /etc/cron.d/aprscaching-licence — Sundays 04:30
+# /etc/cron.d/aprscaching-licence: Sundays 04:30
 30 4 * * 0  aprs  cd /opt/aprscaching && BASE=http://127.0.0.1:8787 OPERATOR_SECRET=… LICENCE_SOURCES=fcc,ised,at,de node tools/licence/import.mjs
 ```
 
+With a systemd service and a `.timer` beside it (`OnCalendar=weekly`):
+
 ```ini
-# /etc/systemd/system/aprscaching-licence.service   (+ a .timer with OnCalendar=weekly)
+# /etc/systemd/system/aprscaching-licence.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/aprscaching
@@ -33,8 +55,12 @@ Environment=LICENCE_SOURCES=fcc,ised,at,de
 ExecStart=/usr/bin/node tools/licence/import.mjs
 ```
 
-The registry holds no user data (see [Data protection](../compliance/data-protection.md)).
+## Check that it worked
+
+For each register the tool prints `<id>: <n> calls imported, <m> no longer listed removed`. A licensed call's
+profile then shows the licence badge. The registry holds no user data, so it is outside export and erasure
+([Data protection](../compliance/data-protection.md)).
 
 ## Next
 
-- [Import heritage places](import-places.md).
+- [Import heritage places](import-places.md): another import, for caches.

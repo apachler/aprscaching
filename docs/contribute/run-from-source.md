@@ -1,11 +1,13 @@
 # Run from source
 
-This page is for developers and for operators who want to run aprscaching from a checkout of the code: the
-gateway (API + data), the web app, and optionally the RF ingest box. To use aprscaching without running it, see
-[What is APRScaching?](../play/index.md); to install an instance, [Self-host with Docker](../run/install/self-host-docker.md) is the usual
-route.
+This page shows contributors how to run aprscaching from a checkout: the gateway, the web app and, if you
+need it, the RF ingest. You need Node 22 or newer and pnpm; at the end the app runs on your machine against a
+local gateway. To install an instance for real use, see [Is running an instance for me?](../run/index.md).
 
-You need **Node 22 or newer** and **pnpm** (`corepack enable` provides the pinned version).
+## Before you start
+
+- **Node 22 or newer** (CI uses 24).
+- **pnpm**: `corepack enable` provides the version the repository pins.
 
 ## Install
 
@@ -16,25 +18,25 @@ pnpm run check    # build every unit, run every unit suite, typecheck and build 
 
 ## Run the gateway
 
-The gateway is the API and data plane. Pick one runtime — all three serve the same API and pass the same
-conformance suite.
+The gateway is the API and data plane. Pick one runtime: all three serve the same API and pass the same
+conformance suites ([Architecture and runtimes](architecture.md)).
 
-Every runtime needs an **ingest secret**: the gateway refuses to start without one, and the ingest box sends
-the same value. Make one and keep it for the steps below:
+Every runtime needs an **ingest secret**: the gateway refuses to start without one, and the ingest sends the
+same value. Make one and keep it for the steps below:
 
 ```bash
 openssl rand -hex 24
 ```
 
-=== "Node + SQLite (simplest)"
+=== "Node + SQLite"
 
     ```bash
     INGEST_SECRET=<your secret> pnpm --filter @aprscaching/node-gateway start
     # serves /health, /ingest, /api/*, /ws on http://127.0.0.1:8787
     ```
 
-    The schema is applied automatically from `db/migrations/` into a local SQLite file
-    (`DB_PATH`, default under `servers/node/data/`).
+    The server applies the schema from `db/migrations/` into a local SQLite file (`DB_PATH`, by default under
+    `servers/node/data/`).
 
 === "Cloudflare Worker + D1"
 
@@ -48,7 +50,9 @@ openssl rand -hex 24
     npx wrangler dev                                      # http://127.0.0.1:8787
     ```
 
-=== "Bun (single-file desktop)"
+    `pnpm --filter @aprscaching/gateway migrate && pnpm dev:gateway` does the same on a local D1.
+
+=== "Bun"
 
     ```bash
     INGEST_SECRET=<your secret> bun run servers/bun/server.ts
@@ -59,47 +63,48 @@ openssl rand -hex 24
 ## Run the web app
 
 ```bash
-pnpm --filter @aprscaching/web dev
+pnpm dev:web
 ```
 
-The app talks to the gateway at `VITE_API_BASE` (the dev server defaults to `http://127.0.0.1:8787`; a
-production build without it uses its own origin). Open the printed URL and
-you can browse the map, hide a cache, and log a find. In-app geolocation (**Tier B**) needs HTTPS or
-`localhost` and the browser's location permission.
+The app talks to the gateway at `VITE_API_BASE`; the dev server defaults to `http://127.0.0.1:8787`, and a
+production build without it uses its own origin. The dev server runs on another origin than the gateway, so
+start the gateway with `CORS_ORIGINS=http://localhost:5173`: without that allowlist no cross-origin request
+carries a session, and sign-in fails.
 
-## Add RF ingest (optional)
+Open the printed URL to browse the map, hide a cache and log a find. In-app geolocation (Tier B) needs
+`https` or `localhost` and the browser's location permission.
 
-The **ingest box** feeds real radio into your instance. It runs on your own hardware — a Pi, a PC, or the
-browser bridging a USB/BLE radio. Copy the example config and point it at your gateway:
+`/?demo=app` serves the whole app from canned gateway answers, and `/?demo=ui` shows every token and
+component ([Design and accessibility](testing.md#design-and-accessibility)).
+
+## Run the ingest
+
+The ingest feeds real radio and APRS-IS into your gateway. Copy the example settings and start it:
 
 ```bash
 cp .env.example .env
-pnpm --filter @aprscaching/ingest dev
+pnpm dev:ingest
 ```
 
-Edit `.env` at the top of the checkout first: set `APRSIS_FILTER`, set `INGEST_SECRET` to the **same value
-the gateway runs with**, and add `KISS_TNC_HOST`, `MESHTASTIC_HOST`, … as needed. **Check it worked:** the
-gateway's `/api/ports` lists the ingest's ports, and stations appear on the map.
+Edit `.env` at the top of the checkout first: set `APRSIS_FILTER`, set `INGEST_SECRET` to the **same value the
+gateway runs with**, and add `KISS_TNC_HOST`, `MESHTASTIC_HOST` and others as needed. With only
+`APRSIS_FILTER` it streams a slice of the global APRS-IS feed.
 
-With only `APRSIS_FILTER` it streams a slice of the global APRS-IS firehose. Add a KISS TNC, a Meshtastic
-node, or an AXUDP/AXIP link and each forwards to the gateway on its own port. See
-[Connect a radio: quick starts](../run/radios/quick-starts.md) for each link step by step, and
-[RF ingest & transports](../run/radios/rf-ingest.md) for every setting.
+**Check it worked:** the gateway's `/api/ports` lists the ingest's ports, and stations appear on the map.
 
-!!! note "Off-grid works"
-    Point `INGEST_URL` at a gateway on the same box (`http://localhost:8787/ingest`) and the whole
-    stack — RF in, map out — runs with no internet at all.
+Each radio link and every ingest setting are covered for operators under
+[Connect a radio: quick starts](../run/radios/quick-starts.md) and
+[RF ingest & transports](../run/radios/rf-ingest.md).
 
-## Verify your checkout
+## Check your checkout
 
 ```bash
 pnpm run check               # build + every unit suite (includes the web guards)
-pnpm run smoke               # spin a throwaway gateway and run the conformance smoke suites
-pnpm run verify              # both — the full gate before committing
+pnpm run smoke               # a throwaway gateway and the conformance smoke suites
+pnpm run verify              # both: the full gate before committing
 ```
 
-## Where to next
+## Next
 
-- Understand the trust model before deploying: [The trust model](../reference/trust-model.md).
-- Ship it: [Is running an instance for me?](../run/index.md).
-- Every setting: [Configuration reference](../reference/configuration.md).
+- [Testing & verification](testing.md): every check and how to run one test.
+- [Architecture and runtimes](architecture.md): where a change belongs.

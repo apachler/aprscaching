@@ -254,6 +254,51 @@ for (const f of TEXT) {
     });
 }
 
+// Every doctor warning and failure links `docs/run/troubleshooting.md#<anchor>` (deploy/lib/doctor.sh doc_see), so
+// every check id the doctor and the shapes report needs its entry there. A check named after a setting, a node or
+// a peer shares the entry of its kind, as doc_see maps it.
+{
+  const page = "run/troubleshooting.md";
+  const see = (id) =>
+    /^config\.value\./.test(id)
+      ? "configvaluekey"
+      : /^setup\.(checklist|budget)$/.test(id)
+        ? id.replace(/\./g, "")
+        : /^setup\./.test(id)
+          ? "setupitem"
+          : /^ingest\.meshcom_fw\./.test(id)
+            ? "ingestmeshcom_fwcall"
+            : /^ingest\.meshcom\./.test(id)
+              ? "ingestmeshcomcall"
+              : /^federation\.peer\./.test(id)
+                ? "federationpeerhost"
+                : id.replace(/\./g, "");
+  for (const f of tracked.filter((f) => /^deploy\/(lib\/doctor\.sh|lib\/shapes\/[\w-]+\.sh)$/.test(f)))
+    read(f)
+      .split("\n")
+      .forEach((text, i) => {
+        const m = /\b(?:warnc|failc)\s+"?([a-z0-9_.-]+(?:\$\{?[\w,]+\}?)?[a-z0-9_.-]*)/.exec(text);
+        if (!m) return;
+        // a variable part stands for a name: ingest.${name,,} is one of the named links, checked by its kind
+        const id = m[1].includes("$") ? m[1].replace(/\$\{?[\w,]+\}?/, "x") : m[1];
+        // a service check loops over the services its shape runs: each needs its entry
+        const services = {
+          "deploy/lib/shapes/selfhost.sh": ["gateway", "ingest", "caddy", "cloudflared"],
+          "deploy/lib/shapes/baremetal.sh": ["aprscaching-gateway", "aprscaching-ingest"],
+        }[f];
+        if (/^service\.x$/.test(id) && services) {
+          for (const n of services) checkRef(f, i + 1, page, `service${n}`, `service.${n}`);
+          return;
+        }
+        if (/^ingest\.x$/.test(id)) {
+          for (const n of ["kiss_tnc", "agwpe", "hostmode", "meshtastic"])
+            checkRef(f, i + 1, page, `ingest${n}`, `ingest.${n}`);
+          return;
+        }
+        checkRef(f, i + 1, page, see(id), `doctor check ${m[1]}`);
+      });
+}
+
 // ---------------------------------------------------------------- 5. diagrams are Mermaid
 const DIAGRAM_DOCS = tracked.filter(
   (f) =>
