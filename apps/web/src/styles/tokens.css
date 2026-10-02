@@ -105,7 +105,7 @@
     --elevation-hero: 0 18px 50px -22px var(--shadow); /* the terminal card */
     --elevation-shot: 0 12px 32px -18px var(--shadow); /* screenshots */
 
-    /* ---- role scales (docs/design/design-language.md) ----
+    /* ---- role scales (docs/contribute/design/design-language.md) ----
        Named by what a value is for, so a heading, a card or a dialog picks its step by role. */
 
     /* type: a 1.2 ratio around the 14px body; the display role is fluid for the landing page */

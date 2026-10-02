@@ -5,7 +5,7 @@ Shack, and all maintenance/settings surfaces. Claude Code MUST consult this rule
 building or changing any component or page**, and MUST keep components consistent with it. Styling
 implementation is governed by the companion rule **`.claude/rules/css.md`** (CSS-over-JS, tokens,
 performance) — the two are read together. The visual vocabulary they apply (themes, colour roles, the role
-scales, iconography, motion, words) is set out in [`docs/design/design-language.md`](../../docs/design/design-language.md),
+scales, iconography, motion, words) is set out in [`docs/contribute/design/design-language.md`](../../docs/contribute/design/design-language.md),
 and `/?demo=ui` shows every token and primitive live.
 
 Keywords: **MUST / MUST NOT / SHOULD / SHOULD NOT / MAY** (RFC 2119).

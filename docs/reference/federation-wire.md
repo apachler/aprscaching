@@ -4,7 +4,7 @@ Federation records travel as **deterministic CBOR signed under Ed25519**. A reco
 lives entirely in its bytes — the same signed frame is valid over HTTPS on the public internet,
 plain HTTP on a 44net/HAMNET amateur-IP name, an AX.25/NET-ROM circuit, or BBS store-and-forward.
 The verify engine never consults the path a frame took: **transport is never trust** ([Core
-concepts](../concepts.md)).
+concepts](trust-model.md)).
 
 ## The signed form
 
@@ -322,7 +322,12 @@ voice.
 the A record of the host peers contact, the TXT's `inst` and `key` against this instance (the endpoint's
 own `_aprscaching.<host>` record first, then the callsign's), whether the callsign's record sends peers to
 this host with another binding, and the 44net endpoint of the descriptor it serves — and reports each as pass, warn or fail with a fix
-([Your first hour as sysop](../operate/first-hour.md#the-checklist)). It only reads DNS; it writes nothing.
+([The checklist](../run/first-hour.md#the-checklist)). It only reads DNS; it writes nothing.
 
 On amateur RF all of this stays legal because the wire format **signs and never encrypts** — every
-frame is readable off the air; see [Amateur-radio compliance](../operate/rf-regulatory.md).
+frame is readable off the air; see [Automatic stations on the air](../run/compliance/on-air-stations.md).
+
+## Next
+
+- [How federation stays honest](federation-trust.md).
+- [Join the network](../run/federation/index.md).

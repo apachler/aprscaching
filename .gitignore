@@ -32,3 +32,7 @@ deploy/oci/.terraform/
 deploy/oci/.terraform.lock.hcl
 apps/web/test/visual/out/
 docs/assets/vendor/
+
+# Python bytecode
+__pycache__/
+*.pyc

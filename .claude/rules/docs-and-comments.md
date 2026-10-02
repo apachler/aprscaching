@@ -109,9 +109,11 @@ around the diagram carries the explanation.
 
 `tools/checks/docs.mjs` (run in the `lint + format` job) fails on the codes and story phrases above in the
 manual, the root documents and the READMEs, on configuration keys missing from
-`docs/reference/configuration.md` (or documented but unread), on manual pages outside the nav, and on broken
-links outside the manual, and on box-drawing diagrams in fenced blocks; the web app's `test/diagrams.test.ts`
-parses every ```` ```mermaid ```` block. It cannot judge subtler story-telling or code comments; review still does.
+`docs/reference/configuration.md` (or documented but unread), on manual pages outside the nav, on broken
+links outside the manual, on box-drawing diagrams in fenced blocks, and on any reference to a manual page or
+heading that does not exist: a `docs/…` path in code, scripts or comments, a published-manual URL, an in-app
+`doc=` link or a doctor hint. Pages move without redirects, so a move updates every reference in the same
+change. The web app's `test/diagrams.test.ts` parses every ```` ```mermaid ```` block. It cannot judge subtler story-telling or code comments; review still does.
 
 ## Applies to NEW code
 

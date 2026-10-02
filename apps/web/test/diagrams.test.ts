@@ -41,7 +41,9 @@ describe("Mermaid diagrams in the docs", () => {
   });
 
   it("an admonition title renders its inline Markdown", () => {
-    const html = renderMarkdown('!!! tip "New here? [Start here](start-here.md)"\n    Body.', "index");
-    expect(html).toContain('<p class="doc-adm-t">New here? <a href="?view=docs&doc=start-here" data-doc="start-here"');
+    const html = renderMarkdown('!!! tip "New here? [Start here](play/index.md)"\n    Body.', "index");
+    expect(html).toContain(
+      '<p class="doc-adm-t">New here? <a href="?view=docs&doc=play%2Findex" data-doc="play/index"',
+    );
   });
 });

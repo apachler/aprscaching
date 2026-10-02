@@ -3,7 +3,7 @@
 !!! info "Review dated 28 September 2026"
     This is a point-in-time review record. It describes the code as it stood on that date and is not
     updated as the code moves; file and function names in the *Where* column may since have changed. The
-    current design is documented in the [federation guide](../guides/federation.md) and the
+    current design is documented in the [federation guide](../run/federation/index.md) and the
     [wire reference](../reference/federation-wire.md).
 
 A validation of the federation layer against `dev` as of 28 September 2026. The wire and crypto layer

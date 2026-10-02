@@ -968,7 +968,7 @@ function SetupAdmin(props: {
         Items marked <span className="mono">env</span> are read-only here: set them in the deployment environment (
         <span className="mono">deploy/.env</span>, the systemd unit, or{" "}
         <span className="mono">wrangler secret put</span>) and restart.{" "}
-        <Button variant="inline" onClick={() => props.onDocs("operate/first-hour")}>
+        <Button variant="inline" onClick={() => props.onDocs("run/first-hour")}>
           Your first hour as sysop
         </Button>
       </p>

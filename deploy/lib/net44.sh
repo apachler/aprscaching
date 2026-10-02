@@ -32,7 +32,7 @@ N44_NFT=aprscaching_wg44
 N44_ROLLBACK_S="${APRS_NET44_ROLLBACK_S:-120}"
 N44_HANDSHAKE_WAIT_S="${APRS_NET44_HANDSHAKE_WAIT_S:-30}"
 N44_MTU_CAP=1420
-N44_DOCS="docs/operate/44net.md"
+N44_DOCS="docs/run/networks/44net.md"
 
 n44_conf() { printf '%s/%s.conf' "$N44_DIR" "$N44_IF"; }
 n44_issued() { printf '%s/%s.issued.conf' "$N44_DIR" "$N44_IF"; }

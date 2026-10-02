@@ -4,7 +4,7 @@ name: release-verify
 # archive and the Pocket installer, stamped with the tag and the bundle's SHA-256 — then a SHA256SUMS over every asset and a signed build-provenance
 # attestation for each (Sigstore, keyless: the signature names this repository's workflow, so there is no
 # signing key to keep). Operators check them with `sha256sum -c` and `gh attestation verify`
-# (docs/operate/helpers.md, Verified downloads).
+# (docs/run/install/verified-downloads.md).
 #
 # release-please.yml calls it with the new tag after the OCI stack and the desktop binaries; it also runs
 # by hand for a tag.

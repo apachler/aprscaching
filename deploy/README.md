@@ -7,7 +7,7 @@ browser (Web Serial/BLE); the gateway/core is the variable.
 ## Files
 | File | Purpose |
 |---|---|
-| `aprscaching` | one command for every shape: `init`, `status`, `backup`, `rotate-secret`, … (`docs/operate/helpers.md`) |
+| `aprscaching` | one command for every shape: `init`, `status`, `backup`, `rotate-secret`, … (`docs/run/day-to-day/helper-command.md`) |
 | `lib/` | the helpers' shared shell library, a module per shape, and the configuration schema's export (`config-keys.tsv`, generated) |
 | `setup.sh` | first-run wizard: writes `.env` (operator call, `APP_URL`, APRS-IS feed, site call, secrets, federation key); safe to re-run; `--non-interactive` for scripts |
 | `desktop/` | **Desktop** — single-binary app (Bun `--compile`); see `desktop/README.md` |
@@ -47,7 +47,7 @@ INGEST_URL=https://api.example.net/ingest docker compose -f compose.ingest-only.
 After the first start, sign in and confirm your call:
 `docker compose exec gateway node tools/admin/verify-call.mjs <CALL>` (off-grid, sign in first with
 `docker compose exec gateway node tools/admin/signin-link.mjs <CALL>`). The full order is in
-`docs/operate/first-hour.md`.
+`docs/run/first-hour.md`.
 
 The ingest-only stack is also a **day-one APRS-IS feed**: run it on a cloud VM with only the `APRSIS_*`
 variables set (no RF transports) and `INGEST_URL` pointing at the instance. A cloud box may carry an IS-only
@@ -72,4 +72,4 @@ on a schedule.
   API token. R2 media (`aprscaching-media`) is not covered by Time Travel and needs its own plan — e.g. a
   nightly `rclone sync` from R2's S3-compatible endpoint, or `npx wrangler r2 object get
   aprscaching-media/<key> --remote --file <key>` for single objects. Details:
-  `docs/operate/deployment.md` → Backups.
+  `docs/run/day-to-day/backups.md`.

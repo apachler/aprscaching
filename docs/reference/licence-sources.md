@@ -2,7 +2,7 @@
 
 The **licence badge** answers one question: is this callsign listed as a current amateur licence in a public
 register? It is a check of **validity**, not of **control**. The verified tick means the person proved
-control of the call on the air ([callsign verification](../operate/administration.md#callsign-verification));
+control of the call on the air ([callsign verification](../run/day-to-day/callsign-verification.md));
 the licence badge only says that a national register lists the call.
 
 The badge flags and never blocks. Many countries publish no register, so a call that no imported register
@@ -71,3 +71,7 @@ reproduced from `https://ised-isde.canada.ca/site/amateur-radio-operator-certifi
 "Based on Australian Communications and Media Authority information"; Fernmeldebehörde (Austria);
 Bundesnetzagentur (Germany). An operator who imports the ISED list for a commercial service needs ISED's
 permission.
+
+## Next
+
+- [Licence registers](../run/day-to-day/licence-registers.md): importing them.

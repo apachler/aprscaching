@@ -48,7 +48,7 @@ jobs:
                 deploy/aprscaching | deploy/lib/* | deploy/test/* | deploy/setup.sh | deploy/systemd/* | deploy/.env.example | deploy/oci/* | deploy/oci/test/* | docs/reference/cli.md | .github/workflows/ci.yml) helpers=true ;;
               esac
               case "$f" in
-                docs/* | mkdocs.yml | *.md | deploy/pocket/*) ;;
+                docs/* | mkdocs.yml | overrides/* | *.md | deploy/pocket/*) ;;
                 *) code=true ;;
               esac
             done <<< "$files"

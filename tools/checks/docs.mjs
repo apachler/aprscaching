@@ -15,6 +15,8 @@
  *  5. Diagrams — a fenced block in the manual, the READMEs or the rules draws no picture in box-drawing
  *     characters: a diagram is a ```mermaid block, which the manual and the in-app reader both draw. Real
  *     terminal output that uses them is marked by an `<!-- ascii-ok: <what it is> -->` line right above it.
+ *  6. Stale references — pages move without redirects, so every reference to a manual page or heading in any
+ *     tracked file (paths, published URLs, in-app slugs, the doctor's hints) must still resolve.
  *
  * Pure word and path matching over the tracked files, with no dependency, so it runs before install.
  */
@@ -182,6 +184,76 @@ for (const f of PROSE.filter((f) => !f.startsWith("docs/"))) {
     });
 }
 
+// ---------------------------------------------------------------- 6. no stale references to the manual
+// Manual pages move without redirects, so every reference to one, in any tracked file, must name a page (and a
+// heading) that exists: `docs/…md` paths in code, scripts and comments, the published URL, the in-app reader's
+// `doc=` slugs, the doctor's `$DOCS_URL/…` hints and the configuration schema's links (relative to
+// docs/reference/, where they are rendered). Links inside the manual are checked by `mkdocs build --strict`.
+/** The published manual: a page is `<site>/<path>/`, the home page the bare site. */
+const SITE_URL = /apachler\.github\.io\/aprscaching\/([\w/-]*?)\/?(?:#([\w-]+))?(?=[)\s"'>`]|$)/g;
+/** Python-Markdown's toc slug: what MkDocs gives a heading as its anchor. */
+const slug = (h) =>
+  h
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[`*]/g, "")
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7f]/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "-");
+const anchorCache = new Map();
+function anchorsOf(page) {
+  if (!anchorCache.has(page)) {
+    const set = new Set();
+    let fence = false;
+    for (const l of read(`docs/${page}`).split("\n")) {
+      if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+      const h = !fence && /^#{1,6} (.*?)\s*$/.exec(l);
+      if (!h) continue;
+      const id = /\{#([\w-]+)\}\s*$/.exec(h[1]);
+      let a = id ? id[1] : slug(h[1]);
+      for (let n = 1; !id && set.has(a); n++) a = `${slug(h[1])}_${n}`;
+      set.add(a);
+    }
+    for (const m of read(`docs/${page}`).matchAll(/\{\s*#([\w-]+)\s*\}|<a id="([\w-]+)"/g)) set.add(m[1] ?? m[2]);
+    anchorCache.set(page, set);
+  }
+  return anchorCache.get(page);
+}
+function checkRef(f, line, page, anchor, as) {
+  if (!existsSync(join(root, "docs", page))) return fail(f, line, `stale manual reference: ${as} (no docs/${page})`);
+  if (anchor && !anchorsOf(page).has(anchor)) fail(f, line, `stale manual reference: ${as} (no heading #${anchor})`);
+}
+const TEXT = tracked.filter(
+  (f) =>
+    !f.startsWith("docs/") &&
+    f !== "CHANGELOG.md" &&
+    f !== "pnpm-lock.yaml" &&
+    f !== "tools/checks/docs.mjs" &&
+    !f.includes("node_modules/") &&
+    !/\.(png|webp|jpg|avif|ico|svg|woff2?|pmtiles|zip)$/.test(f),
+);
+for (const f of TEXT) {
+  read(f)
+    .split("\n")
+    .forEach((text, i) => {
+      for (const m of text.matchAll(/(?<![\w-])docs\/([\w./-]+\.md)(?:#([\w-]+))?/g))
+        checkRef(f, i + 1, m[1], m[2], m[0]);
+      for (const m of text.matchAll(SITE_URL)) {
+        const p = m[1];
+        const page = !p ? "index.md" : existsSync(join(root, "docs", `${p}.md`)) ? `${p}.md` : `${p}/index.md`;
+        checkRef(f, i + 1, page, m[2], m[0]);
+      }
+      for (const m of text.matchAll(/(?:[?&]doc=|onDocs\(")([\w/%-]+)(?:#([\w-]+))?/g))
+        checkRef(f, i + 1, `${decodeURIComponent(m[1])}.md`, m[2], m[0]);
+      for (const m of text.matchAll(/\$DOCS_URL\/([\w./-]+\.md)(?:#([\w-]+))?/g)) checkRef(f, i + 1, m[1], m[2], m[0]);
+      if (f === "packages/shared/src/configdocs.ts")
+        for (const m of text.matchAll(/\]\(([\w./-]+\.md)(?:#([\w-]+))?\)/g))
+          checkRef(f, i + 1, join("reference", m[1]).replace(/\\/g, "/"), m[2], m[0]);
+    });
+}
+
 // ---------------------------------------------------------------- 5. diagrams are Mermaid
 const DIAGRAM_DOCS = tracked.filter(
   (f) =>
@@ -212,5 +284,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid`,
+  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid, no stale manual references`,
 );

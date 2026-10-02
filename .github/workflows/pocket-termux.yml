@@ -2,7 +2,7 @@
 # architecture of phones, on GitHub's native Arm runner) and on x86_64. Monthly and manual, never the PR
 # loop: it downloads Termux packages and compiles better-sqlite3 with Termux's clang, and a mirror outage is
 # not a reason to hold a PR. The image has no Android underneath, so this proves the install and the
-# scripts, not a phone's background limits (docs/operate/pocket.md).
+# scripts, not a phone's background limits (docs/run/install/pocket.md).
 name: pocket-termux
 on:
   schedule:

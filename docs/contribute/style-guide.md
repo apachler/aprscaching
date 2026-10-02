@@ -111,13 +111,13 @@ Every game type gets the same sections, in this order:
 - **Admonitions only for real warnings**: something that loses data, breaks the law or costs money. A tip is a
   sentence.
 - **Screenshots** for UI procedures, made from the demo fixtures (`tools/teaser/docs-shots.mjs` or the
-  [visual harness](../reference/testing.md#design-and-accessibility)). Each has alt text that says what it
+  [visual harness](testing.md#design-and-accessibility)). Each has alt text that says what it
   shows, and a caption when the image carries the point.
 - **Diagrams are Mermaid**, never box-drawing characters. The manual and the in-app reader draw them in the
   theme's colours.
 - **Working examples**: callsigns like `OE8APR-7`, locators like `JN76`, and `<placeholders>` in angle brackets
   for what the reader fills in.
-- **Link text says where it goes**: "[How finds are verified](../concepts.md)", never "click here".
+- **Link text says where it goes**: "[How finds are verified](../reference/trust-model.md)", never "click here".
 - **Every page ends with Next**: one or two links.
 
 ## Player pages
@@ -134,7 +134,7 @@ Pages in the Play section are read on a phone, outdoors, by someone who is not a
 | Check | Fails on | Runs in |
 |---|---|---|
 | Vale (`.vale.ini`, `.vale/styles/APRScaching/`) | filler words, terminology variants (errors); title-case headings, Play-page readability (warnings); sentences over 30 words (suggestions) | docs workflow |
-| `tools/checks/docs.mjs` | process codes and story framing, undocumented configuration keys, pages outside the nav, broken links outside the manual, box-drawing diagrams | lint job |
+| `tools/checks/docs.mjs` | process codes and story framing, undocumented configuration keys, pages outside the nav, broken links outside the manual, box-drawing diagrams, references to a manual page or heading that does not exist (paths, published URLs, in-app links, the doctor's hints) | lint job |
 | `mkdocs build --strict` | broken links and anchors inside the manual | docs workflow |
 | `apps/web/test/diagrams.test.ts` | a Mermaid block that does not parse | unit tests |
 
@@ -143,5 +143,5 @@ noun there when Vale wrongly flags it, rather than switching a rule off.
 
 ## Next
 
-- [Testing & verification](../reference/testing.md): every check and how to run it.
+- [Testing & verification](testing.md): every check and how to run it.
 - [Glossary](../glossary.md): the names the manual uses.

@@ -54,3 +54,8 @@ switched to it — not a live flag.
 
 The typed data contracts that cross the wire — `Packet`, `Provenance`, the WebSocket messages, and the DTOs —
 live in `@aprscaching/shared` (Zod schemas) and are the source of truth for request/response shapes.
+
+## Next
+
+- [HTTP API](api.md).
+- [Backups and moving](../run/day-to-day/backups.md): what to back up.

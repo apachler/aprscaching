@@ -9,6 +9,7 @@ on:
     paths: &paths
       - "docs/**"
       - "mkdocs.yml"
+      - "overrides/**"
       - ".github/workflows/docs.yml"
       # the manual's theme and Mermaid build come from the web app (tools/dev/docs-theme.mjs)
       - "apps/web/src/styles/tokens.css"

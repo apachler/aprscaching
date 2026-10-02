@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Icon — the app's one icon set (docs/design/design-language.md): inline-SVG line icons on a 24-unit grid,
+ * Icon — the app's one icon set (docs/contribute/design/design-language.md): inline-SVG line icons on a 24-unit grid,
  * stroke 2, coloured by `currentColor`, size in px. No icon font, so they work offline and cost no request.
  * A few markers (navigation arrow, overflow dots) are filled. In the Phosphor theme an icon given a `cp437`
  * glyph shows that glyph instead (an empty string drops it), so the terminal look stays text through the same
