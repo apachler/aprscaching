@@ -1,91 +1,108 @@
 # Packet: BBS & NET/ROM node
 
-Beyond APRS, aprscaching is a connected-mode packet station: an AX.25 data-link stack, a NET/ROM node, and
-a store-and-forward BBS that forwards mail with the wider packet network. These run on the operator-local
-ingest box over a KISS TNC, or over an AXUDP link to other nodes when the box has no radio.
+This page turns the ingest box into a connected-mode packet station: a NET/ROM node, a BBS, and FBB mail
+forwarding with the wider packet network. It is for the sysop; at the end the node answers connects and
+trades routes with its neighbours.
+
+These services run on the operator's own ingest box, over its KISS TNC, or over an AXUDP link to other nodes
+when the box has no radio.
 
 !!! warning "These services transmit automatically"
-    The NET/ROM node, the BBS and FBB forwarding answer and send on the air without an operator at the key,
-    over the KISS TNC. Read [Automatic stations on the air](../compliance/on-air-stations.md) before you enable them on RF.
+    Over a KISS TNC, the NET/ROM node, the BBS and FBB forwarding answer and send on the air without an
+    operator at the key. Read [Automatic stations on the air](../compliance/on-air-stations.md) before you
+    turn them on with a radio.
+
+## Before you start
+
+- An ingest box with a working [KISS TNC](quick-starts.md#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc)
+  with PTT, or a two-way [AXUDP link](quick-starts.md#axudp-and-axip-packet-over-the-internet)
+  (`AXUDP_PEERS`).
+- A callsign-SSID for each service, for example `OE8APR-7` for the node and `OE8APR-8` for the BBS.
+- Settings go in the box's settings file (`deploy/.env` in Docker); restart the ingest after each change.
 
 ## Connected-mode AX.25
 
 The node and the BBS run on the ingest box's own AX.25 stack, over its KISS TNC or an AXUDP port. Defaults:
-`t1` 3 s, `t3` 30 s, `n2` 10, window 4, modulo 8; the modulus is chosen for an outgoing connect and adopted
-from the peer on an incoming one, and SREJ is opt-in per link. How the stack works is under
+`t1` 3 s, `t3` 30 s, `n2` 10, window 4, modulo 8. The modulus is chosen for an outgoing connect and adopted
+from the peer on an incoming one, and SREJ is opt-in per link. How the stack works is in
 [The AX.25 stack](../../contribute/ax25-stack.md).
 
 ## NET/ROM node
 
-Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over
-a bidirectional AXUDP port (`AXUDP_PEERS`). It:
+Set `NETROM_CALL` and `NETROM_ALIAS` (both required) to run a node over the KISS TNC or, without one, over a
+two-way AXUDP port. The node:
 
-- broadcasts its **NODES** table on an interval (`NETROM_BROADCAST_MS`, default 5 min) and learns routes from
-  inbound NODES broadcasts, decaying obsolescence;
-- switches directed NET/ROM frames — deliver locally, transit-forward, or drop;
-- accepts **L4 circuits** terminating at the node (bound to the node command line) and supports
-  **connect-through** (`C <dest>`) that routes and bridges a caller onward;
-- mirrors its learned NODES table and MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`).
+- broadcasts its **NODES** table every `NETROM_BROADCAST_MS` (default 300000, five minutes) and learns
+  routes from the NODES broadcasts it hears, letting stale routes age out; `NETROM_PATH_QUALITY` (0–255) is
+  the quality it assumes for a neighbour heard directly;
+- switches directed NET/ROM frames: delivers them locally, forwards them on, or drops them;
+- accepts **L4 circuits** that end at the node (bound to the node command line), and **connect-through**
+  (`C <dest>`), which routes a caller onward and bridges the two;
+- answers with the command surface set by `NODE_PERSONALITY`: `netrom`, `flexnet`, `tnn` or `baycom`;
+- mirrors its learned NODES table and its MHeard list to the gateway (`/api/node/nodes`, `/api/node/mheard`).
 
-**Check it worked:** the box logs `[netrom] node <ALIAS>:<CALL> active on <port>` and, once it answers connects,
-`[netrom] node CLI answering inbound connects on <CALL>`. Learned routes log as `[netrom] learned … route(s)`
-and appear in the **NET/ROM node** app in the Shack.
+**Check that it worked.** The box logs `[netrom] node <ALIAS>:<CALL> active on <port>` and, once it answers
+connects, `[netrom] node CLI answering inbound connects on <CALL>`. Learned routes log as
+`[netrom] learned … route(s)` and appear in the **NET/ROM node** app in the Shack and under
+**Instance admin**.
 
-### INP3 (Improved NET/ROM)
+### INP3 routing
 
-Set `NETROM_INP3=1` to also speak **INP3** alongside classic NODES broadcasts. INP3 replaces the
-0–255 quality metric and the fixed 5-minute flood with **triggered, point-to-point Routing
-Information Frames (RIFs)** ranked by measured **round-trip transport time (`tt`)**, so the network
-converges faster and prefers genuinely low-latency paths:
+Set `NETROM_INP3=1` to also speak **INP3** (Improved NET/ROM) beside the NODES broadcasts. INP3 replaces the 0–255 quality and
+the fixed five-minute flood with **triggered, point-to-point Routing Information Frames (RIFs)**, ranked by
+the measured **round-trip transport time (`tt`)**. The network converges faster and prefers paths with low
+latency. The node:
 
-- learns routes from a neighbour's directed RIF (`0xFF` info to us, not flooded to `NODES`), adding
-  the link's own `tt` to each advertised route and re-advertising only what changed (triggered
-  update), within a 30-hop horizon;
-- measures each neighbour's latency with **L3RTT** probes (a NET/ROM L4 frame to the `L3RTT`
-  pseudo-destination, echoed back), smoothing samples as `srtt' = (7·srtt + rtt) / 8` and deriving a
-  route's `tt` as half the round trip;
+- learns routes from a neighbour's directed RIF, adds the link's own `tt` to each route, and advertises
+  again only what changed, within a 30-hop horizon;
+- measures each neighbour's latency with **L3RTT** probes and takes a route's `tt` as half the smoothed
+  round trip;
 - withdraws a route (`tt = 60000`) when its neighbour does, or when it ages out;
-- surfaces INP3 routes in the same merged node table (their `tt` mapped to a NET/ROM-style quality
-  for display only — routing stays on the native `tt` metric).
+- shows INP3 routes in the same node table, with their `tt` mapped to a NET/ROM-style quality for display
+  only; routing stays on `tt`.
 
-Classic NODES broadcasting keeps running, so an INP3 node still interoperates with plain NET/ROM
-neighbours.
+The log shows `[inp3] enabled — RIF learning, L3RTT probing, triggered updates on <port>`. Classic NODES
+broadcasting keeps running, so an INP3 node still works with plain NET/ROM neighbours.
 
 ## BBS
 
-There are two BBS surfaces:
+Set `BBS_NODE_CALL`, and the box answers inbound AX.25 connects to that call with the F6FBB command set
+(list, read, send, kill, help, …), backed by a per-caller snapshot of the gateway's mail store. The log shows
+`[bbs] BBS answering inbound connects on <CALL> (FBB forwarding gate armed)`.
 
-- **Connected-mode FBB/MBL BBS.** Set `BBS_NODE_CALL` and the node answers inbound AX.25 connects with the
-  F6FBB command set (list, read, send, kill, help, …) backed by a per-caller snapshot of the gateway's mail
-  store.
-- **Connectionless store-and-forward.** The gateway holds personal mail and bulletins; personal mail is
-  **held until the addressee is next heard**, then delivered as a standard APRS message with line-number ack
-  tracking. The relay callsign is `BBS_CALL` (default `APRSCG`). Message format (P/B type + BID) is
-  MBL/FBB-compatible. See the public BBS endpoints in the [API reference](../../reference/api.md#bbs).
+The gateway also runs a connectionless store-and-forward BBS. It holds personal mail and bulletins; personal
+mail is **held until the addressee is next heard**, then delivered as a standard APRS message with
+line-number ack tracking. The relay callsign is `BBS_CALL` (default `APRSCG`). The message format (P/B type
+and BID) is MBL/FBB-compatible. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
 
 ### FBB forwarding
 
-Enable outbound forwarding with `BBS_FORWARD=1` and `BBS_FORWARD_CALL`. The forwarder opens connected-mode
-AX.25 sessions to partner BBSes and exchanges mail using the **ASCII FBB** protocol, with hierarchical
-`TO@BBS.#REGION.STATE.CC.CONT` addressing, longest-prefix routing, and BID/MID de-duplication. Partners and
-routing rules are configured on the sysop surface (see [Instance admin at a glance](../day-to-day/index.md)). Multi-hop
-connect scripts are supported.
+Set `BBS_FORWARD=1` and `BBS_FORWARD_CALL` to forward mail. It needs the KISS TNC or a two-way AXUDP port.
+The forwarder opens connected-mode AX.25 sessions to partner BBSes and exchanges mail with the **ASCII FBB**
+protocol. It uses hierarchical `TO@BBS.#REGION.STATE.CC.CONT` addressing, longest-prefix routing, and BID/MID
+de-duplication, and runs multi-hop connect scripts. It checks its queue every `BBS_FORWARD_POLL_MS` (default
+60000) and presents `BBS_FORWARD_SID` to partners. The log shows
+`[forward] FBB forwarding scheduler active as <CALL>`.
 
-!!! note "LZHUF (B1) compressed forwarding"
-    Set `BBS_FORWARD_COMPRESS=1` to offer FBB binary compressed forwarding. The LZHUF codec is
-    **byte-exact against a real F6FBB oracle**, the binary-block session transport (SOH/STX/EOT blocks,
-    `FA` proposals, `FS !offset` resume) rides the same forwarding session, and FBB MD5 link auth is
-    supported. Compression engages only when the partner's SID also advertises the `B` flag — against an
-    ASCII-only partner the session negotiates back to plain ASCII, so the option is always safe to enable.
-    The containerized F6FBB in `tools/interop/` is the live-validation peer.
+Partners and routing rules are set under **Instance admin → FBB forwarding**
+([Instance admin at a glance](../day-to-day/index.md)).
+
+**Compressed forwarding.** Set `BBS_FORWARD_COMPRESS=1` to offer FBB binary compressed forwarding (LZHUF,
+B1). The binary blocks (SOH/STX/EOT, `FA` proposals, `FS !offset` resume) travel in the same forwarding
+session, and FBB MD5 link authentication is supported. Compression starts only when the partner's SID also
+advertises the `B` flag. Against an ASCII-only partner the session falls back to plain ASCII, so the option
+is always safe to turn on.
 
 ## Internet crosslinks
 
-A NET/ROM node and FBB forwarding can run over the internet leg instead of (or alongside) RF, using the
-bidirectional **AXUDP** or **AXIP** ports — set `AXUDP_PEERS` / `AXIP_PEERS` (see
-[RF ingest & transports](rf-ingest.md#transports)). This lets your node join the wider BPQ-style packet mesh
-without a radio path to every neighbour.
+A NET/ROM node and FBB forwarding can run over the internet instead of RF, or beside it, on the two-way
+**AXUDP** or **AXIP** ports: set `AXUDP_PEERS` or `AXIP_PEERS` ([Transports](rf-ingest.md#transports)). Your
+node then joins the wider BPQ-style packet mesh without a radio path to every neighbour. Between two 44Net
+addresses, see [AXUDP and AXIP peering over 44Net](../networks/44net.md#axudp-and-axip-peering-over-44net).
+Frames that arrive this way stay Tier C.
 
 ## Next
 
-- [Remote control of your box](remote-box.md).
+- [Remote control of your box](remote-box.md): drive the box from the web app.
+- [Automatic stations on the air](../compliance/on-air-stations.md): the rules for a station that answers
+  on its own.

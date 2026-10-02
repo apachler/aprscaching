@@ -279,7 +279,7 @@ def not_cdc_acm(vid: int, pid: int) -> str:
     return (
         f"device {vid:04x}:{pid:04x} is not a CDC-ACM serial device"
         + (f": it has a {chip} chip, which needs its own driver" if chip else "")
-        + ". Only CDC-ACM TNCs work here; see the compatibility table in docs/run/install/pocket.md."
+        + ". Only CDC-ACM TNCs work here; see the compatibility table in docs/run/pocket/field-station.md."
     )
 
 

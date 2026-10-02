@@ -266,7 +266,7 @@ instance. Relay cargo (query params, the
 answered feed page) travels as JSON text inside the CBOR bodies — feed pages carry floats, which the
 deterministic codec refuses by design.
 
-## 44net verified onboarding
+## Verified onboarding on 44Net
 
 ARDC's portal reviews an amateur licence before delegating `<call>.ampr.org` (its Level-of-Trust
 process), so the name is an externally-verified callsign binding. A peer advertises its federation

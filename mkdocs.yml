@@ -117,7 +117,8 @@ nav:
       - The Shack at a glance: shack/index.md
       - Your radio in the browser: shack/my-radio.md
       - The live map: shack/live-map.md
-      - Packet decoder & BBS: shack/packet-and-bbs.md
+      - Packet terminal & BBS: shack/packet-and-bbs.md
+      - Messages over APRS and MeshCom: shack/messages.md
       - Rig control & weather: shack/rig-weather.md
       - On-air etiquette and rules: shack/on-air.md
   - Run an instance:
@@ -167,6 +168,7 @@ nav:
           - A public instance's duties: run/compliance/index.md
           - Automatic stations on the air: run/compliance/on-air-stations.md
           - Data protection (GDPR): run/compliance/data-protection.md
+      - Troubleshooting: run/troubleshooting.md
   - Reference:
       - HTTP API: reference/api.md
       - Configuration: reference/configuration.md

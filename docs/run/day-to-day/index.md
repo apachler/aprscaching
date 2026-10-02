@@ -1,25 +1,50 @@
 # Instance admin at a glance
 
-Some configuration governs the **whole instance** and belongs to the ham who deployed it — not to platform
-users. This surface is separate from per-user settings and is gated server-side.
+This page is for the sysop who keeps an instance running. It lists what only the sysop sees in the app, and
+links each recurring task: checks, backups, updates, sign-in links and the rest.
+
+## Who sees the admin surface
+
+The **Admin** entry in the navigation rail opens **Instance admin**. It appears only for a sysop: a signed-in
+account whose active callsign is in `ADMIN_CALLSIGNS` and is control-verified
+([Who is a sysop](../../reference/secrets.md#who-is-a-sysop)). The server checks every admin write itself, so
+hiding a control in the app is never the only gate. When `ADMIN_CALLSIGNS` is unset, nobody sees the surface.
+
+Instance admin holds settings for the **whole instance**. A member's own settings (account, callsigns,
+preferences, media, tools, their own data) stay under **Settings** and are not part of it.
 
 ## Operator-only surfaces
 
-Reached from the instance-admin panel (shown only to operators):
+**Instance admin** has these groups, each collapsed until you open it:
 
-- **Callsign verification** — verify a call by hand, list and revoke manual verifications (above).
-- **Cache adoption** — offer caches for adoption, decide requests, assign an owner (above).
-- **Federation** — the peer list with health and reputation, per-peer **trust** (`trusted` / `unvetted` /
-  `blocked`), and a manual sync trigger. See [Join the network](../federation/index.md).
-- **FBB forwarding** — partner BBSes (callsign, protocol, intervals, time-bands, message types) and
-  hierarchical routing rules, plus the White Pages directory that steers personal mail.
-- **NET/ROM node** — the learned NODES routing table.
-- **Ingest & transports** — the data plane (transports and the TAK/CoT feed). `GET /api/cot?bbox=` renders
-  the live station registry as Cursor-on-Target for ATAK / WinTAK / iTAK.
+| Group | What you do there | Page |
+|---|---|---|
+| **Setup** | the first-install checklist: *Blocking*, *Recommended* and *Optional* items, and the 44Net self-check | [Your first hour](../first-hour.md) |
+| **Callsign verification** | verify a call by hand, list and revoke manual verifications | [Callsign verification](callsign-verification.md) |
+| **Cache adoption** | offer caches for adoption, decide requests, assign an owner | [Cache adoption](cache-adoption.md) |
+| **Federation** | the peer list with health and reputation, each peer's trust (`trusted`, `unvetted`, `blocked`), a manual sync | [Join the network](../federation/index.md) |
+| **Forwarding** | FBB partner BBSes (callsign, protocol, intervals, time bands, message types), routing rules, and the White Pages directory that steers personal mail | [Packet: BBS and NET/ROM node](../radios/packet-node.md) |
+| **Ingest boxes** | enroll a box and revoke one | [Set up an ingest box](../radios/ingest-box.md) |
+| **Ingest & transports** | the data plane: the transports and the TAK/CoT feed | [RF ingest and transports](../radios/rf-ingest.md) |
 
-Everything a normal user does — hiding and logging caches, favorites and ratings, callsign management,
-preferences, media, enabling tools, and their own data actions — is **not** on this surface.
+The TAK/CoT feed, `GET /api/cot?bbox=`, serves the live station list as Cursor-on-Target for ATAK, WinTAK and
+iTAK.
+
+## Recurring tasks
+
+| Task | Page |
+|---|---|
+| Check the installation, set up a shape, rotate a secret | [The deploy/aprscaching command](helper-command.md) |
+| Find what a doctor result means and fix it | [Troubleshooting](../troubleshooting.md) |
+| Back up, restore, move to another shape | [Backups and moving](backups.md) |
+| Bring the instance to a new release | [Updates](updates.md) |
+| Sign someone in without a passkey | [One-time sign-in links](sign-in-links.md) |
+| Verify a member's callsign by hand | [Callsign verification](callsign-verification.md) |
+| Give an abandoned cache a new owner | [Cache adoption](cache-adoption.md) |
+| Keep the licence badge current | [Licence registers](licence-registers.md) |
+| Import summits, parks and castles as caches | [Import heritage places](import-places.md) |
 
 ## Next
 
-- [The deploy/aprscaching command](helper-command.md).
+- [The deploy/aprscaching command](helper-command.md): the one command behind most of these tasks.
+- [A public instance's duties](../compliance/index.md): what a public instance owes its users.

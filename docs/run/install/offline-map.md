@@ -1,18 +1,24 @@
 # The offline map
 
-Hunters make **offline packs** before a trip without signal ([Offline packs](../../play/index.md)). A pack
-always holds the caches; if your instance offers an **offline map**, it holds the map of its square too, and the
-app draws it with no connection. Without one, the offline map is a grid under the caches.
+This page gives your instance an **offline map** for hunters' offline packs. It is for a sysop on any shape; at
+the end a pack holds the map of its square, and the app draws it with no connection.
+
+Hunters make offline packs before a trip without signal ([Hunting without signal](../../play/offline.md)). A
+pack always holds the caches. Without an offline map, the map in a pack is a grid under the caches.
 
 The offline map is one file you provide: a regional **PMTiles** archive of vector tiles, cut from
 OpenStreetMap data. Your instance serves it; a phone reads only the tiles of its pack's square, by byte range.
 No tiles come from a third-party tile service: OpenStreetMap's own tile servers forbid bulk and offline
 downloads.
 
+## Before you start
+
+- The [`pmtiles` command-line tool](https://docs.protomaps.com/pmtiles/cli).
+- Room on the instance's disk (or bucket) for the archive: a few hundred MB for a country.
+
 ## Prepare the archive
 
-Cut your region from a [Protomaps](https://protomaps.com) daily build with the
-[`pmtiles` command-line tool](https://docs.protomaps.com/pmtiles/cli):
+Cut your region from a [Protomaps](https://protomaps.com) daily build:
 
 ```bash
 pmtiles extract https://build.protomaps.com/20261001.pmtiles austria.pmtiles \
@@ -33,9 +39,9 @@ the archive now and then: a pack keeps the map it was made with, until it is mad
 
 | Shape | How |
 |---|---|
-| Self-host (Docker) | Put the file in the data volume, e.g. `docker compose cp austria.pmtiles gateway:/data/offline.pmtiles`, and set `OFFLINE_TILES_PATH=/data/offline.pmtiles` in `.env`. |
+| Self-host (Docker) | Put the file in the data volume, e.g. `docker compose cp austria.pmtiles gateway:/data/offline.pmtiles`, set `OFFLINE_TILES_PATH=/data/offline.pmtiles` in `.env`, and apply it with `docker compose up -d` (from `deploy/`). |
 | Bare metal, Pocket, Desktop | Set `OFFLINE_TILES_PATH` to the file's path. |
-| Cloudflare split | Upload it to the `TILES` bucket: `wrangler r2 object put aprscaching-assets/offline.pmtiles --file austria.pmtiles` (`OFFLINE_TILES_KEY` names another key). |
+| Cloudflare split | Upload it to the `TILES` bucket: `wrangler r2 object put aprscaching-assets/offline.pmtiles --file austria.pmtiles` (`OFFLINE_TILES_KEY` names another key). Create the bucket first if it does not exist: `wrangler r2 bucket create aprscaching-assets`. |
 | Hosted elsewhere | Set `OFFLINE_TILES_URL` to its URL. The host must allow offline use and answer byte ranges with CORS (`Access-Control-Allow-Origin`, and `Content-Range` exposed). |
 
 The instance serves the file at `/tiles/offline.pmtiles`; `GET /api/offline/tiles` tells the app where it is.
@@ -46,7 +52,16 @@ once, with no restart. [Configuration](../../reference/configuration.md) lists e
 On Pocket, the phone serves the archive on its hotspot, so a group of hunters on it makes packs with no
 internet at all.
 
+## Check that it worked
+
+```bash
+curl -fsS https://<your domain>/api/offline/tiles
+```
+
+The answer names a `url` (`/tiles/offline.pmtiles` for a file or a bucket object); `"url":null` means the
+instance has no offline map. In the app, a new offline pack shows the map of its square.
+
 ## Next
 
-- [Your first hour](../first-hour.md).
+- [Your first hour](../first-hour.md): the rest of the setup after the instance answers.
 - [Hunting without signal](../../play/offline.md): what players do with it.

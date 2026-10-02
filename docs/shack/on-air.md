@@ -1,75 +1,69 @@
 # On-air etiquette and rules
 
-The moment an aprscaching instance keys a transmitter — digipeating, IGating, running a node or BBS,
-forwarding store-and-forward mail, or carrying federation over the air — it operates in the **amateur
-radio service**, and amateur rules apply to every frame it sends. This chapter maps the constraints
-that shape the platform and shows where aprscaching enforces them for you and where responsibility
-stays with you.
+This page is for you as an individual operator who transmits from aprscaching: a beacon, a message, a packet
+connect or a weather report. It sets out the amateur rules that apply to every frame you send, and what the
+software does to help you keep them.
 
-> **This is not legal advice.** Amateur regulations differ by country and change over time. You are the
-> **control operator** of your station and are solely responsible for its transmissions. Verify
-> everything here against your own licence conditions and national authority (US FCC Part 97,
-> CEPT/ECC in Europe, and your national telecom regulator).
+!!! warning "This is not legal advice"
+    Amateur regulations differ by country and change over time. You are the **control operator** of your
+    station and solely responsible for its transmissions. Check everything here against your own licence
+    conditions and your national authority (US FCC Part 97, CEPT/ECC in Europe, and your national telecom
+    regulator).
 
 ## You are the control operator
 
-aprscaching is software; the licence is yours. Nothing the platform or its users do relieves the
-station's control operator of responsibility for what leaves the antenna. Two controls make that
-tractable:
+aprscaching is software; the licence is yours. Nothing the platform or its users do relieves you of
+responsibility for what leaves your antenna. The software helps in three ways:
 
-- **Transmit is off by default and gated.** Browser and RF transmit are disabled until the callsign
-  is **control-verified**: its holder transmitted `VERIFY <code>` and a receiving site you attest heard it
-  on the air, or the operator or a sysop vouched for it (see [Instance admin at a glance](../run/day-to-day/index.md)). The
-  APRS-IS passcode verifies nothing and is never the gate. See [RF ingest & transports](../run/radios/rf-ingest.md).
-- **Receiving never obligates transmitting.** RX is always safe and never lifts trust
-  ([The trust model](../reference/trust-model.md)); enabling automatic TX (digipeat, beacon, forward) is a separate,
-  explicit, per-port opt-in.
+- **Transmit is off by default and gated.** The browser radio's beacon and messages, the APRS-IS weather
+  beacon and the CWOP relay, and plugins that transmit all stay off until your callsign is
+  **control-verified**: you sent `VERIFY <code>` and a receiving site the instance attests heard it on the
+  air, you proved the call another way ([Verify your callsign](../play/join.md#verify-your-callsign)), or a
+  sysop vouched for it. The APRS-IS passcode verifies nothing and is never the gate.
+- **Every transmission is a choice.** The browser asks you to confirm each beacon and message, and switching
+  on **Enable transmit** is a separate step.
+- **Receiving never obliges you to transmit.** Receiving is always allowed and never raises trust
+  ([The trust model](../reference/trust-model.md)).
+
+!!! note "Known issue"
+    The **Packet terminal** keys your radio when it connects, without checking that your callsign is verified.
+    Use it only with a callsign you hold.
 
 ## No encryption on the air — sign, never conceal
 
-Amateur rules broadly prohibit transmitting messages **encoded to obscure their meaning**. This is the
-single hardest constraint on carrying an application protocol over RF, and aprscaching is built around
-it:
+Amateur rules broadly prohibit messages **encoded to obscure their meaning**. aprscaching is built around that
+rule:
 
-- **aprscaching signs; it does not encrypt.** Federation feed pages, signed tombstones, account-move
-  records, device-key find signatures, and tool-manifest signatures are all **digital signatures** —
-  they authenticate origin and integrity. They do **not** conceal content: the payload stays in the
-  clear and is fully readable off the air. Signing for authentication is permitted; encrypting for
-  secrecy is not.
-- **Confidentiality degrades to omission, never to ciphertext.** Any field the platform withholds for
-  privacy — `fed_scope` owner-field redaction, or any non-public payload — is **dropped** before it
-  reaches an RF binding, never encrypted onto it. **An RF transport binding MUST NOT carry
-  ciphertext.**
-- **Secrets never touch the air.** The ingest secret, the session HMAC key, per-operator peer keys,
-  and VAPID keys are internet-side authentication only. They are not transmitted, and RF paths carry
-  no credential material.
+- **It signs; it does not encrypt.** Federation records, tombstones, account moves, the signatures on your
+  finds and plugin signatures are **digital signatures**: they prove who sent a record and that nobody changed
+  it. The content stays in the clear and anyone can read it off the air. Signing for authentication is
+  permitted; encrypting for secrecy is not.
+- **Privacy means leaving out, never encrypting.** A field the platform withholds for privacy, such as a
+  cache owner's details, is **dropped** before it reaches the air, never encrypted onto it.
+- **Secrets never touch the air.** The instance's secrets and your device key are internet-side only; no
+  radio path carries credential material.
 
-The practical result: everything aprscaching would put on the air is already public, signed, and
-inspectable — which is exactly what keeps it legal.
+Everything aprscaching puts on the air is public, signed and readable, which is what keeps it legal.
 
 ## Station identification
 
-Automatic stations must identify with their callsign at the interval your regulator requires. Every
-APRS/AX.25 frame aprscaching sends carries its source callsign. The NET/ROM node identifies through its
-NODES broadcast, whose interval is `NETROM_BROADCAST_MS` (default 5 minutes). The digipeater and IGate
-have no separate identification timer: they transmit only when relaying traffic, under the station's
-callsign. Check that this meets your national identification rule.
+Every APRS and AX.25 frame you send from aprscaching carries your callsign and SSID as its source. Your
+regulator may still require an identification at fixed intervals, for example during a long connected
+session: check your national rule.
 
-## Third-party traffic & message handling
+## Third-party traffic
 
-Relaying messages **on behalf of other people** ("third-party traffic") is restricted, and
-international third-party handling is permitted only with specific countries. aprscaching's
-third-party encapsulation puts the licensed user's callsign as the on-air source
-(`}USERCALL>APZACG,…`) while your gateway is the sending station. When you forward others' BBS mail or
-carry federation records that originated at other operators' stations, you remain responsible for
-meeting your country's third-party rules and any applicable international agreements.
+Relaying messages **on behalf of other people** (third-party traffic) is restricted, and international
+third-party traffic is permitted only with specific countries. When you send BBS mail to another country, or a
+radio command that the instance answers through its own station, you remain responsible for your country's
+third-party rules.
 
-## No commercial or pecuniary traffic
+## No commercial traffic
 
-The amateur service is non-commercial. aprscaching's **donations are recognition-only** and never
-gate features, so nothing that looks like paid promotion rides the air; cache content and federation
-records carry no advertising. Keep it that way on any RF binding.
+The amateur service is non-commercial. Donations to aprscaching are recognition-only and never unlock
+features, and caches carry no advertising. Keep anything you put on the air the same way.
 
 ## Next
 
+- [Your radio in the browser](my-radio.md): connect and transmit.
 - [Automatic stations on the air](../run/compliance/on-air-stations.md): for a sysop's IGate, digipeater or node.

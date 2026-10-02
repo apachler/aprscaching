@@ -90,8 +90,7 @@ shape_doctor_extra() {
     warnc service.gateway_port "the gateway's port 8080 is published on the host, bypassing Caddy" "remove the ports: entry of the gateway service"
   fi
   if doc_public && selfhost_compose port --protocol udp ingest 1799 2>/dev/null | grep -qE '^(0\.0\.0\.0|\[::\]):[1-9]'; then
-    warnc service.meshcom_port "MeshCom's 1799/udp is published on every address of a public host" "publish it on the LAN address only" \
-      "docs/run/radios/meshcom.md"
+    warnc service.meshcom_port "MeshCom's 1799/udp is published on every address of a public host" "publish it on the LAN address only"
   fi
   size="$(selfhost_compose exec -T gateway sh -c 'du -k "${DB_PATH:-/data/aprscaching.db}" | cut -f1' 2>/dev/null || true)"
   [ -z "$size" ] || pass resources.database "the database is $((size / 1024)) MiB"

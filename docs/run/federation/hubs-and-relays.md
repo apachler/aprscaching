@@ -1,51 +1,113 @@
 # Hubs, relays and the registry
 
-How an instance behind a firewall stays in the network, and how instances find each other.
+This page shows the sysop how an instance that nobody can dial stays in the network, and how instances find
+each other through a registry. At the end a firewalled instance, such as a phone or a box behind a carrier's
+NAT, pushes its records to a hub you run.
+
+## Before you start
+
+- Both instances have a signing key and know each other's URL ([Join the network](index.md)).
+- The hub answers on a public URL. The spoke needs only outbound connections.
 
 ## Reaching firewalled peers
 
-A peer that can't be dialled inbound can still contribute:
+A peer that can't be dialled inbound still contributes in two ways: it pushes its records to a hub, or it
+answers queries through a relay on the hub.
 
-- **Push-to-hub.** A spoke pushes its signed records to a reachable hub's `POST /federation/submit`
-  (secret-gated by `FED_SUBMIT_SECRET`; the hub verifies each record and requires the submitter to be its
-  own signer). The signature proves which instance sent a record; the secret decides who may introduce a
-  new spoke's key to the hub at all. A submission for an instance the hub already knows under another key, or for a blocked
-  instance, is refused; a new spoke is registered `unvetted` until the operator promotes it. A spoke that
-  rotated its key sends its rotation records with each push (`FED_ROTATIONS`), so the hub follows the
-  rotation from the key it pinned. A submission body is capped at 4 MiB. Set `FED_HUB_URL` on the spoke.
-  The spoke keeps how far it has pushed each feed in its database and advances it only when the hub
-  accepts a page, so a restart resumes instead of sending its history again. The hub records where each
-  spoke's feeds stand and returns it; a spoke reads it when it starts and after an outage, so a backup
-  restored on either side resumes from what the hub holds. After a network failure a Node or Bun spoke
-  probes the hub's `/health?live` (30 s, backing off to 10 minutes) and pushes the moment it answers; while
-  more pages wait than one cycle sends, the next cycle follows a few seconds later. **Instance admin →
-  Federation** shows the last push, the records waiting and since when the hub is unreachable, with **Sync
-  now**; on a hub it lists each spoke's last submission, stale after `FED_SPOKE_STALE_HOURS`.
-- **Rendezvous relay.** A poll-based relay lets a firewalled peer's feed be served through a hub with no
-  tunnel and no inbound port (`/federation/relay/*`, enabled by `FED_RELAY_SECRET`). The secret is what
-  admits a requester — enqueueing and reading results carry no signature. A requester gets a
-  ticket with each query and reads only its own results; queries per requester are capped. A spoke leases
-  and answers by signing each request with its own federation key, which the hub checks against the key it
-  holds for that instance — so the hub must already know the spoke (as a pulled peer, in the registry, or
-  from a push-to-hub submission), and no spoke can act for another. An unanswered lease returns to the
-  queue after five minutes.
+### Push to a hub
+
+The spoke sends its signed records to the hub's `POST /federation/submit`. The hub verifies each record, and the
+submitter must be its own signer.
+
+On the hub, in its `.env`:
+
+```bash
+FED_SUBMIT_SECRET=<a long random secret>       # turns submissions on
+FED_SUBMIT_INSTANCES=oe8apr-pocket,oe8xyz.net  # the spokes allowed to push
+```
+
+On the spoke:
+
+```bash
+FED_HUB_URL=https://aprs.example.net           # the hub it pushes to
+FED_SUBMIT_SECRET=<the hub's FED_SUBMIT_SECRET>
+FED_PEERS=https://aprs.example.net             # optional: also pull from the hub
+```
+
+Restart both. What happens then:
+
+- **The first push registers the spoke `unvetted`.** Its records arrive hidden on the hub's map until the hub's
+  sysop promotes it under **Instance admin → Federation**. The secret decides who may introduce a new key to the
+  hub; it does not say who the spoke is, so trusting it stays your call.
+- **The hub refuses** a submission for an instance it knows under another key, and one for a blocked instance.
+  A submission body is capped at 4 MiB.
+- **A spoke that rotated its key** sends its rotation records with each push (`FED_ROTATIONS`), so the hub
+  follows the rotation from the key it pinned.
+- **Pushes resume.** The spoke keeps how far it pushed each feed in its database. It advances only when the hub
+  accepts a page, so a restart never sends its history again. The hub returns where each spoke's feeds stand; a
+  spoke reads that when it starts and after an outage, so a backup restored on either side resumes from what
+  the hub holds.
+- **Back-off after an outage.** After a network failure a Self-host, Desktop or Pocket spoke probes the hub's
+  `/health?live` after 30 s, doubling up to 10 minutes, and pushes the moment it answers. While more pages wait
+  than one cycle sends, the next cycle follows a few seconds later.
+
+### Rendezvous relay
+
+The relay lets a firewalled peer serve its feed through a hub, with no tunnel and no inbound port. It runs on
+the hub under `/federation/relay/*`, turned on by `FED_RELAY_SECRET`.
+
+- A requester enqueues a query for a spoke and gets a ticket; it reads only its own results. The secret admits
+  the requester, and queries per requester are capped.
+- The spoke leases the queries addressed to it and signs each request with its own federation key. The hub
+  checks that key against the one it holds for the instance, so the hub must already know the spoke: as a
+  pulled peer, from the registry, or from a push. No spoke can act for another.
+- An unanswered lease returns to the queue after 5 minutes.
+- A relayed answer is a signed feed page, verified like a pulled one: the relay is transport only.
+
+The gateway serves the hub's relay endpoints. A spoke's gateway does not poll them by itself: the spoke side
+needs a client that leases and answers.
 
 ## The instance registry
 
-A signed instance registry binds instance names to keys and operators. Its authority key is always pinned in
-`FED_REGISTRY_KEY`; the document comes from `FED_REGISTRY` or is located through a DNS `TXT` record named
-by `FED_REGISTRY_DNS` (`url=https://…`). DNS only says where the document lives: a `key=` in the record is
-ignored, because whoever can change a DNS record must not choose the key that signs the registry. A
-registry setting without `FED_REGISTRY_KEY` is a configuration error — the Node and Bun servers refuse to
-start, and on Workers every registry lookup fails closed.
+A registry is a signed document that binds instance names to keys and operators. An instance refuses to mirror
+a peer whose current key differs from the key its registry entry binds, so nobody can pose as a registered
+instance.
 
-An instance refuses to mirror a peer whose **current** key isn't the key its registry entry binds — an
-anti-spoof check. A DNS-located registry is cached for five minutes; a document older than the newest one
-already accepted is refused as a replay, and when the registry can't be fetched the last good document keeps
-binding the instances it registered, so an outage never reopens them to impersonation. Each instance exposes
-its verified view at `GET /federation/registry`, including its own entry (operator, APRS service call, and an
-optional reachability-only amateur-network endpoint).
+1. **The registry authority signs the entries** from the repository root:
+
+    ```bash
+    node tools/fedkey/signregistry.mjs '[{"instance":"oe.net","url":"https://oe.aprscaching.net","key":"<public key>","operator":"OE8APR","aprsCall":"OE8APR-12"}]'
+    ```
+
+    It prints `FED_REGISTRY`, the signed document, and `FED_REGISTRY_KEY`, the authority's public key. Pass the
+    authority key in `AUTHORITY` to sign again with the same one. An entry may carry `addresses`, the
+    instance's typed endpoints (https, 44net, ax25, netrom, bbs): a directory of where to reach it, never a
+    trust upgrade.
+2. **Each member pins the authority key** in `FED_REGISTRY_KEY`, and gets the document one of two ways:
+    - `FED_REGISTRY`: the document itself.
+    - `FED_REGISTRY_DNS`: the name of a DNS `TXT` record holding `url=https://…`. DNS only says where the
+      document lives; a `key=` in the record is ignored, so whoever controls DNS never chooses the signing key.
+3. **Restart.** A registry setting without `FED_REGISTRY_KEY` is a configuration error: Self-host, Desktop and
+   Pocket refuse to start, and on Cloudflare every registry lookup fails closed.
+
+How the registry behaves:
+
+- Registered peers join your peer list `unvetted`.
+- A DNS-located registry is cached for 5 minutes. A document older than the newest one accepted is refused as
+  a replay.
+- When the registry can't be fetched, the last good document keeps binding the instances it registered, so an
+  outage never reopens them to impersonation.
+- `GET /federation/registry` shows your instance's verified view, including its own entry: operator, APRS
+  service call, and an optional amateur-network endpoint used for reachability only.
+
+## Check that it worked
+
+- On the spoke, **Instance admin → Federation** shows the last push, the records waiting and since when the hub
+  is unreachable, with **Sync now**. On Pocket, `sync.sh --status` shows the same.
+- On the hub, the same page lists each spoke's last submission. A spoke shows as stale after
+  `FED_SPOKE_STALE_HOURS` (24) without one.
 
 ## Next
 
-- [Instance admin at a glance](../day-to-day/index.md).
+- [Before a trip: sync and your home hub](../pocket/trips.md): a phone as the spoke.
+- [Instance admin at a glance](../day-to-day/index.md): the other operator-only surfaces.

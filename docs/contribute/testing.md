@@ -1,7 +1,8 @@
 # Testing & verification tooling
 
-Everything that verifies this repo, from unit tests to real-packet-software interop. All commands
-run from the repo root after `pnpm install`.
+This page lists every check that verifies the repository, from unit tests to interop with real packet
+software, and how to run each one. It is for contributors; all commands run from the repository root after
+`pnpm install`.
 
 ## The three wrappers (day-to-day)
 
@@ -28,9 +29,10 @@ pnpm --filter @aprscaching/packet exec vitest run test/lzhuf.test.ts   # one fil
 ```
 
 `servers/bun` intentionally has no vitest: the Bun **conformance** job (below) covers it. `apps/web`
-runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM: data loading,
-polling, navigation history) beside its typecheck + build and the `no-emoji.mjs` / `tour-anchors.mjs`
-guards.
+runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse
+check under jsdom: data loading, polling, navigation history) beside its typecheck + build and three guards:
+`no-emoji.mjs`, `tour-anchors.mjs` (every tour anchor resolves) and `vendor-maplibre.mjs` (the vendored
+MapLibre).
 
 ## Conformance suites (runtime-agnostic)
 
@@ -148,6 +150,21 @@ tiers (full detail in `tools/interop/README.md`):
 
 These run in the **weekly** `interop` workflow (scheduled + manual dispatch), never the PR loop —
 peer downloads and kernel modules are not PR-gating dependencies.
+
+## Pocket in Termux
+
+The monthly `pocket-termux` workflow installs and starts Pocket in the `termux/termux-docker` image. On
+aarch64, the phones' architecture, everything is built inside Termux. On x86_64 the web app is built on the
+runner and handed in with `--web-dist`: Rolldown, the web build's bundler, has Android builds for Arm only, so
+an x86 Android device (a Chromebook, an emulator) takes its web build from a PC. The image has no Android
+underneath, so the workflow proves the install and the scripts, not a phone's background limits. It runs
+monthly and on demand, never on a pull request: it downloads Termux packages and compiles better-sqlite3
+with Termux's clang, and a mirror outage is no reason to hold a change.
+
+Pocket's USB TNC bridge is written from the USB CDC-ACM class specification. Prior art:
+[Termux_CDC_ACM](https://github.com/schuhumi/Termux_CDC_ACM) and pyusb's Termux file-descriptor work
+([pyusb#287](https://github.com/pyusb/pyusb/pull/287), not merged, so the bridge calls libusb through Python's
+`ctypes` instead).
 
 ## Key & signing tools used by tests
 

@@ -1,58 +1,92 @@
 # Join the network
 
-This page is for the [sysop](../../glossary.md#sysop) who connects an instance to others. As a player you
-need none of it: caches from the instances yours trusts appear on your map, and your finds travel to them.
-In plain words, federation lets independent instances share caches, finds and keys as signed records, so
-none of them has to trust the network in between.
+This page shows the [sysop](../../glossary.md#sysop) how to connect an instance to others. At the end your
+instance mirrors the peers you trust, and they mirror you.
 
-Any instance — Cloudflare-edge or self-hosted — can join one open network. Federation is built on
-**signed feeds and verified mirrors**, never on trusting a transport. Because a record's authenticity is
-in its signature and not its path, the same signed records travel over any transport — HTTPS, plain HTTP
-on a 44net/HAMNET amateur-IP name, and the packet-radio carriers — and on amateur RF a signature
-authenticates but never conceals (see [Automatic stations on the air](../compliance/on-air-stations.md)). The
-byte-level format, typed peer endpoints (https / 44net / ax25 / netrom / bbs), and the ARDC-verified
-44net onboarding flow are specified in the [Federation wire format](../../reference/federation-wire.md); running
-an instance on a 44Net address is covered in [44Net address](../networks/44net.md).
+As a player you need none of this: caches from the instances yours trusts appear on your map, and your finds
+travel to them.
+
+Federation lets independent instances share caches, finds and keys as signed records. Each record carries its
+own signature, so no instance has to trust the network in between. The same records travel over HTTPS, over
+plain HTTP on a 44Net or HAMNET name, and over packet radio. On amateur RF a signature authenticates but never
+conceals ([Automatic stations on the air](../compliance/on-air-stations.md)). Any shape can join: Self-host,
+Desktop, Cloudflare split or Pocket.
+
+## Before you start
+
+- An instance that answers on its public `APP_URL` ([Your first hour](../first-hour.md)).
+- The URLs of instances you know, and a way to reach their sysops.
+- Sysop access to **Instance admin**.
 
 ## Joining the network
 
-1. **Sign your feeds.** `deploy/setup.sh` generates `FED_PRIVATE_KEY` (elsewhere:
-   `node tools/fedkey/genkey.mjs`, see [Sign your feeds](#sign-your-feeds)). The key signs
-   your feeds and your corroboration questions; the instance id follows `APP_URL`'s host.
-2. **Add the peers you know** to `FED_PEERS` (`FED_PEERS=https://a.example,https://b.example`) and restart.
-   They start `trusted`: your instance mirrors them and counts their corroboration. This is the primary
-   path. **Instance admin → Federation** lists your peers and changes their trust, and admits a 44net peer by
-   callsign; it does not add a peer by URL.
-3. **Ask each peer's operator to do the same on their side** — add your `APP_URL` to their `FED_PEERS`.
-   Until they do, their instance holds you `unvetted` if it learns of you at all (through discovery, the
-   registry, 44net or a hub push): your records are mirrored but hidden on their map, and your answers do
-   not count toward their Tier A. They promote you under **Instance admin → Federation**.
-4. Optionally publish your operator identity (`FED_OPERATOR`, `FED_APRS_CALL`) and register in the shared
-   instance registry.
+1. **Check your signing key.** `FED_PRIVATE_KEY` must be set ([Sign your feeds](#sign-your-feeds)). Your
+   instance id follows `APP_URL`'s host.
+2. **Add the peers you know** to `FED_PEERS`, comma-separated https URLs, and restart the gateway:
 
-Your instance then mirrors its peers, verifies everything it mirrors, and contributes corroboration back.
-The settings that decide how much a stranger can do are collected under
-[Running federation safely](#running-federation-safely).
+    ```bash
+    FED_PEERS=https://a.example,https://b.example
+    ```
+
+    They start `trusted`: your instance mirrors them and counts their corroboration.
+3. **Ask each peer's sysop to add your `APP_URL`** to their `FED_PEERS`. Until they do, their instance holds you
+   `unvetted` if it learns of you at all: your records are mirrored there but hidden on the map, and your
+   answers do not count toward their Tier A. They can also promote you under **Instance admin → Federation**.
+4. **Optional:** publish who runs the instance with `FED_OPERATOR` and `FED_APRS_CALL`, and ask a registry
+   authority for an entry ([The instance registry](hubs-and-relays.md#the-instance-registry)).
+
+**Instance admin → Federation** lists your peers and changes their trust. It admits a 44Net peer by callsign
+([Peers by callsign](../networks/44net-identity.md#peers-by-callsign)); it does not add a peer by URL.
 
 ## Sign your feeds
 
-To take part in federation, generate an instance key and set it as a secret so your feeds are signed:
+Your instance signs its feeds and its corroboration questions with `FED_PRIVATE_KEY`. Without a key the feeds
+still serve, unsigned, and peers do not mirror them.
 
-`deploy/setup.sh` generates the key for the Docker stack. Elsewhere:
+The installers generate the key: `deploy/setup.sh` for Self-host, and the setup questions on Pocket. Elsewhere,
+from the repository root:
 
 ```bash
-node tools/fedkey/genkey.mjs        # prints FED_PRIVATE_KEY + the public key it publishes
-# Cloudflare:  npx wrangler secret put FED_PRIVATE_KEY
-# Node/Bun:    export FED_PRIVATE_KEY=...
+node tools/fedkey/genkey.mjs --raw     # prints the value for FED_PRIVATE_KEY
 ```
 
-The instance id (`INSTANCE`) follows `APP_URL`'s host.
+Without `--raw` it also prints the public key the instance publishes. Set the value as a secret:
+`npx wrangler secret put FED_PRIVATE_KEY` on Cloudflare, or the `.env` on Self-host, Desktop and Pocket. Never
+commit it, and never copy one instance's key to another.
 
-Without a key, feeds still serve — unsigned — and peers won't mirror them. See [Join the network](index.md).
+### Rotate your key
+
+Rotate the key when it may have leaked, from the repository root:
+
+```bash
+FED_PRIVATE_KEY="<current key>" node tools/fedkey/rotatekey.mjs
+```
+
+It prints three values: set the new `FED_PRIVATE_KEY`, `FED_KEY_HISTORY` and `FED_ROTATIONS`, then restart.
+Peers follow the rotation and accept the old key for a grace of 7 days (`FED_ROTATION_GRACE_DAYS`). To reject
+a leaked key at once, publish it as revoked:
+`FED_KEY_HISTORY='[{"x":"<leaked public key>","revoked":true}]'`.
+[Signed feeds](../../reference/federation-trust.md#signed-feeds) explains how peers follow a rotation.
+
+## What the installer sets
+
+On a public instance `deploy/setup.sh` writes the safe posture out, so you see it in `.env`:
+`FED_AUTO_PROMOTE=0`, `FED_CORROBORATION_QUORUM=2` and `FED_DISCOVER=0`. A value you chose stays, with a warning
+when it is unsafe. A LAN instance starts with federation off.
+
+| Flag | Asks for | Writes |
+|---|---|---|
+| `--fed-peers URL,…` | the https peers you know; a 44Net peer is refused here | `FED_PEERS` |
+| `--fed-submit-instances ID,…` | on a hub (`FED_SUBMIT_SECRET` set), the spokes allowed to push; required | `FED_SUBMIT_INSTANCES` |
+| `--fed-registry-key KEY` | with `FED_REGISTRY` or `FED_REGISTRY_DNS`, the registry authority's key; required | `FED_REGISTRY_KEY` |
+| `--net44-name NAME` | this instance's 44Net name, such as `aprscaching.oe8apr.ampr.org` | `FED_ENDPOINTS` (https and 44net) |
+
+A 44Net peer (a name under `ampr.org` or an address in `44/8`) never goes into `FED_PEERS`, since that list
+starts `trusted`. Admit it from **Instance admin → Federation**, which holds it `unvetted`.
 
 ## Running federation safely
 
-The defaults are safe; these are the settings that decide how much a stranger can do.
+The defaults are safe. These settings decide how much a stranger can do.
 
 | Setting | Safe choice | Secure by default |
 |---|---|---|
@@ -65,67 +99,65 @@ The defaults are safe; these are the settings that decide how much a stranger ca
 | `FED_CORROBORATION_REQUIRE_KNOWN` | Set `1` to answer corroboration questions only from your peers. | no (answers anyone, coarsened) |
 | `FED_REVEAL_IGATE` | Leave off unless you and your peers want IGate credit to cross instances. | yes (off) |
 | `FED_ALLOW_PRIVATE` | Leave off, so federation never reaches your LAN except the peers you configured. | yes (off) |
-| 44net peers | Admitted `unvetted`; promote them yourself. Automatic admission trusts `DOH_URL`'s DNSSEC flag. | yes (`unvetted`) |
+| 44Net peers | Admitted `unvetted`; promote them yourself. Automatic admission trusts `DOH_URL`'s DNSSEC flag. | yes (`unvetted`) |
 
-Keep `FED_PRIVATE_KEY` secret and rotate it with `tools/fedkey/rotatekey.mjs` if it may have leaked; peers
-stop accepting the old key once its grace has passed.
+Keep `FED_PRIVATE_KEY` secret, and [rotate it](#rotate-your-key) if it may have leaked. The doctor checks this
+posture on every run ([federation.posture](../troubleshooting.md#federationposture)).
 
 ## Peers and trust
 
-Peers are rows with a **trust tier**:
+Each peer is a row with a trust level:
 
-| Trust | Behaviour |
+| Trust | What your instance does |
 |-------|-----------|
-| `trusted` | Mirrored, and counted toward Tier A corroboration. Peers you list in `FED_PEERS` start here. |
-| `unvetted` | Mirrored but hidden on the map by default; probed only advisorily to earn trust. Registry- and transitively-discovered peers start here. |
-| `blocked` | Never mirrored, never surfaced. |
+| `trusted` | Mirrors it, and counts it toward Tier A corroboration. Peers in `FED_PEERS` start here. |
+| `unvetted` | Mirrors it, hidden on the map by default. Peers from the registry, discovery, 44Net and hub pushes start here. |
+| `blocked` | Never mirrors it, never shows it. A blocked peer stays blocked even when `FED_PEERS` lists it. |
 
-Push-to-hub spokes start `unvetted` too: the submit secret authorises a spoke to push, it does not say
-who the spoke is, so trusting it is the operator's call.
+Change a peer's trust under **Instance admin → Federation**. Blocking a peer hides everything it sent.
 
-### One row per instance
+- **Auto-promotion.** `FED_AUTO_PROMOTE=<n>` promotes an `unvetted` peer to `trusted` after `n` confirmed
+  corroborations. A peer that denies a find the quorum confirmed is penalised.
+- **A peer moves to a new URL.** One instance id belongs to one live row, so the new URL is refused while the
+  old row holds the id. Block or remove the old row first.
 
-A peer's instance id (its hostname, such as `oe.example.net`) is bound to the peer row that first proved
-it, and a live (non-blocked) row is the only one allowed to hold that id. A second URL claiming a bound
-instance is refused, and a descriptor that renames its instance is refused, so an impostor never inherits
-another instance's namespace or trust. Instance ids are lowercase hostnames; an id with a `:` or other
-characters outside a hostname is refused.
-
-To move a peer to a new URL, block or remove its old row first.
-
-Peers carry a reputation (`rep_confirmed` / `rep_failed`). Set `FED_AUTO_PROMOTE` to auto-promote an unvetted
-peer to trusted after that many confirmed corroborations. A peer that denies a corroboration the quorum
-confirmed accrues a contradiction and is penalised.
+[How federation stays honest](../../reference/federation-trust.md) explains the row binding and the quorum.
 
 ## Keeping mirrors fresh
 
-- **Pull sync** runs on a schedule and after a manual `POST /federation/sync`, negotiating which feeds a peer
-  supports and applying tombstones first so a delete suppresses a re-mirror. A manual pull can be narrowed to
-  some feeds and a page cap (`{"types":["cache","key"],"maxPages":10}`); deletes always come too, and the next
-  pass carries on where a capped one stopped.
-- **One region only.** `FED_SYNC_REGION=S,W,N,E` pulls only the caches inside that box from peers that filter
-  by region, for an instance that serves one area (a phone in the field). Deletes are never filtered.
-- **Gossip ping.** After a federated write an instance sends peers a `POST /federation/notify` "come pull
-  from me," which triggers an incremental sync — freshness without a firehose. The endpoint is
-  unauthenticated, so it only ever asks for a pull the instance would make anyway: a notify naming an
-  instance it doesn't follow is ignored, a host and an instance are each rate-limited, and the pull goes
-  through the same coalescer as the scheduled sync.
-- **Records only move forward.** Every mirrored record carries a per-record version, and an instance applies
-  a record only when its version is higher than the last one it applied — a replayed older record, or a
-  different record at the same version, changes nothing. A cache's version counts its revisions, so two
-  edits in one second are still two versions. A frame signed in the future, or a timestamp version in the
-  future, is refused; a pulled page is capped at 4 MiB and at the number of frames asked for, and must carry
-  only its own record type.
-- **Discovery** (`FED_DISCOVER`) learns only from trusted peers, takes only `https` URLs, adds each learned
-  peer `unvetted` and **disabled**, and stops at 200 discovered peers. Choosing a trust level for a
-  discovered peer in the admin surface enables it.
-- **Private networks.** On Node and Bun every federation fetch resolves its host first and refuses loopback,
-  private, link-local and CGNAT addresses (IPv4 carried inside IPv6 included), and checks every redirect
-  hop the same way, so a URL from another party can never reach this host's LAN. The
-  peers you configured by hand (`FED_PEERS`, `FED_HUB_URL`) are exempt; set `FED_ALLOW_PRIVATE=1` for a
-  federation that lives entirely on a LAN. Cloudflare Workers never reach a private network.
+Your instance pulls from its peers on a schedule. Self-host, Desktop and Pocket pull every 5 minutes
+(`FED_SYNC_INTERVAL_MS`, `0` turns it off); Cloudflare pulls every 15 minutes, on the Worker's cron. Peers also
+ask for a pull after they write, so new records arrive sooner.
+
+- **Sync now.** **Instance admin → Federation → Sync now** pulls from every peer and pushes to the hub at
+  once. From a script, post to `/federation/sync` with the operator secret; this one only pulls:
+
+    ```bash
+    curl -X POST -H "x-operator-secret: $OPERATOR_SECRET" https://<your instance>/federation/sync
+    ```
+
+    A JSON body narrows the pull to some feeds and a page cap, from 1 to 50:
+    `{"types":["cache","key"],"maxPages":10}`. Deletes always come too, and the next pass carries on where a
+    capped one stopped.
+- **One region only.** `FED_SYNC_REGION=S,W,N,E` pulls only the caches inside that box, in decimal degrees,
+  from peers that filter by region. A peer without the filter sends every cache. Deletes are never filtered.
+  It suits an instance that serves one area, such as a phone in the field
+  ([Before a trip](../pocket/trips.md)).
+- **Discovery.** `FED_DISCOVER=1` learns peers from your trusted peers' lists. It takes only `https` URLs, adds
+  each learned peer `unvetted` and disabled, and stops at 200. Choosing a trust level for a discovered peer
+  enables it.
+- **Private networks.** On Self-host, Desktop and Pocket, federation refuses to fetch loopback, private,
+  link-local and CGNAT addresses, so a URL from another party never reaches your LAN. The peers you configured
+  (`FED_PEERS`, `FED_HUB_URL`) are exempt. Set `FED_ALLOW_PRIVATE=1` for a federation that lives entirely on a
+  LAN. Cloudflare Workers never reach a private network.
+
+## Check that it worked
+
+- **Instance admin → Federation** shows each peer with its trust, its last sync and any error.
+- `deploy/aprscaching doctor` checks the key, the posture and that each peer in `FED_PEERS` answers
+  ([federation checks](../troubleshooting.md#federation-federation)).
 
 ## Next
 
-- [Hubs, relays and the registry](hubs-and-relays.md).
-- [How federation stays honest](../../reference/federation-trust.md).
+- [Hubs, relays and the registry](hubs-and-relays.md): reach peers behind a firewall.
+- [How federation stays honest](../../reference/federation-trust.md): what a signature and a quorum prove.
