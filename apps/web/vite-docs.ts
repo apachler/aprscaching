@@ -3,8 +3,9 @@
  * vite-docs — bundle the repo's `docs/` markdown manual straight into the SPA at build time, so the
  * platform serves its own documentation with no MkDocs, no static-site step, and no extra container.
  * The markdown stays the single source of truth (MkDocs still builds the same files for the public
- * site); this plugin just exposes them to the app as a `virtual:docs` module of `{ slug, title,
- * section, order, body }` records. Rendering happens client-side (see src/docs/markdown.ts).
+ * site); this plugin exposes them to the app as a `virtual:docs` module of `{ slug, title, section, order,
+ * body }` records, in the order, sections and titles of `mkdocs.yml`'s nav. Rendering happens client-side (see
+ * src/docs/markdown.ts).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -13,39 +14,54 @@ import type { Plugin } from "vite";
 const VIRTUAL_ID = "virtual:docs";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 
-// Section + order mirror mkdocs.yml `nav` (kept in sync by hand — it's a short list). Any doc NOT
-// listed here still appears: grouped by its top-level directory and sorted after the known pages, so
-// a newly-added file is never silently dropped — just unordered until it's added here.
-const NAV: { slug: string; section: string; title: string }[] = [
-  { slug: "index", section: "Overview", title: "Overview" },
-  { slug: "getting-started", section: "Overview", title: "Getting started" },
-  { slug: "concepts", section: "Overview", title: "Core concepts" },
-  { slug: "guides/caching", section: "Guides", title: "Caching" },
-  { slug: "guides/shack", section: "Guides", title: "The Shack" },
-  { slug: "guides/federation", section: "Guides", title: "Federation" },
-  { slug: "operate/deployment", section: "Operating an instance", title: "Deployment" },
-  { slug: "operate/docker", section: "Operating an instance", title: "Running in Docker" },
-  { slug: "operate/first-hour", section: "Operating an instance", title: "Your first hour as sysop" },
-  { slug: "operate/rf-ingest", section: "Operating an instance", title: "RF ingest & transports" },
-  { slug: "operate/packet", section: "Operating an instance", title: "Packet BBS & node" },
-  { slug: "operate/rig-weather", section: "Operating an instance", title: "Rig control & weather" },
-  { slug: "operate/rf-regulatory", section: "Operating an instance", title: "Amateur-radio compliance" },
-  { slug: "operate/administration", section: "Operating an instance", title: "Administration" },
-  { slug: "reference/api", section: "Reference", title: "HTTP API" },
-  { slug: "reference/federation-wire", section: "Reference", title: "Federation wire format" },
-  { slug: "reference/configuration", section: "Reference", title: "Configuration" },
-  { slug: "reference/cli", section: "Reference", title: "Command-line tools" },
-  { slug: "reference/testing", section: "Reference", title: "Testing & e2e tooling" },
-  { slug: "reference/specs", section: "Reference", title: "Specification registry" },
-  { slug: "reference/data-model", section: "Reference", title: "Data model" },
-  { slug: "about", section: "About", title: "About" },
-];
+export interface NavEntry {
+  slug: string;
+  title: string;
+  /** the top-level nav section, or "" for a page at the top level */
+  section: string;
+}
 
-const SECTION_FOR_DIR: Record<string, string> = {
-  guides: "Guides",
-  operate: "Operating an instance",
-  reference: "Reference",
-};
+export interface MkdocsNav {
+  pages: NavEntry[];
+  /** `not_in_nav` patterns: built, linkable, but kept out of the manual's contents */
+  notInNav: RegExp[];
+}
+
+/**
+ * The manual's contents from `mkdocs.yml`, so the in-app reader and the published manual list the same pages in
+ * the same order under the same names. Only the `nav` and `not_in_nav` blocks are read: nav items are
+ * `- Title: page.md` or `- Section:` with an indented list, and quoted titles keep their quotes stripped. (A full
+ * YAML parse would choke on the `!!python/name` tags elsewhere in the file.)
+ */
+export function parseMkdocsNav(yml: string): MkdocsNav {
+  const lines = yml.split("\n");
+  const start = lines.findIndex((l) => /^nav:\s*$/.test(l));
+  if (start < 0) throw new Error("mkdocs.yml has no nav");
+  const pages: NavEntry[] = [];
+  let section = "";
+  for (let i = start + 1; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (/^\S/.test(l)) break; // the next top-level key ends the nav
+    const m = /^(\s*)-\s+("?)(.+?)\2:\s*(\S*)\s*$/.exec(l);
+    if (!m) continue;
+    const depth = m[1]!.length;
+    const title = m[3]!;
+    const file = m[4]!;
+    if (!file) {
+      if (depth === 2) section = title;
+      continue;
+    }
+    if (depth === 2) section = "";
+    pages.push({ slug: file.replace(/\.md$/, ""), title, section });
+  }
+  const block = /^not_in_nav:\s*\|\n((?:[ \t]+.*\n?)+)/m.exec(yml)?.[1] ?? "";
+  const notInNav = block
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((g) => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$"));
+  return { pages, notInNav };
+}
 
 /** Recursively list `*.md` files under `dir`, returned as slash-joined paths relative to `dir`. */
 function listMarkdown(dir: string, base = dir): string[] {
@@ -59,24 +75,26 @@ function listMarkdown(dir: string, base = dir): string[] {
   return out;
 }
 
-function firstHeading(md: string): string | null {
-  const m = /^#\s+(.+?)\s*$/m.exec(md);
-  return m ? m[1]! : null;
-}
-
 export function docsPlugin(docsDir: string): Plugin {
+  const mkdocsYml = path.join(docsDir, "..", "mkdocs.yml");
   const build = () => {
-    const pages = listMarkdown(docsDir)
-      .map((rel) => {
-        const slug = rel.replace(/\.md$/, "");
-        const body = fs.readFileSync(path.join(docsDir, rel), "utf8");
-        const nav = NAV.find((n) => n.slug === slug);
-        const title = nav?.title ?? firstHeading(body) ?? slug;
-        const section = nav?.section ?? SECTION_FOR_DIR[slug.split("/")[0]!] ?? "More";
-        const order = nav ? NAV.indexOf(nav) : 1000 + slug.length;
-        return { slug, title, section, order, body };
-      })
-      .sort((a, b) => a.order - b.order);
+    const { pages: nav, notInNav } = parseMkdocsNav(fs.readFileSync(mkdocsYml, "utf8"));
+    const files = new Set(listMarkdown(docsDir).map((rel) => rel.replace(/\.md$/, "")));
+    const missing = nav.filter((n) => !files.has(n.slug)).map((n) => n.slug);
+    const stray = [...files].filter(
+      (f) => !nav.some((n) => n.slug === f) && !notInNav.some((re) => re.test(`${f}.md`)),
+    );
+    if (missing.length || stray.length)
+      throw new Error(
+        `mkdocs.yml and docs/ disagree:${missing.map((m) => `\n  in the nav, no file: ${m}.md`).join("")}` +
+          stray.map((f) => `\n  no nav entry and not in not_in_nav: ${f}.md`).join(""),
+      );
+    // the dated records outside the nav stay out of the in-app reader
+    const pages = nav.map((n, order) => ({
+      ...n,
+      order,
+      body: fs.readFileSync(path.join(docsDir, `${n.slug}.md`), "utf8"),
+    }));
     return `export const DOC_PAGES = ${JSON.stringify(pages)};\n`;
   };
 
@@ -91,10 +109,11 @@ export function docsPlugin(docsDir: string): Plugin {
       return null;
     },
     configureServer(server) {
-      // Dev HMR: editing a manual page invalidates the virtual module and reloads.
-      server.watcher.add(docsDir);
+      // Dev HMR: editing a manual page or the nav invalidates the virtual module and reloads.
+      server.watcher.add([docsDir, mkdocsYml]);
       const onChange = (file: string) => {
-        if (!path.resolve(file).startsWith(path.resolve(docsDir))) return;
+        const f = path.resolve(file);
+        if (!f.startsWith(path.resolve(docsDir)) && f !== path.resolve(mkdocsYml)) return;
         const mod = server.moduleGraph.getModuleById(RESOLVED_ID);
         if (mod) server.moduleGraph.invalidateModule(mod);
         server.ws.send({ type: "full-reload" });

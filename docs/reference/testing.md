@@ -99,6 +99,9 @@ the real browser ceremony before a release.
 - **Diagrams** — `apps/web/test/diagrams.test.ts` parses every ```` ```mermaid ```` block in the repository's
   Markdown with the Mermaid the app ships (under jsdom, which Mermaid's label sanitiser needs), and
   `tools/checks/docs.mjs` fails on a diagram drawn in box-drawing characters.
+- **The in-app manual** — `apps/web/vite-docs.ts` bundles the manual into the app with the order, sections and
+  titles of `mkdocs.yml`'s nav. The build fails, and `apps/web/test/docsNav.test.ts` fails, when a nav entry has
+  no file or a page is neither in the nav nor under `not_in_nav`; the dated reviews stay out of the app.
 - **The manual's theme** — `node tools/dev/docs-theme.mjs` writes `docs/stylesheets/tokens.gen.css` from the
   app's tokens and fonts, and copies Mermaid's browser build into `docs/assets/vendor/` for the build;
   `--check` (in `pnpm run check` and the docs workflow) fails when the committed theme no longer matches.
