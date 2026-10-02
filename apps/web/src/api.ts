@@ -1642,6 +1642,20 @@ export function addCallsign(
   return call(`/auth/callsigns`, { method: "POST", body: JSON.stringify({ callsign }) });
 }
 
+/** One of the signed-in account's passkeys: when it was added and how its device connects (WebAuthn transports). */
+export interface Passkey {
+  id: string;
+  createdAt: number;
+  transports: string[];
+}
+/** The account's passkeys, the primary call they are bound to, and whether it has a recovery email. */
+export function listPasskeys(): Promise<{ callsign: string; hasEmail: boolean; passkeys: Passkey[] }> {
+  return call(`/auth/passkeys`);
+}
+/** Remove one passkey, such as a lost device's. The last one of an account without an email stays. */
+export function removePasskey(id: string): Promise<{ ok: boolean; remaining: number }> {
+  return call(`/auth/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
 export async function registerPasskey(callsign: string, email?: string): Promise<{ ok: boolean; callsign: string }> {
   const o = await call<any>(`/auth/passkey/register/begin`, {
     method: "POST",

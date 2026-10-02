@@ -27,6 +27,8 @@ import {
   handleListCallsigns,
   handleAddCallsign,
   handlePasskeyRegisterBegin,
+  handleListPasskeys,
+  handleRemovePasskey,
   handlePasskeyRegisterFinish,
   handlePasskeyLoginBegin,
   handlePasskeyLoginFinish,
@@ -537,6 +539,9 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // auth (passkey + email magic-link). Sessions attribute logs and gate announce.
   if (p === "/auth/claim" && m === "POST") return handleClaim(req, env);
+  if (p === "/auth/passkeys" && m === "GET") return handleListPasskeys(req, env);
+  const passkeyDel = /^\/auth\/passkeys\/([A-Za-z0-9_-]+)$/.exec(p);
+  if (passkeyDel && m === "DELETE") return handleRemovePasskey(req, env, passkeyDel[1]!);
   if (p === "/auth/passkey/register/begin" && m === "POST") return handlePasskeyRegisterBegin(req, env);
   if (p === "/auth/passkey/register/finish" && m === "POST") return handlePasskeyRegisterFinish(req, env);
   if (p === "/auth/passkey/login/begin" && m === "POST") return handlePasskeyLoginBegin(req, env);

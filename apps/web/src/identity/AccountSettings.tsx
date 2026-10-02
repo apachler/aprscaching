@@ -22,6 +22,7 @@ import {
   useLoad,
 } from "../ui/index.js";
 import { VerifyCall } from "./VerifyCall.js";
+import { Passkeys } from "./Passkeys.js";
 
 type Session = {
   callsign: string;
@@ -198,6 +199,7 @@ export function AccountSettings(props: {
           <div className="setrow-c muted">{email}</div>
         </div>
       )}
+      <Passkeys />
       <div className="row end wrap gap-2 mt-3">
         <Button onClick={endEverywhere} disabled={busy}>
           Sign out everywhere

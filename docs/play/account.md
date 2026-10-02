@@ -64,7 +64,7 @@ Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, 
 
 | Group | What it holds |
 |---|---|
-| **Account** | Sign in and out, your callsigns, verification, your email |
+| **Account** | Sign in and out, your callsigns, verification, your email, your passkeys ([Use more than one device](join.md#use-more-than-one-device)) |
 | **Display** | **Appearance** (Auto, Light, Dark or Phosphor), **Units**, and the CRT effect in Phosphor |
 | **Profile** | What others see on your profile |
 | **Home weather station** | Your own weather station ([Weather stations](../shack/rig-weather.md#weather-stations)) |

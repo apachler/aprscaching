@@ -165,7 +165,8 @@ explains it in full.
     mirrored again.
 
 <span id="passkey"></span>Passkey
-:   A sign-in key stored on your device, used instead of a password ([Sign in](play/join.md#sign-in)).
+:   A sign-in key stored on your device, used instead of a password. Each device holds its own, or shares one
+    through your password manager ([How a passkey keeps your account yours](play/join.md#how-a-passkey-keeps-your-account-yours)).
 
 <span id="sign-in-link"></span>One-time sign-in link
 :   A link that signs you in once, within 15 minutes. You get it by email, or from the sysop where the

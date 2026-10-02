@@ -123,10 +123,17 @@ export async function passkeyRegister(
 ): Promise<Res> {
   const begin = await call(env, "POST", "/auth/passkey/register/begin", { callsign }, headers);
   if (begin.status !== 200) return begin;
-  return passkeyRegisterFinish(env, callsign, a, begin.data.challenge);
+  return passkeyRegisterFinish(env, callsign, a, begin.data.challenge, headers);
 }
 
-export async function passkeyRegisterFinish(env: Env, callsign: string, a: Authenticator, challenge: string) {
+/** The finish step; a browser sends its session cookie here too (HEADERS). */
+export async function passkeyRegisterFinish(
+  env: Env,
+  callsign: string,
+  a: Authenticator,
+  challenge: string,
+  headers: Record<string, string> = {},
+) {
   const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.create", challenge, origin: ORIGIN }));
   const attestationObject = concat(
     new Uint8Array([0xa3]),
@@ -137,13 +144,19 @@ export async function passkeyRegisterFinish(env: Env, callsign: string, a: Authe
     cborText("authData"),
     cborBytes(await authData(a, true)),
   );
-  return call(env, "POST", "/auth/passkey/register/finish", {
-    callsign,
-    credential: {
-      id: b64url(a.credId),
-      response: { clientDataJSON: b64url(clientDataJSON), attestationObject: b64url(attestationObject) },
+  return call(
+    env,
+    "POST",
+    "/auth/passkey/register/finish",
+    {
+      callsign,
+      credential: {
+        id: b64url(a.credId),
+        response: { clientDataJSON: b64url(clientDataJSON), attestationObject: b64url(attestationObject) },
+      },
     },
-  });
+    headers,
+  );
 }
 
 /** Full passkey login (begin → finish). */

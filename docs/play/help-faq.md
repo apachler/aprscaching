@@ -57,6 +57,11 @@ is open. Your phone's location alone does not trigger it. See
 Passkeys work only on an `https://` address. On a plain `http://` instance, sign in with the email link, or ask
 your sysop for a one-time sign-in link. See [Getting to your instance](your-instance.md#what-works-on-each-way-in).
 
+**I have a new phone or computer. How do I sign in there?**
+If Apple or Google syncs your passkeys, **Sign in with passkey** works on it at once. Otherwise sign in once with
+your phone's passkey by QR code or with the email link, then tap **Add a passkey on this device** under
+**Settings → Account**. See [Use more than one device](join.md#use-more-than-one-device).
+
 **I have a new callsign.**
 Add it under **Settings → Account → Add a callsign**, verify it, and tap **Set active**. Your past finds stay
 with the call you logged them under. See [Several callsigns](account.md#several-callsigns).

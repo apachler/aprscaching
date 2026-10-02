@@ -39,6 +39,43 @@ address gets *That email doesn't match …'s account*.
 Your callsign shows in the top bar, and **You** shows your profile. The profile says **unverified** until you
 verify the callsign.
 
+## How a passkey keeps your account yours
+
+A passkey is a pair of keys. The private key stays on your device, locked by your fingerprint, your face or
+the device PIN. The instance keeps only the public key. To sign you in, the instance sends a random challenge,
+your device signs it, and the instance checks the signature. There is no password to steal or guess.
+
+- A passkey works only on the address it was made for, so a look-alike site cannot use it.
+- A callsign that already has an account gets a new passkey only from a device signed in to that account.
+  Someone who types your callsign elsewhere cannot add their own.
+- A passkey proves that you are the person who opened the account. It does not prove that you hold the
+  licence: that is what [verifying your callsign](#verify-your-callsign) does.
+
+## Use more than one device
+
+Each device signs in with a passkey of its own, or shares one through your password manager:
+
+- **Apple and Google sync passkeys** between your own devices: an iPhone and a Mac on the same Apple Account,
+  or an Android phone and Chrome on the same Google Account. Tap **Sign in with passkey** on the other device,
+  and it works.
+- **On any other device**, sign in once another way, then add a passkey for that device.
+
+To add a passkey on a new device:
+
+1. On the new device, tap **Sign in** and type your **Callsign**. Then sign in one of these ways:
+    - Tap **Sign in with passkey** and, in the browser's window, pick the option to use a phone or tablet. It
+      shows a QR code: scan it with the phone that holds your passkey, and confirm on the phone.
+    - Tap **Email me a link**, if your account has an email.
+2. Open **Settings → Account** and tap **Add a passkey on this device**.
+3. Confirm with your fingerprint, your face or the device PIN.
+
+**Check that it worked:** **Passkeys** under **Settings → Account** counts one more, and **Your passkeys** lists
+it. Next time, this device signs in with **Sign in with passkey** directly.
+
+**Lost a device?** On another device, open **Settings → Account → Your passkeys** and tap **Remove** next to its
+passkey, then **Sign out everywhere**. The last passkey of an account without an email cannot be removed: it is
+your only way in. Add an email or another passkey first.
+
 ## Verify your callsign
 
 Signing in claims a callsign. Verifying proves that you control it. A verified callsign gets:
