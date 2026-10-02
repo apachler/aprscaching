@@ -272,7 +272,14 @@ const DETAILS = new Map<number, CacheDetail>(
     detail(
       c,
       c.id === 1
-        ? { minTrust: "B", favorited: true, rating: { avg: 4.6, count: 23, mine: 5, policy: "finders", canRate: true } }
+        ? {
+            minTrust: "B",
+            favorited: true,
+            rating: { avg: 4.6, count: 23, mine: 5, policy: "finders", canRate: true },
+            // ME hid it: the owner's view, with its stages, for the edit form
+            own: { minTrust: null, rendezvous: false },
+            stageCount: 3,
+          }
         : {},
     ),
   ]),

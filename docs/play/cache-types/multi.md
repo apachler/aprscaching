@@ -65,10 +65,11 @@ Each stage has:
 - an unlock kind: geo, nfc, audio or open;
 - a position, revealed when the stage unlocks;
 - a clue text, and for an audio stage an audio clip of up to 5 MB;
-- a radius for a geo stage, 60 m by default;
+- a radius, 60 m by default: when the next stage unlocks by location, the finder stands within it;
 - a tag code for an NFC stage.
 
-Adding stages is not in the app yet; ask your sysop.
+Add the stages after hiding: open the cache, tap **Edit**, and use **Stages** at the end of the form
+([Edit your cache](../hide-a-cache.md#edit-your-cache)).
 
 For an NFC stage, use the tag's serial, or nine or more random letters and digits. A shorter code still works
 online, but it does not travel in offline packs.

@@ -41,6 +41,7 @@ import { StagesSection } from "../log/StagesSection.js";
 import { LogForm } from "../log/LogForm.js";
 import { NavigateCache } from "./NavigateCache.js";
 import { CacheMedia } from "./CacheMedia.js";
+import { EditCachePanel } from "./EditCachePanel.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import type { OfflineFrom } from "../api.js";
 import { syncNote } from "../log/syncNote.js";
@@ -97,6 +98,8 @@ export function DetailPanel(props: {
   const phosphor = useTheme() === "phosphor";
   const toast = useToast();
   const [fav, setFav] = useState({ on: c.favorited, count: c.favorites });
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setEditing(false), [c.id]);
   useEffect(() => {
     setFav({ on: c.favorited, count: c.favorites });
   }, [c.id, c.favorited, c.favorites]);
@@ -146,14 +149,32 @@ export function DetailPanel(props: {
       toast(ok ? "Coordinates copied" : "Copy failed — long-press the coordinates to copy"),
     );
   }
+  if (editing && c.own)
+    return (
+      <EditCachePanel
+        detail={c}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          props.onLogged();
+        }}
+      />
+    );
   return (
     <Panel
       onClose={props.onClose}
       title={c.title}
       actions={
-        <Button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>
-          {fav.on ? "♥" : "♡"} {fav.count}
-        </Button>
+        <>
+          {c.own && !props.offlineFrom && (
+            <Button title={`Edit ${c.code}`} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          )}
+          <Button className={`heart${fav.on ? " on" : ""}`} title="Favorite" onClick={toggleFav}>
+            {fav.on ? "♥" : "♡"} {fav.count}
+          </Button>
+        </>
       }
     >
       {props.offlineFrom && (

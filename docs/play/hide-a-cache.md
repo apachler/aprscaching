@@ -69,7 +69,8 @@ the real place. To hide a cache on a summit, hide it as a traditional cache.
 
 A find counts as verified from the instance's minimum up, **Location-verified** unless your sysop asks for
 **Radio-verified** ([How finds are verified](verification.md)). Under **Advanced**, the switch **Radio-verified
-finds only** sets your cache's own minimum to **Radio-verified**, whatever the instance's is.
+finds only** sets your cache's own minimum to **Radio-verified**, whatever the instance's is. Turn it off under
+**Edit** and the instance's minimum applies again.
 
 ## Who sees your cache
 
@@ -91,7 +92,8 @@ The hint never leaves this instance, whatever the scope.
 ## Stages, living caches and media
 
 **Stages.** A multi-stage cache leads finders through stages to the final spot
-([Multi-stage caches](cache-types/multi.md)). The app cannot add stages yet. Ask your sysop to add them.
+([Multi-stage caches](cache-types/multi.md)). Hide the cache first, then open it, tap **Edit** and add the stages
+under **Stages**.
 
 **Living caches.** A living cache moves with a beaconing APRS station ([Living caches](cache-types/living.md)).
 Pick **Living (APRS)** as the type and, under **Station**, one of your own stations from **Settings → My
@@ -119,7 +121,27 @@ cache.
 - **Your caches offline.** **Offline → Your caches → Pack my caches** stores all your caches for a field trip.
   It flags the ones that need a visit: three or more did-not-finds in a row, no find for months, or disabled.
 
-The app cannot edit, disable or archive a cache yet. Ask your sysop.
+## Edit your cache
+
+Open your cache and tap **Edit**, next to the favourite heart. Only the owner sees it.
+
+1. Change what you need. The form is grouped as the hide form is:
+    - **Basics**: the title, the status, difficulty and terrain;
+    - **Location**: type new coordinates or a locator under **Move to**; a living cache has none, it follows its
+      station;
+    - **Details**: hint, description, drive-in, country and tags;
+    - **Verification, rating & sharing**: **Radio-verified finds only**, who can rate, the federation scope, and
+      for a living cache the rendezvous switch.
+2. Tap **Save changes**. The cache page shows the new version.
+
+**Status.** **Disabled** keeps the cache on the map and refuses finds, for a cache that needs repair.
+**Archived** takes it off the map, for a cache that is gone; the app asks first. Either one can be set back to
+**Active** here.
+
+**Stages.** A multi-stage or audio cache has **Stages** at the end of the form: the open start and the locked
+stages in order, each with its unlock, position and clue. **Add a stage** and **Remove the last stage** change
+the list; **Save stages** stores it. A finder who unlocked a stage you changed, or one after it, unlocks those
+stages again, so the app asks before it saves. An audio stage's clip uploads once the stage is saved.
 
 ## Cache adoption
 

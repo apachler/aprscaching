@@ -41,8 +41,9 @@ Then add the sound:
 
 - **In the Media section:** open your cache and pick an audio file under **Media**. A cache holds up to 20
   media items of up to 10 MB each. Anyone who opens the cache can play them.
-- **As a stage clue:** an audio stage carries one clip of up to 5 MB. Adding stages is not in the app yet;
-  ask your sysop.
+- **As a stage clue:** an audio stage carries one clip of up to 5 MB. Open your cache, tap **Edit**, add an
+  audio stage under **Stages**, save the stages, then pick the clip
+  ([Edit your cache](../hide-a-cache.md#edit-your-cache)).
 
 Without stages, an audio cache plays like a traditional cache with a clip in its gallery.
 

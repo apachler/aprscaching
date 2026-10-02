@@ -221,16 +221,20 @@ export async function handleGetStages(req: Request, env: Env, cacheId: number): 
   const callsign = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
   const rows = (
     await env.DB.prepare(
-      "SELECT stage_no, unlock, clue, media_key, lat, lon, radius_m FROM cache_stages WHERE cache_id=? ORDER BY stage_no",
+      "SELECT stage_no, unlock, clue, media_key, lat, lon, radius_m, unlock_secret FROM cache_stages WHERE cache_id=? ORDER BY stage_no",
     )
       .bind(cacheId)
       .all<StageRow>()
   ).results;
   const unlocked = callsign ? await unlockedSet(env, cacheId, callsign) : new Set<number>();
+  // the owner sees every stage as set, tag codes included, to edit them
+  const owner = await ownerOf(env, cacheId);
+  const isOwner = !!owner && (await mayActAsOwner(req, env, owner));
   return json({
     stages: rows.map((r) => {
-      const open = r.stage_no === 0 || unlocked.has(r.stage_no);
+      const open = isOwner || r.stage_no === 0 || unlocked.has(r.stage_no);
       return {
+        ...(isOwner && { secret: r.unlock_secret }),
         stageNo: r.stage_no,
         unlock: r.unlock,
         clue: r.clue,

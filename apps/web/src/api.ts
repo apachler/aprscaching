@@ -18,6 +18,7 @@ import type {
   CacheDetail,
   CacheLogEntry,
   CreateCacheRequest,
+  UpdateCacheRequest,
   MapCache,
   LogType,
   AppGeo,
@@ -37,6 +38,7 @@ export type {
   CacheDetail,
   CacheLogEntry,
   CreateCacheRequest,
+  UpdateCacheRequest,
   MapCache,
   LogType,
   AppGeo,
@@ -1210,6 +1212,19 @@ export function setStages(
 ): Promise<{ ok: boolean; offline: { stageNo: number; offline: boolean; reason?: string }[] }> {
   return call(`/api/caches/${cacheId}/stages`, { method: "POST", body: JSON.stringify({ ownerCall, stages }) });
 }
+/** Upload an audio stage's clip (up to 5 MB), as the cache's owner. */
+export function uploadStageClip(
+  cacheId: number,
+  stageNo: number,
+  ownerCall: string,
+  file: File,
+): Promise<{ ok: true }> {
+  return call(`/api/caches/${cacheId}/stages/${stageNo}/media`, {
+    method: "POST",
+    headers: { "content-type": file.type || "audio/mpeg", "x-owner-call": ownerCall },
+    body: file,
+  });
+}
 /** Absolute URL for a media clue path returned by the API. */
 /** A media path on the instance as a URL; a local object URL (an offline pack's image) as it is. */
 export const mediaUrl = (path: string): string => (path.startsWith("blob:") ? path : API_BASE + path);
@@ -1380,6 +1395,10 @@ export function deleteAccount(callsign: string, auth: SignedAction): Promise<{ o
   return call(`/api/account/${encodeURIComponent(callsign)}/delete`, { method: "POST", body: JSON.stringify(auth) });
 }
 
+/** The owner's edit of a cache: only the fields given change; `minTrust: null` returns it to the instance's minimum. */
+export function updateCache(id: number, body: UpdateCacheRequest): Promise<{ cache: CacheSummary }> {
+  return call(`/api/caches/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
 export function createCache(body: CreateCacheRequest): Promise<{ cache: CacheSummary }> {
   return call(`/api/caches`, { method: "POST", body: JSON.stringify(body) });
 }

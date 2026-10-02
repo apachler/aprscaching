@@ -348,9 +348,10 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const fav = await favoritesInfo(env, id, who);
   const rating = await ratingInfo(env, id, (row.rating_policy ?? "finders") as "finders" | "all" | "off", who);
   // a meeting's time and place are the hider's: anyone else sees whom the cache met and on which day
+  const isOwner = await mayActAsOwner(req, env, row.owner_call);
   const met = row.rendezvous ? await rendezvousFor(env, id) : [];
   const rendezvous =
-    met.length && !(await mayActAsOwner(req, env, row.owner_call))
+    met.length && !isOwner
       ? met.map((r) => ({ ...r, ts: r.ts - (r.ts % 86_400) + 43_200, lat: null, lon: null, day: true }))
       : met;
   const stages = await stageCount(env, id);
@@ -376,6 +377,9 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     rating,
     rendezvous,
     stageCount: stages,
+    ...(isOwner && {
+      own: { minTrust: (row.min_trust as "A" | "B" | null) ?? null, rendezvous: !!row.rendezvous },
+    }),
   };
   return json({ cache: detail });
 }
