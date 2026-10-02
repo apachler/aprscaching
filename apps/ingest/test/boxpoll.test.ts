@@ -53,13 +53,16 @@ describe("remote transmit", () => {
     expect(sent[0]!.payload).toBe("!4704.20N/01525.20E-hi");
   });
 
-  it("sends an APRS message to the addressee", async () => {
+  it("sends an APRS message to the addressee, numbered so it is acknowledged", async () => {
     const { poller, sent, nowSec } = setup();
     const r = await poller.execute(
       cmd({ kind: "message", createdAt: nowSec(), payload: { to: "oe3abc", text: "QSL" } }),
     );
     expect(r.status).toBe("done");
-    expect(sent[0]!.payload).toBe(":OE3ABC   :QSL");
+    expect(sent[0]!.payload).toMatch(/^:OE3ABC {3}:QSL\{\d{1,5}$/);
+    await poller.execute(cmd({ id: 2, kind: "message", createdAt: nowSec(), payload: { to: "OE3ABC", text: "73" } }));
+    const n = (s: string) => Number(s.split("{")[1]);
+    expect(n(sent[1]!.payload)).toBe((n(sent[0]!.payload) % 99_999) + 1);
   });
 
   it("refuses when the operator has not opted in on the box", async () => {

@@ -157,7 +157,9 @@ public name pinned to this host. A DNS problem then shows under [the public addr
 - **Message:** `the database (<file>) is newer than this checkout (<file>)` (warn). The checkout is older
   than the running gateway.
 - **Message:** `the gateway does not report its schema (an older release)` (warn).
-- **Fix:** bring the gateway onto this checkout: `deploy/aprscaching update`, or rebuild and restart it.
+- **Fix:** bring the gateway onto this checkout: `deploy/aprscaching update`. On Self-host the image carries the
+  migrations, so rebuild it in `deploy/` with `docker compose up -d --build`; on the other shapes a restart applies
+  them.
   Self-host, in `deploy/`: `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose up -d --build`. For the
   second message, update the checkout.
 - **See:** [Updates](day-to-day/updates.md).
@@ -599,7 +601,8 @@ Every shape with a gateway. AGPL §13 requires a public instance to offer its so
 
 ### `source.fork`
 
-- **Tests:** a checkout with local changes to tracked files sets `SOURCE_REPO`.
+- **Tests:** when this checkout has local changes to tracked files, the instance's source link does not name
+  the upstream repository (`SOURCE_REPO` unset, or set to it).
 - **Message:** `this checkout has local changes but SOURCE_REPO is the upstream` (warn).
 - **Fix:** publish your changes and set `SOURCE_REPO` to your fork.
 - **See:** [A public instance's duties](compliance/index.md).

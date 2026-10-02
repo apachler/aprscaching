@@ -140,6 +140,7 @@ import {
   handleStationPackets,
   handlePorts,
   handleMessages,
+  handleSentMessage,
 } from "./shack.js";
 import { handleCot, handleCotStream } from "./cot.js";
 import { handleBadge } from "./badge.js";
@@ -662,6 +663,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/cot/stream" && m === "GET") return handleCotStream(req, env, nowS());
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
+  if (p === "/api/messages/sent" && m === "POST") return handleSentMessage(req, env);
   if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // gated user TX via the ingest box
 
   // audio-cache: stages + media

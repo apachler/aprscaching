@@ -53,7 +53,7 @@ export function MessagesPanel(props: { onClose: () => void }) {
                   →
                 </span>
                 <span className="mono msg-to">{m.toCall ?? "ALL"}</span>
-                {m.direction === "out" && <Badge>sent</Badge>}
+                {m.direction === "tx" && <Badge>sent</Badge>}
                 <span className="spacer" />
                 <span className="muted msg-when">{fmt.ago(m.ts)}</span>
               </div>

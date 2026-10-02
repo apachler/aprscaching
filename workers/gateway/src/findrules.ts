@@ -6,7 +6,7 @@
  *  - a find counts once per person: any SSID of the logger's base call, or any callsign on their account, holds it;
  *  - an archived or disabled cache takes no find and no did-not-find (a note or an owner's maintenance log stays
  *    possible, so the owner can say why and bring it back);
- *  - an owner does not find their own cache;
+ *  - an owner does not find their own cache, and only the owner posts maintenance, enabled and disabled logs;
  *  - a staged cache is found at its last stage: the finder has unlocked it, and the find is verified at its
  *    position ({@link findPoint}).
  *
@@ -83,9 +83,21 @@ export async function findPoint<C extends { id: number; lat?: number | null; lon
   return last?.lat != null && last.lon != null ? { ...cache, lat: last.lat, lon: last.lon } : cache;
 }
 
+/** The log types that speak for the cache: its owner's alone. */
+const OWNER_LOGS = new Set(["maintenance", "enabled", "disabled"]);
+
+/** Is the logger the cache's owner: the owner's base call, or a call on the owner's account? */
+async function isOwner(env: Env, ownerCall: string, loggerCall: string, accountId: string | null): Promise<boolean> {
+  const owner = baseCall(ownerCall);
+  if (baseCall(loggerCall) === owner) return true;
+  const acct = accountId ?? (await baseHolder(env, baseCall(loggerCall)));
+  return !!acct && (await baseHolder(env, owner)) === acct;
+}
+
 /**
  * Why this log is refused, or null when it may be written: a find or a did-not-find on a cache that is not active,
- * a find by the cache's owner (the owner's base call, or a call on the owner's account), or a find on a staged
+ * a find by the cache's owner (the owner's base call, or a call on the owner's account), a maintenance, enabled
+ * or disabled log by anyone else, or a find on a staged
  * cache whose last stage the finder has not unlocked.
  */
 export async function logRefusal(
@@ -96,13 +108,13 @@ export async function logRefusal(
   logType: string,
   accountId: string | null,
 ): Promise<string | null> {
+  if (OWNER_LOGS.has(logType) && !(await isOwner(env, cache.owner_call, loggerCall, accountId)))
+    return `only the owner of ${cache.code} posts ${logType} logs`;
   if ((logType === "found" || logType === "dnf") && cache.status !== "active")
     return `${cache.code} is ${cache.status === "archived" ? "archived" : "disabled"} and takes no ${logType === "found" ? "finds" : "logs of a search"}`;
   if (logType === "found" && (!cache.source || cache.source === "native")) {
-    const owner = baseCall(cache.owner_call);
-    if (baseCall(loggerCall) === owner) return `you own ${cache.code}, so you cannot log it as found`;
-    const acct = accountId ?? (await baseHolder(env, baseCall(loggerCall)));
-    if (acct && (await baseHolder(env, owner)) === acct) return `you own ${cache.code}, so you cannot log it as found`;
+    if (await isOwner(env, cache.owner_call, loggerCall, accountId))
+      return `you own ${cache.code}, so you cannot log it as found`;
   }
   if (logType === "found" && cache.id != null) {
     const last = await env.DB.prepare("SELECT MAX(stage_no) AS n FROM cache_stages WHERE cache_id = ?")

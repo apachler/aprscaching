@@ -85,3 +85,15 @@ describe("an owner does not find their own cache", () => {
     expect((await log(w, sw, { logType: "note", comment: "checked it" })).status).toBe(200);
   });
 });
+
+describe("maintenance, enabled and disabled logs", () => {
+  it("are the owner's alone", async () => {
+    const w = await world();
+    for (const logType of ["maintenance", "enabled", "disabled"]) {
+      const theirs = await log(w, w.finder, { logType, comment: "fixed the lid" });
+      expect(theirs.status, logType).toBe(409);
+      expect(theirs.data.error).toMatch(/only the owner/);
+    }
+    expect((await log(w, w.owner, { logType: "maintenance", comment: "new logbook" })).status).toBe(200);
+  });
+});

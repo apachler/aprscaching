@@ -11,7 +11,8 @@ import {
 import { WebAudioAfsk, WebSerialMeshtastic, webAudioSupported } from "./extralinks.js";
 import { encodeAprsPosition, encodeAprsMessage, ackReply, syncBackBatch, type LocalMessage } from "@aprscaching/aprs";
 import { fieldStation } from "./fieldStation.js";
-import { ingestPackets, ingestSigned, registerKey } from "../api.js";
+import { ingestPackets, ingestSigned, registerKey, recordSentMessage } from "../api.js";
+import { nextMsgNo } from "./msgNo.js";
 import { devicePublicKey } from "../crypto.js";
 import { useFmt } from "../format.js";
 import { NAV_MAX_AGE_MS } from "../geo/location.js";
@@ -214,15 +215,17 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   }
 
   // Transmit, gated on callsign control-verification + opt-in; every send is a deliberate, confirmed action.
-  async function tx(payload: string, what: string) {
+  async function tx(payload: string, what: string): Promise<boolean> {
     const l = linkRef.current;
-    if (!l || !props.verified || !txOn) return;
+    if (!l || !props.verified || !txOn) return false;
     setTxBusy(true);
     try {
       await l.send({ src: txCall, dst: "APRS", path: ["WIDE1-1"], payload });
       toast(`Transmitted: ${what}`);
+      return true;
     } catch (e) {
       toast(`TX failed: ${(e as Error).message}`);
+      return false;
     } finally {
       setTxBusy(false);
     }
@@ -257,7 +260,12 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
       }))
     )
       return;
-    await tx(encodeAprsMessage(msg.to, msg.text), `message to ${msg.to.toUpperCase()}`);
+    // a numbered message asks the addressee's station to acknowledge it
+    const msgNo = nextMsgNo();
+    if (await tx(encodeAprsMessage(msg.to, msg.text, msgNo), `message to ${msg.to.toUpperCase()}`))
+      void recordSentMessage({ from: txCall, to: msg.to.trim().toUpperCase(), text: msg.text.trim(), msgNo }).catch(
+        () => {}, // the Messages list misses it; the message itself went out
+      );
   }
   async function fillMyLocation() {
     const got = await loc.locate(NAV_MAX_AGE_MS);

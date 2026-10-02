@@ -437,6 +437,15 @@ export function decodePacket(raw: string): Promise<DecodedPacket> {
 export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
   return call(`/api/ports`);
 }
+/** Record an APRS message this browser's radio sent, so the Messages list shows it as sent. */
+export function recordSentMessage(m: {
+  from: string;
+  to: string;
+  text: string;
+  msgNo?: string;
+}): Promise<{ ok: true }> {
+  return call(`/api/messages/sent`, { method: "POST", body: JSON.stringify(m) });
+}
 export function getMessages(
   bulletins = false,
   cursor?: string | null,
