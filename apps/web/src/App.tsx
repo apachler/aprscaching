@@ -24,8 +24,18 @@ const Splash = () => (
  * landing-vs-platform before a single byte of MapLibre is fetched; the platform itself is the lazy
  * `Platform` chunk. `useSession` lives here (single source of truth) and is passed down.
  */
+/**
+ * The landing as HTML in index.html (#landing-pre, vite-prerender.ts) shows while the app loads. It is gone when
+ * the head script found the landing would not open, or once the app has rendered its own.
+ */
+const prerenderShown = () =>
+  typeof document !== "undefined" &&
+  !!document.getElementById("landing-pre") &&
+  document.documentElement.dataset.prerender !== "off";
+
 export function App() {
   const session = useSession();
+  const [prerendered] = useState(prerenderShown);
   const [showSignIn, setShowSignIn] = useState(false);
   // landing gate: signed-in skips the landing; signed-out sees it until they Explore
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
@@ -66,15 +76,23 @@ export function App() {
     prevSignedIn.current = session.signedIn;
   }, [session.signedIn]);
 
+  // the app's own landing or platform is up: the prerendered copy goes (the platform also hides it by CSS)
+  const ready = !session.loading;
+  useEffect(() => {
+    if (ready) document.getElementById("landing-pre")?.remove();
+  }, [ready]);
+
   return (
     <ToastProvider>
       <ConfirmProvider>
         <UpdateNotice />
         {session.loading ? (
-          <Splash />
+          prerendered ? null : (
+            <Splash />
+          )
         ) : !active ? (
           <>
-            <Landing onSignIn={() => setShowSignIn(true)} onExplore={onExplore} />
+            <Landing onSignIn={() => setShowSignIn(true)} onExplore={onExplore} resume={prerendered} />
             {showSignIn && (
               <SignIn
                 onDone={() => {

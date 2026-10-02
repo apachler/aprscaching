@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
 import { Button, Icon, TierBadge, type IconName } from "./ui/index.js";
@@ -12,9 +12,16 @@ import { Button, Icon, TierBadge, type IconName } from "./ui/index.js";
  * short closing bands. One primary action (sign in with your callsign); Explore opens the read-only map.
  * Images are made from the real app by apps/web/test/visual/landing-assets.mjs.
  */
-export function Landing(props: { onSignIn: () => void; onExplore: () => void }) {
+export function Landing(props: {
+  onSignIn: () => void;
+  onExplore: () => void;
+  /** Taking over from the prerendered copy: the terminal card's sequence carries on where that copy is. */
+  resume?: boolean;
+}) {
+  // how far the page has come since it was opened, as a negative delay for the sequence's CSS animations
+  const [skew] = useState(() => (props.resume ? `${-Math.round(performance.now())}ms` : "0ms"));
   return (
-    <main className="landing">
+    <main className="landing" style={{ "--landing-skew": skew } as CSSProperties}>
       <Hero onSignIn={props.onSignIn} onExplore={props.onExplore} />
       <MapBand onExplore={props.onExplore} />
       <Steps />

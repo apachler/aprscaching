@@ -224,25 +224,27 @@
     .landing-term-rx {
       animation: landing-blink 1.6s infinite step-end;
     }
+    /* --landing-skew: the app's copy, taking over from the prerendered one, carries on where it is (Landing.tsx) */
     .landing-frame,
     .landing-stamp {
       opacity: 0;
       animation: landing-in var(--motion-base) var(--ease-standard) forwards;
     }
     .landing-frame.f1 {
-      animation-delay: 0.3s;
+      animation-delay: calc(0.3s + var(--landing-skew, 0s));
     }
     .landing-frame.f2 {
-      animation-delay: 0.9s;
+      animation-delay: calc(0.9s + var(--landing-skew, 0s));
     }
     .landing-frame.f3 {
-      animation-delay: 1.5s;
+      animation-delay: calc(1.5s + var(--landing-skew, 0s));
     }
     .landing-frame.f4 {
-      animation-delay: 1.9s;
+      animation-delay: calc(1.9s + var(--landing-skew, 0s));
     }
     .landing-stamp {
-      animation: landing-stamp var(--motion-slow) var(--ease-standard) 2.4s forwards;
+      animation: landing-stamp var(--motion-slow) var(--ease-standard) forwards;
+      animation-delay: calc(2.4s + var(--landing-skew, 0s));
     }
   }
   @keyframes landing-blink {
@@ -586,5 +588,16 @@
     text-align: center;
     color: var(--muted);
     font-size: var(--text-caption);
+  }
+
+  /* the prerendered landing (vite-prerender.ts) takes the place #root's landing will take, until the app's own
+     replaces it; it is hidden when the head script found it would not open */
+  #landing-pre {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-splash);
+  }
+  [data-prerender="off"] #landing-pre {
+    display: none;
   }
 }
