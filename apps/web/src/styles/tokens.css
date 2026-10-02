@@ -204,6 +204,14 @@
     --shade: oklch(0 0 none);
     --tint: oklch(1 0 none);
 
+    /* diagrams (Mermaid, in the in-app manual and the published one): brand-tinted boxes, hairline edges */
+    --diagram-node-bg: color-mix(in oklab, var(--brand) 22%, var(--surface)); /* oklab: no hue swing toward white */
+    --diagram-node-line: var(--heading);
+    --diagram-ink: var(--ink);
+    --diagram-edge: var(--muted);
+    --diagram-label-bg: var(--surface);
+    --diagram-group-bg: color-mix(in oklab, var(--ink) 5%, var(--surface));
+
     --font-brand: "Fredoka", system-ui, sans-serif;
     --font-ui: system-ui, sans-serif; /* body/UI text — Phosphor swaps this to the mono stack */
     --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;

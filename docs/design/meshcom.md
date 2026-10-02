@@ -58,12 +58,12 @@ payloads, so a MeshCom position maps onto a station directly — Meshtastic show
 callsign only for nodes in licensed mode, learned from their node info. Like Meshtastic it is a LoRa mesh reached through a node on the operator's
 LAN, not through a TNC.
 
-```
- LoRa 433.175 ──▶ MeshCom node ──UDP :1799 JSON──▶ apps/ingest (MeshcomListener)
-                        ▲                                  │ Packet{port:"meshcom"}
-                        └──── msg (gated TX) ◀─────────────┤
-                                                           ▼ batched POST /ingest
-                                                     gateway → map · MHeard · Messages
+```mermaid
+flowchart LR
+  lora["LoRa 433.175 MHz"] --> node["MeshCom node"]
+  node -- "UDP :1799, JSON" --> listener["apps/ingest<br/>MeshcomListener"]
+  listener -- "Packet, port meshcom<br/>batched POST /ingest" --> gateway["gateway<br/>map · MHeard · Messages"]
+  listener -. "a message out<br/>(transmit is gated)" .-> node
 ```
 
 ### Where each piece lands

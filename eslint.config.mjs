@@ -20,6 +20,7 @@ export default tseslint.config(
       "**/data/**",
       "tools/teaser/**", // vendored playwright + generated assets
       "apps/web/public/**",
+      "docs/assets/vendor/**", // Mermaid, copied by tools/dev/docs-theme.mjs
     ],
   },
   js.configs.recommended,

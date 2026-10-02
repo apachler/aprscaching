@@ -5,7 +5,9 @@
  * The precache list is everything the build emitted (index.html and the hashed bundles, MapLibre
  * included, so the map opens offline) plus each file from public/ that the built app references by its
  * path — the fonts in the CSS, the brand images in the code, the icons and the manifest in index.html.
- * The iOS launch screens, the embed widget's MapLibre copy and anything nothing references stay out.
+ * The iOS launch screens, the embed widget's MapLibre copy and anything nothing references stay out, and so
+ * does Mermaid: the manual's diagram renderer is large, is loaded only by a page with a diagram, and a diagram
+ * offline still reads as its source.
  * The version is a hash of the list and of every listed file, so any change makes a new worker, whose
  * install stores the new files and whose activation deletes the old ones.
  */
@@ -47,6 +49,43 @@ export function precacheList(outDir: string, emitted: string[]): string[] {
   return [...new Set([...built, ...referenced])].map((f) => `/${f}`).sort();
 }
 
+/** The part of the bundle graph a chunk needs: its file name, its static and its dynamic imports. */
+export interface ChunkLinks {
+  fileName: string;
+  isEntry: boolean;
+  facadeModuleId: string | null;
+  imports: string[];
+  dynamicImports: string[];
+}
+
+/** A chunk loaded on demand that the offline shell leaves to the network, with everything only it reaches. */
+const ON_DEMAND = /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?mermaid\//;
+
+/** The chunks reachable only through an ON_DEMAND import: never precached. */
+export function onDemandChunks(chunks: ChunkLinks[]): Set<string> {
+  const byName = new Map(chunks.map((c) => [c.fileName, c]));
+  const roots = new Set(
+    chunks.filter((c) => c.facadeModuleId && ON_DEMAND.test(c.facadeModuleId)).map((c) => c.fileName),
+  );
+  const reach = (from: string[], skip: Set<string>) => {
+    const seen = new Set<string>();
+    const todo = [...from];
+    while (todo.length) {
+      const f = todo.pop()!;
+      if (seen.has(f) || skip.has(f)) continue;
+      seen.add(f);
+      const c = byName.get(f);
+      if (c) todo.push(...c.imports, ...c.dynamicImports);
+    }
+    return seen;
+  };
+  const app = reach(
+    chunks.filter((c) => c.isEntry).map((c) => c.fileName),
+    roots,
+  );
+  return new Set([...reach([...roots], new Set())].filter((f) => !app.has(f)));
+}
+
 export function serviceWorkerPlugin(): Plugin {
   let outDir = "";
   return {
@@ -57,7 +96,12 @@ export function serviceWorkerPlugin(): Plugin {
     },
     writeBundle(_options, bundle) {
       const swPath = path.join(outDir, "sw.js");
-      const list = precacheList(outDir, Object.keys(bundle));
+      const chunks = Object.values(bundle).flatMap((o) => (o.type === "chunk" ? [o] : []));
+      const skip = onDemandChunks(chunks);
+      const list = precacheList(
+        outDir,
+        Object.keys(bundle).filter((f) => !skip.has(f)),
+      );
       const hash = createHash("sha256");
       for (const u of list) hash.update(u).update(fs.readFileSync(path.join(outDir, u.slice(1))));
       const version = hash.digest("hex").slice(0, 16);

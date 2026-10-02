@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The design tokens as numbers: reads apps/web/src/styles/tokens.css, resolves a theme's custom properties
-// (var() chains, oklch(), hex, color-mix() in oklch, transparent) to sRGB, and measures WCAG contrast. Used by
+// (var() chains, oklch(), hex, color-mix() in oklch or oklab, transparent) to sRGB, and measures WCAG contrast. Used by
 // the contrast test; it implements just the colour syntax tokens.css uses and throws on anything else, so a new
 // syntax fails loudly instead of being measured wrong.
 import { readFileSync } from "node:fs";
@@ -90,10 +90,10 @@ export function parseColor(value: string, tokens: Map<string, string>, seen: str
     const [l, c, h] = main.split(/\s+/);
     return { l: num(l), c: num(c), h: h === "none" ? null : num(h), a: alpha ? num(alpha) : 1 };
   }
-  const mix = /^color-mix\(\s*in oklch\s*,(.*)\)$/.exec(v);
+  const mix = /^color-mix\(\s*in (oklch|oklab)\s*,(.*)\)$/.exec(v);
   if (mix) {
     // a percentage may itself be a token: color-mix(in oklch, var(--tc) var(--hue-text), var(--ink))
-    const body = (mix[1] ?? "").replace(/var\((--[\w-]+)\)/g, (m, name: string) => {
+    const body = (mix[2] ?? "").replace(/var\((--[\w-]+)\)/g, (m, name: string) => {
       const t = tokens.get(name);
       return t !== undefined && /^\d+(\.\d+)?%$/.test(t) ? t : m;
     });
@@ -105,7 +105,8 @@ export function parseColor(value: string, tokens: Map<string, string>, seen: str
     const a = part(p1);
     const b = part(p2);
     const wa = a.pct ?? (b.pct !== null ? 1 - b.pct : 0.5);
-    return mixOklch(parseColor(a.col, tokens, seen), parseColor(b.col, tokens, seen), wa);
+    const mixer = mix[1] === "oklab" ? mixOklab : mixOklch;
+    return mixer(parseColor(a.col, tokens, seen), parseColor(b.col, tokens, seen), wa);
   }
   throw new Error(`unsupported colour syntax: ${v}`);
 }
@@ -128,6 +129,24 @@ function mixOklch(a: Oklch, b: Oklch, wa: number): Oklch {
   }
   // a fully transparent partner (transparent = oklch(0 0 none / 0)) contributes no colour
   return { l: pm(a.l, b.l), c: pm(a.c, b.c), h, a: alpha };
+}
+
+/** color-mix(in oklab, A wa, B): premultiplied alpha, straight through the a/b plane (no hue arc). */
+function mixOklab(a: Oklch, b: Oklch, wa: number): Oklch {
+  const wb = 1 - wa;
+  const alpha = a.a * wa + b.a * wb;
+  if (alpha === 0) return { l: 0, c: 0, h: null, a: 0 };
+  const lab = (x: Oklch) => {
+    const hr = ((x.h ?? 0) * Math.PI) / 180;
+    return { l: x.l, A: x.c * Math.cos(hr), B: x.c * Math.sin(hr) };
+  };
+  const p = lab(a);
+  const q = lab(b);
+  const pm = (x: number, y: number) => (x * a.a * wa + y * b.a * wb) / alpha;
+  const A = pm(p.A, q.A);
+  const B = pm(p.B, q.B);
+  const c = Math.hypot(A, B);
+  return { l: pm(p.l, q.l), c, h: c < 1e-6 ? null : ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360, a: alpha };
 }
 
 function fromHex(h: string): Rgba {

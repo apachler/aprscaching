@@ -96,6 +96,12 @@ the real browser ceremony before a release.
   foreground/background token pair the stylesheets use, in the dark, light and Phosphor themes. It resolves
   `var()`, OKLCH and `color-mix()` itself. A pair listed as a known failure must keep failing: once it passes,
   the test asks for it to leave the list.
+- **Diagrams** — `apps/web/test/diagrams.test.ts` parses every ```` ```mermaid ```` block in the repository's
+  Markdown with the Mermaid the app ships (under jsdom, which Mermaid's label sanitiser needs), and
+  `tools/checks/docs.mjs` fails on a diagram drawn in box-drawing characters.
+- **The manual's theme** — `node tools/dev/docs-theme.mjs` writes `docs/stylesheets/tokens.gen.css` from the
+  app's tokens and fonts, and copies Mermaid's browser build into `docs/assets/vendor/` for the build;
+  `--check` (in `pnpm run check` and the docs workflow) fails when the committed theme no longer matches.
 - **The UI kit** — `/?demo=ui` in a running app (`pnpm dev:web`): every token, the role scales and every
   primitive in every state, with a theme, density and scale switch ([Design language](../design/design-language.md)).
 - **The whole app on fixtures** — `/?demo=app` serves the app from canned gateway answers
@@ -160,7 +166,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
-| `docs.yml` — `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `docs.yml` — the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
 | `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
 | `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
 | `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |

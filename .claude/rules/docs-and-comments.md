@@ -78,12 +78,29 @@ either — e.g. an error body must say `verify <call> to transmit — control-ve
 
 ---
 
+## Diagrams are Mermaid
+
+A diagram in the manual, a README or a rule (a topology, a data path, an exchange, a state machine, a schema)
+MUST be a ```` ```mermaid ```` block: `flowchart` for topologies and paths, `sequenceDiagram` for exchanges,
+`stateDiagram-v2` for states, `erDiagram` for tables. The published manual and the in-app reader draw the same
+block in the theme's colours, and a reader without it still sees readable source. Keep labels short; the prose
+around the diagram carries the explanation.
+
+- MUST NOT draw diagrams in box-drawing characters or ASCII arrows inside a fenced block.
+- Real terminal output, command lines, configuration, packet dumps and byte tables stay as code. A fenced
+  block of real output that uses box-drawing characters carries `<!-- ascii-ok: <what it is> -->` on the line
+  right above it.
+- Code comments and the dated records under `docs/reviews/` are out of scope.
+
+---
+
 ## Enforced in CI
 
 `tools/checks/docs.mjs` (run in the `lint + format` job) fails on the codes and story phrases above in the
 manual, the root documents and the READMEs, on configuration keys missing from
 `docs/reference/configuration.md` (or documented but unread), on manual pages outside the nav, and on broken
-links outside the manual. It cannot judge subtler story-telling or code comments; review still does.
+links outside the manual, and on box-drawing diagrams in fenced blocks; the web app's `test/diagrams.test.ts`
+parses every ```` ```mermaid ```` block. It cannot judge subtler story-telling or code comments; review still does.
 
 ## Applies to NEW code
 
@@ -100,3 +117,4 @@ doc is a defect in review, the same as a failing test.
 - [ ] No "for now / previously / used to / reborn / greenfield / squashed / was-broken-now-fixed".
 - [ ] The rationale (the WHY) survived; only the history and the tag were removed.
 - [ ] Domain terms (Tier A/B/C, q-constructs, protocol names) are intact.
+- [ ] Any diagram is a `mermaid` block, not box-drawing characters.

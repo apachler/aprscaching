@@ -10,6 +10,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DOC_PAGES, type DocPage } from "virtual:docs";
 import { Panel, EmptyState, Button } from "../ui/index.js";
 import { renderMarkdown } from "./markdown.js";
+import { drawDiagrams } from "./diagrams.js";
+import { useAppliedTheme } from "../map/mapPaint.js";
 
 /** Pages grouped into their sections, section order preserved from the manifest order. */
 function useSections(): { section: string; pages: DocPage[] }[] {
@@ -31,6 +33,7 @@ export function DocsPanel(props: { initialSlug?: string; initialAnchor?: string;
   const page = DOC_PAGES.find((p) => p.slug === slug) ?? null;
   const html = useMemo(() => (page ? renderMarkdown(page.body, page.slug) : ""), [page]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const theme = useAppliedTheme();
 
   function scrollToAnchor(id: string) {
     const target = bodyRef.current?.querySelector(`#${CSS.escape(id)}`);
@@ -70,6 +73,17 @@ export function DocsPanel(props: { initialSlug?: string; initialAnchor?: string;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on rendered page (html), not on the transient anchor
   }, [html]);
+
+  // Draw the page's diagrams, and again in the new colours when the theme changes.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    let current = true;
+    void drawDiagrams(el, () => current);
+    return () => {
+      current = false;
+    };
+  }, [html, theme]);
 
   return (
     <Panel title="Manual" side="left" wide onClose={props.onClose}>
