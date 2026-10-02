@@ -180,15 +180,6 @@ async function openView(page, view, waitSel) {
   if (waitSel) await page.waitForSelector(waitSel, { timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(300);
 }
-// Expand a named shack group (e.g. "Packet terminal", "Tools") + scroll it into view for the shot.
-async function expandGroup(page, title) {
-  const toggle = page.locator(".group-toggle", { hasText: title }).first();
-  await toggle.waitFor({ state: "visible", timeout: 6000 });
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click().catch(() => {});
-  await page.waitForTimeout(500);
-  await toggle.scrollIntoViewIfNeeded().catch(() => {});
-  await page.waitForTimeout(300);
-}
 // Open a `?demo=` harness route (the hardware-free simulator: real components + in-process sims). The
 // hardware/gated surfaces (packet terminal, BBS, CAT rig, remote box) can't populate against a headless
 // browser with no TNC/radio, so the teaser shows them here in demo mode — populated and working. These
@@ -339,15 +330,12 @@ for (const v of VIEWS) {
   });
 
   // signed-in demo journey (one context; reset to the map before each destination)
-  let ctx,
-    page,
-    signedIn = false;
+  let ctx, page;
   try {
     ctx = await ctxFor(v, true);
     page = await ctx.newPage();
     try {
       await signIn(page);
-      signedIn = true;
     } catch (e) {
       console.log("   (real sign-in failed — explore mode, gated surfaces skip):", String(e.message).split("\n")[0]);
     }
