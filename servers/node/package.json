@@ -14,7 +14,7 @@
     "@aprscaching/gateway": "workspace:*",
     "@aprscaching/shared": "workspace:*",
     "better-sqlite3": "^13.0.3",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
