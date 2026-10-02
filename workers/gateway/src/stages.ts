@@ -124,11 +124,27 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
       ).results
     : [];
 
+  // An unlock belongs to the stage as it was. From the first stage that changes (moved, re-keyed, re-clued,
+  // removed or added), finders' unlocks are dropped: a stage reached the old way does not open the new one.
+  const before = new Map(
+    (
+      await env.DB.prepare(
+        "SELECT stage_no, unlock, clue, lat, lon, radius_m, unlock_secret FROM cache_stages WHERE cache_id=?",
+      )
+        .bind(cacheId)
+        .all<Omit<StageRow, "media_key">>()
+    ).results.map((r) => [r.stage_no, JSON.stringify([r.unlock, r.clue, r.lat, r.lon, r.radius_m, r.unlock_secret])]),
+  );
+  const after = new Map<number, string>();
   const stmts = [env.DB.prepare("DELETE FROM cache_stages WHERE cache_id=?").bind(cacheId)];
   for (const s of b.stages) {
     const unlock = ["geo", "audio", "open", "nfc"].includes(s.unlock ?? "") ? s.unlock : "geo";
     // for an nfc stage the secret (tag text/serial) is required so it can actually be unlocked
     const secret = unlock === "nfc" ? s.secret?.trim() || null : null;
+    after.set(
+      s.stageNo,
+      JSON.stringify([unlock, s.clue ?? null, s.lat ?? null, s.lon ?? null, Math.round(s.radiusM ?? 60), secret]),
+    );
     stmts.push(
       env.DB.prepare(
         "INSERT INTO cache_stages (cache_id, stage_no, unlock, clue, lat, lon, radius_m, unlock_secret) VALUES (?,?,?,?,?,?,?,?)",
@@ -144,6 +160,14 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
       ),
     );
   }
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter((n) => before.get(n) !== after.get(n));
+  if (changed.length)
+    stmts.push(
+      env.DB.prepare("DELETE FROM stage_unlocks WHERE cache_id=? AND stage_no >= ?").bind(
+        cacheId,
+        Math.min(...changed),
+      ),
+    );
   await env.DB.batch(stmts);
   // free the now-orphaned clue objects (best-effort; the rows are already gone)
   for (const m of orphaned) {
