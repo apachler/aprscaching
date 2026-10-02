@@ -437,7 +437,7 @@ doc_net44() {
       warnc net44.mtu "$N44_IF's MTU is ${mtu:-unknown}, above $N44_MTU_CAP: large replies can stall" "deploy/aprscaching net44 setup sets it from the path MTU" "$link"
     fi
     if have nft && nft list table inet "$N44_NFT" >/dev/null 2>&1; then pass net44.firewall "$N44_IF is filtered: only TCP 80/443 and replies"; else
-      warnc net44.firewall "no firewall from net44 on $N44_IF: ARDC filters nothing" "deploy/aprscaching net44 setup applies it, or filter $N44_IF yourself" "$link#6-who-can-reach-you"
+      warnc net44.firewall "no firewall from net44 on $N44_IF: ARDC filters nothing" "deploy/aprscaching net44 setup applies it, or filter $N44_IF yourself" "$DOCS_URL/run/networks/44net.md#6-who-can-reach-you"
     fi
   elif [ -n "$name" ] && [ "$(n44_shape_mode)" != guide ]; then
     failc net44.tunnel "FED_ENDPOINTS names $name, but $N44_IF is not up on this host" "deploy/aprscaching net44 setup <connect.conf>" "$link"
@@ -446,27 +446,27 @@ doc_net44() {
   a="$(SHAPE_ENV="$DOC_ENV" n44_doh "$name" A | grep -E '^[0-9.]+$' | head -n 1)"
   v4="$( [ -f "$(n44_conf)" ] && n44_v4 "$(n44_conf)" || true)"
   if [ -z "$a" ]; then
-    failc net44.dns "$name has no A record" "add it in the 44Net Portal${v4:+, pointing at $v4}" "$link#3-name-and-identity"
+    failc net44.dns "$name has no A record" "add it in the 44Net Portal${v4:+, pointing at $v4}" "$DOCS_URL/run/networks/44net-identity.md#3-name-and-identity"
   elif [ -n "$v4" ] && [ "$a" != "$v4" ]; then
-    failc net44.dns "$name points at $a, but the tunnel is $v4" "correct the A record in the 44Net Portal" "$link#3-name-and-identity"
+    failc net44.dns "$name points at $a, but the tunnel is $v4" "correct the A record in the 44Net Portal" "$DOCS_URL/run/networks/44net-identity.md#3-name-and-identity"
   else
     pass net44.dns "$name points at $a"
   fi
   txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.$name" TXT | grep 'v=acs1' | head -n 1)"
   [ -n "$txt" ] || txt="$(SHAPE_ENV="$DOC_ENV" n44_doh "_aprscaching.${name#*.}" TXT | grep 'v=acs1' | head -n 1)"
   if [ -n "$txt" ]; then pass net44.txt "the _aprscaching record is published"; else
-    failc net44.txt "no _aprscaching TXT record for $name" "publish the value Instance admin -> Setup -> 44Net shows" "$link#3-name-and-identity"
+    failc net44.txt "no _aprscaching TXT record for $name" "publish the value Instance admin -> Setup -> 44Net shows" "$DOCS_URL/run/networks/44net-identity.md#3-name-and-identity"
   fi
   domain="$(doc_get DOMAIN)"
   case ", $domain," in
     *", $name,"* | *" $name,"*)
       end="$(echo | openssl s_client -connect "${a:-$name}:443" -servername "$name" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)"
       if [ -z "$end" ]; then
-        warnc net44.cert "no certificate answered for $name" "Caddy fetches one once the name resolves and is reachable" "$link#tls-on-the-44net-name"
+        warnc net44.cert "no certificate answered for $name" "Caddy fetches one once the name resolves and is reachable" "$DOCS_URL/run/networks/44net-identity.md#tls-on-the-44net-name"
       else
         days=$((($(date -d "$end" +%s) - $(date +%s)) / 86400))
         if [ "$days" -gt 14 ]; then pass net44.cert "the certificate for $name is valid for $days more days"; else
-          warnc net44.cert "the certificate for $name expires in $days days" "check Caddy's renewal (docker compose logs caddy)" "$link#tls-on-the-44net-name"
+          warnc net44.cert "the certificate for $name expires in $days days" "check Caddy's renewal (docker compose logs caddy)" "$DOCS_URL/run/networks/44net-identity.md#tls-on-the-44net-name"
         fi
       fi
       ;;
