@@ -37,30 +37,54 @@ added.
 **Recent T-Deck Plus work** (firmware 4.35s–4.35t): a Kalman filter on GPS positions, key repeat on the
 keyboard, faster boot, and a sound/mute fix. Firmware 4.35t also fixes screen rendering that stopped part-way
 through an update ([MeshCom-Firmware #1131](https://github.com/icssw-org/MeshCom-Firmware/issues/1131)), so a
-T-Deck Plus for this map runs 4.35t or later.
+T-Deck Plus for this map runs 4.35t or later. The current release is 4.40a (October 2026).
 
-**Unverified:** how the map is implemented — tile source, whether map data lives on the SD card, the
-rendering library, and the memory left for an overlay. See the open questions below.
+### How the map works
+
+From the firmware source, release 4.40a:
+
+- **Tiles from the SD card.** The map draws raster tiles from up to five map sets in
+  `/maps/<set>/<z>/<x>/<y>.png`: the OSM slippy-map layout, 256-pixel PNG tiles, Web Mercator. Each set's zoom
+  range comes from its folders. The firmware downloads and renders no tiles itself; the operator copies them
+  onto the card, and the settings tab picks the set. Without a card the map says so.
+- **Rendering.** LVGL 8.3 on TFT_eSPI. A redraw decodes at most 2 × 2 tiles with lodepng into one image of the
+  viewport (about 294 × 182 pixels). There is no tile cache, so every pan or zoom reads the card again.
+- **Stations.** Each one is a red dot (blue for the node itself) with its callsign as the label; there is no
+  APRS symbol, comment or age. They sit in a ring of 30 entries shared by all stations, and the oldest entry
+  gives way to a new one. Entries do not expire.
+- **What feeds it.** Only position frames received over LoRa, labelled with the sender's callsign. Positions
+  that reach a gateway node over UDP or the internet do not appear.
+- **Memory.** The board has 8 MB of PSRAM and LVGL allocates from it, so memory is not what limits an
+  overlay. The 30-entry ring is.
+- **Southern and western positions plot in the wrong place.** The function that adds a station negates the
+  latitude for `W` and the longitude for `S`, the letters swapped, so neither is ever negated. Positions in
+  Europe are unaffected.
 
 ## Why caches cannot be pushed onto the map
 
-Neither client interface of the firmware can place an arbitrary object on the node's map:
+None of the firmware's client interfaces can place a point of its own on the node's map:
 
-- **ExtUDP** (JSON over UDP, port 1799) accepts only text messages from a client
-  (`{"type":"msg","dst":…,"msg":…}`); it cannot inject positions or objects. See the
+- **ExtUDP** (JSON over UDP, port 1799) accepts text messages (`{"type":"msg","dst":…,"msg":…}`) and sensor
+  values for the node's own beacon (`{"type":"tele",…}`). It cannot inject positions or objects. See the
   [ExtUDP reference](../../reference/meshcom-extudp.md).
 - **KISS over TCP** (port 8001, ESP32 only;
-  [MeshCom-Firmware #1151](https://github.com/icssw-org/MeshCom-Firmware/pull/1151)) transmits AX.25 frames
-  from a client, but converts them only into MeshCom text or position messages. They go out under the
-  client's own callsign — frames from other callsigns are refused — and at most 8 per second. APRS
-  objects are not transmitted.
+  [MeshCom-Firmware #1151](https://github.com/icssw-org/MeshCom-Firmware/pull/1151)) is in the firmware from the
+  4.35t daily build of 24 September 2026 and in 4.35u and later, off by default. It converts a client's
+  AX.25 frames into MeshCom text or position messages, at most 8 per second, and refuses anything else as a
+  bad frame. A frame must come from the client's base callsign; any SSID passes.
+- **Bluetooth** (the phone app) sets only the node's own position and sends text messages.
 
-**Unverified:** whether the T-Deck map shows APRS objects it receives. It is known to show stations'
-positions.
+The map cannot show a received APRS object either. MeshCom has no object or item frame: the firmware takes
+only text (`:`), position (`!`) and HEY (`@`) frames and discards anything else, so an object never reaches
+the node.
+
+A client could send positions under extra SSIDs of its own call, and each would show as a dot labelled
+`OE8APR-1` and so on. APRScaching does not use this: gateways forward those frames to APRS-IS as station
+positions that are not real, and the label cannot be a cache code.
 
 ## Concept: three layers, one overlay renderer
 
-**1. Text bot — works with current firmware (4.35t).** An operator sends `CACHES [grid]` to a bot callsign and
+**1. Text bot — works with current firmware (4.40a).** An operator sends `CACHES [grid]` to a bot callsign and
 receives the nearest caches in one reply within the message limit. Without a grid, the bot uses the sender's
 last beaconed position. It rides the gateway → box transmit channel described in [Logging finds over radio
 messages](radio-find-logging.md).
@@ -75,7 +99,8 @@ and draws it as a map overlay; APRScaching provides a GPX export per region or M
 caches as APRS objects (object name = cache code, originator = the bot's callsign). This needs two firmware
 changes:
 
-- the firmware receives objects and shows them on the map, honouring an expiry time and kill frames;
+- MeshCom gains an object frame type, and the firmware receives objects and shows them on the map, honouring
+  an expiry time and kill frames;
 - KISS accepts object frames whose originator is the client's own callsign.
 
 Objects are broadcasts that every mesh node repeats. They are therefore sent **only on request**, with a
@@ -98,9 +123,10 @@ dynamic additions such as new caches or events.
 
 | Question | Status | How to settle it |
 |---|---|---|
-| Does the T-Deck map show received APRS objects? | **Unverified** | Firmware map/display code, then an on-air test |
+| Does the T-Deck map show received APRS objects? | **Settled: no** — MeshCom has no object frame; the firmware discards every frame but text, position and HEY (firmware 4.40a) | — |
 | Is the message limit counted in bytes or characters? | **Settled: 150 bytes of UTF-8** — the firmware checks `strlen`, so an umlaut costs two bytes (firmware 4.35t, see the [ExtUDP reference](../../reference/meshcom-extudp.md)) | — |
-| How is the map implemented (tiles, SD storage, renderer, memory headroom for an overlay)? | **Unverified** | Firmware source, T-Deck variant |
+| How is the map implemented (tiles, SD storage, renderer, memory headroom for an overlay)? | **Settled** — SD-card PNG tiles in the slippy-map layout, LVGL 8.3, memory in PSRAM; the 30-station ring is the limit ([How the map works](#how-the-map-works)) | — |
+| How much heap and PSRAM is free with the map open? | **Unverified** | `--heap` on a measurement build of the firmware, on a T-Deck Plus |
 
 ## Upstream proposal drafts
 
@@ -113,12 +139,13 @@ concept is agreed with ICSSW. **Not filed.**
 >
 > **Problem.** The map shows stations heard on the mesh, but an operator in the field often wants fixed
 > points of interest on the same screen — repeaters, SOTA summits, shelters, meeting points, geocaches.
-> Today they can only be sent as text, which the map cannot display.
+> The map draws only SD-card tiles and stations heard over LoRa, so these points can only be sent as text.
 >
 > **Proposed behaviour.** At boot (and on a menu action), the firmware reads one waypoint file from the SD
-> card, for example `/poi/poi.gpx` or `/poi/poi.csv`, and draws each point as a small symbol with an
-> optional short label. A settings switch turns the overlay on or off. Points outside the visible area are
-> skipped; nothing is transmitted.
+> card, for example `/maps/poi.gpx` or `/maps/poi.csv` beside the tile sets, and draws each point as a small
+> symbol with an optional short label on the same projection as the stations. The points live in their own
+> table, apart from the 30-station ring, so they never push a station off the map. A settings switch turns the
+> overlay on or off. Points outside the visible area are skipped; nothing is transmitted.
 >
 > **File format.**
 >
@@ -127,10 +154,9 @@ concept is agreed with ICSSW. **Not filed.**
 > - *CSV:* `lat,lon,label,symbol` — decimal degrees, label up to 9 characters, symbol an APRS symbol pair
 >   (`/;`) or empty for a default. `#` starts a comment line.
 >
-> **Memory and airtime.** No airtime at all. On the ESP32-S3, points are loaded into a compact array
-> (lat/lon as 32-bit integers, 9-byte label, 2-byte symbol ≈ 20 bytes per point), capped at a fixed count
-> (for example 500) so the overlay can never exhaust heap; points are filtered per redraw by the visible
-> bounding box.
+> **Memory and airtime.** No airtime at all. Points are loaded into a compact array in PSRAM (lat/lon as
+> 32-bit integers, 9-byte label, 2-byte symbol ≈ 20 bytes per point), capped at a fixed count (for example
+> 500), and filtered per redraw by the visible bounding box. The vendored tinyxml2 library can parse the GPX.
 >
 > **Why it is generic.** Any group benefits: repeater lists, summit lists for SOTA activators, emergency
 > shelters for EmComm exercises, event locations. The file can be produced by any tool that exports GPX.
@@ -142,11 +168,11 @@ concept is agreed with ICSSW. **Not filed.**
 > **Title:** Map: display received APRS objects with expiry and kill support
 >
 > **Problem.** APRS objects (`;NAME_____*DDHHMMz…`) are the standard way to announce a point that is not a
-> station — an event, a net control position, a temporary repeater. The map shows stations' positions but
-> (to our knowledge) not objects, so this information is lost on MeshCom handhelds.
+> station — an event, a net control position, a temporary repeater. MeshCom has no object frame: the firmware
+> accepts only text, position and HEY frames, so objects never reach a MeshCom handheld.
 >
-> **Proposed behaviour.** When the node receives an APRS object, it stores it keyed by (originator, object
-> name) and draws it on the map with its symbol and name. A later object with the same key replaces the
+> **Proposed behaviour.** A new MeshCom frame type carries an APRS object. When the node receives one, it
+> stores it keyed by (originator, object name) and draws it on the map with its symbol and name. A later object with the same key replaces the
 > earlier one; a kill frame (`_` instead of `*` after the name) removes it. Each object expires after a
 > configurable time (default 60 minutes) unless refreshed.
 >
@@ -171,7 +197,7 @@ concept is agreed with ICSSW. **Not filed.**
 >
 > **Proposed behaviour.** Accept an AX.25 UI frame whose information field is an APRS object when the
 > frame's source (the object's originator) is the client's own callsign, and transmit it as a MeshCom
-> object message. The existing own-callsign check and rate limit stay in force; object frames count
+> object message, the frame type the object proposal above defines. The existing own-callsign check and rate limit stay in force; object frames count
 > against the same rate limit.
 >
 > **Frame format.** As received: APRS101 chapter 11 object, including kill frames so a client can withdraw
@@ -197,6 +223,9 @@ concept is agreed with ICSSW. **Not filed.**
   [#1114](https://github.com/icssw-org/MeshCom-Firmware/pull/1114),
   [#1151](https://github.com/icssw-org/MeshCom-Firmware/pull/1151),
   [#1157](https://github.com/icssw-org/MeshCom-Firmware/pull/1157)
+- MeshCom firmware source, release 4.40a (`e1e2ace`): `src/t-deck/tdeck_sdmap.cpp` (tiles),
+  `src/t-deck/lv_obj_functions.cpp` (stations on the map), `src/aprs_functions.cpp` (accepted frames),
+  `src/extudp_functions.cpp`, `src/kiss_functions.cpp`, `src/phone_commands.cpp`
 - APRS Protocol Reference (APRS101), chapter 11 "Object and Item Reports"
 
 ## Next
