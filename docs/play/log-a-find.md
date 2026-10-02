@@ -120,12 +120,10 @@ one of two badges:
 
 ## Announce your finds on APRS-IS
 
-With a verified callsign, a find can be announced to [APRS-IS](../glossary.md#aprs-is) as a short status
-message from your callsign. The result card then shows **announced to APRS-IS**. Announcing is off unless you
-opt in.
-
-!!! note "Known issue"
-    The app has no switch to opt in, so finds are not announced.
+With a verified callsign, each verified find can be announced to [APRS-IS](../glossary.md#aprs-is) as a short
+status message from your callsign, for example *Found AC-1234 (Rover on the ridge) via aprscaching.net*.
+Announcing is off unless you opt in: turn on **Settings** → **Announce finds**. The result card then shows
+**announced to APRS-IS**. The switch covers finds logged in the app and by radio, from any SSID of your call.
 
 ## Check that it worked
 

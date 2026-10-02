@@ -727,6 +727,13 @@ export function getSupportPrefs(): Promise<SupportPrefs> {
 export function setSupportPrefs(hideNag: boolean): Promise<SupportPrefs> {
   return call(`/api/support/prefs`, { method: "POST", body: JSON.stringify({ hideNag }) });
 }
+/** Whether the signed-in account announces its verified finds on APRS-IS. */
+export function getAnnounce(): Promise<{ on: boolean }> {
+  return call(`/api/announce`);
+}
+export function setAnnounce(on: boolean): Promise<{ on: boolean }> {
+  return call(`/api/announce`, { method: "POST", body: JSON.stringify({ on }) });
+}
 /** The public transparency ledger page (server-rendered on the gateway). */
 export const supportUrl = `${API_BASE}/support`;
 

@@ -33,6 +33,7 @@ import { ProfileEditor } from "../profile/ProfileEditor.js";
 import { WeatherStation } from "../profile/WeatherStation.js";
 import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
+import { AnnounceSettings } from "./AnnounceSettings.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
@@ -217,6 +218,10 @@ export function SettingsPanel(props: {
         <Group title="My radio (browser)" status="RF bridge" defaultOpen={false}>
           <ConnectionsSettings callsign={callsign} verified={verified} />
         </Group>
+      )}
+
+      {session.signedIn && match("announce finds APRS-IS status message broadcast") && (
+        <AnnounceSettings verified={verified} />
       )}
 
       {session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (

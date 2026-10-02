@@ -98,6 +98,7 @@ import { handleUserTx } from "./tx.js";
 import { handleWatchList, handleWatchAdd, handleWatchRemove, handleWatchAlerts, handleWatchSeen } from "./watch.js";
 import { handleViewCreate, handleViewList, handleViewDelete, handleViewResolve } from "./views.js";
 import { handlePrefsGet, handlePrefsPut } from "./prefs.js";
+import { handleAnnouncePrefs } from "./announce.js";
 import { handlePushKey, handlePushSubscribe, handlePushUnsubscribe, handleNotifyPrefs, runDigests } from "./notify.js";
 import { handleFederationSync, syncAllPeers } from "./fedpull.js";
 import { handleFederationPeers, handlePeerTrust } from "./fedpeers.js";
@@ -411,6 +412,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (viewGet && m === "GET") return handleViewResolve(req, env, viewGet[1]!);
 
   // account-level UI preferences sync: theme, units/locale, pinned apps, basemap
+  if (p === "/api/announce" && (m === "GET" || m === "POST")) return handleAnnouncePrefs(req, env);
   if (p === "/api/prefs" && m === "GET") return handlePrefsGet(req, env);
   if (p === "/api/prefs" && m === "PUT") return handlePrefsPut(req, env);
 
