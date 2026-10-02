@@ -11,6 +11,9 @@ fi
 cd "$ROOT/workers/gateway"
 wrangler d1 create aprscaching || true
 echo ">> Paste the database_id into wrangler.toml, then press Enter."; read -r _
+# the two R2 buckets wrangler.toml binds: TILES (the offline map's archive) and MEDIA (cache media and audio
+# clues). A deploy fails while a bound bucket is missing; an existing bucket is left as it is.
+wrangler r2 bucket create aprscaching-assets || true
 wrangler r2 bucket create aprscaching-media || true
 # three distinct secrets: the ingest box's, the operator's scripts', and the session-signing key
 # (the Worker mints no session without SESSION_SECRET). Generate each with: openssl rand -hex 32

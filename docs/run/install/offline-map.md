@@ -41,7 +41,7 @@ the archive now and then: a pack keeps the map it was made with, until it is mad
 |---|---|
 | Self-host (Docker) | Put the file in the data volume, e.g. `docker compose cp austria.pmtiles gateway:/data/offline.pmtiles`, set `OFFLINE_TILES_PATH=/data/offline.pmtiles` in `.env`, and apply it with `docker compose up -d` (from `deploy/`). |
 | Bare metal, Pocket, Desktop | Set `OFFLINE_TILES_PATH` to the file's path. |
-| Cloudflare split | Upload it to the `TILES` bucket: `wrangler r2 object put aprscaching-assets/offline.pmtiles --file austria.pmtiles` (`OFFLINE_TILES_KEY` names another key). Create the bucket first if it does not exist: `wrangler r2 bucket create aprscaching-assets`. |
+| Cloudflare split | Upload it to the `TILES` bucket: `wrangler r2 object put aprscaching-assets/offline.pmtiles --file austria.pmtiles` (`OFFLINE_TILES_KEY` names another key). `deploy/cloudflare/deploy-cf.sh` creates the bucket. |
 | Hosted elsewhere | Set `OFFLINE_TILES_URL` to its URL. The host must allow offline use and answer byte ranges with CORS (`Access-Control-Allow-Origin`, and `Content-Range` exposed). |
 
 The instance serves the file at `/tiles/offline.pmtiles`; `GET /api/offline/tiles` tells the app where it is.
