@@ -497,18 +497,16 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
   }
   const accountVerified = sessionCall != null; // session => passkey-bound account
 
-  const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?")
-    .bind(cacheId)
-    .first<
-      CacheRow & {
-        code: string;
-        title: string;
-        created_at: number;
-        status: string;
-        owner_call: string;
-        source: string | null;
-      }
-    >();
+  const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(cacheId).first<
+    CacheRow & {
+      code: string;
+      title: string;
+      created_at: number;
+      status: string;
+      owner_call: string;
+      source: string | null;
+    }
+  >();
   if (!cache) return json({ error: "no such cache" }, { status: 404 });
   const sessionAccount = sessionCall ? ((await sessionIdentity(req, env))?.accountId ?? null) : null;
   // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
