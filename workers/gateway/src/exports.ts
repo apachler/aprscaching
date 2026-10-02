@@ -105,7 +105,8 @@ async function bboxCaches(
   const rows = (
     await env.DB.prepare(
       `SELECT code, title, type, difficulty, terrain, lat, lon, owner_call AS ownerCall
-       FROM caches WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND lat IS NOT NULL AND lon IS NOT NULL
+       FROM caches WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND fed_scope != 'unlisted'
+         AND lat IS NOT NULL AND lon IS NOT NULL
        LIMIT 2000`,
     )
       .bind(minLat, maxLat, minLon, maxLon)

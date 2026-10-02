@@ -16,7 +16,8 @@ before mirroring it into display-only tables.
 - Only `source='native'` caches with a federating scope are published. Imported heritage data and
   `local-only` caches never leave the instance.
 - Finds federate only with their cache: a find on a `local-only` or imported cache stays home too.
-- A cache marked `unlisted` withholds its description on the wire.
+- A cache marked `unlisted` withholds its description on the wire, and a mirror keeps it off its map and
+  offline packs as the origin does.
 
 ### Key rotation
 

@@ -179,7 +179,7 @@ explains it in full.
 
 <span id="rendezvous"></span>Rendezvous
 :   A record made when two living caches meet: within 150 m of each other inside 15 minutes. It shows on both
-    cache pages with the time, and earns no points ([Living caches](play/cache-types/living.md#rendezvous)).
+    cache pages, with the time for the cache's owner and the day for everyone else, and earns no points ([Living caches](play/cache-types/living.md#rendezvous)).
 
 <span id="heritage-place"></span><span id="heritage-cache"></span>Heritage place
 :   A summit, park, castle or other place from an award programme or open map data, imported by the sysop so

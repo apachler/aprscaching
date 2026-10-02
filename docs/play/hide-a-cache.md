@@ -84,14 +84,14 @@ instances get:
 | Scope | On this instance | Other instances |
 |---|---|---|
 | **Public** | map, search, RSS | the whole cache |
-| **Unlisted** | map, search, RSS | the title and position, without the description |
+| **Unlisted** | its link and code only | the title and position, without the description, kept off their maps |
 | **Local only** | map, search, RSS | nothing |
 
-The hint never leaves this instance, whatever the scope.
+An **Unlisted** cache stays off the map, search, RSS, GPX downloads, offline packs and watch alerts. You see it
+on your own map and in your own search. Anyone with its link or code opens its page and can log it. Unlisted
+keeps a cache out of sight; it does not make it secret.
 
-!!! note "Known issue"
-    **Unlisted** does not hide a cache. It still shows on this instance's map, in search and in RSS. Other
-    instances get its title and position and can show it on their maps.
+The hint never leaves this instance, whatever the scope.
 
 ## Stages, living caches and media
 

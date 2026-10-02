@@ -118,7 +118,7 @@ export async function recordWatchHeard(env: Env, heard: { src: string; lat: numb
     if (recent) continue;
     const p = pos.get(w.callsign)!;
     const cache = await env.DB.prepare(
-      `SELECT id, code, title FROM caches WHERE status != 'archived' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+      `SELECT id, code, title FROM caches WHERE status != 'archived' AND fed_scope != 'unlisted' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
          ORDER BY (lat-?)*(lat-?)+(lon-?)*(lon-?) LIMIT 1`,
     )
       .bind(

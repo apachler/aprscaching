@@ -2,6 +2,7 @@
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { displayCall } from "./auth.js";
+import { listedOrOwn } from "./caches.js";
 import type { SearchHitCache, SearchHitStation, SearchResults, CacheType } from "@aprscaching/shared";
 
 /**
@@ -44,12 +45,13 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
   const contains = `%${esc}%`,
     prefix = `${esc}%`;
 
+  const listed = await listedOrOwn(req, env);
   // Caches: contains-match across code/title/owner; rank prefix-of-code first, then code, then title.
   // Plain positional ? (bound repeatedly) for portability — D1 doesn't reliably support ?N reuse.
   const cacheRows = (
     await env.DB.prepare(
       `SELECT id, code, owner_call, title, type, lat, lon FROM caches
-       WHERE status != 'archived'
+       WHERE status != 'archived' AND ${listed.sql}
          AND (code LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR owner_call LIKE ? ESCAPE '\\')
        ORDER BY
          CASE WHEN code LIKE ? ESCAPE '\\' THEN 0
@@ -59,7 +61,7 @@ export async function handleSearch(req: Request, env: Env): Promise<Response> {
          length(code)
        LIMIT ?`,
     )
-      .bind(contains, contains, contains, prefix, contains, contains, limit)
+      .bind(...listed.binds, contains, contains, contains, prefix, contains, contains, limit)
       .all<CacheHitRow>()
   ).results;
 

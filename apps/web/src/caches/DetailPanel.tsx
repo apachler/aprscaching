@@ -294,7 +294,8 @@ export function DetailPanel(props: {
             {c.rendezvous.map((r, i) => (
               <li key={`${r.withCacheId}-${r.ts}-${i}`}>
                 <Icon name="handover" cp437="" className="lead-ic" />
-                met <span className="mono">{r.withCall}</span> <span className="muted">· {fmt.ago(r.ts)}</span>
+                met <span className="mono">{r.withCall}</span>{" "}
+                <span className="muted">· {r.day ? fmt.date(r.ts) : fmt.ago(r.ts)}</span>
               </li>
             ))}
           </ul>
