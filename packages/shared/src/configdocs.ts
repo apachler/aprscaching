@@ -30,6 +30,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_OPERATOR: "Operator label this instance publishes in /.well-known",
   FED_APRS_CALL: "APRS service callsign this instance publishes in /.well-known",
   FIRST_PARTY_SITES: "Comma-separated calls of receiving sites you operate and attest (Tier A)",
+  MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
   FED_PEERS: "Comma-separated base URLs of federation peers to sync from",
   FED_DISCOVER: "1 learns the peers that trusted peers advertise",
   FED_CORROBORATION_QUORUM: "Distinct corroborating identities required to promote a find to Tier A",
@@ -369,6 +370,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`FIRST_PARTY_SITES`",
         "Allowlist of receiving-site callsigns you operate and attest — the only Tier A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
         "—",
+      ],
+      [
+        "`MIN_TRUST`",
+        "The lowest tier a find needs to count as verified on this instance: `B` (Location-verified or better) or `A` (Radio-verified only). A cache's own minimum, set by its hider, takes precedence",
+        "`B`",
       ],
       [
         "`FED_CORROBORATION_QUORUM`",

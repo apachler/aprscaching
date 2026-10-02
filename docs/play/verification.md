@@ -76,7 +76,8 @@ about where you were.
 ## Caches that need a better badge
 
 Each cache shows what a find needs under **Verification** on its sheet. Most need **Location-verified or
-better**. Some caches need **Radio-verified**.
+better**. Some caches need **Radio-verified**: the hider asked for it, or the sysop set it for the whole
+instance.
 
 A find below the cache's minimum stays on record with its own badge. It does not count as verified. The result
 card says so: *This cache needs a Radio-verified find. Yours was Location-verified, so it is on record but

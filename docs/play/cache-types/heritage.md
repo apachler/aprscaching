@@ -66,9 +66,9 @@ Nothing: the sysop imports heritage places, and running the import again updates
 region onto the map, ask your sysop. They can follow
 [Import heritage places](../../run/day-to-day/import-places.md).
 
-!!! note "Known issue"
-    The hide form offers **SOTA summit** and **POTA park** as types, so a player can hide one. Finds on such a
-    cache earn the **Summiteer** or **Park hunter** badge.
+A player cannot hide a heritage place: the hide form leaves the types out, and the instance refuses them from
+anyone but the sysop. A cache on a summit is hidden as a traditional cache, and a find on it earns no
+**Summiteer** badge.
 
 ## Example
 
