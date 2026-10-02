@@ -3,7 +3,7 @@
 ## Privacy by default
 
 Amateur radio is public by construction: every packet you transmit is heard by anyone with a receiver, and
-aprscaching cannot and does not change that. What it *can* decide is what happens to those packets once they
+APRScaching cannot and does not change that. What it *can* decide is what happens to those packets once they
 reach an instance. Four invariants hold, and each one is code you can read rather than a promise in a policy.
 
 **Positions expire.** The nightly job in `workers/gateway/src/app.ts` prunes firehose and browser-RF positions

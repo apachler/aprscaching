@@ -1,6 +1,6 @@
 # The Shack at a glance
 
-The Shack is the radio side of aprscaching: packet-radio apps that run in your browser and drive a radio
+The Shack is the radio side of APRScaching: packet-radio apps that run in your browser and drive a radio
 connected to your own computer. This page is for operators who know APRS, TNCs and packet; it shows what each
 app does and where to read more.
 

@@ -1,6 +1,6 @@
 # Architecture and runtimes
 
-This page explains how the aprscaching code base fits together: one gateway that runs on three runtimes, a
+This page explains how the APRScaching code base fits together: one gateway that runs on three runtimes, a
 web app, an ingest that runs on the operator's own equipment, and the libraries underneath. It is for
 contributors deciding where a change belongs.
 

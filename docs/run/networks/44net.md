@@ -15,7 +15,7 @@ and the self-check.
     - **Identity.** ARDC issues `<call>.ampr.org` only after checking the operator's licence, so a record
       published under that name binds a federation key to a verified callsign.
     - **No trust.** A 44.x source address, the WireGuard tunnel and a HAMNET path are transports. A source
-      address is not a signature, so aprscaching never derives identity or trust from one. Authenticity comes
+      address is not a signature, so APRScaching never derives identity or trust from one. Authenticity comes
       from signatures: every record is signed, and corroboration questions and answers are signed and bound
       to each other, so a middlebox on a plain-http link can neither forge nor replay them
       ([Cross-instance corroboration](../../reference/federation-trust.md#cross-instance-corroboration),

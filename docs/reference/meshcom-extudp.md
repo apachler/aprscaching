@@ -67,7 +67,7 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
   | `OE1KBC-24,` | none (the frame is rejected) | OE1KBC-24 |
 
   This is how the firmware's APRS decoder splits it (`msg_destination_call` is the text after the last
-  comma, empty after a trailing comma). The firmware does not check via tokens; aprscaching keeps the
+  comma, empty after a trailing comma). The firmware does not check via tokens; APRScaching keeps the
   callsigns among them, drops the rest and counts them (`viaDropped`). A via list is the sender's plan, not
   the route the frame took — that is `src`. Firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8): `checkVia()` in `src/via_functions.cpp`, the
   destination split in `src/aprs_functions.cpp`.
@@ -75,7 +75,7 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
 - `msg` is UTF-8. A direct message may end in an APRS message number (`Hello{034`).
 - A direct message neither to nor from the node is suppressed when the node runs `--nopmother on`.
 - Telemetry frames addressed to `100001` are never forwarded as text. The firmware compares the whole path,
-  so from a node with Via on telemetry arrives as `<via>,100001`; aprscaching rejects that destination.
+  so from a node with Via on telemetry arrives as `<via>,100001`; APRScaching rejects that destination.
 
 ### Telemetry (`type: "tele"`)
 

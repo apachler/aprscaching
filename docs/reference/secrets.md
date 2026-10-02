@@ -1,6 +1,6 @@
 # Secrets and credentials
 
-This page lists every secret an aprscaching instance holds: what it guards, where each deployment shape keeps
+This page lists every secret an APRScaching instance holds: what it guards, where each deployment shape keeps
 it, who must never hold it and how to change it. It also sets out how sessions end and who counts as a sysop.
 
 ## The secrets

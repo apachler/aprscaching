@@ -171,7 +171,7 @@ routing to save airtime (firmware v4.35p.06.13: "DESTINATION-PATH expanded to in
 - **Automatic selection** (the gateway token `HG`, or the best-connected MHeard neighbour) is commented out
   in the firmware since 22 July 2026; only lists an operator sets take effect.
 
-Three rules hold in aprscaching:
+Three rules hold in APRScaching:
 
 1. **The destination is the last token** of `dst`, everything before it the via list
    ([ExtUDP](../../reference/meshcom-extudp.md#text-type-msg)).

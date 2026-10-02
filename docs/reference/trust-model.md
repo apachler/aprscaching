@@ -1,6 +1,6 @@
 # The trust model
 
-This page states the exact rules by which aprscaching grades a find and trusts a callsign. It is for sysops
+This page states the exact rules by which APRScaching grades a find and trusts a callsign. It is for sysops
 deciding how their instance verifies finds and for integrators building on it; the player's version is
 [How finds are verified](../play/verification.md).
 
