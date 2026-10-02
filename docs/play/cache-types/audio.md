@@ -22,7 +22,9 @@ game does not check your answer. Audio stages unlock only online.
 ## What "found" means
 
 The same as a traditional cache: you were at the cache's pin when you logged. The game checks your position
-against the pin, within 150 m plus your phone's accuracy. It does not check that you solved the clip.
+against the pin, within 150 m plus your phone's accuracy. It does not check that you solved the clip. With
+stages, the last stage takes the pin's place and must be unlocked first, as on a
+[multi-stage cache](multi.md#what-found-means).
 
 ## How it is logged and verified
 

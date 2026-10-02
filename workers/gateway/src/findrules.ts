@@ -6,7 +6,9 @@
  *  - a find counts once per person: any SSID of the logger's base call, or any callsign on their account, holds it;
  *  - an archived or disabled cache takes no find and no did-not-find (a note or an owner's maintenance log stays
  *    possible, so the owner can say why and bring it back);
- *  - an owner does not find their own cache.
+ *  - an owner does not find their own cache;
+ *  - a staged cache is found at its last stage: the finder has unlocked it, and the find is verified at its
+ *    position ({@link findPoint}).
  *
  * Finds are stored under the exact call a player logged with (OE8APR-7); everything that counts them for a person
  * (the leaderboard, profiles, badges, who may rate) groups by the base call, through {@link baseSql}.
@@ -43,13 +45,52 @@ export async function alreadyFound(
   return r?.call ?? null;
 }
 
+/** Has this person unlocked the stage? An unlock by any SSID of the base call, or any call on the account, counts. */
+async function hasUnlocked(
+  env: Env,
+  cacheId: number,
+  stageNo: number,
+  loggerCall: string,
+  accountId: string | null,
+): Promise<boolean> {
+  const base = baseCall(loggerCall);
+  const acct = accountId ?? (await baseHolder(env, base));
+  const r = await env.DB.prepare(
+    `SELECT 1 AS x FROM stage_unlocks u WHERE u.cache_id = ? AND u.stage_no = ? AND (
+       u.callsign = ? OR u.callsign LIKE ? || '-%'
+       OR EXISTS (SELECT 1 FROM account_callsigns ac WHERE ac.account_id = ?
+                  AND (u.callsign = ac.callsign OR u.callsign LIKE ac.callsign || '-%'))
+     ) LIMIT 1`,
+  )
+    .bind(cacheId, stageNo, base, base, acct)
+    .first();
+  return !!r;
+}
+
+/**
+ * Where a find on this cache is verified: a staged cache at its last stage, when that stage has a position; any
+ * other cache at its own coordinates.
+ */
+export async function findPoint<C extends { id: number; lat?: number | null; lon?: number | null }>(
+  env: Env,
+  cache: C,
+): Promise<C> {
+  const last = await env.DB.prepare(
+    "SELECT lat, lon FROM cache_stages WHERE cache_id = ? AND stage_no > 0 ORDER BY stage_no DESC LIMIT 1",
+  )
+    .bind(cache.id)
+    .first<{ lat: number | null; lon: number | null }>();
+  return last?.lat != null && last.lon != null ? { ...cache, lat: last.lat, lon: last.lon } : cache;
+}
+
 /**
  * Why this log is refused, or null when it may be written: a find or a did-not-find on a cache that is not active,
- * or a find by the cache's owner (the owner's base call, or a call on the owner's account).
+ * a find by the cache's owner (the owner's base call, or a call on the owner's account), or a find on a staged
+ * cache whose last stage the finder has not unlocked.
  */
 export async function logRefusal(
   env: Env,
-  cache: { code: string; status: string; owner_call: string; source?: string | null },
+  cache: { id?: number; code: string; status: string; owner_call: string; source?: string | null },
   loggerCall: string,
   /** found, dnf, note, maintenance, enabled or disabled; over the radio, the command (found, dnf, note) */
   logType: string,
@@ -62,6 +103,13 @@ export async function logRefusal(
     if (baseCall(loggerCall) === owner) return `you own ${cache.code}, so you cannot log it as found`;
     const acct = accountId ?? (await baseHolder(env, baseCall(loggerCall)));
     if (acct && (await baseHolder(env, owner)) === acct) return `you own ${cache.code}, so you cannot log it as found`;
+  }
+  if (logType === "found" && cache.id != null) {
+    const last = await env.DB.prepare("SELECT MAX(stage_no) AS n FROM cache_stages WHERE cache_id = ?")
+      .bind(cache.id)
+      .first<{ n: number | null }>();
+    if (last?.n && !(await hasUnlocked(env, cache.id, last.n, loggerCall, accountId)))
+      return `unlock every stage of ${cache.code} first: a find needs its last stage`;
   }
   return null;
 }

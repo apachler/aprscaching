@@ -36,7 +36,7 @@ import { rendezvousFor } from "./rendezvous.js";
 import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
-import { alreadyFound, logRefusal } from "./findrules.js";
+import { alreadyFound, findPoint, logRefusal } from "./findrules.js";
 
 // ---- D1 row shapes (snake_case) ----
 export interface CacheDbRow {
@@ -701,11 +701,12 @@ export interface FindScore {
  */
 export async function scoreFind(
   env: Env,
-  cache: CacheRow & { code: string },
+  listed: CacheRow & { code: string },
   loggerCall: string,
   at: number,
   appGeo?: AppGeo,
 ): Promise<FindScore> {
+  const cache = await findPoint(env, listed);
   const since = at - DEFAULT_POLICY.windowSec;
   const lp = await env.DB.prepare(
     // `ts <= at+60` — without the upper bound a future-dated fix sits inside the window forever

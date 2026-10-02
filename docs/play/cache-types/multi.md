@@ -39,18 +39,17 @@ You need to be signed in to unlock a stage. A stage stays locked until you have 
 
 ## What "found" means
 
-The same as a traditional cache: you were at the cache's pin when you logged. The game checks your position
-against the pin, within 150 m plus your phone's accuracy.
-
-!!! note "Known issue"
-    A find does not need any stage unlocked. The find is verified at the pin the map shows, not at the last
-    stage.
+You unlocked every stage and were at the last one when you logged. A find needs the last stage unlocked;
+before that, **✓ Log a find** answers that the stages come first. The game checks your position against the
+last stage, not the start the map shows, within 150 m plus your phone's accuracy. A find sent by radio follows
+the same rule, so unlock the stages in the app first.
 
 ## How it is logged and verified
 
 Log it like any cache: **✓ Log a find**, **Couldn't find it** or **Add a note**, in the app or from your radio.
 A find can reach **Radio-verified**, **Location-verified** or **Logged**. See
-[Traditional caches](traditional.md#how-it-is-logged-and-verified) for the rules.
+[Traditional caches](traditional.md#how-it-is-logged-and-verified) for the rules, with the last stage in place
+of the pin.
 
 Offline, a pack carries the start. An NFC stage with a long enough code also travels in the pack, sealed
 under that code: scan or type it, and the stage opens without a connection. Geo, audio and open stages unlock
@@ -74,9 +73,8 @@ Adding stages is not in the app yet; ask your sysop.
 For an NFC stage, use the tag's serial, or nine or more random letters and digits. A shorter code still works
 online, but it does not travel in offline packs.
 
-!!! note "Known issue"
-    When the stage list of a cache is replaced, finders keep the stages they unlocked before. A finder who
-    unlocked an old stage 2 sees the new stage 2 as unlocked.
+When a hider changes a stage, finders lose the unlocks from that stage on and unlock it again. Unlocks of the
+stages before it stay.
 
 ## Example
 
