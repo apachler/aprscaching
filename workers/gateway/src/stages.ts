@@ -205,13 +205,39 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   return json({ ok: true, mediaKey: key });
 }
 
-// ---- serve a media clue (public; the clue is meant to be heard) ----
+/**
+ * What a finder sees of a stage before unlocking it: the start, and an audio stage, whose clip is the puzzle that
+ * opens it, show their clue; any other stage's clue is part of what unlocking reveals.
+ */
+const clueShownLocked = (s: { stage_no: number; unlock: string | null }) => s.stage_no === 0 || s.unlock === "audio";
+
+// ---- serve a media clue: a stage's clip follows its clue, other cache media is public ----
 export async function handleGetMedia(req: Request, env: Env, key: string): Promise<Response> {
   if (!env.MEDIA) return new Response("media not configured", { status: 501 });
+  let cacheControl = "public, max-age=86400";
+  const stageKey = /^cache\/(\d+)\/stage\/(\d+)\//.exec(key);
+  if (stageKey) {
+    const cacheId = Number(stageKey[1]),
+      stageNo = Number(stageKey[2]);
+    const st = await env.DB.prepare("SELECT stage_no, unlock FROM cache_stages WHERE cache_id=? AND stage_no=?")
+      .bind(cacheId, stageNo)
+      .first<{ stage_no: number; unlock: string | null }>();
+    if (!st) return new Response("not found", { status: 404 });
+    if (!clueShownLocked(st)) {
+      const owner = await ownerOf(env, cacheId);
+      // the caller's own unlocks: `?callsign=` names someone else only with the ingest secret
+      const cs = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
+      const allowed =
+        (!!owner && (await mayActAsOwner(req, env, owner))) ||
+        (!!cs && (await unlockedSet(env, cacheId, cs)).has(stageNo));
+      if (!allowed) return new Response("not found", { status: 404 });
+      cacheControl = "private, no-store"; // the clip is the finder's once unlocked, never a shared cache's
+    }
+  }
   const obj = await env.MEDIA.get(key);
   if (!obj) return new Response("not found", { status: 404 });
   return new Response(obj.bytes as unknown as BodyInit, {
-    headers: { "content-type": obj.contentType, "cache-control": "public, max-age=86400" },
+    headers: { "content-type": obj.contentType, "cache-control": cacheControl },
   });
 }
 
@@ -233,12 +259,13 @@ export async function handleGetStages(req: Request, env: Env, cacheId: number): 
   return json({
     stages: rows.map((r) => {
       const open = isOwner || r.stage_no === 0 || unlocked.has(r.stage_no);
+      const clue = open || clueShownLocked(r);
       return {
         ...(isOwner && { secret: r.unlock_secret }),
         stageNo: r.stage_no,
         unlock: r.unlock,
-        clue: r.clue,
-        mediaUrl: r.media_key ? `/api/media/${r.media_key}` : null,
+        clue: clue ? r.clue : null,
+        mediaUrl: clue && r.media_key ? `/api/media/${r.media_key}` : null,
         radiusM: r.radius_m,
         unlocked: open,
         lat: open ? r.lat : null,
