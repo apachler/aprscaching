@@ -290,4 +290,4 @@ else
 fi
 info "status.sh shows the MeshCom line; positions and messages from the node appear on the map."
 info "Direct hearings by your own node count toward Tier A only once its call is in FIRST_PARTY_SITES"
-info "(docs/operate/meshcom.md); that is your decision, this script does not set it."
+info "(docs/run/radios/meshcom.md); that is your decision, this script does not set it."

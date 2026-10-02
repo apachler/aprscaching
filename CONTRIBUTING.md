@@ -51,7 +51,7 @@ pnpm run check     # build every unit, run every unit suite (and the web guards)
 | `pnpm --filter @aprscaching/gateway dev` | run the Cloudflare Worker gateway (needs a local D1) |
 
 Run **`pnpm verify` before you open a PR**, and `tools/dev/smoke.sh federation` too for federation changes.
-[Testing & verification](docs/reference/testing.md) maps every suite and CI job.
+[Testing & verification](docs/contribute/testing.md) maps every suite and CI job.
 
 ## Linting & formatting
 

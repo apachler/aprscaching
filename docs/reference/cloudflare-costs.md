@@ -1,6 +1,6 @@
 # Cloudflare D1 costs
 
-Reference for the [Cloudflare split](../operate/deployment.md#cloudflare-split) deployment: what D1 bills, how
+Reference for the [Cloudflare split](../run/install/cloudflare-split.md) deployment: what D1 bills, how
 much a feed writes, and the write budget that caps it. Self-host and Desktop store in SQLite on your own disk
 and have no per-row cost.
 
@@ -84,7 +84,7 @@ divide `rx` by 86,400 for packets per second. The Cloudflare dashboard (**D1 →
 shows the rows actually written.
 
 This shape suits a small regional feed and an operator who wants no server to maintain. A large or
-global feed belongs on [Self-host](../operate/deployment.md#self-host), where the cost is flat.
+global feed belongs on [Self-host](../run/install/self-host-docker.md), where the cost is flat.
 
 ## Write budget
 
@@ -126,3 +126,7 @@ writes a day. SQLite-backed Durable Object storage is billed apart from D1, at t
 stored total and may miss up to a minute of writes. On the Node and Bun runtimes the guard is off unless
 `D1_DAILY_WRITE_BUDGET` is set; there the count is kept in memory, starts again when the server restarts, and
 counts changed rows only (SQLite reports no index rows), so it runs low.
+
+## Next
+
+- [Cloudflare split](../run/install/cloudflare-split.md).

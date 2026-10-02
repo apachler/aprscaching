@@ -25,7 +25,7 @@ commit, the tag and the licence. `GET /source` redirects to that commit's tree. 
 verify is marketing; this one you can diff.
 
 **Or self-host and trust no one.** The same code runs as a desktop single binary, on a Raspberry Pi at home, on
-your own VM, or on Cloudflare's edge — see [Deployment](operate/deployment.md). The RF ingest is *always*
+your own VM, or on Cloudflare's edge — see [Is running an instance for me?](run/index.md). The RF ingest is *always*
 runnable on your own equipment and is never cloud-only. Run your own instance and the retention schedule, the
 data and the hardware are all yours.
 
@@ -63,3 +63,8 @@ Bruninga or his estate. The APRScaching game and this application are the author
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL. Imported heritage data carries its
 source's own licence and disclaimer. The same credits appear in-app under *Settings → About & credits*.
+
+## Next
+
+- [What is APRScaching?](play/index.md).
+- [Contribute](contribute/index.md).

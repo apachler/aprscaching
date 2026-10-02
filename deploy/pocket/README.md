@@ -195,7 +195,7 @@ enter the new commands on the node.
 
 Traffic from the node shows on the map at once, and none of it changes a trust tier by itself: a direct
 hearing by your own node counts toward Tier A only once you add the node's call to `FIRST_PARTY_SITES`, as
-on any ingest box ([MeshCom](../../docs/operate/meshcom.md#how-meshcom-traffic-is-trusted)).
+on any ingest box ([MeshCom](../../docs/run/radios/meshcom.md#how-meshcom-traffic-is-trusted)).
 
 ## Visitors over https
 
@@ -244,7 +244,7 @@ station is a field and demo station, and exposing it publicly is your decision.
 
 **Cloudflare Tunnel.** `cloudflared` is a Termux package. It opens an outbound connection to Cloudflare, and
 a hostname of yours reaches the station through it. It needs a Cloudflare account, a domain on Cloudflare
-and a named tunnel created in the dashboard, as in [Docker](../../docs/operate/docker.md#cloudflare-tunnel-ingress-a-pi-or-mini-pc-at-home),
+and a named tunnel created in the dashboard, as in [Docker](../../docs/run/networks/cloudflare.md#set-up-the-tunnel),
 with the public hostname's service set to `http://localhost:8787`. Then:
 
 ```bash
@@ -265,9 +265,9 @@ carried over WireGuard, which works behind the carrier's NAT. Import the Connect
 WireGuard app (F-Droid or the Play Store). Android runs it as the phone's VPN, so it covers the whole phone,
 and the gateway, which listens on every interface, answers on the 44.x address too. Who reaches it there
 depends on the tunnel's `AllowedIPs`: 44Net hosts only with a split tunnel, the whole internet with a full
-tunnel that also carries every app's traffic. [Pocket on 44Net](../../docs/operate/pocket.md#pocket-on-44net)
+tunnel that also carries every app's traffic. [Pocket on 44Net](../../docs/run/pocket/44net.md#pocket-on-44net)
 has that choice, the exposure, federation and `extras/ampr-cert.sh` for https on the ampr.org name; read
-[44Net](../../docs/operate/44net.md) too. **Unverified**: whether Android delivers inbound connections on the VPN
+[44Net](../../docs/run/networks/44net.md) too. **Unverified**: whether Android delivers inbound connections on the VPN
 interface to Termux on every phone; test from another network before you rely on it.
 
 ## Backup
@@ -283,6 +283,6 @@ any app with storage permission: `--no-env` leaves them out. `--dest DIR`, `--ke
 `--no-media` (media is included up to 50 MiB by default), and `--restore FILE`, which stops the station,
 keeps the current database in `~/.aprscaching/before-restore-<time>/` and starts it again.
 
-The operator guide is [Pocket: a station on an Android phone](../../docs/operate/pocket.md), and
+The operator guide is [Pocket: a station on an Android phone](../../docs/run/install/pocket.md), and
 `test/termux-ci.sh` (run monthly by `.github/workflows/pocket-termux.yml`) installs and starts Pocket in the
 `termux/termux-docker` image.

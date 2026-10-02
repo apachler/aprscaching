@@ -1,4 +1,4 @@
-# The glossary's names, spelled one way everywhere (docs/glossary.md, docs/design/design-language.md "Words").
+# The glossary's names, spelled one way everywhere (docs/glossary.md, docs/contribute/design/design-language.md "Words").
 extends: substitution
 message: "Use '%s' instead of '%s'."
 level: error

@@ -2,7 +2,7 @@
 /**
  * MeshCom datagram → normalised event with provenance.
  *
- * Provenance rules (docs/design/meshcom.md):
+ * Provenance rules (docs/contribute/design/meshcom.md):
  *   - `rf` — the receiving node heard the frame over LoRa. Only `src_type: lora` qualifies, and not when
  *     the origin is the receiving node itself: the firmware reports its own back-pressure notices as
  *     `lora` from its own call with a zero signal report, although they never went on air.

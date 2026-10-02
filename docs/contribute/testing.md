@@ -1,0 +1,191 @@
+# Testing & verification tooling
+
+Everything that verifies this repo, from unit tests to real-packet-software interop. All commands
+run from the repo root after `pnpm install`.
+
+## The three wrappers (day-to-day)
+
+| Command | What it runs | Duration |
+|---|---|---|
+| `pnpm run check` | `pnpm -r build` (typecheck every package) + `pnpm -r test` (all unit suites) + the web typecheck & production build. No servers. | ~1–3 min |
+| `pnpm run smoke` | Boots a throwaway Node/SQLite gateway (random port, temp DB, generated secret), runs the `smoke` + `geofence` conformance suites against it, tears down. | ~30–60 s |
+| `pnpm run verify` | `check` then `smoke` — the full pre-commit gate. | ~2–4 min |
+
+Also part of the gate: `pnpm lint` (fast ESLint), `pnpm lint:types` (type-aware rules over
+`workers/` + `packages/`, its own CI job), `pnpm format:check` (Prettier).
+
+## Unit tests (vitest)
+
+More than 200 test files across `packages/aprs` (parser), `packages/ax25`, `packages/packet` (the largest
+logic surface: NET/ROM, INP3, FBB incl. LZHUF), `packages/shared` (CBOR/fedwire),
+`packages/tools` (DSP decoders, registry), `workers/gateway` (federation, auth, trust),
+`servers/node`, and `apps/ingest` (transports, reconnect).
+
+```bash
+pnpm -r test                                    # everything
+pnpm --filter @aprscaching/packet test              # one workspace
+pnpm --filter @aprscaching/packet exec vitest run test/lzhuf.test.ts   # one file
+```
+
+`servers/bun` intentionally has no vitest: the Bun **conformance** job (below) covers it. `apps/web`
+runs a vitest suite over its pure logic modules (`apps/web/test/*.test.ts`, no DOM: data loading,
+polling, navigation history) beside its typecheck + build and the `no-emoji.mjs` / `tour-anchors.mjs`
+guards.
+
+## Conformance suites (runtime-agnostic)
+
+`tools/smoke/*.mjs` are standalone scripts that hit a **running gateway** at `BASE` and assert the
+full product behavior — the same suites run against all three runtimes, which is what makes the
+tri-runtime promise real:
+
+| Suite | Asserts |
+|---|---|
+| `tools/smoke/smoke.mjs` | The end-to-end gateway flow: ingest auth, caches, finds, trust tiers, BBS, federation signing (with `fedwire-mini.mjs`, an independent minimal CBOR codec used as a cross-implementation check) |
+| `tools/smoke/geofence.mjs` | Real-time geofencing over WebSocket: a position near a cache produces a `near_cache` prompt for the right callsign only |
+| `tools/smoke/federation.mjs` | Two instances: publisher seeds, subscriber pull-syncs, signature-verified mirroring (needs `PUB`, `SUB`, `RELAY_SECRET`) |
+
+### Running them against each runtime
+
+**Node + SQLite** — wrapped as `pnpm run smoke`. Manually:
+
+```bash
+KEY=$(node tools/fedkey/genkey.mjs --raw)
+export INGEST_SECRET=devsecret OPERATOR_SECRET=devoperator SESSION_SECRET=devsession
+DB_PATH=/tmp/acs.db PORT=8787 ALLOW_DEV_TOKENS=1 \
+  FIRST_PARTY_SITES=OE8XXX FED_PRIVATE_KEY="$KEY" \
+  pnpm --filter @aprscaching/node-gateway start &
+BASE=http://127.0.0.1:8787 node tools/smoke/smoke.mjs      # sends x-ingest-secret and x-operator-secret
+BASE=http://127.0.0.1:8787 node tools/smoke/geofence.mjs
+```
+
+**Cloudflare Worker + D1** — migrate the local D1, write `.dev.vars`, start `wrangler dev`:
+
+```bash
+cd workers/gateway
+CI=1 npx wrangler d1 migrations apply aprscaching --local
+printf 'INGEST_SECRET=devsecret\nOPERATOR_SECRET=devoperator\nSESSION_SECRET=devsession\nALLOW_DEV_TOKENS=1\nFIRST_PARTY_SITES=OE8XXX\nFED_PRIVATE_KEY=%s\n' \
+  "$(node ../../tools/fedkey/genkey.mjs --raw)" > .dev.vars
+CI=1 npx wrangler dev --port 8787 --local --ip 127.0.0.1 &
+cd ../.. && BASE=http://127.0.0.1:8787 INGEST_SECRET=devsecret OPERATOR_SECRET=devoperator node tools/smoke/smoke.mjs
+```
+
+**Bun + bun:sqlite** — same env recipe as Node, started with `bun run servers/bun/server.ts`.
+
+**Two-instance federation** — `tools/dev/smoke.sh federation` runs it locally. It boots two throwaway
+Node/SQLite gateways on free ports with the environment of the CI job `conformance-federation`
+(`.github/workflows/ci.yml`): signing keys and a key history from `tools/fedkey/genkey.mjs`, a signed
+registry from `tools/fedkey/signregistry.mjs`, a publisher (`oe.pub`) and a subscriber hub (`oe.sub`), then
+runs `PUB=… SUB=… RELAY_SECRET=… node tools/smoke/federation.mjs` and tears both down. CI starts the same
+pair on the fixed ports `:8801` and `:8802`.
+
+## Browser end-to-end
+
+`pnpm run e2e:audio` (`tools/e2e/audio-mic.mjs`) exercises the **live microphone decode path** in a
+real headless Chromium: it bundles the actual web-app decoder code, synthesises a PSK31 WAV of
+"cq de test", feeds it in as a fake microphone, and asserts the decoded text. Skips cleanly (exit 0)
+when no Chromium is available; CI installs one in the `e2e-audio` job.
+
+`tools/webauthn/virtual-authenticator.mjs` is a **manual** check that drives a full passkey
+register + login (and a tampered-signature rejection) against a running gateway via a Playwright
+virtual authenticator. It is not wired into CI — the WebAuthn logic is unit-tested; this validates
+the real browser ceremony before a release.
+
+## Design and accessibility
+
+- **Contrast** — `apps/web/test/contrast.test.ts` (part of the web unit suite) measures the WCAG contrast of every
+  foreground/background token pair the stylesheets use, in the dark, light and Phosphor themes. It resolves
+  `var()`, OKLCH and `color-mix()` itself. A pair listed as a known failure must keep failing: once it passes,
+  the test asks for it to leave the list.
+- **Diagrams** — `apps/web/test/diagrams.test.ts` parses every ```` ```mermaid ```` block in the repository's
+  Markdown with the Mermaid the app ships (under jsdom, which Mermaid's label sanitiser needs), and
+  `tools/checks/docs.mjs` fails on a diagram drawn in box-drawing characters.
+- **The in-app manual** — `apps/web/vite-docs.ts` bundles the manual into the app with the order, sections and
+  titles of `mkdocs.yml`'s nav. The build fails, and `apps/web/test/docsNav.test.ts` fails, when a nav entry has
+  no file or a page is neither in the nav nor under `not_in_nav`; the dated reviews stay out of the app.
+- **The manual's theme** — `node tools/dev/docs-theme.mjs` writes `docs/stylesheets/tokens.gen.css` from the
+  app's tokens and fonts, and copies Mermaid's browser build into `docs/assets/vendor/` for the build;
+  `--check` (in `pnpm run check` and the docs workflow) fails when the committed theme no longer matches.
+- **The UI kit** — `/?demo=ui` in a running app (`pnpm dev:web`): every token, the role scales and every
+  primitive in every state, with a theme, density and scale switch ([Design language](design/design-language.md)).
+- **The whole app on fixtures** — `/?demo=app` serves the app from canned gateway answers
+  (`apps/web/src/demo/fixtures.ts`); `&as=sysop` or `&as=out` changes who is signed in.
+- **Visual and axe harness** — after `pnpm --filter @aprscaching/web build`:
+
+    ```bash
+    pnpm --filter @aprscaching/web visual                      # every surface × theme × phone/desktop
+    node apps/web/test/visual/run.mjs --only map,detail --themes light --keyboard
+    ```
+
+    It writes screenshots, `axe.json`, `keyboard.json` and an HTML index to `apps/web/test/visual/out/`.
+    `pnpm --filter @aprscaching/web journeys` walks the main tasks (first visit, sign in, find and log, hide,
+    settings search, the Shack, the sysop's first hour) by their visible controls on a phone and a desktop, with a
+    screenshot per step and a log that marks every step it could not complete.
+    Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
+    axe finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
+    the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and
+    keeps them as an artifact.
+- **Inline styles** — ESLint rejects a `style` prop in `apps/web` that sets anything but custom properties
+  (`style={{ "--pct": "40%" }}`); every other value is a token in the stylesheets.
+- **Landing images** — `pnpm --filter @aprscaching/web landing-assets` (after a build, with a connection for the
+  basemap tiles) renders the landing page's map band, phone and desktop screenshots and Open Graph card from the
+  fixtures, and writes them with the hero photo to `apps/web/public/landing/` as AVIF and WebP at the srcset widths.
+  Run it again when a surface it shows changes, and commit the images.
+
+## Interop against real packet software
+
+`tools/interop/` tests the FBB/NET-ROM stack against the actual programs it must talk to. Two
+tiers (full detail in `tools/interop/README.md`):
+
+- **Local loop, no Docker** — `bash tools/interop/run-local-loop.sh`: two complete aprscaching
+  stacks crosslinked over AXUDP exchange NODES broadcasts both ways, run an FBB forwarding session
+  A→B, verify BID idempotency, and (both nodes speak INP3) assert INP3 route convergence via
+  triggered RIFs.
+- **Containerized peers** — `tools/interop/docker-compose.yml` brings up **LinBPQ** (default),
+  **F6FBB** (`--profile fbb`, needs host `modprobe ax25`), and **TheNetNode + JNOS**
+  (`--profile extra`, source builds). Drivers in `tools/interop/tests/` assert NODES + forwarding
+  into the BPQ BBS and that the real `xfbbd` answers with its FBB banner. The F6FBB container
+  (`fbbcomp` on) is the live-validation peer for LZHUF-B1 compressed forwarding.
+
+These run in the **weekly** `interop` workflow (scheduled + manual dispatch), never the PR loop —
+peer downloads and kernel modules are not PR-gating dependencies.
+
+## Key & signing tools used by tests
+
+- `tools/fedkey/` — `genkey.mjs` (mint `FED_PRIVATE_KEY`), `rotatekey.mjs` (rotation + continuity
+  proof), `signregistry.mjs` (signed instance registry). Used by every conformance job.
+- `tools/toolkey/` — `genkey.mjs` + `sign.mjs` for tool-manifest/registry signatures
+  (`packages/tools` verifies them).
+
+## CI guards
+
+CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-click stack consistent,
+`worker-bundle.mjs` proves the Cloudflare Worker bundle carries no RF socket code, `dead-exports.mjs`
+fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
+present-tense, every configuration key the code reads documented (and every documented key read), the
+manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
+interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc); see its README.
+
+## CI map (`.github/workflows/`)
+
+| Workflow | Trigger | Gating? |
+|---|---|---|
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
+| `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
+| `codeql.yml` | push/PR + weekly | Security scanning |
+| `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
+| `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |
+| `pocket-termux.yml` — Pocket install in `termux/termux-docker` | monthly + manual | Informational |
+| `desktop-release.yml` — Bun desktop binaries | tag `v*` | Release |
+| `oci-stack.yml` — the Oracle Cloud one-click stack zip | tag `v*` + manual | Release |
+| `release-please.yml` — versioning + changelog | push (main) | Release |
+
+A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
+`ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
+and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/` or `ci.yml` changes.
+When the diff cannot be read, every job runs.
+
+## Next
+
+- [Design language](design/design-language.md).
+- [Style guide for the manual](style-guide.md).

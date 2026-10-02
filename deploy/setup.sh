@@ -282,7 +282,7 @@ else
   if [ -n "$NET44_IN" ]; then
     # single-quoted, as compose and systemd both read a quoted JSON value intact
     setvar FED_ENDPOINTS "'[{\"transport\":\"https\",\"address\":\"$APP_URL\",\"priority\":10},{\"transport\":\"44net\",\"address\":\"$NET44_IN\",\"priority\":20}]'"
-    echo "  44Net: check the name with the self-check in Instance admin -> Setup (docs/operate/44net.md)."
+    echo "  44Net: check the name with the self-check in Instance admin -> Setup (docs/run/networks/44net.md)."
   fi
   case "$(current FED_DISCOVER)" in 1 | true | yes)
     echo "  WARN: FED_DISCOVER is on, so learned peers are added (disabled). Set it to 0 to turn discovery off." ;;

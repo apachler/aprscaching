@@ -3,7 +3,7 @@
  * The UI kit — `/?demo=ui`: the design language on one page. Every primitive in every state it has, in either
  * density; the colour tokens with their contrast on the panel surface; the role scales for type, space,
  * radius, elevation and motion; and real surfaces of the app in frames. A theme switch covers dark, light and
- * Phosphor. docs/design/design-language.md is the
+ * Phosphor. docs/contribute/design/design-language.md is the
  * text this page illustrates; apps/web/test/visual/run.mjs renders it for review and runs axe on it.
  */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
@@ -476,7 +476,7 @@ function Kit() {
               <h1>UI kit</h1>
               <p className="muted">
                 The design language of APRScaching, live: tokens, scales and every primitive. The text is in{" "}
-                <a href="/?view=docs&doc=design/design-language">Design language</a>.
+                <a href="/?view=docs&doc=contribute/design/design-language">Design language</a>.
               </p>
               <div className="uikit-row">
                 <Seg

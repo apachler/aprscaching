@@ -12,9 +12,9 @@ It runs in a browser, self-hosts on a Raspberry Pi, and federates with other ins
 Built by **OE8APR** from open specifications (APRS101, APRS-IS, AX.25/KISS, Meshtastic, MeshCom, TAK/CoT).
 Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
 
-> **New here? [Start here](https://apachler.github.io/aprscaching/start-here/).**
+> **New here? [What is APRScaching?](https://apachler.github.io/aprscaching/play/)**
 > Sign in at **[aprscaching.net](https://aprscaching.net)** with your callsign, verify it over APRS, and log
-> your first find — no installation needed. [Start here](https://apachler.github.io/aprscaching/start-here/)
+> your first find — no installation needed. [Your first find](https://apachler.github.io/aprscaching/play/first-find/)
 > walks you through it in five minutes.
 
 ## What it is
@@ -32,12 +32,13 @@ Independent and unofficial — see [Credits & trademarks](#credits--trademarks).
 
 | I want to… | Start with |
 |---|---|
-| **Play** — find and hide caches, connect my radio | [Start here](https://apachler.github.io/aprscaching/start-here/) |
-| **Run an instance** | [Deployment](https://apachler.github.io/aprscaching/operate/deployment/) and [Your first hour as sysop](https://apachler.github.io/aprscaching/operate/first-hour/) |
+| **Play** — find and hide caches | [What is APRScaching?](https://apachler.github.io/aprscaching/play/) |
+| **Operate** — my radio, packet and the Shack apps | [The Shack at a glance](https://apachler.github.io/aprscaching/shack/) |
+| **Run an instance** | [Is running an instance for me?](https://apachler.github.io/aprscaching/run/) and [Your first hour](https://apachler.github.io/aprscaching/run/first-hour/) |
 | **Build on it** — the read API, signed feeds, federation | [HTTP API](https://apachler.github.io/aprscaching/reference/api/) and [Federation wire format](https://apachler.github.io/aprscaching/reference/federation-wire/) |
-| **Contribute** | [Run from source](https://apachler.github.io/aprscaching/getting-started/) and [CONTRIBUTING.md](CONTRIBUTING.md) |
+| **Contribute** | [Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) and [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-How finds are verified is in [Core concepts](https://apachler.github.io/aprscaching/concepts/); the privacy invariants, with the code behind each,
+How finds are verified is in [How finds are verified](https://apachler.github.io/aprscaching/play/verification/) and, as precise rules, [The trust model](https://apachler.github.io/aprscaching/reference/trust-model/); the privacy invariants, with the code behind each,
 are under [About](https://apachler.github.io/aprscaching/about/#privacy-by-default).
 
 ---
@@ -45,8 +46,8 @@ are under [About](https://apachler.github.io/aprscaching/about/#privacy-by-defau
 ## Run it from source
 
 For developers. To install an instance, use the Docker stack in `deploy/`
-([Running in Docker](https://apachler.github.io/aprscaching/operate/docker/)) or one of the
-[deployment recipes](https://apachler.github.io/aprscaching/operate/deployment/). Needs Node 22+ and pnpm.
+([Self-host with Docker](https://apachler.github.io/aprscaching/run/install/self-host-docker/)) or another
+[shape](https://apachler.github.io/aprscaching/run/choose-a-shape/). Needs Node 22+ and pnpm.
 
 ```bash
 pnpm install
@@ -56,9 +57,9 @@ pnpm dev:web                                      # the map UI (talks to http://
 pnpm dev:ingest                                   # the operator-local RF ingest (copy .env.example to .env)
 ```
 
-[Run from source](https://apachler.github.io/aprscaching/getting-started/) covers the Cloudflare Worker
+[Run from source](https://apachler.github.io/aprscaching/contribute/run-from-source/) covers the Cloudflare Worker
 gateway, the Bun desktop build and the ingest box, and
-[Testing](https://apachler.github.io/aprscaching/reference/testing/) covers the smoke and conformance suites.
+[Testing](https://apachler.github.io/aprscaching/contribute/testing/) covers the smoke and conformance suites.
 
 For an all-in-one Oracle Cloud VM there is a one-click path — you supply a callsign and an SSH key. It
 deploys the stack archive attached to the latest release, so it works once the first release is published:

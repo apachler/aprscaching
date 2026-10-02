@@ -104,7 +104,7 @@ administrators can read it.
 **Apply fails at the dynamic group** (`NotAuthorizedOrNotFound`, or a 404 on `oci_identity_dynamic_group`)?
 Dynamic groups and policies are tenancy-level and are written in the tenancy's home region, which needs
 rights to manage both — a tenancy administrator has them. Either ask an administrator to apply the stack, or
-untick *Nightly backups to a bucket* and back up another way ([Backups](https://github.com/apachler/aprscaching/blob/main/docs/operate/deployment.md#backups)).
+untick *Nightly backups to a bucket* and back up another way ([Backups](https://github.com/apachler/aprscaching/blob/main/docs/run/day-to-day/backups.md#what-to-back-up)).
 
 **What it costs.** Always Free includes 20 GB of Object Storage and 50,000 API requests a month. A nightly
 upload uses a handful of requests, so 14 archives fit as long as each stays under about 1.4 GB; `doctor` and
@@ -197,7 +197,7 @@ has the OCI CLI, and can run `bastion-ssh.sh` from a clone.
 ## 44Net
 
 The VM can also carry a 44Net Connect tunnel, so the instance is reachable at a 44.x address and a
-`<call>.ampr.org` name ([Run an instance on 44Net](https://github.com/apachler/aprscaching/blob/main/docs/operate/44net.md)).
+`<call>.ampr.org` name ([Run an instance on 44Net](https://github.com/apachler/aprscaching/blob/main/docs/run/networks/44net.md)).
 The first boot installs `wireguard-tools` and `nftables` for it; the stack never handles the Connect configuration,
 which holds the tunnel's private key. Copy it to the VM through the Bastion and let the helper bring it up:
 

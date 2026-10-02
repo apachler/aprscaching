@@ -1,0 +1,186 @@
+# Connect a radio: quick starts
+
+Each section below takes one kind of radio link from zero to "packets on the map" in a few steps. For the
+full list of settings see [RF ingest & transports](rf-ingest.md); for connecting a radio from a browser
+without any of this, see [Your radio in the browser](../../shack/my-radio.md).
+
+## APRS-IS (internet feed)
+
+Receive APRS traffic from the internet for your area — no radio needed. Everything from APRS-IS is tier C.
+
+1. Set your callsign and an area filter:
+
+    ```
+    APRSIS_CALLSIGN=OE8APR
+    APRSIS_PASSCODE=-1
+    APRSIS_FILTER=r/47.07/15.42/200
+    ```
+
+    `-1` is a receive-only login, which is all the feed needs. `r/lat/lon/km` is a circle around a point;
+    any [APRS-IS server filter](https://www.aprs-is.net/javAPRSFilter.aspx) works (`b/`, `p/`, `t/`, …).
+2. Start the box. It logs `[aprs-is] connected + filter sent`.
+3. Check: the `aprs-is` port counts packets, and stations appear on the map.
+
+## KISS TNC with Direwolf (soundcard or hardware TNC)
+
+[Direwolf](https://github.com/wb2osz/direwolf) turns a soundcard and a radio into a TNC and offers it as
+KISS over TCP. A hardware TNC with a KISS-over-TCP server works the same way.
+
+1. Minimal `direwolf.conf` (1200 baud APRS):
+
+    ```
+    ADEVICE plughw:1,0
+    CHANNEL 0
+    MYCALL OE8APR-10
+    MODEM 1200
+    PTT CM108
+    KISSPORT 8001
+    AGWPORT 8000
+    ```
+
+    `ADEVICE` is your USB soundcard (list them with `arecord -l`). `PTT` is only needed to transmit; with a
+    serial interface it looks like `PTT /dev/ttyUSB0 RTS`.
+
+2. Start Direwolf and check it decodes packets in its own window first.
+3. Point the box at it:
+
+    ```
+    KISS_TNC_HOST=127.0.0.1
+    KISS_TNC_PORT=8001
+    ```
+
+4. Start the box. It logs `[kiss] connected 127.0.0.1:8001`.
+5. Check: the `kiss-tnc` port counts packets.
+6. **Make it count for find verification** (optional): set `RF_SITE_CALL=OE8APR-10` on the box — the
+   callsign that names this receiver — and add the same call to `FIRST_PARTY_SITES` on the gateway. Frames
+   your radio hears **directly** then count toward **tier A** for other people's finds, never your own
+   ([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)). With an IGate configured, `IGATE_CALL` is used when `RF_SITE_CALL` is not
+   set. The same works for an AGWPE or host-mode TNC. Set it only for a TNC you operate.
+
+Receiving alone never transmits. The box transmits over KISS only when you enable a digipeater, IGate,
+node or BBS forwarding below.
+
+## AGWPE: Direwolf, SoundModem, UZ7HO
+
+Programs that offer the AGW Packet Engine interface (port 8000) can feed the box instead of KISS:
+
+```
+AGWPE_HOST=127.0.0.1
+AGWPE_PORT=8000
+AGWPE_RADIO_PORT=0
+```
+
+It logs `[agwpe] connected 127.0.0.1:8000`; packets count on the `agwpe` port. This link only receives.
+
+## WA8DED hostmode (TheFirmware TNCs, TFPCX)
+
+```
+HOSTMODE_HOST=127.0.0.1
+HOSTMODE_PORT=3694
+HOSTMODE_MYCALL=OE8APR
+```
+
+It logs `[hostmode] connected …`; packets count on the `hostmode` port. This link only receives.
+
+## Your own IGate
+
+An IGate passes what your radio hears to APRS-IS, and APRS-IS messages for nearby stations back to RF. It
+needs a working [KISS TNC](#kiss-tnc-with-direwolf-soundcard-or-hardware-tnc); passing messages to RF
+also needs PTT.
+
+1. Add your IGate callsign and its APRS-IS passcode:
+
+    ```
+    IGATE_CALL=OE8APR-10
+    IGATE_PASS=12345
+    ```
+
+2. Start the box: `[igate] enabled as OE8APR-10`, then `[igate] APRS-IS connected`. Messages it sends to RF
+   log `[igate] TX->RF message for …`.
+3. **Make it count for find verification**: on the gateway, set `FIRST_PARTY_SITES=OE8APR-10`. The box
+   names `IGATE_CALL` as the receiving site of every frame it hears directly, so those frames can reach
+   **tier A**. The copies the IGate passes to APRS-IS (tagged `qAR,OE8APR-10`) never count, not even when
+   they come back through the box's [APRS-IS feed](#aprs-is-internet-feed) — see
+   [Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a).
+
+The IGate only sends messages to RF for stations heard locally in the last 30 minutes
+(`IGATE_LOCAL_TTL`) and honours `NOGATE`/`RFONLY`. Read [Automatic stations on the air](../compliance/on-air-stations.md) first:
+an IGate is an automatically controlled station.
+
+## Digipeater
+
+```
+DIGI_CALL=OE8APR-10
+DIGI_ALIASES=WIDE1,WIDE2
+```
+
+The box logs `[digi] enabled as OE8APR-10 …` and `[digi] repeated …` for each repeat. `DIGI_VISCOUS_MS=3000`
+waits and skips a repeat when a better-placed digipeater was heard doing it first. Needs a KISS TNC with PTT.
+A digipeater is an automatically controlled station: read [Automatic stations on the air](../compliance/on-air-stations.md) before
+you enable it.
+
+## Meshtastic
+
+Only **licensed** Meshtastic nodes appear: a node must run Meshtastic's licensed (ham) mode, which sets its
+licence flag and makes its long name your callsign (e.g. `OE8APR-7`). Positions show under that callsign.
+Licence-free nodes are ignored — they have no callsign to show. Turn on licensed mode in the Meshtastic app
+(**Settings → User → Licensed amateur radio**, callsign as the long name); note that it switches off
+channel encryption, as amateur rules require.
+
+The box reads the node's protobuf stream in one of two ways (or both):
+
+=== "Node on your network (TCP)"
+
+    A Meshtastic node on WiFi or Ethernet serves its data on TCP port 4403.
+
+    ```
+    MESHTASTIC_HOST=192.168.1.60
+    ```
+
+    It logs `[meshtastic] connected 192.168.1.60:4403`.
+
+=== "MQTT broker"
+
+    Nodes with the **MQTT** module uplink to a broker. The box subscribes to the protobuf topics:
+
+    ```
+    MESHTASTIC_MQTT_URL=mqtt://user:password@broker.example.net
+    # MESHTASTIC_MQTT_TOPIC=msh/#
+    ```
+
+    It logs `[meshtastic-mqtt] connected, subscribed to msh/#`. Use `mqtts://` for a TLS broker.
+
+A licensed node's positions start appearing once its node info has been heard — it announces every ten
+minutes. Until then the box logs once that it is dropping positions from nodes not known to be licensed.
+Positions count on the `meshtastic` port and are always tier C.
+
+A Meshtastic node on USB can also be read straight from the browser: [Your radio in the
+browser](../../shack/my-radio.md).
+
+## MeshCom
+
+MeshCom has its own guide: [MeshCom](meshcom.md). In short: `--extudpip <box IP>` and `--extudp on` on the
+node, `MESHCOM_NODE=<node IP>=<node call>` on the box.
+
+## AXUDP and AXIP (packet over the internet)
+
+Link the box with other packet nodes (LinBPQ, JNOS, …) over the internet or HAMNET.
+
+```
+AXUDP_PORT=10093
+AXUDP_PEERS=bpq.example.net:10093
+```
+
+It logs `[axudp] port udp/10093 ↔ bpq.example.net:10093`. The box then accepts frames only from the peers'
+addresses and drops the rest. Without `AXUDP_PEERS` it only listens, from any host — it warns about that at
+startup; bind it to your LAN with `AXUDP_BIND`. The node, BBS and FBB forwarding run over this link even
+without a radio — see [Packet BBS & node](packet-node.md).
+
+AXIP (raw IP protocol 93) is the same with `AXIP_PEERS=host1,host2` (no ports). It needs the optional
+`raw-socket` package and the `CAP_NET_RAW` privilege; without them it logs `[axip] disabled — …`.
+
+Everything that arrives over the internet is tier C.
+
+## Next
+
+- [RF ingest & transports](rf-ingest.md): every setting.

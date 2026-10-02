@@ -1,0 +1,18 @@
+{#- The manual's "not found" page. Pages move without redirects, so an old link lands here: it says so and
+    offers the five sections, each of which opens with its reader's journey. -#}
+{% extends "main.html" %}
+{% block content %}
+<h1>This page moved, or never existed</h1>
+<p>
+  The manual is organised by who is reading it, so an old link may point to a page that now lives elsewhere.
+  Pick your section; each one opens with its journey, in order.
+</p>
+<ul>
+  <li><a href="{{ config.site_url }}play/">Play</a>: find, log and hide caches.</li>
+  <li><a href="{{ config.site_url }}shack/">The Shack</a>: your radio, packet and the Shack apps.</li>
+  <li><a href="{{ config.site_url }}run/">Run an instance</a>: install, connect radios, run it day to day.</li>
+  <li><a href="{{ config.site_url }}reference/api/">Reference</a>: the API, configuration and wire formats.</li>
+  <li><a href="{{ config.site_url }}contribute/">Contribute</a>: run from source, test, change it.</li>
+</ul>
+<p>Or search the manual with the search box at the top of the page.</p>
+{% endblock %}

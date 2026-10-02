@@ -21,7 +21,7 @@ DOC_CURL_OPTS=()   # extra curl options for requests to DOC_BASE (Self-host pins
 DOC_HEALTH=""
 DOC_ROWS=()
 
-DOCS_URL="docs/operate" # docs links are paths in the repository, readable in a checkout and on the docs site
+DOCS_URL="docs" # docs links are paths in the repository, readable in a checkout and on the docs site
 
 # doc_add STATUS ID MESSAGE [FIX] [DOCS]: one result. MESSAGE and FIX never carry a secret value.
 doc_add() {
@@ -75,7 +75,7 @@ doc_config() {
   local key v msg unknown=() bad=0 mode
   [ -n "$DOC_ENV" ] || return 0
   if [ ! -f "$DOC_ENV" ]; then
-    failc config.file "$DOC_ENV is missing" "run deploy/aprscaching init $SHAPE" "$DOCS_URL/helpers.md"
+    failc config.file "$DOC_ENV is missing" "run deploy/aprscaching init $SHAPE" "$DOCS_URL/run/day-to-day/helper-command.md"
     return 0
   fi
   mode="$(file_mode "$DOC_ENV")"
@@ -110,7 +110,7 @@ doc_config_secrets() {
     [ "${#v}" -ge 16 ] || weak+=("$s")
   done
   if [ "${#weak[@]}" -gt 0 ]; then
-    failc config.secrets "weak or example secrets: ${weak[*]}" "deploy/aprscaching rotate-secret <name>" "$DOCS_URL/helpers.md#rotating-a-secret"
+    failc config.secrets "weak or example secrets: ${weak[*]}" "deploy/aprscaching rotate-secret <name>" "$DOCS_URL/reference/secrets.md#rotating-a-secret"
   else
     pass config.secrets "no secret is empty-but-required, weak or an example value"
   fi
@@ -132,7 +132,7 @@ doc_config_required() {
     [ -n "$(doc_get "$k")" ] || missing+=("$k")
   done < <(cfg_keys_for "$SHAPE" 1)
   if [ "${#missing[@]}" -gt 0 ]; then
-    warnc config.public "a public instance should set: ${missing[*]}" "set them in $DOC_ENV" "$DOCS_URL/first-hour.md"
+    warnc config.public "a public instance should set: ${missing[*]}" "set them in $DOC_ENV" "$DOCS_URL/run/first-hour.md"
   else
     pass config.public "everything a public instance needs is set"
   fi
@@ -144,14 +144,14 @@ doc_gateway() {
   [ -n "$DOC_BASE" ] || return 0
   if ! DOC_HEALTH="$(gw_curl -sS --max-time 8 "$DOC_BASE/health" 2>/dev/null)" || [ -z "$DOC_HEALTH" ]; then
     failc gateway.reachable "the gateway does not answer at $DOC_BASE/health" "deploy/aprscaching status; check its logs" \
-      "$DOCS_URL/helpers.md"
+      "$DOCS_URL/run/day-to-day/helper-command.md"
     DOC_HEALTH=""
     return 0
   fi
   db="$(json_field "$DOC_HEALTH" db)"
   if [ -z "$db" ]; then
     failc gateway.reachable "$DOC_BASE/health answers, but not as the gateway (a proxy serving the web app instead?)" \
-      "check the reverse proxy's routes: /health, /api/*, /ingest and /.well-known/* go to the gateway" "$DOCS_URL/deployment.md"
+      "check the reverse proxy's routes: /health, /api/*, /ingest and /.well-known/* go to the gateway" "$DOCS_URL/run/install/self-host-docker.md"
     DOC_HEALTH=""
     return 0
   fi
@@ -184,7 +184,7 @@ doc_setup_checklist() {
   DOC_OPERATOR_SECRET="$(doc_get OPERATOR_SECRET)"
   if [ -z "$DOC_OPERATOR_SECRET" ]; then
     warnc setup.checklist "no OPERATOR_SECRET here, so the gateway's Setup checklist is not read" \
-      "run doctor with OPERATOR_SECRET in the environment, or open Instance admin -> Setup" "$DOCS_URL/first-hour.md"
+      "run doctor with OPERATOR_SECRET in the environment, or open Instance admin -> Setup" "$DOCS_URL/run/first-hour.md"
     return 0
   fi
   body="$(curl_secret x-operator-secret "$DOC_OPERATOR_SECRET" -sS --max-time 10 "$DOC_BASE/api/admin/setup" 2>/dev/null || true)"
@@ -256,14 +256,14 @@ doc_ingest() {
     401)
       if [ -n "$(doc_get BOX_KEY)" ]; then
         failc ingest.credentials "the gateway refuses this box's key (revoked, or enrolled elsewhere)" \
-          "enroll again with a new code: deploy/aprscaching init ingest-box" "$DOCS_URL/rf-ingest.md#enrolling-the-box"
+          "enroll again with a new code: deploy/aprscaching init ingest-box" "$DOCS_URL/run/radios/ingest-box.md#enrolling-the-box"
       else
         failc ingest.credentials "the gateway refuses this box's INGEST_SECRET" "copy the gateway's INGEST_SECRET to $DOC_ENV" \
-          "$DOCS_URL/rf-ingest.md"
+          "$DOCS_URL/run/radios/rf-ingest.md"
       fi
       ;;
     404) warnc ingest.credentials "the gateway at $url is too old to check credentials" "update the gateway" ;;
-    *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" "$DOCS_URL/rf-ingest.md" ;;
+    *) failc ingest.credentials "the gateway does not answer at $url" "check INGEST_URL and the network" "$DOCS_URL/run/radios/rf-ingest.md" ;;
   esac
   doc_transports
 }
@@ -283,7 +283,7 @@ doc_transports() {
     port="$(doc_get "${name}_PORT")"
     port="${port:-$(cfg_default "${name}_PORT")}"
     if tcp_open "$host" "$port"; then pass "ingest.${name,,}" "$name $host:$port is reachable"; else
-      failc "ingest.${name,,}" "$name $host:$port does not answer" "check the device and ${name}_HOST/${name}_PORT" "$DOCS_URL/rf-ingest.md"
+      failc "ingest.${name,,}" "$name $host:$port does not answer" "check the device and ${name}_HOST/${name}_PORT" "$DOCS_URL/run/radios/rf-ingest.md"
     fi
   done
   doc_meshcom
@@ -296,7 +296,7 @@ doc_meshcom() {
   [ -n "$nodes" ] || return 0
   if [ "$(doc_get MESHCOM_BIND)" = 0.0.0.0 ] && doc_public; then
     warnc ingest.meshcom_bind "MESHCOM_BIND=0.0.0.0 on a public host accepts datagrams from anywhere" \
-      "bind the LAN address, or leave it blank" "$DOCS_URL/meshcom.md"
+      "bind the LAN address, or leave it blank" "$DOCS_URL/run/radios/meshcom.md"
   fi
   base="${DOC_BASE:-${DOC_INGEST%/ingest}}"
   for entry in ${nodes//,/ }; do
@@ -306,13 +306,13 @@ doc_meshcom() {
     heard="$(json_field "$body" lastHeard)"
     fw="$(json_field "$body" firmware)"
     if [ -z "$heard" ]; then
-      warnc "ingest.meshcom.$call" "MeshCom node $call has not been heard recently" "check the node's ExtUDP settings" "$DOCS_URL/meshcom.md"
+      warnc "ingest.meshcom.$call" "MeshCom node $call has not been heard recently" "check the node's ExtUDP settings" "$DOCS_URL/run/radios/meshcom.md"
       continue
     fi
     pass "ingest.meshcom.$call" "MeshCom node $call last heard $(date -d "@$heard" '+%F %T' 2>/dev/null || echo "$heard")"
     if [ -n "$fw" ] && ! fw_at_least "$fw" 4 35 t; then
       warnc "ingest.meshcom_fw.$call" "MeshCom node $call runs firmware $fw; ExtUDP needs 4.35t (built 2026-09-25) or newer" \
-        "update the node's firmware" "$DOCS_URL/meshcom.md"
+        "update the node's firmware" "$DOCS_URL/run/radios/meshcom.md"
     fi
   done
 }
@@ -336,13 +336,13 @@ doc_network() {
   host="${host%%:*}"
   ips="$(getent hosts "$host" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)"
   if [ -n "$ips" ]; then pass network.dns "$host resolves ($ips)"; else
-    failc network.dns "$host does not resolve" "create its DNS record (or the tunnel's public hostname)" "$DOCS_URL/deployment.md"
+    failc network.dns "$host does not resolve" "create its DNS record (or the tunnel's public hostname)" "$DOCS_URL/run/install/self-host-docker.md"
     return 0
   fi
   end="$(echo | timeout 10 openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null |
     openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
   if [ -z "$end" ]; then
-    failc network.tls "no TLS certificate from $host:443" "check Caddy / the tunnel / your proxy" "$DOCS_URL/deployment.md"
+    failc network.tls "no TLS certificate from $host:443" "check Caddy / the tunnel / your proxy" "$DOCS_URL/run/install/self-host-docker.md"
   else
     end_s="$(date -d "$end" +%s 2>/dev/null || echo 0)"
     now="$(date +%s)"
@@ -378,7 +378,7 @@ doc_federation() {
   [ -n "$DOC_ENV" ] || return 0 # the Worker's settings are not readable here; Setup reports them
   if [ -n "$(doc_get FED_PRIVATE_KEY)" ]; then pass federation.key "the federation signing key is set"; else
     warnc federation.key "no FED_PRIVATE_KEY: feeds go out unsigned and peers cannot verify them" \
-      "node tools/fedkey/genkey.mjs --raw, into FED_PRIVATE_KEY" "docs/guides/federation.md"
+      "node tools/fedkey/genkey.mjs --raw, into FED_PRIVATE_KEY" "docs/run/federation/index.md"
   fi
   case "$(doc_get FED_DISCOVER)" in 1 | true | yes) unsafe+=("FED_DISCOVER is on") ;; esac
   case "$(doc_get FED_AUTO_PROMOTE)" in 0 | "") ;; *) unsafe+=("FED_AUTO_PROMOTE is not 0") ;; esac
@@ -399,7 +399,7 @@ doc_federation() {
   if [ "${#unsafe[@]}" -gt 0 ]; then
     local u
     for u in "${unsafe[@]}"; do
-      warnc federation.posture "$u" "see Running federation safely" "docs/guides/federation.md#running-federation-safely"
+      warnc federation.posture "$u" "see Running federation safely" "docs/run/federation/index.md#running-federation-safely"
     done
   else
     pass federation.posture "the federation settings are the safe ones"
@@ -417,7 +417,7 @@ doc_federation() {
 # When the instance publishes a 44net endpoint or this host has wg44: the tunnel, its MTU and firewall, the DNS
 # records under the 44Net name, and the certificate when Caddy serves that name with TLS.
 doc_net44() {
-  local name="" on_host=0 age mtu v4 a txt end days domain link="$DOCS_URL/44net.md"
+  local name="" on_host=0 age mtu v4 a txt end days domain link="$DOCS_URL/run/networks/44net.md"
   declare -F n44_up >/dev/null || return 0
   [ -z "$DOC_ENV" ] || name="$(SHAPE_ENV="$DOC_ENV" n44_name_from_env)"
   n44_up && on_host=1
@@ -492,11 +492,11 @@ doc_resources() {
     # shellcheck disable=SC2086 # the glob is the point
     newest="$(cd "$DOC_BACKUP_DIR" 2>/dev/null && ls -t $DOC_BACKUP_GLOB 2>/dev/null | head -n 1 || true)"
     if [ -z "$newest" ]; then
-      failc resources.backup "no backup in $DOC_BACKUP_DIR" "deploy/aprscaching backup, and schedule it" "$DOCS_URL/deployment.md#backups"
+      failc resources.backup "no backup in $DOC_BACKUP_DIR" "deploy/aprscaching backup, and schedule it" "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
     else
       age=$((($(date +%s) - $(stat -c %Y "$DOC_BACKUP_DIR/$newest" 2>/dev/null || stat -f %m "$DOC_BACKUP_DIR/$newest")) / 86400))
       if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
-        warnc resources.backup "the newest backup is $age days old" "check the scheduled backup" "$DOCS_URL/deployment.md#backups"
+        warnc resources.backup "the newest backup is $age days old" "check the scheduled backup" "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
       else
         pass resources.backup "the newest backup is $age days old ($newest)"
       fi
@@ -520,10 +520,10 @@ doc_backup_destination() {
     DOC_BACKUP_DIR="$DEPLOY_DIR/backups"
     DOC_BACKUP_GLOB="aprscaching-*.tar.gz"
     warnc resources.backup_place "backups are only on this host's disk ($DOC_BACKUP_DIR)" \
-      "set BACKUP_DIR to another disk or mount, or copy the archives off this host" "$DOCS_URL/deployment.md#backups"
+      "set BACKUP_DIR to another disk or mount, or copy the archives off this host" "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
   else
     failc resources.backup "no backup destination is set" "set BACKUP_DIR, OCI_BUCKET or BACKUP_BUCKET, then schedule deploy/aprscaching backup" \
-      "$DOCS_URL/deployment.md#backups"
+      "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
   fi
 }
 
@@ -533,12 +533,12 @@ doc_bucket_backup_age() {
   when="$(bk_bucket_newest_time "$1")"
   if [ -z "$when" ]; then
     failc resources.backup "no backup archive in the bucket $1, or the bucket is unreachable" \
-      "deploy/aprscaching backup; on the OCI stack, systemctl status aprscaching-backup.timer" "$DOCS_URL/deployment.md#backups"
+      "deploy/aprscaching backup; on the OCI stack, systemctl status aprscaching-backup.timer" "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
     return 0
   fi
   age=$((($(date +%s) - when) / 86400))
   if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
-    warnc resources.backup "the newest backup in the bucket $1 is $age days old" "check the scheduled backup" "$DOCS_URL/deployment.md#backups"
+    warnc resources.backup "the newest backup in the bucket $1 is $age days old" "check the scheduled backup" "$DOCS_URL/run/day-to-day/backups.md#what-to-back-up"
   else
     pass resources.backup "the newest backup in the bucket $1 is $age days old"
   fi
@@ -553,7 +553,7 @@ doc_source() {
   repo="$(json_field "$body" repo)"
   commit="$(json_field "$body" commit)"
   if [ -z "$repo" ]; then
-    failc source.link "${base%/}/.well-known/source does not answer" "the AGPL §13 source link must be public" "$DOCS_URL/first-hour.md"
+    failc source.link "${base%/}/.well-known/source does not answer" "the AGPL §13 source link must be public" "$DOCS_URL/run/first-hour.md"
   elif [ -z "$commit" ] || [ "$commit" = null ]; then
     if [ "$SHAPE" = selfhost ]; then
       warnc source.link "the source link names no commit" "rebuild in deploy/: SOURCE_COMMIT=\$(git rev-parse HEAD) docker compose up -d --build"

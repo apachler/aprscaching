@@ -87,7 +87,7 @@ run_shape_cmd() {
   shift
   fn="shape_${cmd//-/_}"
   declare -F "$fn" >/dev/null || die "'$cmd' is not available for the $SHAPE shape." \
-    "deploy/aprscaching help lists the commands; docs/operate/helpers.md says which shape supports which."
+    "deploy/aprscaching help lists the commands; docs/run/day-to-day/helper-command.md says which shape supports which."
   "$fn" "$@"
 }
 

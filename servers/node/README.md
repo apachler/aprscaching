@@ -12,7 +12,7 @@ are shared (`@aprscaching/gateway/app`); only the bindings differ:
 | Cron | `scheduled()` | `setInterval`: the nightly jobs (`runScheduled`), and the frequent federation sync (`runFrequentSync`, every `FED_SYNC_INTERVAL_MS`, default 5 min) |
 
 This is the **self-host story** for hams and clubs who want to run their own node and join the
-federated network (see [Federation](../../docs/guides/federation.md)) instead of standing up an island.
+federated network (see [Federation](../../docs/run/federation/index.md)) instead of standing up an island.
 
 ## Run it
 
@@ -47,7 +47,7 @@ Point the ingest box at it: `INGEST_URL=http://127.0.0.1:8787/ingest` in `.env`.
 | `TLS_CA_CERT` | *(unset)* | a CA certificate served read-only at `/pocket-ca.crt` on both ports, for visitors to install |
 
 The https listener is for a station its visitors reach on its own Wi-Fi hotspot, with no proxy in front
-([Visitors on the hotspot](../../docs/operate/first-hour.md#visitors-on-the-hotspot)); behind Caddy or a
+([Visitors on the hotspot](../../docs/run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)); behind Caddy or a
 tunnel, leave it off and let the proxy terminate TLS. Every setting is in the
 [configuration reference](../../docs/reference/configuration.md).
 

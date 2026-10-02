@@ -26,7 +26,7 @@ An enrolled ingest box sends no `x-ingest-secret`: it signs each request with it
 headers `x-box-id`, `x-box-at` (unix seconds), `x-box-nonce` and `x-box-sig`. The signature covers the
 method, the path with its query, the time, the nonce and the body's SHA-256, with the domain prefix
 `acs-box/1` (`boxRequestMessage` in `packages/shared`). It is fresh for five minutes and accepted once, and it
-carries the ingest plane's rights for that box alone ([Enrolling ingest boxes](../operate/administration.md#enrolling-ingest-boxes)).
+carries the ingest plane's rights for that box alone ([Enrolling ingest boxes](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)).
 
 ## Public read API
 
@@ -167,7 +167,7 @@ secret; the others need a signed-in sysop.
 | GET · POST        | `/outbox` · `/outbox/ack`                                                      | Box pulls / acks queued APRS-IS messages                                                                                                                                | x-ingest-secret                                  |
 | GET · POST · POST | `/api/bbs/forward/pool` · `/api/bbs/forward/inbound` · `/api/bbs/forward/sent` | FBB forwarding backend for the ingest box                                                                                                                               | x-ingest-secret                                  |
 | GET · POST        | `/api/bbs/session` · `/api/bbs/kill`                                           | Connected-mode BBS session state · end a session                                                                                                                        | x-ingest-secret                                  |
-| POST              | `/api/import/:source`                                                          | Import an external catalog — see [Administration](../operate/administration.md#import-heritage-places)                                                                  | x-ingest-secret                                  |
+| POST              | `/api/import/:source`                                                          | Import an external catalog — see [Import heritage places](../run/day-to-day/import-places.md)                                                                  | x-ingest-secret                                  |
 
 ## Accounts, identity & GDPR
 
@@ -234,3 +234,8 @@ every mailbox, since it carries the mail of the stations it hears and forwards.
 On a cron the gateway prunes TTL'd firehose positions, the raw-packet ring and stale relay
 queue entries; then pulls federation (`syncAllPeers`), runs push-to-hub and the relay spoke leg (both no-ops
 unless configured), and sends watch-alert email digests.
+
+## Next
+
+- [Configuration](configuration.md).
+- [Federation wire format](federation-wire.md).

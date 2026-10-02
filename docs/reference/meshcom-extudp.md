@@ -154,3 +154,7 @@ approximate. Against the firmware:
 | — | Clients may send `type: "tele"` to set the node's sensor values |
 | — | The symbol table arrives as `aprs_symbol_group`, with a doubled backslash |
 | Groups `10`–`99999` | Groups `1`–`99999` (`CheckGroup`); `100001` is reserved for telemetry |
+
+## Next
+
+- [MeshCom](../run/radios/meshcom.md): setting up a node.

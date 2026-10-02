@@ -41,7 +41,7 @@ usage() {
   cat <<'EOF'
 pocket.sh: install and start aprscaching on an Android phone in Termux, in one command.
 
-  bash pocket.sh --call OE8APR     (downloaded from a release and checked: docs/operate/pocket.md)
+  bash pocket.sh --call OE8APR     (downloaded from a release and checked: docs/run/install/pocket.md)
 
 Options:
   --call CALL          your callsign (asked on the terminal when a new .env needs it)
@@ -83,7 +83,7 @@ fetch_release() {
   sum="$(sha256sum "$bundle" | cut -d' ' -f1)"
   [ "$sum" = "$POCKET_BUNDLE_SHA256" ] ||
     fail "the $tag bundle does not match the checksum this script carries; nothing was installed." \
-      "Download pocket.sh and SHA256SUMS again and check them (docs/operate/pocket.md)."
+      "Download pocket.sh and SHA256SUMS again and check them (docs/run/install/pocket.md)."
   note "checked: sha256 $sum"
   if [ -d "$dir/.git" ]; then
     [ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] ||
@@ -138,7 +138,7 @@ main() {
     if [ "$unverified" -eq 0 ]; then
       say "Unverified: this installs the $branch branch straight from GitHub, with no checksum or signature"
       tty_ok || fail "an unverified install needs --unverified when there is no terminal to ask on." \
-        "Or install a release: docs/operate/pocket.md."
+        "Or install a release: docs/run/install/pocket.md."
       local answer=""
       printf '    Install it anyway? [y/N] ' >/dev/tty
       IFS= read -r answer </dev/tty || true

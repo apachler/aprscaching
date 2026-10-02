@@ -101,7 +101,7 @@ shape_doctor_extra() {
 }
 
 # ---- backup and restore (deploy/lib/backup.sh) through wrangler, on the remote D1 database. R2 media is not
-# part of these archives: D1 Time Travel and an R2 copy cover them (docs/operate/deployment.md, Backups).
+# part of these archives: D1 Time Travel and an R2 copy cover them (docs/run/day-to-day/backups.md).
 cf_db() { sed -n 's/^database_name *= *"\(.*\)"/\1/p' "$CF_WORKER_DIR/wrangler.toml" | head -n 1; }
 cf_wrangler() { (cd "$CF_WORKER_DIR" && wrangler "$@"); }
 cf_need() { have wrangler || die "wrangler is not installed." "npm i -g wrangler, then wrangler login."; }

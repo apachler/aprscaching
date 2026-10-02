@@ -280,7 +280,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`OPERATOR_LINKS_FOR_ANY_CALL`",
-        "`1` lets the operator's one-time link ([`signin-link.mjs`](cli.md#signin-link)) serve every call on an instance that also offers passkeys or email, where it otherwise serves only `ADMIN_CALLSIGNS` calls. It is for an off-grid station whose owner signs in with a passkey on `http://localhost` and whose visitors on its hotspot have no other way in ([Visitors on the hotspot](../operate/first-hour.md#visitors-on-the-hotspot)). It widens what a leaked `OPERATOR_SECRET` reaches to every account, so leave it off on a shared or public instance",
+        "`1` lets the operator's one-time link ([`signin-link.mjs`](cli.md#signin-link)) serve every call on an instance that also offers passkeys or email, where it otherwise serves only `ADMIN_CALLSIGNS` calls. It is for an off-grid station whose owner signs in with a passkey on `http://localhost` and whose visitors on its hotspot have no other way in ([Visitors on the hotspot](../run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)). It widens what a leaked `OPERATOR_SECRET` reaches to every account, so leave it off on a shared or public instance",
         "off",
       ],
       ["`SOURCE_REPO`", "AGPL §13 published-source URL — a public fork **must** set this", "upstream"],
@@ -382,7 +382,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`AMPR_DNS_RESOLVERS`",
-        "Comma-separated DNS-over-HTTPS resolvers (JSON API, `?name=&type=` with `accept: application/dns-json` — the `/resolve` and `/dns-query` dialects both work) that must agree on an `ampr.org` verification record DNSSEC does not validate: at least 2 must answer, and every one that answers must return the same TXT set. Name resolvers run by different operators — see [Administration](../operate/administration.md#callsign-verification)",
+        "Comma-separated DNS-over-HTTPS resolvers (JSON API, `?name=&type=` with `accept: application/dns-json` — the `/resolve` and `/dns-query` dialects both work) that must agree on an `ampr.org` verification record DNSSEC does not validate: at least 2 must answer, and every one that answers must return the same TXT set. Name resolvers run by different operators — see [Administration](../run/day-to-day/callsign-verification.md)",
         "`https://cloudflare-dns.com/dns-query`, `https://dns.google/resolve`, `https://dns.quad9.net:5053/dns-query`",
       ],
       [
@@ -392,7 +392,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`LOTW_CA_PEM`",
-        "PEM certificate(s) of the ARRL Logbook of The World CA(s) trusted for LoTW callsign-certificate verification. Several blocks may be concatenated; a literal `\\n` counts as a line break, so the PEM fits a one-line `.env` value. No ARRL certificate ships with the gateway — see [Administration](../operate/administration.md#lotw-callsign-certificates). Unset ⇒ the LoTW method is off",
+        "PEM certificate(s) of the ARRL Logbook of The World CA(s) trusted for LoTW callsign-certificate verification. Several blocks may be concatenated; a literal `\\n` counts as a line break, so the PEM fits a one-line `.env` value. No ARRL certificate ships with the gateway — see [Administration](../run/day-to-day/callsign-verification.md#lotw-callsign-certificates). Unset ⇒ the LoTW method is off",
         "—",
       ],
       [
@@ -612,7 +612,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "MeshCom",
-        "`MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file), `MESHCOM_TX_BURST` (`3`) / `MESHCOM_TX_REFILL_SEC` (`60`) — [transmit pacing](../operate/rf-regulatory.md#transmit-pacing)",
+        "`MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file), `MESHCOM_TX_BURST` (`3`) / `MESHCOM_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       ["AXUDP", "`AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS`"],
       ["AXIP", "`AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND`"],
@@ -623,11 +623,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "BBS (inbound + forwarding)",
-        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../operate/rf-regulatory.md#transmit-pacing)",
+        "`BBS_NODE_CALL`, `BBS_FORWARD`, `BBS_FORWARD_CALL`, `BBS_FORWARD_POLL_MS` (`60000`), `BBS_FORWARD_SID`, `BBS_FORWARD_COMPRESS` (`1` offers LZHUF-B1 compressed forwarding; engages only when the partner's SID also advertises `B`), `BBS_FORWARD_BURST` (`4`) / `BBS_FORWARD_REFILL_SEC` (`300`) — sessions, see [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "IGate",
-        "`IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL`, `IGATE_TX_PATH` (blank = direct), `IGATE_TX_BURST` (`6`) / `IGATE_TX_REFILL_SEC` (`10`) — [transmit pacing](../operate/rf-regulatory.md#transmit-pacing)",
+        "`IGATE_CALL`, `IGATE_PASS`, `IGATE_FILTER`, `IGATE_LOCAL_TTL`, `IGATE_TX_PATH` (blank = direct), `IGATE_TX_BURST` (`6`) / `IGATE_TX_REFILL_SEC` (`10`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Receiving site (Tier A)",
@@ -635,7 +635,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../operate/rf-regulatory.md#transmit-pacing)",
+        "`BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Announce / WX uplink (opt-in TX)",
@@ -733,7 +733,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       [
         "`BACKUP_PRUNE_BUCKET`",
         "`deploy/backup.sh`",
-        "`1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../operate/deployment.md#backups))",
+        "`1` makes the script delete bucket snapshots older than `BACKUP_RETENTION_DAYS`, for buckets without a lifecycle rule; the bucket key then needs delete permission. Unset, bucket destinations are append-only — expire them with a lifecycle rule ([Backups](../run/day-to-day/backups.md#what-to-back-up))",
         "off",
       ],
       [

@@ -15,7 +15,7 @@
 # Receive-only unless all three hold: USB_KISS_TX=1 in the .env, the operator's callsign is
 # control-verified on this station, and the bridge is started with transmit (it then passes KISS data
 # frames through a watchdog: 6 a minute, 3 in a burst). You are the control operator of an automatic station
-# then; read docs/operate/rf-regulatory.md first. The station notification shows "USB TNC: TX ON".
+# then; read docs/shack/on-air.md first. The station notification shows "USB TNC: TX ON".
 #
 # Only CDC-ACM TNCs work (no driver needed); FTDI, CP210x and CH340 chips are refused by name.
 # Needs the Termux:API app, `pkg install termux-api python libusb`.

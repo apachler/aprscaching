@@ -65,13 +65,13 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
 
 - [ ] **Pocket with a Bluetooth TNC in the phone's browser** — Web Bluetooth in Brave (enabled in
       `brave://flags`) with a BLE KISS TNC, and Termux:Boot autostart, are not yet tested on a phone; the
-      "tested on" table in [`docs/operate/pocket.md`](docs/operate/pocket.md) records what is.
+      "tested on" table in [`docs/run/install/pocket.md`](docs/run/install/pocket.md) records what is.
 - [ ] **Owned-RF Tier A** — genuine Tier-A corroboration needs a receiver _you_ operate and attest for.
       The provenance seam is built and Tier A is designed-for; standing up the RF site is hardware, not code.
       Its amateur-IP reachability is a 44Net Connect address
-      ([`docs/operate/44net.md`](docs/operate/44net.md)); an own 44Net PoP, the IPIP mesh and BGP are
+      ([`docs/run/networks/44net.md`](docs/run/networks/44net.md)); an own 44Net PoP, the IPIP mesh and BGP are
       [decided, not planned](#44net-decided-not-planned).
-      See [`docs/guides/federation.md`](docs/guides/federation.md) · [`docs/operate/rf-ingest.md`](docs/operate/rf-ingest.md).
+      See [`docs/run/federation/index.md`](docs/run/federation/index.md) · [`docs/run/radios/rf-ingest.md`](docs/run/radios/rf-ingest.md).
 - [x] **FBB LZHUF (B0/B1) compressed forwarding + MD5 link auth** — the codec is built and **byte-exact
       against a real F6FBB oracle** (`packages/packet/src/lzhuf.ts`: N=2048 window, F=60, classic 6+6 position
       tables, B0 `[LE32 size]` framing, B1 `[LE16 CRC][LE32 size]` framing over the TransIt CRC-16). The
@@ -84,7 +84,7 @@ These are blocked on physical radio, a real peer, or a network no CI runner has 
       deploy. Wire facts pinned in [`tools/interop/LZHUF-SPEC.md`](tools/interop/LZHUF-SPEC.md).
 - [ ] **Live-radio behaviour** — the pure codecs (KISS/AX.25, Meshtastic protobuf, CW/PSK31, CAT/`rigctld`,
       AXUDP/AXIP) are unit-tested; lighting them up on real hardware (a TNC, a rig, a raw-IP socket, off-air
-      weak signals) is a field/deploy step by nature. See [`docs/operate/rf-ingest.md`](docs/operate/rf-ingest.md).
+      weak signals) is a field/deploy step by nature. See [`docs/run/radios/rf-ingest.md`](docs/run/radios/rf-ingest.md).
 
 ## Transport conformance (every connection path proven against a real partner)
 
@@ -207,15 +207,15 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
 - [x] **Pocket: a station on an Android phone** — the gateway and the ingest in Termux, without root:
       one-command install, supervised processes, https for hotspot visitors, a MeshCom node on the hotspot or a
       router, backup, and a monthly install check in `termux/termux-docker`
-      ([`docs/operate/pocket.md`](docs/operate/pocket.md)). A field-day and demo station, not a server.
+      ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)). A field-day and demo station, not a server.
 - [x] **Pocket extras** — the setup questions, a status notification, home-screen shortcuts, a battery saver,
       field alerts, a scheduled backup, a USB KISS TNC through `termux-usb`, 44Net status and https on the ampr.org
       name, a pre-trip sync with a region filter, and the home-instance hub
-      ([`docs/operate/pocket.md`](docs/operate/pocket.md)). Phone tests of each are recorded in its "Tested on" table.
+      ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)). Phone tests of each are recorded in its "Tested on" table.
 - [x] **Per-host 44Net records** — `_aprscaching.<host>` records so one callsign publishes several instances
       (a home station and a Pocket), added by host; an ambiguous name lists its candidates. The ARDC-verified
       callsign is recorded on 44net peers and counts as the operator, so the corroboration quorum hears one voice
-      per callsign ([`docs/operate/44net.md`](docs/operate/44net.md#3-name-and-identity)).
+      per callsign ([`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#3-name-and-identity)).
 - [ ] **Watch: Bun on Android** — no official Android build (oven-sh/bun#28924), so Pocket runs the Node
       gateway rather than the desktop binary. Once Bun ships one, the desktop binary could run on a phone.
 - [ ] **Watch: Android background limits** — Pocket relies on a wake lock, Termux battery "Unrestricted",
@@ -226,20 +226,20 @@ restartable, talks to ingest over the existing local seam. MIT-clean like the ot
       librtlsdr cannot open a dongle from the file descriptor `termux-usb` hands over (the `rtlsdr_open_fd` patch
       on the osmocom-sdr list is not merged), and Direwolf needs ALSA or OSS headers that Termux lacks. Revisit
       when librtlsdr opens by file descriptor and Direwolf builds in Termux (or is packaged); then measure CPU,
-      battery and heat over 30 minutes before offering it ([`docs/operate/pocket.md`](docs/operate/pocket.md)).
+      battery and heat over 30 minutes before offering it ([`docs/run/install/pocket.md`](docs/run/install/pocket.md)).
 - [ ] **A later-corroborated find on mirrors** — a find lifted to Tier A by the later corroboration attempt
       keeps its first tier on instances that already mirrored it: the finds feed pages by log id and carries each
       log once. Re-serving a changed find needs a revision on the finds feed, like the caches feed's
       (updated-at cursor, versioned records).
 - [ ] **Watch: DNS-PERSIST-01** — Let's Encrypt's standing DNS authorisation (one TXT record per name and
       ACME account, no new record per renewal) is not in production: it waits on an open point in the IETF
-      draft. Once it ships, the ampr.org certificate ([`docs/operate/44net.md`](docs/operate/44net.md#tls-on-the-44net-name))
+      draft. Once it ships, the ampr.org certificate ([`docs/run/networks/44net-identity.md`](docs/run/networks/44net-identity.md#tls-on-the-44net-name))
       can renew without a portal edit each time; lego already has `--dns-persist`.
 - [ ] **Watch: FTDI, CP210x and CH340 TNCs on Pocket** — the USB KISS bridge drives only CDC-ACM devices;
       these chips need a userspace driver of their own over libusb. Worth doing when a common TNC needs it.
 - [ ] **Capacitor mobile shell** _(P3 · L)_ — reuse the web app in a native iOS/Android wrapper for
       USB-serial / BLE-KISS and background operation. A build/sign/store pipeline, not a headless code core.
-      The deployment shapes it would join are in [`docs/operate/deployment.md`](docs/operate/deployment.md).
+      The deployment shapes it would join are in [`docs/run/index.md`](docs/run/index.md).
 
 ## Growth & community (owner-decided slate; keeps the game-first orientation and the open/recognition-only style)
 
@@ -536,14 +536,14 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       the same licensed-only rule as the node TCP API and MQTT protobuf feeds it reads (the browser path
       already does Meshtastic over Web Serial).
 - [x] **MeshCom transport** — the LoRa ham mesh through a node's ExtUDP JSON interface
-      ([design](docs/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
-      [operator guide](docs/operate/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on
+      ([design](docs/contribute/design/meshcom.md), [protocol](docs/reference/meshcom-extudp.md),
+      [operator guide](docs/run/radios/meshcom.md)): the pure core (`packages/aprs/src/meshcom/`, conformance on
       Node/Bun/workerd), the RX listener (allowlist, rate cap, dedup with RF upgrade, fan-out, direct LoRa
       hearings attestable via `FIRST_PARTY_SITES`), the opt-in `MeshcomSender`, and the `meshcom_msg` box
       command through which gateway features send via the node owner's box.
 - [ ] **MeshCom follow-ups** _(P2 · M)_, in order:
   - bench-test the MeshCom ack for radio commands (`SENDER   :ack<nnn>` handed to the hearing node) on a
-    real node ([design](docs/design/radio-find-logging.md));
+    real node ([design](docs/contribute/design/radio-find-logging.md));
   - `tele` → the observational weather path with a per-field presence rule (the firmware reports an
     absent sensor as `0`);
   - replies from the Messages surface to a MeshCom direct message, sent through `MeshcomSender`;
@@ -555,22 +555,22 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
   - **Via-Calls** — done: the destination is the last token of the destination path, so a via path never
     turns a broadcast or group message into a direct message to a relay; the via list is display
     metadata, never a link and never trust; the operator's own node's Via setting shows in the station
-    status, the Pocket notification and the box log ([design](docs/design/meshcom.md#via-calls)).
+    status, the Pocket notification and the box log ([design](docs/contribute/design/meshcom.md#via-calls)).
   - **Watch: automatic via selection and Hey!-based routing** — the firmware's automatic via (the gateway
     token `HG`, the best-connected MHeard neighbour) is commented out "for testing" since 2026-07-22. Once
     it returns, via lists appear without operators setting them, and destinations such as `HG` may reach
     ExtUDP; check the destination rules and the fixtures against it then.
   - **MeshCom on the map** — done: the node and link store, `/api/meshcom/nodes` and `/links`, the map
     layer, the links sub-layer and the station panel section
-    ([guide](docs/guides/caching.md#meshcom-on-the-map)). A network-wide feed from the MeshCom servers is
+    ([guide](docs/shack/live-map.md#meshcom-on-the-map)). A network-wide feed from the MeshCom servers is
     not pursued (owner decision): the map shows what the operator's own node(s) heard and links to MeshMap
     for the rest.
-  - **Caches on the MeshCom map** ([research](docs/design/meshcom-tdeck-map.md)) — display only, never
+  - **Caches on the MeshCom map** ([research](docs/contribute/design/meshcom-tdeck-map.md)) — display only, never
     find evidence. Watch: T-Deck Plus screen-rendering stall, MeshCom-Firmware #1131.
     - [ ] **`CACHES` bot command** _(P2 · M)_ — a MeshCom operator sends `CACHES [grid]` to the bot call
           and gets the nearest caches in one ≤150-byte reply (sender's last beacon when no grid). _Why:_ works
           on every MeshCom node today, no firmware change. _Notes:_ same command engine and reply path as
-          [radio find logging](docs/design/radio-find-logging.md); rate-limited per sender. _Impact:_ first
+          [radio find logging](docs/contribute/design/radio-find-logging.md); rate-limited per sender. _Impact:_ first
           way to discover caches from a handheld without a phone. _Depends on:_ the gateway → box transmit
           channel and the MeshCom node registry.
     - [ ] **GPX/CSV cache export per region or grid square** _(P2 · S)_ — `/api/v1` export of caches
@@ -615,7 +615,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [x] **Instance-served offline tile packs** — the operator's regional PMTiles archive is served at
   `/tiles/offline.pmtiles` (a file on Node/Bun, the `TILES` bucket on Cloudflare, or `OFFLINE_TILES_URL`);
   an offline pack keeps the tiles of its square and the offline map draws them
-  ([The offline map](docs/operate/offline-map.md)).
+  ([The offline map](docs/run/install/offline-map.md)).
 - [ ] **Load the map's data without the base style** _(P3 · S)_ — the first cache fetch runs on MapLibre's
       `load` event (`apps/web/src/platform/useMapInstance.ts`), which fires only once the base style has loaded.
       When the online style is unreachable (a HAMNET-only instance, a dead tile service), the map stays empty
@@ -734,11 +734,11 @@ lands with a regression test that fails without it.
       auto-promotion off and a quorum of 2, leaves discovery unset, takes only https non-44Net peers for
       `FED_PEERS`, requires the spoke list on a hub and the pinned key with a registry, and keeps a LAN instance
       unfederated; `deploy/.env.example`, which the OCI stack copies, carries the same posture.
-- [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/operate/44net.md`](docs/operate/44net.md):
+- [x] **Self-host recipe on a 44net/HAMNET address** — [`docs/run/networks/44net.md`](docs/run/networks/44net.md):
       a 44Net Connect address, the exact `ampr.org` records, the host firewall and an inbound test, what
       signatures protect over plain http and what 44Net does not give, and which features work over HAMNET
       without the internet. The `<call>.ampr.org` identity binding is in
-      [`docs/guides/federation.md`](docs/guides/federation.md#identity-on-44net-callamprorg).
+      [`docs/run/federation/index.md`](docs/run/networks/44net-identity.md#peers-by-callsign).
 - [ ] **Registry DNS lookup through `DOH_URL`** _(P3 · S)_ — `FED_REGISTRY_DNS` always asks Cloudflare's
       resolver (`federation.ts` `registryFromDns`), unlike 44net onboarding and `ampr.org` verification,
       which use `DOH_URL`. _Why:_ an instance on HAMNET without the internet cannot locate its registry by DNS;
@@ -814,7 +814,7 @@ store-and-forward), and ARDC-verified 44net onboarding are built — see
 ## 44Net: decided, not planned
 
 44Net is used for reachability (a 44Net Connect address) and identity (`<call>.ampr.org`), never for trust
-— see [`docs/operate/44net.md`](docs/operate/44net.md). These were weighed and are not planned, each for
+— see [`docs/run/networks/44net.md`](docs/run/networks/44net.md). These were weighed and are not planned, each for
 the reason given:
 
 - **BGP announcement of a 44Net /24** — solves routing for one operator, not identity or trust; it needs a

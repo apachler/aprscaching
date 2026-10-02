@@ -14,15 +14,15 @@ deploy/cloudflare/deploy-cf.sh           # one-shot Cloudflare core (Worker + D1
 deploy/cloudflare/cache-rules.sh         # Cloudflare cache rules for a CDN in front of a VM; needs CF_API_TOKEN + CF_ZONE_ID
 ```
 
-See [Deployment](../operate/deployment.md), [Deployment helpers](../operate/helpers.md) and
-[Running in Docker](../operate/docker.md).
+See [Is running an instance for me?](../run/index.md), [The deploy/aprscaching command](../run/day-to-day/helper-command.md) and
+[Self-host with Docker](../run/install/self-host-docker.md).
 
 `setup.sh` keeps every value already in `.env` unless you confirm the change (or pass `--yes`), and never
 regenerates a secret that is set.
 
 ### `deploy/aprscaching` {#deploy-aprscaching}
 
-One command for every shape ([Deployment helpers](../operate/helpers.md)). Every command takes these options:
+One command for every shape ([The deploy/aprscaching command](../run/day-to-day/helper-command.md)). Every command takes these options:
 
 | Option | Effect |
 |---|---|
@@ -44,7 +44,7 @@ One command for every shape ([Deployment helpers](../operate/helpers.md)). Every
 | `restore <archive>` | `--dry-run`, `--no-settings`; the archive may be `oci://<bucket>/<object>` or `oci://<bucket>/latest` |
 | `update` | `--ref`, `--rollback-window` |
 | `rotate-secret <name>` | none |
-| `net44 setup <connect.conf>` | `--name`, `--mtu`, `--no-firewall` ([44Net](../operate/44net.md)) |
+| `net44 setup <connect.conf>` | `--name`, `--mtu`, `--no-firewall` ([44Net](../run/networks/44net.md)) |
 | `net44 status`, `net44 check [name]`, `net44 remove` | none |
 
 ## Operator callsign — `tools/admin/` {#operator-callsign}
@@ -60,7 +60,7 @@ as that call — claiming a call clears a verification recorded while nobody hel
 gateway accepts only a call listed in `ADMIN_CALLSIGNS` and marks it verified (method `operator`). `BASE`
 defaults to the gateway on this host, `http://127.0.0.1:$PORT` (`PORT` defaults to `8787`; the gateway
 container sets `8080` and carries `OPERATOR_SECRET`, so the Docker form needs neither). See
-[Administration](../operate/administration.md#operator-identity).
+[Who is a sysop](secrets.md#who-is-a-sysop).
 
 ## Sign-in link — `tools/admin/` {#signin-link}
 
@@ -85,7 +85,7 @@ origin other than that and `APP_URL`. `--qr` also prints the link as a QR code f
 OPERATOR_SECRET=… node tools/admin/signin-link.mjs --link-origin https://192.168.43.1:8443 --qr OE8VIS
 ```
 
-See [Off-grid sign-in](../operate/first-hour.md#off-grid-sign-in).
+See [Off-grid sign-in](../run/day-to-day/sign-in-links.md#off-grid-sign-in).
 
 ## Licence registers — `tools/licence/` {#licence-registers}
 
@@ -103,7 +103,7 @@ downloaded and parsed on this machine; only callsign, status and expiry are post
 removes calls the register no longer lists. With no `--source`, `LICENCE_SOURCES` (comma-separated) names
 the registers, for scheduled runs. `BASE` (or `--base`) defaults to `http://127.0.0.1:8787`. The PDF
 registers need `pdftotext` (poppler-utils). Exits non-zero if any register fails. See
-[Administration](../operate/administration.md#licence-registers).
+[Licence registers](../run/day-to-day/licence-registers.md).
 
 ## Federation keys — `tools/fedkey/`
 
@@ -124,7 +124,7 @@ machine-readable output. Related:
 ## Tool signing — `tools/toolkey/` {#toolkey}
 
 Sign tool plugins and the tool registry so the app can verify them (see
-[the tools platform](../guides/shack.md#tools-and-plugins)):
+[the tools platform](../shack/index.md#tools-and-plugins)):
 
 ```bash
 node tools/toolkey/genkey.mjs                                   # a tool-author keypair
@@ -139,7 +139,12 @@ signed.
 
 The contributor commands — `pnpm run check`, `smoke`, `verify`, `conformance:meshcom` — the smoke and e2e
 suites, the CI guards under `tools/checks/` and the interop tests are described in
-[Testing & verification](testing.md).
+[Testing & verification](../contribute/testing.md).
 
 !!! note
     `tools/teaser/` and `tools/webauthn/` are internal build/marketing and test helpers, not operator tools.
+
+## Next
+
+- [Configuration](configuration.md).
+- [The deploy/aprscaching command](../run/day-to-day/helper-command.md).

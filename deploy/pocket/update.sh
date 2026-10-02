@@ -54,7 +54,7 @@ pocket_paths
 if [ -z "$BRANCH" ]; then
   BRANCH="$(git -C "$DIR" rev-parse --abbrev-ref HEAD)"
   [ "$BRANCH" != HEAD ] || die "$DIR is at a release, not on a branch." \
-    "Update to a newer release with that release's pocket.sh (docs/operate/pocket.md), or pass --branch NAME."
+    "Update to a newer release with that release's pocket.sh (docs/run/install/pocket.md), or pass --branch NAME."
 fi
 
 before="$(git -C "$DIR" rev-parse HEAD)"

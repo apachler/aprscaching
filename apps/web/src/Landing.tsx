@@ -249,7 +249,7 @@ function Steps() {
             </span>
           </li>
         </ol>
-        <a className="landing-more" href="/?view=docs&doc=guides/caching">
+        <a className="landing-more" href="/?view=docs&doc=play/index">
           The caching guide
         </a>
       </div>
@@ -285,7 +285,7 @@ function Trust() {
           <p>The instance's own receiver heard the finder on the air there. A copy from the internet never counts.</p>
         </li>
       </ol>
-      <a className="landing-more" href="/?view=docs&doc=concepts">
+      <a className="landing-more" href="/?view=docs&doc=reference/trust-model">
         How verification works
       </a>
     </section>
@@ -369,7 +369,7 @@ function RunAnywhere() {
         <li>An Android phone in the field</li>
         <li>Cloudflare, with your own RF box</li>
       </ul>
-      <a className="landing-more" href="/?view=docs&doc=operate/deployment">
+      <a className="landing-more" href="/?view=docs&doc=run/index">
         Choose how to run it
       </a>
     </section>

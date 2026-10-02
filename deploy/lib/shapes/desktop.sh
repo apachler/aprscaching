@@ -7,7 +7,7 @@
 shape_init() {
   shape_record desktop ""
   if [ "$APRS_JSON" = 1 ]; then
-    printf '{"shape":"desktop","docs":"docs/operate/deployment.md#desktop"}\n'
+    printf '{"shape":"desktop","docs":"docs/run/install/desktop.md"}\n'
     return 0
   fi
   step "Desktop"
@@ -15,7 +15,7 @@ shape_init() {
   info "  sha256sum -c --ignore-missing SHA256SUMS"
   info "  gh attestation verify <the binary> --repo apachler/aprscaching"
   info "then run it; it serves the app on http://127.0.0.1:8787."
-  info "Steps and options: docs/operate/helpers.md (Verified downloads) and deploy/desktop/README.md."
+  info "Steps and options: docs/run/install/verified-downloads.md and deploy/desktop/README.md."
 }
 
 shape_status() {
