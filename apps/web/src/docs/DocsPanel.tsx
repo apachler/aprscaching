@@ -91,7 +91,7 @@ export function DocsPanel(props: { initialSlug?: string; initialAnchor?: string;
         <nav className="docs-nav" aria-label="Manual contents">
           {sections.map((g) => (
             <div key={g.section} className="docs-navgroup">
-              <p className="docs-navhead">{g.section}</p>
+              {g.section && <p className="docs-navhead">{g.section}</p>}
               {g.pages.map((p) => (
                 <Button
                   key={p.slug}
