@@ -230,15 +230,23 @@ async function toggleSet(
     .first<{ n: number }>();
   return { on: want, count: count?.n ?? 0 };
 }
-export async function handleFavorite(req: Request, env: Env, cacheId: number): Promise<Response> {
+/** A favourite or watch belongs to the caller: the signed-in session, or a named callsign only with the ingest secret. */
+async function handleToggle(
+  req: Request,
+  env: Env,
+  cacheId: number,
+  table: "favorites" | "watches",
+): Promise<Response> {
   const b = (await req.json().catch(() => ({}))) as { callsign?: string; on?: boolean };
-  if (!b.callsign) return json({ error: "callsign required" }, { status: 400 });
-  return json(await toggleSet(env, "favorites", cacheId, b.callsign, b.on));
+  const who = await actor(req, env, b.callsign);
+  if (!who) return json({ error: "sign in to change your favourites and watches" }, { status: 401 });
+  return json(await toggleSet(env, table, cacheId, who, b.on));
 }
-export async function handleWatch(req: Request, env: Env, cacheId: number): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as { callsign?: string; on?: boolean };
-  if (!b.callsign) return json({ error: "callsign required" }, { status: 400 });
-  return json(await toggleSet(env, "watches", cacheId, b.callsign, b.on));
+export function handleFavorite(req: Request, env: Env, cacheId: number): Promise<Response> {
+  return handleToggle(req, env, cacheId, "favorites");
+}
+export function handleWatch(req: Request, env: Env, cacheId: number): Promise<Response> {
+  return handleToggle(req, env, cacheId, "watches");
 }
 
 // ---------------------------------------------------------------- helpers for cache detail

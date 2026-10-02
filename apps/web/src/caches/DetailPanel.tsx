@@ -128,8 +128,9 @@ export function DetailPanel(props: {
     try {
       const r = await toggleFavorite(c.id, callsign, want);
       setFav(r);
-    } catch {
+    } catch (e) {
       setFav({ on: c.favorited, count: c.favorites });
+      toast((e as Error).message);
     }
   }
   const minTier: Tier = c.minTrust ?? "B"; // the site default minimum is B
