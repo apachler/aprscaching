@@ -234,6 +234,24 @@ export function remoteMapCache(r: RemoteCacheRow): MapCache {
 // trust. Trust policy: native always shown; `trusted`-origin mirrors shown by default; `unvetted`
 // (auto-discovered) hidden unless `?includeUnvetted=1`; `blocked` never surfaced. The trust is a
 // read-time join to fed_peers, so promoting/blocking a peer takes effect immediately, no re-mirror.
+/**
+ * The listing filter for unlisted caches: an `unlisted` cache stays off maps, search and feeds, reached only
+ * by its link or code, except in its own owner's listings (`owner_call` is a base call or one of its SSIDs).
+ */
+export async function listedOrOwn(
+  req: Request,
+  env: Env,
+  col = "owner_call",
+): Promise<{ sql: string; binds: string[] }> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return { sql: "fed_scope != 'unlisted'", binds: [] };
+  return {
+    sql: `(fed_scope != 'unlisted' OR EXISTS (SELECT 1 FROM account_callsigns ac
+            WHERE ac.account_id = ? AND (${col} = ac.callsign OR ${col} LIKE ac.callsign || '-%')))`,
+    binds: [me.accountId],
+  };
+}
+
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
   const u = new URL(req.url);
   const [minLon, minLat, maxLon, maxLat] = (u.searchParams.get("bbox") ?? "-180,-90,180,90").split(",").map(Number);
@@ -241,18 +259,19 @@ export async function handleCachesInBBox(req: Request, env: Env): Promise<Respon
   const instance = env.INSTANCE ?? u.host;
   const includeUnvetted = u.searchParams.get("includeUnvetted") === "1" || u.searchParams.get("network") === "all";
 
+  const listed = await listedOrOwn(req, env);
   const native = await env.DB.prepare(
     `SELECT * FROM caches
-     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' LIMIT 1000`,
+     WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND ${listed.sql} LIMIT 1000`,
   )
-    .bind(minLat, maxLat, minLon, maxLon)
+    .bind(minLat, maxLat, minLon, maxLon, ...listed.binds)
     .all<CacheDbRow>();
   // origin trust defaults to 'unvetted' when the origin peer is unknown (e.g. removed) — hidden by default.
   const remote = await env.DB.prepare(
     `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust
        FROM remote_caches rc
        LEFT JOIN fed_peers fp ON fp.instance = rc.origin
-      WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'
+      WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived' AND rc.fed_scope != 'unlisted'
         AND COALESCE(fp.trust, 'unvetted') != 'blocked'
         AND (? = 1 OR COALESCE(fp.trust, 'unvetted') = 'trusted')
       LIMIT 1000`,
@@ -304,7 +323,12 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
   const rating = await ratingInfo(env, id, (row.rating_policy ?? "finders") as "finders" | "all" | "off", who);
-  const rendezvous = row.rendezvous ? await rendezvousFor(env, id) : [];
+  // a meeting's time and place are the hider's: anyone else sees whom the cache met and on which day
+  const met = row.rendezvous ? await rendezvousFor(env, id) : [];
+  const rendezvous =
+    met.length && !(await mayActAsOwner(req, env, row.owner_call))
+      ? met.map((r) => ({ ...r, ts: r.ts - (r.ts % 86_400) + 43_200, lat: null, lon: null, day: true }))
+      : met;
   const stages = await stageCount(env, id);
   const detail: CacheDetail = {
     ...toSummary(row),

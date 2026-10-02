@@ -43,7 +43,8 @@ import {
 /** Full pack builds per address per hour (a 304 refresh is not counted). */
 const PACK_BUILDS_PER_HOUR = 30;
 
-const NATIVE_IN_BOX = "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived'";
+const NATIVE_IN_BOX =
+  "lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status != 'archived' AND fed_scope != 'unlisted'";
 /** A cache unfound for this long is flagged in the owner's pack. */
 const QUIET_S = 180 * 86_400;
 /** The most calls of one account the owner's pack matches (D1 binds at most 100 parameters). */
@@ -100,7 +101,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
            : `(SELECT COUNT(*) || ':' || COALESCE(MAX(rc.mirrored_at), 0) FROM remote_caches rc
           LEFT JOIN fed_peers fp ON fp.instance = rc.origin
          WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'${typeSql.replace("type", "rc.type")}
-           AND ${trustSql}) AS r`
+           AND rc.fed_scope != 'unlisted' AND ${trustSql}) AS r`
        }`,
   )
     .bind(
@@ -142,7 +143,7 @@ export async function handleOfflinePack(req: Request, env: Env): Promise<Respons
           `SELECT rc.*, COALESCE(fp.trust, 'unvetted') AS origin_trust FROM remote_caches rc
          LEFT JOIN fed_peers fp ON fp.instance = rc.origin
         WHERE rc.lat BETWEEN ? AND ? AND rc.lon BETWEEN ? AND ? AND rc.status != 'archived'${typeSql.replace("type", "rc.type")}
-          AND ${trustSql} LIMIT ?`,
+          AND rc.fed_scope != 'unlisted' AND ${trustSql} LIMIT ?`,
         )
           .bind(...box, ...types, includeUnvetted ? 1 : 0, scan)
           .all<

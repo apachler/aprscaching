@@ -66,11 +66,10 @@ A rendezvous is a meeting between two living caches that both opted in. It is re
 - the other was heard in the last 15 minutes;
 - the same two caches have not met in the last hour.
 
-The page of each cache lists its last 10 meetings under **Rendezvous**, for example "met OE8APR-9 · 2 h ago".
-A rendezvous is a social record. It earns no points and is not a find.
-
-!!! note "Known issue"
-    Rendezvous are public, with the place and time of the meeting.
+The page of each cache lists its last 10 meetings under **Rendezvous**. The cache's owner sees when each
+meeting happened, for example "met OE8APR-9 · 2 h ago". Everyone else sees whom the cache met and on which day,
+for example "met OE8APR-9 · 2 Oct 2026". The place of a meeting goes to nobody but the owner. A rendezvous is a
+social record. It earns no points and is not a find.
 
 ## Example
 

@@ -836,6 +836,21 @@ ok(
 );
 ok("a local-only cache never enters the feed at all", !locRec, cLoc.data?.cache?.title);
 ok("no hint text leaks anywhere in the caches feed", !new RegExp(HINT).test(JSON.stringify(cfeed.data)));
+// an unlisted cache stays off the maps: its origin's (for anyone but the owner) and every mirror's
+const pubMap = await call(PUB, "GET", "/api/caches?bbox=15,46,16,48");
+ok(
+  "an unlisted cache is off its origin's public map",
+  !(pubMap.data?.caches ?? []).some((c) => c.title === cUnl.data?.cache?.title),
+  `status=${pubMap.status}`,
+);
+await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
+const scopeMap = (await call(SUB, "GET", "/api/caches?bbox=15,46,16,48")).data?.caches ?? [];
+ok(
+  "a mirror shows the public cache and keeps the unlisted one off its map",
+  scopeMap.some((c) => c.title === cPub.data?.cache?.title) &&
+    !scopeMap.some((c) => c.title === cUnl.data?.cache?.title),
+  scopeMap.map((c) => c.title).join(","),
+);
 
 // ---- account-move as a signed federation record ----
 // migrate OE7MOV onto the publisher (device-key assertion bound to oe.pub) → it announces the move

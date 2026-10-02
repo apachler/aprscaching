@@ -65,7 +65,7 @@ export async function envelopeForPosition(
   const rows = (
     await env.DB.prepare(
       `SELECT id, code, title, lat, lon FROM caches
-      WHERE status = 'active' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? LIMIT 50`,
+      WHERE status = 'active' AND fed_scope != 'unlisted' AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? LIMIT 50`,
     )
       .bind(lat - dLat, lat + dLat, lon - dLon, lon + dLon)
       .all<{ id: number; code: string; title: string; lat: number; lon: number }>()

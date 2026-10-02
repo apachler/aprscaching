@@ -238,8 +238,16 @@ export interface CacheDetail extends CacheSummary {
   lastFound: number | null;
   // owner-gated rating
   rating: { avg: number | null; count: number; mine: number | null; policy: RatingPolicy; canRate: boolean };
-  // living-cache rendezvous: recent meetings (empty unless this is a rendezvous living cache)
-  rendezvous: { withCacheId: number; withCall: string; ts: number; lat: number | null; lon: number | null }[];
+  // living-cache rendezvous: recent meetings (empty unless this is a rendezvous living cache). Only the cache's
+  // owner gets the time and place; anyone else gets the day (`day`, `ts` at its noon UTC) and no position.
+  rendezvous: {
+    withCacheId: number;
+    withCall: string;
+    ts: number;
+    lat: number | null;
+    lon: number | null;
+    day?: boolean;
+  }[];
   // audio-cache
   stageCount: number;
 }

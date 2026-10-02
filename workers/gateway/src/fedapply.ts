@@ -506,14 +506,14 @@ export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: strin
   await env.DB.prepare(
     `INSERT INTO remote_caches
        (global_id, origin, code, owner_call, title, type, status, difficulty, terrain, lat, lon,
-        station_call, source, external_id, hint, description, min_trust, created_at, updated_at, mirrored_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        station_call, source, external_id, hint, description, min_trust, fed_scope, created_at, updated_at, mirrored_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(global_id) DO UPDATE SET
        origin=excluded.origin, code=excluded.code, owner_call=excluded.owner_call,
        title=excluded.title, type=excluded.type, status=excluded.status,
        difficulty=excluded.difficulty, terrain=excluded.terrain, lat=excluded.lat, lon=excluded.lon,
        station_call=excluded.station_call, source=excluded.source, external_id=excluded.external_id,
-       hint=excluded.hint, description=excluded.description, min_trust=excluded.min_trust,
+       hint=excluded.hint, description=excluded.description, min_trust=excluded.min_trust, fed_scope=excluded.fed_scope,
        created_at=excluded.created_at, updated_at=excluded.updated_at, mirrored_at=excluded.mirrored_at
      WHERE COALESCE(excluded.updated_at, 0) >= COALESCE(remote_caches.updated_at, 0)`,
   )
@@ -535,6 +535,7 @@ export async function upsertRemoteCache(env: Env, rec: FeedRecord, origin: strin
       d.hint ?? null,
       d.description ?? null,
       d.minTrust ?? null,
+      d.fedScope === "unlisted" ? "unlisted" : "public",
       d.createdAt ?? null,
       clampFuture(d.updatedAt),
       nowS(),
