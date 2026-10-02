@@ -566,7 +566,7 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
     not pursued (owner decision): the map shows what the operator's own node(s) heard and links to MeshMap
     for the rest.
   - **Caches on the MeshCom map** ([research](docs/contribute/design/meshcom-tdeck-map.md)) — display only, never
-    find evidence. Watch: T-Deck Plus screen-rendering stall, MeshCom-Firmware #1131.
+    find evidence. The T-Deck Plus needs firmware 4.35t or later (the screen-rendering fix).
     - [ ] **`CACHES` bot command** _(P2 · M)_ — a MeshCom operator sends `CACHES [grid]` to the bot call
           and gets the nearest caches in one ≤150-byte reply (sender's last beacon when no grid). _Why:_ works
           on every MeshCom node today, no firmware change. _Notes:_ same command engine and reply path as
@@ -581,11 +581,13 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
           field. _Depends on:_ —
     - [ ] **Upstream proposal: SD-card waypoint overlay** _(P2 · S proposal / L firmware)_ — agree with
           ICSSW, then file the drafted issue. _Why:_ offline, zero airtime, generic (repeaters, SOTA,
-          shelters). _Notes:_ draft in the research page. _Impact:_ caches on the device map without any
-          transmission. _Depends on:_ the grid export; the firmware's map implementation (open question).
-    - [ ] **Upstream proposal: show received APRS objects on the map** _(P3 · L)_ — expiry and kill-frame
-          support. _Why:_ the dynamic half of the overlay. _Notes:_ draft in the research page. _Impact:_
-          events and new caches appear live. _Depends on:_ confirming whether the map shows objects today.
+          shelters). _Notes:_ draft in the research page; the map draws SD-card tiles with LVGL, so the overlay
+          reuses its projection and keeps its own table apart from the 30-station ring. _Impact:_ caches on the
+          device map without any transmission. _Depends on:_ the grid export.
+    - [ ] **Upstream proposal: show received APRS objects on the map** _(P3 · L)_ — a new MeshCom object frame
+          type, with expiry and kill-frame support. _Why:_ the dynamic half of the overlay; MeshCom has no
+          object frame today, so the firmware discards objects. _Notes:_ draft in the research page.
+          _Impact:_ events and new caches appear live. _Depends on:_ —
     - [ ] **Upstream proposal: KISS object frames from the client's own call** _(P3 · M)_ — _Why:_ lets a
           client announce objects under the operator's callsign. _Notes:_ draft in the research page; keep
           the own-callsign check and rate limit. _Impact:_ enables the on-demand object bot. _Depends on:_
@@ -598,10 +600,13 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
     - [ ] **T-Deck Plus test device** _(P2 · S)_ — buy the 433 MHz variant with external antenna, flash
           MeshCom via the ICSSW web flasher, document the setup in the operator guide. _Why:_ a reference
           handheld for every item above. _Depends on:_ —
-    - [ ] **Settle the open firmware questions** _(P2 · S)_ — whether the map shows APRS objects, and how
-          the map is implemented (tiles, SD storage, renderer, memory headroom). _Why:_ gates both upstream
-          proposals. _Notes:_ firmware source (T-Deck variant), then an on-air test. The message limit is
-          settled: 150 bytes. _Depends on:_ —
+    - [ ] **Measure free memory with the map open** _(P3 · S)_ — heap and PSRAM on a T-Deck Plus, with `--heap`
+          on a measurement build. _Why:_ sizes the overlay's point cap. _Notes:_ the other firmware questions
+          are settled from the 4.40a source (research page). _Depends on:_ the T-Deck Plus test device.
+    - [ ] **Upstream issue: southern and western positions on the T-Deck map** _(P3 · S)_ — the function that
+          adds a station to the map negates latitude for `W` and longitude for `S`, so neither is negated.
+          _Why:_ stations outside the northern and eastern hemispheres plot in the wrong place. _Notes:_ a
+          one-line fix; file it on icssw-org/MeshCom-Firmware. _Depends on:_ —
 - [ ] **Bring-your-own-ingest** _(P2 · M)_ — a user binds their local ingest box to a cloud instance
       they don't operate: a per-user ingest grant keyed on their registered Ed25519 device key (the
       signed-batch path already authenticates one operator, own-traffic-only), extended with per-user
