@@ -1,7 +1,7 @@
 # aprscaching
 
 **Find real places on the air.** aprscaching is an [APRS](glossary.md#aprs) geocaching game and ham-radio
-**Shack**. You hide a cache, go find it, and log the find *verified by radio* — not just by tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
+**Shack**. You hide a cache, go find it, and log the find *verified by radio* — not only by tapping a button. Hide, hunt, operate. It runs in a browser, self-hosts on a Raspberry Pi, and federates
 with other instances into one open network.
 
 !!! tip "New here? [Start here](start-here.md)"

@@ -69,7 +69,7 @@ have had with signal. That holds for up to 7 days (older position evidence is go
 counts from when it arrives. A wrong phone clock matters: a time more than a minute ahead, or before you
 registered the device, is not taken, and the find counts from its arrival.
 
-**Nothing is lost.** If the instance refuses a log when it syncs — the cache was archived meanwhile, say — it
+**Nothing is lost.** If the instance refuses a log when it syncs — the cache was deleted meanwhile, say — it
 moves to **Needs attention** with the reason, where you retry it, edit its comment, or discard it. A log goes
 only to the instance it was made on; signed in to another, it waits and says so.
 

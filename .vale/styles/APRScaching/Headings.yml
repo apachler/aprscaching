@@ -1,0 +1,91 @@
+# Headings are sentence case: "Log a find", not "Log A Find". Names keep their capitals (the vocabulary).
+extends: capitalization
+message: "Use sentence case for '%s'."
+level: warning
+scope: heading
+match: $sentence
+indicators:
+  - ":"
+exceptions:
+  - APRS
+  - APRS-IS
+  - APRScaching
+  - aprscaching
+  - Shack
+  - MeshCom
+  - Meshtastic
+  - IGate
+  - Tier
+  - A
+  - B
+  - C
+  - NET/ROM
+  - BBS
+  - FBB
+  - AX.25
+  - KISS
+  - TNC
+  - TCP
+  - UDP
+  - HTTP
+  - HTTPS
+  - API
+  - CLI
+  - D1
+  - R2
+  - Cloudflare
+  - Docker
+  - Caddy
+  - Pocket
+  - Termux
+  - Android
+  - Bun
+  - Node
+  - SQLite
+  - Raspberry
+  - Pi
+  - OCI
+  - Oracle
+  - Cloud
+  - WireGuard
+  - HAMNET
+  - Connect
+  - CAT
+  - CWOP
+  - PWS
+  - WX
+  - SOTA
+  - POTA
+  - WWFF
+  - TAK
+  - CoT
+  - AGPL
+  - GDPR
+  - DSGVO
+  - Maidenhead
+  - LoTW
+  - Mermaid
+  - MkDocs
+  - Vale
+  - Web
+  - Serial
+  - Bluetooth
+  - BLE
+  - USB
+  - SDR
+  - RF
+  - IS
+  - ExtUDP
+  - T-Deck
+  - T-Beam
+  - Direwolf
+  - SSID
+  - JSON
+  - CBOR
+  - Ed25519
+  - DNS
+  - TLS
+  - VM
+  - CI
+  - OE8APR
+  - FAQ

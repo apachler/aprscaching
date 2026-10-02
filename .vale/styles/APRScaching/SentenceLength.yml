@@ -1,0 +1,7 @@
+# Aim for sentences of 20 words or fewer; past 30 a sentence is hard to follow.
+extends: occurrence
+message: "Try to split this sentence: it has more than 30 words."
+scope: sentence
+level: suggestion
+max: 30
+token: \b(\w+)\b

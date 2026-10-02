@@ -38,11 +38,11 @@ crons = ["0 4 * * *", "*/15 * * * *"]   # nightly TTL/rollup + federation pull-s
 # For local `wrangler dev`, put both in workers/gateway/.dev.vars (gitignored).
 INSTANCE = "aprscaching.local"   # canonical federation instance id (use your domain in prod)
 # FED_PEERS = "https://peer.example/"          # advertised peer instances
-# Position storage (docs/operate/deployment.md "Cost on D1"): a fix is stored once its station moved this many
+# Position storage (docs/reference/cloudflare-costs.md "Cost on D1"): a fix is stored once its station moved this many
 # metres or this many seconds passed; protected stations and RF hearings are always stored. 0 stores every fix.
 # POS_MIN_MOVE_M = "25"
 # POS_MIN_INTERVAL_S = "600"
-# Daily D1 write budget (docs/operate/deployment.md "Write budget"): near it the gateway sheds low-value writes
+# Daily D1 write budget (docs/reference/cloudflare-costs.md "Write budget"): near it the gateway sheds low-value writes
 # and alerts the sysop; protected data is always stored. Unset = 1500000 on the Worker. Workers Free: 90000. 0 = off.
 # D1_DAILY_WRITE_BUDGET = "90000"
 # The embeddable map widget (/embed) loads MapLibre from the Pages site at APP_URL; its basemap is BASEMAP_STYLE

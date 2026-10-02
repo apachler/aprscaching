@@ -33,7 +33,6 @@ const NAV: { slug: string; section: string; title: string }[] = [
   { slug: "operate/administration", section: "Operating an instance", title: "Administration" },
   { slug: "reference/api", section: "Reference", title: "HTTP API" },
   { slug: "reference/federation-wire", section: "Reference", title: "Federation wire format" },
-  { slug: "reference/federation-operations", section: "Reference", title: "Federation operations" },
   { slug: "reference/configuration", section: "Reference", title: "Configuration" },
   { slug: "reference/cli", section: "Reference", title: "Command-line tools" },
   { slug: "reference/testing", section: "Reference", title: "Testing & e2e tooling" },

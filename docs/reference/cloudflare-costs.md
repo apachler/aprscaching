@@ -99,7 +99,7 @@ As the day's count nears the budget, the gateway stops storing the writes that m
 | Level | From | What is no longer stored |
 |-------|------|--------------------------|
 | ok | — | nothing: everything is stored as configured |
-| warn | 80 % | the raw packet log (`packets_recent`), so the shack's raw packet view goes quiet (the Setup checklist's "Ingest feeding" line says why); a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6 (an hour by default) instead of every interval, so its last-heard time can trail by that much |
+| warn | 80 % | the raw packet log (`packets_recent`), so the Shack's raw packet view goes quiet (the Setup checklist's "Ingest feeding" line says why); a stationary station nothing protects stores a fix every `POS_MIN_INTERVAL_S` × 6 (an hour by default) instead of every interval, so its last-heard time can trail by that much |
 | over | 100 % | also every fix and station update of a station nothing protects heard over APRS-IS, weather readings, messages that no protected call sends or receives, MHeard entries of stations your own receiver did not hear, and the hourly port counters |
 
 **Protected data is never throttled.** At every level the gateway stores every fix of a protected station and

@@ -115,7 +115,7 @@ signed by the old key, and the old key with an `until` (the rotation time plus a
 set `FED_ROTATION_GRACE_DAYS` to change it). A consumer:
 
 - pins the first key it sees for a peer and moves the pin only along verified rotation records, so a
-  hijacked domain that simply publishes a new key is refused;
+  hijacked domain that publishes a new key is refused;
 - accepts an older published key only as a proven predecessor of the current one — a key it already
   trusted (the old pin), from which a signed rotation leads to the current key — and only until its
   `until`, never later than the rotation time plus the grace;
@@ -133,7 +133,7 @@ Peers are rows with a **trust tier**:
 
 | Trust | Behaviour |
 |-------|-----------|
-| `trusted` | Mirrored, and counted toward Tier-A corroboration. Peers you list in `FED_PEERS` start here. |
+| `trusted` | Mirrored, and counted toward Tier A corroboration. Peers you list in `FED_PEERS` start here. |
 | `unvetted` | Mirrored but hidden on the map by default; probed only advisorily to earn trust. Registry- and transitively-discovered peers start here. |
 | `blocked` | Never mirrored, never surfaced. |
 

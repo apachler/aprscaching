@@ -53,7 +53,7 @@ Measured on the same harness after the design-system pass.
 | Measure | Before | After |
 |---|---|---|
 | axe serious/critical rules failing, 159 renders | 5 rules on up to 62 renders | 0; the `axe` CI job keeps it there |
-| Contrast pairs failing | dark 1 · light 17 · Phosphor 0 (of 24 per theme) | 0 of 41 per theme, in all three; no known failures |
+| Contrast pairs failing | dark 1 · light 17 · Phosphor 0 (of 24 per theme) | 0 of 47 per theme, in all three; no known failures |
 | Raw `<button>` outside `ui/` vs `Button` | 193 vs 75 | 1 vs 257 |
 | Inline `style={{…}}` | 10, some setting colours and sizes | 11, all custom properties only; ESLint rejects anything else |
 | Icon systems | `Icon` 19 · `Ico` 42 | `Icon` only (71 uses; Phosphor's CP437 through its `cp437` prop) |

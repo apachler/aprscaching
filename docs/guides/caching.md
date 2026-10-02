@@ -96,7 +96,7 @@ Tap a marker on the map, a row in **Nearby**, or a search result. The cache shee
 ## Log a find
 
 At the cache, tap **✓ Log a find** (or **Log** in the bottom bar). Allow location access when the browser
-asks — that reading is what verifies your find. If you refuse, the find is still logged, just not verified by
+asks — that reading is what verifies your find. If you refuse, the find is still logged, but not verified by
 your phone.
 
 The result shows how well your find is verified:
@@ -176,7 +176,7 @@ A multi-stage cache shows **Stages · 1/3 unlocked**. Unlock the next stage by:
 4. Under **Advanced**, optionally: **Hint**, **Description**, **Drive-in**, **Country**, **Tags**, and
    **Rating & federation** — who may rate it, and the scope —
    - **Public** — shared with linked instances;
-   - **Unlisted** — shared, but not listed;
+   - **Unlisted** — listed here as usual; linked instances get its title and position, not its description;
    - **Local only** — stays on this instance. The hint is never shared.
 5. Tap **Hide cache**. It gets a code like `AC-1234`.
 

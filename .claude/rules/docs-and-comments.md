@@ -78,6 +78,17 @@ either — e.g. an error body must say `verify <call> to transmit — control-ve
 
 ---
 
+## The manual's style
+
+The manual's own writing standard — one page, one job, one reader; the four page templates and the cache-type
+template; short active sentences in the glossary's terms; no filler words; sentence-case headings; player pages
+free of commands and configuration; every page ending in **Next** — is
+[`docs/contribute/style-guide.md`](../../docs/contribute/style-guide.md). Vale enforces the mechanical part
+(`.vale.ini`): filler words and terminology variants fail the docs workflow; title-case headings and long
+sentences are flagged.
+
+---
+
 ## Diagrams are Mermaid
 
 A diagram in the manual, a README or a rule (a topology, a data path, an exchange, a state machine, a schema)
