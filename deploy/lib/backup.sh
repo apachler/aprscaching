@@ -62,10 +62,11 @@ bk_bucket_newest() {
     --query 'max_by(data, &"time-created").name' --raw-output 2>/dev/null | grep -v '^null$' || true
 }
 
-# The newest archive's upload time, as epoch seconds; empty when there is none or the bucket is unreachable.
+# The newest object's upload time under PREFIX (default: the archives), as epoch seconds; empty when there is
+# none or the bucket is unreachable.
 bk_bucket_newest_time() {
   local t
-  t="$(oci os object list -bn "$1" --prefix "$BK_BUCKET_PREFIX" --all \
+  t="$(oci os object list -bn "$1" --prefix "${2:-$BK_BUCKET_PREFIX}" --all \
     --query 'max_by(data, &"time-created")."time-created"' --raw-output 2>/dev/null || true)"
   [ -n "$t" ] && [ "$t" != null ] || return 0
   date -d "$t" +%s 2>/dev/null || true

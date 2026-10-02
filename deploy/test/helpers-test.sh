@@ -423,6 +423,20 @@ check "without OCI_BUCKET nothing is uploaded" bk "$TMP/a.env" bk_upload "$TMP/a
 check "  … not even tried" test ! -s "$OCI_LOG"
 check "doctor reads the newest bucket backup's age" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' OCI_NEWEST_TIME='$(date -u +%Y-%m-%dT%H:%M:%S+00:00)' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^pass the newest backup in the bucket acs-backups is 0 days old'"
 check "  … warns when it is ten days old" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' OCI_NEWEST_TIME='$(date -u -d '10 days ago' +%Y-%m-%dT%H:%M:%S+00:00)' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^warn .* 10 days old'"
+# where each backup tool writes: deploy/backup.sh's <time>.db.gz snapshots and the helper's archives
+mkdir -p "$TMP/snaps" "$TMP/nosnaps" "$TMP/place-a" "$TMP/place-b"
+touch "$TMP/snaps/20261001T020000Z.db.gz"
+printf 'BACKUP_DIR=%s\n' "$TMP/snaps" >"$TMP/snaps.env"
+printf 'BACKUP_DIR=%s\n' "$TMP/nosnaps" >"$TMP/nosnaps.env"
+check "doctor finds deploy/backup.sh's snapshots in BACKUP_DIR" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/snaps.env' eval 'DOC_ENV=\$SHAPE_ENV; DOC_BACKUP_SETTINGS=1; doc_resources' | grep -q '^pass the newest backup is 0 days old'"
+check "  … and fails on an empty BACKUP_DIR" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/nosnaps.env' eval 'DOC_ENV=\$SHAPE_ENV; DOC_BACKUP_SETTINGS=1; doc_resources' | grep -q '^fail no backup in'"
+touch "$TMP/place-b/aprscaching-pocket-20261001T020000Z.tar.gz"
+check "doctor takes the newest backup across a shape's places" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/a.env' eval 'DOC_BACKUP_PLACES=(\"$TMP/place-a|aprscaching-pocket-*.tar.gz\" \"$TMP/place-b|aprscaching-pocket-*.tar.gz\"); doc_resources' | grep -q '^pass the newest backup is 0 days old (aprscaching-pocket-'"
+check "  … and only warns where a missing backup is a warning (Desktop)" \
+  bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/a.env' eval 'DOC_BACKUP_PLACES=(\"$TMP/place-a|aprscaching-desktop-*.tar.gz\"); DOC_BACKUP_MISSING=warn; doc_resources' | grep -q '^warn no backup in'"
 check "  … fails when the bucket has none" bash -c "$(declare -f bk); TMP='$TMP' DEPLOY='$DEPLOY' bk '$TMP/bucket.env' doc_bucket_backup_age acs-backups | grep -q '^fail no backup archive in the bucket'"
 
 check "MeshCom firmware 4.35t is new enough" bash -c ". '$DEPLOY/lib/doctor.sh'; fw_at_least 4.35t 4 35 t"

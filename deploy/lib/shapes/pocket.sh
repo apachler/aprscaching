@@ -62,6 +62,9 @@ shape_doctor_context() {
   DOC_DATA_DIR="$data"
   DOC_DB_FILE="$(env_file_get "$SHAPE_ENV" DB_PATH)"
   DOC_DB_FILE="${DOC_DB_FILE:-$data/aprscaching.db}"
-  DOC_BACKUP_DIR="${APRSCACHING_BACKUP_DIR:-$HOME/storage/shared/aprscaching-backups}"
-  DOC_BACKUP_GLOB="aprscaching-pocket-*.tar.gz"
+  # the phone's scheduled backup (pocket/backup.sh, shared storage) and deploy/aprscaching backup's archives
+  DOC_BACKUP_PLACES=(
+    "${APRSCACHING_BACKUP_DIR:-$HOME/storage/shared/aprscaching-backups}|aprscaching-pocket-*.tar.gz"
+    "$(backup_dest_default)|aprscaching-pocket-*.tar.gz"
+  )
 }

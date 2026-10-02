@@ -555,19 +555,22 @@ Disk, database and backups. The ingest box has none of these checks; Desktop has
 ### `resources.backup`
 
 A backup destination is set and its newest backup is at most 7 days old. Set `APRS_BACKUP_MAX_DAYS` in the
-doctor's environment for another limit. Where the doctor looks:
+doctor's environment for another limit. The doctor looks wherever either backup tool writes, and the newest file
+across those places counts:
 
-| Shape | Destination |
+| Shape | Where the doctor looks |
 |---|---|
-| Self-host, bare metal | `BACKUP_DIR` (the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`); else `OCI_BUCKET`, read with the `oci` CLI; else `BACKUP_BUCKET`, whose age it cannot read; else `deploy/backups/` |
-| Pocket | `APRSCACHING_BACKUP_DIR`, default `~/storage/shared/aprscaching-backups` |
+| Self-host, bare metal | `BACKUP_DIR`: the `<time>.db.gz` snapshots of `deploy/backup.sh` and the `aprscaching-*.tar.gz` archives of `deploy/aprscaching backup`. Else `OCI_BUCKET`, read with the `oci` CLI, under `archives/` and `db/`. Else `BACKUP_BUCKET` with `R2_ENDPOINT`, read with the `aws` CLI, under `db/`. Without the CLI it cannot read a bucket's age. Else `deploy/backups/` |
+| Pocket | the phone's scheduled backup in `APRSCACHING_BACKUP_DIR` (default `~/storage/shared/aprscaching-backups`), and the archives of `deploy/aprscaching backup` (`BACKUP_DIR`, else `deploy/backups/`) |
+| Desktop | the archives of `deploy/aprscaching backup` (`deploy/backups/`); without one it warns rather than fails |
 | Cloudflare split | none: it always passes, because D1 Time Travel keeps the database restorable for 30 days (7 on Workers Free) |
 
 - **Message:** `no backup destination is set` (fail).
-- **Message:** `no backup in <dir>` (fail).
-- **Message:** `no backup archive in the bucket <bucket>, or the bucket is unreachable` (fail).
-- **Message:** `the newest backup is <n> days old`, or `the newest backup in the bucket <bucket> is <n> days old`
-  (warn past the limit).
+- **Message:** `no backup in <dir> …` (fail; warn on Desktop).
+- **Message:** `no backup archive in the bucket <bucket>, or the bucket is unreachable`, or `no snapshot in the
+  bucket <bucket>, or the bucket is unreachable` (fail).
+- **Message:** `the newest backup is <n> days old`, `the newest backup in the bucket <bucket> is <n> days old`, or
+  `the newest snapshot in the bucket <bucket> is <n> days old` (warn past the limit).
 - **Fix:** run `deploy/aprscaching backup`, then schedule it. On the Oracle Cloud stack, check the timer:
   `systemctl status aprscaching-backup.timer`.
 - **See:** [What to back up](day-to-day/backups.md#what-to-back-up).
