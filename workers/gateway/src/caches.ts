@@ -36,6 +36,7 @@ import { rendezvousFor } from "./rendezvous.js";
 import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
 import { requireSysop } from "./admin.js";
+import { alreadyFound, logRefusal } from "./findrules.js";
 
 // ---- D1 row shapes (snake_case) ----
 export interface CacheDbRow {
@@ -498,8 +499,21 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?")
     .bind(cacheId)
-    .first<CacheRow & { code: string; title: string; created_at: number }>();
+    .first<
+      CacheRow & {
+        code: string;
+        title: string;
+        created_at: number;
+        status: string;
+        owner_call: string;
+        source: string | null;
+      }
+    >();
   if (!cache) return json({ error: "no such cache" }, { status: 404 });
+  const sessionAccount = sessionCall ? ((await sessionIdentity(req, env))?.accountId ?? null) : null;
+  // an archived or disabled cache takes no find or did-not-find, and an owner does not find their own cache
+  const refused = await logRefusal(env, cache, loggerCall, logType, sessionAccount);
+  if (refused) return json({ error: refused }, { status: 409 });
 
   const now = nowS();
 
@@ -558,6 +572,13 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
         tier: prior.tier,
         method: prior.verify_method,
       });
+    // a find counts once per person: another SSID of the same call, or another call on the account, holds it
+    const byPerson = await alreadyFound(env, cacheId, loggerCall, sessionAccount);
+    if (byPerson)
+      return json(
+        { error: `${cache.code} is already logged as found by ${byPerson}`, foundBy: byPerson },
+        { status: 409 },
+      );
   }
 
   // Only `found` logs are presence-verified; DNF/note/maintenance are plain records.

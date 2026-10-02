@@ -83,8 +83,8 @@ and the find counts from its arrival.
 the log moves to **Needs attention** with the reason. There you retry it, edit its comment, or discard it. A
 log goes only to the instance it was made on; signed in to another, it waits and says so.
 
-!!! note "Known issue"
-    An archived or disabled cache still accepts a queued find when it syncs.
+A cache archived or disabled while your find waited refuses it when it syncs: the find lands under **Needs
+attention**, with the reason.
 
 ## Where this helps
 

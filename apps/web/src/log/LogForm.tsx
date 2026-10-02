@@ -55,6 +55,8 @@ export function LogForm(props: {
   callsign: string;
   /** The cache's owner: may log maintenance (queued offline like any log, e.g. from the owner's pack). */
   isOwner?: boolean;
+  /** An archived or disabled cache takes no find and no did-not-find; a note stays possible. */
+  cacheStatus?: string;
   onLogged: () => void;
   onSignIn: () => void;
 }) {
@@ -201,32 +203,49 @@ export function LogForm(props: {
     );
   }
 
+  // the game's rules (the gateway holds them too): no find on an archived or disabled cache, none on your own
+  const inactive = props.cacheStatus && props.cacheStatus !== "active" ? props.cacheStatus : null;
+  const noFind = inactive
+    ? `This cache is ${inactive}: it takes no finds. You can still post a note.`
+    : props.isOwner
+      ? "You own this cache, so you don't log it as found. Post a note or a maintenance log."
+      : null;
   return (
     <Card className="logform">
-      <Button
-        variant="primary"
-        className="log-primary"
-        data-tour="log"
-        disabled={!!busy}
-        onClick={() => doLog("found")}
-      >
-        {busy === "found"
-          ? loc.waiting
-            ? `Locating… ${Math.floor(loc.waiting.elapsedMs / 1000)} s`
-            : "Logging…"
-          : "✓ Log a find"}
-      </Button>
-      <LocateStatus
-        waiting={loc.waiting}
-        problem={loc.problem}
-        onCancel={loc.cancel}
-        onSkip={loc.skipWait}
-        skipLabel="Log without location"
-      />
+      {noFind ? (
+        <p className="muted" role="status">
+          {noFind}
+        </p>
+      ) : (
+        <>
+          <Button
+            variant="primary"
+            className="log-primary"
+            data-tour="log"
+            disabled={!!busy}
+            onClick={() => doLog("found")}
+          >
+            {busy === "found"
+              ? loc.waiting
+                ? `Locating… ${Math.floor(loc.waiting.elapsedMs / 1000)} s`
+                : "Logging…"
+              : "✓ Log a find"}
+          </Button>
+          <LocateStatus
+            waiting={loc.waiting}
+            problem={loc.problem}
+            onCancel={loc.cancel}
+            onSkip={loc.skipWait}
+            skipLabel="Log without location"
+          />
+        </>
+      )}
       <div className="row between mt-3">
-        <Button variant="quiet" disabled={!!busy} onClick={() => doLog("dnf")}>
-          {busy === "dnf" ? "…" : "Couldn't find it"}
-        </Button>
+        {!noFind && (
+          <Button variant="quiet" disabled={!!busy} onClick={() => doLog("dnf")}>
+            {busy === "dnf" ? "…" : "Couldn't find it"}
+          </Button>
+        )}
         <Button variant="quiet" onClick={() => setNoteOpen((v) => !v)}>
           Add a note
         </Button>

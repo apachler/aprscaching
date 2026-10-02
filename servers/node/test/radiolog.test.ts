@@ -395,6 +395,40 @@ describe("hardening", () => {
     expect(commands()[1]).toMatchObject({ status: "rejected", reason: "AC-0001 is already logged as found" });
   });
 
+  it("an archived or disabled cache takes no FOUND or DNF over the radio, but a NOTE", async () => {
+    sqlite.prepare("UPDATE caches SET status='archived' WHERE code='AC-0001'").run();
+    await handleRadioMessage(env, onAir({ msgNo: "1" }));
+    await handleRadioMessage(env, onAir({ msgNo: "2", text: "DNF AC-0001" }));
+    await handleRadioMessage(env, onAir({ msgNo: "3", text: "NOTE AC-0001 is it gone?" }));
+    expect(commands()[0]).toMatchObject({ status: "rejected" });
+    expect(String(commands()[0]!.reason)).toMatch(/archived/);
+    expect(commands()[1]).toMatchObject({ status: "rejected" });
+    expect(logs().map((l) => l.log_type)).toEqual(["note"]);
+  });
+
+  it("an owner's FOUND on their own cache is refused", async () => {
+    sqlite
+      .prepare("INSERT INTO account_callsigns (account_id, callsign, added_at) VALUES ('acct-own','OE3OWN',?)")
+      .run(t);
+    sqlite
+      .prepare(
+        "INSERT INTO callsign_verifications (callsign, method, status, verified_at) VALUES ('OE3OWN','operator','verified',?)",
+      )
+      .run(t);
+    await handleRadioMessage(env, onAir({ src: "OE3OWN-7", msgNo: "1" }));
+    expect(commands()[0]).toMatchObject({ status: "rejected" });
+    expect(String(commands()[0]!.reason)).toMatch(/you own AC-0001/);
+    expect(logs()).toHaveLength(0);
+  });
+
+  it("a pending FOUND is refused on confirmation when the cache was archived meanwhile", async () => {
+    await handleRadioMessage(env, overIs({ msgNo: "1" }));
+    sqlite.prepare("UPDATE caches SET status='archived' WHERE code='AC-0001'").run();
+    const r = await decideRadioCommand(env, "acct-apr", Number(commands()[0]!.id), "confirm");
+    expect(r.status).toBe(409);
+    expect(logs()).toHaveLength(0);
+  });
+
   it("a pending FOUND from another SSID is refused on confirmation once the person has found the cache", async () => {
     await handleRadioMessage(env, overIs({ src: "OE8APR-9", msgNo: "1" }));
     await handleRadioMessage(env, onAir({ src: "OE8APR-7", msgNo: "2" }));

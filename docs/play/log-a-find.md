@@ -48,18 +48,20 @@ was Location-verified, so it is on record but does not count as verified.*
 **signed with your device key** means your browser signed the find with a key that stays on your device. You
 do nothing for it. The signature ties the find to your callsign, even if you move to another instance.
 
-### One find per callsign
+### One find per person
 
-Each cache takes one find from each callsign. The find is scored when you log it. Logging it again shows
-**You already logged this**, and your first find stays as it was scored.
+Each cache takes one find from each person: your base callsign, any SSID of it such as `OE8APR-7`, and any
+other callsign on your account share it. The find is scored when you log it. Logging it again with the same
+callsign shows **You already logged this**, and your first find stays as it was scored. A find under an SSID
+counts for you on the leaderboard, your profile and your badges.
 
-!!! note "Known issue"
-    In the app, the rule is one find per exact callsign, so `OE8APR` and `OE8APR-7` can each log the same
-    cache. Finds logged under an SSID do not count on the leaderboard.
+### Caches that take no find
 
-!!! note "Known issue"
-    Archived and disabled caches still accept finds, in the app and by radio. Owners can log finds on their
-    own caches, and those finds earn points and badges.
+- An **archived** or **disabled** cache takes no find and no **Couldn't find it**. You can still post a note.
+- You don't log your **own** cache as found. As its owner you post notes and maintenance logs.
+
+The app shows why in place of **✓ Log a find**. The same rules hold for a log from your radio, and for a log
+waiting offline: if the cache was archived meanwhile, the queued log lands under **Needs attention**.
 
 ## Log without signal
 
