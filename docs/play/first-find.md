@@ -1,37 +1,73 @@
 # Your first find
 
-This tutorial takes you from opening the app to a logged find. You need your callsign and a phone or a
-computer with a browser; nothing to install.
+This tutorial takes you from opening the app to your first logged find. You need your callsign and a phone
+with a web browser. At the end your find is in the cache's logbook, with a badge that says how it was verified.
 
-Everything below happens in your web browser — on your phone or your computer. Open
-**[aprscaching.net](https://aprscaching.net)** (or the address of your club's instance).
+## Before you start
 
-1. **Sign in.** Tap **Sign in** (top right), type your callsign, tap **Continue**. On first visit, tap
-   **Create account with a [passkey](../glossary.md#passkey)** — your phone or computer stores the key; there is no password. You can
-   add an email address for recovery, or use **Email me a link** instead of a passkey.
+- Your amateur-radio [callsign](../glossary.md#callsign).
+- A phone with a web browser and location turned on. A computer works for the first steps, but you log at the
+  cache.
+- The address of your instance: [aprscaching.net](https://aprscaching.net), or the address your club gives you.
 
-    ![Sign in with your callsign](../assets/shots/signin-mobile.webp){ width="280" loading=lazy }
-2. **Verify your callsign.** Open **You** and tap **Verify callsign** under your call (it opens
-   **Settings → Account**, where **verify** sits next to each callsign you hold). The
-   default is **On the air**: the app shows a message to send, such as `VERIFY 482913` to `APRSCG`. Transmit
-   it within 30 minutes as an APRS message from your radio or a [MeshCom](../glossary.md#meshcom) message from your node; your callsign
-   is verified once this instance's own receiving station hears it directly on the air. You can instead
-   publish a code under your `<call>.ampr.org` name, or sign with your ARRL [LoTW](../glossary.md#lotw) callsign certificate — and
-   a [sysop](../glossary.md#sysop) can verify you by hand. Details: [Verify your callsign](join.md#verify-your-callsign).
-3. **Find a cache.** Browse the map, or tap **Nearby** for the closest caches. Tap one to open it: you see
-   its description, difficulty and terrain, the hint, and **Navigate** to hand the coordinates to your maps
-   app.
+## Steps
 
-    ![A cache sheet on a phone](../assets/shots/detail-mobile.webp){ width="280" loading=lazy }
-4. **Log it.** At the spot, tap **✓ Log a find**. Allow location access when your browser asks — that is
-   how the app confirms you were there. The result shows how well the find is verified (see below).
-5. **Hide your own.** Tap **+ Hide a cache** (or **Hide** on a phone). On a phone the pin starts at your
-   location; otherwise tap or click the map where it is (or **Use my location**). Give it a
-   title, type, difficulty and terrain, and tap **Hide cache**.
+### Sign in
 
-More in [What is APRScaching?](index.md).
+1. Open the address in your browser. The front page opens.
+2. Tap **Sign in with your callsign**, or **Sign in** in the top bar. The sign-in sheet opens.
+3. Type your **Callsign** and tap **Continue**.
+
+    ![The sign-in sheet on a phone, with the callsign field and the Continue button](../assets/shots/signin-mobile.webp){ width="280" loading=lazy }
+
+4. Tap **Create account with a passkey**. Your phone asks for your fingerprint, face or PIN, and stores the
+   [passkey](../glossary.md#passkey). There is no password. You can tap **Email me a link** instead.
+
+The map opens. Your callsign shows in the top bar, marked **unverified**.
+
+### Verify your callsign
+
+1. Tap **You** in the bottom bar, then **Verify callsign**. **Settings → Account** opens.
+2. Tap **verify** next to your callsign and follow the steps. The usual way is a short APRS message from your
+   radio. [Verify your callsign](join.md#verify-your-callsign) explains every method.
+
+You can log finds before this step. A verified callsign puts your finds on the leaderboard and lets you log
+from your radio.
+
+### Choose your cache
+
+1. Tap **Map** and move the map to where you are.
+
+    ![The map on a phone, with cache markers and the bottom bar](../assets/shots/map-mobile.webp){ width="280" loading=lazy }
+
+2. Tap **Nearby**. The list shows the caches closest to the centre of the map, nearest first.
+
+3. Tap a cache. Its sheet opens with the description, **Difficulty**, **Terrain** and the **Hint**.
+
+    ![A cache sheet on a phone, with difficulty, terrain, coordinates and the Log button in the bottom bar](../assets/shots/detail-mobile.webp){ width="280" loading=lazy }
+
+4. Tap **Navigate**, then your maps app (**Google**, **Apple** or **OpenStreetMap**). The maps app opens with a
+   route to the cache.
+
+### Log the find
+
+1. At the cache, open its sheet again and tap **✓ Log a find**. The button shows **Locating…** while the phone
+   gets a fix.
+2. Tap **Allow** when the browser asks for your location. The phone's reading is what verifies your find.
+
+The result card opens. It shows **Logged**, a badge such as **Location-verified**, and one line that says why.
+
+## Check that it worked
+
+- The result card shows a badge. **Radio-verified** or **Location-verified** means the find counts as
+  verified. **Logged** means it is on record, but nothing placed you at the cache.
+- Scroll down the cache sheet to the **Logbook**. Your callsign is at the top.
+- If the card says **Saved** and **offline**, your phone had no signal. The find syncs when the signal returns.
+
+If the badge is **Logged**, the line under it says what was missing. [How finds are verified](verification.md)
+has tips.
 
 ## Next
 
+- [Log a find](log-a-find.md): DNFs, notes, and logging from your radio.
 - [Cache types](cache-types/index.md): what else you can hunt.
-- [Log a find](log-a-find.md): every way to log, including by radio.

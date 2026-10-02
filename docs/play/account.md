@@ -1,65 +1,100 @@
 # Your account
 
-Your account is your callsign. This page covers signing out, holding several callsigns, the licence badge, your
-settings and your data.
+This page is for every signed-in player. It shows how to sign out, hold several callsigns and read the licence
+badge. It also lists the settings and shows how to export or erase your data.
+
+Your account is your callsign. To create one, see [Join](join.md).
 
 ## Sign out
 
-**Settings → Account → Sign out** ends the session on this device. **Sign out everywhere** ends every
-session of your account on every device — use it after losing a phone or signing in on a shared computer.
-Changing your active callsign also signs your other devices out.
+Open **Settings → Account**.
+
+- **Sign out** ends the session on this device.
+- **Sign out everywhere** ends every session of your account, this device included. The app asks first. Use
+  it after you lose a phone or sign in on a shared computer.
+
+Switching your active callsign also signs your other devices out.
 
 ![The sign-in panel](../assets/shots/signin-desktop.webp){ width="720" loading=lazy }
 
-## The licence badge
-
-Beside each of your calls, **Settings → Account** shows whether a public licence register lists it:
-**licence confirmed (FCC)**, **licence expired**, or **not found in public registers**. It checks that the
-call is a real, current licence; it does not prove that you control it — only the verified tick does. Many
-countries publish no register, so "not found" is normal and never stops you from using the call. See
-[Licence registers](../reference/licence-sources.md).
-
 ## Several callsigns
 
-One account can hold several licensed base calls — a club call, or a call from another country:
+One account can hold several licensed base callsigns, such as a club call or a call from another country.
 
-- **Settings → Account → Add a callsign**, type it, tap **Add**, then **verify** it like the first one.
-- **Set active** chooses which call you are operating as. Past finds stay with the call they were logged
-  under.
-- SSIDs need no extra verification: `-7` (handheld), `-9` (mobile), `-10` ([IGate](../glossary.md#igate)) and so on inherit their
-  base call's status.
+1. Open **Settings → Account** and tap **Add a callsign**.
+2. Type the base callsign, for example `OE8APR`, and tap **Add**. The app says the call was added and asks
+   you to verify it.
+3. Tap **verify** next to the new callsign ([Verify your callsign](join.md#verify-your-callsign)).
 
-## Settings at a glance
+Each callsign is verified on its own. Verified callsigns show a tick.
 
-**Settings** (left rail on a computer, **You → Advanced → Settings** on a phone) is grouped; the search box at
-the top filters it. Signed out you see **Account** (with the way to sign in), **Display**, **Locale & time**,
-**Your data**, **Support the project** and **About & credits**; after signing in, the profile, station,
-radio and notification groups appear as well.
+**Set active** picks the callsign you operate as. The active one shows **active**. Switching never asks you
+to verify again. Your past finds stay with the callsign you logged them under.
+
+An [SSID](../glossary.md#ssid) needs no extra step. `-7` (handheld), `-9` (mobile), `-10`
+([IGate](../glossary.md#igate)) and the rest share their base callsign's verification.
+
+!!! note "Known issue"
+    Finds logged under an SSID, such as `OE8APR-7`, never reach the leaderboard. Profiles and ratings also
+    count each SSID apart from its base callsign.
+
+## The licence badge
+
+Next to each callsign, **Settings → Account** shows whether a public licence register lists it:
+
+| Badge | Meaning |
+|---|---|
+| **licence confirmed** | A register lists the call as licensed. The register's name follows, such as (FCC). |
+| **licence expired** | A register lists the call, but not as currently licensed. |
+| **not found in public registers** | No register this instance reads lists the call. |
+
+The badge shows that a licence exists. It does not prove that you control the call; only the verified tick
+does. Many countries publish no register, so **not found** is normal. It never stops you from using the call.
+See [Licence registers](../reference/licence-sources.md) for the registers.
+
+## All settings
+
+Open **Settings** from the left rail on a computer. On a phone, tap **You**, open **Advanced — the Shack** and
+tap **Settings**. The search box at the top filters the groups.
+
+Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, **Support the project** and
+**Help & credits**. Signed in, the other groups appear too.
 
 ![Settings while signed out](../assets/shots/set-account-desktop.webp){ width="720" loading=lazy }
 
-| Group | What's in it |
+| Group | What it holds |
 |---|---|
-| **Account** | Sign in/out, your callsigns, verification, email |
-| **Display** | Appearance (Auto, Light, Dark — the default — or Phosphor, a green-screen terminal), units, the CRT effect in Phosphor |
+| **Account** | Sign in and out, your callsigns, verification, your email |
+| **Display** | **Appearance** (Auto, Light, Dark or Phosphor), **Units**, and the CRT effect in Phosphor |
 | **Profile** | What others see on your profile |
-| **Home weather station** | Feed your own weather station into the network |
-| **My stations** | Your SSIDs and living caches |
-| **My radio (browser)** | [Connect your radio from the browser](../shack/my-radio.md) |
-| **Notifications** | Email digest, browser push, the watchlist |
-| **Locale & time** | Language, time format |
-| **Your data** | Export or erase everything about you |
-| **Support the project** | Donating, and the public ledger of what donations pay for — recognition only, never a feature gate |
-| **About & credits** | The manual, the source code, credits |
+| **Home weather station** | Your own weather station ([Weather stations](../shack/rig-weather.md#weather-stations)) |
+| **My stations** | Your stations and living caches |
+| **My radio (browser)** | A radio connected to the browser ([Connect your radio](../shack/my-radio.md)) |
+| **Notifications** | **Email digest**, **Browser push** and the **Watchlist** ([Alerts](community.md#alerts-and-the-watchlist)) |
+| **Locale & time** | Language, date and number format, time zone |
+| **Your data** | Export or erase your data |
+| **Support the project** | Donations, and what they pay for. A donation earns thanks, never features. |
+| **Help & credits** | The manual, the tour again, credits |
+
+Dark is the default appearance. Phosphor is a green-screen terminal look.
 
 ## Your data
 
-**Settings → Your data → Export my data** downloads a complete copy (`aprscaching-<CALL>.json`).
-**Erase my account** — after you confirm **Permanently erase …?** — removes your account, keys and personal
-data and anonymises your finds. It covers the whole account — every callsign it holds, with their SSIDs —
-and your passkeys stop working. Erasure also reaches instances that mirrored your records.
+Open **Settings → Your data**.
+
+- **Export my data** downloads a full copy of everything the instance holds about you. It includes how each of
+  your callsigns was verified.
+- **Erase my account** removes your account, your keys and your personal data. Your finds stay, but without
+  your name or callsign on them. The app asks **Permanently erase OE8APR?** first; tap **Erase everything**
+  to go ahead.
+
+!!! warning
+    Erasing cannot be undone. It covers the whole account: every callsign it holds, with their SSIDs. Your
+    passkeys stop working. Other instances that copied your records erase them too.
+
+Both need a recent browser. If the app says *This browser can't sign*, use a current Chrome, Firefox or Safari.
 
 ## Next
 
-- [The Shack at a glance](../shack/index.md): when you want to operate.
-- [Privacy by default](../about.md#privacy-by-default).
+- [The Shack at a glance](../shack/index.md): when you want to operate your radio.
+- [Privacy by default](../about.md#privacy-by-default): what the instance keeps and why.

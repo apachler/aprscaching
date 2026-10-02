@@ -1,62 +1,112 @@
 # Find a cache
 
-This page shows how to get around the map, open a cache and get to it.
+This page shows you how to get around the app, pick a cache on the map and get to it. It is for any player;
+at the end you stand at the cache with its sheet open, ready to log.
 
-## Finding your way around
+## Get around the app
 
-| On a phone (bottom bar)            | On a computer (left rail)                                 | What it is                                                                   |
-| ---------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Map**                            | **Map**                                                   | The map with caches and live stations                                        |
-| **Nearby**                         | **Nearby**                                                | The closest caches and stations, nearest first                               |
-| **Hide** / **Log** (centre button) | **+ Hide a cache** (top bar)                              | Hide a cache — or, when a cache is selected, log it                          |
-| **Activity**                       | **Activity**                                              | Recent finds, top finders, top corroborators                                 |
-| **You**                            | **You**, **Ranks**, **Messages**, **Shack**, **Settings** | Your profile; on a phone the Shack and Settings are under **You → Advanced** |
+| What                    | On a phone (bottom bar)                    | On a computer (left rail)                  |
+| ----------------------- | ------------------------------------------ | ------------------------------------------ |
+| The map                 | **Map**                                    | **Map**                                    |
+| The closest caches      | **Nearby**                                 | **Nearby**                                 |
+| Log the open cache      | **Log** (the centre button)                | **✓ Log a find** in the cache sheet        |
+| Hide a cache            | **Hide** (the centre button)               | **+ Hide a cache** in the top bar          |
+| Recent finds and ranks  | **Activity**                               | **Activity** and **Ranks**                 |
+| Your profile            | **You**                                    | **You**                                    |
+| Offline packs           | **Nearby** → **Offline packs**             | **Offline**                                |
+| Settings and the Shack  | **You** → **Advanced — the Shack**         | **Settings** and **Shack**                 |
 
-The **Manual** icon in the top bar opens this manual.
+The centre button shows **Log** while a cache is open and **Hide** otherwise. The **Manual** icon in the top
+bar opens this manual.
 
 ![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }
 
-## The map
+## Search the map
 
-- **Search & filter** (the funnel icon): search by code or title, filter by **Cache type**, include
-  **unvetted network data** from other instances, and turn on **Live layers** — live [APRS](../glossary.md#aprs) stations and
-  POTA/SOTA activations.
-  ![Search & filter](../assets/shots/filter-desktop.webp){ width="720" loading=lazy }
-- **Basemap**: **Map**, **Topo** or **Sat**.
-- **Map tools**: grid-square overlay, range rings, a ruler (distance and bearing), the day/night line, and
-  the bearing from your home locator to the selected cache.
-- The corner readout shows the cursor position as **Lat / Lon**, **Grid** (Maidenhead) and **MGRS**.
-- **Nearby → Download this area** keeps the caches of the current area for use without mobile coverage.
+- **Search**: type a cache code (`AC-1234`), a title, a callsign or a grid square (`JN76`) in the search box in
+  the top bar. Pick a result to open it.
+- **Filter**: tap the funnel icon. **Search & filter** opens.
+    - **Cache type** shows only the types you pick.
+    - **Include unvetted network data** adds caches from instances your sysop has not vetted yet.
+    - **Live layers** adds **Live stations** (APRS stations heard now), **MeshCom** nodes and **Activity
+      spots** (live POTA and SOTA activations).
+- **Basemap**: pick **Map**, **Topo** or **Sat**.
+- **Map tools**: a grid-square overlay, range rings, a ruler for distance and bearing, the day and night line,
+  and the bearing from your home locator to the open cache.
 
-## Open a cache
+The corner of the map shows the position under the cursor as latitude and longitude, grid square and MGRS.
 
-Tap a marker on the map, a row in **Nearby**, or a search result. The cache sheet shows:
+![Search and filter on a computer, with cache types and live layers](../assets/shots/filter-desktop.webp){ width="720" loading=lazy }
 
-- the title, type, source (**APRScaching** or **imported · …**), code (`AC-1234`) and **by** the owner;
-- **Difficulty** and **Terrain** (1–5);
+## List the closest caches
+
+Tap **Nearby**. The list shows the caches and stations closest to the centre of the map, nearest first, with
+distance and direction. Move the map to change the list.
+
+- **Caches** and **Stations** narrow the list.
+- **For adoption** lists caches whose owners are handing them on.
+
+## Open the cache sheet
+
+Tap a marker, a row in **Nearby**, or a search result. The cache sheet shows:
+
+- the title, the type, where the cache comes from (**APRScaching**, or **imported** from a programme such as
+  SOTA), the code and the owner;
+- **Difficulty** and **Terrain**, from 1 to 5;
 - how far away the cache is, once your location is known;
-- **Rating**, the **Hint** (tap to reveal), photos under **Media**;
-- **Verification · Location-verified or better** (tap to open) — what a find needs to count as verified here;
-- **Coordinates** with a copy button, the grid square, and **Navigate** to open your maps app
-  (Google, Apple or OpenStreetMap);
-- **Copy link** and **▦ QR** to share it;
-- the **Logbook** of everyone's finds, DNFs and notes.
+- **Rating**, the description, the **Hint** (tap to show it) and any photos;
+- **Verification**: the badge a find needs here to count as verified;
+- **Coordinates** with a copy button, the grid square, and **Navigate**;
+- **Copy link** and **▦ QR** to share the cache;
+- the **Logbook**: everyone's finds, did-not-finds and notes.
 
-![A cache sheet on a computer](../assets/shots/detail-desktop.webp){ width="720" loading=lazy }
+![A cache sheet on a computer, with coordinates, verification and the logbook](../assets/shots/detail-desktop.webp){ width="720" loading=lazy }
+
+## Get to the cache
+
+1. Tap **Navigate**. A list of maps apps opens.
+2. Tap **Maps app**, **Google**, **Apple** or **OpenStreetMap**. That app opens with the cache as the
+   destination.
+
+Without a maps app, tap **Show bearing & distance from here**. The sheet shows an arrow, the bearing and the
+distance from where you stand. **Update from here** refreshes it as you walk.
 
 ## The "you're near" prompt
 
-When you walk into a cache's area with the app open, a banner appears: **📍 You're near AC-1234 — …** with
-**Log it** and **Dismiss**.
+When your radio's APRS position is heard within 150 m of a cache, the app shows a banner: **You're near
+AC-1234**, with **Log it** and **Dismiss**. **Log it** opens the cache sheet.
 
-## Sharing and exporting
+The prompt needs three things:
 
-- **Search & filter → Share this view** copies a link to the current map view.
-- Each cache has **Copy link** and a printable **QR** code.
-- Caches as **GPX/KML**, station tracks, and your finds as **ADIF** (for your logbook program) are available
-  from the public [read API](../reference/api.md#public-read-api).
+- your radio beacons its position, and this instance hears it, over the air or over the internet;
+- the beacon carries the same callsign you are signed in with, SSID included;
+- the app is open on your phone or computer.
+
+The phone's own location does not trigger the prompt. Without a radio, use **Nearby** and the distance on the
+cache sheet instead.
+
+!!! note "Known issue"
+    The prompt matches the exact callsign. Signed in as `OE8APR`, a beacon from `OE8APR-7` does not
+    prompt you.
+
+## Caches from other instances
+
+Your instance can show caches from other instances in its network. Their sheet says **mirrored from** the
+other instance and shows the type, difficulty, terrain and owner. You cannot log them here: log your find on
+the cache's home instance. It shows here once that instance publishes it.
+
+## Share caches and views
+
+- **Copy link** copies a link to the cache.
+- **▦ QR** shows a QR code that opens the cache. **download SVG** saves it for printing.
+- **Search & filter** → **Share this view** copies a link to the current map, with its layers and filters.
+
+## Hunt without signal
+
+Before a trip into an area without mobile data, make an offline pack. [Hunt without signal](offline.md) shows
+how.
 
 ## Next
 
-- [Log a find](log-a-find.md).
-- [Hunting without signal](offline.md).
+- [Log a find](log-a-find.md): log what happened at the cache.
+- [How finds are verified](verification.md): what each badge needs.
