@@ -100,11 +100,7 @@ function item(r) {
     if (big > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("mini-cbor: integer beyond 2^53");
     arg = Number(big);
   } else if (info >= 27) {
-    if (major === 7) {
-      if (info === 20) return false;
-      if (info === 21) return true;
-      if (info === 22) return null;
-    }
+    // simple values (false/true/null) have info 20–22 and are read in the major-7 case below
     throw new Error("mini-cbor: unsupported head");
   }
   switch (major) {

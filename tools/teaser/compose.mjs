@@ -6,7 +6,6 @@
 // the canvas stream to webm. No ffmpeg dependency. Output: tour/aprscaching-ui-teaser.webm
 import { chromium } from "playwright";
 import fs from "node:fs";
-import path from "node:path";
 
 const OUT = (process.env.OUT ?? new URL("./tour", import.meta.url).pathname).replace(/\/?$/, "/");
 const EXE = process.env.PW_CHROMIUM || undefined;

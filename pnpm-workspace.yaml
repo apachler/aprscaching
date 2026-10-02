@@ -29,3 +29,6 @@ overrides:
   browserslist: "^4.28.7"
   baseline-browser-mapping: "^2.11.0"
   undici@>=7.28.0 <7.29.1: "^7.29.1"
+  # Mermaid's parser (chevrotain) pins an older lodash-es with published advisories; the web app never
+  # uses the affected template or unset/omit paths, but the floor keeps the lockfile clean.
+  lodash-es@<4.18.0: "^4.18.1"
