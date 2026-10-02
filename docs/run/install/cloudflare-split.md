@@ -40,7 +40,7 @@ cloud VM may add an APRS-IS-only feed the same way, never the RF bridge.
        `workers/gateway/wrangler.toml`. While it waits, also set `APP_URL` under `[vars]` to the app's URL.
        The embeddable map widget (`/embed`) is served by the Worker but loads MapLibre from the app at
        `APP_URL`; the app's `_headers` file lets Pages serve that copy to the Worker's origin;
-    2. creates the R2 bucket `aprscaching-media`;
+    2. creates the R2 buckets `aprscaching-assets` (the offline map's archive) and `aprscaching-media` (cache media);
     3. asks for `INGEST_SECRET`, `OPERATOR_SECRET` and `SESSION_SECRET` (`wrangler secret put`). Give three
        different values, each from `openssl rand -hex 32`;
     4. applies the migrations to D1, deploys the Worker stamped with its source commit, builds the web app
