@@ -15,6 +15,7 @@ import {
 import {
   verifyFind,
   DEFAULT_POLICY,
+  instanceMinTier,
   plausiblePresence,
   type CacheRow,
   type PositionRow,
@@ -355,6 +356,8 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
   const stages = await stageCount(env, id);
   const detail: CacheDetail = {
     ...toSummary(row),
+    // the minimum a find meets: the cache's own, else the instance's
+    minTrust: (row.min_trust as "A" | "B" | null) ?? instanceMinTier(env),
     hint: row.hint,
     description: row.description,
     externalId: row.external_id,
@@ -407,6 +410,17 @@ async function livingStationRefusal(
   return own ? null : `${cs} is not one of your stations: add it under Settings → My stations first`;
 }
 
+/**
+ * Heritage places (SOTA summits, POTA parks, WWFF reserves, bunkers, castles) come from the sysop's import of the
+ * programmes' own lists, so their badges stand for the real place. A player hides a cache there as a traditional
+ * one; only the sysop or the instance's own import creates or retypes one.
+ */
+const HERITAGE_TYPES = new Set(["sota", "pota", "wwff", "bunker", "castle"]);
+async function heritageRefusal(req: Request, env: Env, type: string): Promise<string | null> {
+  if (!HERITAGE_TYPES.has(type) || ingestOk(req, env) || !(await requireSysop(req, env))) return null;
+  return "heritage places come from the sysop's import: hide a cache at one as a traditional cache";
+}
+
 // ---------------------------------------------------------------- create ("hide a cache")
 /** The form of the codes the instance mints, `AC-` and the cache id. */
 const MINTED_CODE = /^AC-\d+$/i;
@@ -420,6 +434,8 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
   if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
   const notOwn = await livingStationRefusal(req, env, b.type, b.stationCall);
   if (notOwn) return json({ error: notOwn }, { status: 403 });
+  const heritage = await heritageRefusal(req, env, b.type);
+  if (heritage) return json({ error: heritage }, { status: 403 });
   if (b.code) {
     // An explicit code is for imports by the instance itself. A player who picked one could take a code the
     // instance mints later, or one that reads like another cache's.
@@ -501,7 +517,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
     station_call: b.stationCall ?? existing.station_call,
     hint: b.hint ?? existing.hint,
     description: b.description ?? existing.description,
-    min_trust: b.minTrust ?? existing.min_trust,
+    min_trust: b.minTrust === undefined ? existing.min_trust : b.minTrust, // null: back to the instance's minimum
     fed_scope: b.fedScope ?? existing.fed_scope,
     drive_in: b.driveIn === undefined ? existing.drive_in : b.driveIn ? 1 : 0,
     country: b.country ?? existing.country,
@@ -512,6 +528,10 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
   if (m.type === "aprs_living" && (m.type !== existing.type || m.station_call !== existing.station_call)) {
     const notOwn = await livingStationRefusal(req, env, m.type, m.station_call);
     if (notOwn) return json({ error: notOwn }, { status: 403 });
+  }
+  if (m.type !== existing.type) {
+    const heritage = await heritageRefusal(req, env, m.type);
+    if (heritage) return json({ error: heritage }, { status: 403 });
   }
   const now = nowS();
   await env.DB.prepare(
@@ -772,12 +792,17 @@ export async function scoreFind(
     for (const r of stations.results) loggerOwnIgates.add(baseCall(r.callsign));
   }
 
-  const result = verifyFind(cache, appGeo, {
-    loggerPositions: attest(lp.results),
-    cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
-    loggerOwnIgates,
-    now: at, // app-reading freshness is judged against log time
-  });
+  const result = verifyFind(
+    cache,
+    appGeo,
+    {
+      loggerPositions: attest(lp.results),
+      cacheStationPositions: cacheStationPositions ? attest(cacheStationPositions) : undefined,
+      loggerOwnIgates,
+      now: at, // app-reading freshness is judged against log time
+    },
+    { ...DEFAULT_POLICY, minTier: instanceMinTier(env) },
+  );
 
   // The gating IGate of a locally verified Tier-A find (its matched RF position) — credited on the
   // corroborator board. A peer-corroborated find's IGate is captured below (cross-instance credit).

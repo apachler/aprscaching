@@ -63,18 +63,13 @@ hide earns the **Hider** badge on your profile.
 
 Difficulty and terrain also add to a finder's points ([Ranks](community.md#ranks)).
 
-The hide form offers Traditional, Multi-stage, Living (APRS), Audio, Virtual, SOTA summit and POTA park.
+The hide form offers Traditional, Multi-stage, Living (APRS), Audio and Virtual. SOTA summits, POTA parks and
+the other [heritage places](cache-types/heritage.md) come from the sysop's import, so their badges stand for
+the real place. To hide a cache on a summit, hide it as a traditional cache.
 
-!!! note "Known issue"
-    Any player can hide a SOTA summit or POTA park. A find on one earns the summit or park badge, as a find on
-    the real summit or park does.
-
-Every cache needs a find that is **Location-verified** or better to count as verified
-([How finds are verified](verification.md)). The hide form has no setting for this.
-
-!!! note "Known issue"
-    The minimum is fixed at **Location-verified** on every instance. A cache's minimum can be raised to
-    **Radio-verified**, but not in the app, and once raised it cannot go back.
+A find counts as verified from the instance's minimum up, **Location-verified** unless your sysop asks for
+**Radio-verified** ([How finds are verified](verification.md)). Under **Advanced**, the switch **Radio-verified
+finds only** sets your cache's own minimum to **Radio-verified**, whatever the instance's is.
 
 ## Who sees your cache
 

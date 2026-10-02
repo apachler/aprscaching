@@ -44,6 +44,9 @@ export const DEFAULT_POLICY: VerifyPolicy = {
   appMaxAgeSec: 120, // the in-app reading must be roughly contemporaneous with the log
 };
 
+/** The instance's minimum tier (`MIN_TRUST`): `A` when the sysop asks for Radio-verified finds, else `B`. */
+export const instanceMinTier = (env: { MIN_TRUST?: string }): "A" | "B" => (env.MIN_TRUST === "A" ? "A" : "B");
+
 export interface PositionRow {
   id: number;
   callsign: string;

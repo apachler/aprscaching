@@ -116,7 +116,7 @@ export const UpdateCacheRequest = z.object({
   stationCall: Callsign.optional(),
   hint: z.string().max(500).optional(),
   description: z.string().max(4000).optional(),
-  minTrust: MinTrust.optional(),
+  minTrust: MinTrust.nullable().optional(), // null: back to the instance's minimum
   fedScope: FedScope.optional(), // change federation scope
   driveIn: z.boolean().optional(),
   country: z.string().trim().max(56).optional(),

@@ -47,6 +47,7 @@ export function HidePanel(props: {
   const [tags, setTags] = useState("");
   const [ratingPolicy, setRatingPolicy] = useState<"finders" | "all" | "off">("finders");
   const [rendezvous, setRendezvous] = useState(false);
+  const [radioOnly, setRadioOnly] = useState(false);
   const [fedScope, setFedScope] = useState<FedScope>("public");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -122,6 +123,7 @@ export function HidePanel(props: {
         tags: tagList.length ? tagList : undefined,
         ratingPolicy,
         rendezvous: type === "aprs_living" ? rendezvous : undefined,
+        minTrust: radioOnly ? "A" : undefined,
       });
       props.onCreated(cache);
     } catch (e) {
@@ -291,7 +293,13 @@ export function HidePanel(props: {
             ))}
           </div>
         )}
-        <h4 className="set-subh">Rating &amp; federation</h4>
+        <h4 className="set-subh">Verification, rating &amp; federation</h4>
+        <Row
+          label="Radio-verified finds only"
+          help="A find counts as verified only when a receiving station heard the finder there. Off: this instance's minimum applies."
+        >
+          <Switch label="Radio-verified finds only" checked={radioOnly} onChange={setRadioOnly} />
+        </Row>
         <label>
           Who can rate
           <select value={ratingPolicy} onChange={(e) => setRatingPolicy(e.target.value as "finders" | "all" | "off")}>

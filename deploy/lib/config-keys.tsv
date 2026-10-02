@@ -19,6 +19,7 @@ FED_REGISTRY_DNS	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,deskt
 FED_OPERATOR	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Operator label this instance publishes in /.well-known
 FED_APRS_CALL	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	APRS service callsign this instance publishes in /.well-known
 FIRST_PARTY_SITES	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated calls of receiving sites you operate and attest (Tier A)
+MIN_TRUST	enum	gateway	B	A|B	0	0	selfhost,cloudflare,baremetal,pocket,desktop	Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)
 FED_PEERS	list	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated base URLs of federation peers to sync from
 FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 learns the peers that trusted peers advertise
 FED_CORROBORATION_QUORUM	int	gateway	2		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Distinct corroborating identities required to promote a find to Tier A

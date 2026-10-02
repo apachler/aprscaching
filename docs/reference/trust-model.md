@@ -20,8 +20,9 @@ Every find carries exactly one tier, graded by the evidence behind it:
 
 - A bare internet packet never reaches Tier B on its own: Tier B requires the independent app reading, and
   Tier A requires independent RF evidence.
-- A find counts as verified from **Tier B** up on every instance. A cache owner may raise that to Tier A for
-  one cache with `min_trust`.
+- A find counts as verified from the instance's minimum up: **Tier B** by default, **Tier A** with
+  `MIN_TRUST=A`. A cache's own `min_trust`, set by its hider (**Radio-verified finds only**), takes
+  precedence; clearing it returns the cache to the instance's minimum.
 - A radio message carries no device reading, so a find logged by radio reaches Tier A or C, never B.
 - The app shows the names everywhere a find's trust appears, with the letter as a secondary label.
 
