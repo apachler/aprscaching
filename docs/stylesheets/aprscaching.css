@@ -47,6 +47,11 @@
   --md-admonition-fg-color: var(--ink);
 }
 
+/* a drawn diagram replaces its source: Material gives every pre a display, which would override [hidden] */
+.md-typeset pre.diagram[hidden] {
+  display: none;
+}
+
 /* a drawn diagram (docs/javascripts/diagrams.js) scales down to the column */
 .md-typeset .diagram-drawn {
   margin: 1em 0;
