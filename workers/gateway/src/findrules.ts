@@ -43,8 +43,6 @@ export async function alreadyFound(
   return r?.call ?? null;
 }
 
-type LogKind = "found" | "dnf" | "note" | "maintenance" | "enabled" | "disabled";
-
 /**
  * Why this log is refused, or null when it may be written: a find or a did-not-find on a cache that is not active,
  * or a find by the cache's owner (the owner's base call, or a call on the owner's account).
@@ -53,7 +51,8 @@ export async function logRefusal(
   env: Env,
   cache: { code: string; status: string; owner_call: string; source?: string | null },
   loggerCall: string,
-  logType: LogKind | string,
+  /** found, dnf, note, maintenance, enabled or disabled; over the radio, the command (found, dnf, note) */
+  logType: string,
   accountId: string | null,
 ): Promise<string | null> {
   if ((logType === "found" || logType === "dnf") && cache.status !== "active")
