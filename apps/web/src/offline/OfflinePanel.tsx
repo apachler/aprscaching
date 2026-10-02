@@ -12,7 +12,7 @@ import type * as maplibregl from "maplibre-gl";
 import { maidenhead } from "../map/geo.js";
 import { API_BASE, offlineReady } from "../api.js";
 import { useFmt } from "../format.js";
-import { TYPE_META, TYPE_ORDER } from "../cacheTypes.js";
+import { TYPE_META, FILTER_TYPES } from "../cacheTypes.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import {
   Advanced,
@@ -410,7 +410,7 @@ function NewPack(props: { onSaved: () => void; disabled: boolean }) {
       </p>
       <Advanced label="Only some cache types">
         <div className="pack-types">
-          {TYPE_ORDER.map((t) => (
+          {FILTER_TYPES.map((t) => (
             <label key={t}>
               <input
                 type="checkbox"

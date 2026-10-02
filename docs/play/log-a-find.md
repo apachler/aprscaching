@@ -84,7 +84,8 @@ usually `APRSCG`; **You** → **Logs sent over the air** names the one your inst
 | `NOTE AC-1234 log is full` | a note; the text is required          |
 | `HELP`                     | a reply with the command list         |
 
-The dash in the code is optional. A MeshCom direct message to the service call works the same way.
+The dash in a cache code is optional. A heritage place takes its reference as the code, for example
+`FOUND OE/ST-001`. A MeshCom direct message to the service call works the same way.
 
 The log goes to the account that holds your callsign, with any SSID. Your callsign must be verified first;
 otherwise the message is not logged.

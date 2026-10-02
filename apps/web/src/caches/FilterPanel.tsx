@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { TYPE_ORDER, TYPE_META, typeGlyph } from "../cacheTypes.js";
+import { FILTER_TYPES, TYPE_META, typeGlyph } from "../cacheTypes.js";
 import { useTheme } from "../format.js";
 import { Panel, useToast, Button, Icon, ChipToggle } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
@@ -71,7 +71,7 @@ export function FilterPanel(props: {
       </label>
       <h4>Cache type</h4>
       <div className="badges">
-        {TYPE_ORDER.map((t) => {
+        {FILTER_TYPES.map((t) => {
           const m = TYPE_META[t];
           const on = filters.types.includes(t);
           return (

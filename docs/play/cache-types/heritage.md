@@ -57,9 +57,8 @@ A verified find on a heritage place earns its badge:
 | Bunker | **Bunker hunter** |
 | Castle | **Castle hunter** |
 
-!!! note "Known issue"
-    The radio takes cache codes made of letters, a dash and digits, such as `AT-0001`. A code with a slash,
-    such as a SOTA summit's, cannot be logged by radio. Log those in the app.
+By radio, send the place's reference as its code, for example `FOUND OE/ST-001` for a SOTA summit or
+`FOUND OEFF-0123` for a WWFF reserve. Upper or lower case both work.
 
 ## What a hider sets
 
@@ -96,10 +95,6 @@ Each type has its own pin colour and symbol. The Phosphor theme swaps some symbo
 | WWFF reserve | forest green | flower (❀) | spade (♠) |
 | Bunker | grey | square in a square (▣) | filled square (■) |
 | Castle | clay | chess rook (♜) | hash (#) |
-
-!!! note "Known issue"
-    **WWFF reserve**, **Bunker** and **Castle** are missing from the type filter in **Search & filter** and in
-    offline packs. With no type picked, they show. Once you pick types, they are hidden.
 
 ## Next
 
