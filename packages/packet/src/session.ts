@@ -65,6 +65,12 @@ export class TerminalSession {
   private links = new Map<number, ConnectedLink>();
   private nextId = 1;
   readonly local: Ax25Address;
+  /**
+   * Whether this station may transmit. Off, the session only listens: the monitor records every frame, but no
+   * frame leaves (no connect, no answer to an incoming connect, no text, no acknowledgement). The caller turns it
+   * on only for a licensed, control-verified callsign.
+   */
+  private txAllowed = true;
 
   constructor(
     myCall: string,
@@ -82,8 +88,23 @@ export class TerminalSession {
     this.local = parseAddr(myCall);
   }
 
+  /** Allow or forbid transmitting. Forbidding it also drops the open connections, without a word on the air. */
+  allowTransmit(on: boolean): void {
+    if (this.txAllowed === on) return;
+    this.txAllowed = on;
+    if (!on) {
+      this.links.clear();
+      for (const c of this.channels) c.state = "disconnected";
+    }
+    this.notify();
+  }
+  get canTransmit(): boolean {
+    return this.txAllowed;
+  }
+
   /** Open a new connected-mode channel to a remote station; returns its id. */
   connect(remoteCall: string): number {
+    if (!this.txAllowed) throw new Error("transmit is not allowed: verify your callsign to connect");
     const id = this.makeChannel(parseAddr(remoteCall));
     this.links.get(id)!.connect();
     this.notify();
@@ -98,7 +119,10 @@ export class TerminalSession {
       this.local,
       remote,
       {
-        send: (f) => this.transport.send(f),
+        // the one place a frame leaves: nothing does while transmitting is not allowed
+        send: (f) => {
+          if (this.txAllowed) this.transport.send(f);
+        },
         deliver: (info) => {
           this.append(ch, "rx", toText(info));
           this.notify();
@@ -158,7 +182,7 @@ export class TerminalSession {
       // an incoming SABM from a station we have no channel for → accept the call (auto-open a channel).
       // Bound the live channel count — at the cap, first reap any disconnected channels
       // (the UI keeps a just-closed one; only stale ones are collected); if still full, drop the SABM.
-      if (!ch && f.type === "SABM") {
+      if (!ch && f.type === "SABM" && this.txAllowed) {
         if (this.channels.length >= this.channelCap) this.reapDisconnected();
         if (this.channels.length >= this.channelCap) {
           this.notify();

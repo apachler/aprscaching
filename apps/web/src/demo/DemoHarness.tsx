@@ -128,7 +128,7 @@ export function DemoHarness({ which }: { which: string }) {
         }
         wide
       >
-        <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
+        <PacketTerminal callsign={ME} verified makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
       </AppShell>
     );
   }
@@ -191,7 +191,7 @@ export function DemoHarness({ which }: { which: string }) {
               </h2>
               <span className="spacer" />
             </div>
-            <PacketTerminal callsign={ME} makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
+            <PacketTerminal callsign={ME} verified makeTransport={makeSimTransport(ME)} autoConnect="OE8XBM-7" />
           </aside>
         )}
         {showBbs && bbsReady && (
