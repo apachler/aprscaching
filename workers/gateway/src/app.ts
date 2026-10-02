@@ -42,6 +42,7 @@ import {
   handleStationWxKey,
   handleStationToCache,
   handleMeCache,
+  handleAdminAddStation,
 } from "./stations_mine.js";
 import { startAprsChallenge, aprsVerifyStatus, handleOperatorVerify } from "./callsign.js";
 import {
@@ -522,6 +523,7 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/ingest" && m === "POST") return handleIngest(req, env, ctx);
   if (p === "/ingest/check" && m === "GET") return handleIngestCheck(req, env);
   if (p === "/ingest/enroll" && m === "POST") return handleEnroll(req, env);
+  if (p === "/api/admin/stations" && m === "POST") return handleAdminAddStation(req, env);
   if (p === "/api/admin/boxes" && m === "GET") return handleListBoxes(req, env);
   if (p === "/api/admin/federation/sync" && m === "GET") return handleSyncStatus(req, env);
   if (p === "/api/admin/federation/sync" && m === "POST") return handleSyncNow(req, env, ctx);

@@ -16,7 +16,8 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json, asStr } from "./app.js";
-import { sessionIdentity } from "./auth.js";
+import { sessionIdentity, baseHolder } from "./auth.js";
+import { requireSysop } from "./admin.js";
 import { sanitizeBio } from "./profile.js";
 import { makeWxKey, wxUrls } from "./wx.js";
 import { isCallsignVerified } from "./callsign.js";
@@ -105,6 +106,91 @@ async function placeOnMap(
 }
 
 /** GET list / POST create. */
+/**
+ * Why this account may not list a station, or null when it may: a station belongs to a callsign the account holds
+ * and has verified (OE8APR-9 needs OE8APR, held and verified), so nobody lists another operator's station and, from
+ * it, a living cache that follows them. A club's station is listed by an account holding the club call, or by the
+ * sysop for a member (POST /api/admin/stations).
+ */
+async function stationRefusal(env: Env, acct: string, callsign: string): Promise<string | null> {
+  if (!CALLSIGN_RE.test(callsign)) return null; // not a callsign at all: addStation's check answers that
+  const base = baseCall(callsign);
+  if ((await baseHolder(env, base)) !== acct)
+    return `${base} is not a callsign on your account: add it under Settings → Account, or ask your sysop to list the station for you`;
+  if (!(await isCallsignVerified(env, base)))
+    return `verify ${base} first: only a verified callsign's stations are listed`;
+  return null;
+}
+
+/** Add a station to an account's registry: the checks every way in shares, then the row and its map entry. */
+async function addStation(env: Env, acct: string, b: Record<string, unknown>): Promise<Response> {
+  const callsign = asStr(b.callsign).trim().toUpperCase();
+  if (!CALLSIGN_RE.test(callsign))
+    return json({ error: "enter a valid callsign (optionally with an SSID, e.g. OE8APR-1)" }, { status: 400 });
+  // a given callsign lives in one operator's registry
+  const taken = await env.DB.prepare("SELECT account_id FROM account_stations WHERE callsign = ?")
+    .bind(callsign)
+    .first<{ account_id: string }>();
+  if (taken) return json({ error: `${callsign} is already registered` }, { status: 409 });
+  const lat = coord(b.lat, -90, 90),
+    lon = coord(b.lon, -180, 180);
+  if (!lat.ok || !lon.ok) return json({ error: "latitude must be -90..90 and longitude -180..180" }, { status: 400 });
+  const roles = parseRoles(b.roles);
+  const symbol = typeof b.symbol === "string" && b.symbol.trim() ? b.symbol.trim().slice(0, 2) : null;
+  const description = sanitizeBio(b.description);
+
+  // Location is required at creation. If omitted, adopt the live fix of a station already heard on
+  // the map (the "pick an existing station" path) — else ask for one.
+  let latV = lat.value,
+    lonV = lon.value,
+    adopted = false;
+  if (latV == null || lonV == null) {
+    const heard = await env.DB.prepare("SELECT lat, lon FROM stations WHERE callsign = ?")
+      .bind(callsign)
+      .first<{ lat: number | null; lon: number | null }>();
+    if (heard?.lat != null && heard.lon != null) {
+      latV = heard.lat;
+      lonV = heard.lon;
+      adopted = true;
+    } else
+      return json(
+        { error: "set a location, or pick a station that has already been heard on the map" },
+        { status: 400 },
+      );
+  }
+
+  const sym = symbolForRoles(roles, symbol);
+  const ts = nowS();
+  const ins = await env.DB.prepare(
+    "INSERT INTO account_stations (account_id, callsign, lat, lon, symbol, description, roles, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+  )
+    .bind(acct, callsign, latV, lonV, sym, description, roles.join(","), ts, ts)
+    .run();
+  // Place it on the live map. Adopting keeps the heard station's own fix/symbol; a fresh station is
+  // pinned at the given coords with its role symbol. APRS beacons update it from here (ingest.ts).
+  await placeOnMap(env, callsign, latV, lonV, sym, !adopted);
+  const row = await env.DB.prepare("SELECT * FROM account_stations WHERE id = ?")
+    .bind(ins.meta.last_row_id)
+    .first<StationRow>();
+  return json({ station: toStation(row!) }, { status: 201 });
+}
+
+/**
+ * POST /api/admin/stations — the sysop lists a station for a member: `{ owner, callsign, lat?, lon?, roles?, … }`,
+ * where `owner` is any callsign the member's account holds. For a club station run by a member who does not hold
+ * the club call; the member then manages it under My stations like their own.
+ */
+export async function handleAdminAddStation(req: Request, env: Env): Promise<Response> {
+  const denied = await requireSysop(req, env);
+  if (denied) return denied;
+  const b = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!b) return json({ error: "bad request" }, { status: 400 });
+  const owner = baseCall(asStr(b.owner).trim().toUpperCase());
+  const acct = owner ? await baseHolder(env, owner) : null;
+  if (!acct) return json({ error: `no account holds ${owner || "that callsign"}` }, { status: 404 });
+  return addStation(env, acct, b);
+}
+
 export async function handleMyStations(req: Request, env: Env): Promise<Response> {
   const acct = (await sessionIdentity(req, env))?.accountId ?? null;
   if (!acct) return json({ error: "sign in to manage your stations" }, { status: 401 });
@@ -112,56 +198,9 @@ export async function handleMyStations(req: Request, env: Env): Promise<Response
   if (req.method === "POST") {
     const b = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     if (!b) return json({ error: "bad request" }, { status: 400 });
-    const callsign = asStr(b.callsign).trim().toUpperCase();
-    if (!CALLSIGN_RE.test(callsign))
-      return json({ error: "enter a valid callsign (optionally with an SSID, e.g. OE8APR-1)" }, { status: 400 });
-    // A station's callsign need not be the operator's own — clubs, inherited infra, adopted stations.
-    // Uniqueness still holds: a given callsign lives in one operator's registry.
-    const taken = await env.DB.prepare("SELECT account_id FROM account_stations WHERE callsign = ?")
-      .bind(callsign)
-      .first<{ account_id: string }>();
-    if (taken) return json({ error: `${callsign} is already registered` }, { status: 409 });
-    const lat = coord(b.lat, -90, 90),
-      lon = coord(b.lon, -180, 180);
-    if (!lat.ok || !lon.ok) return json({ error: "latitude must be -90..90 and longitude -180..180" }, { status: 400 });
-    const roles = parseRoles(b.roles);
-    const symbol = typeof b.symbol === "string" && b.symbol.trim() ? b.symbol.trim().slice(0, 2) : null;
-    const description = sanitizeBio(b.description);
-
-    // Location is required at creation. If omitted, adopt the live fix of a station already heard on
-    // the map (the "pick an existing station" path) — else ask for one.
-    let latV = lat.value,
-      lonV = lon.value,
-      adopted = false;
-    if (latV == null || lonV == null) {
-      const heard = await env.DB.prepare("SELECT lat, lon FROM stations WHERE callsign = ?")
-        .bind(callsign)
-        .first<{ lat: number | null; lon: number | null }>();
-      if (heard?.lat != null && heard.lon != null) {
-        latV = heard.lat;
-        lonV = heard.lon;
-        adopted = true;
-      } else
-        return json(
-          { error: "set a location, or pick a station that has already been heard on the map" },
-          { status: 400 },
-        );
-    }
-
-    const sym = symbolForRoles(roles, symbol);
-    const ts = nowS();
-    const ins = await env.DB.prepare(
-      "INSERT INTO account_stations (account_id, callsign, lat, lon, symbol, description, roles, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-    )
-      .bind(acct, callsign, latV, lonV, sym, description, roles.join(","), ts, ts)
-      .run();
-    // Place it on the live map. Adopting keeps the heard station's own fix/symbol; a fresh station is
-    // pinned at the given coords with its role symbol. APRS beacons update it from here (ingest.ts).
-    await placeOnMap(env, callsign, latV, lonV, sym, !adopted);
-    const row = await env.DB.prepare("SELECT * FROM account_stations WHERE id = ?")
-      .bind(ins.meta.last_row_id)
-      .first<StationRow>();
-    return json({ station: toStation(row!) }, { status: 201 });
+    const refused = await stationRefusal(env, acct, asStr(b.callsign).trim().toUpperCase());
+    if (refused) return json({ error: refused }, { status: 403 });
+    return addStation(env, acct, b);
   }
 
   const pg = parsePage(new URL(req.url), 50, 200);
@@ -350,6 +389,8 @@ export async function handleMeCache(req: Request, env: Env): Promise<Response> {
   if (listed && listed.account_id !== acct)
     return json({ error: `${stationCall} is registered to another operator's stations` }, { status: 409 });
   if (!listed) {
+    const refused = await stationRefusal(env, acct, stationCall);
+    if (refused) return json({ error: refused }, { status: 403 });
     const now = nowS();
     await env.DB.prepare(
       "INSERT INTO account_stations (account_id, callsign, lat, lon, roles, created_at, updated_at) VALUES (?,?,?,?, '', ?,?)",

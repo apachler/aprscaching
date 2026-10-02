@@ -654,6 +654,15 @@ export interface StationInput {
   description?: string | null;
   roles?: StationRole[];
 }
+/** The sysop lists a station for a member (a club station run by someone who does not hold the club call). */
+export function adminAddStation(s: {
+  owner: string;
+  callsign: string;
+  lat?: number;
+  lon?: number;
+}): Promise<{ station: OperatedStation }> {
+  return call(`/api/admin/stations`, { method: "POST", body: JSON.stringify(s) });
+}
 export function listMyStations(
   cursor?: string | null,
   limit = 50,
