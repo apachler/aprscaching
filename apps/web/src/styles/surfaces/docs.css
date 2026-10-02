@@ -75,7 +75,10 @@
   .docs-body .doc-diagram {
     margin: var(--space-md) 0;
   }
-  .docs-body .doc-diagram[data-drawn] svg {
+  .docs-body .doc-diagram-drawn[data-drawing] {
+    visibility: hidden;
+  }
+  .docs-body .doc-diagram-drawn svg {
     display: block;
     max-width: 100%;
     height: auto;

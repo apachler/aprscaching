@@ -11,7 +11,6 @@
   var blocks = Array.prototype.slice.call(document.querySelectorAll("pre.diagram"));
   if (!blocks.length) return;
   var here = document.currentScript && document.currentScript.src;
-  var seq = 0;
 
   function hex(name) {
     var probe = document.createElement("span");
@@ -71,6 +70,7 @@
     window.mermaid.initialize({
       startOnLoad: false,
       securityLevel: "strict",
+      suppressErrorRendering: true, // a diagram that fails keeps its source, not Mermaid's error picture
       theme: "base",
       layout: "dagre", // as the in-app reader, whose bundle leaves ELK out
       themeVariables: themeVariables(),
@@ -78,19 +78,23 @@
     for (var pre of blocks) {
       var source = pre.dataset.source || pre.textContent;
       pre.dataset.source = source;
+      // Mermaid draws into a fresh element holding the source as text; the code block stays as the fallback
+      var old = pre.nextElementSibling;
+      if (old && old.classList.contains("diagram-drawn")) old.remove();
+      var fig = document.createElement("div");
+      fig.className = "diagram-drawn";
+      fig.setAttribute("role", "img");
+      fig.setAttribute("aria-label", "Diagram");
+      fig.textContent = source;
+      fig.dataset.drawing = ""; // laid out but unseen: Mermaid measures the text as it draws
+      pre.after(fig);
       try {
-        var out = await window.mermaid.render("diagram-" + ++seq, source);
-        var fig = pre.nextElementSibling && pre.nextElementSibling.classList.contains("diagram-drawn") ? pre.nextElementSibling : null;
-        if (!fig) {
-          fig = document.createElement("div");
-          fig.className = "diagram-drawn";
-          fig.setAttribute("role", "img");
-          fig.setAttribute("aria-label", "Diagram");
-          pre.after(fig);
-        }
-        fig.innerHTML = out.svg;
+        await window.mermaid.run({ nodes: [fig] });
+        if (!fig.querySelector("svg")) throw new Error("not drawn");
+        delete fig.dataset.drawing;
         pre.hidden = true;
       } catch (e) {
+        fig.remove();
         pre.hidden = false;
       }
     }

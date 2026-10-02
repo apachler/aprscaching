@@ -51,6 +51,9 @@
 .md-typeset .diagram-drawn {
   margin: 1em 0;
 }
+.md-typeset .diagram-drawn[data-drawing] {
+  visibility: hidden;
+}
 .md-typeset .diagram-drawn svg {
   display: block;
   max-width: 100%;
