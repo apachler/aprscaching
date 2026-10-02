@@ -15,10 +15,9 @@ exceptions:
   - MeshCom
   - Meshtastic
   - IGate
-  - Tier
-  - A
-  - B
-  - C
+  - Tier A
+  - Tier B
+  - Tier C
   - NET/ROM
   - BBS
   - FBB
@@ -40,16 +39,14 @@ exceptions:
   - Termux
   - Android
   - Bun
-  - Node
   - SQLite
-  - Raspberry
-  - Pi
+  - Raspberry Pi
   - OCI
   - Oracle
-  - Cloud
+  - Oracle Cloud
   - WireGuard
   - HAMNET
-  - Connect
+  - 44Net Connect
   - CAT
   - CWOP
   - PWS
@@ -67,14 +64,13 @@ exceptions:
   - Mermaid
   - MkDocs
   - Vale
-  - Web
-  - Serial
+  - Web Serial
+  - Web Bluetooth
   - Bluetooth
   - BLE
   - USB
   - SDR
   - RF
-  - IS
   - ExtUDP
   - T-Deck
   - T-Beam
@@ -89,3 +85,24 @@ exceptions:
   - CI
   - OE8APR
   - FAQ
+  - LAN
+  - AXUDP
+  - AXIP
+  - 44Net
+  - AMPRNet
+  - CW
+  - PSK31
+  - WA8DED
+  - TheFirmware
+  - TFPCX
+  - Via-Calls
+  - AGWPE
+  - SoundModem
+  - UZ7HO
+  - INP3
+  - ARDC
+  - LoRa
+  - Cloudflare Tunnel
+  - LilyGO
+  - T-Deck Plus
+  - SD

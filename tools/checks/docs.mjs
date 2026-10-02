@@ -189,7 +189,8 @@ for (const f of PROSE.filter((f) => !f.startsWith("docs/"))) {
 // heading) that exists: `docs/…md` paths in code, scripts and comments, the published URL, the in-app reader's
 // `doc=` slugs, the doctor's `$DOCS_URL/…` hints and the configuration schema's links (relative to
 // docs/reference/, where they are rendered). Links inside the manual are checked by `mkdocs build --strict`.
-const SITE = "apachler.github.io/aprscaching/";
+/** The published manual: a page is `<site>/<path>/`, the home page the bare site. */
+const SITE_URL = /apachler\.github\.io\/aprscaching\/([\w/-]*?)\/?(?:#([\w-]+))?(?=[)\s"'>`]|$)/g;
 /** Python-Markdown's toc slug: what MkDocs gives a heading as its anchor. */
 const slug = (h) =>
   h
@@ -239,9 +240,7 @@ for (const f of TEXT) {
     .forEach((text, i) => {
       for (const m of text.matchAll(/(?<![\w-])docs\/([\w./-]+\.md)(?:#([\w-]+))?/g))
         checkRef(f, i + 1, m[1], m[2], m[0]);
-      for (const m of text.matchAll(
-        new RegExp(`${SITE.replace(/[./]/g, "\\$&")}([\\w/-]*?)/?(?:#([\\w-]+))?(?=[)\\s"'>\`]|$)`, "g"),
-      )) {
+      for (const m of text.matchAll(SITE_URL)) {
         const p = m[1];
         const page = !p ? "index.md" : existsSync(join(root, "docs", `${p}.md`)) ? `${p}.md` : `${p}/index.md`;
         checkRef(f, i + 1, page, m[2], m[0]);

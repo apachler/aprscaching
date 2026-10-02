@@ -382,7 +382,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`AMPR_DNS_RESOLVERS`",
-        "Comma-separated DNS-over-HTTPS resolvers (JSON API, `?name=&type=` with `accept: application/dns-json` — the `/resolve` and `/dns-query` dialects both work) that must agree on an `ampr.org` verification record DNSSEC does not validate: at least 2 must answer, and every one that answers must return the same TXT set. Name resolvers run by different operators — see [Administration](../run/day-to-day/callsign-verification.md)",
+        "Comma-separated DNS-over-HTTPS resolvers (JSON API, `?name=&type=` with `accept: application/dns-json` — the `/resolve` and `/dns-query` dialects both work) that must agree on an `ampr.org` verification record DNSSEC does not validate: at least 2 must answer, and every one that answers must return the same TXT set. Name resolvers run by different operators — see [Callsign verification](../run/day-to-day/callsign-verification.md)",
         "`https://cloudflare-dns.com/dns-query`, `https://dns.google/resolve`, `https://dns.quad9.net:5053/dns-query`",
       ],
       [
@@ -392,7 +392,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`LOTW_CA_PEM`",
-        "PEM certificate(s) of the ARRL Logbook of The World CA(s) trusted for LoTW callsign-certificate verification. Several blocks may be concatenated; a literal `\\n` counts as a line break, so the PEM fits a one-line `.env` value. No ARRL certificate ships with the gateway — see [Administration](../run/day-to-day/callsign-verification.md#lotw-callsign-certificates). Unset ⇒ the LoTW method is off",
+        "PEM certificate(s) of the ARRL Logbook of The World CA(s) trusted for LoTW callsign-certificate verification. Several blocks may be concatenated; a literal `\\n` counts as a line break, so the PEM fits a one-line `.env` value. No ARRL certificate ships with the gateway — see [LoTW callsign certificates](../run/day-to-day/callsign-verification.md#lotw-callsign-certificates). Unset ⇒ the LoTW method is off",
         "—",
       ],
       [
