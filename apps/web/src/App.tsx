@@ -31,7 +31,9 @@ export function App() {
   // (per-session intent) or sign in. The platform is the same SPA in read-only when signed out.
   const [explored, setExplored] = useState(() => {
     try {
-      return sessionStorage.getItem("acs.explore") === "1";
+      // a deep link into the platform (?view=…, ?v=…) is a visit to it, signed in or not
+      const q = new URLSearchParams(location.search);
+      return sessionStorage.getItem("acs.explore") === "1" || q.has("view") || q.has("v");
     } catch {
       return false;
     }

@@ -51,6 +51,11 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/v1/caches.kml?bbox=", desc: "caches as KML (Google Earth)" },
   { method: "GET", path: "/api/v1/caches/:code.gpx", desc: "single cache as GPX" },
   { method: "GET", path: "/api/v1/profile/:call.adif", desc: "a callsign's finds as ADIF (logbooks)" },
+  {
+    method: "GET",
+    path: "/api/v1/stats",
+    desc: "the instance in three numbers: caches, finds heard on the air this week, stations heard in the last hour",
+  },
   { method: "GET", path: "/api/v1/activity", desc: "recent finds, hides and DNFs" },
   { method: "GET", path: "/api/v1/leaderboard?metric=finds|points", desc: "top finders" },
   { method: "GET", path: "/api/v1/corroborators?bbox=&period=", desc: "top IGates by Tier-A finds they helped verify" },
@@ -189,6 +194,7 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
     if (!row) return json({ error: "cache not found" }, { status: 404 });
     return handleCacheDetail(req, env, row.id);
   }
+  if (rest === "/stats") return handleStats(env);
   if (rest === "/activity") return handleActivity(req, env);
   if (rest === "/leaderboard") return handleLeaderboard(req, env);
   if (rest === "/corroborators") return handleCorroborators(req, env);
@@ -206,4 +212,35 @@ export async function handleApiV1(req: Request, env: Env, rest: string): Promise
   if (profM) return handleProfile(req, env, profM[1]!.toUpperCase());
 
   return json({ error: "not found", see: "/api/v1" }, { status: 404 });
+}
+
+/**
+ * GET /api/v1/stats — the instance in three numbers, for the landing page and anyone's dashboard: active caches
+ * hidden here, finds heard on the air (Tier A) in the last seven days, and stations heard in the last hour. Three
+ * counts, cached for five minutes at the edge and in browsers; never estimated.
+ */
+async function handleStats(env: Env): Promise<Response> {
+  const now = nowS();
+  const [caches, onAir, stations] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) AS n FROM caches WHERE status = 'active' AND source = 'native'").first<{
+      n: number;
+    }>(),
+    env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM cache_logs WHERE log_type = 'found' AND verified = 1 AND tier = 'A' AND ts >= ?",
+    )
+      .bind(now - 7 * 86400)
+      .first<{ n: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM stations WHERE last_seen >= ?")
+      .bind(now - 3600)
+      .first<{ n: number }>(),
+  ]);
+  return json(
+    {
+      caches: caches?.n ?? 0,
+      findsOnAirThisWeek: onAir?.n ?? 0,
+      stationsHeardLastHour: stations?.n ?? 0,
+      at: now,
+    },
+    { headers: { "cache-control": "public, max-age=300" } },
+  );
 }

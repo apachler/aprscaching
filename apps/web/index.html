@@ -21,7 +21,56 @@
         }
       })();
     </script>
-    <title>APRScaching — find caches over the air</title>
+    <script>
+      /* The landing hero is the largest paint, and the app finds it only after its script has run: when the
+         landing is what opens (no remembered session, no visit to the platform this session, no deep link),
+         fetch it now. The widths match Landing.tsx's hero srcset. */
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search);
+          if (localStorage.getItem("acs.session") || sessionStorage.getItem("acs.explore") === "1") return;
+          if (q.has("view") || q.has("v") || q.has("demo")) return;
+          var l = document.createElement("link");
+          l.rel = "preload";
+          l.as = "image";
+          l.type = "image/avif";
+          l.setAttribute(
+            "imagesrcset",
+            "/landing/hero-960.avif 960w, /landing/hero-1600.avif 1600w, /landing/hero-2560.avif 2560w",
+          );
+          l.setAttribute("imagesizes", "100vw");
+          l.setAttribute("fetchpriority", "high");
+          document.head.appendChild(l);
+        } catch (e) {
+          /* storage refused: the hero loads with the page */
+        }
+      })();
+    </script>
+    <!-- the headline face: preloaded so the hero's slogan is set in it from the first paint, not reflowed later -->
+    <link rel="preload" href="/fonts/Fredoka-700.woff2" as="font" type="font/woff2" crossorigin />
+    <title>APRScaching — geocaching on the air</title>
+    <meta
+      name="description"
+      content="Hide a cache, hunt it down, and key the find over APRS: the radio network itself proves you were there. Free, open source, and runs on your own hardware."
+    />
+    <!-- the APP_ORIGIN placeholder is the origin of VITE_APP_URL (vite.config.ts); a build without it drops the tags that need one -->
+    <link rel="canonical" href="%APP_ORIGIN%/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="APRScaching" />
+    <meta property="og:title" content="APRScaching — geocaching on the air" />
+    <meta
+      property="og:description"
+      content="Hide a cache, hunt it down, and key the find over APRS: the radio network itself proves you were there."
+    />
+    <meta property="og:url" content="%APP_ORIGIN%/" />
+    <meta property="og:image" content="%APP_ORIGIN%/landing/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="The APRScaching landing page: a find heard over the air and verified Tier A"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!-- favicons -->
     <link rel="icon" href="/icons/favicon.ico" sizes="any" />

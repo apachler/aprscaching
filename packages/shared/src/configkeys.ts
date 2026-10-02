@@ -216,6 +216,7 @@ export const CONFIG_KEYS = {
   HOST: { type: "string", units: ["desktop"], default: "127.0.0.1" },
   DATA_DIR: { type: "string", units: ["desktop"] },
   VITE_API_BASE: { type: "string", units: ["web"] },
+  VITE_APP_URL: { type: "string", units: ["web"] },
   VITE_BASEMAP: { type: "string", units: ["web"] },
   VITE_BASEMAP_STYLE: { type: "string", units: ["web"] },
   VITE_SAT_TILES: { type: "string", units: ["web"] },

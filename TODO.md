@@ -696,6 +696,10 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
       (`packages/tools`) at every boundary, so a malformed body can never stringify to `[object Object]`.
       **Left:** `no-unnecessary-type-assertion` stays a **warning** — it false-positives on generic
       `.json()`/`unknown` returns under `projectService` (auto-fixing it would strip load-bearing casts).
+- [ ] **Prerender the landing page** _(P2 · M)_ — the landing page is client-rendered, so nothing paints until its
+      ~120 KB (gzip) of JavaScript has loaded and run. On Fast 4G it reaches LCP in about 1.1 s, but on Lighthouse's
+      Slow 4G with a 4× slower CPU first paint is about 3.6 s and LCP about 4.1 s, over the 2.5 s budget. Writing the
+      landing markup into `index.html` at build time (and hydrating it) would paint the hero from the HTML alone.
 - [ ] **A preinstalled Raspberry Pi image** _(P3 · L)_ — a ready-to-flash image with the Self-host stack
       and the deploy helpers, so a Pi needs no setup beyond `deploy/aprscaching init selfhost`. It is a large
       build and maintenance effort (image builds per release, updates of the base system), so it waits until the

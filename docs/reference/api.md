@@ -49,6 +49,7 @@ most 20° a side.
 | GET        | `/api/v1/profile/:call` · `/profile/:call.adif`                                          | A callsign's public profile · its finds as ADIF 3.1 (`SIG=APRSCACHING`).        |
 | GET        | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots`                        | Activity feed, rankings, top corroborating IGates, live spots.                  |
 | GET        | `/api/v1/licence/:call`                                                                  | Callsign validity from public licence registers (same as `/api/licence/:call`). |
+| GET        | `/api/v1/stats`                                                                          | The instance's counts for its landing page: active caches, finds heard on the air (Tier A) in the last 7 days, stations heard in the last hour. Cached for 5 minutes. |
 | POST · GET | `/api/v1/keys` · `/api/v1/keys/:id`                                                      | Issue a free API key · look one up.                                             |
 
 Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys never gate a feature.
