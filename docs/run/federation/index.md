@@ -29,6 +29,7 @@ Desktop, Cloudflare split or Pocket.
     ```
 
     They start `trusted`: your instance mirrors them and counts their corroboration.
+
 3. **Ask each peer's sysop to add your `APP_URL`** to their `FED_PEERS`. Until they do, their instance holds you
    `unvetted` if it learns of you at all: your records are mirrored there but hidden on the map, and your
    answers do not count toward their Tier A. They can also promote you under **Instance admin → Federation**.
@@ -139,6 +140,7 @@ ask for a pull after they write, so new records arrive sooner.
     A JSON body narrows the pull to some feeds and a page cap, from 1 to 50:
     `{"types":["cache","key"],"maxPages":10}`. Deletes always come too, and the next pass carries on where a
     capped one stopped.
+
 - **One region only.** `FED_SYNC_REGION=S,W,N,E` pulls only the caches inside that box, in decimal degrees,
   from peers that filter by region. A peer without the filter sends every cache. Deletes are never filtered.
   It suits an instance that serves one area, such as a phone in the field

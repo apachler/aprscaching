@@ -40,6 +40,7 @@ Receive APRS traffic for your area from the internet, with no radio. Everything 
 
     `-1` is a receive-only login, which is all the feed needs. `r/lat/lon/km` is a circle around a point;
     any [APRS-IS server filter](https://www.aprs-is.net/javAPRSFilter.aspx) works (`b/`, `p/`, `t/`, …).
+
 2. Restart the ingest. The log shows `[aprs-is] connected + filter sent`.
 3. The `aprs-is` port counts packets, and stations appear on the map.
 

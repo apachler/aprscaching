@@ -17,6 +17,7 @@
  *     terminal output that uses them is marked by an `<!-- ascii-ok: <what it is> -->` line right above it.
  *  6. Stale references — pages move without redirects, so every reference to a manual page or heading in any
  *     tracked file (paths, published URLs, in-app slugs, the doctor's hints) must still resolve.
+ *  7. Lists — a list item MkDocs would read as paragraph text, for want of a blank line before it.
  *
  * Pure word and path matching over the tracked files, with no dependency, so it runs before install.
  */
@@ -299,6 +300,53 @@ for (const f of TEXT) {
       });
 }
 
+// ---------------------------------------------------------------- 7. lists the manual's Markdown can parse
+// MkDocs's Markdown (Python-Markdown) needs a blank line before a list item in two places CommonMark does not: a
+// list that starts right after a paragraph, and the next item after an item that holds a blank line (a second
+// paragraph, an indented note). Without it the markers are read as text: "… listen for it. 2. Send that …".
+// A list item is fine when the lines above it, back to the last blank line, belong to an item.
+{
+  const MARK = /^\s*(\d+\.|[-*+])\s/;
+  const FENCE = /^\s*(```|~~~)/;
+  for (const f of tracked.filter((f) => f.startsWith("docs/") && f.endsWith(".md") && !f.startsWith("docs/reviews/"))) {
+    // a block quote's lines are read without their "> " prefix
+    const lines = read(f)
+      .split("\n")
+      .map((l) => l.replace(/^>\s?/, ""));
+    const fenceStart = new Map();
+    let open = -1;
+    lines.forEach((l, i) => {
+      if (!FENCE.test(l)) return;
+      if (open < 0) open = i;
+      else {
+        fenceStart.set(i, open);
+        open = -1;
+      }
+    });
+    let inFence = false;
+    lines.forEach((l, i) => {
+      if (FENCE.test(l)) {
+        inFence = !inFence;
+        return;
+      }
+      if (inFence || !MARK.test(l) || i === 0 || !lines[i - 1].trim()) return;
+      for (let j = i - 1; j >= 0;) {
+        if (fenceStart.has(j)) {
+          j = fenceStart.get(j) - 1;
+          continue;
+        }
+        const p = lines[j];
+        if (!p.trim() || /^\s*(#|\||<(?!!--))/.test(p)) {
+          fail(f, i + 1, "a list item needs a blank line before it here, or it renders as text");
+          return;
+        }
+        if (MARK.test(p) || /^\s*(!!!|\?\?\?)/.test(p)) return;
+        j--;
+      }
+    });
+  }
+}
+
 // ---------------------------------------------------------------- 5. diagrams are Mermaid
 const DIAGRAM_DOCS = tracked.filter(
   (f) =>
@@ -329,5 +377,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid, no stale manual references`,
+  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid, no stale manual references, lists parse`,
 );

@@ -83,6 +83,7 @@ instance.
     authority key in `AUTHORITY` to sign again with the same one. An entry may carry `addresses`, the
     instance's typed endpoints (https, 44net, ax25, netrom, bbs): a directory of where to reach it, never a
     trust upgrade.
+
 2. **Each member pins the authority key** in `FED_REGISTRY_KEY`, and gets the document one of two ways:
     - `FED_REGISTRY`: the document itself.
     - `FED_REGISTRY_DNS`: the name of a DNS `TXT` record holding `url=https://…`. DNS only says where the
