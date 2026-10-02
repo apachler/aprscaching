@@ -53,8 +53,8 @@ See [Licence registers](../reference/licence-sources.md) for the registers.
 
 ## All settings
 
-Open **Settings** from the left rail on a computer. On a phone, tap **You**, open **Advanced — the Shack** and
-tap **Settings**. The search box at the top filters the groups.
+Open **Settings** from the left rail on a computer. On a phone, tap **More**, then **Settings**. The search box
+at the top filters the groups.
 
 Signed out, you see **Account**, **Display**, **Locale & time**, **Your data**, **Support the project** and
 **Help & credits**. Signed in, the other groups appear too.

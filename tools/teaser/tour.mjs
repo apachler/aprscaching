@@ -118,6 +118,12 @@ async function closeAll(page) {
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(200);
 }
+/** Open the profile: the top bar's button on a computer; on a phone, More in the tab bar, then You. */
+async function openYou(page) {
+  if (await clickAny(page, ["button[title^='Profile']"])) return true;
+  if (!(await clickAny(page, [".tabbar button:has-text('More')"]))) return false;
+  return clickAny(page, [".more-list button:has-text('You')"]);
+}
 async function clickAny(page, sels) {
   for (const s of sels) {
     const el = page.locator(s).first();
@@ -137,7 +143,7 @@ async function clickCache(page, match) {
   await page.waitForTimeout(700);
 }
 async function openProfileAdvanced(page, btnText) {
-  if (!(await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]))) return false;
+  if (!(await openYou(page))) return false;
   await page.waitForSelector(".panel .group", { timeout: 6000 }).catch(() => {});
   await clickAny(page, [".group-toggle:has-text('Advanced')"]);
   await page.waitForTimeout(300);
@@ -226,7 +232,7 @@ const slug = (s) =>
 // { full: button text incl. glyph, name: slug, label: caption } for each emoji/glyph-prefixed tool.
 async function advancedTools(page) {
   await closeAll(page);
-  if (!(await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]))) return [];
+  if (!(await openYou(page))) return [];
   await page.waitForSelector(".panel", { timeout: 6000 }).catch(() => {});
   await clickAny(page, [".group-toggle:has-text('Advanced')"]);
   await page.waitForTimeout(300);
@@ -488,7 +494,7 @@ for (const v of VIEWS) {
     });
     await step("profile", async () => {
       await closeAll(page);
-      await clickAny(page, ["button[title^='Profile']", ".tabbar button:has-text('You')"]);
+      await openYou(page);
       await page.waitForSelector(".panel .group", { timeout: 6000 }).catch(() => {});
       await page.waitForTimeout(400);
       await shot(page, v.id, "profile", "Profile");

@@ -441,9 +441,11 @@ export function getMessages(
   bulletins = false,
   cursor?: string | null,
   limit = 30,
+  to?: string,
 ): Promise<{ messages: MessageItem[] } & PageInfo> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (bulletins) q.set("bulletins", "1");
+  if (to) q.set("to", to);
   if (cursor) q.set("cursor", cursor);
   return call(`/api/messages?${q.toString()}`);
 }

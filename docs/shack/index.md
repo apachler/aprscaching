@@ -6,7 +6,7 @@ app does and where to read more.
 
 A laptop and a radio are a complete station, even with no internet: the apps talk to a USB or Bluetooth
 [TNC](../glossary.md#tnc), or to the soundcard, straight from the browser. Open the Shack from **Shack** in
-the left rail (on a phone: **You → Advanced — the Shack → Shack**). Each app opens its own screen, and the pin
+the left rail (on a phone: **More → Shack**). Each app opens its own screen, and the pin
 button next to an app puts it on the left rail.
 
 ## Your journey

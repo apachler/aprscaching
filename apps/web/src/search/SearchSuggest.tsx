@@ -18,7 +18,13 @@ export function SearchSuggest(props: {
   onSubmitRaw: (v: string) => void; // grid / lat-lon fallback (Enter, no active hit)
   onPickCache: (hit: SearchHitCache) => void;
   onPickStation: (hit: SearchHitStation) => void;
+  /** Prefix of the listbox and option ids: two search fields on one page (top bar, search sheet) stay apart. */
+  idBase?: string;
+  /** Mark the field for the dialog around it to focus first (the search sheet). */
+  autoFocus?: boolean;
+  className?: string;
 }) {
+  const ids = props.idBase ?? "search";
   const [open, setOpen] = useState(false);
   const [hits, setHits] = useState<Hit[]>([]);
   const [active, setActive] = useState(-1);
@@ -96,15 +102,15 @@ export function SearchSuggest(props: {
   const showEmpty = open && !loading && hits.length === 0 && props.q.trim().length >= 2;
 
   return (
-    <div className="topsearch-wrap" ref={wrapRef}>
+    <div className={`topsearch-wrap${props.className ? ` ${props.className}` : ""}`} ref={wrapRef}>
       <label className="topsearch">
         <Icon name="search" size={16} />
         <input
           role="combobox"
           aria-expanded={open}
-          aria-controls="search-listbox"
+          aria-controls={`${ids}-listbox`}
           aria-autocomplete="list"
-          aria-activedescendant={active >= 0 ? `search-opt-${active}` : undefined}
+          aria-activedescendant={active >= 0 ? `${ids}-opt-${active}` : undefined}
           value={props.q}
           placeholder="Search caches, stations, or grid…"
           aria-label="Search caches and stations"
@@ -113,15 +119,16 @@ export function SearchSuggest(props: {
             if (hits.length) setOpen(true);
           }}
           onKeyDown={onKeyDown}
+          data-autofocus={props.autoFocus ? "" : undefined}
         />
         {loading && <span className="search-spin" aria-hidden="true" />}
       </label>
       {open && hits.length > 0 && (
-        <ul className="search-pop" id="search-listbox" role="listbox" aria-label="Search results">
+        <ul className="search-pop" id={`${ids}-listbox`} role="listbox" aria-label="Search results">
           {hits.map((h, i) => (
             <li
               key={h.kind === "cache" ? `c${h.id}` : `s${h.callsign}`}
-              id={`search-opt-${i}`}
+              id={`${ids}-opt-${i}`}
               role="option"
               aria-selected={i === active}
               className={`search-opt${i === active ? " active" : ""}`}

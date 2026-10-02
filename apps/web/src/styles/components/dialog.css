@@ -33,4 +33,52 @@
     justify-content: flex-end;
     flex-wrap: wrap;
   }
+
+  /* ---- a sheet on a phone (ui/Sheet.tsx): More from the bottom, search from the top ---- */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dialog);
+    background: color-mix(in oklch, var(--page-bg) 55%, transparent);
+  }
+  .sheet {
+    position: absolute;
+    left: max(var(--space-xs), env(safe-area-inset-left));
+    right: max(var(--space-xs), env(safe-area-inset-right));
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--elevation-overlay);
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  @supports (height: 1dvh) {
+    .sheet {
+      max-height: 80dvh;
+    }
+  }
+  .sheet-bottom {
+    bottom: 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom));
+  }
+  .sheet-top {
+    top: 0;
+    border-radius: 0 0 var(--radius-sheet) var(--radius-sheet);
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top));
+  }
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: 44px;
+  }
+  .sheet-title {
+    flex: 1;
+    margin: 0;
+    font-size: var(--text-body);
+  }
+  .sheet-close {
+    margin-left: auto;
+  }
 }

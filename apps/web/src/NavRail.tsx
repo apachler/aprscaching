@@ -16,6 +16,8 @@ export function NavRail(props: {
   pinnedApps: ShackApp[];
   onLaunchApp: (id: ShackApp["id"]) => void;
   sysop: boolean;
+  /** Destinations that need attention carry a dot (see useAttention). */
+  attention: ReadonlySet<string>;
 }) {
   const item = (key: string, icon: IconName, label: string, onClick: () => void, cls?: string) => (
     <Button
@@ -24,9 +26,11 @@ export function NavRail(props: {
       onClick={onClick}
       title={label}
       aria-current={props.active === key ? "page" : undefined}
+      aria-describedby={props.attention.has(key) ? "rail-attn" : undefined}
       data-tour={key === "nearby" ? "nearby" : undefined}
     >
       <Icon name={icon} size={21} />
+      {props.attention.has(key) && <span className="nav-dot" aria-hidden="true" />}
       <span>{label}</span>
     </Button>
   );
@@ -40,6 +44,10 @@ export function NavRail(props: {
       {props.pinnedApps.length > 0 && <span className="rail-div" aria-hidden="true" />}
       {props.pinnedApps.map((app) => item(app.id, app.icon, app.label, () => props.onLaunchApp(app.id), "rail-pinned"))}
       {core("bottom")}
+      {/* the words of an attention dot, outside the buttons so they describe one without joining its name */}
+      <span id="rail-attn" className="sr-only">
+        needs attention
+      </span>
     </nav>
   );
 }

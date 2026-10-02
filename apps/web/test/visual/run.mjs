@@ -58,7 +58,7 @@ const SURFACES = [
     after: "form, .signin",
   },
   { name: "map", as: "user", query: "", wait: ".topbar" },
-  // the top bar's search exists from 960px up; narrower screens reach caches through Nearby
+  // the top bar's search field from 960px up; narrower screens open it in a sheet from the search button
   {
     name: "search",
     as: "user",
@@ -67,6 +67,28 @@ const SURFACES = [
     wait: ".topbar",
     steps: [["fill", ".topsearch input", "Schloss"]],
     after: ".search-pop",
+  },
+  {
+    name: "search-sheet",
+    as: "user",
+    query: "",
+    views: ["phone"],
+    wait: ".topbar",
+    steps: [
+      ["click", ".search-ic"],
+      ["fill", ".in-sheet .topsearch input", "Schloss"],
+    ],
+    after: ".in-sheet .search-pop",
+  },
+  // the phone's More sheet: every destination the rail has that is not a tab
+  {
+    name: "more",
+    as: "user",
+    query: "",
+    views: ["phone"],
+    wait: ".tabbar",
+    steps: [["click", ".tabbar button[aria-haspopup=dialog]"]],
+    after: ".more-list",
   },
   {
     name: "detail",
@@ -172,6 +194,9 @@ async function open(page, origin, s, theme) {
   const url = s.url
     ? `${origin}${s.url}&theme=${theme}`
     : `${origin}/${s.query || ""}${s.query ? "&" : "?"}demo=app&as=${s.as}${s.tour ? "&tour=1" : ""}#14/47.0725/15.4380`;
+  // a fresh document for every surface: going to the URL the page already shows would keep the last surface's
+  // state (an open sheet, a filled field) instead of loading it again
+  await page.goto("about:blank");
   // the UI kit's frames are whole app instances, which never settle into network idle together
   await page.goto(url, { waitUntil: s.fullPage ? "load" : "networkidle", timeout: 60000 });
   await holdTheme(page, theme);

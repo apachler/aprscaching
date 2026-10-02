@@ -5,26 +5,28 @@ at the end you stand at the cache with its sheet open, ready to log.
 
 ## Get around the app
 
-| What                    | On a phone (bottom bar)                    | On a computer (left rail)                  |
-| ----------------------- | ------------------------------------------ | ------------------------------------------ |
-| The map                 | **Map**                                    | **Map**                                    |
-| The closest caches      | **Nearby**                                 | **Nearby**                                 |
-| Log the open cache      | **Log** (the centre button)                | **✓ Log a find** in the cache sheet        |
-| Hide a cache            | **Hide** (the centre button)               | **+ Hide a cache** in the top bar          |
-| Recent finds and ranks  | **Activity**                               | **Activity** and **Ranks**                 |
-| Your profile            | **You**                                    | **You**                                    |
-| Offline packs           | **Nearby** → **Offline packs**             | **Offline**                                |
-| Settings and the Shack  | **You** → **Advanced — the Shack**         | **Settings** and **Shack**                 |
+| What                        | On a phone (bottom bar)                 | On a computer (left rail)               |
+| --------------------------- | --------------------------------------- | --------------------------------------- |
+| The map                     | **Map**                                 | **Map**                                 |
+| The closest caches          | **Nearby**                              | **Nearby**                              |
+| Log the open cache          | **Log** (the centre button)             | **✓ Log a find** in the cache sheet     |
+| Hide a cache                | **Hide** (the centre button)            | **+ Hide a cache** in the top bar       |
+| Recent finds                | **Activity**                            | **Activity**                            |
+| Everything else             | **More**                                | its own entry                           |
+
+**More** lists the rest, in the order of the left rail: **You** (your profile), **Messages**, **Ranks**, **Shack**,
+**Offline**, **Settings** and **Manual**, plus **Admin** for the sysop. A dot marks one that needs you: a new
+message, or a callsign still to verify. The same dot shows on **More** and on the left rail.
 
 The centre button shows **Log** while a cache is open and **Hide** otherwise. The **Manual** icon in the top
-bar opens this manual.
+bar also opens this manual.
 
 ![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }
 
 ## Search the map
 
 - **Search**: type a cache code (`AC-1234`), a title, a callsign or a grid square (`JN76`) in the search box in
-  the top bar. Pick a result to open it.
+  the top bar. On a phone, tap the magnifier in the top bar to open the search box. Pick a result to open it.
 - **Filter**: tap the funnel icon. **Search & filter** opens.
     - **Cache type** shows only the types you pick.
     - **Include unvetted network data** adds caches from instances your sysop has not vetted yet.

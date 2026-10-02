@@ -16,6 +16,44 @@
       display: block;
     }
   }
+  /* in the phone's search sheet (search/SearchSheet.tsx) the field shows at every width, on the sheet's surface */
+  .topsearch-wrap.in-sheet {
+    display: block;
+    max-width: none;
+    min-width: 0;
+    margin-top: var(--space-xs);
+  }
+  .in-sheet .topsearch {
+    height: 44px;
+    background: var(--field-bg);
+    border-color: var(--line);
+    color: var(--muted);
+  }
+  .in-sheet .topsearch:focus-within {
+    border-color: var(--accent);
+    outline: 2px solid var(--heading);
+    outline-offset: 2px;
+  }
+  .in-sheet .topsearch input {
+    color: var(--ink);
+  }
+  .in-sheet .topsearch input::placeholder {
+    color: var(--muted);
+  }
+  .in-sheet .search-pop {
+    position: static;
+    margin-top: var(--space-xs);
+    box-shadow: none;
+  }
+  /* below 960px the top bar has a search button in place of the field */
+  .search-ic {
+    display: inline-flex;
+  }
+  @media (min-width: 960px) {
+    .search-ic {
+      display: none;
+    }
+  }
   .topsearch {
     display: flex;
     align-items: center;

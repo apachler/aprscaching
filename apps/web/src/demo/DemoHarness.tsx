@@ -47,6 +47,7 @@ function AppShell({
         verified={true}
         onAccount={noop}
         onHide={noop}
+        onSearchOpen={noop}
         count={7}
         syncLine=""
         attention={0}
@@ -64,7 +65,14 @@ function AppShell({
         onDocs={noop}
       />
       <div className="shell">
-        <NavRail active={active} onNav={noop} pinnedApps={[]} onLaunchApp={noop} sysop={false} />
+        <NavRail
+          active={active}
+          onNav={noop}
+          pinnedApps={[]}
+          onLaunchApp={noop}
+          sysop={false}
+          attention={NO_ATTENTION}
+        />
         <div className="mapwrap">
           <div className="map demo-map" />
         </div>
@@ -86,6 +94,8 @@ function AppShell({
     </div>
   );
 }
+
+const NO_ATTENTION: ReadonlySet<string> = new Set();
 
 export function DemoHarness({ which }: { which: string }) {
   const showPacket = which === "packet" || which === "1" || which === "both" || which === "";

@@ -4,13 +4,20 @@ import { TAB_ITEMS, type NavItem } from "../nav.js";
 
 /**
  * The mobile bottom tab bar: the `tab` destinations of the nav table, with the find/hide action in the
- * middle. `active` is the lit tab's key (see nav.ts activeKey). Hidden at ≥1024px, where the rail shows.
+ * middle and More last, which opens the sheet of every other destination (MoreSheet). `active` is the lit tab's
+ * key (see nav.ts activeKey); More lights while one of its destinations is open. Hidden at ≥1024px, where the
+ * rail shows.
  */
 export function TabBar(props: {
   active: string;
   onNav: (key: NavItem["key"]) => void;
   onFab: () => void;
   fabLabel: "Log" | "Hide";
+  onMore: () => void;
+  /** One of More's destinations is open. */
+  moreActive: boolean;
+  /** One of More's destinations needs attention: the More tab carries the dot. */
+  moreAttention: boolean;
 }) {
   const tab = (item: NavItem) => (
     <Button
@@ -41,6 +48,23 @@ export function TabBar(props: {
         <span>{props.fabLabel}</span>
       </Button>
       {TAB_ITEMS.slice(half).map(tab)}
+      <Button
+        className={props.moreActive ? "on" : ""}
+        aria-current={props.moreActive ? "page" : undefined}
+        aria-haspopup="dialog"
+        aria-describedby={props.moreAttention ? "tab-attn" : undefined}
+        onClick={props.onMore}
+      >
+        <span className="ic">
+          <Icon name="menu" cp437="≡" size={22} />
+          {props.moreAttention && <span className="nav-dot" aria-hidden="true" />}
+        </span>
+        <span>More</span>
+      </Button>
+      {/* the words of the attention dot, outside the button so they describe it without joining its name */}
+      <span id="tab-attn" className="sr-only">
+        needs attention
+      </span>
     </nav>
   );
 }

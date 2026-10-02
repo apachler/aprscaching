@@ -68,10 +68,12 @@ export type IconName =
   | "satellite"
   | "antenna"
   | "trophy"
-  | "place";
+  | "place"
+  | "menu";
 
 const D: Record<IconName, string> = {
   close: "M18 6 6 18 M6 6l12 12",
+  menu: "M4 6h16 M4 12h16 M4 18h16",
   search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M21 21l-4.3-4.3",
   settings: "M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6",
   map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z M9 4v14 M15 6v14",
