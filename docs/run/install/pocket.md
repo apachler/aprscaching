@@ -1,6 +1,6 @@
 # Install Pocket on an Android phone
 
-This page installs **Pocket**, a complete aprscaching station on one Android phone, in
+This page installs **Pocket**, a complete APRScaching station on one Android phone, in
 [Termux](https://termux.dev) and without root. It is for a sysop who wants a station for field days, demos and
 hikes; at the end the station runs on the phone and you are signed in.
 

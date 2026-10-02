@@ -28,7 +28,7 @@ explains it in full.
 
 <span id="q-construct"></span>q-construct
 :   A tag APRS-IS servers add to a packet's path (`qAR`, `qAC`, …) naming how and where it entered
-    APRS-IS. Anyone with a passcode can write one, so aprscaching never treats it as proof of a hearing.
+    APRS-IS. Anyone with a passcode can write one, so APRScaching never treats it as proof of a hearing.
 
 <span id="callsign"></span><span id="ssid"></span>Callsign and SSID
 :   Your licence callsign identifies you on the air. An **SSID** is the suffix after a dash (`OE8APR-7`)
@@ -65,11 +65,11 @@ explains it in full.
     internet traffic all the same ([AXUDP and AXIP peering](run/networks/44net.md#axudp-and-axip-peering-over-44net)).
 
 <span id="meshcom"></span><span id="extudp"></span>MeshCom
-:   A LoRa mesh network for licensed amateurs. aprscaching listens to a MeshCom node on the operator's
+:   A LoRa mesh network for licensed amateurs. APRScaching listens to a MeshCom node on the operator's
     network through the node's **ExtUDP** interface ([MeshCom](run/radios/meshcom.md)).
 
 <span id="meshtastic"></span>Meshtastic
-:   A LoRa mesh system; aprscaching shows only nodes in licensed mode, which carry a callsign.
+:   A LoRa mesh system; APRScaching shows only nodes in licensed mode, which carry a callsign.
 
 <span id="44net"></span><span id="amprnet"></span><span id="hamnet"></span>44Net, AMPRNet and HAMNET
 :   **44Net** (AMPRNet) is the amateur-radio IPv4 space in `44.x`, administered by ARDC; `<call>.ampr.org`
@@ -88,10 +88,10 @@ explains it in full.
 :   A grid square such as `JN77pb` that names a location in a few characters; hams use it in place of
     coordinates.
 
-## aprscaching
+## APRScaching
 
 <span id="instance"></span>Instance
-:   One running aprscaching server, run by a ham or a club for their region. Instances link up and share
+:   One running APRScaching server, run by a ham or a club for their region. Instances link up and share
     caches and finds; the one your account lives on is your home instance
     ([Getting to your instance](play/your-instance.md)).
 

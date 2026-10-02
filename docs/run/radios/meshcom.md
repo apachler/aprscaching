@@ -85,11 +85,11 @@ of the node's (`OE8APR-12` above). The box then logs `[meshcom] transmit enabled
 send in its log (time, node, destination, size and outcome, never the text). Sends share a rate limit of
 one per minute, three in a burst.
 
-**Via on your node.** If your node has `--via` on, every message aprscaching sends through it (acks,
+**Via on your node.** If your node has `--via` on, every message APRScaching sends through it (acks,
 replies, find confirmations) is forwarded only by the relays you listed. Recipients outside their range
 don't receive it. The box logs the node's setting once it has seen the node send a message
 (`[meshcom] node OE8APR-12 has Via on: …`), and the station status and the Pocket notification show it.
-Until then it is unknown. aprscaching never changes the setting: that is `--via` on the node.
+Until then it is unknown. APRScaching never changes the setting: that is `--via` on the node.
 
 ## 3. Firewall
 

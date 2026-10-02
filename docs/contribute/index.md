@@ -1,6 +1,6 @@
 # Contribute
 
-This section is for people who change aprscaching: the code, the tests and this manual. Start with a running
+This section is for people who change APRScaching: the code, the tests and this manual. Start with a running
 checkout, then read where your change belongs.
 
 1. [Run from source](run-from-source.md): the gateway, the web app and the ingest from a checkout.

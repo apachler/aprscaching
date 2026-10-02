@@ -1,6 +1,6 @@
 # On-air etiquette and rules
 
-This page is for you as an individual operator who transmits from aprscaching: a beacon, a message, a packet
+This page is for you as an individual operator who transmits from APRScaching: a beacon, a message, a packet
 connect or a weather report. It sets out the amateur rules that apply to every frame you send, and what the
 software does to help you keep them.
 
@@ -12,7 +12,7 @@ software does to help you keep them.
 
 ## You are the control operator
 
-aprscaching is software; the licence is yours. Nothing the platform or its users do relieves you of
+APRScaching is software; the licence is yours. Nothing the platform or its users do relieves you of
 responsibility for what leaves your antenna. The software helps in three ways:
 
 - **Transmit is off by default and gated.** The browser radio's beacon and messages, the APRS-IS weather
@@ -28,7 +28,7 @@ responsibility for what leaves your antenna. The software helps in three ways:
 
 ## No encryption on the air — sign, never conceal
 
-Amateur rules broadly prohibit messages **encoded to obscure their meaning**. aprscaching is built around that
+Amateur rules broadly prohibit messages **encoded to obscure their meaning**. APRScaching is built around that
 rule:
 
 - **It signs; it does not encrypt.** Federation records, tombstones, account moves, the signatures on your
@@ -40,11 +40,11 @@ rule:
 - **Secrets never touch the air.** The instance's secrets and your device key are internet-side only; no
   radio path carries credential material.
 
-Everything aprscaching puts on the air is public, signed and readable, which is what keeps it legal.
+Everything APRScaching puts on the air is public, signed and readable, which is what keeps it legal.
 
 ## Station identification
 
-Every APRS and AX.25 frame you send from aprscaching carries your callsign and SSID as its source. Your
+Every APRS and AX.25 frame you send from APRScaching carries your callsign and SSID as its source. Your
 regulator may still require an identification at fixed intervals, for example during a long connected
 session: check your national rule.
 
@@ -57,7 +57,7 @@ third-party rules.
 
 ## No commercial traffic
 
-The amateur service is non-commercial. Donations to aprscaching are recognition-only and never unlock
+The amateur service is non-commercial. Donations to APRScaching are recognition-only and never unlock
 features, and caches carry no advertising. Keep anything you put on the air the same way.
 
 ## Next

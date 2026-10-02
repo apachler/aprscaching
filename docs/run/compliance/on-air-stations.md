@@ -2,7 +2,7 @@
 
 This page is for the sysop of an instance that transmits: an IGate, a digipeater, a node or a BBS. Such an
 instance is an amateur station, and you are its control operator; this page covers what applies to automatic
-stations and what aprscaching does to keep them within the rules.
+stations and what APRScaching does to keep them within the rules.
 
 The rules every operator follows, attended or not, are under
 [On-air etiquette and rules](../../shack/on-air.md). This page is not legal advice: meeting the rules at your
@@ -13,7 +13,7 @@ station, on your bands, under your licence, is your responsibility as control op
 A digipeater, an IGate, a NET/ROM node (whichever command style it presents: NET/ROM, FlexNet, TNN or BayCom), a
 BBS, a store-and-forward mail path and any automatic federation-over-RF relay are **automatically controlled
 stations**. National rules restrict where and how these run: permitted band segments, power, occupied bandwidth,
-and a control operator who can be reached. aprscaching's part:
+and a control operator who can be reached. APRScaching's part:
 
 - Automatic transmit (digipeat, beacon, forward, relay) is **opt-in per port**, never implicit.
 - Every unattended transmit path is **paced by a token bucket** with a hard ceiling
@@ -63,7 +63,7 @@ retries.
 
 ## Bandwidth, band plans and high-speed modes
 
-aprscaching runs over whatever modem your TNC provides: typically 1200-baud AFSK or 9600-baud G3RUH on VHF/UHF,
+APRScaching runs over whatever modem your TNC provides: typically 1200-baud AFSK or 9600-baud G3RUH on VHF/UHF,
 and 300 baud on HF. It also runs over the browser's own 1200-baud soundcard AFSK, and over IP links (HAMNET
 microwave, and AXIP/AXUDP on the internet side). Symbol-rate, occupied-bandwidth and band-segment rules for these
 differ widely by country and band. You decide which ports and bands are enabled; the platform adapts its encoding
@@ -76,9 +76,9 @@ amateur radio: no content encryption, callsign identification and control-operat
 1200-baud packet channel. Where a HAMNET or 44Net segment bridges to the general internet, the amateur-service
 boundary sits at that RF or gateway edge. You are responsible for what crosses it in each direction.
 
-## What aprscaching enforces, and what stays yours
+## What APRScaching enforces, and what stays yours
 
-| aprscaching provides | You own |
+| APRScaching provides | You own |
 |---|---|
 | Signs, never encrypts; confidentiality degrades to field-drop | Confirming that satisfies *your* regulator |
 | Transmit off by default, gated on control-verification | Being the reachable, responsible control operator |

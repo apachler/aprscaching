@@ -139,7 +139,7 @@ the real browser ceremony before a release.
 `tools/interop/` tests the FBB/NET-ROM stack against the actual programs it must talk to. Two
 tiers (full detail in `tools/interop/README.md`):
 
-- **Local loop, no Docker** — `bash tools/interop/run-local-loop.sh`: two complete aprscaching
+- **Local loop, no Docker** — `bash tools/interop/run-local-loop.sh`: two complete APRScaching
   stacks crosslinked over AXUDP exchange NODES broadcasts both ways, run an FBB forwarding session
   A→B, verify BID idempotency, and (both nodes speak INP3) assert INP3 route convergence via
   triggered RIFs.

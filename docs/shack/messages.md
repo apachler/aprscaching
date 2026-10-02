@@ -1,6 +1,6 @@
 # Messages over APRS and MeshCom
 
-This page shows you where APRS and MeshCom text messages appear in aprscaching, and how you send and
+This page shows you where APRS and MeshCom text messages appear in APRScaching, and how you send and
 acknowledge them. It is for operators with a radio; at the end you know which surface handles which kind of
 message.
 
@@ -70,7 +70,7 @@ When the instance runs a [MeshCom](../glossary.md#meshcom) node, a direct messag
 the node receives appears in **Messages** like an APRS message. Group and broadcast text (`*` or a group
 number) is addressed to no one in particular and stays out of the list.
 
-aprscaching does not send MeshCom messages for you: write them on your own MeshCom node. A direct message to
+APRScaching does not send MeshCom messages for you: write them on your own MeshCom node. A direct message to
 the instance's service call is a command (next section). The instance answers it through the node that heard
 it when its sysop allows that ([MeshCom](../run/radios/meshcom.md)).
 

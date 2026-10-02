@@ -1,6 +1,6 @@
 # Run from source
 
-This page shows contributors how to run aprscaching from a checkout: the gateway, the web app and, if you
+This page shows contributors how to run APRScaching from a checkout: the gateway, the web app and, if you
 need it, the RF ingest. You need Node 22 or newer and pnpm; at the end the app runs on your machine against a
 local gateway. To install an instance for real use, see [Is running an instance for me?](../run/index.md).
 

@@ -1,6 +1,6 @@
 # Your radio in the browser
 
-This page shows you how to connect your own radio to aprscaching from a web browser, with no server and no
+This page shows you how to connect your own radio to APRScaching from a web browser, with no server and no
 software to install. You need a radio with a TNC, or only an audio cable; at the end the browser decodes what
 your radio hears, shows it live, and can pass it on to an instance.
 
