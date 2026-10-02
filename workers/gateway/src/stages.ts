@@ -9,6 +9,8 @@ import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { mayActAsOwner } from "./auth.js";
+import { actor } from "./caches.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { haversineMeters } from "@aprscaching/aprs";
 import { STAGE_MIN_CODE_BITS, StageUnlockRequest, codeEntropyBits, sealStage } from "@aprscaching/shared";
 
@@ -22,6 +24,12 @@ interface StageRow {
   radius_m: number;
   unlock_secret: string | null;
 }
+
+/** Per hour: NFC code attempts by one finder on one stage, and by everyone on one stage. A tag code is short
+ *  enough to type, so guessing it is bounded here rather than by its length. */
+const CODE_TRIES_PER_FINDER = 10;
+const CODE_TRIES_PER_STAGE = 60;
+const HOUR_MS = 3600_000;
 
 /** Normalise an NFC/manual unlock code for comparison (trim + casefold; tag serials/text vary in case). */
 const normCode = (s: string) => s.trim().toLowerCase();
@@ -185,7 +193,8 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
 
 // ---- list stages (coords hidden unless stage 0 or unlocked by the caller) ----
 export async function handleGetStages(req: Request, env: Env, cacheId: number): Promise<Response> {
-  const callsign = new URL(req.url).searchParams.get("callsign");
+  // the caller's own unlocks only: `?callsign=` names someone else only with the ingest secret
+  const callsign = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
   const rows = (
     await env.DB.prepare(
       "SELECT stage_no, unlock, clue, media_key, lat, lon, radius_m FROM cache_stages WHERE cache_id=? ORDER BY stage_no",
@@ -217,8 +226,8 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   const parsed = StageUnlockRequest.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
   const b = parsed.data;
-  if (!b.callsign) return json({ error: "callsign required" }, { status: 400 });
-  const cs = b.callsign.toUpperCase();
+  const cs = await actor(req, env, b.callsign);
+  if (!cs) return json({ error: "sign in to unlock a stage" }, { status: 401 });
   if (stageNo <= 0) return json({ error: "stage 0 is the public start" }, { status: 400 });
 
   const stage = await env.DB.prepare("SELECT * FROM cache_stages WHERE cache_id=? AND stage_no=?")
@@ -252,6 +261,12 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
     if (!stage.unlock_secret)
       return json({ error: "this NFC stage has no tag configured", reason: "no_tag" }, { status: 409 });
     if (!b.code) return json({ error: "scan the NFC tag or enter its code", reason: "no_code" }, { status: 403 });
+    const t = Date.now();
+    if (
+      (await rateLimitedDurable(env, `stage-code:${cacheId}:${stageNo}:${cs}`, t, CODE_TRIES_PER_FINDER, HOUR_MS)) ||
+      (await rateLimitedDurable(env, `stage-code:${cacheId}:${stageNo}`, t, CODE_TRIES_PER_STAGE, HOUR_MS))
+    )
+      return json({ error: "too many tries on this tag — try again in an hour", reason: "limited" }, { status: 429 });
     if (normCode(b.code) !== normCode(stage.unlock_secret))
       return json({ unlocked: false, reason: "bad_code" }, { status: 403 });
   }

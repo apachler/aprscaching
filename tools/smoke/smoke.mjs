@@ -113,6 +113,19 @@ ok(
   `status=${created.status} ${JSON.stringify(created.data)}`,
 );
 const id = created.data?.cache?.id;
+// A request with neither a session nor the ingest secret: what a stranger's browser sends.
+const ANON = { "x-ingest-secret": "" };
+const mintedCode = await call("POST", "/api/caches", {
+  title: "Minted squat",
+  type: "traditional",
+  lat: 47,
+  lon: 15,
+  difficulty: 1,
+  terrain: 1,
+  ownerCall: "OE8APR",
+  code: "AC-9999",
+});
+ok("an explicit AC- code is refused, even for the instance", mintedCode.status === 400, `status=${mintedCode.status}`);
 
 // the virtual cache type (location/riddle/landmark, no container) is accepted end-to-end
 const vCache = await call("POST", "/api/caches", {
@@ -318,6 +331,25 @@ ok(
   "the session find is attributed to the signed-in callsign",
   (sessDetail.data?.cache?.logs ?? []).some((l) => l.loggerCall === SESSCALL),
   JSON.stringify((sessDetail.data?.cache?.logs ?? []).map((l) => l.loggerCall)),
+);
+const playerCode = await call(
+  "POST",
+  "/api/caches",
+  { title: "Squat", type: "traditional", lat: 47, lon: 15, difficulty: 1, terrain: 1, code: "GC-SQUAT" },
+  { ...ANON, cookie },
+);
+ok("a player cannot choose a cache code -> 403", playerCode.status === 403, `status=${playerCode.status}`);
+const sessFav = await call(
+  "POST",
+  `/api/caches/${sCacheId}/favorite`,
+  { callsign: "DL1ABC", on: true },
+  { ...ANON, cookie },
+);
+const favOf = async (cs) => (await call("GET", `/api/caches/${sCacheId}?callsign=${cs}`)).data?.cache?.favorited;
+ok(
+  "a favourite is the signed-in caller's, whatever the body names",
+  sessFav.status === 200 && (await favOf(SESSCALL)) === true && (await favOf("DL1ABC")) === false,
+  `status=${sessFav.status}`,
 );
 
 // change the active callsign — re-binds the session and resets verification to pending
@@ -777,6 +809,13 @@ ok(
 );
 const favOn = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: true });
 ok("favorite toggled on", favOn.data?.on === true && (favOn.data?.count ?? 0) >= 1, JSON.stringify(favOn.data));
+const favAnon = await call("POST", `/api/caches/${id}/favorite`, { callsign: "DL1ABC", on: false }, ANON);
+const watchAnon = await call("POST", `/api/caches/${id}/watch`, { callsign: "DL1ABC", on: true }, ANON);
+ok(
+  "favourite and watch need a session or the ingest secret -> 401",
+  favAnon.status === 401 && watchAnon.status === 401,
+  `fav=${favAnon.status} watch=${watchAnon.status}`,
+);
 const det = await call("GET", `/api/caches/${id}?callsign=DL1ABC`);
 ok(
   "detail carries favorite + health fields",
@@ -1023,6 +1062,8 @@ ok(
   unlock1.data?.unlocked === true && Math.abs((unlock1.data?.lat ?? 0) - 47.11) < 0.001,
   JSON.stringify(unlock1.data),
 );
+const unlockAnon = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" }, ANON);
+ok("unlock for a named callsign without a session -> 401", unlockAnon.status === 401, `status=${unlockAnon.status}`);
 const unlock2 = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" });
 ok(
   "open final stage unlocks after reaching stage 1",
@@ -1174,6 +1215,20 @@ ok(
   "nfc unlock with the right code (case-insensitive) reveals coords",
   nfcOk.data?.unlocked === true && Math.abs((nfcOk.data?.lat ?? 0) - 47.21) < 0.001,
   JSON.stringify(nfcOk.data),
+);
+const peek = await call("GET", `/api/caches/${mid}/stages?callsign=DL1ABC`, undefined, ANON);
+ok(
+  "a stranger naming a finder sees only the public start",
+  peek.data?.stages?.[1]?.lat === null && peek.data?.stages?.[1]?.unlocked === false,
+  JSON.stringify(peek.data?.stages?.[1]),
+);
+let guess;
+for (let i = 0; i < 11; i++)
+  guess = await call("POST", `/api/caches/${nid}/stages/1/unlock`, { callsign: "DL7RL", code: `WRONG${i}` });
+ok(
+  "NFC code guessing stops after 10 tries an hour -> 429",
+  guess.status === 429 && guess.data?.reason === "limited",
+  JSON.stringify(guess.data),
 );
 
 // ---- account data lifecycle: GDPR export/erasure + portability (signed by a registered key) ----

@@ -35,6 +35,7 @@ import { awardFindBadges, awardHideBadge, cacheHealth, favoritesInfo, ratingInfo
 import { rendezvousFor } from "./rendezvous.js";
 import { fieldTime } from "./fieldtime.js";
 import { stageCount } from "./stages.js";
+import { requireSysop } from "./admin.js";
 
 // ---- D1 row shapes (snake_case) ----
 export interface CacheDbRow {
@@ -297,7 +298,8 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
       .bind(id)
       .all<{ month: string; n: number }>()
   ).results.reverse();
-  const who = new URL(req.url).searchParams.get("callsign");
+  // the caller's own favourite and rating: `?callsign=` names someone else only with the ingest secret
+  const who = await actor(req, env, new URL(req.url).searchParams.get("callsign") ?? undefined);
   const health = await cacheHealth(env, id);
   const fav = await favoritesInfo(env, id, who);
   const rating = await ratingInfo(env, id, (row.rating_policy ?? "finders") as "finders" | "all" | "off", who);
@@ -335,6 +337,9 @@ export async function handleCacheLogs(req: Request, env: Env, id: number): Promi
 }
 
 // ---------------------------------------------------------------- create ("hide a cache")
+/** The form of the codes the instance mints, `AC-` and the cache id. */
+const MINTED_CODE = /^AC-\d+$/i;
+
 export async function handleCreateCache(req: Request, env: Env): Promise<Response> {
   const parsed = CreateCacheRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error.issues }, { status: 400 });
@@ -342,6 +347,13 @@ export async function handleCreateCache(req: Request, env: Env): Promise<Respons
 
   const owner = await actor(req, env, b.ownerCall);
   if (!owner) return json({ error: "owner callsign required (sign in or pass ownerCall)" }, { status: 401 });
+  if (b.code) {
+    // An explicit code is for imports by the instance itself. A player who picked one could take a code the
+    // instance mints later, or one that reads like another cache's.
+    if (!ingestOk(req, env) && (await requireSysop(req, env)))
+      return json({ error: "only the sysop can choose a cache code" }, { status: 403 });
+    if (MINTED_CODE.test(b.code)) return json({ error: "AC- codes are minted by the instance" }, { status: 400 });
+  }
 
   const now = nowS();
   const tmpCode = `__minting__${crypto.randomUUID()}`;
