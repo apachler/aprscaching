@@ -35,11 +35,9 @@ added.
 - optional sounds played from the SD card; setup data is also stored on the SD card.
 
 **Recent T-Deck Plus work** (firmware 4.35s–4.35t): a Kalman filter on GPS positions, key repeat on the
-keyboard, faster boot, and a sound/mute fix.
-
-**Known issue.** Screen rendering sometimes stops part-way through an update
-([MeshCom-Firmware #1131](https://github.com/icssw-org/MeshCom-Firmware/issues/1131), open as of
-September 2026).
+keyboard, faster boot, and a sound/mute fix. Firmware 4.35t also fixes screen rendering that stopped part-way
+through an update ([MeshCom-Firmware #1131](https://github.com/icssw-org/MeshCom-Firmware/issues/1131)), so a
+T-Deck Plus for this map runs 4.35t or later.
 
 **Unverified:** how the map is implemented — tile source, whether map data lives on the SD card, the
 rendering library, and the memory left for an overlay. See the open questions below.
