@@ -53,7 +53,8 @@ reading** shows when the last one arrived. **Re-issue key** makes new URLs and s
 ### A weather station somewhere else
 
 For a station at another place, such as a summit, add it under **Settings → My stations** with the
-**Weather** role, its own callsign and its coordinates. Open the station and select **Enable weather push**.
+**Weather** role, its own callsign (an SSID of a verified callsign on your account, such as `OE8APR-13`) and its
+coordinates. Open the station and select **Enable weather push**.
 Its URLs work the same way, and the readings appear under that station's callsign at its coordinates.
 
 ### A station on USB

@@ -43,8 +43,8 @@ Only **Radio-verified** checks that you met the station. A verified find on a li
 
 ## What a hider sets
 
-A living cache follows a station of your own: one listed under **Settings → My stations**. Nobody can make a
-cache of another operator's beacon. There are three ways to make one:
+A living cache follows a station of your own: one listed under **Settings → My stations**, which takes only
+stations of your verified callsigns. Nobody can make a cache of another operator's beacon. There are three ways to make one:
 
 - **+ Hide a cache**, then pick **Living (APRS)** under **Type**. Under **Station**, pick one of your stations,
   for example `OE8APR-9`; add it under **My stations** first if it is not there. The other fields are those of

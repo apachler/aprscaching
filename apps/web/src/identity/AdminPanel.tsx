@@ -4,6 +4,7 @@ import type * as maplibregl from "maplibre-gl";
 import {
   getFederationSync,
   syncFederationNow,
+  adminAddStation,
   listFederationPeers,
   setPeerTrust,
   add44netPeer,
@@ -112,6 +113,11 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
           <VerificationAdmin />
         </Group>
       )}
+      {show("stations", "club", "member", "digipeater", "igate", "list") && (
+        <Group title="Stations for members" status="club stations" defaultOpen={false}>
+          <StationsAdmin />
+        </Group>
+      )}
       {show("adoption", "adopt", "caches", "owner", "withdrawn", "assign", "orphan") && (
         <Group title="Cache adoption" status="owners" defaultOpen={false}>
           <AdoptionAdmin />
@@ -138,6 +144,99 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
         </Group>
       )}
     </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- stations listed for members
+
+/**
+ * A member lists under My stations only stations of callsigns they hold and have verified. A club station run by a
+ * member who does not hold the club call is listed for them here; they then manage it like their own.
+ */
+function StationsAdmin() {
+  const toast = useToast();
+  const [owner, setOwner] = useState("");
+  const [station, setStation] = useState("");
+  const [lat, setLat] = useState("");
+  const [lon, setLon] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const own = owner.trim().toUpperCase();
+  const st = station.trim().toUpperCase();
+  const submit = async () => {
+    if (!CALL_RE.test(own) || !CALL_RE.test(st)) {
+      setFormErr("Enter the member's callsign and the station's callsign.");
+      return;
+    }
+    const la = lat.trim() ? Number(lat) : undefined;
+    const lo = lon.trim() ? Number(lon) : undefined;
+    if ((la !== undefined && !Number.isFinite(la)) || (lo !== undefined && !Number.isFinite(lo))) {
+      setFormErr("Latitude and longitude are decimal degrees, or blank to take a heard station's position.");
+      return;
+    }
+    setSaving(true);
+    setFormErr(null);
+    try {
+      const r = await adminAddStation({ owner: own, callsign: st, lat: la, lon: lo });
+      toast(`${r.station.callsign} listed for ${own}`);
+      setStation("");
+      setLat("");
+      setLon("");
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <>
+      <p className="muted fine">
+        Members list only stations of their own verified callsigns. List a club station here for the member who runs it;
+        it then shows under their My stations.
+      </p>
+      <div className="partner-form">
+        <label>
+          Member's callsign
+          <input
+            className="mono"
+            placeholder="OE8APR"
+            value={owner}
+            autoCapitalize="characters"
+            spellCheck={false}
+            onChange={(e) => setOwner(e.target.value)}
+          />
+        </label>
+        <label>
+          Station's callsign
+          <input
+            className="mono"
+            placeholder="OE8XKR-10"
+            value={station}
+            autoCapitalize="characters"
+            spellCheck={false}
+            onChange={(e) => setStation(e.target.value)}
+          />
+        </label>
+        <label>
+          Latitude (blank: as heard)
+          <input inputMode="decimal" placeholder="46.62" value={lat} onChange={(e) => setLat(e.target.value)} />
+        </label>
+        <label>
+          Longitude (blank: as heard)
+          <input inputMode="decimal" placeholder="14.31" value={lon} onChange={(e) => setLon(e.target.value)} />
+        </label>
+        <div className="row end">
+          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void submit()}>
+            {saving ? "Listing…" : "List the station"}
+          </Button>
+        </div>
+        {formErr && (
+          <p className="error" role="alert">
+            {formErr}
+          </p>
+        )}
+      </div>
+    </>
   );
 }
 

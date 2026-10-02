@@ -84,9 +84,10 @@ export function MyStations(props: { callsign: string }) {
     <>
       <p className="muted">
         Your operated stations — a home weather PWS, a remote digipeater/igate/node on a mountain. Each has its own
-        callsign, location and roles; weather-capable stations get a push key. The callsign need not be your own (clubs,
-        inherited infrastructure). Set a location, or leave it blank to adopt a station already heard on the map — and
-        tap any station pin to add it directly.
+        callsign, location and roles; weather-capable stations get a push key. A station's callsign is one of yours,
+        verified: OE8APR-9 needs OE8APR on your account. A club station whose call you do not hold is listed for you by
+        your sysop. Set a location, or leave it blank to adopt a station already heard on the map — and tap any station
+        pin to add it directly.
       </p>
       <p className="muted fine">
         Running infrastructure feeds the commons: a receiving station this instance attests makes other people&apos;s

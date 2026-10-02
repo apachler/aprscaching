@@ -1960,6 +1960,18 @@ ok(
 
 // operated-stations registry — manage multiple own stations with explicit locations
 ok("my-stations list requires a session (401)", (await call("GET", "/api/my/stations")).status === 401);
+// a station belongs to a held, verified call: before verifying, OE9PROF lists none
+ok(
+  "an unverified call lists no station (403)",
+  (
+    await fetch(`${BASE}/api/my/stations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: prcookie },
+      body: JSON.stringify({ callsign: "OE9PROF-2", lat: 47.62, lon: 13.0 }),
+    })
+  ).status === 403,
+);
+ok("the station owner verifies OE9PROF on the air", await verifyCallsign("OE9PROF", prcookie));
 const stBad = await fetch(`${BASE}/api/my/stations`, {
   method: "POST",
   headers: { "content-type": "application/json", cookie: prcookie },
@@ -2001,26 +2013,26 @@ ok(
   JSON.stringify({ roles: stOnMap.data?.station?.roles, sym: stOnMap.data?.station?.symbol }),
 );
 ok(
-  "a station callsign need NOT be the operator's own (with a location)",
+  "another operator's callsign is not listed (403)",
   (
     await fetch(`${BASE}/api/my/stations`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: prcookie },
       body: JSON.stringify({ callsign: "DL9XXX-7", lat: 50.1, lon: 8.6, roles: ["igate"] }),
     })
-  ).status === 201,
+  ).status === 403,
 );
-// adopt a station already heard on the map (no coords given → inherit OE1WX's fix)
+// adopt an own station already heard on the map (no coords given → inherit OE9PROF-13's fix)
 const adopt = await (
   await fetch(`${BASE}/api/my/stations`, {
     method: "POST",
     headers: { "content-type": "application/json", cookie: prcookie },
-    body: JSON.stringify({ callsign: "OE1WX", roles: ["digipeater"] }),
+    body: JSON.stringify({ callsign: "OE9PROF-13", roles: ["weather"] }),
   })
 ).json();
 ok(
   "adopt a heard station with no coords inherits its location",
-  adopt.station?.callsign === "OE1WX" && adopt.station?.lat != null && adopt.station?.lon != null,
+  adopt.station?.callsign === "OE9PROF-13" && adopt.station?.lat != null && adopt.station?.lon != null,
   JSON.stringify(adopt.station),
 );
 const stWxNo = await fetch(`${BASE}/api/my/stations/${stMk.station.id}/wx-key`, {
