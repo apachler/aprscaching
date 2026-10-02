@@ -16,7 +16,8 @@ aprscaching is software; the licence is yours. Nothing the platform or its users
 responsibility for what leaves your antenna. The software helps in three ways:
 
 - **Transmit is off by default and gated.** The browser radio's beacon and messages, the APRS-IS weather
-  beacon and the CWOP relay, and plugins that transmit all stay off until your callsign is
+  beacon and the CWOP relay, the **Packet terminal**'s connections, and plugins that transmit all stay off until
+  your callsign is
   **control-verified**: you sent `VERIFY <code>` and a receiving site the instance attests heard it on the
   air, you proved the call another way ([Verify your callsign](../play/join.md#verify-your-callsign)), or a
   sysop vouched for it. The APRS-IS passcode verifies nothing and is never the gate.
@@ -24,10 +25,6 @@ responsibility for what leaves your antenna. The software helps in three ways:
   on **Enable transmit** is a separate step.
 - **Receiving never obliges you to transmit.** Receiving is always allowed and never raises trust
   ([The trust model](../reference/trust-model.md)).
-
-!!! note "Known issue"
-    The **Packet terminal** keys your radio when it connects, without checking that your callsign is verified.
-    Use it only with a callsign you hold.
 
 ## No encryption on the air — sign, never conceal
 

@@ -79,3 +79,37 @@ describe("terminal session core", () => {
     expect(h.B.channels[0]!.state).toBe("disconnected");
   });
 });
+
+describe("a station that may not transmit only listens", () => {
+  it("refuses to connect and sends no frame", () => {
+    const sent: Ax25Frame[] = [];
+    const s = new TerminalSession("OE8APR-1", { send: (f) => sent.push(f) }, () => {});
+    s.allowTransmit(false);
+    expect(() => s.connect("OE8XBM-7")).toThrow(/verify your callsign/);
+    expect(sent).toHaveLength(0);
+    expect(s.canTransmit).toBe(false);
+  });
+
+  it("does not answer an incoming connect, but the monitor still records it", () => {
+    const h = harness();
+    h.B.allowTransmit(false);
+    h.A.connect("OE8XBM-7");
+    h.pump();
+    expect(h.B.channels).toHaveLength(0);
+    expect(h.B.monitor.length).toBeGreaterThan(0);
+    expect(h.A.channels[0]!.state).not.toBe("connected");
+  });
+
+  it("drops open connections without sending when transmit is turned off", () => {
+    const h = harness();
+    const id = h.A.connect("OE8XBM-7");
+    h.pump();
+    expect(h.A.channels.find((c) => c.id === id)?.state).toBe("connected");
+    h.A.allowTransmit(false);
+    expect(h.A.channels.find((c) => c.id === id)?.state).toBe("disconnected");
+    h.A.send(id, "hello");
+    h.advance(5000);
+    h.pump();
+    expect(h.B.channels[0]!.lines.some((l) => l.text.includes("hello"))).toBe(false);
+  });
+});

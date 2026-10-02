@@ -23,7 +23,9 @@ The **Packet terminal** is a multi-channel connected-mode terminal for a USB [KI
 It needs Web Serial, so use Chrome or Edge on a computer.
 
 !!! warning "Connecting transmits"
-    A connect keys your radio under your callsign. Read [On-air etiquette and rules](on-air.md) first.
+    A connect keys your radio under your callsign, so the terminal connects only for a verified callsign
+    ([Verify your callsign](../play/join.md#verify-your-callsign)). Until then it listens: channel 0 shows
+    everything your TNC hears. Read [On-air etiquette and rules](on-air.md) first.
 
 1. Open **Shack → Packet terminal**.
 2. Plug in the TNC and select **Open KISS TNC…**, then pick the device in the browser's dialog. Channel 0 shows

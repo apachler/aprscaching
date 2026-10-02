@@ -77,7 +77,13 @@ function AnsiLine({ text }: { text: string }) {
   );
 }
 
-export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTransport; autoConnect?: string }) {
+export function PacketTerminal(props: {
+  callsign: string;
+  /** A control-verified callsign: only then does the terminal connect and transmit; otherwise it listens. */
+  verified: boolean;
+  makeTransport?: MakeTransport;
+  autoConnect?: string;
+}) {
   const [, forceRender] = useReducer((n) => n + 1, 0);
   const notify = useCallback(() => forceRender(), []);
   const fmt = useFmt();
@@ -137,6 +143,7 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         },
       );
       const session = new TerminalSession(myCall, transport, notify, namesRef.current);
+      session.allowTransmit(props.verified); // transmit is gated on callsign control-verification
       await transport.connect(9600);
       transportRef.current = transport;
       sessionRef.current = session;
@@ -222,9 +229,12 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // a callsign that loses (or gains) its verification while the port is open stops (or may start) transmitting
+  useEffect(() => sessionRef.current?.allowTransmit(props.verified), [props.verified]);
+
   function connect() {
     const s = sessionRef.current;
-    if (!s || remoteCall.trim().length < 3) return;
+    if (!s || !props.verified || remoteCall.trim().length < 3) return;
     const id = s.connect(remoteCall.trim().toUpperCase());
     setActiveId(id);
     setViewMon(false);
@@ -305,6 +315,13 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
         )}
       </div>
       {err && <p className="error">{err}</p>}
+      {!props.verified && (
+        <p className="muted">
+          Connecting transmits, so it is for <strong>licensed, control-verified</strong> operators only: verify your
+          callsign in Settings → Account to connect. Until then the terminal listens: channel 0 shows everything your
+          TNC hears.
+        </p>
+      )}
 
       {!portOpen && (
         <EmptyState
@@ -369,12 +386,17 @@ export function PacketTerminal(props: { callsign: string; makeTransport?: MakeTr
                 value={remoteCall}
                 placeholder="connect to…"
                 aria-label="Connect to callsign"
+                disabled={!props.verified}
                 onChange={(e) => setRemoteCall(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") connect();
                 }}
               />
-              <Button onClick={connect} disabled={remoteCall.trim().length < 3}>
+              <Button
+                onClick={connect}
+                disabled={!props.verified || remoteCall.trim().length < 3}
+                title={props.verified ? undefined : "Verify your callsign to connect"}
+              >
                 Connect
               </Button>
             </div>
