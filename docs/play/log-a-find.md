@@ -1,73 +1,136 @@
 # Log a find
 
-At the cache, you log what happened: a find, a did-not-find or a note. This page covers logging in the app and
-from your radio.
+This page shows you how to log what happened at a cache: a find, a did-not-find or a note. It is for any
+player, in the app or with a radio; at the end your log is in the cache's logbook.
 
-At the cache, tap **✓ Log a find** (or **Log** in the bottom bar). Allow location access when the browser
-asks — that reading is what verifies your find. If you refuse, the find is still logged, but not verified by
-your phone.
+## Before you start
 
-The result shows how well your find is verified:
+- You are signed in ([Join](join.md)).
+- For logging by radio: a [verified callsign](join.md#verify-your-callsign) and an APRS radio or a
+  [MeshCom](../glossary.md#meshcom) node.
 
-| Badge                 | Tier | Meaning                                                                                                                                                                             |
-| --------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Radio-verified**    | A    | Your APRS position was heard on the air near the cache, by a receiving station the instance runs and that isn't yours, on a believable track. Peer instances can also confirm this. |
-| **Location-verified** | B    | Your phone's location at logging time matched the cache (within the cache's radius plus your GPS accuracy).                                                                         |
-| **Logged**            | C    | Nothing independent placed you at the cache — at most an internet (APRS-IS) position. The find is recorded but not verified.                                                        |
+## Log in the app
 
-Under the badge, one line says why in plain words — for example how far your phone was from the cache. If a
-cache requires a higher tier than your find reached, the find is recorded as **Logged**.
+1. At the cache, open its sheet and tap **✓ Log a find**. On a phone you can also tap **Log** in the bottom
+   bar. The button shows **Locating…** while the phone gets a fix.
+2. Tap **Allow** when the browser asks for your location. That reading is what verifies your find. Without
+   it, tap **Log without location**; the find is still logged, but not verified by your phone.
+3. If the phone places you too far from the cache, the app asks first: *You're 34 km from the cache — log
+   anyway?* Tap **Log anyway** or **Not yet**.
 
-If your phone places you farther from the cache than it can verify, the app asks first: _"You're 34 km from
-the cache — log anyway?"_ Each cache takes one find from each callsign, scored when you log it, so logging
-it again later shows **You already logged this** and leaves the first find as it was.
-Your find is signed with your device key (**signed with your device key ✍**); if you verified your
-callsign, it can also be **announced to APRS-IS**.
+The result card opens with **Logged**, a badge, and one line that says why. **✓** next to **Logged** means the
+find counts as verified.
 
-**No signal?** The app opens without a connection, and a find logged offline is saved, signed with the time
-you made it, and verified at that time when it syncs. Before a trip, make an **offline pack** of the area.
-[Hunting without signal](offline.md) has it all.
+### Other log types
 
-**Couldn't find it** records a [DNF](../glossary.md#dnf); **Add a note** posts a note to the logbook.
+| You tap                                           | It logs                                                  | The card shows   |
+| ------------------------------------------------- | -------------------------------------------------------- | ---------------- |
+| **Couldn't find it**                              | a did-not-find ([DNF](../glossary.md#dnf))               | **Marked DNF**   |
+| **Add a note**, then **Post note**                | a note in the logbook                                    | **Note posted**  |
+| **Add a note**, then **Post as maintenance**      | what you checked or fixed, for the cache's owner only    | **Note posted**  |
+
+After a find, **Add a note** on the result card adds a note to the same cache.
+
+## Read the result
+
+| Badge                 | What placed you at the cache                                                          |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Radio-verified**    | A receiving station that is not yours heard your APRS position on the air near the cache. |
+| **Location-verified** | Your device's location, read when you logged, was at the cache.                         |
+| **Logged**            | Nothing independent. The find is on record but not verified.                            |
+
+[How finds are verified](verification.md) explains each badge, with the distances and times.
+
+The line under the badge says why, for example *Your device was 12 m from the cache when you logged it*. Some
+caches need a better badge than yours. The line then says so: *This cache needs a Radio-verified find. Yours
+was Location-verified, so it is on record but does not count as verified.*
+
+**signed with your device key** means your browser signed the find with a key that stays on your device. You
+do nothing for it. The signature ties the find to your callsign, even if you move to another instance.
+
+### One find per callsign
+
+Each cache takes one find from each callsign. The find is scored when you log it. Logging it again shows
+**You already logged this**, and your first find stays as it was scored.
+
+!!! note "Known issue"
+    In the app, the rule is one find per exact callsign, so `OE8APR` and `OE8APR-7` can each log the same
+    cache. Finds logged under an SSID do not count on the leaderboard.
+
+!!! note "Known issue"
+    Archived and disabled caches still accept finds, in the app and by radio. Owners can log finds on their
+    own caches, and those finds earn points and badges.
+
+## Log without signal
+
+With no mobile data, a log is saved on your phone. The card shows **Saved** and *offline — will sync when
+you're back online*. The top bar counts what waits; tap it to open **Logs to sync**.
+
+When the signal returns, the app sends the log. Your find is verified for the time you made it, not the time
+it synced. If the instance refuses a log, it moves to **Needs attention** with the reason. There you retry
+it, edit it or discard it. [Hunt without signal](offline.md) has the details.
 
 ## Log from your radio
 
-No phone with you? Send an APRS text message from your radio to the instance's service call — `APRSCG`
-unless the instance names another:
+No phone with you? Send an APRS text message from your radio to the instance's service call. The call is
+usually `APRSCG`; **You** → **Logs sent over the air** names the one your instance uses.
 
-| Message                    | Logs                           |
-| -------------------------- | ------------------------------ |
-| `FOUND AC-1234 nice spot`  | a find, with optional log text |
-| `DNF AC-1234 muggles`      | a did-not-find                 |
-| `NOTE AC-1234 log is full` | a note                         |
-| `HELP`                     | replies with the command list  |
+| Message                    | Logs                                  |
+| -------------------------- | ------------------------------------- |
+| `FOUND AC-1234 nice spot`  | a find, with optional log text        |
+| `DNF AC-1234 muggles`      | a did-not-find, with optional log text |
+| `NOTE AC-1234 log is full` | a note; the text is required          |
+| `HELP`                     | a reply with the command list         |
 
-The dash in the code is optional. Your callsign must be verified on your account (**Settings → Account**);
-the log goes to the account that holds it.
+The dash in the code is optional. A MeshCom direct message to the service call works the same way.
 
-- **Heard by one of the instance's own receiving stations** (its [attested
-  sites](../glossary.md#attested-site)), the message is logged at once.
-- **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message), it waits under **You →
-  Logs sent over the air** until you tap **Confirm** — anyone can put your callsign on an internet message,
-  so the app asks you first. Unconfirmed messages expire after seven days.
+The log goes to the account that holds your callsign, with any SSID. Your callsign must be verified first;
+otherwise the message is not logged.
 
-The find is verified the usual way, at the time you sent the message: beacon your position near the cache
-first, and a find heard by an independent receiving station reaches **[Tier A](../glossary.md#tier)**. A radio
-message carries no phone location, so without such a beacon it is recorded at **Tier C**.
+### Where it lands
 
-Your radio gets an acknowledgement when it numbers the message (radios add a number when they want one), sent
-back the way your message came: from the receiving station's own radio when it can transmit (no internet
-needed), through the MeshCom node that heard you, or over APRS-IS. A text reply ("AC-1234 found, logged Tier
-A") comes only if the operator has turned replies on; `HELP` is always answered. At most ten commands per hour
-are accepted from one callsign, all its SSIDs together; more are ignored, without an acknowledgement.
+- **Heard on the air by one of the instance's own receiving stations**: the log is written at once.
+- **Sent from the app's own radio bridge** (**Settings** → **My radio (browser)**): written at once too, since
+  your device signs it.
+- **Arrived only over the internet** (APRS-IS, or a relayed MeshCom message): it waits under **You** →
+  **Logs sent over the air**, marked **to confirm**. Tap **Confirm** to log it, or **Discard**. Anyone can put
+  your callsign on an internet message, so the app asks you first. A message you do not confirm within 7 days
+  expires.
 
-## Your finds are signed
+### How radio finds are verified
 
-When you log a find, your browser signs it with a key that lives only on your device. You don't have to do
-anything; the result shows **signed with your device key ✍**. The signature ties the find to your callsign
-even if you later move to another instance.
+The find is scored for the time you sent the message. A radio message carries no phone location, so it gets
+one of two badges:
+
+- **Radio-verified** when a receiving station that is not yours heard your position beacon near the cache in
+  the 30 minutes before the message. Beacon at the cache first, then send `FOUND`.
+- **Logged** otherwise.
+
+### Acknowledgements and limits
+
+- Your radio gets an acknowledgement when it numbers the message. Most radios number messages that want one.
+- A text reply, such as *AC-1234 found, logged Tier A*, comes only if your sysop turns replies on. `HELP` is
+  answered either way. You get at most one reply every 10 minutes.
+- A retry of the same message within 30 minutes is only acknowledged again, never logged twice.
+- One callsign may send ten commands an hour, all its SSIDs together. More are ignored, with no
+  acknowledgement.
+
+## Announce your finds on APRS-IS
+
+With a verified callsign, a find can be announced to [APRS-IS](../glossary.md#aprs-is) as a short status
+message from your callsign. The result card then shows **announced to APRS-IS**. Announcing is off unless you
+opt in.
+
+!!! note "Known issue"
+    The app has no switch to opt in, so finds are not announced.
+
+## Check that it worked
+
+- Open the cache sheet and scroll to the **Logbook**. Your log is at the top, with its badge.
+- For a radio log, **You** → **Logs sent over the air** shows **logged**.
+- For an offline log, **Logs to sync** is empty once it has synced.
 
 ## Next
 
-- [How finds are verified](verification.md).
-- [Community](community.md).
+- [How finds are verified](verification.md): how to earn a better badge.
+- [Community](community.md): ratings, badges and ranks.

@@ -98,7 +98,11 @@ nav:
       - Your first find: play/first-find.md
       - Cache types:
           - Overview: play/cache-types/index.md
+          - Traditional: play/cache-types/traditional.md
           - Multi-stage: play/cache-types/multi.md
+          - Living cache: play/cache-types/living.md
+          - Audio: play/cache-types/audio.md
+          - Virtual: play/cache-types/virtual.md
           - Heritage places: play/cache-types/heritage.md
       - Find a cache: play/find-a-cache.md
       - Hunting without signal: play/offline.md
@@ -107,6 +111,8 @@ nav:
       - Hide a cache: play/hide-a-cache.md
       - Community: play/community.md
       - Your account: play/account.md
+      - Getting to your instance: play/your-instance.md
+      - Help and FAQ: play/help-faq.md
   - The Shack:
       - The Shack at a glance: shack/index.md
       - Your radio in the browser: shack/my-radio.md
