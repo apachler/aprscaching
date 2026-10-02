@@ -118,7 +118,11 @@ the real browser ceremony before a release.
     settings search, the Shack, the sysop's first hour) by their visible controls on a phone and a desktop, with a
     screenshot per step and a log that marks every step it could not complete.
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
-    axe finding.
+    axe finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
+    the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and
+    keeps them as an artifact.
+- **Inline styles** — ESLint rejects a `style` prop in `apps/web` that sets anything but custom properties
+  (`style={{ "--pct": "40%" }}`); every other value is a token in the stylesheets.
 - **Landing images** — `pnpm --filter @aprscaching/web landing-assets` (after a build, with a connection for the
   basemap tiles) renders the landing page's map band, phone and desktop screenshots and Open Graph card from the
   fixtures, and writes them with the hero photo to `apps/web/public/landing/` as AVIF and WebP at the srcset widths.
@@ -162,7 +166,8 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 
 | Workflow | Trigger | Gating? |
 |---|---|---|
-| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
+| `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
@@ -173,6 +178,6 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `release-please.yml` — versioning + changelog | push (main) | Release |
 
 A change to docs only (`docs/`, `mkdocs.yml`, Markdown) or to the Pocket scripts only (`deploy/pocket/`) skips
-`ci.yml`'s type-aware lint, unit tests, conformance legs and audio e2e: its `changed paths` job reads the diff
+`ci.yml`'s type-aware lint, unit tests, conformance legs, e2e runs and axe: its `changed paths` job reads the diff
 and those jobs report as skipped. The Pocket scripts job runs only when `deploy/pocket/` or `ci.yml` changes.
 When the diff cannot be read, every job runs.

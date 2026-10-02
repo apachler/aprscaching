@@ -46,6 +46,22 @@ The work item is the handover item that fixes it.
 | Type / spacing / radius / elevation tokens | 23 font sizes (with half steps) · 15 spacing steps · 17 radii · 13 elevations; named by size, not role |
 | Colour literals outside `tokens.css` | `offlineBasemap.ts` 15, `MapTools.tsx` 7, `brand.ts` 7, `TrackReplay.tsx` 5, `MeshcomLinks.tsx` 2, `OfflinePanel.tsx` 1 |
 
+## After the pass
+
+Measured on the same harness after the design-system pass.
+
+| Measure | Before | After |
+|---|---|---|
+| axe serious/critical rules failing, 159 renders | 5 rules on up to 62 renders | 0; the `axe` CI job keeps it there |
+| Contrast pairs failing | dark 1 · light 17 · Phosphor 0 (of 24 per theme) | 0 of 41 per theme, in all three; no known failures |
+| Raw `<button>` outside `ui/` vs `Button` | 193 vs 75 | 1 vs 257 |
+| Inline `style={{…}}` | 10, some setting colours and sizes | 11, all custom properties only; ESLint rejects anything else |
+| Icon systems | `Icon` 19 · `Ico` 42 | `Icon` only (71 uses; Phosphor's CP437 through its `cp437` prop) |
+| Scales | 23 sizes · 15 spacings · 17 radii · 13 elevations, size-named | role-named: 10 type · 9 space · 6 radius · 7 elevation · 6 motion |
+| Colour literals in `src/*.ts(x)` | `offlineBasemap.ts` 15, `MapTools.tsx` 7, `brand.ts` 7, `TrackReplay.tsx` 5, `MeshcomLinks.tsx` 2, `OfflinePanel.tsx` 1 | `offlineBasemap.ts` 17 (the offline map's own cartography), `brand.ts` 7 (the brand constants), and one fallback each in `tokenColor.ts` and `MeshcomLinks.tsx`; map overlays read their tokens |
+| Landing page (Fast 4G) | — | LCP ≈ 1.1 s · CLS 0.0003 · 121 KB gzip of JS, no MapLibre |
+| Landing page (Slow 4G, 4× CPU) | — | LCP ≈ 4.1 s, over the 2.5 s budget: the page is client-rendered (TODO: prerender it) |
+
 ## Findings
 
 ### Across the app
@@ -68,7 +84,7 @@ The work item is the handover item that fixes it.
 
 | ID | Sev. | Finding | Evidence | Work item | Resolution |
 |---|---|---|---|---|---|
-| R-12 | major | **2.5.8 Target size** fails on 62 renders:<br>• the Shack launcher's pin buttons;<br>• the terminal's channel close `.pt-x`;<br>• `<summary>` disclosures in Settings and the cache detail;<br>• disclosure buttons (`button[aria-controls]`). | axe `target-size` | DSN-10 | |
+| R-12 | major | **2.5.8 Target size** fails on 62 renders:<br>• the Shack launcher's pin buttons;<br>• the terminal's channel close `.pt-x`;<br>• `<summary>` disclosures in Settings and the cache detail;<br>• disclosure buttons (`button[aria-controls]`). | axe `target-size` | DSN-10 || Fixed: every control named here is at least 24 px with spacing and most are 44 px; axe `target-size` passes on all 159 renders (every surface, theme and width), and the axe job in CI keeps it so. |
 | R-13 | major | **2.4.7 Focus visible:** the top-bar search and the Settings search remove the outline (`outline: none`). The only cue is the wrapper's border going from 18 % to 40 % of the chrome ink. | keyboard walk: map stop 2, settings stop 2 | DSN-10 || Fixed: both search fields draw a 2px ring around the whole field (Phase 5). |
 | R-14 | major | **2.4.3 / 2.4.11:** cache pins outside the visible map stay in the tab order. Keyboard focus lands on markers nobody can see (map stops 21 and 23). | keyboard walk | DSN-10 || Fixed: only pins inside the view are focusable, re-checked after every move (Phase 5). |
 | R-15 | major | **2.1.1:** the landing page's terminal card is a scrollable region that cannot get keyboard focus. | axe `scrollable-region-focusable` on `landing-*`, `signin-*` | DSN-12 || Fixed: the terminal card no longer scrolls. Its lines wrap at any width, so it holds no scrollable region; axe finds nothing on the landing page in any theme. |
@@ -81,7 +97,7 @@ The work item is the handover item that fixes it.
 
 | ID | Sev. | Surface | Finding | Evidence | Work item | Resolution |
 |---|---|---|---|---|---|---|
-| R-19 | major | Instance admin, operator apps | A `?view=admin` (or node, remote) deep link was dropped: it ran before the operator check answered. | `admin-dark-desktop` (first run) | — | **Fixed in this PR**: the deep link waits for the operator check. |
+| R-19 | major | Instance admin, operator apps | A `?view=admin` (or node, remote) deep link was dropped: it ran before the operator check answered. | `admin-dark-desktop` (first run) | — | Fixed: the deep link waits for the operator check. |
 | R-20 | major | Search | The top bar has search only from 960 px up. A phone finds caches through Nearby, and has no way to search stations or a grid. | `map-*-phone` | G7 proposal || Proposed: `design-ia-proposal-2026-10.md`, Proposal 1 — waiting for the owner (G7). |
 | R-21 | major | Phone navigation | The phone tab bar holds Map, Nearby, Hide, Activity and You. It is not obvious how to reach Messages, Ranks, the Shack, Settings and Offline: Settings is under the identity chip, and the Shack under You → Advanced. | `*-phone` | G7 proposal || Proposed: same document, Proposal 2; the walk confirms Messages has no path on a phone — waiting for the owner (G7). |
 | R-22 | minor | Packet terminal | Before a TNC is open, the surface is blank below its title. There is no empty state saying what it does, what it needs (Web Serial or BLE, a KISS TNC) or what to press. | `terminal-*` | DSN-09 || Fixed: an empty state says what the terminal is for, what it needs, and offers *Open KISS TNC…* (Phase 5). |

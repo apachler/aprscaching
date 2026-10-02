@@ -68,6 +68,29 @@ export default tseslint.config(
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+      // A style prop sets custom properties only (`style={{ "--pct": "40%" }}`); colours, sizes and the rest
+      // are tokens in the stylesheets (.claude/rules/css.md).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='style'] ObjectExpression > Property[key.type='Identifier']",
+          message: 'style={{}} sets custom properties only ("--name"); put the value in CSS as a token (css.md).',
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='style'] ObjectExpression > Property[key.type='Literal']:not([key.value=/^--/])",
+          message: 'style={{}} sets custom properties only ("--name"); put the value in CSS as a token (css.md).',
+        },
+        {
+          selector: "JSXAttribute[name.name='style'] ObjectExpression > SpreadElement",
+          message: "style={{}} sets custom properties only; spell them out.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='style'] > JSXExpressionContainer > :not(ObjectExpression, TSAsExpression, TSSatisfiesExpression)",
+          message: "style takes an object literal of custom properties, not a computed style object.",
+        },
+      ],
     },
   },
   // Test files and Node scripts: relax a couple more.
