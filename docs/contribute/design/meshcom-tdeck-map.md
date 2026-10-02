@@ -123,6 +123,7 @@ concept is agreed with ICSSW. **Not filed.**
 > skipped; nothing is transmitted.
 >
 > **File format.**
+>
 > - *GPX subset:* `<wpt lat="…" lon="…">` with `<name>` (label, truncated to 9 characters) and optional
 >   `<sym>` / `<type>`; everything else ignored.
 > - *CSV:* `lat,lon,label,symbol` — decimal degrees, label up to 9 characters, symbol an APRS symbol pair

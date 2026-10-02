@@ -71,6 +71,7 @@ One verification covers the callsign and every [SSID](../glossary.md#ssid) of it
     - **Message**: `VERIFY` and a six-digit code, for example `VERIFY 482913`.
 
     It also names the **Receiving stations** that listen for it.
+
 2. Send that message from your callsign or any SSID of it. Use an APRS message on your radio, or a MeshCom
    direct message from your node. **Copy message** copies the text.
 3. Wait while the app listens. When a receiving station hears your message, the app shows

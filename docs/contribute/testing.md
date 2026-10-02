@@ -126,6 +126,7 @@ the real browser ceremony before a release.
     axe finding. CI runs `run.mjs --no-shots --strict` on every pull request that touches code (the `axe` job);
     the `visual` workflow takes the screenshots, the keyboard walk and the journeys nightly and on demand, and
     keeps them as an artifact.
+
 - **Inline styles** — ESLint rejects a `style` prop in `apps/web` that sets anything but custom properties
   (`style={{ "--pct": "40%" }}`); every other value is a token in the stylesheets.
 - **Landing images** — `pnpm --filter @aprscaching/web landing-assets` (after a build, with a connection for the

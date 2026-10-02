@@ -90,6 +90,7 @@ flight mode is fine) or the **router** the phone has joined.
     It finds the network, and asks when both the hotspot and a Wi-Fi are up (`--hotspot` or `--wifi` answers).
     It prints the commands to enter on the node, writes `MESHCOM_NODE` and restarts the ingest. It never sends
     anything to the node.
+
 3. Enter the printed commands on the node: on its serial console, in the MeshCom app or on its web page.
     - **On the hotspot** the node gets a fixed address high in the hotspot's subnet (`--setownip`,
       `--setowngw`, `--setownms`, then `--extudpip <the phone>` and `--extudp on`).
@@ -139,6 +140,7 @@ per app, so `termux-usb` (Termux:API) hands the bridge the device.
     `--setup` writes `USB_KISS_DEVICE`, `USB_KISS_BAUD`, `KISS_TNC_HOST=127.0.0.1` and `KISS_TNC_PORT` to the
     `.env` and restarts the station. `start.sh` then runs the bridge in the tmux window `usb-kiss`. It waits for
     the TNC and restarts the bridge when the TNC is unplugged and plugged in again.
+
 4. **Optional:** to make what the TNC hears count toward Tier A, set `RF_SITE_CALL` to this station's call and
    list it in `FIRST_PARTY_SITES` ([Receiving site and Tier A](../radios/rf-ingest.md#receiving-site-and-tier-a)).
 

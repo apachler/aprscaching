@@ -25,6 +25,7 @@ on https or `localhost`. It usually has no email either. The sysop signs people 
     From a checkout, run `OPERATOR_SECRET=… node tools/admin/signin-link.mjs OE8APR` in its root directory. On
     Pocket, run `bash ~/aprscaching/deploy/pocket/signin-link.sh OE8APR` in Termux; it reads the secret from
     the station's `.env`. `--qr` also prints the link as a QR code.
+
 2. Hand the link to the person it is for: show it on their screen, let them scan the QR code, or type it on
    their device. Never send it over a channel others read.
 3. They open it and select **Sign in** on the confirm page. The session opens for the account that holds the

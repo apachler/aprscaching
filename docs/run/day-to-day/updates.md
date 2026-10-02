@@ -30,6 +30,7 @@ deploy/aprscaching update --rollback-window 30     # roll back without asking fo
     - ingest box: rebuild the ingest container.
 
     The gateway applies new migrations when it starts.
+
 4. It runs `doctor` again. If a check fails that did not fail before the update, it rolls back:
     1. the database to the pre-update backup, held at the backup's schema;
     2. then the code, rebuilt and restarted.

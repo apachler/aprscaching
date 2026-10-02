@@ -71,6 +71,7 @@ Golden fixtures for every shape below live in `packages/aprs/test/fixtures/meshc
   callsigns among them, drops the rest and counts them (`viaDropped`). A via list is the sender's plan, not
   the route the frame took — that is `src`. Firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8): `checkVia()` in `src/via_functions.cpp`, the
   destination split in `src/aprs_functions.cpp`.
+
 - `msg` is UTF-8. A direct message may end in an APRS message number (`Hello{034`).
 - A direct message neither to nor from the node is suppressed when the node runs `--nopmother on`.
 - Telemetry frames addressed to `100001` are never forwarded as text. The firmware compares the whole path,

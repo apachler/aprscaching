@@ -33,6 +33,7 @@ You need to be signed in. Stand at the spot, or know its coordinates.
     - Or type decimal degrees or a Maidenhead locator in **Coordinates** and tap **Place pin**.
 
     The panel shows **Pin at** with the coordinates and the grid square. Drag the pin to adjust it.
+
 3. Under **Basics**, type a **Title** and pick a **Type**. The line under the type says what it means.
 4. Under **Difficulty & terrain**, set **Difficulty** and **Terrain** with the sliders.
 5. Optional: open **Advanced: hint, description, rating & sharing** and fill in what you want

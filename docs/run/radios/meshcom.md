@@ -146,6 +146,7 @@ acks the message and confirms the verification. The player's steps are in
   `deduped` counts frames the node reported twice (over LoRa and from the server); `upgraded` counts a LoRa
   copy that arrived after the server copy and was forwarded again as RF; `viaDropped` counts via-list
   tokens that were not callsigns (the message itself is kept). Message text is never logged.
+
 - **Map**: MeshCom stations' positions, marked as MeshCom nodes, with how your node heard them and the links
   it heard ([MeshCom on the map](../../shack/live-map.md#meshcom-on-the-map)).
 - **Message log**: direct messages between callsigns.

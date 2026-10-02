@@ -34,6 +34,7 @@ never the only way to get RF in.
     For scripts: `./setup.sh --non-interactive --call OE8APR --lan-host 192.168.1.10`. It writes
     `DOMAIN=:80` and `APP_URL=http://192.168.1.10`, and starts the instance with federation off. The ingest
     keeps the stack's default `INGEST_URL=http://gateway:8080/ingest`, the gateway inside the same stack.
+
 2. Start it. In `deploy/`:
 
     ```bash

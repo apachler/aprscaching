@@ -108,6 +108,8 @@ Every game type gets the same sections, in this order:
   Vale warns on title case.
 - **Inverted pyramid**: what most readers need comes first. Edge cases and detail come last.
 - **Scannable**: short paragraphs, lists for parallel items, tables for things with the same fields.
+- **A blank line before a list**, and between items when one holds a second paragraph or a note. MkDocs reads
+  a marker without one as plain text ("… listen for it. 2. Send that …"); the docs check fails on it.
 - **Admonitions only for real warnings**: something that loses data, breaks the law or costs money. A tip is a
   sentence.
 - **Screenshots** for UI procedures, made from the demo fixtures (`tools/teaser/docs-shots.mjs` or the
@@ -134,7 +136,7 @@ Pages in the Play section are read on a phone, outdoors, by someone who is not a
 | Check | Fails on | Runs in |
 |---|---|---|
 | Vale (`.vale.ini`, `.vale/styles/APRScaching/`) | filler words, terminology variants (errors); title-case headings, Play-page readability (warnings); sentences over 30 words (suggestions) | docs workflow |
-| `tools/checks/docs.mjs` | process codes and story framing, undocumented configuration keys, pages outside the nav, broken links outside the manual, box-drawing diagrams, references to a manual page or heading that does not exist (paths, published URLs, in-app links, the doctor's hints) | lint job |
+| `tools/checks/docs.mjs` | process codes and story framing, undocumented configuration keys, pages outside the nav, broken links outside the manual, box-drawing diagrams, references to a manual page or heading that does not exist (paths, published URLs, in-app links, the doctor's hints), a list item MkDocs would read as text | lint job |
 | `mkdocs build --strict` | broken links and anchors inside the manual | docs workflow |
 | `apps/web/test/diagrams.test.ts` | a Mermaid block that does not parse | unit tests |
 
