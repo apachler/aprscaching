@@ -27,7 +27,8 @@ The map opens. Your callsign shows in the top bar, marked **unverified**.
 
 ### Verify your callsign
 
-1. Tap **You** in the bottom bar, then **Verify callsign**. **Settings → Account** opens.
+1. Tap **More**, then **You**, then **Verify callsign**. On a computer, **You** is in the left rail.
+   **Settings → Account** opens.
 2. Tap **verify** next to your callsign and follow the steps. The usual way is a short APRS message from your
    radio. [Verify your callsign](join.md#verify-your-callsign) explains every method.
 

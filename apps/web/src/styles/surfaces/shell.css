@@ -213,6 +213,65 @@
     font-size: var(--text-caption);
     color: var(--chrome-ink-muted);
   }
+  /* a destination that needs attention (platform/useAttention.ts): a dot by the icon, with words for a screen reader */
+  .nav-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--rail-bg);
+  }
+  .rail button {
+    position: relative;
+  }
+  .rail button .nav-dot {
+    position: absolute;
+    top: var(--space-xs);
+    right: var(--space-sm);
+  }
+  .tabbar button .ic {
+    position: relative;
+  }
+  .tabbar button .nav-dot {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    box-shadow: 0 0 0 2px var(--topbar-bg);
+  }
+  /* the phone's More sheet (platform/MoreSheet.tsx) */
+  .more-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2xs);
+  }
+  .more-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    justify-content: flex-start;
+    gap: var(--space-md);
+    padding: 0 var(--space-md);
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-weight: 500;
+    text-align: left;
+  }
+  .more-item:hover {
+    background: color-mix(in oklch, var(--ink) 6%, transparent);
+  }
+  .more-item.on {
+    background: var(--selected-bg);
+    color: var(--heading);
+  }
+  .more-item .nav-dot {
+    margin-left: auto;
+    box-shadow: none;
+  }
   /* bottom tab bar — mobile-first primary navigation (hidden on desktop) */
   .tabbar {
     display: none;

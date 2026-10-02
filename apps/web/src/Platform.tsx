@@ -79,11 +79,16 @@ import {
   panel,
   viewFromQuery,
   viewOf,
+  inMore,
+  MORE_ITEMS,
   type PanelKey,
   type View,
 } from "./nav.js";
 import { PlatformContext } from "./platform/PlatformContext.js";
 import { TabBar } from "./platform/TabBar.js";
+import { MoreSheet } from "./platform/MoreSheet.js";
+import { useAttention } from "./platform/useAttention.js";
+import { SearchSheet } from "./search/SearchSheet.js";
 import { useLiveSocket } from "./platform/useLiveSocket.js";
 import { useSync } from "./platform/useSync.js";
 import { useMapInstance, mapHash } from "./platform/useMapInstance.js";
@@ -187,8 +192,17 @@ export default function Platform({ session, startTour }: { session: SessionState
   }, [verified]);
   const [view, setView] = useState<View>(MAP);
   const isPanel = (key: PanelKey) => view.kind === "panel" && view.key === key;
+  const attention = useAttention({
+    signedIn: session.signedIn,
+    callsign,
+    verified,
+    messagesOpen: isPanel("messages"),
+  });
   const hiding = isPanel("hide");
   const [tourOpen, setTourOpen] = useState(startTour);
+  // the phone's More sheet and search sheet (TabBar, TopBar below 960px)
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [caches, setCaches] = useState<MapCache[]>([]);
   const [draft, setDraft] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -790,6 +804,7 @@ export default function Platform({ session, startTour }: { session: SessionState
   const pinnedApps = pins.map(appById).filter((a): a is ShackApp => !!a && (sysop || !a.sysop));
   const railKeys = new Set([...NAV_ITEMS.map((i) => i.key), ...pinnedApps.map((a) => a.id)]);
   const tabKeys = new Set(TAB_ITEMS.map((i) => i.key));
+  const moreKeys = new Set<string>(MORE_ITEMS.map((i) => i.key));
   const openDocs = useCallback(
     (slug: string, anchor = "") => {
       setDocSlug(slug);
@@ -820,6 +835,7 @@ export default function Platform({ session, startTour }: { session: SessionState
             onSearchSubmit={runSearch}
             onPickCache={pickCacheHit}
             onPickStation={pickStationHit}
+            onSearchOpen={() => setSearchOpen(true)}
             onNearby={() => openView(panel("nearby"))}
             onActivity={() => openView(panel("activity"))}
             onProfile={() => openView(panel("profile"))}
@@ -834,6 +850,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               pinnedApps={pinnedApps}
               onLaunchApp={launchApp}
               sysop={sysop}
+              attention={attention}
             />
 
             {/* the left dock: exactly one surface (the open View) — docked left at ≥1024px */}
@@ -1084,12 +1101,38 @@ export default function Platform({ session, startTour }: { session: SessionState
               active={activeKey(view, tabKeys)}
               onNav={onNav}
               fabLabel={selectedId != null || nearPrompt ? "Log" : "Hide"}
+              onMore={() => setMoreOpen(true)}
+              moreActive={inMore(view)}
+              moreAttention={MORE_ITEMS.some((i) => attention.has(i.key))}
               onFab={() => {
                 if (nearPrompt) {
                   closeAll();
                   setSelectedId(nearPrompt.cacheId);
                 } else if (selectedId == null) openView(panel("hide"));
               }}
+            />
+          )}
+          {moreOpen && (
+            <MoreSheet
+              active={activeKey(view, moreKeys)}
+              attention={attention}
+              sysop={sysop}
+              onClose={() => setMoreOpen(false)}
+              onPick={(key) => {
+                setMoreOpen(false);
+                if (key === "docs") openView(panel("docs"));
+                else onNav(key);
+              }}
+            />
+          )}
+          {searchOpen && (
+            <SearchSheet
+              q={filters.q}
+              onSearch={(v) => setFilters({ ...filters, q: v })}
+              onSearchSubmit={runSearch}
+              onPickCache={pickCacheHit}
+              onPickStation={pickStationHit}
+              onClose={() => setSearchOpen(false)}
             />
           )}
           {tourOpen && <Tour steps={TOUR_STEPS} signedIn={!!callsign} onDone={() => setTourOpen(false)} />}

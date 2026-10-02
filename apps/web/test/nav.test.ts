@@ -5,6 +5,8 @@ import {
   MAP,
   NAV_ITEMS,
   TAB_ITEMS,
+  MORE_ITEMS,
+  inMore,
   activeKey,
   createViewHistory,
   sameView,
@@ -97,8 +99,28 @@ describe("the surface table", () => {
     expect(activeKey({ kind: "app", id: "rig" }, rail)).toBe("shack"); // not pinned → its launcher
     expect(activeKey({ kind: "station", call: "X" }, rail)).toBe("map");
     expect(activeKey({ kind: "panel", key: "messages" }, tabs)).toBe("map");
-    expect(activeKey({ kind: "panel", key: "profile" }, tabs)).toBe("profile");
-    expect(TAB_ITEMS.map((t) => t.key)).toEqual(["map", "nearby", "activity", "profile"]);
+    expect(activeKey({ kind: "panel", key: "profile" }, tabs)).toBe("map");
+    expect(TAB_ITEMS.map((t) => t.key)).toEqual(["map", "nearby", "activity"]);
+  });
+
+  it("the phone's More sheet reaches every rail destination the tabs do not", () => {
+    const tabs = new Set(TAB_ITEMS.map((i) => i.key));
+    const more = new Set(MORE_ITEMS.map((i) => i.key));
+    for (const i of NAV_ITEMS) expect(tabs.has(i.key) || more.has(i.key), i.key).toBe(true);
+    expect(MORE_ITEMS.map((i) => i.key)).toEqual([
+      "profile",
+      "messages",
+      "ranks",
+      "shack",
+      "offline",
+      "settings",
+      "docs",
+      "admin",
+    ]);
+    expect(inMore({ kind: "panel", key: "messages" })).toBe(true);
+    expect(inMore({ kind: "app", id: "terminal" })).toBe(true);
+    expect(inMore({ kind: "panel", key: "nearby" })).toBe(false);
+    expect(inMore(MAP)).toBe(false);
   });
 
   it("compares views by value", () => {

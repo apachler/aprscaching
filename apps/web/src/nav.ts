@@ -7,7 +7,8 @@
  * deliberately coexists with a left panel on wide screens.
  *
  * `NAV_ITEMS` is the single table of top-level destinations: the rail draws it, the mobile tab bar
- * draws its `tab` subset, and both derive their active item from the open view with `activeKey`.
+ * draws its `tab` subset and its More sheet the rest (`MORE_ITEMS`), so the phone reaches every destination the
+ * rail has; all of them derive their active item from the open view with `activeKey`.
  * `?view=` query strings (the shared SURFACES deep links, plus admin, the Shack apps and a station)
  * map to views through `viewQuery` / `viewFromQuery`; the map position stays in MapLibre's hash.
  */
@@ -78,12 +79,35 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "messages", label: "Messages", icon: "message", section: "top" },
   { key: "ranks", label: "Ranks", icon: "ranks", section: "top" },
   { key: "shack", label: "Shack", icon: "tools", section: "top" },
-  { key: "profile", label: "You", icon: "profile", section: "bottom", tab: { cog: "☺" } },
+  { key: "profile", label: "You", icon: "profile", section: "bottom" },
   { key: "offline", label: "Offline", icon: "import", section: "bottom" },
   { key: "settings", label: "Settings", icon: "settings", section: "bottom" },
   { key: "admin", label: "Admin", icon: "shield-check", section: "bottom", sysop: true },
 ];
 export const TAB_ITEMS: readonly NavItem[] = NAV_ITEMS.filter((i) => i.tab);
+
+/** A destination in the phone's More sheet: a nav item, or the manual, which the rail reaches from the top bar. */
+export interface MoreItem {
+  key: NavItem["key"] | "docs";
+  label: string;
+  icon: IconName;
+  sysop?: boolean;
+}
+/**
+ * The phone's More sheet: every rail destination that is not a tab, in the rail's order with You first, then the
+ * manual, and Admin last for the operator.
+ */
+export const MORE_ITEMS: readonly MoreItem[] = [
+  ...NAV_ITEMS.filter((i) => i.key === "profile"),
+  ...NAV_ITEMS.filter((i) => !i.tab && i.key !== "profile" && !i.sysop),
+  { key: "docs", label: "Manual", icon: "info" },
+  ...NAV_ITEMS.filter((i) => i.sysop),
+];
+/** Whether the open view is one the More sheet reaches, so the More tab lights for it. */
+export function inMore(view: View): boolean {
+  const k = view.kind === "panel" ? view.key : view.kind === "app" ? "shack" : null;
+  return !!k && MORE_ITEMS.some((i) => i.key === k);
+}
 
 /** The view a nav key opens. */
 export const viewOf = (key: NavItem["key"]): View => (key === "map" ? MAP : panel(key));

@@ -2,7 +2,8 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 /**
- * Modal-dialog behaviour for a container ref (ui-ux.md §7): focus the primary control on open, trap
+ * Modal-dialog behaviour for a container ref (ui-ux.md §7): focus the control marked `data-autofocus`, else the
+ * primary control, on open, trap
  * Tab within the dialog, close on Escape, and restore focus to the opener on close. Pair with
  * `role="dialog" aria-modal="true"` on the same element. `onClose` may be a fresh closure each render
  * (held in a ref) so the effect doesn't re-run — and re-steal focus — on every parent re-render.
@@ -16,6 +17,7 @@ export function useModalDialog(ref: RefObject<HTMLElement | null>, onClose: () =
     if (!el) return;
     const prev = document.activeElement as HTMLElement | null;
     (
+      el.querySelector<HTMLElement>("[data-autofocus]") ??
       el.querySelector<HTMLElement>("button.primary") ??
       el.querySelector<HTMLElement>("button, input, select, textarea, a[href]")
     )?.focus();

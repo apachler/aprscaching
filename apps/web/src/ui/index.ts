@@ -22,6 +22,7 @@ export { Icon, ICON_NAMES, type IconName } from "./Icon.js";
 export { Tour, tourSeen, type TourStep } from "./Tour.js";
 export { TOUR_STEPS } from "./tourSteps.js";
 export { useModalDialog } from "./useModalDialog.js";
+export { Sheet } from "./Sheet.js";
 export { ConfirmProvider, useConfirm, useChoice } from "./Confirm.js";
 export { Disclosure } from "./Disclosure.js";
 export { CommandBlock } from "./CommandBlock.js";

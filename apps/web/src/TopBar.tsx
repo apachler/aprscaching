@@ -28,6 +28,8 @@ export function TopBar(props: {
   onSearchSubmit: (v: string) => void;
   onPickCache: (hit: SearchHitCache) => void;
   onPickStation: (hit: SearchHitStation) => void;
+  /** Open the search sheet: below 960px the bar shows a search button in place of the field. */
+  onSearchOpen: () => void;
   onNearby: () => void;
   onActivity: () => void;
   onProfile: () => void;
@@ -54,6 +56,16 @@ export function TopBar(props: {
         onPickCache={props.onPickCache}
         onPickStation={props.onPickStation}
       />
+      <Button
+        variant="icon"
+        className="search-ic"
+        onClick={props.onSearchOpen}
+        title="Search"
+        aria-label="Search caches, stations or a grid locator"
+        aria-haspopup="dialog"
+      >
+        <Icon name="search" size={16} />
+      </Button>
       <span className="muted">
         · {props.count} caches{props.filtered ? " (filtered)" : " in view"}
       </span>

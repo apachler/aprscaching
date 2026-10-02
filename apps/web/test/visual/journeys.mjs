@@ -23,7 +23,8 @@ const VIEWS = {
 
 /** Each journey: who, where it starts, and its steps — [what, how]. `how` is "click:<role>:<name>",
  *  "fill:<label>:<text>" or "key:<key>"; "a||b" tries the names in turn (the phone's tab bar says "Log" where
- *  the desktop panel says "Log a find"). Names match the way a person reads the screen. */
+ *  the desktop panel says "Log a find"). Names match the way a person reads the screen. A third element lists the
+ *  views a step belongs to, for a step only one layout needs (More, on a phone). */
 const JOURNEYS = [
   {
     name: "first-visit",
@@ -84,6 +85,7 @@ const JOURNEYS = [
     start: "/",
     steps: [
       ["Map", null],
+      ["More", "click:button:More", ["phone"]],
       ["Open the Shack", "click:button:Shack"],
       ["Launch the BBS", "click:button:BBS"],
       ["Back", "key:Escape"],
@@ -178,7 +180,8 @@ for (const j of JOURNEYS) {
     await page.goto(`${origin}${j.start}${sep}demo=app&as=${j.as}#14/47.0725/15.4380`, { waitUntil: "networkidle" });
     await page.waitForTimeout(700);
     let n = 0;
-    for (const [step, how] of j.steps) {
+    for (const [step, how, views] of j.steps) {
+      if (views && !views.includes(view)) continue; // a step only one layout needs, such as More on a phone
       n++;
       let note = "ok";
       if (how) {
