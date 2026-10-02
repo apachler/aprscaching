@@ -12,7 +12,8 @@ unlock it. You unlock stages in order, one after another.
 
 Open the cache. The **Stages** section shows how far you are, for example **Stages · 1/3 unlocked**. **Start**
 is open to everyone. Each later stage shows a lock and how it unlocks. When you unlock a stage, its
-coordinates, its clue and a **map ↗** link appear.
+coordinates, its clue and a **map ↗** link appear. An audio stage shows its clip and clue while it is still
+locked, because working them out is how you open it.
 
 Each stage unlocks in one of four ways:
 

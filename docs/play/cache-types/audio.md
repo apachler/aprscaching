@@ -16,8 +16,9 @@ of the **Stages** section. Solving it tells you where to go or what comes next.
    stage's position and clue appear.
 4. Go to the spot and log the find.
 
-The stages work as on a [multi-stage cache](multi.md#how-you-find-it). An audio stage opens when you ask: the
-game does not check your answer. Audio stages unlock only online.
+The stages work as on a [multi-stage cache](multi.md#how-you-find-it). An audio stage shows its clip and clue
+while it is locked: they are the puzzle. It opens when you ask, and the game does not check your answer. Any
+other stage shows its clue only once you unlock it. Audio stages unlock only online.
 
 ## What "found" means
 

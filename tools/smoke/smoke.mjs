@@ -1027,20 +1027,17 @@ const upRes = await fetch(`${BASE}/api/caches/${mid}/stages/1/media`, {
 });
 const upJson = await upRes.json().catch(() => ({}));
 ok("owner uploads an audio clue", upRes.status === 200 && typeof upJson.mediaKey === "string", JSON.stringify(upJson));
-const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}`);
-ok(
-  "media clue served back as audio",
-  mediaRes.status === 200 && (mediaRes.headers.get("content-type") || "").includes("audio/"),
-  `status=${mediaRes.status}`,
-);
+// stage 1 unlocks by location, so its clip is part of what unlocking reveals: hidden until then
+const lockedClip = await fetch(`${BASE}/api/media/${upJson.mediaKey}`);
+ok("a locked location stage's clip stays hidden", lockedClip.status === 404, `status=${lockedClip.status}`);
 
 // a finder sees stage 0 coords + the clue, but stage 1/2 coords are hidden
 const stagesView = await call("GET", `/api/caches/${mid}/stages?callsign=DL1ABC`);
 const sv = stagesView.data?.stages ?? [];
 ok(
   "stage 0 visible, later stages hidden until unlocked",
-  sv[0]?.lat === 47.1 && sv[1]?.lat === null && sv[1]?.mediaUrl && sv[2]?.lat === null,
-  JSON.stringify(sv.map((s) => ({ n: s.stageNo, lat: s.lat }))),
+  sv[0]?.lat === 47.1 && sv[1]?.lat === null && !sv[1]?.mediaUrl && sv[1]?.clue === null && sv[2]?.lat === null,
+  JSON.stringify(sv.map((s) => ({ n: s.stageNo, lat: s.lat, clue: s.clue, media: s.mediaUrl }))),
 );
 
 // unlock stage 1: too far -> 403, then within the stage-0 radius -> revealed
@@ -1061,6 +1058,14 @@ ok(
   "unlock at the previous stage reveals coords",
   unlock1.data?.unlocked === true && Math.abs((unlock1.data?.lat ?? 0) - 47.11) < 0.001,
   JSON.stringify(unlock1.data),
+);
+const mediaRes = await fetch(`${BASE}/api/media/${upJson.mediaKey}?callsign=DL1ABC`, {
+  headers: { "x-ingest-secret": SECRET },
+});
+ok(
+  "the clip is served as audio once its stage is unlocked",
+  mediaRes.status === 200 && (mediaRes.headers.get("content-type") || "").includes("audio/"),
+  `status=${mediaRes.status}`,
 );
 const unlockAnon = await call("POST", `/api/caches/${mid}/stages/2/unlock`, { callsign: "DL1ABC" }, ANON);
 ok("unlock for a named callsign without a session -> 401", unlockAnon.status === 401, `status=${unlockAnon.status}`);
