@@ -26,7 +26,7 @@ the real benefit, not novelty.
 | Adapt a panel/sheet to the space **it** occupies (docked vs full-width) | **CSS container queries** | JS width measurement / viewport breakpoints |
 | Adapt to the **viewport** (coarse layout, orientation) | CSS media queries | JS |
 | Style an element based on its **contents or a child's state** | **CSS `:has()`** | JS class toggling |
-| Derive hover/active/disabled tints, dark/light variants from a base color | **`color-mix()` / OKLCH / `light-dark()`** | hand-written palettes / JS |
+| Derive hover/active/disabled tints from a base color | **`color-mix()` / OKLCH** | hand-written palettes / JS |
 | Keep a header/toolbar pinned while scrolling | **`position: sticky`** | JS scroll listeners |
 | Transition appearance on a state change (open/close, selected) | **CSS transitions** | JS animation libs |
 | Snap bottom-sheets to stops | **CSS `scroll-snap`** | JS drag math |
@@ -43,8 +43,14 @@ the real benefit, not novelty.
 - **Responsive component layout MUST use container queries** (`container-type: inline-size` +
   `@container`) for anything that can appear in more than one slot (cache sheet, Nearby list,
   detail panel). The sheet/panel information architecture depends on this.
-- **Theming MUST be token-driven**, with dark/light via `color-scheme` + `light-dark()` (or a
-  `[data-theme]` layer) — **no JS theme recomputation, no inline color math.**
+- **Theming MUST be token-driven**: a theme is a token set on the root, `:root` (Dark, the default) overridden by
+  `:root[data-theme="light"]` and `:root[data-theme="phosphor"]`, each with its `color-scheme`. JS only picks the
+  theme (Auto resolves the system preference; the head script applies it before the first paint) — **no JS theme
+  recomputation, no inline color math.** A colour that must exist outside CSS (MapLibre paint, Mermaid, the
+  `theme-color` meta) is read from its token at use time (`tokenColor.ts`), never duplicated as a literal.
+- **Scales are role-named.** Type, space, radius, elevation and motion come from `--text-*`, `--space-*`,
+  `--radius-*`, `--elevation-*` and `--motion-*`, named for the role they play (`--text-label`,
+  `--radius-control`), never for a size. A new value is a new role or an existing one, not a literal.
 - **State-driven appearance MUST use CSS** where the state is expressible in the DOM
   (`:hover`, `:focus-visible`, `:checked`, `:disabled`, `[aria-current]`, `:has()`). Don't toggle
   style-only classes from JS for these.
@@ -94,6 +100,9 @@ the real benefit, not novelty.
 - **MUST NOT** ship scroll-driven / cinematic animations (`animation-timeline: scroll()/view()`,
   parallax, scroll-spectacle) on the cacher surface. Showcase, not value; competes with map
   rendering. (A subtle, reduced-motion-aware touch in a non-map view MAY be allowed.)
+- **The landing page is the one exception to "motion explains a change"**: it MAY play one entrance and the
+  terminal card's short sequence, `transform`/`opacity` only, once, and none under reduced motion — never on
+  scroll. Its hero pins the Dark tokens for what sits on the photo, so the brand treatment holds in every theme.
 - **MUST NOT** rely on a modern feature without support-guarding it if it's load-bearing — gate
   with `@supports` and provide a usable fallback (see baseline below).
 
@@ -108,7 +117,9 @@ the real benefit, not novelty.
 - **MUST NOT** compute colors/tints/spacing in JS that `color-mix()`/`clamp()` can derive.
 - **MUST NOT** read layout in render loops (`getBoundingClientRect` on scroll/resize) for styling
   outcomes CSS can declare.
-- **MUST NOT** write inline styles for values that belong in `apps/web/src/styles/tokens.css`.
+- **MUST NOT** write inline styles for values that belong in `apps/web/src/styles/tokens.css`. A `style` prop
+  MAY set custom properties only (`style={{ "--pct": "40%" }}`), for a per-element value the stylesheet then
+  uses; ESLint rejects any other property in `apps/web`.
 
 ---
 
@@ -136,8 +147,8 @@ the real benefit, not novelty.
 **Trust-tier / status tokens** (derive, don't hand-maintain):
 ```css
 @layer tokens {
-  :root {
-    color-scheme: dark light;
+  :root {                                    /* Dark, the default theme */
+    color-scheme: dark;
     --accent:  oklch(0.73 0.18 128);          /* our own green accent — NOT APRStac teal */
     --tier-a:  oklch(0.70 0.15 145);          /* RF-corroborated  */
     --tier-b:  oklch(0.78 0.13 250);          /* app-corroborated */
@@ -145,7 +156,11 @@ the real benefit, not novelty.
     --ok:  oklch(0.72 0.17 145);
     --warn:oklch(0.80 0.16 85);
     --bad: oklch(0.63 0.20 27);
-    --surface: light-dark(oklch(0.98 0 0), oklch(0.18 0.01 250));
+    --surface: oklch(0.18 0.01 250);
+  }
+  :root[data-theme="light"] {               /* a theme overrides the tokens it changes, nothing else */
+    color-scheme: light;
+    --surface: oklch(0.98 0 0);
   }
   .badge-a { background: color-mix(in oklch, var(--tier-a) 18%, transparent); color: var(--tier-a); }
   .badge:hover { background: color-mix(in oklch, currentColor 14%, transparent); }
@@ -180,7 +195,10 @@ the real benefit, not novelty.
 ## Pre-commit checklist (Claude Code MUST self-check)
 
 - [ ] Did I solve responsive sizing with **container queries**, not JS measurement?
-- [ ] Are colors/tints **derived from tokens** (`color-mix`/OKLCH), not hard-coded or JS-computed?
+- [ ] Are colors/tints **derived from tokens** (`color-mix`/OKLCH), not hard-coded or JS-computed? (Mix toward
+      white or grey **in oklab**: an OKLCH mix swings the hue on its way to an achromatic colour.)
+- [ ] Sizes, radii, shadows and durations from the **role scales**, not literals?
+- [ ] Checked in **Dark, Light and Phosphor**?
 - [ ] Is every interactive thing a **real semantic element** with focus states — not a CSS hack?
 - [ ] Do animations use **only `transform`/`opacity`**, with a **reduced-motion** path?
 - [ ] No `backdrop-filter`/large blur stacked over the map beyond one small surface?

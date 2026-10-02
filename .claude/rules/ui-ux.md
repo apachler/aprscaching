@@ -4,7 +4,9 @@
 Shack, and all maintenance/settings surfaces. Claude Code MUST consult this rule **before
 building or changing any component or page**, and MUST keep components consistent with it. Styling
 implementation is governed by the companion rule **`.claude/rules/css.md`** (CSS-over-JS, tokens,
-performance) — the two are read together.
+performance) — the two are read together. The visual vocabulary they apply (themes, colour roles, the role
+scales, iconography, motion, words) is set out in [`docs/design/design-language.md`](../../docs/design/design-language.md),
+and `/?demo=ui` shows every token and primitive live.
 
 Keywords: **MUST / MUST NOT / SHOULD / SHOULD NOT / MAY** (RFC 2119).
 
@@ -134,6 +136,9 @@ group does.
 - **Table** — Shack tabular data (stats, port RX/TX) only; not for the cacher surface.
 - **Badge / chip** — compact status/trust (`Tier A/B/C`, `RF`/`IS`, status colors). One shared
   component, color from tokens.
+- **Icon** — the one line-icon set (`Icon`): 24 px grid, `currentColor`. Phosphor draws the same places with
+  CP437 glyphs through the same component (its `cp437` prop), so no surface picks between two systems. Emoji are
+  never UI. An icon-only control MUST have an accessible name.
 - **Stat** — a single highlighted metric (finds, 24h RX).
 
 **Feedback**
@@ -168,6 +173,14 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
   users. It MUST live on a **dedicated, sysop-gated surface** (revealed only when the signed-in account
   is an operator, `ADMIN_CALLSIGNS`), and every write MUST be gated **server-side** (`requireSysop`),
   never merely hidden in the UI. A normal user MUST NOT see or reach it.
+- **Landing page (signed out):** "Live on the air" — a hero that keeps the brand treatment in every theme
+  (photo, slogan, two calls to action, the terminal card's find sequence, the instance's live counts), a band of
+  the real map, then a few sections that follow the theme, each a short story beside **one** large screenshot
+  made from the fixtures (`landing-assets`). Counts come from `/api/v1/stats`; while they load the page shows
+  skeletons, and on failure it shows nothing — never invented numbers. **Motion budget:** one entrance and the
+  terminal card's sequence, `transform`/`opacity` only, nothing on scroll, none under reduced motion.
+  **Performance budget:** landing JS ≤ ~150 KB gzip beyond the shell (no MapLibre), CLS < 0.05, LCP ≤ 2.5 s,
+  AVIF/WebP srcsets and a preloaded hero.
 - **The Shack:** an **app launcher**, not a config page. It lists the operator *apps* (packet
   terminal, BBS, packet decoder, NET/ROM node, tools/plugins, rig control, remote box); each launches
   into **its own surface** and can be **pinned to the nav rail**. Anything that is APRS/APRScaching
@@ -177,7 +190,13 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 
 ---
 
-## 6. Density & consistency
+## 6. Themes, density & consistency
+
+- **Appearance is Auto · Light · Dark · Phosphor.** Dark is the default for everyone; Auto follows the system;
+  Phosphor is the green-phosphor flip (a token swap, mono everywhere, CP437 glyphs). A component MUST be checked
+  in **Dark, Light and Phosphor** — a theme is a token set, never a per-component branch.
+- **One basemap** in every theme (Phosphor draws its own grid); map overlays take their colours from the
+  `--map-*` tokens.
 
 - **Two density modes:** comfortable (cacher) and compact (Shack). MUST be a token-level switch
   (spacing/type scale), not per-component guesswork.
@@ -193,7 +212,8 @@ A component PR is incomplete if any applicable state is missing. Disabled contro
 
 - Real semantic elements (`button`, `a`, `nav`, `ul`, `dialog`); never styled-div substitutes.
 - Visible `:focus-visible`; full keyboard operability; logical focus order; focus-trap in dialogs.
-- Hit targets ≥44px; contrast meets WCAG AA (verify in dark *and* sunlight/light mode).
+- Hit targets ≥44px; contrast meets WCAG AA in **Dark, Light and Phosphor** — `apps/web/test/contrast.test.ts`
+  measures every token pair the stylesheets use, and axe runs on the fixture surfaces in CI.
 - Label every control; associate help/error text; use ARIA only to fill genuine gaps.
 - Honor `prefers-reduced-motion`; never convey state by color alone (pair with icon/text).
 
@@ -209,7 +229,7 @@ how to fix it. Uppercase only for small section labels/badges, not body. Callsig
 ## 9. Definition of Done
 
 **A component is done when:** it reuses tokens (no inline styles); defines all applicable §4 states;
-is keyboard- and screen-reader-operable with visible focus; works in dark + light; honors
+is keyboard- and screen-reader-operable with visible focus; works in Dark, Light and Phosphor; honors
 reduced-motion; is responsive via container queries (css.md); and matches an existing pattern
 rather than inventing one.
 

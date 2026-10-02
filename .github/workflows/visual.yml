@@ -1,0 +1,38 @@
+name: visual
+
+# The visual harness and the journeys, on demand and nightly: screenshots of every fixture surface in Dark, Light
+# and Phosphor at a phone and a desktop width, the keyboard walk, and the main tasks step by step. They are for
+# review, kept as an artifact, and never compared pixel by pixel; axe gates pull requests in ci.yml.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    name: screenshots, keyboard walk and journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @aprscaching/web... build
+      - run: pnpm exec playwright-core install --with-deps chromium
+      - run: node apps/web/test/visual/run.mjs --keyboard
+      - run: pnpm --filter @aprscaching/web journeys
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: visual
+          path: apps/web/test/visual/out/
+          retention-days: 14
