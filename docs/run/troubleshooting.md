@@ -420,7 +420,7 @@ the DNS records only.
 - **Tests:** the firewall `net44 setup` installs on `wg44` is in place: only TCP 80 and 443 and replies.
 - **Message:** `no firewall from net44 on wg44: ARDC filters nothing` (warn).
 - **Fix:** `deploy/aprscaching net44 setup` applies it, or filter `wg44` yourself.
-- **See:** [Who can reach you](networks/44net.md#6-who-can-reach-you).
+- **See:** [Who can reach you](networks/44net.md#who-can-reach-you).
 
 ### `net44.dns`
 

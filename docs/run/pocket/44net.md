@@ -81,7 +81,7 @@ app** carries the tunnel for the whole phone.
 ### What answers on the 44.x address
 
 The gateway listens on every interface, the tunnel included, and 44Net Connect filters nothing
-([Who can reach you](../networks/44net.md#6-who-can-reach-you)). Port 8787, and 8443 with https on, answer on the
+([Who can reach you](../networks/44net.md#who-can-reach-you)). Port 8787, and 8443 with https on, answer on the
 44.x address. So does anything else running in Termux, such as `sshd` on 8022: stop it (`pkill sshd`) while the
 tunnel is up. `status.sh` shows *44Net: up* with this warning, and the station notification shows *44Net: up
 (44.x)*.
