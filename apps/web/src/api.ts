@@ -1234,6 +1234,17 @@ export function uploadStageClip(
     body: file,
   });
 }
+/**
+ * A stage clip that only its unlocker and the owner may hear, as a local object URL. The app fetches it with the
+ * sign-in cookie, which an `<audio>` element does not send to an API on another origin. The caller revokes it.
+ */
+export async function privateClipUrl(path: string): Promise<string> {
+  if (path.startsWith("blob:")) return path;
+  const res = await reach(API_BASE + path, { credentials: "include" });
+  if (!res.ok)
+    throw new ApiError(res.status === 404 ? "This clip is not available" : `${res.status}`, res.status, null);
+  return URL.createObjectURL(await res.blob());
+}
 /** Absolute URL for a media clue path returned by the API. */
 /** A media path on the instance as a URL; a local object URL (an offline pack's image) as it is. */
 export const mediaUrl = (path: string): string => (path.startsWith("blob:") ? path : API_BASE + path);

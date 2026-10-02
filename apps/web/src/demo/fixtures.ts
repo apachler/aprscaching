@@ -290,7 +290,8 @@ const STAGES: CacheStage[] = [
     stageNo: 1,
     unlock: "geo",
     clue: "Start at the bridge with the shell.",
-    mediaUrl: null,
+    // an unlocked location stage's clip: it loads on demand through the session
+    mediaUrl: "/api/media/cache/1/stage/1/clue.mp3",
     radiusM: 60,
     unlocked: true,
     lat: 47.0719,
