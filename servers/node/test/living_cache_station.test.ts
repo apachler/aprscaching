@@ -84,3 +84,27 @@ describe("a living cache follows its hider's own station", () => {
     expect((await call(env, "POST", "/api/me/cache", {}, { cookie: squat.cookie })).status).toBe(409);
   });
 });
+
+describe("a living cache's pin", () => {
+  it("follows its station's last heard position, and stays at the hiding place until the station is heard", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8ROV" });
+    const me = await emailSignup(env, "rover@example.test", "OE8ROV");
+    await operatorVerify(env, "OE8ROV");
+    await call(env, "POST", "/api/my/stations", { callsign: "OE8ROV-9", lat: 47, lon: 15 }, { cookie: me.cookie });
+    const made = await call(env, "POST", "/api/caches", living("OE8ROV-9"), { cookie: me.cookie });
+    const { id, code } = made.data.cache;
+    const pin = async (bbox: string) =>
+      ((await call(env, "GET", `/api/caches?bbox=${bbox}`)).data.caches as { code: string; lat: number }[]).find(
+        (c) => c.code === code,
+      );
+    expect((await pin("14.9,46.9,15.1,47.1"))?.lat).toBe(47);
+
+    await env.DB.prepare("INSERT OR REPLACE INTO stations (callsign, lat, lon, last_seen) VALUES (?,?,?,?)")
+      .bind("OE8ROV-9", 47.5, 15.5, Math.floor(Date.now() / 1000))
+      .run();
+    expect(await pin("14.9,46.9,15.1,47.1")).toBeUndefined();
+    expect((await pin("15.4,47.4,15.6,47.6"))?.lat).toBe(47.5);
+    const detail = await call(env, "GET", `/api/caches/${id}`);
+    expect(detail.data.cache).toMatchObject({ lat: 47.5, lon: 15.5 });
+  });
+});

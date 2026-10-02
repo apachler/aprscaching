@@ -239,4 +239,36 @@ describe("verifyFind — living (moving) cache", () => {
     });
     expect(r.verified).toBe(false);
   });
+
+  // the phone path follows the station too: the hiding place is not where the cache is
+  const hidden: CacheRow = { ...living, lat: 46.5, lon: 14.5 };
+  const atHide = { lat: 46.5001, lon: 14.5, accuracyM: 10, ts: 1000 };
+
+  it("verifies a phone reading next to the station, at tier B", () => {
+    const r = verifyFind(
+      hidden,
+      { ...NEAR, accuracyM: 10, ts: 1000 },
+      {
+        loggerPositions: [],
+        cacheStationPositions: [pos({ lat: 47.0711, lon: 15.42, heard_via: "aprs_is", ts: 1060 })],
+      },
+    );
+    expect(r).toMatchObject({ verified: true, tier: "B", method: "app_geo" });
+  });
+
+  it("does not verify a phone reading at the hiding place while the station is away", () => {
+    const r = verifyFind(hidden, atHide, {
+      loggerPositions: [],
+      cacheStationPositions: [pos({ ...NEAR, heard_via: "aprs_is", ts: 1000 })],
+    });
+    expect(r.verified).toBe(false);
+  });
+
+  it("does not verify a phone reading when the station was not heard near that time", () => {
+    const r = verifyFind(hidden, atHide, {
+      loggerPositions: [],
+      cacheStationPositions: [pos({ lat: 46.5001, lon: 14.5, heard_via: "aprs_is", ts: 1000 + 10 * 60 })],
+    });
+    expect(r.verified).toBe(false);
+  });
 });
