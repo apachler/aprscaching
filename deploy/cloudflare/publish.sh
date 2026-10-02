@@ -13,7 +13,8 @@ SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
 wrangler deploy --var SOURCE_COMMIT:"$SOURCE_COMMIT" --var SOURCE_BUILT_AT:"$(date +%s)" --var SOURCE_REPO:"${SOURCE_REPO:-https://github.com/apachler/aprscaching}"
 # Build the SPA against the deployed gateway before publishing it — a stale/missing dist (it is
 # gitignored) or a localhost VITE_API_BASE would ship a Pages site that talks to nothing.
-( cd "$ROOT" && VITE_API_BASE="$API_BASE" pnpm --filter @aprscaching/web build )
+# APP_URL, when set, is the Pages site's public URL: the build makes its canonical and Open Graph links absolute.
+( cd "$ROOT" && VITE_API_BASE="$API_BASE" VITE_APP_URL="${APP_URL:-}" pnpm --filter @aprscaching/web build )
 # Pages serves only the SPA; paths the gateway serves (crawler files, feeds, legal and source pages) would
 # otherwise fall back to index.html on the app host, so send them to the gateway's host.
 API="${API_BASE%/}"

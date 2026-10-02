@@ -186,6 +186,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   HOST: "Address the desktop app listens on; 0.0.0.0 serves the local network",
   DATA_DIR: "Where the desktop app keeps its database and media",
   VITE_API_BASE: "Gateway base URL, when the API lives on another host than the web app",
+  VITE_APP_URL: "Public URL of the web app, for its canonical link and Open Graph tags",
   VITE_BASEMAP: "offline uses the self-contained grid; anything else the online basemap",
   VITE_BASEMAP_STYLE: "MapLibre style URL for the vector basemap",
   VITE_SAT_TILES: "Satellite raster tile URL template",
@@ -668,6 +669,11 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`VITE_API_BASE`",
         "Gateway base URL. Set it whenever the API lives on another host (Pages + a Worker). A production build without it talks to its own origin — right wherever one host serves both the SPA and the API — never to localhost",
         "dev server: `http://127.0.0.1:8787` · production build: same origin",
+      ],
+      [
+        "`VITE_APP_URL`",
+        "The instance's public URL. Its origin makes the landing page's canonical link and Open Graph URLs absolute; without it the build leaves the canonical link and `og:url` out and serves `og:image` from its own path",
+        "(unset)",
       ],
       ["`VITE_BASEMAP`", "`offline` uses the self-contained graticule; else the online vector basemap", "online"],
       [

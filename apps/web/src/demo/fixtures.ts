@@ -596,6 +596,7 @@ const ROUTES: Route[] = [
       state: { center: [15.4378, 47.0763], zoom: 15, selected: 1 },
     }),
   ],
+  ["GET", /^\/api\/v1\/stats$/, () => ({ caches: 128, findsOnAirThisWeek: 23, stationsHeardLastHour: 41, at: NOW })],
   ["GET", /^\/api\/caches$/, () => ({ caches: MAP_CACHES })],
   ["GET", /^\/api\/caches\/(\d+)$/, (m) => ({ cache: DETAILS.get(Number(m[1])) ?? DETAILS.get(1) })],
   // a find logged from the app: located by the device, Tier B

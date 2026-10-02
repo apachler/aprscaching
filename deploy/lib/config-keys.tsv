@@ -175,6 +175,7 @@ BASE	url	licence	http://127.0.0.1:8787		0	0	selfhost,cloudflare,baremetal,ingest
 HOST	string	desktop	127.0.0.1		0	0	desktop	Address the desktop app listens on; 0.0.0.0 serves the local network
 DATA_DIR	string	desktop			0	0	desktop	Where the desktop app keeps its database and media
 VITE_API_BASE	string	web			0	0	selfhost,cloudflare,baremetal,pocket	Gateway base URL, when the API lives on another host than the web app
+VITE_APP_URL	string	web			0	0	selfhost,cloudflare,baremetal,pocket	Public URL of the web app, for its canonical link and Open Graph tags
 VITE_BASEMAP	string	web			0	0	selfhost,cloudflare,baremetal,pocket	offline uses the self-contained grid; anything else the online basemap
 VITE_BASEMAP_STYLE	string	web			0	0	selfhost,cloudflare,baremetal,pocket	MapLibre style URL for the vector basemap
 VITE_SAT_TILES	string	web			0	0	selfhost,cloudflare,baremetal,pocket	Satellite raster tile URL template

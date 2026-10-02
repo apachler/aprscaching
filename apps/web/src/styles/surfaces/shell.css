@@ -365,7 +365,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--brand) url("/brand/bg.jpg") center/cover no-repeat;
+    /* the landing hero's own files, so a visitor from the landing already has them */
+    background: var(--brand) url("/landing/hero-960.webp") center/cover no-repeat;
+    background-image: image-set(
+      url("/landing/hero-960.avif") type("image/avif"),
+      url("/landing/hero-960.webp") type("image/webp")
+    );
   }
   .splash::before {
     content: "";

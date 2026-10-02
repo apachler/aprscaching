@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "visual": "node test/visual/run.mjs",
+    "landing-assets": "node test/visual/landing-assets.mjs",
     "journeys": "node test/visual/journeys.mjs",
     "test": "node test/no-emoji.mjs && node test/tour-anchors.mjs && node test/vendor-maplibre.mjs && vitest run"
   },

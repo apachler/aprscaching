@@ -14,8 +14,17 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 
-/** Public files never precached, however they are referenced. */
-const SKIP = [/^icons\/splash\//, /^vendor\//, /^shots\//, /^_headers$/, /^sw\.js$/, /\.map$/, /\.txt$/];
+/** Public files never precached, however they are referenced. The landing page's images are for a visitor who is
+ * online by definition; only the small hero the splash shows stays, so the splash keeps its photo offline. */
+const SKIP = [
+  /^icons\/splash\//,
+  /^vendor\//,
+  /^landing\/(?!hero-960\.)/,
+  /^_headers$/,
+  /^sw\.js$/,
+  /\.map$/,
+  /\.txt$/,
+];
 
 function walk(dir: string, base = dir): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

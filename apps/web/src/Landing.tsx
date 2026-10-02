@@ -1,276 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect, useState, type ReactNode } from "react";
 import { ASSET } from "./brand.js";
 import { API_BASE } from "./api.js";
-import { Button } from "./ui/index.js";
+import { Button, Icon, TierBadge, type IconName } from "./ui/index.js";
 
 /**
- * Marketing landing — the signed-out front door. The hero opens with the product's thesis: a live
- * APRS frame proving a find on the air, decoding into its Tier-A stamp (the packet uses our real
- * APZACG tocall and is heard directly by an attested receiving site). Below it: the three-step find flow, the A/B/C trust
- * tiers, the shack capability grid, the run-anywhere deployment shapes, and the free-and-open band.
- * One call to action opens the callsign-led sign-in (which creates the account for a new call); Explore
- * drops the visitor into the read-only
- * platform. The footer carries the canonical site-wide links (the Site map is the crawlable page).
+ * The landing page — "Live on the air". The hero keeps the brand treatment in every theme and opens with the
+ * product's thesis: an APRS frame heard on the air, decoding into its Radio-verified stamp. Below it the page
+ * varies its rhythm: the instance's own numbers (from the read API, never invented), a full-width band of the
+ * live map, the three steps beside a phone, the trust tiers as a progression, the Shack beside a desktop, and
+ * short closing bands. One primary action (sign in with your callsign); Explore opens the read-only map.
+ * Images are made from the real app by apps/web/test/visual/landing-assets.mjs.
  */
 export function Landing(props: { onSignIn: () => void; onExplore: () => void }) {
   return (
     <main className="landing">
-      <div className="landing-hero">
-        <nav className="landing-nav" aria-label="Landing">
-          <img className="landing-nav-logo" src={ASSET.wordmark} alt="APRScaching" />
-          <span className="landing-nav-links">
-            <a href="#how">How it works</a>
-            <a href="#tiers">Trust</a>
-            <a href="#shack">Shack</a>
-            <a href="#privacy">Privacy</a>
-            <a href="#selfhost">Self-host</a>
-          </span>
-          <Button variant="primary" onClick={props.onSignIn}>
-            Sign in
-          </Button>
-        </nav>
-        <div className="landing-hero-grid">
-          <div className="landing-hero-copy">
-            <p className="landing-eyebrow">Amateur radio · APRS · Geocaching</p>
-            <h1 className="landing-slogan">
-              Geocaching, <em>on the air.</em>
-            </h1>
-            <p className="landing-sub">
-              Hide a cache. Hunt it down. Key the find over APRS — and let the radio network itself prove you were
-              really there. No app store, no subscription, no tracking: ham radio, a map, and cryptographic honesty.
-            </p>
-            <div className="landing-cta">
-              <Button variant="primary" onClick={props.onSignIn}>
-                Sign in with your callsign
-              </Button>
-              <Button onClick={props.onExplore}>Explore the live map</Button>
-            </div>
-          </div>
-          <div className="landing-term" aria-label="A find verified on the air">
-            <div className="landing-term-bar">
-              <span className="landing-term-rx" aria-hidden="true"></span> RF · 144.800 MHz · RX
-            </div>
-            <div className="landing-term-body">
-              <div className="landing-frame f1">
-                <span className="dim">1042Z</span> OE8APR-7&gt;APZACG,WIDE1-1:
-              </div>
-              <div className="landing-frame f2">&gt;Found AC-1042 via aprscaching.net</div>
-              <div className="landing-frame f3 dim">heard direct at OE8XBM-10 (attested site) · track plausible</div>
-              <span className="landing-stamp">✓ RADIO-VERIFIED · TIER A</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <section className="landing-section" id="how">
-        <p className="landing-eyebrow">How a find works</p>
-        <h2>Three steps, and the network is the referee</h2>
-        <ol className="landing-steps">
-          <li>
-            <h3>Hide</h3>
-            <p>
-              Place a container — or make a station, an event, even <em>yourself</em> the cache. Coordinates, a hint,
-              and a find code: <code>AC-1042</code>.
-            </p>
-          </li>
-          <li>
-            <h3>Hunt</h3>
-            <p>
-              Navigate by live map, bearing arrow, or 10-character Maidenhead. Off-grid works: the map, the caches, and
-              your radio need no internet.
-            </p>
-          </li>
-          <li>
-            <h3>Key the find</h3>
-            <p>
-              Transmit the find over APRS from the site — handheld, tracker, or the in-app logger. When this
-              instance&rsquo;s own receiving station hears you on the air, the find is radio-verified.
-            </p>
-          </li>
-        </ol>
-      </section>
-
-      <section className="landing-section" id="tiers">
-        <p className="landing-eyebrow">The trust model</p>
-        <h2>Every find says how hard it was to fake</h2>
-        <p className="landing-lede">
-          Transport never equals trust. A find's tier comes from corroboration — who independently heard you, not which
-          wire delivered the packet.
+      <Hero onSignIn={props.onSignIn} onExplore={props.onExplore} />
+      <MapBand onExplore={props.onExplore} />
+      <Steps />
+      <Trust />
+      <Shack />
+      <Privacy />
+      <RunAnywhere />
+      <section className="landing-section landing-close">
+        <h2>Free in full. Open in full.</h2>
+        <p>
+          AGPL-3.0, and every instance links the code it runs. The read API is free. Donations buy recognition, never
+          features.
         </p>
-        <div className="landing-tiers">
-          <div className="landing-tier tier-a">
-            <span className="landing-tier-badge">TIER A</span>
-            <h3>Radio-verified</h3>
-            <p>
-              Your RF transmission, heard on the air by this instance&rsquo;s own receiving station, with a plausible
-              track. A copy relayed over the internet never counts. The gold standard.
-            </p>
-          </div>
-          <div className="landing-tier tier-b">
-            <span className="landing-tier-badge">TIER B</span>
-            <h3>Location-verified</h3>
-            <p>The in-app logger confirms your device's own position matches the cache. No radio required to play.</p>
-          </div>
-          <div className="landing-tier tier-c">
-            <span className="landing-tier-badge">TIER C</span>
-            <h3>Logged</h3>
-            <p>
-              Nothing independent placed you at the cache — at most a bare internet beacon. Counted and shown, and
-              honestly labelled as not verified.
-            </p>
-          </div>
-        </div>
+        <Button variant="primary" onClick={props.onSignIn}>
+          Sign in with your callsign
+        </Button>
       </section>
-
-      <section className="landing-section" id="shack">
-        <p className="landing-eyebrow">More than a game</p>
-        <h2>A whole ham-radio Shack underneath</h2>
-        <p className="landing-lede">The platform the game runs on is a serious packet-radio station in your browser.</p>
-        <div className="landing-features">
-          <div className="landing-feature">
-            <span className="landing-glyph">MAP</span>
-            <h3>Live map</h3>
-            <p>
-              Stations, tracks, weather, telemetry graphs, POTA/SOTA spots, and every cache — with offline basemaps for
-              the field.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">TERM</span>
-            <h3>Packet terminal &amp; BBS</h3>
-            <p>
-              Connected-mode AX.25 terminal, a threaded BBS with real FBB forwarding (compressed included), and a
-              NET/ROM node with INP3 routing.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">RF</span>
-            <h3>Your radio, your way</h3>
-            <p>
-              KISS TNC, AGWPE, Web Serial, Bluetooth KISS, Meshtastic, even soundcard AFSK — the RF side always runs on{" "}
-              <em>your</em> equipment.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">WX</span>
-            <h3>Weather &amp; telemetry</h3>
-            <p>Personal weather stations, CWOP, WX beacons, and sensor history charts.</p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">FED</span>
-            <h3>A federated network</h3>
-            <p>
-              Instances exchange signed finds and corroborate each other — over HTTPS, or over the air when the internet
-              is gone.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">EXT</span>
-            <h3>Tools &amp; plugins</h3>
-            <p>A signed plugin system: decoders, macros, panels — extend the Shack without trusting blindly.</p>
-          </div>
-        </div>
-        <div className="landing-shots">
-          <figure>
-            <img src="/shots/shack-terminal.webp" alt="Packet terminal connected to a BBS over AX.25" loading="lazy" />
-            <figcaption>The packet terminal, connected</figcaption>
-          </figure>
-          <figure>
-            <img src="/shots/shack-bbs.webp" alt="Threaded BBS inbox with a message thread open" loading="lazy" />
-            <figcaption>Threaded BBS mail &amp; bulletins</figcaption>
-          </figure>
-          <figure>
-            <img
-              src="/shots/shack-decoder.webp"
-              alt="Packet decoder showing a parsed APRS position frame"
-              loading="lazy"
-            />
-            <figcaption>Decode any frame, field by field</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <section className="landing-section" id="privacy">
-        <p className="landing-eyebrow">What we do with your beacons</p>
-        <h2>An APRS map that forgets</h2>
-        <p className="landing-lede">
-          Your packets are public the moment you key up — that is amateur radio, and no map changes it. What a map does
-          with them <em>afterwards</em> is a choice. Here are ours, in writing.
-        </p>
-        <div className="landing-features landing-invariants">
-          <div className="landing-feature">
-            <span className="landing-glyph">TTL</span>
-            <h3>Positions expire</h3>
-            <p>
-              Firehose tracks are pruned on a retention schedule, not archived forever. The only fixes kept longer are
-              the ones corroborating a find — they are that find&rsquo;s evidence.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">NO ADS</span>
-            <h3>Nothing is watching you</h3>
-            <p>
-              No analytics, no advertising, no third-party scripts. One session cookie when you sign in, and short-lived
-              per-IP counters for rate limits. That is the entire list.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">AGPL</span>
-            <h3>The source is the receipt</h3>
-            <p>
-              Every instance links the exact commit it is running, this one included. You never have to take a privacy
-              promise on faith — go and read the code that makes it.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <span className="landing-glyph">SELF</span>
-            <h3>Or trust no one</h3>
-            <p>
-              Run the whole thing yourself: a desktop binary, a Pi at home, your own VM. Your radio, your database, your
-              rules — and the RF side always runs on your equipment anyway.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section" id="selfhost">
-        <p className="landing-eyebrow">Run it anywhere</p>
-        <h2>From a double-click to a global edge</h2>
-        <div className="landing-hosts">
-          <div className="landing-host">
-            <strong>Desktop</strong>
-            <span>one single binary</span>
-          </div>
-          <div className="landing-host">
-            <strong>Raspberry Pi</strong>
-            <span>at home, behind a tunnel</span>
-          </div>
-          <div className="landing-host">
-            <strong>Any VM</strong>
-            <span>Docker, batteries included</span>
-          </div>
-          <div className="landing-host">
-            <strong>Cloudflare split</strong>
-            <span>managed core, your own RF box</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section">
-        <div className="landing-band">
-          <div>
-            <h2>Free in full. Open in full.</h2>
-            <p>
-              AGPL-3.0 — every instance links its running source. The read API is free. Donations buy recognition, never
-              features. Built by OE8APR from open specifications.
-            </p>
-          </div>
-          <Button variant="primary" onClick={props.onSignIn}>
-            Start caching →
-          </Button>
-        </div>
-      </section>
-
       <footer className="landing-footer">
         <a href={`${API_BASE}/sitemap`}>Site map</a>
         <a href={`${API_BASE}/support`}>Support</a>
@@ -288,5 +49,329 @@ export function Landing(props: { onSignIn: () => void; onExplore: () => void }) 
         </p>
       </footer>
     </main>
+  );
+}
+
+/** An image the asset script makes at two or three widths, as AVIF with a WebP fallback. */
+function Shot(props: {
+  name: string;
+  widths: number[];
+  ratio: [number, number];
+  sizes: string;
+  alt: string;
+  eager?: boolean;
+  className?: string;
+}) {
+  const set = (ext: string) => props.widths.map((w) => `/landing/${props.name}-${w}.${ext} ${w}w`).join(", ");
+  const largest = props.widths[props.widths.length - 1];
+  return (
+    <picture className={props.className}>
+      <source type="image/avif" srcSet={set("avif")} sizes={props.sizes} />
+      <source type="image/webp" srcSet={set("webp")} sizes={props.sizes} />
+      <img
+        src={`/landing/${props.name}-${largest}.webp`}
+        alt={props.alt}
+        width={props.ratio[0]}
+        height={props.ratio[1]}
+        loading={props.eager ? "eager" : "lazy"}
+        decoding="async"
+        {...(props.eager ? { fetchPriority: "high" as const } : {})}
+      />
+    </picture>
+  );
+}
+
+function Hero(props: { onSignIn: () => void; onExplore: () => void }) {
+  return (
+    <header className="landing-hero">
+      <Shot
+        name="hero"
+        widths={[960, 1600, 2560]}
+        ratio={[3840, 2160]}
+        sizes="100vw"
+        alt=""
+        eager
+        className="landing-hero-photo"
+      />
+      <nav className="landing-nav" aria-label="Landing">
+        <img className="landing-nav-logo" src={ASSET.wordmark} alt="APRScaching" width={160} height={34} />
+        <span className="landing-nav-links">
+          <a href="#map">The map</a>
+          <a href="#how">How it works</a>
+          <a href="#trust">Trust</a>
+          <a href="#shack">Shack</a>
+          <a href="#privacy">Privacy</a>
+        </span>
+        <Button variant="primary" onClick={props.onSignIn}>
+          Sign in
+        </Button>
+      </nav>
+      <div className="landing-hero-grid">
+        <div className="landing-hero-copy">
+          <p className="landing-eyebrow">Amateur radio · APRS · Geocaching</p>
+          <h1 className="landing-slogan">
+            Geocaching, <em>on the air.</em>
+          </h1>
+          <p className="landing-sub">
+            Hide a cache, hunt it down, and key the find over APRS. The radio network itself proves you were there.
+          </p>
+          <div className="landing-cta">
+            <Button variant="primary" onClick={props.onSignIn}>
+              Sign in with your callsign
+            </Button>
+            <Button onClick={props.onExplore}>Explore the live map</Button>
+          </div>
+        </div>
+        <Terminal />
+      </div>
+      <LiveStats />
+    </header>
+  );
+}
+
+/** One find, heard on the air: the frame arrives line by line, then its stamp. */
+function Terminal() {
+  return (
+    <figure className="landing-term" aria-label="A find heard on the air and verified">
+      <div className="landing-term-bar" aria-hidden="true">
+        <span className="landing-term-rx" /> RF · 144.800 MHz · RX
+      </div>
+      <div className="landing-term-body">
+        <p className="landing-frame f1">
+          <span className="dim">10:42Z</span> OE8APR-7&gt;APZACG,WIDE1-1:
+        </p>
+        <p className="landing-frame f2">:APRSCA &nbsp;:FOUND AC-1042</p>
+        <p className="landing-frame f3 dim">heard direct by OE8XBM-10, the instance's own receiver</p>
+        <p className="landing-frame f4 dim">track plausible · 18 m from the cache</p>
+        <span className="landing-stamp">
+          <Icon name="check" size={14} /> Radio-verified · Tier A
+        </span>
+      </div>
+    </figure>
+  );
+}
+
+interface Stats {
+  caches: number;
+  findsOnAirThisWeek: number;
+  stationsHeardLastHour: number;
+}
+
+/** The instance's own numbers from the read API; a skeleton while they load, nothing if they cannot. */
+function LiveStats() {
+  const [stats, setStats] = useState<Stats | null | "failed">(null);
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch(`${API_BASE}/api/v1/stats`, { signal: ac.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<Stats>) : Promise.reject(new Error(String(r.status)))))
+      .then(setStats)
+      .catch((e: unknown) => {
+        if ((e as Error).name !== "AbortError") setStats("failed");
+      });
+    return () => ac.abort();
+  }, []);
+  if (stats === "failed") return null;
+  const n = (v: number) => new Intl.NumberFormat("en").format(v);
+  const items: [string, ReactNode][] = stats
+    ? [
+        ["caches hidden here", n(stats.caches)],
+        ["finds heard on the air this week", n(stats.findsOnAirThisWeek)],
+        ["stations heard in the last hour", n(stats.stationsHeardLastHour)],
+      ]
+    : [
+        ["caches hidden here", null],
+        ["finds heard on the air this week", null],
+        ["stations heard in the last hour", null],
+      ];
+  return (
+    <dl className="landing-stats" aria-busy={stats === null}>
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value ?? <span className="landing-skel" aria-hidden="true" />}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MapBand(props: { onExplore: () => void }) {
+  return (
+    <section className="landing-band-map" id="map" aria-labelledby="map-h">
+      <div className="landing-map-frame">
+        <Shot
+          name="map-band"
+          widths={[800, 1600]}
+          ratio={[1600, 620]}
+          sizes="100vw"
+          alt="The live map around Graz: caches of several types over the street map"
+        />
+        <span className="landing-callout c1" aria-hidden="true">
+          <TierBadge tier="A" /> Schlossberg clock tower
+        </span>
+        <span className="landing-callout c2" aria-hidden="true">
+          <TierBadge tier="B" /> Morse in the Stadtpark
+        </span>
+      </div>
+      <div className="landing-band-copy">
+        <h2 id="map-h">One live map</h2>
+        <p>
+          Caches, the stations around you, and how every find was confirmed. Off-grid packs keep it working without
+          signal.
+        </p>
+        <Button onClick={props.onExplore}>Explore the live map</Button>
+        <p className="landing-attrib">Map © OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors</p>
+      </div>
+    </section>
+  );
+}
+
+function Steps() {
+  return (
+    <section className="landing-section landing-split" id="how" aria-labelledby="how-h">
+      <div>
+        <p className="landing-eyebrow">How a find works</p>
+        <h2 id="how-h">Three steps, and the network is the referee</h2>
+        <ol className="landing-steps">
+          <li>
+            <span>
+              <strong>Hide</strong> a container, or make a station or yourself the cache.
+            </span>
+          </li>
+          <li>
+            <span>
+              <strong>Hunt</strong> by map, bearing or a 10-character locator, even without internet.
+            </span>
+          </li>
+          <li>
+            <span>
+              <strong>Key the find</strong> over APRS from the spot, or log it in the app.
+            </span>
+          </li>
+        </ol>
+        <a className="landing-more" href="/?view=docs&doc=guides/caching">
+          The caching guide
+        </a>
+      </div>
+      <div className="landing-phone">
+        <Shot
+          name="phone"
+          widths={[390, 780]}
+          ratio={[780, 1688]}
+          sizes="(min-width: 880px) 300px, 70vw"
+          alt="A cache open on a phone: its difficulty, rating and coordinates"
+        />
+      </div>
+    </section>
+  );
+}
+
+function Trust() {
+  return (
+    <section className="landing-section" id="trust" aria-labelledby="trust-h">
+      <p className="landing-eyebrow">The trust model</p>
+      <h2 id="trust-h">Every find says how it was confirmed</h2>
+      <ol className="landing-tiers">
+        <li>
+          <TierBadge tier="C" />
+          <p>On record. Nothing independent placed the finder at the cache.</p>
+        </li>
+        <li>
+          <TierBadge tier="B" />
+          <p>The finder's own device was at the cache when the find was logged.</p>
+        </li>
+        <li>
+          <TierBadge tier="A" />
+          <p>The instance's own receiver heard the finder on the air there. A copy from the internet never counts.</p>
+        </li>
+      </ol>
+      <a className="landing-more" href="/?view=docs&doc=concepts">
+        How verification works
+      </a>
+    </section>
+  );
+}
+
+const SHACK: [IconName, string, string][] = [
+  ["radio", "Your radio, your way", "KISS TNC, Bluetooth, Meshtastic, or the sound card."],
+  ["bbs", "Packet terminal and BBS", "AX.25 connected mode, FBB forwarding, a NET/ROM node."],
+  ["map", "Live map", "Stations, tracks, weather and spots, with offline maps."],
+  ["server", "Federated", "Instances share signed finds, over HTTPS or over the air."],
+  ["tools", "Tools", "Signed plugins: decoders, macros, panels."],
+  ["thermo", "Weather", "Your weather station, CWOP and WX beacons."],
+];
+
+function Shack() {
+  return (
+    <section className="landing-section landing-split landing-split-rev" id="shack" aria-labelledby="shack-h">
+      <div className="landing-desktop">
+        <Shot
+          name="desktop"
+          widths={[960, 1920]}
+          ratio={[1920, 1200]}
+          sizes="(min-width: 880px) 560px, 92vw"
+          alt="The app on a desktop: the Nearby list beside an open cache"
+        />
+      </div>
+      <div>
+        <p className="landing-eyebrow">More than a game</p>
+        <h2 id="shack-h">A ham-radio Shack underneath</h2>
+        <ul className="landing-caps">
+          {SHACK.map(([icon, title, line]) => (
+            <li key={title}>
+              <Icon name={icon} size={20} />
+              <span>
+                <strong>{title}.</strong> {line}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function Privacy() {
+  return (
+    <section className="landing-section" id="privacy" aria-labelledby="privacy-h">
+      <p className="landing-eyebrow">What we do with your beacons</p>
+      <h2 id="privacy-h">An APRS map that forgets</h2>
+      <dl className="landing-facts">
+        <div>
+          <dt>Positions expire</dt>
+          <dd>Tracks are pruned on a schedule; only a find's own evidence is kept longer.</dd>
+        </div>
+        <div>
+          <dt>Nothing is watching you</dt>
+          <dd>No analytics, no ads, no third-party scripts. One session cookie when you sign in.</dd>
+        </div>
+        <div>
+          <dt>The source is the receipt</dt>
+          <dd>Every instance links the exact code it runs, so a promise can be checked.</dd>
+        </div>
+        <div>
+          <dt>Or run it yourself</dt>
+          <dd>Your radio, your database, your rules.</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function RunAnywhere() {
+  return (
+    <section className="landing-section landing-run" aria-labelledby="run-h">
+      <h2 id="run-h">Run it anywhere</h2>
+      <ul className="landing-hosts">
+        <li>A desktop app</li>
+        <li>A Raspberry Pi at home</li>
+        <li>Any VM with Docker</li>
+        <li>An Android phone in the field</li>
+        <li>Cloudflare, with your own RF box</li>
+      </ul>
+      <a className="landing-more" href="/?view=docs&doc=operate/deployment">
+        Choose how to run it
+      </a>
+    </section>
   );
 }

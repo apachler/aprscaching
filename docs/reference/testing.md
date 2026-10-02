@@ -113,6 +113,10 @@ the real browser ceremony before a release.
     screenshot per step and a log that marks every step it could not complete.
     Screenshots are for review and are never compared pixel by pixel; `--strict` fails on a serious or critical
     axe finding.
+- **Landing images** — `pnpm --filter @aprscaching/web landing-assets` (after a build, with a connection for the
+  basemap tiles) renders the landing page's map band, phone and desktop screenshots and Open Graph card from the
+  fixtures, and writes them with the hero photo to `apps/web/public/landing/` as AVIF and WebP at the srcset widths.
+  Run it again when a surface it shows changes, and commit the images.
 
 ## Interop against real packet software
 
