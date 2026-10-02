@@ -635,6 +635,18 @@ const ROUTES: Route[] = [
   ["GET", /^\/api\/support$/, () => SUPPORT],
   ["GET", /^\/api\/support\/prefs$/, () => ({ supporter: true, hideNag: false })],
   ["GET", /^\/auth\/callsigns$/, () => ({ active: ME, callsigns: [{ callsign: ME, verified: true }] })],
+  [
+    "GET",
+    /^\/auth\/passkeys$/,
+    () => ({
+      callsign: ME,
+      hasEmail: true,
+      passkeys: [
+        { id: "demo-phone", createdAt: NOW - 86400 * 40, transports: ["internal", "hybrid"] },
+        { id: "demo-key", createdAt: NOW - 86400 * 3, transports: ["usb", "nfc"] },
+      ],
+    }),
+  ],
   ["GET", /^\/api\/my\/stations$/, () => page({ stations: MY_STATIONS })],
   ["GET", /^\/api\/watch$/, () => ({ watching: [], unseen: 0 })],
   ["GET", /^\/api\/watch\/alerts$/, () => page({ alerts: [] })],

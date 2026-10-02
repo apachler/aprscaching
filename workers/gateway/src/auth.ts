@@ -234,11 +234,15 @@ export async function handlePasskeyRegisterBegin(req: Request, env: Env): Promis
     .first<{ account_id: string }>();
   let accountId: string;
   let pendingNew = false;
-  if (existing) {
+  // the account that holds this call, whether it is the account's active call or another it holds
+  const holder = existing?.account_id ?? (await baseHolder(env, baseCall(cs)));
+  if (holder) {
+    // Another passkey for a held call is added only from a session of the account that holds it: a new
+    // device of the same ham, whichever of the account's calls the session is using.
     const me = await sessionIdentity(req, env);
-    if (!me || me.accountId !== existing.account_id || me.callsign !== cs)
+    if (!me || me.accountId !== holder)
       return json({ error: "callsign already claimed — sign in instead" }, { status: 409 });
-    accountId = existing.account_id;
+    accountId = holder;
   } else {
     const refused = await unclaimableReason(env, cs);
     if (refused) return json({ error: refused }, { status: refused === "invalid callsign" ? 400 : 409 });
@@ -331,17 +335,20 @@ export async function handlePasskeyRegisterFinish(req: Request, env: Env): Promi
       }
       accountId = pending.a;
     } else {
-      accountId = await accountIdOf(env, cs);
+      accountId = (await accountIdOf(env, cs)) ?? (await baseHolder(env, baseCall(cs)));
       if (!accountId) return json({ error: "no pending registration" }, { status: 400 });
     }
+    // a passkey added to an existing account keeps the session on the call it was using
+    const me = pending.a ? null : await sessionIdentity(req, env);
+    const sessionCall = me && me.accountId === accountId ? me.callsign : cs;
     await env.DB.prepare(
       "INSERT OR REPLACE INTO credentials (id, callsign, public_key, counter, transports, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
       .bind(r.credentialId, cs, r.coseKey, r.signCount, JSON.stringify(credential.response.transports ?? []), nowS())
       .run();
     return json(
-      { ok: true, callsign: cs, licence: await licenceFor(env, cs) },
-      { headers: { "set-cookie": await issueSessionCookie(env, accountId, cs) } },
+      { ok: true, callsign: sessionCall, licence: await licenceFor(env, sessionCall) },
+      { headers: { "set-cookie": await issueSessionCookie(env, accountId, sessionCall) } },
     );
   } catch (e) {
     if (e instanceof SessionUnavailable) return sessionUnavailable();
@@ -740,4 +747,61 @@ async function verifySession(token: string, env: Env): Promise<SessionClaims | n
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------- the account's passkeys (one per device)
+/** The account's primary call (its passkeys are stored and looked up under it) and its recovery email. */
+async function passkeyOwner(req: Request, env: Env): Promise<{ callsign: string; email: string | null } | null> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return null;
+  return env.DB.prepare(
+    `SELECT ac.callsign AS callsign, a.email AS email FROM account_callsigns ac JOIN accounts a ON a.account_id = ac.account_id
+     WHERE ac.account_id=? AND ac.is_primary=1`,
+  )
+    .bind(me.accountId)
+    .first<{ callsign: string; email: string | null }>();
+}
+
+/** GET /auth/passkeys — the signed-in account's passkeys: when each was added and how its device connects. */
+export async function handleListPasskeys(req: Request, env: Env): Promise<Response> {
+  const owner = await passkeyOwner(req, env);
+  if (!owner) return json({ error: "sign in to see your passkeys" }, { status: 401 });
+  const rows = (
+    await env.DB.prepare("SELECT id, transports, created_at FROM credentials WHERE callsign=? ORDER BY created_at")
+      .bind(owner.callsign)
+      .all<{ id: string; transports: string | null; created_at: number }>()
+  ).results;
+  return json({
+    callsign: owner.callsign,
+    hasEmail: !!owner.email,
+    passkeys: rows.map((r) => {
+      let transports: string[] = [];
+      try {
+        transports = JSON.parse(r.transports ?? "[]") as string[];
+      } catch {
+        /* an unreadable list is shown as unknown */
+      }
+      return { id: r.id, createdAt: r.created_at, transports };
+    }),
+  });
+}
+
+/**
+ * DELETE /auth/passkeys/:id — remove one of the account's passkeys, such as a lost phone's. The last passkey of an
+ * account without a recovery email stays: removing it would leave no way to sign in.
+ */
+export async function handleRemovePasskey(req: Request, env: Env, id: string): Promise<Response> {
+  const owner = await passkeyOwner(req, env);
+  if (!owner) return json({ error: "sign in to remove a passkey" }, { status: 401 });
+  const all = (
+    await env.DB.prepare("SELECT id FROM credentials WHERE callsign=?").bind(owner.callsign).all<{ id: string }>()
+  ).results;
+  if (!all.some((c) => c.id === id)) return json({ error: "no such passkey" }, { status: 404 });
+  if (all.length === 1 && !owner.email)
+    return json(
+      { error: "this is your only way to sign in: add an email address or another passkey first" },
+      { status: 409 },
+    );
+  await env.DB.prepare("DELETE FROM credentials WHERE id=? AND callsign=?").bind(id, owner.callsign).run();
+  return json({ ok: true, remaining: all.length - 1 });
 }
