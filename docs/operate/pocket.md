@@ -5,13 +5,25 @@ root: the gateway (Node and SQLite) serves the map and the web app, and the inge
 MeshCom node. It is a station for field days, demos and hikes — not a 24/7 server. Android stops background
 apps, and battery and heat are real limits; for an always-on station, use [Self-host](deployment.md#self-host).
 
-```
-MeshCom node (T-Deck, T-Beam) ──Wi-Fi──▶ the phone's hotspot, or a router ── ExtUDP, UDP 1799 ──▶
-Termux: tmux ─┬─ ingest   (MeshCom listener; APRS-IS while there is a data connection)
-              └─ gateway  (SQLite) on port 8787, and https on 8443 for visitors
-A browser on the phone ── http://localhost:8787 ── Web Bluetooth ── a BLE KISS TNC (your own traffic)
-Visitors on the hotspot ── https://<hotspot address>:8443
-Optional, with a data connection: a Cloudflare Tunnel, or WireGuard with 44Net Connect
+```mermaid
+flowchart LR
+  node["MeshCom node<br/>(T-Deck, T-Beam)"]
+  tnc["BLE KISS TNC<br/>(your own traffic)"]
+  visitors["Visitors on the hotspot"]
+  inet["Optional, with a data connection:<br/>Cloudflare Tunnel, or WireGuard<br/>with 44Net Connect"]
+  aprsis["APRS-IS"]
+  subgraph phone["Android phone · Termux · tmux"]
+    ingest["ingest<br/>MeshCom listener, APRS-IS"]
+    gateway["gateway<br/>Node + SQLite<br/>:8787 · https :8443"]
+    browser["Browser on the phone<br/>http://localhost:8787"]
+  end
+  node -- "Wi-Fi to the hotspot or a router<br/>ExtUDP, UDP 1799" --> ingest
+  aprsis -. "while there is a data connection" .-> ingest
+  ingest --> gateway
+  browser --> gateway
+  tnc -- "Web Bluetooth" --> browser
+  visitors -- "https://&lt;hotspot address&gt;:8443" --> gateway
+  gateway -.- inet
 ```
 
 The scripts are in `deploy/pocket/`; each takes `--help`, and the

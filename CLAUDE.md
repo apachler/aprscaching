@@ -78,7 +78,7 @@ pnpm dev:ingest       # needs .env (copy .env.example)
 pnpm dev:web
 ```
 `apps/web`'s `test` runs three guard scripts (no emoji, tour anchors resolve, vendored MapLibre) and a vitest suite over its
-pure logic modules (`apps/web/test/*.test.ts`, no DOM); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
+pure logic modules (`apps/web/test/*.test.ts`, no DOM except the Mermaid parse check under jsdom); its other check is `typecheck`. The federation smoke (`tools/smoke/federation.mjs`) needs two
 instances: `tools/dev/smoke.sh federation` boots a publisher and a subscriber on free ports with the env of
 the CI `conformance-federation` job (`.github/workflows/ci.yml`). It is not part of `pnpm run smoke`.
 

@@ -1,0 +1,143 @@
+/* The manual in the app's look: maps the app's design tokens (tokens.gen.css, generated from
+   apps/web/src/styles/tokens.css by tools/dev/docs-theme.mjs) onto Material for MkDocs' variables. Colours,
+   fonts and corner radii come from the tokens only; this file decides which token plays which role. */
+
+[data-md-color-scheme] {
+  /* header and tabs: the app's top bar */
+  --md-primary-fg-color: var(--topbar-bg);
+  --md-primary-fg-color--light: var(--brand);
+  --md-primary-fg-color--dark: var(--rail-bg);
+  --md-primary-bg-color: var(--chrome-ink);
+  --md-primary-bg-color--light: var(--chrome-ink-muted);
+
+  /* links, the active page, focus: the accent's text role */
+  --md-accent-fg-color: var(--accent-text);
+  --md-accent-fg-color--transparent: color-mix(in oklch, var(--accent-text) 10%, transparent);
+  --md-accent-bg-color: var(--accent-ink);
+  --md-typeset-a-color: var(--accent-text);
+
+  /* page */
+  --md-default-bg-color: var(--page-bg);
+  --md-default-fg-color: var(--ink);
+  --md-default-fg-color--light: var(--muted);
+  --md-default-fg-color--lighter: color-mix(in oklch, var(--muted) 60%, transparent);
+  --md-default-fg-color--lightest: var(--hair);
+  --md-typeset-color: var(--ink);
+
+  /* code */
+  --md-code-bg-color: var(--surface-2);
+  --md-code-fg-color: var(--ink-2);
+
+  /* tables, footer, shadows */
+  --md-typeset-table-color: var(--hair);
+  --md-footer-bg-color: var(--rail-bg);
+  --md-footer-bg-color--dark: var(--panel-2);
+  --md-footer-fg-color: var(--ink);
+  --md-footer-fg-color--light: var(--muted);
+  --md-shadow-z1: var(--elevation-raised);
+  --md-shadow-z2: var(--elevation-floating);
+  --md-shadow-z3: var(--elevation-overlay);
+
+  /* fonts */
+  --md-text-font: var(--font-ui);
+  --md-code-font: var(--font-mono);
+
+  /* admonitions */
+  --md-admonition-bg-color: var(--surface);
+  --md-admonition-fg-color: var(--ink);
+}
+
+/* a drawn diagram (docs/javascripts/diagrams.js) scales down to the column */
+.md-typeset .diagram-drawn {
+  margin: 1em 0;
+}
+.md-typeset .diagram-drawn svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+body {
+  font-family: var(--font-ui);
+}
+
+/* headings in the wordmark face, coloured like the app's manual reader */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  font-family: var(--font-brand);
+  color: var(--heading);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.01em;
+}
+.md-typeset h1,
+.md-typeset h2 {
+  font-weight: var(--weight-title);
+}
+.md-typeset h2 {
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 0.2em;
+}
+.md-header__title,
+.md-nav__title {
+  font-family: var(--font-brand);
+  font-weight: var(--weight-strong);
+}
+
+/* links underlined, like in the app */
+.md-typeset a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md-typeset a.headerlink,
+.md-typeset a.md-button {
+  text-decoration: none;
+}
+
+/* shape: the app's radius scale */
+.md-typeset code,
+.md-typeset pre > code,
+.md-search__form,
+.md-typeset .admonition,
+.md-typeset details,
+.md-typeset table:not([class]) {
+  border-radius: var(--radius-control);
+}
+.md-typeset pre > code {
+  border: 1px solid var(--line);
+}
+.md-typeset table:not([class]) th {
+  background: var(--chip-bg);
+  color: var(--heading);
+}
+
+/* admonitions keyed to the app's status tokens */
+.md-typeset .admonition,
+.md-typeset details {
+  border-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 8%, var(--page-bg));
+  box-shadow: none;
+}
+.md-typeset :is(.admonition, details):is(.warning, .caution, .attention) {
+  border-color: var(--warn);
+  background: color-mix(in oklch, var(--warn) 9%, var(--page-bg));
+}
+.md-typeset :is(.admonition, details):is(.danger, .error, .failure, .bug) {
+  border-color: var(--bad);
+  background: color-mix(in oklch, var(--bad) 9%, var(--page-bg));
+}
+.md-typeset :is(.admonition, details):is(.tip, .hint, .success, .check, .done) {
+  border-color: var(--ok);
+  background: color-mix(in oklch, var(--ok) 9%, var(--page-bg));
+}
+.md-typeset :is(.admonition, details):is(.note, .info, .abstract, .summary, .tldr, .example, .quote) {
+  border-color: var(--brand);
+  background: color-mix(in oklch, var(--brand) 9%, var(--page-bg));
+}
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background: transparent !important;
+  color: var(--heading);
+}

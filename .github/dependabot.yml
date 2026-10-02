@@ -29,3 +29,15 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci(deps)"
+
+  # The manual's build (docs/requirements.txt): MkDocs and Material for MkDocs.
+  - package-ecosystem: pip
+    directory: "/docs"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      docs:
+        patterns: ["*"]
+    commit-message:
+      prefix: "docs(deps)"

@@ -72,22 +72,26 @@ master toggle/status** → child controls. Specifically:
 - Show **status at the group header** (e.g. `active`, `inactive`, `needs verification`) so the
   operator scans state without expanding.
 
-```
-┌ Settings        [ ⌕ search settings… ]                      ┐
-│                                                              │
-│  ▣ Notifications                                  [ ●—— ]    │ group master = ON
-│      Geofence prompts                             [ ●—— ]    │
-│      Find confirmations                           [ ——○ ]    │
-│      ▸ Advanced (sound, throttling)                          │ collapsed
-│                                                              │
-│  ▢ APRS-IS announce                               [ ——○ ]    │ master OFF → children hidden
-│      Verify your callsign to enable announce.               │ reason, not dead controls
-│                                                              │
-│  ▣ Ports & transports                             [ ●—— ]    │
-│      ▸ APRS-IS                     active          [ ●—— ]    │ collapsed; expand to configure
-│      ▸ KISS TCP                    inactive        [ ——○ ]    │
-│      ▸ Meshtastic                  inactive        [ ——○ ]    │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph page["Settings · search settings"]
+    direction TB
+    subgraph notif["Notifications · master switch on"]
+      direction TB
+      n1["Geofence prompts · on"]
+      n2["Find confirmations · off"]
+      n3["Advanced: sound, throttling · collapsed"]
+    end
+    subgraph announce["APRS-IS announce · master switch off"]
+      a1["Verify your callsign to enable announce<br/>(the reason, not dead controls; children hidden)"]
+    end
+    subgraph ports["Ports and transports · master switch on"]
+      direction TB
+      p1["APRS-IS · active · on · collapsed, expand to configure"]
+      p2["KISS TCP · inactive · off"]
+      p3["Meshtastic · inactive · off"]
+    end
+  end
 ```
 
 **MUST NOT:** render a long flat list of unrelated toggles; leave a disabled subsystem's controls

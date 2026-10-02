@@ -38,6 +38,11 @@ const PAIRS: Pair[] = [
   },
   { name: "headings and links on a panel", fg: "var(--heading)", bg: "var(--surface)", min: 4.5 },
   { name: "accent as text on a panel", fg: "var(--accent-text)", bg: "var(--surface)", min: 4.5 },
+  { name: "diagram text in a box", fg: "var(--diagram-ink)", bg: "var(--diagram-node-bg)", min: 4.5 },
+  { name: "diagram text in a group", fg: "var(--diagram-ink)", bg: "var(--diagram-group-bg)", min: 4.5 },
+  { name: "diagram edge label", fg: "var(--diagram-ink)", bg: "var(--diagram-label-bg)", min: 4.5 },
+  { name: "diagram edges on a panel", fg: "var(--diagram-edge)", bg: "var(--surface)", min: 3 },
+  { name: "diagram box outline on a panel", fg: "var(--diagram-node-line)", bg: "var(--surface)", min: 3 },
   {
     name: "accent as text on the page",
     fg: "var(--accent-text)",

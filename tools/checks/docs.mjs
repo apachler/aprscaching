@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The documentation stays true to the code and to `.claude/rules/docs-and-comments.md`. Four checks, each
+ * The documentation stays true to the code and to `.claude/rules/docs-and-comments.md`. Five checks, each
  * naming every offending line:
  *
  *  1. Present tense — no milestone, review or ADR codes and no story framing ("previously", "for now", …)
@@ -12,6 +12,9 @@
  *  3. Navigation — every mkdocs.yml nav entry exists, and every docs/ page is in the nav or `not_in_nav`.
  *  4. Links — every relative link in the root documents and READMEs (outside the mkdocs build, which
  *     checks its own) points at a file that exists.
+ *  5. Diagrams — a fenced block in the manual, the READMEs or the rules draws no picture in box-drawing
+ *     characters: a diagram is a ```mermaid block, which the manual and the in-app reader both draw. Real
+ *     terminal output that uses them is marked by an `<!-- ascii-ok: <what it is> -->` line right above it.
  *
  * Pure word and path matching over the tracked files, with no dependency, so it runs before install.
  */
@@ -179,11 +182,35 @@ for (const f of PROSE.filter((f) => !f.startsWith("docs/"))) {
     });
 }
 
+// ---------------------------------------------------------------- 5. diagrams are Mermaid
+const DIAGRAM_DOCS = tracked.filter(
+  (f) =>
+    f.endsWith(".md") &&
+    !f.startsWith("docs/reviews/") &&
+    (f.startsWith("docs/") || f.startsWith(".claude/rules/") || /(^|\/)README\.md$/.test(f)),
+);
+for (const f of DIAGRAM_DOCS) {
+  const lines = read(f).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const open = /^\s*```(\w*)/.exec(lines[i]);
+    if (!open) continue;
+    const start = i;
+    let drawn = 0;
+    while (++i < lines.length && !/^\s*```\s*$/.test(lines[i])) if (/[\u2500-\u257F]/.test(lines[i])) drawn++;
+    if (drawn && open[1] !== "mermaid" && !/<!--\s*ascii-ok:\s*\S/.test(lines[start - 1] ?? ""))
+      fail(
+        f,
+        start + 1,
+        "a diagram in box-drawing characters: draw it as a ```mermaid block (or mark real output <!-- ascii-ok: … -->)",
+      );
+  }
+}
+
 if (problems.length) {
   for (const p of problems) console.error(`✗ ${p}`);
   console.error(`\n${problems.length} documentation problem(s). The rules: .claude/rules/docs-and-comments.md`);
   process.exit(1);
 }
 console.log(
-  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve`,
+  `✓ docs: ${PROSE.length} files present-tense, ${schemaKeys.size} config keys in the schema, nav complete, links resolve, diagrams are Mermaid`,
 );

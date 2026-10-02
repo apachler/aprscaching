@@ -8,7 +8,8 @@ import { vendorMaplibrePlugin } from "./vite-vendor.js";
 import { serviceWorkerPlugin } from "./vite-sw.js";
 
 // The manual lives in the repo-root `docs/` tree; bundle it into the SPA at build time (vite-docs.ts).
-const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../docs");
+const webDir = path.dirname(fileURLToPath(import.meta.url));
+const docsDir = path.resolve(webDir, "../../docs");
 
 /**
  * index.html's canonical link and Open Graph tags want absolute URLs, so `%APP_ORIGIN%` there becomes the
@@ -43,6 +44,8 @@ function originOf(url: string | undefined): string {
 //    for it into index.html; the signed-out landing therefore never fetches it. It loads on demand when
 //    Platform mounts (explore / sign-in). The warning limit reflects MapLibre's real size.
 export default defineConfig(({ mode }) => ({
+  // Mermaid's ELK layout stays out of the bundle (src/docs/noElk.ts says why).
+  resolve: { alias: { "elkjs/lib/elk.bundled.js": path.resolve(webDir, "src/docs/noElk.ts") } },
   plugins: [
     appOriginPlugin(originOf(loadEnv(mode, process.cwd(), "VITE_").VITE_APP_URL)),
     react(),

@@ -71,6 +71,16 @@
     line-height: 1.6;
     overflow-wrap: break-word;
   }
+  /* a diagram scales down to the column; until it is drawn (or if it cannot be) its source shows as code */
+  .docs-body .doc-diagram {
+    margin: var(--space-md) 0;
+  }
+  .docs-body .doc-diagram[data-drawn] svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin-inline: auto;
+  }
   .docs-body h1,
   .docs-body h2,
   .docs-body h3,
