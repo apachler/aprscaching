@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useState } from "react";
-import { getStages, unlockStage, mediaUrl, type CacheStage } from "../api.js";
+import { getStages, unlockStage, mediaUrl, privateClipUrl, type CacheStage } from "../api.js";
 import { useFmt } from "../format.js";
 import { Button, Icon } from "../ui/index.js";
 import type { AppGeo } from "../api.js";
@@ -156,7 +156,12 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
               </span>
             </div>
             {s.clue && <div className="comment">{s.clue}</div>}
-            {s.mediaUrl && <audio controls preload="none" src={mediaUrl(s.mediaUrl)} />}
+            {s.mediaUrl &&
+              (s.stageNo === 0 || s.unlock === "audio" ? (
+                <audio controls preload="none" src={mediaUrl(s.mediaUrl)} />
+              ) : (
+                <PrivateClip path={s.mediaUrl} stageNo={s.stageNo} />
+              ))}
             {s.unlocked && s.lat != null && s.lon != null && (
               <div className="muted mt-1">
                 <Icon name="place" cp437="" className="lead-ic" />
@@ -215,6 +220,45 @@ export function StagesSection(props: { cacheId: number; callsign: string }) {
         </p>
       )}
       {err && <p className="error">{err}</p>}
+    </div>
+  );
+}
+
+/**
+ * The clip of a stage that unlocks by location, tag or on request: only its unlocker and the owner may hear it, so
+ * it loads on demand through the signed-in session and plays from a local copy (see privateClipUrl).
+ */
+function PrivateClip(props: { path: string; stageNo: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(
+    () => () => {
+      if (url?.startsWith("blob:") && url !== props.path) URL.revokeObjectURL(url);
+    },
+    [url, props.path],
+  );
+  if (url) return <audio controls autoPlay src={url} />;
+  return (
+    <div className="row">
+      <Button
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setErr(null);
+          privateClipUrl(props.path)
+            .then(setUrl)
+            .catch((e: Error) => setErr(e.message))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Loading…" : `Play stage ${props.stageNo} clip`}
+      </Button>
+      {err && (
+        <span className="error fine" role="alert">
+          {err}
+        </span>
+      )}
     </div>
   );
 }
