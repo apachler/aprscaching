@@ -12,12 +12,52 @@
   if (!blocks.length) return;
   var here = document.currentScript && document.currentScript.src;
 
+  // A computed colour as #rrggbb. Browsers report it in different forms (Chromium color(srgb …) or rgb(),
+  // Firefox and Safari oklab() or oklch()), and a canvas does not parse all of them everywhere, so the common
+  // forms are converted here, as apps/web/src/shell/tokenColor.ts does; anything else goes through a canvas.
+  function toHex(rgb) {
+    return "#" + rgb.map((v) => Math.min(255, Math.max(0, Math.round(v))).toString(16).padStart(2, "0")).join("");
+  }
+  function gamma(x) {
+    return 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+  }
+  function num(s, scale) {
+    return s === "none" ? 0 : s.endsWith("%") ? (parseFloat(s) / 100) * (scale || 1) : parseFloat(s);
+  }
+  function oklab(l, a, b) {
+    var l_ = Math.pow(l + 0.3963377774 * a + 0.2158037573 * b, 3),
+      m_ = Math.pow(l - 0.1055613458 * a - 0.0638541728 * b, 3),
+      s_ = Math.pow(l - 0.0894841775 * a - 1.291485548 * b, 3);
+    return [
+      4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+      -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+      -0.0041960863 * l_ - 0.7034186147 * m_ + 1.707614701 * s_,
+    ].map(gamma);
+  }
+  function parse(css) {
+    var m = /^\s*([a-z]+)\(\s*([^)]*)\)\s*$/i.exec(css);
+    if (!m) return null;
+    var fn = m[1].toLowerCase(),
+      p = m[2].split(/[\s,/]+/).filter(Boolean);
+    if ((fn === "rgb" || fn === "rgba") && p.length >= 3) return toHex(p.slice(0, 3).map((x) => num(x, 255)));
+    if (fn === "color" && p[0] === "srgb" && p.length >= 4) return toHex(p.slice(1, 4).map((x) => num(x) * 255));
+    if (fn === "oklab" && p.length >= 3) return toHex(oklab(num(p[0]), num(p[1], 0.4), num(p[2], 0.4)));
+    if (fn === "oklch" && p.length >= 3) {
+      var c = num(p[1], 0.4),
+        h = (num(p[2]) * Math.PI) / 180;
+      return toHex(oklab(num(p[0]), c * Math.cos(h), c * Math.sin(h)));
+    }
+    return null;
+  }
+
   function hex(name) {
     var probe = document.createElement("span");
     probe.style.color = "var(" + name + ")";
     document.body.appendChild(probe);
     var css = getComputedStyle(probe).color;
     probe.remove();
+    var parsed = parse(css);
+    if (parsed) return parsed;
     var c = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
     c.fillStyle = css;
     c.fillRect(0, 0, 1, 1);
