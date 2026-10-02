@@ -52,6 +52,10 @@ describe("normalizeCacheCode", () => {
     expect(normalizeCacheCode("AC-1234")).toBe("AC-1234");
     expect(normalizeCacheCode("AC_1234")).toBeNull();
     expect(normalizeCacheCode("1234")).toBeNull();
+    expect(normalizeCacheCode("oe/st-001")).toBe("OE/ST-001");
+    expect(normalizeCacheCode("OEFF-0123")).toBe("OEFF-0123");
+    expect(normalizeCacheCode("OE/ST 001")).toBeNull();
+    expect(normalizeCacheCode("OE/ST-001;DROP")).toBeNull();
   });
 });
 

@@ -11,7 +11,7 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { Subscribe, ServerMsg, StationDelta, GeofencePrompt } from "@aprscaching/shared";
-import { haversineMeters } from "@aprscaching/aprs";
+import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { dispatchBudget, settleDispatch } from "./budget.js";
 
 const GEOFENCE_RADIUS_M = 150;
@@ -33,8 +33,9 @@ export function deliveriesFor(sub: Subscribe | undefined, env: LiveEnvelope): Se
   if (!sub) return out;
   if (env.station && inBbox(sub.bbox, env.station.lat, env.station.lon)) out.push(env.station);
   if (sub.callsign && env.prompts) {
-    const cs = sub.callsign.toUpperCase();
-    for (const p of env.prompts) if (p.forCallsign === cs) out.push(p.prompt);
+    // a prompt goes to the person: the subscriber's base call matches a beacon from any of its SSIDs
+    const cs = baseCall(sub.callsign.toUpperCase());
+    for (const p of env.prompts) if (baseCall(p.forCallsign) === cs) out.push(p.prompt);
   }
   return out;
 }

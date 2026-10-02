@@ -40,7 +40,10 @@ export const TYPE_META: Record<CacheType, TypeMeta> = {
   castle: { label: "Castle", help: "A castle landmark.", glyph: "♜", cog: "#" },
 };
 
+/** The types the hide form offers. */
 export const TYPE_ORDER: CacheType[] = ["traditional", "multi", "aprs_living", "audio", "virtual", "sota", "pota"];
+/** Every type a cache on the map can have, for the type filter and offline packs: imported heritage places too. */
+export const FILTER_TYPES: CacheType[] = [...TYPE_ORDER, "wwff", "bunker", "castle"];
 
 export function typeMeta(t: string): TypeMeta {
   return TYPE_META[t as CacheType] ?? { label: t, help: "", glyph: "●", cog: "●" };

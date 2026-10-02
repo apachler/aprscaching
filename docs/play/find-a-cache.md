@@ -81,15 +81,12 @@ AC-1234**, with **Log it** and **Dismiss**. **Log it** opens the cache sheet.
 The prompt needs three things:
 
 - your radio beacons its position, and this instance hears it, over the air or over the internet;
-- the beacon carries the same callsign you are signed in with, SSID included;
+- the beacon carries the callsign you are signed in with, with any SSID: signed in as `OE8APR`, a beacon from
+  `OE8APR-7` prompts you;
 - the app is open on your phone or computer.
 
 The phone's own location does not trigger the prompt. Without a radio, use **Nearby** and the distance on the
 cache sheet instead.
-
-!!! note "Known issue"
-    The prompt matches the exact callsign. Signed in as `OE8APR`, a beacon from `OE8APR-7` does not
-    prompt you.
 
 ## Caches from other instances
 

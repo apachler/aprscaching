@@ -69,10 +69,15 @@ type RadioCommand =
 /** The service call radio commands and `VERIFY` messages are addressed to — the identity BBS mail uses. */
 export const serviceCall = (env: Env): string => (env.BBS_CALL ?? "APRSCG").toUpperCase();
 
-/** `ac1234`, `AC-1234`, `ac-1234` → `AC-1234`; anything that isn't letters followed by digits → null. */
+/**
+ * `ac1234`, `AC-1234`, `ac-1234` → `AC-1234`. A heritage reference keeps its own form, upper-cased: a SOTA
+ * summit `oe/st-001` → `OE/ST-001`. Anything else (spaces, other punctuation, a bare number) → null.
+ */
 export function normalizeCacheCode(raw: string): string | null {
-  const m = /^([A-Za-z]{1,4})-?(\d{1,8})$/.exec(raw.trim());
-  return m ? `${m[1]!.toUpperCase()}-${m[2]}` : null;
+  const t = raw.trim();
+  const m = /^([A-Za-z]{1,4})-?(\d{1,8})$/.exec(t);
+  if (m) return `${m[1]!.toUpperCase()}-${m[2]}`;
+  return t.length <= 20 && /^[A-Za-z0-9]+(?:[/-][A-Za-z0-9]+){1,3}$/.test(t) ? t.toUpperCase() : null;
 }
 
 /** Parse a command message. Pure: the whole grammar lives here. */
@@ -414,7 +419,9 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
   const acct = holder && (await isCallsignVerified(env, src)) ? { account_id: holder } : null;
   if (!acct) return reject(`${baseCall(src)} is not a verified callsign here - verify it in the app`);
 
-  const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ?").bind(parsed.code).first<CacheForLog>();
+  const cache = await env.DB.prepare("SELECT * FROM caches WHERE code = ? COLLATE NOCASE")
+    .bind(parsed.code)
+    .first<CacheForLog>();
   if (!cache) return reject(`unknown cache ${parsed.code}`, { accountId: acct.account_id });
   const refused = await logRefusal(env, cache, src, parsed.command, acct.account_id);
   if (refused) return reject(refused, { accountId: acct.account_id, cache });
