@@ -45,7 +45,8 @@ command's callsign has the same base call as the box's station call (`BOX_CALL`,
 - fit the box's rate limit: three in a burst, then one per minute.
 
 The app asks you to confirm each of these commands before it queues it. A refused command shows in the
-command log with the reason.
+command log with the reason. A message carries a message number, so the recipient's station acknowledges it,
+and once the box has sent it, it shows in **Messages**, marked **sent**.
 
 **TX off** is the box's master switch: it silences the APRS digipeater, IGate transmit to RF and remote
 transmits until switched on again or the ingest restarts. The switches live in memory, so a restart returns

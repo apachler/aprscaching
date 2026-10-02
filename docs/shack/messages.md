@@ -21,8 +21,9 @@ message.
 2. The newest messages come first, each with sender, recipient and age. A message from or to your callsign
    (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows older ones.
 
-The list holds what the instance heard over the air and from [APRS-IS](../glossary.md#aprs-is). Acknowledgements
-are not listed. When nothing has arrived yet, the list says so.
+The list holds what the instance heard over the air and from [APRS-IS](../glossary.md#aprs-is), and the messages
+you sent from your radio in the browser or from your remote box, marked **sent**. Acknowledgements are not
+listed. When nothing has arrived yet, the list says so.
 
 ## Send an APRS message from your radio
 
@@ -40,8 +41,8 @@ are not listed. When nothing has arrived yet, the list says so.
    **message** (up to 67 characters).
 4. Select **Send**, then **Transmit** in the confirmation.
 
-The app shows **Transmitted: message to <CALL>**. The message goes out with the path `WIDE1-1` and carries no
-message number, so the recipient's station does not acknowledge it.
+The app shows **Transmitted: message to <CALL>**. The message goes out with the path `WIDE1-1` and a message
+number, so the recipient's station acknowledges it. It joins the **Messages** list, marked **sent**.
 
 ## Acknowledge a message sent to you
 

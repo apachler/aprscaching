@@ -123,6 +123,8 @@ export class BoxPoller {
   private inFlight = false;
   private failing = false;
   private loggedAt = 0;
+  /** The last APRS message number sent; starts at random so a restart does not repeat recent numbers. */
+  private msgNo = Math.floor(Math.random() * 99_999);
   private readonly startedAt: number;
   private readonly now: () => number;
   private readonly fetch: typeof fetch;
@@ -404,7 +406,9 @@ export class BoxPoller {
         const text = String(p.text ?? "").trim();
         if (!/^[A-Z0-9-]{1,9}$/.test(to)) return { status: "failed", result: "message needs a valid addressee" };
         if (!text) return { status: "failed", result: "message text is empty" };
-        return this.transmit(cmd, encodeAprsMessage(to, text), `message to ${to}`);
+        // numbered, so the addressee's station acknowledges it
+        this.msgNo = (this.msgNo % 99_999) + 1;
+        return this.transmit(cmd, encodeAprsMessage(to, text, String(this.msgNo)), `message to ${to}`);
       }
       case "tx":
         return this.toggle(cmd, "tx", "transmit");

@@ -130,7 +130,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   DIGI_CALL: "Callsign of the RF digipeater; set it to enable digipeating",
   DIGI_ALIASES: "Aliases the digipeater answers to, comma-separated",
   DIGI_CONNECTED: "1 also digipeats connected-mode AX.25 frames",
-  DIGI_VISCOUS_MS: "Delay in milliseconds before digipeating, letting a better-placed digi go first",
+  DIGI_VISCOUS_MS: "Milliseconds the connected-mode digipeater waits, so a better-placed digi repeats first",
   NETROM_CALL: "Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it",
   NETROM_ALIAS: "Alias of the NET/ROM node",
   NETROM_BROADCAST_MS: "Interval in milliseconds between NODES broadcasts",
@@ -281,7 +281,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`OPERATOR_LINKS_FOR_ANY_CALL`",
-        "`1` lets the operator's one-time link ([`signin-link.mjs`](cli.md#signin-link)) serve every call on an instance that also offers passkeys or email, where it otherwise serves only `ADMIN_CALLSIGNS` calls. It is for an off-grid station whose owner signs in with a passkey on `http://localhost` and whose visitors on its hotspot have no other way in ([Visitors on the hotspot](../run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)). It widens what a leaked `OPERATOR_SECRET` reaches to every account, so leave it off on a shared or public instance",
+        "`1`: the operator's one-time sign-in link ([`signin-link.mjs`](cli.md#signin-link)) serves every call, not only `ADMIN_CALLSIGNS` calls, on an instance that also offers passkeys or email. For an off-grid station whose visitors have no other way in ([Visitors on the hotspot](../run/day-to-day/sign-in-links.md#visitors-on-the-hotspot)). A leaked `OPERATOR_SECRET` then reaches every account, so it stays off on a shared or public instance",
         "off",
       ],
       ["`SOURCE_REPO`", "AGPL §13 published-source URL — a public fork **must** set this", "upstream"],
@@ -622,7 +622,10 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       ["AXUDP", "`AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS`"],
       ["AXIP", "`AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND`"],
-      ["Digipeater", "`DIGI_CALL`, `DIGI_ALIASES` (`WIDE1,WIDE2`), `DIGI_CONNECTED`, `DIGI_VISCOUS_MS`"],
+      [
+        "Digipeater",
+        "`DIGI_CALL`, `DIGI_ALIASES` (`WIDE1,WIDE2`), `DIGI_CONNECTED`, `DIGI_VISCOUS_MS` (the connected-mode digipeater's delay before it repeats a frame, so a better-placed digi goes first)",
+      ],
       [
         "NET/ROM node",
         "`NETROM_CALL`, `NETROM_ALIAS`, `NETROM_BROADCAST_MS` (`300000`), `NETROM_PATH_QUALITY`, `NETROM_INP3` (`1` also speaks INP3 alongside NODES), `NODE_PERSONALITY` (`netrom` \\| `flexnet` \\| `tnn` \\| `baycom` command surface)",
@@ -641,7 +644,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Remote control (Shack → Remote box)",
-        "`BOX_ID` (the box prints a one-time pairing code at start; enter it in the web app to link the box to your account), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_SERVICE_CALL` (the gateway's `BBS_CALL`; the only inner source the box sends answers to radio commands from, default `APRSCG`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
         "Announce / WX uplink (opt-in TX)",

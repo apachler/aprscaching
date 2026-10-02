@@ -1691,6 +1691,20 @@ const boxAck = await call("POST", "/api/box/smoke-box/commands/ack", {
   result: "ok",
 });
 ok("the box acks execution", boxAck.status === 200 && boxAck.data?.ok === true, JSON.stringify(boxAck.data));
+{
+  // a message the box sent shows in the Messages list as sent, once however often the box reports it
+  const msgCmd = (boxPoll.data?.commands ?? []).find((c) => c.kind === "message");
+  for (let i = 0; i < 2; i++)
+    await call("POST", "/api/box/smoke-box/commands/ack", { id: msgCmd?.id, status: "done", result: "ok" });
+  const sentRows = ((await call("GET", "/api/messages")).data?.messages ?? []).filter(
+    (m) => m.fromCall === "OE7BOX" && m.toCall === "OE3ABC" && m.body === "hi",
+  );
+  ok(
+    "a message the box sent is listed once, as sent",
+    sentRows.length === 1 && sentRows[0].direction === "tx",
+    JSON.stringify(sentRows),
+  );
+}
 const boxLog = await call("GET", "/api/box/smoke-box/log");
 // a signed-in operator controls a box only after pairing it with the code the box obtained
 {

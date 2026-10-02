@@ -189,7 +189,12 @@ doc_gateway() {
   elif [ -z "$newest" ] || [ "$schema" = "$newest" ]; then
     pass gateway.migrations "migrations are current ($schema)"
   elif [[ "$schema" < "$newest" ]]; then
-    warnc gateway.migrations "the database is at $schema; this checkout has $newest" "restart the gateway: it applies them when it starts"
+    if [ "$SHAPE" = selfhost ]; then
+      # the image carries the migrations it applies, so the new ones need an image built from this checkout
+      warnc gateway.migrations "the database is at $schema; this checkout has $newest" "rebuild in deploy/: docker compose up -d --build"
+    else
+      warnc gateway.migrations "the database is at $schema; this checkout has $newest" "restart the gateway: it applies them when it starts"
+    fi
   else
     warnc gateway.migrations "the database ($schema) is newer than this checkout ($newest)" "update this checkout"
   fi
@@ -616,7 +621,9 @@ doc_source() {
   else
     pass source.link "the source link names $repo at ${commit:0:12}"
   fi
-  if [ -z "$(doc_get SOURCE_REPO)" ] && [ -n "$(git -C "$DEPLOY_DIR/.." status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  # the link names the upstream (SOURCE_REPO unset, or set to it) while this checkout runs changed code
+  if [ "${repo%/}" = "https://github.com/apachler/aprscaching" ] &&
+    [ -n "$(git -C "$DEPLOY_DIR/.." status --porcelain --untracked-files=no 2>/dev/null)" ]; then
     warnc source.fork "this checkout has local changes but SOURCE_REPO is the upstream" "publish your changes and set SOURCE_REPO to your fork"
   fi
 }

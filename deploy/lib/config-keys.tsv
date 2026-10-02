@@ -119,7 +119,7 @@ AXIP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local address
 DIGI_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the RF digipeater; set it to enable digipeating
 DIGI_ALIASES	list	ingest	WIDE1,WIDE2		0	0	selfhost,baremetal,ingest-box,pocket	Aliases the digipeater answers to, comma-separated
 DIGI_CONNECTED	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also digipeats connected-mode AX.25 frames
-DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Delay in milliseconds before digipeating, letting a better-placed digi go first
+DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds the connected-mode digipeater waits, so a better-placed digi repeats first
 NETROM_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it
 NETROM_ALIAS	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Alias of the NET/ROM node
 NETROM_BROADCAST_MS	int	ingest	300000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts

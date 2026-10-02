@@ -29,8 +29,8 @@ export function RigControl() {
   if (!catSupported())
     return (
       <p className="muted fine">
-        CAT control needs Web Serial — use Chromium on desktop. Other browsers can use a Hamlib{" "}
-        <span className="mono">rigctld</span> companion.
+        CAT control needs Web Serial: open the Shack in a Chromium-based browser on a computer, with the radio on its
+        USB port.
       </p>
     );
 

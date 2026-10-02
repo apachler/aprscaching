@@ -40,7 +40,8 @@ Double-click or `./aprscaching-linux-x64`. SQLite lives in:
 - macOS: `~/Library/Application Support/aprscaching`
 - Linux: `~/.local/share/aprscaching`
 
-Back that file up (`deploy/backup.sh`).
+Back that directory up with `deploy/aprscaching backup`: it archives the database and the secrets
+beside it ([Backups](../../docs/run/day-to-day/backups.md)).
 
 ## Network & secrets
 The app listens on **`127.0.0.1` only**, so nothing else on your network can reach it. To serve your

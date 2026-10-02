@@ -11,6 +11,8 @@ import { parseTNC2, classifyQ, decodeAprs } from "@aprscaching/aprs";
 import { parsePage, keyset, paginate } from "./paging.js";
 import { lastSeenLagS } from "./downsample.js";
 import { sessionIdentity } from "./auth.js";
+import { isCallsignVerified } from "./callsign.js";
+import { baseCall } from "@aprscaching/aprs";
 
 // ------------------------------------------------------------- packet inspector
 export async function handleDecode(req: Request): Promise<Response> {
@@ -115,6 +117,33 @@ export async function handleMessages(req: Request, env: Env): Promise<Response> 
   ).results as any[];
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.ts, id: r.id }));
   return json({ messages: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore });
+}
+
+/**
+ * POST /api/messages/sent — a message the signed-in operator's browser radio transmitted, recorded as `tx` so the
+ * Messages list shows it as sent. Only from the operator's own verified call (any SSID), the same gate the
+ * transmit itself has; the row is a record, the transmission happened on the radio.
+ */
+export async function handleSentMessage(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in" }, { status: 401 });
+  const b = (await req.json().catch(() => ({}))) as { from?: unknown; to?: unknown; text?: unknown; msgNo?: unknown };
+  const from = typeof b.from === "string" ? b.from.trim().toUpperCase() : "";
+  const to = typeof b.to === "string" ? b.to.trim().toUpperCase() : "";
+  const text = typeof b.text === "string" ? b.text.trim().slice(0, 67) : "";
+  const msgNo = typeof b.msgNo === "string" && /^[A-Za-z0-9]{1,5}$/.test(b.msgNo) ? b.msgNo : null;
+  if (!/^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/.test(from) || !/^[A-Z0-9-]{1,9}$/.test(to) || !text)
+    return json({ error: "from, to and text required" }, { status: 400 });
+  const own = await env.DB.prepare("SELECT 1 AS x FROM account_callsigns WHERE account_id = ? AND callsign = ?")
+    .bind(me.accountId, baseCall(from))
+    .first();
+  if (!own) return json({ error: `${baseCall(from)} is not a callsign on your account` }, { status: 403 });
+  if (!(await isCallsignVerified(env, from)))
+    return json({ error: `verify ${baseCall(from)} to transmit — control-verification required` }, { status: 403 });
+  await env.DB.prepare("INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'tx')")
+    .bind(nowS(), from, to, text, msgNo)
+    .run();
+  return json({ ok: true });
 }
 
 export async function handleStation(req: Request, env: Env, callsign: string): Promise<Response> {

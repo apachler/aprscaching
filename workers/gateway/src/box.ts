@@ -237,9 +237,23 @@ export async function handleBoxAck(req: Request, env: Env, boxId: string): Promi
   };
   if (!id || (status !== "done" && status !== "failed"))
     return json({ error: "id and status (done|failed) required" }, { status: 400 });
-  await env.DB.prepare("UPDATE box_commands SET status=?, result=?, acked_at=? WHERE id=? AND box_id=?")
+  const done = await env.DB.prepare(
+    "UPDATE box_commands SET status=?, result=?, acked_at=? WHERE id=? AND box_id=? AND status != 'done'",
+  )
     .bind(status, result ?? null, nowS(), id, boxId)
     .run();
+  // a message the box transmitted shows in the Messages list as sent, once however often the box reports it
+  if (status === "done" && done.meta.changes) {
+    const cmd = await env.DB.prepare("SELECT callsign, kind, payload FROM box_commands WHERE id=?")
+      .bind(id)
+      .first<{ callsign: string | null; kind: string; payload: string | null }>();
+    const p =
+      cmd?.kind === "message" && cmd.payload ? (JSON.parse(cmd.payload) as { to?: string; text?: string }) : null;
+    if (cmd?.callsign && p?.to && p.text)
+      await env.DB.prepare("INSERT INTO messages (ts, from_call, to_call, body, direction) VALUES (?,?,?,?, 'tx')")
+        .bind(nowS(), cmd.callsign.toUpperCase(), p.to.toUpperCase(), p.text)
+        .run();
+  }
   return json({ ok: true });
 }
 
