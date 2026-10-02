@@ -2,6 +2,9 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { isCallsignVerified } from "./callsign.js";
+import { json } from "./app.js";
+import { sessionIdentity } from "./auth.js";
+import { baseCall } from "@aprscaching/aprs";
 
 /**
  * Announce a verified find to APRS-IS — ONLY if: account opted in AND callsign is verified.
@@ -14,8 +17,12 @@ export async function maybeAnnounceFind(
   cacheCode: string,
   cacheTitle?: string,
 ): Promise<boolean> {
-  const acct = await env.DB.prepare("SELECT announce_is, announce_tocall FROM accounts WHERE callsign = ?")
-    .bind(callsign)
+  // the switch belongs to the account that holds the call, so a find from any of its SSIDs follows it
+  const acct = await env.DB.prepare(
+    `SELECT a.announce_is, a.announce_tocall FROM accounts a
+       JOIN account_callsigns ac ON ac.account_id = a.account_id WHERE ac.callsign = ?`,
+  )
+    .bind(baseCall(callsign.toUpperCase()))
     .first<{ announce_is: number; announce_tocall: string }>();
   if (!acct?.announce_is) return false;
   if (!(await isCallsignVerified(env, callsign))) return false;
@@ -26,4 +33,21 @@ export async function maybeAnnounceFind(
     .bind(nowS(), callsign, acct.announce_tocall ?? "APZACG", payload)
     .run();
   return true;
+}
+
+/** GET / POST /api/announce — the signed-in account's opt-in to announcing its verified finds on APRS-IS. */
+export async function handleAnnouncePrefs(req: Request, env: Env): Promise<Response> {
+  const me = await sessionIdentity(req, env);
+  if (!me) return json({ error: "sign in" }, { status: 401 });
+  if (req.method === "POST") {
+    const b = (await req.json().catch(() => ({}))) as { on?: unknown };
+    if (typeof b.on !== "boolean") return json({ error: "on must be true or false" }, { status: 400 });
+    await env.DB.prepare("UPDATE accounts SET announce_is = ? WHERE account_id = ?")
+      .bind(b.on ? 1 : 0, me.accountId)
+      .run();
+  }
+  const row = await env.DB.prepare("SELECT announce_is FROM accounts WHERE account_id = ?")
+    .bind(me.accountId)
+    .first<{ announce_is: number }>();
+  return json({ on: (row?.announce_is ?? 0) === 1 });
 }
