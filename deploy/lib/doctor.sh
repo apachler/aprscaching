@@ -14,6 +14,10 @@ DOC_DATA_DIR=""     # where the database lives, for the disk-space check
 DOC_DB_FILE=""      # the SQLite file, for its size
 DOC_BACKUP_DIR=""   # where backups land, for their age
 DOC_BACKUP_GLOB="*" # the backup files in it
+# More places backups land, each "DIR|GLOB …": a shape whose two backup tools write to different places lists
+# them all, and the newest file across them counts.
+DOC_BACKUP_PLACES=()
+DOC_BACKUP_MISSING=fail # warn: a shape where no backup yet is a warning (Desktop: often a trial)
 DOC_BACKUP_SETTINGS=0 # 1: the destination comes from BACKUP_DIR / OCI_BUCKET / BACKUP_BUCKET (deploy/backup.sh)
 DOC_BACKUP_MAX_DAYS="${APRS_BACKUP_MAX_DAYS:-7}"
 DOC_OPERATOR_SECRET="" # read from the shape's settings, or the environment; never printed
@@ -506,18 +510,28 @@ doc_resources() {
     size="$(du -k "$DOC_DB_FILE" | cut -f1 || true)"
     pass resources.database "the database is $((size / 1024)) MiB"
   fi
-  if [ -n "$DOC_BACKUP_DIR" ]; then
+  [ -z "$DOC_BACKUP_DIR" ] || DOC_BACKUP_PLACES+=("$DOC_BACKUP_DIR|$DOC_BACKUP_GLOB")
+  [ "${#DOC_BACKUP_PLACES[@]}" -gt 0 ] || return 0
+  local place dir glob f t best=0 where=() missing
+  for place in "${DOC_BACKUP_PLACES[@]}"; do
+    dir="${place%%|*}" glob="${place#*|}"
+    [[ " ${where[*]} " == *" $dir "* ]] || where+=("$dir")
     # shellcheck disable=SC2086 # the glob is the point
-    newest="$(cd "$DOC_BACKUP_DIR" 2>/dev/null && ls -t $DOC_BACKUP_GLOB 2>/dev/null | head -n 1 || true)"
-    if [ -z "$newest" ]; then
-      failc resources.backup "no backup in $DOC_BACKUP_DIR" "deploy/aprscaching backup, and schedule it"
+    f="$(cd "$dir" 2>/dev/null && ls -t $glob 2>/dev/null | head -n 1 || true)"
+    [ -n "$f" ] || continue
+    t="$(stat -c %Y "$dir/$f" 2>/dev/null || stat -f %m "$dir/$f")"
+    [ "$t" -le "$best" ] || { best="$t" newest="$f"; }
+  done
+  if [ "$best" = 0 ]; then
+    missing="${DOC_BACKUP_MISSING}c"
+    [ "$missing" = warnc ] || missing=failc
+    "$missing" resources.backup "no backup in ${where[*]}" "deploy/aprscaching backup, and schedule it"
+  else
+    age=$((($(date +%s) - best) / 86400))
+    if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
+      warnc resources.backup "the newest backup is $age days old" "check the scheduled backup"
     else
-      age=$((($(date +%s) - $(stat -c %Y "$DOC_BACKUP_DIR/$newest" 2>/dev/null || stat -f %m "$DOC_BACKUP_DIR/$newest")) / 86400))
-      if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
-        warnc resources.backup "the newest backup is $age days old" "check the scheduled backup"
-      else
-        pass resources.backup "the newest backup is $age days old ($newest)"
-      fi
+      pass resources.backup "the newest backup is $age days old ($newest)"
     fi
   fi
 }
@@ -527,13 +541,15 @@ doc_backup_destination() {
   local dir
   dir="$(doc_get BACKUP_DIR)"
   if [ -n "$dir" ]; then
-    # backup.sh's snapshots (db/) and deploy/aprscaching backup's archives
+    # deploy/backup.sh's snapshots (<time>.db.gz) and deploy/aprscaching backup's archives, side by side
     DOC_BACKUP_DIR="$dir"
-    DOC_BACKUP_GLOB="db/*.db.gz aprscaching-*.tar.gz"
+    DOC_BACKUP_GLOB="*.db.gz aprscaching-*.tar.gz"
   elif [ -n "$(doc_get OCI_BUCKET)" ] && have oci; then
     doc_bucket_backup_age "$(doc_get OCI_BUCKET)"
+  elif [ -n "$(doc_get BACKUP_BUCKET)" ] && [ -n "$(doc_get R2_ENDPOINT)" ] && have aws; then
+    doc_s3_backup_age "$(doc_get BACKUP_BUCKET)" "$(doc_get R2_ENDPOINT)"
   elif [ -n "$(doc_get OCI_BUCKET)$(doc_get BACKUP_BUCKET)" ]; then
-    pass resources.backup "backups go to a bucket (their age is not checked from here)"
+    pass resources.backup "backups go to a bucket (their age is not checked from here: no oci or aws CLI)"
   elif compgen -G "$DEPLOY_DIR/backups/aprscaching-*.tar.gz" >/dev/null; then
     DOC_BACKUP_DIR="$DEPLOY_DIR/backups"
     DOC_BACKUP_GLOB="aprscaching-*.tar.gz"
@@ -544,10 +560,13 @@ doc_backup_destination() {
   fi
 }
 
-# The newest archive deploy/aprscaching backup uploaded to the OCI bucket, by its upload time.
+# The newest backup in the OCI bucket, by its upload time: deploy/aprscaching backup's archives (archives/) or
+# deploy/backup.sh's snapshots (db/), whichever is newer.
 doc_bucket_backup_age() {
-  local when age
+  local when snap age
   when="$(bk_bucket_newest_time "$1")"
+  snap="$(bk_bucket_newest_time "$1" db/)"
+  if [ -n "$snap" ] && [ "$snap" -gt "${when:-0}" ]; then when="$snap"; fi
   if [ -z "$when" ]; then
     failc resources.backup "no backup archive in the bucket $1, or the bucket is unreachable" \
       "deploy/aprscaching backup; on the OCI stack, systemctl status aprscaching-backup.timer"
@@ -558,6 +577,23 @@ doc_bucket_backup_age() {
     warnc resources.backup "the newest backup in the bucket $1 is $age days old" "check the scheduled backup"
   else
     pass resources.backup "the newest backup in the bucket $1 is $age days old"
+  fi
+}
+
+# The newest snapshot deploy/backup.sh uploaded to an S3-compatible bucket (db/), by its listed time.
+doc_s3_backup_age() {
+  local line when age
+  line="$(aws s3 ls "s3://$1/db/" --endpoint-url "$2" 2>/dev/null | sort | tail -n 1 || true)"
+  when="$(date -d "$(awk '{print $1" "$2}' <<<"$line")" +%s 2>/dev/null || true)"
+  if [ -z "$line" ] || [ -z "$when" ]; then
+    failc resources.backup "no snapshot in the bucket $1, or the bucket is unreachable" "run deploy/backup.sh, and schedule it"
+    return 0
+  fi
+  age=$((($(date +%s) - when) / 86400))
+  if [ "$age" -gt "$DOC_BACKUP_MAX_DAYS" ]; then
+    warnc resources.backup "the newest snapshot in the bucket $1 is $age days old" "check the scheduled backup"
+  else
+    pass resources.backup "the newest snapshot in the bucket $1 is $age days old"
   fi
 }
 

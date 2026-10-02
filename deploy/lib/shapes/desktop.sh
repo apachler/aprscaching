@@ -47,6 +47,9 @@ shape_doctor_context() {
   DOC_DB_FILE="$dir/aprscaching.db"
   [ -n "${OPERATOR_SECRET:-}" ] || OPERATOR_SECRET="$(cat "$dir/operator.secret" 2>/dev/null || true)"
   [ -n "${INGEST_SECRET:-}" ] || INGEST_SECRET="$(cat "$dir/ingest.secret" 2>/dev/null || true)"
+  # deploy/aprscaching backup's archives; a desktop without one yet is often a trial, so that only warns
+  DOC_BACKUP_PLACES=("$(backup_dest_default)|aprscaching-desktop-*.tar.gz")
+  DOC_BACKUP_MISSING=warn
 }
 
 # Portable backups of the desktop app's data directory, with Node.js and this checkout. The app must be
