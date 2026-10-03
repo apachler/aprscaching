@@ -97,7 +97,7 @@ node tools/licence/import.mjs --source ised --dry-run         # parse and count;
 node tools/licence/import.mjs --list                          # the registers and their ids
 ```
 
-Imports public amateur licence registers for the [licence badge](licence-sources.md). Each register is
+Imports public amateur licence registers for the [register badge](licence-sources.md). Each register is
 downloaded and parsed on this machine; only callsign, status and expiry are posted, in batches of 1000, to
 `/api/licence/import` with `OPERATOR_SECRET`, and the run is closed with `/api/licence/import/finish`, which
 removes calls the register no longer lists. With no `--source`, `LICENCE_SOURCES` (comma-separated) names

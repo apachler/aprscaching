@@ -60,22 +60,25 @@ export function TierBadge(props: {
  */
 export function CallVerifiedBadge(props: { label?: string; title?: string }) {
   return (
-    <Badge kind="callok" title={props.title ?? "Control of this callsign is verified"}>
-      <Icon name="check" size={12} /> {props.label ?? "verified"}
+    <Badge
+      kind="callok"
+      title={props.title ?? "You proved you hold this callsign: on the air, through ampr.org, LoTW or the sysop"}
+    >
+      <Icon name="check" size={12} /> {props.label ?? "you control this call"}
     </Badge>
   );
 }
 
 /** The short wording of a licence-register result, for badges and inline confirmations. */
 export function licenceLabel(l: { status: string; sourceName?: string }): string {
-  if (l.status === "licensed") return `licence confirmed${l.sourceName ? ` (${l.sourceName})` : ""}`;
-  if (l.status === "expired") return "licence expired";
-  return "not found in public registers";
+  if (l.status === "licensed") return `listed in ${l.sourceName ?? "a public"} register`;
+  if (l.status === "expired") return `listed as expired${l.sourceName ? ` (${l.sourceName})` : ""}`;
+  return "not in a public register";
 }
 
 /**
  * Licence-register validity chip: is the call listed as licensed in a public register this instance
- * imports? Validity only — it is never the control-verified tick, and "not found" is neutral, not an
+ * imports? Validity only — never "you control this call", and "not in a public register" is neutral, not an
  * error (many countries publish no register).
  */
 export function LicenceBadge(props: { licence?: { status: string; sourceName?: string; expiresAt?: number } | null }) {
@@ -83,7 +86,7 @@ export function LicenceBadge(props: { licence?: { status: string; sourceName?: s
   if (!l) return null;
   const title =
     l.status === "licensed"
-      ? `Listed as licensed in the ${l.sourceName ?? "public"} register. This confirms the call exists, not who controls it.`
+      ? `The ${l.sourceName ?? "public"} register lists this call as licensed. It shows the licence exists, not who uses it.`
       : l.status === "expired"
         ? `The ${l.sourceName ?? "public"} register lists this call, but not as currently licensed.`
         : "No public register this instance imports lists this call. Many countries publish none — this is not an error.";

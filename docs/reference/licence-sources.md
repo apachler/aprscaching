@@ -1,19 +1,19 @@
 # Licence registers
 
-The **licence badge** answers one question: is this callsign listed as a current amateur licence in a public
-register? It is a check of **validity**, not of **control**. The verified tick means the person proved
-control of the call on the air ([callsign verification](../run/day-to-day/callsign-verification.md));
-the licence badge only says that a national register lists the call.
+The **register badge** answers one question: is this callsign listed as a current amateur licence in a public
+register? It is a check of **validity**, not of **control**. **✓ you control this call** means the person proved
+control of the call ([callsign verification](../run/day-to-day/callsign-verification.md)); the register badge
+only says that a national register lists the call.
 
 The badge flags and never blocks. Many countries publish no register, so a call that no imported register
-lists reads **"not found in public registers"**. That is neutral wording: nothing is refused because of
+lists reads **"not in a public register"**. That is neutral wording: nothing is refused because of
 it, and it is never shown as an error.
 
 | Result | Badge | Meaning |
 |--------|-------|---------|
-| `licensed` | licence confirmed (FCC) | A register lists the call as current. |
-| `expired` | licence expired | A register lists the call, but not as currently licensed (expired, cancelled or terminated, or past its expiry date). |
-| `unconfirmed` | not found in public registers | No imported register lists the call. |
+| `licensed` | listed in FCC register | A register lists the call as current. |
+| `expired` | listed as expired (FCC) | A register lists the call, but not as currently licensed (expired, cancelled or terminated, or past its expiry date). |
+| `unconfirmed` | not in a public register | No imported register lists the call. |
 
 ## Sources
 

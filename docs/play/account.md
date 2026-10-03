@@ -26,7 +26,7 @@ One account can hold several licensed base callsigns, such as a club call or a c
    you to verify it.
 3. Tap **verify** next to the new callsign ([Verify your callsign](join.md#verify-your-callsign)).
 
-Each callsign is verified on its own. Verified callsigns show a tick.
+Each callsign is verified on its own. A verified callsign shows **✓ you control this call**.
 
 **Set active** picks the callsign you operate as. The active one shows **active**. Switching never asks you
 to verify again. Your past finds stay with the callsign you logged them under.
@@ -37,18 +37,18 @@ An [SSID](../glossary.md#ssid) needs no extra step. `-7` (handheld), `-9` (mobil
 Finds logged under an SSID, such as `OE8APR-7`, count for the base callsign: on the leaderboard, on your
 profile, for your badges, and for rating a cache you found.
 
-## The licence badge
+## The register badge
 
 Next to each callsign, **Settings → Account** shows whether a public licence register lists it:
 
 | Badge | Meaning |
 |---|---|
-| **licence confirmed** | A register lists the call as licensed. The register's name follows, such as (FCC). |
-| **licence expired** | A register lists the call, but not as currently licensed. |
-| **not found in public registers** | No register this instance reads lists the call. |
+| **listed in FCC register** | A register lists the call as licensed. The badge names the register. |
+| **listed as expired** | A register lists the call, but not as currently licensed. |
+| **not in a public register** | No register this instance reads lists the call. |
 
-The badge shows that a licence exists. It does not prove that you control the call; only the verified tick
-does. Many countries publish no register, so **not found** is normal. It never stops you from using the call.
+The register badge shows that a licence exists, not who uses it. Only **✓ you control this call** shows that
+the call is yours. Many countries publish no register, so **not found** is normal. It never stops you from using the call.
 See [Licence registers](../reference/licence-sources.md) for the registers.
 
 ## All settings

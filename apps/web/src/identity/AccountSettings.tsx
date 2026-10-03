@@ -214,8 +214,8 @@ export function AccountSettings(props: {
         stay attributed to the call they were logged with.
       </p>
       <p className="muted fine">
-        The licence badge shows whether a public licence register lists the call; it confirms the call exists, not that
-        you control it. Only the verified tick means control-verified.
+        The register badge shows whether a public licence register lists the call: the licence exists, not who uses it.
+        Only <strong>you control this call</strong> shows that the call is yours.
       </p>
     </Group>
   );
