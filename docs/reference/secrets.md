@@ -21,7 +21,8 @@ The three plane secrets must differ: the Node and Bun servers refuse to boot on 
 `deploy/aprscaching doctor` fails on a secret that is weak, an example value or shorter than 16 characters.
 
 Other credentials an instance may hold: `APRSIS_PASSCODE`, `IGATE_PASS` and `APRSIS_SERVICE_PASS` (APRS-IS
-logins, public by design and never a proof of identity), `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
+logins, public by design and never a proof of identity), `MESHCOM_KISS_PASS` (a MeshCom node's KISS
+password), `EMAIL_API_KEY`, `VAPID_PRIVATE`, `OKAPI_KEY`,
 `TUNNEL_TOKEN` and `CF_API_TOKEN`. Each is described in [Configuration](configuration.md).
 
 `ADMIN_CALLSIGNS` is not a secret, but it is security-critical: it decides who is a sysop

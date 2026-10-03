@@ -150,6 +150,8 @@ export const CONFIG_KEYS = {
   MESHCOM_TX_AUDIT: { type: "string", units: ["ingest"] },
   MESHCOM_TX_BURST: { type: "int", units: ["ingest"], default: "3" },
   MESHCOM_TX_REFILL_SEC: { type: "number", units: ["ingest"], default: "60" },
+  MESHCOM_KISS_PASS: { type: "string", units: ["ingest"], secret: true },
+  MESHCOM_KISS_PORT: { type: "int", units: ["ingest"], default: "8001" },
   AXUDP_PORT: { type: "int", units: ["ingest"] },
   AXUDP_BIND: { type: "string", units: ["ingest"] },
   AXUDP_PEERS: { type: "list", units: ["ingest"] },

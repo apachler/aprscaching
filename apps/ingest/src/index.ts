@@ -228,6 +228,8 @@ if (env.MESHTASTIC_HOST || env.MESHTASTIC_MQTT_URL) {
 // optionally with the node's callsign (`192.168.1.50=OE8APR-12`). MESHCOM_TX=1 additionally lets the box
 // hand answers to radio commands to those nodes, under the operator's call (MESHCOM_TX_CALL).
 let meshcomTx: import("./boxpoll.js").BoxMeshcom | null = null;
+/** The MeshCom node's KISS link, when its password is set, and the service call it passes acks for. */
+let meshcomKiss: { link: import("./meshcom-kiss.js").MeshcomKiss; service: string | undefined } | null = null;
 if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
   const { MeshcomSender } = await import("./meshcom-send.js");
   const nodes = parseMeshcomNodes(env.MESHCOM_NODE);
@@ -241,6 +243,38 @@ if (env.MESHCOM_NODE && env.MESHCOM_TX === "1") {
   });
   meshcomTx = { nodes, send: (req) => sender.send(req) };
   console.log(`[meshcom] transmit enabled as ${operatorCall ?? "? (set MESHCOM_TX_CALL)"}`);
+  // the first node's KISS port, with its password: answers go out from the service call itself, and the
+  // acks stations send it come back here
+  const first = nodes.find((n) => n.call);
+  if (env.MESHCOM_KISS_PASS && first?.call) {
+    const { MeshcomKiss } = await import("./meshcom-kiss.js");
+    const link = new MeshcomKiss(
+      {
+        host: first.ip,
+        port: portEnv("MESHCOM_KISS_PORT", 8001),
+        password: env.MESHCOM_KISS_PASS,
+        nodeCall: first.call,
+      },
+      (from, msgNo) =>
+        enqueue({
+          src: from,
+          dst: "APRS",
+          path: [],
+          payload: `:${(meshcomKiss?.service ?? "").padEnd(9)}:ack${msgNo}`,
+          kind: "message",
+          heardVia: "rf",
+          port: "meshcom-kiss",
+          ts: Math.floor(Date.now() / 1000),
+        }),
+    );
+    link.start();
+    meshcomKiss = { link, service: undefined };
+    meshcomTx.kiss = {
+      ip: first.ip,
+      canSend: (from) => link.canSend(from),
+      send: (from, info) => link.send(from, info),
+    };
+  }
 }
 if (env.MESHCOM_NODE) {
   const meshcom = new MeshcomListener(
@@ -381,6 +415,10 @@ async function learnServiceCall(): Promise<void> {
     const { serviceCall, sites } = (await r.json()) as { serviceCall?: string; sites?: string[] };
     if (!serviceCall) return;
     aprs.setServiceCall(serviceCall);
+    if (meshcomKiss) {
+      meshcomKiss.service = serviceCall.toUpperCase();
+      meshcomKiss.link.setServiceCall(serviceCall);
+    }
     for (const w of callWarnings(env, serviceCall, sites))
       if (!callWarned.has(w)) {
         callWarned.add(w);

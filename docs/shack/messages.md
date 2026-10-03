@@ -105,8 +105,10 @@ that station. The station's radio acknowledges the numbered message. **You left*
 | **expired** | Not heard within 7 days |
 
 **Withdraw** takes back a message that is still waiting or unacknowledged. **Waiting for you** lists the
-messages left for your own calls. A station the instance hears only on MeshCom gets its messages once it is
-heard over APRS.
+messages left for your own calls. A station heard on MeshCom gets its messages through the node that heard
+it. Only when that node is the sysop's own, reached over KISS, does the message come from the service call
+with a number the station acks; otherwise it goes out once, under the node's call, and shows **sent, never
+acked**.
 
 ## Commands you send by radio
 

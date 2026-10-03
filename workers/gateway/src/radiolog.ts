@@ -241,7 +241,13 @@ async function answer(env: Env, m: RadioMessage, raw: string): Promise<boolean> 
   if (m.port === "meshcom" && !viaMesh) return false;
   if (await rateLimitedDurable(env, "radio:answers", Date.now(), RADIO_ANSWERS_PER_HOUR, 3600_000)) return false;
   if (viaMesh) {
-    await enqueueSystemBoxCommand(env, m.box!, "meshcom_msg", { node: meshNode, dst: m.src.toUpperCase(), text });
+    // from the service call: the box sends it as that call through the node's KISS port when it can
+    await enqueueSystemBoxCommand(env, m.box!, "meshcom_msg", {
+      node: meshNode,
+      dst: m.src.toUpperCase(),
+      text,
+      from: serviceCall(env),
+    });
   } else if (caps?.tx && caps.rf && RF_PORTS.has(m.port)) {
     await enqueueSystemBoxCommand(env, m.box!, "aprs_msg", { from: serviceCall(env), to: m.src.toUpperCase(), text });
   } else {

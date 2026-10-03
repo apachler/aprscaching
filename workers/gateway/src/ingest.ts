@@ -132,7 +132,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
   const heard: Heard[] = []; // every station of the batch and its route, for the Mailbox
-  const mailAcks: { from: string; msgNo: string }[] = []; // acks to the service call: Mailbox deliveries
+  const mailAcks: { from: string; msgNo: string; port: string }[] = []; // acks to the service call: Mailbox deliveries
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
@@ -156,7 +156,12 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
     if (heardDirectly(p.heardVia, transportForPort(p.port, signer != null))) direct.push(p);
     // the route a Mailbox message takes back: the box only when the trusted ingest box heard it itself
-    heard.push({ src: p.src, port: p.port, ...(trusted && p.box ? { box: p.box } : {}) });
+    heard.push({
+      src: p.src,
+      port: p.port,
+      ...(trusted && p.box ? { box: p.box } : {}),
+      ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
+    });
 
     // MeshCom metadata from the operator's own ingest only, sanitised again here: never from a signed batch
     if (trusted && p.port === "meshcom") {
@@ -183,7 +188,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
       );
     }
     if (data.kind === "message" && data.ack && data.msgNo && String(data.addressee ?? "").toUpperCase() === service)
-      mailAcks.push({ from: p.src, msgNo: String(data.msgNo) });
+      mailAcks.push({ from: p.src, msgNo: String(data.msgNo), port: p.port });
     // text message -> messages log
     if (data.kind === "message" && !data.ack && !data.rej) {
       const toService = String(data.addressee ?? "").toUpperCase() === service;
@@ -366,7 +371,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
   // the Mailbox: confirm what was acked, then send what waits for the stations just heard (best-effort)
   try {
-    for (const a of mailAcks) await mailboxOnAck(env, a.from, a.msgNo);
+    for (const a of mailAcks) await mailboxOnAck(env, a.from, a.msgNo, a.port);
     await deliverMailbox(env, heard);
   } catch (e) {
     console.error("mailbox:", (e as Error).message);

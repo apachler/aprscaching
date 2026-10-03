@@ -88,6 +88,34 @@ of the node's (`OE8APR-12` above). The box then logs `[meshcom] transmit enabled
 send in its log (time, node, destination, size and outcome, never the text). Sends share a rate limit of
 one per minute, three in a burst.
 
+#### Answer from the service call (KISS)
+
+Without more, the node sends answers under its own call, so a player who messaged `OE8APR-15` gets the
+reply from `OE8APR-12`, and the instance cannot tell whether a [Mailbox](../../shack/messages.md#leave-a-message-in-the-mailbox)
+message arrived. Through the node's KISS port, the box sends from the service call itself, and the player's
+ack confirms a Mailbox delivery. The node takes a frame only from a call of its own base call, so this works
+for your own node only.
+
+1. On the node, switch on KISS with transmit and its password:
+
+    ```
+    --kiss on
+    --kiss tx on
+    --kiss auth on
+    --passwd <PASSWORD>
+    ```
+
+2. On the box, set the same password:
+
+    ```
+    MESHCOM_KISS_PASS=<PASSWORD>
+    ```
+
+The box logs `[meshcom-kiss] sending through 192.168.1.50:8001`. It sends nothing through a node without a
+KISS password, since anyone on your network could then transmit under your call; it logs an error and keeps
+answering under the node's call. The node serves one KISS client at a time, so another program can't use its
+KISS port while the box holds it.
+
 **Via on your node.** If your node has `--via` on, every message APRScaching sends through it (acks,
 replies, find confirmations) is forwarded only by the relays you listed. Recipients outside their range
 don't receive it. The box logs the node's setting once it has seen the node send a message
@@ -162,8 +190,8 @@ The box transmits on MeshCom only when [answering radio commands](#answering-rad
 set up.
 
 **KISS over TCP.** An ESP32 node with firmware 4.35t (built 2026-09-24 or later) also serves KISS on TCP port
-8001, one client at a time. APRSdroid, Xastir or YAAC can use the node that way. The box keeps ExtUDP: it
-carries the signal report and the sender's device, which KISS frames do not.
+8001, one client at a time. The box uses it only to send ([Answer from the service call](#answer-from-the-service-call-kiss));
+it listens over ExtUDP, which carries the signal report and the sender's device, which KISS frames do not.
 
 ## Troubleshooting
 

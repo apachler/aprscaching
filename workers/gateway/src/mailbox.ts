@@ -189,15 +189,19 @@ export interface Heard {
   port: string;
   /** The ingest box that heard it on its own radio, when the batch came from that box. */
   box?: string;
+  /** The box's station (a MeshCom node's call) that heard it. */
+  rxCall?: string;
 }
 
 /** Ports on which the box itself received the frame over a radio it can also transmit on. */
 const RF_PORTS = new Set(["kiss-tnc"]);
 
 /**
- * Send the messages waiting for the stations of a batch. Over APRS a message goes back the way its station
- * was heard: through the box that heard it on its own radio, else through the APRS-IS outbox. A station
- * heard only on MeshCom waits for a MeshCom delivery path. One read covers the whole batch.
+ * Send the messages waiting for the stations of a batch, back the way each station was heard: over APRS
+ * through the box that heard it on its own radio, else through the APRS-IS outbox; over MeshCom through the
+ * box's node that heard it, from the service call when the box reaches the node's KISS port (else under the
+ * node's own call, which no ack can confirm). A station heard only on a MeshCom node no box can transmit
+ * through waits. One read covers the whole batch.
  */
 export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
   const now = nowS();
@@ -210,9 +214,20 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
       .all<MailRow>()
   ).results;
   if (!waiting.length) return;
+  // one route per station, APRS before MeshCom
   const byCall = new Map<string, Heard>();
-  for (const h of heard) if (h.port !== "meshcom") byCall.set(h.src.toUpperCase(), h);
+  for (const h of heard) {
+    const k = h.src.toUpperCase();
+    if (!byCall.has(k) || byCall.get(k)!.port === "meshcom") byCall.set(k, h);
+  }
   const service = serviceCall(env);
+  const settle = (id: number, to: string, msgNo: string, status: string, tries: number) =>
+    env.DB.prepare(
+      `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?
+        WHERE id = ? AND status IN ('held','sent')`,
+    )
+      .bind(status, to, msgNo, tries, now, id)
+      .run();
   for (const m of waiting) {
     // mail to a base call reaches the first SSID heard; mail to an SSID only that station
     const h =
@@ -223,7 +238,16 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
     const text = mailText(m.from_call, m.body);
     const msgNo = msgNoOf(m.id);
     const caps = h.box ? await freshBoxCaps(env, h.box) : null;
-    if (caps?.tx && caps.rf && RF_PORTS.has(h.port))
+    if (h.port === "meshcom") {
+      const node = h.rxCall?.toUpperCase();
+      if (!caps?.tx || !node || !caps.meshcom.includes(node)) continue;
+      await enqueueSystemBoxCommand(env, h.box!, "meshcom_msg", { node, dst: to, text, from: service, msgNo });
+      // without the node's KISS port no ack can confirm it, so it goes out once and is not repeated
+      if (!caps.kiss?.includes(node)) {
+        await settle(m.id, to, msgNo, "undelivered", MAX_ATTEMPTS);
+        continue;
+      }
+    } else if (caps?.tx && caps.rf && RF_PORTS.has(h.port))
       await enqueueSystemBoxCommand(env, h.box!, "aprs_msg", { from: service, to, text, msgNo });
     else
       await env.DB.prepare(
@@ -232,17 +256,17 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
         .bind(now, service, encodeAprsMessage(to, text, msgNo))
         .run();
     const tries = m.attempts + 1;
-    await env.DB.prepare(
-      `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?
-        WHERE id = ? AND status IN ('held','sent')`,
-    )
-      .bind(tries >= MAX_ATTEMPTS ? "undelivered" : "sent", to, msgNo, tries, now, m.id)
-      .run();
+    await settle(m.id, to, msgNo, tries >= MAX_ATTEMPTS ? "undelivered" : "sent", tries);
   }
 }
 
-/** An ack addressed to the service call: the station received the message with that number. */
-export async function mailboxOnAck(env: Env, from: string, msgNo: string): Promise<void> {
+/**
+ * An ack addressed to the service call: the station received the message with that number. An ack a MeshCom
+ * node reports over ExtUDP carries the number the node gave the message on air, not this one, so only the
+ * KISS port's copy (`meshcom-kiss`), which the node turns back into this number, counts for MeshCom.
+ */
+export async function mailboxOnAck(env: Env, from: string, msgNo: string, port: string): Promise<void> {
+  if (port === "meshcom") return;
   await env.DB.prepare(
     `UPDATE mailbox_messages SET status = 'delivered', delivered_at = ?
       WHERE delivered_to = ? AND msg_no = ? AND status IN ('sent','undelivered')`,
