@@ -301,8 +301,8 @@ Every shape with an ingest: all but the Cloudflare split.
 
 ### `ingest.meshcom_fw.<CALL>`
 
-- **Tests:** the node runs MeshCom firmware 4.35t or newer, which ExtUDP needs.
-- **Message:** `MeshCom node <CALL> runs firmware <version>; ExtUDP needs 4.35t (built 2026-09-25) or newer`
+- **Tests:** the node runs MeshCom firmware 4.35u or newer, which ExtUDP needs.
+- **Message:** `MeshCom node <CALL> runs firmware <version>; ExtUDP needs 4.35u or newer`
   (warn).
 - **Fix:** update the node's firmware.
 - **See:** [MeshCom: before you start](radios/meshcom.md#before-you-start).

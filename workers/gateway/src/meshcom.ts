@@ -8,8 +8,10 @@
  * hearing is one link, origin → receiver; a relayed frame gives each leg of its path, and only the last
  * leg, into the receiver, carries a signal report. A frame the MeshCom server relayed adds no link: it
  * says nothing about who hears whom on the air around this operator. Links come from the source path and the
- * receiver only, never from a message's via list: that names the relays its sender allowed, not the ones a
- * frame took. A node's latest via list is kept as display information on its row (`sent_via`).
+ * receiver only, never from a message's via list: that names the relays allowed to forward a copy, not the
+ * ones a frame took. A node's latest via list is kept as display information on its row (`sent_via`).
+ * A relaying node replaces the via list with its own, and a gateway does the same to a frame from the
+ * server, so only a copy whose source path is the originator alone carries the originator's list.
  *
  * Writes stay small: one row per node and per link, rewritten only when a shown value changes (device,
  * firmware, a 10 % battery step, how it was heard, the receiver, the signal quality) or once
@@ -43,6 +45,14 @@ const intEnv = (v: string | undefined, dflt: number, min: number) => {
 };
 /** The per-node and per-link rewrite interval, seconds. */
 const metaMinS = (env: Env) => intEnv(env.MESHCOM_META_MIN_S, 300, 0);
+
+/**
+ * Whether a message carries its originator's via list: only a copy no node relayed. A relay, or a gateway putting
+ * a server frame on air, resets the destination path and writes its own via list into it.
+ */
+function originatorVia(m: MeshcomMeta): boolean {
+  return m.via !== undefined && m.srcType !== "udp" && m.path?.length === 1;
+}
 
 /** How the receiving node got a frame: straight over LoRa, relayed over LoRa, from the MeshCom server, or its own. */
 export function meshcomVia(src: string, m: MeshcomMeta): MeshcomVia {
@@ -85,16 +95,21 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
   if (!obs.length) return [];
   const minS = metaMinS(env);
   // one node row per sender per batch: later fields win, a missing field keeps the earlier one
-  const nodes = new Map<string, { ts: number; meta: MeshcomMeta; via: MeshcomVia; msgAt: number | null }>();
+  const nodes = new Map<
+    string,
+    { ts: number; meta: MeshcomMeta; via: MeshcomVia; msgAt: number | null; sentVia: string[] }
+  >();
   const links = new Map<string, Link & { ts: number; receiver: string }>();
   for (const o of [...obs].sort((a, b) => a.ts - b.ts)) {
     const prev = nodes.get(o.src);
+    // only a message no node relayed says whether its originator named relays
+    const own = originatorVia(o.meta);
     nodes.set(o.src, {
       ts: o.ts,
       meta: { ...(prev?.meta ?? {}), ...o.meta },
       via: meshcomVia(o.src, o.meta),
-      // only a message says whether its sender named relays
-      msgAt: o.meta.via ? o.ts : (prev?.msgAt ?? null),
+      msgAt: own ? o.ts : (prev?.msgAt ?? null),
+      sentVia: own ? (o.meta.via ?? []) : (prev?.sentVia ?? []),
     });
     for (const l of meshcomLinks(o.src, o.meta))
       links.set(`${l.from}>${l.to}>${l.kind}`, { ...l, ts: o.ts, receiver: o.meta.receiver! });
@@ -105,7 +120,7 @@ export function meshcomStatements(env: Env, obs: MeshcomObservation[]): SqlState
     const fresh = n.via === "direct" || n.via === "relayed";
     const rssi = fresh ? (m.rssi ?? null) : null;
     const snr = fresh ? (m.snr ?? null) : null;
-    const sentVia = n.msgAt !== null && m.via?.length ? JSON.stringify(m.via) : null;
+    const sentVia = n.msgAt !== null && n.sentVia.length ? JSON.stringify(n.sentVia) : null;
     stmts.push(
       env.DB.prepare(
         `INSERT INTO meshcom_nodes (callsign, last_heard, hw_id, firmware, batt, last_via, last_rssi, last_snr, quality, receiver, updated_at, sent_via, msg_at)

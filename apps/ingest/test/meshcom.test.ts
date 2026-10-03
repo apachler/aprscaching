@@ -248,7 +248,7 @@ describe("MeshCom listener — operator signals", () => {
   it("flags 4.35t as possibly affected and says nothing for newer firmware", () => {
     const t = make();
     t.l.receive(pos({ src_type: "node", src: CALL, firmware: "4.35", fw_sub: "t", rssi: 0, snr: 0 }), NODE);
-    expect(t.logs.some((m) => m.includes("before 2026-09-25"))).toBe(true);
+    expect(t.logs.some((m) => m.includes("after 2026-09-25") && m.includes("4.35u or later"))).toBe(true);
     const u = make();
     u.l.receive(pos({ src_type: "node", src: CALL, firmware: "4.35", fw_sub: "u", rssi: 0, snr: 0 }), NODE);
     expect(u.logs.filter((m) => m.startsWith("WARN"))).toHaveLength(0);

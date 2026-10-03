@@ -28,8 +28,9 @@ export interface MeshcomMeta {
   /** Battery, percent. */
   batt?: number;
   /**
-   * On a message only: the relays its sender allowed to forward it (the `--via` list), empty when it named
-   * none. The sender's plan, never the route taken.
+   * On a message only: the via list in this copy's destination path (`--via`), the relays allowed to forward it,
+   * empty when it names none. A relaying node writes its own list, so it is the originator's only when `path` is
+   * the originator alone. A plan, never the route taken.
    */
   via?: string[];
   /** The frame's MeshCom `msg_id` (hex): every copy of one frame carries the same id, so it names the frame. */

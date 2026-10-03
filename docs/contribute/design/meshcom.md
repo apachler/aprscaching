@@ -19,13 +19,13 @@ the sense of the project's IP rule and lets the decoder live in the MIT `package
 | Property | Value |
 |---|---|
 | Frequency | 433.175 MHz (D-A-CH, EU); 439.9125 MHz (UK); 433.925 MHz (Norway) |
-| Modulation | LoRa, SF11, 250 kHz bandwidth, CR 4/6 |
+| Modulation | LoRa, SF11, 250 kHz bandwidth, CR 4/6 (the EU profile); the UK, ON (Belgium) and LA (Norway) profiles use SF10 at 125 kHz |
 | Framing | APRS source / destination / digipeater path and APRS payload (`:` message, `!` position) inside a small binary header: 32-bit message id, hop byte (hop count + flags), hardware id, modulation id, 16-bit checksum ([protocol](https://icssw.org/en/meshcom-2-0-protokoll/)) |
 | Addressing | Direct message to a callsign, group message to a group number `1`–`99999` (group 9 = emergency), broadcast to `*` |
 | Payload types | Text, position, telemetry (temperature, humidity, pressure) |
 | Identity | Real amateur callsigns with SSID (SSIDs above 15 occur, e.g. `-99`) |
 | Gateways | A node in gateway mode links its local mesh to the MeshCom servers over HAMNET or the internet; dashboards at [meshcom.oevsv.at](https://meshcom.oevsv.at/) |
-| LoRa-APRS side channel | With `--track on` a node also beacons its position on 433.775 MHz (LoRa-APRS) to destination `APRS` (`--aprsmc` changes it), where LoRa-APRS IGates put it on APRS-IS ([details](https://icssw.org/en/2026/06/10/meshcom-lora-aprs/)) |
+| LoRa-APRS side channel | With `--track on` a node also beacons its position on 433.775 MHz (LoRa-APRS) to destination `APRSMC`; `--aprsmc APRS` sets the destination many LoRa-APRS IGates expect, and they put it on APRS-IS ([details](https://icssw.org/en/2026/06/10/meshcom-lora-aprs/)) |
 | Hardware | T-Beam, Heltec V3, RAK4631, T-Echo, T-Deck and T-Deck Plus (a standalone node with display and keyboard) |
 
 ### The external UDP interface
@@ -139,9 +139,10 @@ node sends every message as itself, so software can only transmit under the lice
 It sends direct messages to a callsign only (the encoder refuses groups and `*`), only to configured
 node addresses, through a token bucket (one per minute, burst three, by default) because an SF11 /
 250 kHz frame is long on air and the channel is shared. Every attempt is audited — time, node,
-destination, byte length, requesting feature and outcome, never the text. ExtUDP has no
-acknowledgement, so the best outcome is *handed to node*; the node reports its own refusals
-(`QRS`/`QRT`) back through the listener.
+destination, byte length, requesting feature and outcome, never the text. The best outcome is *handed to
+node*: from firmware 4.40a ExtUDP reports an ack only when it reaches the node through the MeshCom server
+(`type:"ack"`), never one the node hears over LoRa. The node reports its own refusals (`QRS`/`QRT`) back
+through the listener.
 
 The box enables the sender with `MESHCOM_TX=1`. It is used by:
 
@@ -157,7 +158,8 @@ Group announcements stay out of scope: software never originates group or broadc
 ## Via-Calls
 
 A node can name the relays allowed to forward what it sends, instead of letting every node flood it — source
-routing to save airtime (firmware v4.35p.06.13: "DESTINATION-PATH expanded to include VIA-CALLS").
+routing to save airtime. Via-Calls are in the firmware from v4.35p.06.13, which carries the via list in the
+destination path.
 
 - **Commands.** `--via <CALL,CALL>` sets the list (upper-cased, at most 39 characters), `--via NONE` clears
   it, `--via on|off` switches the function, `--viadebug on|off` adds debug output. The node settings show
@@ -168,21 +170,28 @@ routing to save airtime (firmware v4.35p.06.13: "DESTINATION-PATH expanded to in
   relayed only by a node whose call appears in it — compared token by token at full length, so `DK5EN-9`
   is not `DK5EN-90` — and only if that node has `--mesh on`. Order is not enforced: any named node that
   hears the frame relays it. Every node still receives it.
-- **Automatic selection** (the gateway token `HG`, or the best-connected MHeard neighbour) is commented out
-  in the firmware since 22 July 2026; only lists an operator sets take effect.
+- **A relay writes its own list.** Before relaying, a node resets the destination path to the destination and
+  applies its own via list, if it has one; a gateway does the same to a frame from the MeshCom server before
+  it goes on air. So a copy's via list is that of the node that last transmitted it — the originator's only
+  when the source path names no relay.
+- **Automatic selection** is commented out in the firmware since 22 July 2026 (still so in 4.40a); only lists
+  an operator sets take effect. The disabled code picks the gateway token `HG` on a gateway and, on any other
+  node, the direct neighbour heard within the last 60 minutes that reports the most neighbours of its own.
 
 Three rules hold in APRScaching:
 
 1. **The destination is the last token** of `dst`, everything before it the via list
-   ([ExtUDP](../../reference/meshcom-extudp.md#text-type-msg)).
+   ([ExtUDP](../../reference/meshcom-extudp.md#text-type-msg)). A node's via list is recorded only from a copy
+   whose source path is the originator alone; a relayed or server copy carries another node's list.
 2. **A via list is never a link.** The map draws links from the source path and the receiving node only;
-   a via list names relays the sender allowed, not ones the frame passed.
+   a via list names relays a transmitting node allowed, not ones the frame passed.
 3. **A via list is never trust.** It bears on nothing in provenance, `direct` or the A/B/C tiers. It is
-   display information: the station panel shows a node's latest list ("sent via relays …"), and the
+   display information: the station panel shows a node's latest own list ("sent via relays …"), and the
    operator's own node's list — which every message the box sends through it carries — shows in the
    station status, the Pocket notification and the box log.
 
-Sources: firmware [`1d4f525`](https://github.com/icssw-org/MeshCom-Firmware/tree/1d4f5250d8ee5a7d136f6b8d03e15374392775f8) — `src/via_functions.cpp` (`checkVia`, `checkMesh`, `pathNamesCall`),
+Sources: firmware 4.40a [`e1e2ace`](https://github.com/icssw-org/MeshCom-Firmware/tree/e1e2acea6a18285301b57f32caacd0beb62638f2) — `src/via_functions.cpp` (`checkVia`, `checkMesh`, `pathNamesCall`),
+`src/lora_functions.cpp` (the relay), `src/esp32/udp_frame_esp32.cpp` (server frames put on air),
 `src/command_functions.cpp` (`--via`), `src/aprs_functions.cpp` (the destination split),
 `src/extudp_functions.cpp` (`dst`), `docs/hey-supp.md` (the routing design).
 
@@ -198,8 +207,9 @@ nodes, messages, telemetry, and signal reports from the operator's own node.
 - **Serial and BLE protocols.** Whether the node's serial console emits machine-readable frames, and
   what the BLE service the phone apps use looks like. Both are answered from the MIT firmware source
   before a browser-direct path is designed.
-- **Acknowledgements.** How the node reports an ACK for a message sent over UDP. ExtUDP carries none, so
-  a transmitted message ends at *handed to node* and the Messages surface cannot yet show delivery.
+- **Acknowledgements over LoRa.** From 4.40a ExtUDP reports an ack that reaches the node through the
+  MeshCom server (`type:"ack"`), but none the node hears over LoRa. How to learn of a LoRa-path ack is open,
+  so a transmitted message ends at *handed to node* and the Messages surface cannot yet show delivery.
 - **Gateway server protocol.** Whether an instance should ever talk to the MeshCom servers directly;
   the default answer is no — the local node is the integration point.
 - **Reference clients.** [MeshcomWebDesk](https://github.com/DH1FR/MeshcomWebDesk) and

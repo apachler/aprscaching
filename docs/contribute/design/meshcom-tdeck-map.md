@@ -11,7 +11,7 @@ tiers in [Verification tiers](../../reference/trust-model.md#verification-tiers)
 
 ## Reference device: LilyGO T-Deck Plus
 
-**Hardware.** ESP32-S3 (dual-core LX7), SX1262 LoRa radio, u-blox GPS, keyboard, trackball, a 2.8″ colour
+**Hardware.** ESP32-S3 (dual-core LX7), SX1262 LoRa radio, a GPS receiver, keyboard, trackball, a 2.8″ colour
 TFT (320 × 240), Li-ion battery and an ABS case. It is also sold with an external antenna (Amazon ASIN
 B0FBGWCVPG).
 
@@ -19,12 +19,13 @@ B0FBGWCVPG).
 "T-Deck, T-Deck-Plus". To enter flash mode: switch the device off, hold the trackball down, switch it on, then
 release the trackball.
 
-**Frequency.** Buy the **433 MHz** variant. MeshCom runs on 70 cm; the 868 MHz variant cannot be used. The
-preinstalled firmware (Meshtastic or LILYGO's) does not matter, because the device is reflashed.
+**Frequency.** Buy the **433 MHz** variant: the D-A-CH MeshCom network runs on 433.175 MHz. The firmware has an
+868 MHz profile (869.525 MHz), but an 868 MHz device can use only that profile, which does not reach the
+network. The preinstalled firmware (Meshtastic or LILYGO's) does not matter, because the device is reflashed.
 
 **Not the T-Deck Pro.** The T-Deck Pro has a 3.1″ e-ink display and its own firmware variant (`t_deck_pro`).
-The T-Deck Plus is the original T-Deck — MeshCom hardware id 8, colour TFT — with GPS, battery and case
-added.
+The T-Deck Plus is the original T-Deck hardware, colour TFT included, with GPS, battery and case added. It
+has its own firmware variant (`t_deck_plus`) and MeshCom hardware id 46; the T-Deck is id 8.
 
 **MeshCom user interface on the colour TFT** (per the ICSSW guide and release notes):
 
@@ -50,15 +51,16 @@ From the firmware source, release 4.40a:
 - **Rendering.** LVGL 8.3 on TFT_eSPI. A redraw decodes at most 2 × 2 tiles with lodepng into one image of the
   viewport (about 294 × 182 pixels). There is no tile cache, so every pan or zoom reads the card again.
 - **Stations.** Each one is a red dot (blue for the node itself) with its callsign as the label; there is no
-  APRS symbol, comment or age. They sit in a ring of 30 entries shared by all stations, and the oldest entry
-  gives way to a new one. Entries do not expire.
+  APRS symbol, comment or age. They sit in a ring of 30 entries shared by all stations. Once it is full, new
+  stations replace entries 1–29 in turn; entry 0 stays. Entries do not expire.
 - **What feeds it.** Only position frames received over LoRa, labelled with the sender's callsign. Positions
   that reach a gateway node over UDP or the internet do not appear.
 - **Memory.** The board has 8 MB of PSRAM and LVGL allocates from it, so memory is not what limits an
   overlay. The 30-entry ring is.
 - **Southern and western positions plot in the wrong place.** The function that adds a station negates the
   latitude for `W` and the longitude for `S`, the letters swapped, so neither is ever negated. The position
-  list has the same swap. Positions in Europe are unaffected.
+  list has the same swap. Positions in Europe are unaffected. A fix is drafted below
+  ([Draft: southern and western positions](#draft-southern-and-western-positions-on-the-t-deck-map)).
 
 ## Why caches cannot be pushed onto the map
 
@@ -71,12 +73,15 @@ None of the firmware's client interfaces can place a point of its own on the nod
   [MeshCom-Firmware #1151](https://github.com/icssw-org/MeshCom-Firmware/pull/1151)) is in the firmware from the
   4.35t daily build of 24 September 2026 and in 4.35u and later, off by default. It converts a client's
   AX.25 frames into MeshCom text or position messages, at most 8 per second, and refuses anything else as a
-  bad frame. A frame must come from the client's base callsign; any SSID passes.
-- **Bluetooth** (the phone app) sets only the node's own position and sends text messages.
+  bad frame. A frame must come from the client's base callsign; any SSID passes. A client transmits only
+  with `--kiss tx on` as well; `--kiss auth on` adds an HMAC challenge keyed with the node password, which a
+  standard KISS client does not answer.
+- **Bluetooth** (the phone app) configures the node — callsign, symbol, its own position, Wi-Fi, time and
+  `--` commands — and sends text messages. Nothing it sends places a point of its own on the map.
 
 The map cannot show a received APRS object either. MeshCom has no object or item frame: the firmware takes
-only text (`:`), position (`!`) and HEY (`@`) frames and discards anything else, so an object never reaches
-the node.
+text (`:`), position (`!`) and HEY (`@`) frames plus its own binary ack frame (`0x41`), and discards anything
+else, so an object never reaches the node.
 
 A client could send positions under extra SSIDs of its own call, and each would show as a dot labelled
 `OE8APR-1` and so on. APRScaching does not use this: gateways forward those frames to APRS-IS as station
@@ -123,7 +128,7 @@ dynamic additions such as new caches or events.
 
 | Question | Status | How to settle it |
 |---|---|---|
-| Does the T-Deck map show received APRS objects? | **Settled: no** — MeshCom has no object frame; the firmware discards every frame but text, position and HEY (firmware 4.40a) | — |
+| Does the T-Deck map show received APRS objects? | **Settled: no** — MeshCom has no object frame; the firmware discards every frame but text, position, HEY and its own ack frame (firmware 4.40a) | — |
 | Is the message limit counted in bytes or characters? | **Settled: 150 bytes of UTF-8** — the firmware checks `strlen`, so an umlaut costs two bytes (firmware 4.35t, see the [ExtUDP reference](../../reference/meshcom-extudp.md)) | — |
 | How is the map implemented (tiles, SD storage, renderer, memory headroom for an overlay)? | **Settled** — SD-card PNG tiles in the slippy-map layout, LVGL 8.3, memory in PSRAM; the 30-station ring is the limit ([How the map works](#how-the-map-works)) | — |
 | How much heap and PSRAM is free with the map open? | **Unverified** | `--heap` on a measurement build of the firmware, on a T-Deck Plus |
@@ -169,7 +174,8 @@ concept is agreed with ICSSW. **Not filed.**
 >
 > **Problem.** APRS objects (`;NAME_____*DDHHMMz…`) are the standard way to announce a point that is not a
 > station — an event, a net control position, a temporary repeater. MeshCom has no object frame: the firmware
-> accepts only text, position and HEY frames, so objects never reach a MeshCom handheld.
+> accepts text, position and HEY frames plus its own binary ack frame and discards anything else, so objects
+> never reach a MeshCom handheld.
 >
 > **Proposed behaviour.** A new MeshCom frame type carries an APRS object. When the node receives one, it
 > stores it keyed by (originator, object name) and draws it on the map with its symbol and name. A later object with the same key replaces the
@@ -211,6 +217,35 @@ concept is agreed with ICSSW. **Not filed.**
 > place objects on MeshCom maps under its operator's own callsign.
 >
 > **Offer.** We can contribute the implementation and test it on a T-Deck Plus (433 MHz).
+
+### Draft: southern and western positions on the T-Deck map
+
+> **Title:** T-Deck map and position list: southern latitudes and western longitudes are never negated
+>
+> **Problem.** `tdeck_add_pos_point()` (`src/t-deck/lv_obj_functions.cpp:3800-3806`) and
+> `tdeck_add_to_pos_view()` (`:3983-3989`) negate the latitude when `lat_c == 'W'` and the longitude when
+> `lon_c == 'S'`. The caller in `src/lora_functions.cpp` passes unsigned degrees with `lat_c` as `N`/`S` and
+> `lon_c` as `E`/`W`, so neither test ever matches. A station south of the equator or west of Greenwich is
+> drawn at the mirrored position on the map and listed with the wrong sign in the position view. Stations in
+> Europe east of Greenwich are unaffected, which is why it goes unnoticed. Seen in release 4.40a (`e1e2ace`).
+>
+> **Proposed fix.** In both functions, test the letter that belongs to each axis:
+>
+> ```cpp
+> if(lat_c == 'S')
+>     dlat = u_dlat * -1.0;
+>
+> if(lon_c == 'W')
+>     dlon = u_dlon * -1.0;
+> ```
+>
+> The other caller, the test command `--injectpos` in `src/command_functions.cpp`, already passes `S` and `W`
+> this way, so its southern and western positions plot correctly with the same change.
+>
+> **Memory and airtime.** None; a two-character change in each function.
+>
+> **Offer.** We can test the fix on a T-Deck Plus (433 MHz) with `--injectpos` positions in all four
+> hemispheres.
 
 ## Sources
 

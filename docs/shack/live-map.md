@@ -30,7 +30,8 @@ ordinary APRS stations.
 
 Open a MeshCom station for how it was last heard, its device and firmware, its battery and signal, and a link
 to its page on MeshMap. When its latest message named relays (its _via_ list), the panel shows **Sent via
-relays …**: the sender limited forwarding to those nodes. That is its plan, not the path the message took.
+relays …**: the sender limited forwarding to those nodes. That is its plan, not the path the message took. A
+relaying node replaces the list with its own, so the panel takes it only from a message no node relayed.
 Visitors see the battery and signal as _high / medium / low_ and _strong / usable / weak_. Signed in, you see
 the battery percentage and the signal as RSSI (strength) and SNR (signal-to-noise ratio).
 

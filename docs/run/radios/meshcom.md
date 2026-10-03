@@ -13,9 +13,9 @@ your ingest box as JSON over UDP: the node's **ExtUDP** interface. The protocol 
 
 - A MeshCom node that joins your Wi-Fi as a client. ExtUDP does nothing while the node runs its own access
   point.
-- **Firmware 4.35t built on or after 2026-09-25, or newer.** Older firmware can crash an ESP32 node with
-  ExtUDP switched on. The box warns once in its log when a node reports older firmware; for 4.35t it cannot
-  tell the build date and says so.
+- **Firmware 4.35u or newer.** Older firmware can crash an ESP32 node with ExtUDP switched on. Every
+  published 4.35t build predates the fix; a 4.35t built from source after 2026-09-25 is not affected. The box
+  warns once in its log when a node reports older firmware; for 4.35t it cannot tell the build date and says so.
 - The ingest box ([Set up an ingest box](ingest-box.md)) on the same LAN as the node: a Pi, PC or mini-PC.
   ExtUDP has no authentication, so the node and the box talk over your LAN only, never across the internet.
 - In Docker, the ingest container must receive UDP 1799: [From a container](rf-ingest.md#from-a-container).
@@ -202,7 +202,7 @@ it listens over ExtUDP, which carries the signal report and the sender's device,
 | `udp/1799 … is already in use` | Another MeshCom program owns the port. Stop it, or let the box own the port and list the other program in `MESHCOM_FANOUT`. |
 | `no datagram from … for N min` | The node is off the Wi-Fi, runs its own access point, or `--extudpip` points elsewhere. Check on the node with `--info`. |
 | `rejected: {"not-allowlisted": …}` rising | The node's address changed (give it a DHCP reservation), or something else on the LAN sends to 1799. |
-| The node restarts when ExtUDP is on | Firmware older than a 4.35t build of 2026-09-25: update it. |
+| The node restarts when ExtUDP is on | Firmware older than 4.35u: update it. |
 | Players' `FOUND` messages never arrive | The instance's service call has no digit (`SERVICE_CALL`), or your node uses the service call's SSID and takes the messages as its own. |
 | Positions but no Tier A | The node's callsign is missing from `MESHCOM_NODE=<ip>=<CALL>` or from the gateway's `FIRST_PARTY_SITES`, or the frames are relayed rather than heard directly. |
 

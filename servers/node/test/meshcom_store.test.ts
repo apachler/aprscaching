@@ -235,6 +235,27 @@ describe("MeshCom via lists (display only, never links)", () => {
     expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: null, msg_at: t + 10 });
   });
 
+  it("keeps only the originator's via list: a relayed or server copy carries another node's", async () => {
+    const { sqlite, env } = setup();
+    const t = now();
+    await ingest(env, [message("OE8XYZ-1", t, direct({ via: ["OE1KBC-24"] }))]);
+    // the relay OE8RLY-2 wrote its own via list into the copy it sent on
+    await ingest(env, [
+      message("OE8XYZ-1", t + 10, direct({ direct: false, path: ["OE8XYZ-1", "OE8RLY-2"], via: ["OE8RLY-9"] })),
+    ]);
+    expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: '["OE1KBC-24"]', msg_at: t });
+    // a gateway writes its own via list into a frame from the server, too
+    await ingest(env, [message("OE8XYZ-1", t + 20, direct({ srcType: "udp", direct: false, via: ["OE8GW-1"] }))]);
+    expect(node(sqlite, "OE8XYZ-1")).toMatchObject({ sent_via: '["OE1KBC-24"]', msg_at: t });
+    // within one batch, too: the originator's copy first, then a relayed one
+    const { sqlite: s2, env: e2 } = setup();
+    await ingest(e2, [
+      message("OE8XYZ-1", t, direct({ via: ["OE1KBC-24"] })),
+      message("OE8XYZ-1", t + 5, direct({ direct: false, path: ["OE8XYZ-1", "OE8RLY-2"], via: [] })),
+    ]);
+    expect(node(s2, "OE8XYZ-1")).toMatchObject({ sent_via: '["OE1KBC-24"]', msg_at: t });
+  });
+
   it("a via message heard directly is one direct link: its via relays draw nothing", async () => {
     const { sqlite, env } = setup();
     await ingest(env, [message("OE8XYZ-1", now(), direct({ via: ["OE1KBC-24", "OE1KFR-12"] }))]);
