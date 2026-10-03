@@ -191,8 +191,8 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may upload media" }, { status: 403 });
 
-  const ct = req.headers.get("content-type") ?? "application/octet-stream";
-  if (!/^audio\//.test(ct)) return json({ error: "expected an audio/* body" }, { status: 415 });
+  const ct = mediaType(req.headers.get("content-type"));
+  if (!AUDIO_TYPES.has(ct)) return json({ error: "an audio clue is a sound (MP3, Ogg, WAV, M4A)" }, { status: 415 });
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (!bytes.length || bytes.length > 5_000_000) return json({ error: "empty or >5MB" }, { status: 413 });
   const ext = ct.split("/")[1]?.split(";")[0] ?? "bin";
@@ -236,8 +236,18 @@ export async function handleGetMedia(req: Request, env: Env, key: string): Promi
   }
   const obj = await env.MEDIA.get(key);
   if (!obj) return new Response("not found", { status: 404 });
+  // Served inert whatever it holds: no sniffing, no script, no frame, and anything not a photo or a sound only
+  // as a download.
+  const ct = mediaType(obj.contentType);
+  const playable = !!mediaKind(ct);
   return new Response(obj.bytes as unknown as BodyInit, {
-    headers: { "content-type": obj.contentType, "cache-control": cacheControl },
+    headers: {
+      "content-type": playable ? ct : "application/octet-stream",
+      "cache-control": cacheControl,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "default-src 'none'; sandbox",
+      ...(playable ? {} : { "content-disposition": "attachment" }),
+    },
   });
 }
 
@@ -342,12 +352,31 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
   });
 }
 
-// ---- cache media gallery: owner-managed images/audio/files on a cache ----
+// ---- cache media gallery: owner-managed images and audio on a cache ----
 const MEDIA_LIMIT = 10_000_000; // 10 MB per item
-function mediaKind(ct: string): "image" | "audio" | "file" {
-  if (/^image\//.test(ct)) return "image";
-  if (/^audio\//.test(ct)) return "audio";
-  return "file";
+/**
+ * The media an instance stores and serves: photos and sound, nothing a browser runs. A type outside this list
+ * (a page, a script, an SVG drawing) would play out in the instance's own origin for whoever opens the link.
+ */
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const AUDIO_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/opus",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/aac",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/webm",
+]);
+const mediaType = (ct: string | null) => (ct ?? "").split(";")[0]!.trim().toLowerCase();
+function mediaKind(ct: string): "image" | "audio" | null {
+  if (IMAGE_TYPES.has(ct)) return "image";
+  if (AUDIO_TYPES.has(ct)) return "audio";
+  return null;
 }
 
 /** List a cache's media (public — attachments are meant to be seen/heard). */
@@ -391,7 +420,13 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may add media" }, { status: 403 });
 
-  const ct = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0]!.trim();
+  const ct = mediaType(req.headers.get("content-type"));
+  const kind = mediaKind(ct);
+  if (!kind)
+    return json(
+      { error: "media must be a photo or a sound (JPEG, PNG, WebP, GIF, AVIF, MP3, Ogg, WAV, M4A)" },
+      { status: 415 },
+    );
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (!bytes.length || bytes.length > MEDIA_LIMIT)
     return json({ error: `empty or >${MEDIA_LIMIT / 1_000_000}MB` }, { status: 413 });
@@ -400,7 +435,6 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
     .first<{ n: number }>();
   if ((count?.n ?? 0) >= 20) return json({ error: "media limit reached (20 per cache)" }, { status: 409 });
 
-  const kind = mediaKind(ct);
   const ext = ct.split("/")[1] ?? "bin";
   const key = `cache/${cacheId}/media/${crypto.randomUUID()}.${ext}`;
   const title = new URL(req.url).searchParams.get("title")?.slice(0, 120) ?? null;
