@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * kiss.ts — browser-direct RF ingest over Web Serial.
+ * kiss.ts — browser-direct RF ingest over Web Serial and Web Bluetooth.
  *
  * A USB KISS TNC (DigiRig, NinoTNC, Mobilinkd, Kenwood TH-D74/75, …) plugged into Chromium becomes
- * a first-class RF ingest with no server and no install. We reuse the pure @aprscaching/aprs codec
+ * a first-class RF ingest with no server and no install; so does a Bluetooth LE KISS TNC (bleKiss.ts). We reuse the pure @aprscaching/aprs codec
  * (KISS reassembly + AX.25 + APRS decode) — the same code the operator-local apps/ingest runs — so a
  * frame heard here decodes identically. Chromium-only + session-bound; callers MUST feature-detect
  * and provide a non-RF fallback.
@@ -23,6 +23,7 @@ import {
   type AprsData,
 } from "@aprscaching/aprs";
 import type { Packet } from "@aprscaching/shared";
+import { BleKissLink } from "./bleKiss.js";
 
 /** A frame to transmit. src is the operator's verified callsign+SSID; dst is the TOCALL. */
 export interface TxFrame {
@@ -177,113 +178,43 @@ export class WebSerialKiss implements RfLink {
   }
 }
 
-// ---- BLE-KISS over Web Bluetooth (Mobilinkd TNC4 & friends use the Nordic UART Service) ----
-const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const NUS_RX_NOTIFY = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // device → host notifications (KISS bytes)
-const NUS_TX_WRITE = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // host → device writes (TX, gated on callsign control-verification)
-
-/** Is browser-direct RF available over Bluetooth? (Web Bluetooth — Chromium, secure context.) */
-export const webBluetoothSupported = (): boolean =>
-  typeof navigator !== "undefined" &&
-  typeof (navigator as { bluetooth?: { requestDevice?: unknown } }).bluetooth?.requestDevice === "function";
+export { webBluetoothSupported } from "./bleKiss.js";
 
 /**
- * BLE-KISS reader. Connects a Bluetooth TNC over the Nordic UART Service, subscribes to the RX
- * characteristic, reassembles KISS frames and emits RfFrames — same decode pipeline as serial.
+ * BLE-KISS reader. Connects a Bluetooth TNC over whichever KISS service it offers (the BLE KISS API that
+ * Mobilinkd TNCs use, or the Nordic UART Service), reassembles KISS frames from the notifications and emits
+ * RfFrames — the same decode pipeline as serial.
  */
 export class WebBluetoothKiss implements RfLink {
-  private device: BleDeviceLike | null = null;
-  private char: BleCharLike | null = null;
-  private txChar: BleCharLike | null = null;
-  private closed = false;
-  private feed: (chunk: Uint8Array) => void;
-  private readonly onValue = (ev: Event) => {
-    const v = (ev.target as { value?: DataView }).value;
-    if (v) this.feed(new Uint8Array(v.buffer));
-  };
+  private link: BleKissLink;
 
   constructor(
     onFrame: (f: RfFrame) => void,
     private onClose?: (err?: Error) => void,
   ) {
-    this.feed = makeFeeder(onFrame);
+    this.link = new BleKissLink(makeFeeder(onFrame), () => this.onClose?.());
   }
 
   /** Prompt the user to pick a BLE TNC (requires a user gesture) and start reading. */
   async connect(): Promise<void> {
-    const bt = (navigator as unknown as { bluetooth: { requestDevice(o: unknown): Promise<BleDeviceLike> } }).bluetooth;
-    this.device = await bt.requestDevice({ filters: [{ services: [NUS_SERVICE] }], optionalServices: [NUS_SERVICE] });
-    this.device.addEventListener?.("gattserverdisconnected", () => {
-      if (!this.closed) this.onClose?.();
-    });
-    const gatt = await this.device.gatt.connect();
-    const svc = await gatt.getPrimaryService(NUS_SERVICE);
-    this.char = await svc.getCharacteristic(NUS_RX_NOTIFY);
-    this.char.addEventListener("characteristicvaluechanged", this.onValue);
-    await this.char.startNotifications();
-    try {
-      this.txChar = await svc.getCharacteristic(NUS_TX_WRITE);
-    } catch {
-      this.txChar = null;
-    } // TX optional
-    this.closed = false;
+    await this.link.connect();
   }
 
-  /** Transmit a frame over BLE (gated on callsign control-verification). Chunked to 20 bytes for the default ATT MTU. Throws if RX-only. */
+  /** Transmit a frame over BLE (gated on callsign control-verification). Throws if the TNC is receive-only. */
   async send(frame: TxFrame): Promise<void> {
-    if (!this.txChar) throw new Error("this TNC has no writable TX characteristic");
-    const bytes = kissWrap(encodeAx25(frame));
-    for (let i = 0; i < bytes.length; i += 20) {
-      const chunk = bytes.subarray(i, i + 20);
-      if (this.txChar.writeValueWithoutResponse) await this.txChar.writeValueWithoutResponse(chunk);
-      else await this.txChar.writeValue!(chunk);
-    }
+    await this.link.write(kissWrap(encodeAx25(frame)));
   }
 
   async disconnect(): Promise<void> {
-    this.closed = true;
-    try {
-      this.char?.removeEventListener("characteristicvaluechanged", this.onValue);
-    } catch {
-      /* ignore */
-    }
-    try {
-      await this.char?.stopNotifications();
-    } catch {
-      /* ignore */
-    }
-    try {
-      this.device?.gatt.disconnect();
-    } catch {
-      /* ignore */
-    }
-    this.device = null;
-    this.char = null;
-    this.txChar = null;
+    await this.link.disconnect();
     this.onClose?.();
   }
 }
 
-/** Minimal slices of the Web Serial / Web Bluetooth APIs we use (avoids extra @types deps). */
+/** Minimal slice of the Web Serial API we use (avoids extra @types deps). */
 interface SerialPortLike {
   readable: ReadableStream<Uint8Array> | null;
   writable: WritableStream<Uint8Array> | null;
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
-}
-interface BleCharLike {
-  startNotifications(): Promise<unknown>;
-  stopNotifications(): Promise<unknown>;
-  addEventListener(t: string, fn: (e: Event) => void): void;
-  removeEventListener(t: string, fn: (e: Event) => void): void;
-  writeValueWithoutResponse?(data: Uint8Array): Promise<void>;
-  writeValue?(data: Uint8Array): Promise<void>;
-}
-interface BleGattLike {
-  connect(): Promise<{ getPrimaryService(u: string): Promise<{ getCharacteristic(u: string): Promise<BleCharLike> }> }>;
-  disconnect(): void;
-}
-interface BleDeviceLike {
-  gatt: BleGattLike;
-  addEventListener?(t: string, fn: () => void): void;
 }

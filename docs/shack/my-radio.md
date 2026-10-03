@@ -15,7 +15,7 @@ your radio hears, shows it live, and can pass it on to an instance.
 | You have | Button | Notes |
 |---|---|---|
 | A USB [KISS](../glossary.md#kiss) [TNC](../glossary.md#tnc), or a radio with a built-in KISS TNC on USB | **Connect USB radio** | Any TNC in KISS mode |
-| A Bluetooth Low Energy KISS TNC, such as a Mobilinkd | **Connect Bluetooth** | |
+| A Bluetooth Low Energy KISS TNC, such as a Mobilinkd TNC3 or TNC4 | **Connect Bluetooth** | Finds TNCs that offer the BLE KISS service (Mobilinkd, many LoRa APRS trackers) or the Nordic UART service |
 | Only an audio cable from the radio's speaker or data jack to the computer's soundcard | **Soundcard AFSK** | A software modem: decodes 1200-baud packet audio ([AFSK](../glossary.md#afsk), Bell 202), the modem [APRS](../glossary.md#aprs) uses on 144.800 and 144.390 MHz, so no TNC is needed. Receive only |
 | A [Meshtastic](../glossary.md#meshtastic) node on USB | **Meshtastic node** | Reads positions of licensed nodes (licensed mode on, callsign as long name) and shows them under their callsign; licence-free nodes are ignored. Receive only |
 
@@ -82,6 +82,7 @@ Every transmission asks you to confirm first; nothing is sent automatically. To 
 | No connect buttons | The browser is not Chromium-based, or the page is not on `https://`. |
 | Connected, but **0 frames** | The TNC is not in KISS mode, or the radio is on the wrong frequency. With the soundcard, the input level is too low or too high: aim for the loudest level that does not clip. |
 | **Meshtastic node** missing | It needs Web Serial: use desktop Chrome or Edge. |
+| The Bluetooth TNC is missing from the dialog | Switch on the TNC's Bluetooth and pair it in the system settings first, if it asks for pairing. A TNC that offers only classic Bluetooth, not Bluetooth Low Energy, cannot connect. |
 | Forwarding does nothing | **signed**: sign in first. **secret**: the URL or the secret is wrong; the sysop can check the gateway log. |
 | **Sync N heard** says to turn on forwarding | Switch on **Forward to a gateway** and choose the **Auth** first. |
 

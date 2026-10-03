@@ -24,7 +24,7 @@ button next to an app puts it on the left rail.
 
 | App | What it does | Who | Read more |
 |---|---|---|---|
-| **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over a USB [KISS](../glossary.md#kiss) TNC. | everyone | [Connect to a BBS or node](packet-and-bbs.md#connect-to-a-bbs-or-node) |
+| **Packet terminal** | A multi-channel connected-mode terminal: connect to BBSes, nodes and other stations over a [KISS](../glossary.md#kiss) TNC on USB or Bluetooth. | everyone | [Connect to a BBS or node](packet-and-bbs.md#connect-to-a-bbs-or-node) |
 | **BBS** | Store-and-forward mail, bulletins and threads on the instance's [BBS](../glossary.md#bbs). Bulletins are open to everyone; your mail needs you signed in as your callsign. | everyone | [Use the instance's BBS](packet-and-bbs.md#use-the-instances-bbs) |
 | **Packet decoder** | Paste a raw [APRS](../glossary.md#aprs) or [AX.25](../glossary.md#ax25) line and see every field decoded. | everyone | [Decode a packet](packet-and-bbs.md#decode-a-packet) |
 | **Tools** | Plugins and signal decoders, including CW and PSK31 decoding from your microphone. | everyone | [Tools and plugins](#tools-and-plugins) |
