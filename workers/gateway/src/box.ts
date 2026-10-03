@@ -155,6 +155,8 @@ interface BoxCaps {
   tx: boolean;
   rf: boolean;
   meshcom: string[];
+  /** The MeshCom nodes the box reaches over KISS, which send from the service call and report its acks. */
+  kiss?: string[];
 }
 
 /** Parse the capability report a box sends with its poll (`?tx=1&rf=1&meshcom=CALL,…`). */
@@ -164,7 +166,11 @@ function parseBoxCaps(url: URL): BoxCaps {
     .map((c) => c.trim().toUpperCase())
     .filter((c) => /^[A-Z0-9]{1,6}(-[A-Z0-9]{1,2})?$/.test(c))
     .slice(0, 8);
-  return { tx: url.searchParams.get("tx") === "1", rf: url.searchParams.get("rf") === "1", meshcom };
+  const kiss = (url.searchParams.get("kiss") ?? "")
+    .split(",")
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => meshcom.includes(c));
+  return { tx: url.searchParams.get("tx") === "1", rf: url.searchParams.get("rf") === "1", meshcom, kiss };
 }
 
 /** A box that polled within this many seconds is considered reachable for a reply. */

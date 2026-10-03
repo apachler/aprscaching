@@ -59,6 +59,15 @@ export interface BoxResult {
 export interface BoxMeshcom {
   /** Nodes the sender may use; `call` is what each node transmits under. */
   nodes: { ip: string; call?: string }[];
+  /**
+   * A node's KISS port, when its password is set: it sends from the service call itself (any call of the
+   * node's base call) and says whether the node queued the frame.
+   */
+  kiss?: {
+    ip: string;
+    canSend(from: string): boolean;
+    send(from: string, info: string): Promise<string>;
+  };
   send(req: {
     dst: string;
     text: string;
@@ -247,7 +256,15 @@ export class BoxPoller {
   capsQuery(): string {
     const tx = this.o.remoteTx && this.o.state.tx;
     const meshcom = (this.o.meshcom?.nodes ?? []).map((n) => n.call?.toUpperCase()).filter((c): c is string => !!c);
-    return `tx=${tx ? 1 : 0}&rf=${this.o.radio ? 1 : 0}&meshcom=${encodeURIComponent(meshcom.join(","))}`;
+    // the node whose KISS port sends from the service call, so the gateway knows an ack can confirm a delivery
+    const mc = this.o.meshcom;
+    const service = this.serviceCall ?? this.o.serviceCall;
+    const kissNode =
+      mc?.kiss && service && mc.kiss.canSend(service) ? mc.nodes.find((n) => n.ip === mc.kiss!.ip)?.call : undefined;
+    return (
+      `tx=${tx ? 1 : 0}&rf=${this.o.radio ? 1 : 0}&meshcom=${encodeURIComponent(meshcom.join(","))}` +
+      (kissNode ? `&kiss=${encodeURIComponent(kissNode.toUpperCase())}` : "")
+    );
   }
 
   /** Gates shared by every answer to a radio command: operator opt-in, the transmit switch, command age. */
@@ -304,6 +321,9 @@ export class BoxPoller {
       .trim()
       .toUpperCase();
     const text = String(p.text ?? "").trim();
+    // the service call the gateway sends from, and a Mailbox message's number for the station's ack
+    const from = String(p.from ?? "").toUpperCase();
+    const msgNo = typeof p.msgNo === "string" && /^[A-Za-z0-9]{1,5}$/.test(p.msgNo) ? p.msgNo : undefined;
     if (!CALL_RE.test(dst)) return fail("answer needs a valid addressee");
     if (!text) return fail("answer text is empty");
     const gate = this.answerGate(cmd);
@@ -312,6 +332,19 @@ export class BoxPoller {
     if (!mc) return fail("MeshCom transmit is not enabled on this box (set MESHCOM_TX=1)");
     const target = mc.nodes.find((n) => n.call?.toUpperCase() === node);
     if (!target) return fail(`no MeshCom node ${node || "?"} on this box`);
+    const service = (this.serviceCall ?? this.o.serviceCall ?? "").toUpperCase();
+    if (mc.kiss && mc.kiss.ip === target.ip && from && from === service && mc.kiss.canSend(from)) {
+      const limited = this.rateLimited();
+      if (limited) return limited;
+      // an ack is already `ADDRESSEE:ackNN`; a message gets its addressee field and its number
+      const info = /^\S+\s*:ack[A-Za-z0-9]{1,5}$/.test(text)
+        ? `:${text}`
+        : `:${dst.padEnd(9)}:${text}${msgNo ? `{${msgNo}` : ""}`;
+      const verdict = await mc.kiss.send(from, info);
+      if (verdict === "queued")
+        return { status: "done", result: `answer to ${dst} sent as ${from} through node ${node}` };
+      this.log(`[box] node ${node} did not take the answer over KISS (${verdict}); sending under its own call`);
+    }
     const r = await mc.send({ dst, text, feature: "radio-answer", node: target.ip });
     return r.ok
       ? { status: "done", result: `answer to ${dst} handed to node ${node}` }

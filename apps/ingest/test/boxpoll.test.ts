@@ -330,6 +330,40 @@ describe("answers to radio commands", () => {
     ]);
   });
 
+  it("sends a MeshCom answer from the service call through the node's KISS port, else under the node's call", async () => {
+    const kissSent: string[] = [];
+    const udpSent: unknown[] = [];
+    let verdict = "queued";
+    const { poller } = setup({
+      serviceCall: "OE8APR-15",
+      meshcom: {
+        nodes: [{ ip: "192.168.1.50", call: "OE8APR-12" }],
+        send: async (req) => {
+          udpSent.push(req.text);
+          return { ok: true };
+        },
+        kiss: {
+          ip: "192.168.1.50",
+          canSend: (from) => from === "OE8APR-15",
+          send: async (from, info) => {
+            kissSent.push(`${from} ${info}`);
+            return verdict;
+          },
+        },
+      },
+    });
+    const run = (payload: Record<string, unknown>) =>
+      poller.execute(
+        answer({ kind: "meshcom_msg", payload: { node: "OE8APR-12", dst: "OE5XYZ-7", from: "OE8APR-15", ...payload } }),
+      );
+    expect((await run({ text: "OE5XYZ-7 :ack034" })).result).toMatch(/sent as OE8APR-15/);
+    await run({ text: "de OE1ABC: hi", msgNo: "1A" });
+    expect(kissSent).toEqual(["OE8APR-15 :OE5XYZ-7 :ack034", "OE8APR-15 :OE5XYZ-7 :de OE1ABC: hi{1A"]);
+    verdict = "tx-off"; // the node took no frame: the answer goes out under its own call
+    expect((await run({ text: "de OE1ABC: again" })).status).toBe("done");
+    expect(udpSent).toEqual(["de OE1ABC: again"]);
+  });
+
   it("reports why a MeshCom answer was not sent", async () => {
     const off = setup();
     expect(

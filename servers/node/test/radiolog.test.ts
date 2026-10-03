@@ -311,7 +311,14 @@ describe("answers go back the way the message came", () => {
       onAir({ port: "meshcom", box: "pi-home", rxCall: "OE8APR-12", igateCall: "OE8APR-12", msgNo: "034" }),
     );
     expect(boxCommands()).toEqual([
-      { box: "pi-home", kind: "meshcom_msg", node: "OE8APR-12", dst: "OE8APR-7", text: "OE8APR-7 :ack034" },
+      {
+        box: "pi-home",
+        kind: "meshcom_msg",
+        node: "OE8APR-12",
+        dst: "OE8APR-7",
+        text: "OE8APR-7 :ack034",
+        from: "APRSCG", // the box sends it as the service call when it reaches the node's KISS port
+      },
     ]);
     expect(outbox()).toEqual([]);
   });

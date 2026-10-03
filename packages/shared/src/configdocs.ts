@@ -120,6 +120,8 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   MESHCOM_TX_AUDIT: "Path of a JSON-lines audit file for MeshCom transmits",
   MESHCOM_TX_BURST: "MeshCom transmits allowed at once before pacing applies",
   MESHCOM_TX_REFILL_SEC: "Seconds to regain one MeshCom transmit",
+  MESHCOM_KISS_PASS: "The node's KISS password: answers then go out from the service call through KISS",
+  MESHCOM_KISS_PORT: "The node's KISS TCP port",
   AXUDP_PORT: "UDP port for AX.25-over-UDP; set it to enable AXUDP",
   AXUDP_BIND: "Local address the AXUDP socket binds",
   AXUDP_PEERS: "AXUDP peers as host:port, comma-separated",
@@ -616,7 +618,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "MeshCom",
-        "`MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file), `MESHCOM_TX_BURST` (`3`) / `MESHCOM_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
+        "`MESHCOM_NODE` (node address(es), each optionally `=CALL`; enables the listener), `MESHCOM_PORT` (`1799`), `MESHCOM_BIND` (default: this host's address on the node's subnet), `MESHCOM_FANOUT` (`host:port` list), `MESHCOM_RATE` (`20`/s per node), `MESHCOM_STALE_MIN` (`30`); transmit: `MESHCOM_TX` (`1` lets the box answer radio commands through its nodes), `MESHCOM_TX_CALL` (the operator's call, which must match the node's; default `BOX_CALL`, then `IGATE_CALL`, `DIGI_CALL`), `MESHCOM_TX_AUDIT` (JSON-lines audit file), `MESHCOM_TX_BURST` (`3`) / `MESHCOM_TX_REFILL_SEC` (`60`), `MESHCOM_KISS_PASS` (the first node's KISS password: with it, answers and Mailbox messages go out from the service call through the node's KISS port, which needs the node's `--kiss auth on`) / `MESHCOM_KISS_PORT` (`8001`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       ["AXUDP", "`AXUDP_PORT`, `AXUDP_BIND`, `AXUDP_PEERS`"],
       ["AXIP", "`AXIP_ENABLE`, `AXIP_PEERS`, `AXIP_BIND`"],

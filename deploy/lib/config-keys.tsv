@@ -109,6 +109,8 @@ MESHCOM_TX_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Operator 
 MESHCOM_TX_AUDIT	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Path of a JSON-lines audit file for MeshCom transmits
 MESHCOM_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	MeshCom transmits allowed at once before pacing applies
 MESHCOM_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one MeshCom transmit
+MESHCOM_KISS_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	The node's KISS password: answers then go out from the service call through KISS
+MESHCOM_KISS_PORT	int	ingest	8001		0	0	selfhost,baremetal,ingest-box,pocket	The node's KISS TCP port
 AXUDP_PORT	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	UDP port for AX.25-over-UDP; set it to enable AXUDP
 AXUDP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local address the AXUDP socket binds
 AXUDP_PEERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	AXUDP peers as host:port, comma-separated

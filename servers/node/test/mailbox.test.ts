@@ -88,6 +88,65 @@ describe("the Mailbox", () => {
     expect(await status()).toBe("delivered");
   });
 
+  it("sends to a station heard on MeshCom through the box's node, and takes only the KISS port's ack", async () => {
+    const { env, leave } = await sender();
+    await leave({ from: "OE1ABC", to: "OE5XYZ", text: "via the mesh" });
+    await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12&kiss=OE8APR-12", undefined, {
+      "x-ingest-secret": SECRET,
+    });
+    const meshcom = (payload: string, port = "meshcom") =>
+      call(
+        env,
+        "POST",
+        "/ingest",
+        {
+          packets: [
+            {
+              src: "OE5XYZ-7",
+              dst: "APRS",
+              path: [],
+              payload,
+              heardVia: "rf",
+              port,
+              box: "pi-home",
+              rxCall: "OE8APR-12",
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ],
+        },
+        { "x-ingest-secret": SECRET },
+      );
+    await meshcom(">on the mesh");
+    const cmd = await env.DB.prepare("SELECT kind, payload FROM box_commands").first<{
+      kind: string;
+      payload: string;
+    }>();
+    expect(cmd?.kind).toBe("meshcom_msg");
+    expect(JSON.parse(cmd!.payload)).toEqual({
+      node: "OE8APR-12",
+      dst: "OE5XYZ-7",
+      text: "de OE1ABC: via the mesh",
+      from: "OE8APR-15",
+      msgNo: "1",
+    });
+    expect(await outbox(env)).toEqual([]);
+    const status = async () =>
+      (await env.DB.prepare("SELECT status FROM mailbox_messages").first<{ status: string }>())?.status;
+    await meshcom(":OE8APR-15:ack1"); // over ExtUDP the number is the node's own, not ours
+    expect(await status()).toBe("sent");
+    await meshcom(":OE8APR-15:ack1", "meshcom-kiss");
+    expect(await status()).toBe("delivered");
+
+    // a box without the node's KISS port: sent once under the node's call, never repeated
+    await leave({ from: "OE1ABC", to: "OE5XYZ", text: "once only" });
+    await call(env, "GET", "/api/box/pi-home/commands?tx=1&rf=0&meshcom=OE8APR-12", undefined, {
+      "x-ingest-secret": SECRET,
+    });
+    await meshcom(">still here");
+    const last = await env.DB.prepare("SELECT status, attempts FROM mailbox_messages WHERE body = 'once only'").first();
+    expect(last).toEqual({ status: "undelivered", attempts: 5 });
+  });
+
   it("waits for the exact station when the message names an SSID", async () => {
     const { env, leave } = await sender();
     await leave({ from: "OE1ABC", to: "OE5XYZ-7", text: "for the handheld" });
