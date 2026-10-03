@@ -49,6 +49,11 @@
     flex-wrap: wrap;
     gap: var(--space-xs);
   }
+  /* a living cache riding the station, with its rendezvous switch, below the header */
+  .station-card > .setrow {
+    padding: var(--space-xs) var(--space-md);
+    border-top: 1px solid var(--line);
+  }
   .station-body {
     padding: var(--space-xs) var(--space-md) var(--space-md);
     display: flex;

@@ -211,7 +211,30 @@ export async function handleMyStations(req: Request, env: Env): Promise<Response
       .all<StationRow>()
   ).results;
   const page = paginate(rows, pg.limit, (r) => ({ primary: r.id, id: r.id }));
-  return json({ stations: page.items.map(toStation), nextCursor: page.nextCursor, hasMore: page.hasMore });
+  // the living caches riding these stations, so the list turns their rendezvous logging on and off in place;
+  // a living cache rides only a station its hider operates, so every one here is the caller's
+  const calls = page.items.map((r) => r.callsign.toUpperCase());
+  const living = calls.length
+    ? (
+        await env.DB.prepare(
+          `SELECT id, code, title, station_call, rendezvous FROM caches
+           WHERE type = 'aprs_living' AND status != 'archived' AND UPPER(station_call) IN (${calls.map(() => "?").join(",")})
+           ORDER BY id`,
+        )
+          .bind(...calls)
+          .all<{ id: number; code: string; title: string; station_call: string; rendezvous: number | null }>()
+      ).results
+    : [];
+  const stations = page.items.map((r) => {
+    const mine = living.filter((c) => c.station_call.toUpperCase() === r.callsign.toUpperCase());
+    return {
+      ...toStation(r),
+      ...(mine.length && {
+        livingCaches: mine.map((c) => ({ id: c.id, code: c.code, title: c.title, rendezvous: !!c.rendezvous })),
+      }),
+    };
+  });
+  return json({ stations, nextCursor: page.nextCursor, hasMore: page.hasMore });
 }
 
 /** Load a station the caller owns, or null (404/403 handled by callers). */

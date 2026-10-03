@@ -11,10 +11,10 @@ also record a rendezvous.
 
 ## How you find it
 
-1. Open the cache. The cache page does not name the station it follows. The owner, shown after **by**, can
-   tell you.
-2. Find out where the station is. Turn on **Live stations** in **Search & filter** to see its last heard
-   position on the map, or arrange a meeting with its operator.
+1. Open the cache. Under the owner, **Rides on** names the station it follows, for example `OE8APR-9`, and how
+   old its position is. The pin is at that position.
+2. Find out where the station is now. Turn on **Live stations** in **Search & filter** to follow it on the map,
+   or arrange a meeting with its operator.
 3. Go to the station, with your own APRS radio beaconing your position.
 4. While you are with the station, log the find.
 
@@ -55,7 +55,9 @@ stations of your verified callsigns. Nobody can make a cache of another operator
   the cache.
 
 In the hide form, the switch **Log rendezvous when I meet other living caches** opts the cache into
-rendezvous. It is off by default. The two paths under **My stations** leave it off.
+rendezvous. It is off by default. The two paths under **My stations** leave it off. To turn it on later, open
+**Settings → My stations**: under each station, every living cache that follows it has its own **Log
+rendezvous** switch. The cache's **Edit** form has the same switch.
 
 ### Rendezvous
 

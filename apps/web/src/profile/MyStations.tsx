@@ -10,6 +10,7 @@ import {
   becomeACache,
   getStationWxKey,
   issueStationWxKey,
+  updateCache,
   type OperatedStation,
   type StationInput,
   type StationWxKey,
@@ -21,6 +22,8 @@ import {
   EmptyState,
   ErrorState,
   LoadMore,
+  Row,
+  Switch,
   copyText,
   useChoice,
   useConfirm,
@@ -172,6 +175,9 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
         </span>
         <span className="muted">{open ? "▾" : "▸"}</span>
       </Button>
+      {props.station.livingCaches?.map((c) => (
+        <LivingCacheRow key={c.id} cache={c} />
+      ))}
       {open && (
         <div className="station-body">
           <StationFields value={edit} onChange={setEdit} />
@@ -211,6 +217,43 @@ function StationCard(props: { station: OperatedStation; onChanged: () => void })
         </div>
       )}
     </div>
+  );
+}
+
+/** A living cache riding the station, with its rendezvous logging switched in place. */
+function LivingCacheRow(props: { cache: NonNullable<OperatedStation["livingCaches"]>[number] }) {
+  const toast = useToast();
+  const [on, setOn] = useState(props.cache.rendezvous);
+  const [busy, setBusy] = useState(false);
+  async function flip(v: boolean) {
+    setBusy(true);
+    setOn(v);
+    try {
+      await updateCache(props.cache.id, { rendezvous: v });
+      toast(v ? `${props.cache.code} logs rendezvous` : `${props.cache.code} stops logging rendezvous`);
+    } catch (e) {
+      setOn(!v);
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Row
+      label={
+        <>
+          Living cache <span className="mono">{props.cache.code}</span> · {props.cache.title}
+        </>
+      }
+      help="Log rendezvous: record when it meets another living cache that logs them."
+    >
+      <Switch
+        label={`Log rendezvous for ${props.cache.code}`}
+        checked={on}
+        disabled={busy}
+        onChange={(v) => void flip(v)}
+      />
+    </Row>
   );
 }
 
