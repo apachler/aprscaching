@@ -21,8 +21,9 @@ three tiers: **Radio-verified**, **Location-verified** and **Logged**. **Radio-v
 station that the instance runs, so it appears only where there is one. [How finds are
 verified](../verification.md) explains the tiers.
 
-Players hide the first five types, plus **SOTA summit** and **POTA park**, with **+ Hide a cache**. Your sysop
-imports the heritage places: summits, parks, reserves, bunkers and castles.
+Players hide the first five types with **+ Hide a cache**. The five heritage types (summits, parks, reserves,
+bunkers and castles) come only from your sysop's import, so their badges stand for the real place; to hide a
+cache at one, hide it as a traditional cache.
 
 The Phosphor theme draws some symbols differently. Each type's page shows its marker in both.
 
