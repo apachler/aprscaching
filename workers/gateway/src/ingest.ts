@@ -10,7 +10,6 @@ import { IngestBatch, sanitizeMeshcomMeta } from "@aprscaching/shared";
 import { meshcomStatements, type MeshcomObservation } from "./meshcom.js";
 import { baseCall, decodeAprs } from "@aprscaching/aprs";
 import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
-import { deliverHeld, bbsOnAck } from "./bbs.js";
 import { recordWatchHeard } from "./watch.js";
 import { recordRendezvous } from "./rendezvous.js";
 import { recordMheard } from "./node.js";
@@ -129,7 +128,6 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
   const fixes: { p: (typeof packets)[number]; fix: NonNullable<ReturnType<typeof fixOf>>; transport: Transport }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
-  const ackedBy: { from: string; lineNo: string }[] = []; // BBS delivery acks seen this batch
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
@@ -206,9 +204,6 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
         });
       }
-    } else if (data.kind === "message" && data.ack && data.msgNo) {
-      // held mail is sent from the service call, so only an ack addressed to it confirms a delivery
-      if (String(data.addressee ?? "").toUpperCase() === service) ackedBy.push({ from: p.src, lineNo: data.msgNo });
     }
 
     // shack raw packet view: a short, TTL-pruned ring of raw frames per
@@ -352,11 +347,6 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // diagnostics once the write budget passes 80 %
   if (!shedding) stmts.push(...meshcomStatements(env, meshcom));
   if (stmts.length) await env.DB.batch(stmts);
-
-  // BBS: confirm deliveries that were acked, and (re)deliver held mail to stations just heard
-  for (const a of ackedBy) await bbsOnAck(env, a.from, a.lineNo);
-  const heardCalls = new Set(positions.map((p) => p.src.toUpperCase()));
-  for (const cs of heardCalls) await deliverHeld(env, cs);
 
   // radio commands (FOUND / DNF / NOTE / HELP) — best-effort per message; never fails the batch
   for (const c of commands) {

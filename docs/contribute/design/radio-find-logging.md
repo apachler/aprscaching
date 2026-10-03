@@ -39,7 +39,7 @@ Meshtastic is out of scope: its nodes are identified by node ids, not callsigns,
 to a verified callsign.
 
 The service call is the instance's one on-air call: radio commands and callsign-verification messages are
-addressed to it, and acks, replies and held personal mail are sent from it. It is `SERVICE_CALL`, by default the
+addressed to it, and acks and replies are sent from it. It is `SERVICE_CALL`, by default the
 first `ADMIN_CALLSIGNS` base call with SSID 15 (`OE8APR-15`), and `APRSCG` only on an instance with no sysop. It
 must be callsign-shaped: MeshCom nodes drop a direct message whose destination has no digit. The ingest box
 learns it from the gateway, adds a group-message filter (`g/<service call>`) to its APRS-IS feed so commands

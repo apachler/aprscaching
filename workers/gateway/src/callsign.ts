@@ -52,7 +52,7 @@ export function listeningSites(env: Env): string[] {
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
 const CHALLENGE_TTL_SEC = 30 * 60;
 /** Wrong codes heard on air before the challenge locks. */
-export const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 5;
 
 /** A uniformly random 6-digit code from the CSPRNG (Math.random is predictable). */
 function sixDigitCode(): string {

@@ -296,7 +296,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "`SERVICE_CALL`",
-        "The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks, replies and held personal mail are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit",
+        "The instance's one on-air call: radio commands (`FOUND` / `DNF` / `NOTE` / `HELP`) and callsign-verification messages (`VERIFY <code>`) are addressed to it, and acks and replies are sent from it. It must be a callsign with an SSID that no station of yours uses: MeshCom drops a direct message to an address without a digit",
         "the first `ADMIN_CALLSIGNS` base call with `-15`; `APRSCG` without one",
       ],
       [
@@ -645,7 +645,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
         "`BOX_ID` (the box's name; the box pairs with an account by the one-time code it prints at start), `BOX_TX` (`1` allows remote transmit), `BOX_CALL` (default `IGATE_CALL`, then `DIGI_CALL`), `BOX_TX_PATH` (`WIDE1-1,WIDE2-1`), `BOX_CMD_MAX_AGE` (`900` s), `BOX_POLL_MS` (`5000`), `BOX_TX_BURST` (`3`) / `BOX_TX_REFILL_SEC` (`60`) — [transmit pacing](../run/compliance/on-air-stations.md#transmit-pacing)",
       ],
       [
-        "APRS-IS uplink (answers, BBS mail, announces, weather)",
+        "APRS-IS uplink (answers, announces, weather)",
         "`APRSIS_SERVICE_CALL`, `APRSIS_SERVICE_PASS`, `CWOP_HOST`, `CWOP_PORT` (`14580`). Without them, a box whose `APRSIS_CALLSIGN` shares the gateway's service-call base call and has an `APRSIS_PASSCODE` logs in as the service call: the sysop's own box publishes the outbox with no further setting, and any other box publishes nothing. Answers from the service call go out as plain APRS messages, which IGates gate to RF; announced finds go out as third-party traffic",
       ],
     ],

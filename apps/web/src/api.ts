@@ -1443,7 +1443,7 @@ export function deleteForwardPartner(id: number): Promise<{ ok: boolean }> {
 export function getMheard(limit = 50): Promise<{ mheard: MheardRow[] }> {
   return call(`/api/node/mheard?limit=${limit}`);
 }
-/** Personal mail you SENT, with its store-and-forward delivery state. */
+/** Personal mail you SENT, with its F6FBB state: read, or forwarded to partner BBSes. */
 export function getBbsSent(callsign: string): Promise<{ messages: BbsMessage[] }> {
   return call(`/api/bbs/sent?from=${encodeURIComponent(callsign)}`);
 }

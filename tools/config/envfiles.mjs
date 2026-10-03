@@ -25,7 +25,7 @@ export const ENV_FILES = [
       { key: "INGEST_SECRET", value: "" },
       { key: "BATCH_MS", value: "1500" },
       "",
-      "# --- APRS-IS uplink: answers to radio commands, BBS mail by APRS, announced finds, weather ---",
+      "# --- APRS-IS uplink: answers to radio commands, announced finds, weather ---",
       "# Blank: a box whose APRSIS_CALLSIGN shares the gateway's service-call base call logs in as the",
       "# service call with APRSIS_PASSCODE. Set both to log in as another call of that base call.",
       { key: "APRSIS_SERVICE_CALL", value: "" },

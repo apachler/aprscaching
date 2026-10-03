@@ -455,12 +455,6 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
     del("DELETE FROM rendezvous_log WHERE $CALLS OR $CALLS", "call_a", "call_b"),
     del("DELETE FROM white_pages WHERE $CALLS", "callsign"),
     del("DELETE FROM box_commands WHERE $CALLS", "callsign"),
-    del("DELETE FROM bbs_delivery WHERE $CALLS", "to_call"),
-    del(
-      "DELETE FROM bbs_delivery WHERE msg_id IN (SELECT id FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS))",
-      "from_call",
-      "to_call",
-    ),
     del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
     env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
       WITHDRAWN,

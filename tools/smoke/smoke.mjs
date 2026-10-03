@@ -1316,7 +1316,7 @@ ok(
 const goneProf = await call("GET", "/api/profile/DL1ABC");
 ok("erased account finds are anonymised away", (goneProf.data?.finds ?? 0) === 0, JSON.stringify(goneProf.data?.finds));
 
-// ---- BBS store-and-forward: hold personal mail, deliver when heard, confirm on ack ----
+// ---- BBS: personal mail, bulletins and NTS traffic, moved the F6FBB way only ----
 const bbsP = await call("POST", "/api/bbs/messages", {
   fromCall: "OE8APR",
   toCall: "OE7BBS",
@@ -1426,8 +1426,8 @@ ok(
 
 const list1 = await call("GET", "/api/bbs/messages?to=OE7BBS");
 ok(
-  "personal mail starts held",
-  (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "held"),
+  "personal mail waits in the BBS, unread",
+  (list1.data?.messages ?? []).some((mm) => mm.id === msgId && mm.readAt == null),
   JSON.stringify(list1.data?.messages?.[0]),
 );
 
@@ -1450,37 +1450,11 @@ await call(
   },
   { "x-ingest-secret": SECRET },
 );
-const list2 = await call("GET", "/api/bbs/messages?to=OE7BBS");
+const outbox = await call("GET", "/outbox", undefined, { "x-ingest-secret": SECRET });
 ok(
-  "mail is forwarded when the station is heard",
-  (list2.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "sent" && mm.lineNo === msgId),
-  JSON.stringify(list2.data?.messages?.[0]),
-);
-
-await call(
-  "POST",
-  "/ingest",
-  {
-    packets: [
-      {
-        src: "OE7BBS",
-        dst: "APRS",
-        path: ["TCPIP*", "qAC", "T2"],
-        payload: `:APRSCG   :ack${msgId}`,
-        kind: "message",
-        heardVia: "aprs_is",
-        port: "aprs-is",
-        ts: now(),
-      },
-    ],
-  },
-  { "x-ingest-secret": SECRET },
-);
-const list3 = await call("GET", "/api/bbs/messages?to=OE7BBS");
-ok(
-  "ack confirms delivery",
-  (list3.data?.messages ?? []).some((mm) => mm.id === msgId && mm.delivery === "acked"),
-  JSON.stringify(list3.data?.messages?.[0]),
+  "the BBS sends nothing over APRS when the addressee is heard",
+  outbox.status === 200 && !(outbox.data?.items ?? []).some((it) => /OE7BBS/.test(it.payload ?? "")),
+  JSON.stringify(outbox.data?.items),
 );
 
 const bulls = await call("GET", "/api/bbs/bulletins");

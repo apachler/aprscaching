@@ -10,10 +10,11 @@ message.
 |---|---|
 | **Messages** in the left rail, or **More → Messages** on a phone | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
 | **Settings → My radio (browser) → Local inbox** | The messages your own radio heard in this browser, with an **ACK** button for those addressed to you. |
-| **Shack → BBS** | Mail and bulletins between accounts. Personal mail reaches the addressee's radio as an APRS message. |
+| **Shack → BBS** | Mail and bulletins on the instance's packet BBS, moved the F6FBB way. Never sent over APRS or MeshCom. |
 | **You → Logs sent over the air** | The commands you sent to the instance by radio, such as `FOUND`, waiting for you to confirm them. |
 
-**Messages** is radio messaging, separate from BBS mail: a BBS message is never made from an APRS message.
+**Messages** is radio messaging, separate from the BBS: a BBS message is never made from an APRS or MeshCom
+message, and never sent as one.
 
 ## Read the messages the instance hears
 
@@ -57,16 +58,6 @@ number.
 2. The app shows **ACK <number> → <CALL>** once your radio has sent it.
 
 The browser never acknowledges on its own: each ack is a transmission you choose to make.
-
-## Personal mail held until you are heard
-
-BBS mail addressed to your callsign waits on the instance until it hears your station. Then the instance sends
-it as an APRS message from its [service call](../glossary.md#service-call), as
-`de <SENDER>: <text>`, cut to 67 characters. The message carries a number, so your radio acknowledges it.
-
-Without an ack, the instance tries again when it hears you, at most once a minute and five times in all. The
-sender follows the state under **BBS → Sent**: **held**, **sent**, **✓ delivered** or **✕ expired**. Sending
-and reading mail is under [Use the instance's BBS](packet-and-bbs.md#use-the-instances-bbs).
 
 ## MeshCom direct messages
 

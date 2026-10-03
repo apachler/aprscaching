@@ -20,7 +20,7 @@ export type Env = {
   MEDIA?: MediaStore; // audio-cache clue storage (R2 on CF, FS on Node); optional
   ROOMS: RoomNamespace;
   // The ingest-plane credential: the ingest box presents it (x-ingest-secret) to post packets, drain the
-  // outbox, deliver BBS mail, mirror the node table, log finds heard over APRS and poll remote commands.
+  // outbox, carry BBS mail for the packet BBS, mirror the node table, log finds heard over APRS and poll remote commands.
   // It authorises nothing operator-level and never signs a session.
   INGEST_SECRET: string;
   /** Installed by Node/Bun: refuses federation fetches to private networks. Workers need none. */

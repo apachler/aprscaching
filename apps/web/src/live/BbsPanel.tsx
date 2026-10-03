@@ -131,7 +131,9 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
     }
   }
 
-  const DELIVERY: Record<string, string> = { held: "held", sent: "sent", acked: "✓ delivered", expired: "✕ expired" };
+  /** What F6FBB knows of mail you sent: read here, passed on to a partner BBS, or waiting in the BBS. */
+  const sentState = (m: BbsMessage) =>
+    m.readAt != null ? "read" : m.forwardedTo?.length ? `forwarded to ${m.forwardedTo.join(", ")}` : "waiting";
   const tabLabel = (label: string, badge?: number) => (
     <>
       {label}
@@ -287,7 +289,7 @@ export function BbsPanel(props: { callsign: string; onClose: () => void }) {
                 <li key={m.id}>
                   <span className="muted">to</span> <strong>{m.toCall}</strong>{" "}
                   <span className="muted">· {fmt.dateTime(m.postedAt)}</span>
-                  <Badge className="ml-2">{DELIVERY[m.delivery ?? "held"] ?? "held"}</Badge>
+                  <Badge className="ml-2">{sentState(m)}</Badge>
                   {m.subject && <span className="bbs-subj"> · {m.subject}</span>}
                   <div className="comment">{m.body}</div>
                 </li>
