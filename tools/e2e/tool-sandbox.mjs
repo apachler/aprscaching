@@ -48,7 +48,10 @@ const probeTool = (appUrl, peerUrl) => `
   const attempt = async (name, fn) => { try { out[name] = "reached: " + String(await fn()); } catch (e) { out[name] = "blocked"; } };
   const done = (async () => {
     await attempt("fetchApp", async () => (await fetch(${JSON.stringify(appUrl + "/probe")})).status);
-    await attempt("fetchPeer", async () => (await fetch(${JSON.stringify(peerUrl + "/peer")}, { credentials: "include" })).text());
+    await attempt("fetchPeer", async () => (await fetch(${JSON.stringify(peerUrl + "/peer")})).text());
+    // The peer allows no credentialed reads, so this response stays unreadable; the peer still records the
+    // request's cookie header, which is what the test checks.
+    await attempt("fetchPeerCreds", async () => (await fetch(${JSON.stringify(peerUrl + "/peer-creds")}, { credentials: "include" })).text());
     await attempt("xhr", () => new Promise((res, rej) => { const x = new XMLHttpRequest(); x.onload = () => res(x.status); x.onerror = rej; x.open("GET", ${JSON.stringify(appUrl + "/probe")}); x.send(); }));
     await attempt("worker", () => new Promise((res, rej) => { const w = new Worker(URL.createObjectURL(new Blob(["fetch(" + ${JSON.stringify(JSON.stringify(appUrl + "/probe"))} + ").then(r => postMessage(r.status), () => postMessage('x'))"]))); w.onmessage = (e) => e.data === "x" ? rej() : res(e.data); w.onerror = rej; setTimeout(rej, 3000); }));
     await attempt("eventSource", () => new Promise((res, rej) => { const s = new EventSource(${JSON.stringify(appUrl + "/probe")}); s.onopen = () => res("open"); s.onerror = () => { s.close(); rej(); }; setTimeout(rej, 3000); }));
@@ -84,8 +87,7 @@ async function main() {
   const peerHits = [];
   const peer = createServer((req, res) => {
     peerHits.push({ url: req.url, cookie: req.headers.cookie ?? null });
-    res.setHeader("access-control-allow-origin", req.headers.origin ?? "*");
-    res.setHeader("access-control-allow-credentials", "true");
+    res.setHeader("access-control-allow-origin", "*");
     res.end("peer-ok");
   });
   await new Promise((r) => peer.listen(0, "127.0.0.1", r));
@@ -171,7 +173,7 @@ async function main() {
             appOrigins: [appOrigin],
           });
           for (let i = 0; i < 100; i++) {
-            if ((await sb.runCommand("ready", ""))[0] === "9") break;
+            if ((await sb.runCommand("ready", ""))[0] === "10") break;
             await new Promise((r) => setTimeout(r, 100));
           }
           const out = JSON.parse((await sb.runCommand("probe", ""))[0]);
@@ -191,7 +193,10 @@ async function main() {
     const open = await probe(["command", "network"], [peerUrl, appUrl]);
     console.log("tool with the network grant", JSON.stringify(open));
     expect(open.fetchPeer === "reached: peer-ok", "reaches its connect origin");
-    expect(peerHits.length > 0 && peerHits.every((h) => h.cookie === null), "the peer request carries no cookie");
+    expect(
+      peerHits.some((h) => h.url === "/peer-creds") && peerHits.every((h) => h.cookie === null),
+      "a credentialed request to the peer carries no cookie",
+    );
     expect(open.fetchApp === "blocked" && open.xhr === "blocked", "the app's own origin stays unreachable");
     for (const k of ["indexedDB", "caches", "localStorage", "cookie"])
       expect(open[k] === "blocked", `${k} is still blocked`);
