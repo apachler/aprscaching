@@ -43,7 +43,9 @@ for (const raw of text.split(/\r?\n/)) {
   for (const item of raw.replace(/;\s*$/, "").split(",")) {
     const t = item.trim();
     if (!t || t.startsWith("=")) continue;
-    const p = t.replace(/\(.*?\)|\[.*?\]|<.*?>|\{.*?\}|~.*?~/g, "").toUpperCase();
+    // the prefix is everything before its first override: (CQ) [ITU] <lat/lon> {continent} ~offset~
+    const cut = t.search(/[([<{~]/);
+    const p = (cut < 0 ? t : t.slice(0, cut)).toUpperCase();
     if (p && !prefixes.has(p)) prefixes.set(p, cur.prefix);
   }
 }
