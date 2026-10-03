@@ -3,7 +3,7 @@
 Real-software interoperability tests for the packet stack: the NET/ROM node, the SID-gated FBB
 BBS/forwarding, the AXUDP port, the APRS-IS client, the KISS TCP and AGWPE modem clients and the
 RX-IGate, exercised against the programs actual partners run — LinBPQ, F6FBB, TheNetNode, JNOS,
-aprsc, Direwolf. Three tiers:
+aprsc, Direwolf, the kernel Linux AX.25 stack. Three tiers:
 
 ## Protocol × real-partner coverage
 
@@ -15,6 +15,8 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 | NET/ROM NODES broadcasts (both directions) | LinBPQ, TNN, JNOS | `bpq-loop`, `extra-peers` | acs learns the peer AND the peer learns ACS |
 | AX.25 v2.2 connected mode (SABM/I-frames) | LinBPQ dials our node | `bpq-loop` (`C 1 OE1ACS-7`) | our LAPB answers a real initiator |
 | FBB forwarding (SID · FA/FB proposals · LZHUF B0/B1) | F6FBB over telnet, LinBPQ when its mail app runs | `fbb-forward`, `fbb-smoke` + explicit SKIP in `bpq-loop` | `fbb-forward` runs a full ASCII mail exchange both ways with F6FBB; the local loop asserts the session against our own responder every run |
+| KISS TCP (FEND/FESC escaping · type byte · frame boundaries · UI both ways) | kernel Linux AX.25 (mkiss via `kissnetd`) | `kiss-kernel` | the kernel's mkiss CRC probe (SMACK, then FlexNet) is asserted as it arrives |
+| AX.25 connected mode over KISS (SABM and SABME, I-frames, DISC) | kernel Linux AX.25 + `ax25d` | `kiss-kernel` | our LAPB initiator, modulo 8 and 128, against the kernel's |
 | APRS-IS (login/passcode · server-side filter · stream) | aprsc (the core APRS-IS server) | `aprsis-loop` | beacon travels driver → aprsc → acs ingest → gateway API |
 | KISS TCP (the ingest's KISS TNC client) | Direwolf | `direwolf-loop` | keys one Direwolf, hears the other, over Bell-202 1200 bd AFSK |
 | AGWPE (`X` register · `k` raw monitor · `K` raw send) | Direwolf (AGW port :8000) | `direwolf-loop` | both directions against the KISS client, through the modems |
@@ -24,14 +26,14 @@ Every connection protocol the stack speaks, and which REAL partner implementatio
 
 Not coverable in CI — validated at deploy on real hardware: Web Serial KISS / BLE-KISS /
 Meshtastic over Web Serial / soundcard Bell-202 AFSK (browser + radio hardware), KISS TCP against
-a hardware TNC, AXIP over raw IP proto 93 (needs CAP_NET_RAW both ends; the wire format is
-unit-tested and identical to AXUDP's), and TAK/CoT output consumers. Weather (CWOP) rides the
-same APRS-IS protocol asserted above.
+a hardware TNC (the protocol itself is asserted against the kernel stack and Direwolf above), AXIP
+over raw IP proto 93 (needs CAP_NET_RAW both ends; the wire format is unit-tested and identical to
+AXUDP's), and TAK/CoT output consumers. Weather (CWOP) rides the same APRS-IS protocol asserted above.
 
 The remaining headless-coverable paths are the transport-conformance program in
 [`TODO.md`](../../TODO.md); each leg landing updates this matrix. Active — the core transports:
-KISS TCP vs kernel AX.25 (APRS-IS vs aprsc, KISS TCP + AGWPE + the RX-IGate vs Direwolf, the FBB mail
-exchange vs F6FBB and MeshCom's fixture conformance already run). Parked until after launch: WA8DED hostmode vs tfkiss,
+KISS TCP vs kernel AX.25, APRS-IS vs aprsc, KISS TCP + AGWPE + the RX-IGate vs Direwolf, the FBB mail
+exchange vs F6FBB and MeshCom's fixture conformance all run. Parked until after launch: WA8DED hostmode vs tfkiss,
 AXIP vs ax25ipd, Meshtastic vs meshtasticd, the browser GPLSL drivers under Node, and the client-side
 legs against the Station hub's servers. Every leg that already runs here stays.
 
@@ -60,6 +62,7 @@ Debug tools: `probe-bbs.mjs` (dial any AXUDP BBS and run a no-traffic F-protocol
 | `tnn`    | TheNetNode | AXUDP · NET/ROM (TheNet lineage) | none |
 | `jnos`   | JNOS 2.0 | AXUDP · NET/ROM · FBB fwd | none |
 | `aprsc`  | aprsc (OH7LZB) | APRS-IS (login · filter · stream) | none |
+| `ax25kernel` | kernel AX.25 (mkiss, `kissnetd`, `ax25d`) | KISS TCP :8001 · AX.25 connected mode | privileged + host network + host `ax25`/`mkiss` |
 
 ```bash
 docker compose -f tools/interop/docker-compose.yml up -d acs linbpq
@@ -68,6 +71,9 @@ sudo modprobe ax25                            # host, once — then the FBB tier
 docker compose -f tools/interop/docker-compose.yml --profile fbb up -d
 node tools/interop/tests/fbb-smoke.mjs        # xfbbd up + registration gate asserted
 pnpm -C apps/ingest exec tsx ../../tools/interop/tests/fbb-forward.mjs   # full mail exchange
+sudo bash tools/interop/ax25kernel/load-modules.sh   # host, once — then the kernel AX.25 tier:
+docker compose -f tools/interop/docker-compose.yml --profile ax25kernel up -d --build ax25kernel
+pnpm -C apps/ingest exec tsx ../../tools/interop/tests/kiss-kernel.mjs
 ```
 
 The LinBPQ binary is freeware downloaded at image build (never redistributed here); FBB installs
@@ -153,3 +159,19 @@ over the telnet port as OE1ACS and asserts:
 
 Over kernel AX.25 FBB auto-creates users on first connect, so the AXUDP/ax25ipd leg needs no
 registration.
+
+## Kernel AX.25 runbook
+
+The `ax25kernel/` container puts the kernel's mkiss line discipline behind KISS TCP the way a Linux node
+does: `kissnetd` joins three pseudo-ttys — `kissattach` on one (port `kern`, `OE9KRN-1`), `socat` bridging one
+to TCP :8001, and `axkit tap` logging every frame on the third, still escaped. `axkit mon` logs each frame the
+kernel decoded or sent on its `ax` device, and `ax25d` runs `echo-svc` for a connect to `OE9KRN-2`: it greets
+the caller by the call the kernel decoded, then echoes one I-frame. `axkit ui` sends UI frames through an
+`AF_AX25` socket. `tests/kiss-kernel.mjs` drives our `KissTnc` against it and reads both logs.
+
+The container needs the host network, since AF_AX25 sockets and AX.25 devices exist only in the initial
+network namespace, and the `ax25` and `mkiss` modules on the host. `load-modules.sh` loads them, and builds
+mkiss out of tree from the upstream source of the running kernel's version when the kernel ships without it
+(the Azure kernels of GitHub's runners have `CONFIG_MKISS` unset). The container is ready about 35 s after start:
+`kissnetd` stops relaying to a pty it read before the pty's slave was open, and retries such a pty after 30 idle
+seconds.

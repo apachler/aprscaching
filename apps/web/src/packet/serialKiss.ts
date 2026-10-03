@@ -7,7 +7,7 @@
  * exactly like the RX-only browser ingest — operator-local RF.
  */
 import { encodeFrame, decodeFrame, type Ax25Frame } from "@aprscaching/ax25";
-import { kissFrames, kissWrap } from "@aprscaching/aprs";
+import { KissDecoder, kissWrap } from "@aprscaching/aprs";
 import type { Transport } from "@aprscaching/packet";
 
 interface SerialPortLike {
@@ -26,7 +26,7 @@ export class SerialKissTransport implements Transport {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private closed = false;
-  private buf: number[] = [];
+  private rx = new KissDecoder();
 
   constructor(
     private onFrame: (f: Ax25Frame) => void,
@@ -39,6 +39,7 @@ export class SerialKissTransport implements Transport {
     this.port = await serial.requestPort();
     await this.port.open({ baudRate });
     this.closed = false;
+    this.rx.reset(); // a reopened port must not complete the last session's partial frame
     if (this.port.writable) this.writer = this.port.writable.getWriter();
     void this.readLoop();
   }
@@ -58,13 +59,9 @@ export class SerialKissTransport implements Transport {
   }
 
   private feed(chunk: Uint8Array): void {
-    for (const b of chunk) this.buf.push(b);
-    const lastFend = this.buf.lastIndexOf(0xc0);
-    if (lastFend <= 0) return; // wait for a complete FEND-delimited frame
-    const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
-    this.buf = this.buf.slice(lastFend + 1);
-    for (const raw of kissFrames(ready)) {
-      const f = decodeFrame(raw);
+    for (const k of this.rx.push(chunk)) {
+      if (k.command !== 0) continue; // a KISS command, not a frame
+      const f = decodeFrame(k.frame);
       if (f) this.onFrame(f);
     }
   }

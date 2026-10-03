@@ -29,27 +29,54 @@ export interface KissFrame {
   frame: Uint8Array;
 }
 
-/** Split a KISS byte stream into frames, keeping each one's port and command. */
+/** Split a complete KISS buffer into frames, keeping each one's port and command. */
 export function kissDecode(buf: Uint8Array): KissFrame[] {
-  const out: KissFrame[] = [];
-  let cur: number[] | null = null,
-    esc = false;
-  for (const b of buf) {
-    if (b === FEND) {
-      if (cur && cur.length > 1)
-        out.push({ port: cur[0]! >> 4, command: cur[0]! & 0x0f, frame: Uint8Array.from(cur.slice(1)) });
-      cur = [];
-      esc = false;
-      continue;
+  return new KissDecoder(Infinity).push(buf);
+}
+
+/**
+ * Incremental KISS decoder for a byte stream (TCP, serial, BLE). A frame split across reads is held until
+ * its closing FEND arrives, whatever frames came before it in the same read. Bytes before the first FEND
+ * belong to no frame and are skipped. A frame that grows past `maxBytes` without a closing FEND means the
+ * stream is not KISS: it is dropped and counted in `overflows`, so the buffer stays bounded.
+ */
+export class KissDecoder {
+  private cur: number[] | null = null;
+  private esc = false;
+  overflows = 0;
+  constructor(private readonly maxBytes = 64 * 1024) {}
+
+  /** Feed one read; returns the frames it completed. */
+  push(chunk: Uint8Array): KissFrame[] {
+    const out: KissFrame[] = [];
+    for (const b of chunk) {
+      if (b === FEND) {
+        const cur = this.cur;
+        if (cur && cur.length > 1)
+          out.push({ port: cur[0]! >> 4, command: cur[0]! & 0x0f, frame: Uint8Array.from(cur.slice(1)) });
+        this.cur = [];
+        this.esc = false;
+        continue;
+      }
+      if (this.cur === null) continue;
+      if (this.esc) {
+        this.cur.push(b === TFEND ? FEND : b === TFESC ? FESC : b);
+        this.esc = false;
+      } else if (b === FESC) this.esc = true;
+      else this.cur.push(b);
+      if (this.cur.length > this.maxBytes) {
+        this.overflows++;
+        this.reset();
+      }
     }
-    if (cur === null) continue;
-    if (esc) {
-      cur.push(b === TFEND ? FEND : b === TFESC ? FESC : b);
-      esc = false;
-    } else if (b === FESC) esc = true;
-    else cur.push(b);
+    return out;
   }
-  return out;
+
+  /** Forget a partial frame (a new connection must not complete the last one's). */
+  reset(): void {
+    this.cur = null;
+    this.esc = false;
+  }
 }
 
 /** Wrap a raw AX.25 frame in a KISS data frame (port 0), escaping FEND/FESC. */

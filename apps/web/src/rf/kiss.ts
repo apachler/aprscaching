@@ -13,7 +13,8 @@
  * Tier C — a browser receiver can't self-corroborate to Tier A.
  */
 import {
-  kissFrames,
+  KissDecoder,
+  type KissFrame,
   decodeAx25,
   decodeAprs,
   encodeAx25,
@@ -67,11 +68,12 @@ export function frameToPacket(frame: ParsedFrame, data: AprsData, atSec: number)
   };
 }
 
-/** Decode a complete KISS byte buffer into RF frames (pure; the testable core of the reader). */
-function decodeKissBuffer(buf: Uint8Array, atMs: number): RfFrame[] {
+/** Decode KISS data frames into RF frames (pure; the testable core of the reader). */
+function decodeKissFrames(frames: KissFrame[], atMs: number): RfFrame[] {
   const out: RfFrame[] = [];
-  for (const raw of kissFrames(buf)) {
-    const frame = decodeAx25(raw);
+  for (const k of frames) {
+    if (k.command !== 0) continue; // a KISS command, not a frame
+    const frame = decodeAx25(k.frame);
     if (!frame) continue;
     try {
       const data = decodeAprs(frame);
@@ -85,14 +87,9 @@ function decodeKissBuffer(buf: Uint8Array, atMs: number): RfFrame[] {
 
 /** A KISS byte feeder: buffers a stream and emits RfFrames on each complete FEND-delimited frame. */
 function makeFeeder(onFrame: (f: RfFrame) => void): (chunk: Uint8Array) => void {
-  let buf: number[] = [];
+  const rx = new KissDecoder();
   return (chunk) => {
-    for (const b of chunk) buf.push(b);
-    const lastFend = buf.lastIndexOf(0xc0);
-    if (lastFend <= 0) return; // wait for a complete frame
-    const ready = Uint8Array.from(buf.slice(0, lastFend + 1));
-    buf = buf.slice(lastFend + 1);
-    for (const f of decodeKissBuffer(ready, Date.now())) onFrame(f);
+    for (const f of decodeKissFrames(rx.push(chunk), Date.now())) onFrame(f);
   };
 }
 

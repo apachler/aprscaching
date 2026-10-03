@@ -1,0 +1,12 @@
+#!/bin/bash
+# ax25d runs this on each connect to OE9KRN-2, its stdin and stdout the AX.25 session. It greets the
+# caller by the call and SSID the kernel decoded from the SABM, echoes the next I-frame's data byte for
+# byte, then waits for the caller to disconnect. The session is a SOCK_SEQPACKET socket: one read takes a
+# whole I-frame, so the line is read with dd, never with the shell's byte-at-a-time read.
+export LC_ALL=C
+printf 'KERNEL AX25 interop %s\r' "$1"
+line=$(dd bs=1024 count=1 2>/dev/null) || exit 0
+printf 'ECHO %s' "$line"
+# Hold the session until the caller's DISC ends it, then exit at once: the kernel ignores a new SABM for
+# the same pair of calls while the old session's socket is still open.
+cat >/dev/null 2>&1
