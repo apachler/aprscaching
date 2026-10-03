@@ -18,7 +18,7 @@
  */
 import net from "node:net";
 import { createHmac } from "node:crypto";
-import { decodeAx25, encodeAx25, kissDecode, kissWrap, decodeAprs } from "@aprscaching/aprs";
+import { decodeAx25, encodeAx25, KissDecoder, kissWrap, decodeAprs } from "@aprscaching/aprs";
 import { Backoff } from "./backoff.js";
 
 export interface MeshcomKissOpts {
@@ -51,7 +51,7 @@ export class MeshcomKiss {
   private sock?: net.Socket;
   private state: "down" | "auth" | "ready" | "refused" = "down";
   private text = "";
-  private bytes: number[] = [];
+  private rx = new KissDecoder();
   private backoff: Backoff;
   private authTimer?: ReturnType<typeof setTimeout>;
   private waiting: ((r: KissTxResult) => void)[] = [];
@@ -114,7 +114,7 @@ export class MeshcomKiss {
     this.sock?.removeAllListeners();
     this.sock?.destroy();
     this.text = "";
-    this.bytes = [];
+    this.rx.reset();
     this.state = "auth";
     const s = net.connect(this.o.port, this.o.host);
     this.sock = s;
@@ -173,15 +173,7 @@ export class MeshcomKiss {
   }
 
   private frameData(chunk: Buffer): void {
-    for (const b of chunk) this.bytes.push(b);
-    const last = this.bytes.lastIndexOf(0xc0);
-    if (last <= 0) {
-      if (this.bytes.length > 64 * 1024) this.bytes = [];
-      return;
-    }
-    const ready = Uint8Array.from(this.bytes.slice(0, last + 1));
-    this.bytes = this.bytes.slice(last + 1);
-    for (const k of kissDecode(ready)) {
+    for (const k of this.rx.push(chunk)) {
       if (((k.port << 4) | k.command) === TXRES_TYPE) {
         this.waiting.shift()?.(TXRES[k.frame[0] ?? 0] ?? "bad-frame");
         continue;

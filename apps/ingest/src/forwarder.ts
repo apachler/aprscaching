@@ -10,7 +10,7 @@
  * default link does a single direct connect to the partner call and logs the script for the operator.
  */
 import net from "node:net";
-import { kissWrap, kissFrames } from "@aprscaching/aprs";
+import { kissWrap, KissDecoder } from "@aprscaching/aprs";
 import type { FrameLink } from "./link.js";
 import { TokenBucket } from "./txlimit.js";
 import { gatewayFetch } from "./gatewayauth.js";
@@ -174,7 +174,7 @@ export function kissForwardLink(o: {
   const remote = parseAddr(firstHop);
 
   let sock: net.Socket | null = null;
-  let rxBuf: number[] = [];
+  const rx = new KissDecoder();
   let sequencing = false; // while true, delivered bytes drive the sequencer, not the app
   let seq: ConnectSequencer | null = null;
   const dataCbs: ((b: Uint8Array) => void)[] = [];
@@ -209,13 +209,9 @@ export function kissForwardLink(o: {
         sock = s;
         s.on("connect", () => link.connect());
         s.on("data", (chunk: Buffer) => {
-          for (const b of chunk) rxBuf.push(b);
-          const lastFend = rxBuf.lastIndexOf(0xc0);
-          if (lastFend <= 0) return;
-          const ready = Uint8Array.from(rxBuf.slice(0, lastFend + 1));
-          rxBuf = rxBuf.slice(lastFend + 1);
-          for (const raw of kissFrames(ready)) {
-            const f = decodeFrame(raw);
+          for (const k of rx.push(chunk)) {
+            if (k.command !== 0) continue; // a KISS command, not a frame
+            const f = decodeFrame(k.frame);
             if (f) link.onReceive(f);
           }
         });

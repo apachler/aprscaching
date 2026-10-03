@@ -96,23 +96,19 @@ gate were all found only against real partners). The protocol × partner matrix 
 updates it. Paths CI physically cannot host (Web Serial/BLE KISS, soundcard AFSK on air, real
 radios) stay documented validate-at-deploy entries — visible, never silently absent.
 
-**Additions to the weekly `interop.yml`:**
+**Found by the interop legs:**
 
-- [ ] **KISS TCP vs the kernel Linux AX.25 stack** _(P1 · M)_ — `kissnetd` pty pair bridged to TCP
-      via `socat`, peer services on `ax25d` (privileged job, same host-`modprobe ax25` pattern as the
-      F6FBB leg). Proves FEND/FESC escaping, port nibbles, and frame boundaries against the canonical
-      implementation.
 - [ ] **FBB BIDs within 12 characters** _(P1 · S)_ — F6FBB defers (`FS =`) any proposal whose BID is
       longer than 12 characters, and the gateway's BID is `<id>_<INSTANCE>` (`1_aprscaching.net` is
       17), so a real FBB partner never takes our mail. Derive a short BID that stays unique per instance
       (the `own`-BID check in `bbs.ts` reads the current shape) and assert it in `fbb-forward`.
 
-Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom: the kernel KISS leg above,
-KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (running in the weekly
-`transports.yml`), APRS-IS against aprsc (running), and MeshCom's golden-fixture conformance on Node, Bun and workerd
-(`pnpm conformance:meshcom`, running; a live node stays validate-at-deploy). The legs already running
-in `interop.yml` — the local AXUDP loop, LinBPQ, F6FBB, aprsc, TNN/JNOS — stay: they guard the shipped
-NET/ROM node and FBB/BBS code.
+Active scope is the core transports — KISS, AGWPE, APRS-IS and MeshCom, and every one runs: KISS TCP
+against the kernel AX.25 stack, the full FBB mail exchange against F6FBB, APRS-IS against aprsc (all in
+`interop.yml`), KISS TCP, AGWPE and the RX-IGate against two Direwolf modems over Bell-202 AFSK (the weekly
+`transports.yml`), and MeshCom's golden-fixture conformance on Node, Bun and workerd (`pnpm
+conformance:meshcom`; a live node stays validate-at-deploy). The local AXUDP loop, LinBPQ and TNN/JNOS legs
+stay too: they guard the shipped NET/ROM node and FBB/BBS code.
 
 **Parked conformance legs** — planned, not scheduled before launch; each is picked up when its
 transport becomes core:

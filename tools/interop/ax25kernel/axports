@@ -1,0 +1,2 @@
+# name callsign speed paclen window description
+kern OE9KRN-1 9600 255 4 kernel AX.25 behind KISS TCP

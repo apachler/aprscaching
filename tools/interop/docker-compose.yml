@@ -99,6 +99,15 @@ services:
       - "10152:10152" # full feed
     networks: [packet]
 
+  ax25kernel:
+    profiles: [ax25kernel]
+    build: ./ax25kernel
+    # The kernel AX.25 stack behind KISS TCP :8001 (kissnetd + socat). AF_AX25 sockets and AX.25 devices
+    # exist only in the initial network namespace, so this runs on the host network, privileged, with the
+    # ax25 and mkiss modules loaded on the HOST (sudo modprobe ax25 mkiss).
+    privileged: true
+    network_mode: host
+
 networks:
   packet:
     ipam:
