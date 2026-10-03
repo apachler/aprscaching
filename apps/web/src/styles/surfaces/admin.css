@@ -108,6 +108,18 @@
     letter-spacing: 0.08em;
     user-select: all;
   }
+  /* "Trust this station's hearings" under an enrolled box: the switch row, then the site form or the finds */
+  .box-trust {
+    margin-top: var(--space-xs);
+    padding-left: var(--space-sm);
+    border-left: 1px solid var(--hair);
+  }
+  .box-trust .setrow {
+    padding-block: var(--space-2xs);
+  }
+  .box-trust .partner-form {
+    margin-block: var(--space-xs);
+  }
   /* Setup checklist rows: status + name on one line, the detail beneath; side by side when there is room */
   .setup-list {
     list-style: none;

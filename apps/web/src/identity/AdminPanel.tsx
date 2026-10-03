@@ -31,6 +31,13 @@ import {
   listEnrolledBoxes,
   createBoxCode,
   revokeBox,
+  setBoxTrust,
+  getBoxFinds,
+  listTrustedStations,
+  addTrustedStation,
+  removeTrustedStation,
+  getStationFinds,
+  type TrustedStation,
   type EnrolledBox,
   getAdminAdoptions,
   offerForAdoption,
@@ -50,6 +57,7 @@ import {
   Button,
   Panel,
   Group,
+  Row,
   Badge,
   EmptyState,
   ErrorState,
@@ -133,8 +141,13 @@ export function AdminPanel(props: { onDocs: (slug: string) => void; onClose: () 
           <ForwardingAdmin />
         </Group>
       )}
-      {show("boxes", "ingest", "enroll", "code", "revoke", "key") && (
-        <Group title="Ingest boxes" status="enrollment" defaultOpen={false}>
+      {show("trusted", "stations", "sites", "receiving", "tier a", "trust", "first_party_sites") && (
+        <Group title="Trusted receiving stations" status="Radio-verified finds" defaultOpen={false}>
+          <TrustedStationsAdmin />
+        </Group>
+      )}
+      {show("boxes", "ingest", "enroll", "code", "revoke", "key", "trust", "lend", "receiver") && (
+        <Group title="Ingest boxes" status="enrollment & trust" defaultOpen={false}>
           <BoxesAdmin />
         </Group>
       )}
@@ -382,13 +395,146 @@ function VerificationAdmin() {
   );
 }
 
+// ---------------------------------------------------------------- trusted receiving stations
+
+const SOURCE_LABEL: Record<TrustedStation["source"], string> = {
+  config: "set in configuration",
+  admin: "added here",
+  box: "enrolled box",
+};
+
+/**
+ * The receiving stations whose direct hearings verify finds (Tier A, Radio-verified). The sysop adds a station by
+ * its site call — their own box on the shared ingest secret, say — and removes it again. Stations preset in
+ * FIRST_PARTY_SITES are listed read-only, and an enrolled box's trust is switched under Ingest boxes. Each
+ * station shows since when and by whom it is trusted, and the finds it verified.
+ */
+function TrustedStationsAdmin() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const list = useLoad(() => listTrustedStations(), []);
+  const [site, setSite] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const call = site.trim().toUpperCase();
+
+  const add = async () => {
+    if (!CALL_RE.test(call)) {
+      setFormErr("Enter the station's site call, such as OE8ABC-10.");
+      return;
+    }
+    setSaving(true);
+    setFormErr(null);
+    try {
+      await addTrustedStation(call);
+      toast(`${call} trusted`);
+      setSite("");
+      list.reload();
+    } catch (e) {
+      setFormErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const remove = async (s: TrustedStation) => {
+    if (
+      !(await confirmDialog({
+        title: `Stop trusting ${s.site}?`,
+        message: "Its hearings stop counting for Radio-verified finds at once. Finds it verified keep their tier.",
+        confirmLabel: "Stop trusting",
+        danger: true,
+      }))
+    )
+      return;
+    try {
+      await removeTrustedStation(s.site);
+      toast(`${s.site} no longer trusted`);
+      list.reload();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  const sites = list.data?.sites;
+
+  return (
+    <>
+      <p className="muted fine">
+        A find is Radio-verified only when one of these stations heard the player directly on its own receiver, through
+        its ingest box. A station never verifies its own operator&apos;s finds.
+      </p>
+      <div className="partner-form">
+        <label>
+          Site call
+          <input
+            className="mono"
+            placeholder="OE8ABC-10"
+            value={site}
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={!!formErr}
+            aria-describedby="trusted-site-help"
+            onChange={(e) => setSite(e.target.value)}
+          />
+        </label>
+        <p id="trusted-site-help" className="muted fine">
+          The call a receiver you vouch for stamps on what it hears. Trust a lent box under Ingest boxes instead.
+        </p>
+        <div className="row end">
+          <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void add()}>
+            {saving ? "Adding…" : "Trust station"}
+          </Button>
+        </div>
+      </div>
+      {formErr && (
+        <p className="error fine" role="alert">
+          {formErr}
+        </p>
+      )}
+      {list.error ? (
+        <ErrorState onRetry={list.reload}>Couldn&apos;t load the stations.</ErrorState>
+      ) : sites === undefined ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : sites.length === 0 ? (
+        <EmptyState>
+          No trusted station: no find here is Radio-verified. Add your receiver&apos;s site call above.
+        </EmptyState>
+      ) : (
+        <ul className="logs">
+          {sites.map((s) => (
+            <li key={`${s.source}-${s.box ?? ""}-${s.site}`}>
+              <span className="mono">{s.site}</span>{" "}
+              <Badge kind={s.source === "config" ? undefined : "found"}>{SOURCE_LABEL[s.source]}</Badge>
+              {s.source === "box" && <span className="muted"> · {s.boxLabel ?? s.box}</span>}
+              {s.source === "admin" && (
+                <Button variant="inline-danger" aria-label={`Stop trusting ${s.site}`} onClick={() => void remove(s)}>
+                  Remove
+                </Button>
+              )}
+              <div className="comment">
+                {s.trustedAt
+                  ? `trusted since ${fmt.date(s.trustedAt)} by ${s.trustedByCall ?? s.trustedBy}`
+                  : "FIRST_PARTY_SITES · change it in the configuration"}
+              </div>
+              <VerifiedFinds id={s.site} sites={[s.site]} load={() => getStationFinds(s.site)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- ingest box enrollment
 
 /**
  * Let an ingest box in without handing it the shared INGEST_SECRET: a one-time code, typed on the box
  * (`deploy/aprscaching init ingest-box`), registers the box's own key. Each box is listed with when it was last
  * seen, and revoking one cuts that box off alone. Enrolling grants no trust: a box's receiving site counts for
- * Tier A only once it is listed in FIRST_PARTY_SITES.
+ * Tier A only once it is listed in FIRST_PARTY_SITES, or once the sysop switches on "Trust this station's
+ * hearings" for the box — the way a ham lends their own receiver to this instance.
  */
 function BoxesAdmin() {
   const toast = useToast();
@@ -447,8 +593,8 @@ function BoxesAdmin() {
     <>
       <p className="muted fine">
         A one-time code lets a box in with its own key, so it needs no copy of the shared ingest secret and you can
-        revoke it alone. Enrolling grants no trust: list the box&apos;s receiving site in{" "}
-        <span className="mono">FIRST_PARTY_SITES</span> for Tier A.
+        revoke it alone. Enrolling grants no trust: for Radio-verified finds, switch on the box&apos;s trust below or
+        list its receiving site in <span className="mono">FIRST_PARTY_SITES</span>.
       </p>
       <div className="partner-form">
         <label>
@@ -544,11 +690,175 @@ function BoxesAdmin() {
                     ? ` · last seen ${fmt.ago(b.lastSeenAt)}`
                     : " · not seen yet"}
               </div>
+              {!b.revokedAt && <BoxTrustRow box={b} onChanged={refresh} />}
             </li>
           ))}
         </ul>
       )}
     </>
+  );
+}
+
+/**
+ * "Trust this station's hearings" for one enrolled box: off by default. Switching it on asks for the receiving
+ * site call the box hears with (a box limited to a callsign takes only sites of that call; the gateway refuses
+ * any other); on, it shows since when and by whom, and the finds the station verified. Switching it off asks
+ * first, since the station's hearings stop counting for Tier A at once.
+ */
+function BoxTrustRow(props: { box: EnrolledBox; onChanged: () => void }) {
+  const { box: b } = props;
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const fmt = useFmt();
+  const [asking, setAsking] = useState(false);
+  const [sites, setSites] = useState(b.callsign ? `${b.callsign}-10` : "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const name = b.label ?? b.box;
+  const trust = b.trust;
+  const siteList = sites
+    .toUpperCase()
+    .split(/[,\s]+/)
+    .filter(Boolean);
+  const sitesOk = siteList.length > 0 && siteList.every((s) => CALL_RE.test(s));
+  const fieldId = `trust-sites-${b.box}`;
+
+  const turnOn = async () => {
+    if (!sitesOk) {
+      setErr("Enter the receiving site call, such as OE8ABC-10.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      await setBoxTrust(b.box, true, siteList);
+      toast(`${name}: hearings trusted`);
+      setAsking(false);
+      props.onChanged();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const turnOff = async () => {
+    if (
+      !(await confirmDialog({
+        title: `Stop trusting ${name}?`,
+        message: "Its hearings stop counting for Radio-verified finds at once. Finds it verified keep their tier.",
+        confirmLabel: "Stop trusting",
+        danger: true,
+      }))
+    )
+      return;
+    setSaving(true);
+    try {
+      await setBoxTrust(b.box, false);
+      toast(`${name}: hearings no longer trusted`);
+      props.onChanged();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const help = trust
+    ? `Trusted since ${fmt.date(trust.trustedAt)} by ${trust.trustedByCall ?? trust.trustedBy}`
+    : "Off: what this box hears never verifies a find.";
+
+  return (
+    <div className="box-trust">
+      <Row label="Trust this station's hearings" help={help}>
+        <Badge kind={trust ? "found" : undefined}>{trust ? "trusted" : "not trusted"}</Badge>
+        <Switch
+          label={`Trust ${name}'s hearings`}
+          checked={!!trust || asking}
+          disabled={saving}
+          onChange={(v) => (v ? setAsking(true) : trust ? void turnOff() : setAsking(false))}
+        />
+      </Row>
+      {asking && !trust && (
+        <div className="partner-form">
+          <label htmlFor={fieldId}>
+            Receiving site call
+            <input
+              id={fieldId}
+              className="mono"
+              placeholder={b.callsign ? `${b.callsign}-10` : "OE8ABC-10"}
+              value={sites}
+              autoCapitalize="characters"
+              spellCheck={false}
+              aria-invalid={!!err}
+              aria-describedby={`${fieldId}-help`}
+              onChange={(e) => setSites(e.target.value)}
+            />
+          </label>
+          <p id={`${fieldId}-help`} className="muted fine">
+            {b.callsign
+              ? `The call the box stamps on what it hears; this box takes only ${b.callsign} sites.`
+              : "The call the box stamps on what it hears. Limit lent boxes to the lender's callsign."}
+          </p>
+          {err && (
+            <p className="error fine" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="row end">
+            <Button variant="inline" onClick={() => setAsking(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" disabled={saving} aria-busy={saving} onClick={() => void turnOn()}>
+              {saving ? "Trusting…" : "Trust hearings"}
+            </Button>
+          </div>
+        </div>
+      )}
+      {trust && <VerifiedFinds named id={b.box} sites={trust.sites} load={() => getBoxFinds(b.box)} />}
+    </div>
+  );
+}
+
+/** The finds a trusted station verified since it was trusted: the count in the label, the latest on open. */
+function VerifiedFinds(props: {
+  load: () => Promise<{ count: number; recent: { code: string; loggerCall: string; ts: number; site: string }[] }>;
+  sites: string[];
+  /** name the sites in the label (a box can attest several) */
+  named?: boolean;
+  /** what identifies the station, so a change reloads */
+  id: string;
+}) {
+  const fmt = useFmt();
+  const finds = useLoad(() => props.load(), [props.id, props.sites.join(",")]);
+  const n = finds.data?.count;
+  const label = finds.error
+    ? "Verified finds"
+    : n === undefined
+      ? "Verified finds…"
+      : `Verified ${n} find${n === 1 ? "" : "s"}${props.named ? ` · ${props.sites.join(", ")}` : ""}`;
+  return (
+    <Disclosure label={label}>
+      {finds.error ? (
+        <ErrorState onRetry={finds.reload}>Couldn&apos;t load the finds.</ErrorState>
+      ) : !finds.data ? (
+        <p className="muted" role="status">
+          Loading…
+        </p>
+      ) : finds.data.recent.length === 0 ? (
+        <EmptyState>No find verified by this station yet.</EmptyState>
+      ) : (
+        <ul className="logs">
+          {finds.data.recent.map((f) => (
+            <li key={`${f.code}-${f.loggerCall}`}>
+              <span className="mono">{f.code}</span> · <span className="mono">{f.loggerCall}</span>
+              <span className="muted">
+                {" "}
+                · {fmt.ago(f.ts)} · heard by <span className="mono">{f.site}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Disclosure>
   );
 }
 

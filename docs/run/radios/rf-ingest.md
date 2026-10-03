@@ -64,9 +64,20 @@ for a receiving site or MeshCom node the gateway's `FIRST_PARTY_SITES` does not 
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local
 TNCs (KISS, AGWPE or WA8DED host mode) hears **directly** carries that callsign to the gateway. A gateway that
-lists the call in `FIRST_PARTY_SITES` counts those frames as RF-corroborated evidence for Tier A, with no
-APRS-IS round trip, so it works off-grid too. The gateway's independence rule still keeps your own receiver
-from corroborating your own finds.
+trusts the call counts those frames as RF-corroborated evidence for Tier A, with no APRS-IS round trip, so it
+works off-grid too. The gateway's independence rule still keeps your own receiver from corroborating your own
+finds.
+
+The sysop trusts a receiving station in one of three ways:
+
+| Where | For | Changed by |
+|---|---|---|
+| **Instance admin → Trusted receiving stations**: **Trust station** with its site call | A receiver you operate, such as your own box on the shared `INGEST_SECRET` | The sysop, in the app: add and remove |
+| **Instance admin → Ingest boxes**: **Trust this station's hearings** on an enrolled box | A receiver a ham lends to your instance ([Lend your receiver to an instance](lend-a-receiver.md)) | The sysop, in the app: switch on and off; revoking the box ends it |
+| `FIRST_PARTY_SITES` on the gateway | Presetting trusted stations from configuration: CI, scripted deploys, an off-grid Desktop or Pocket | The configuration; listed read-only in the app as **set in configuration** |
+
+Instance admin is the primary way. Every trusted station shows there with since when and by whom it is trusted,
+and the finds it verified. Nothing is trusted until you add it: Tier A stays closed until then.
 
 A frame counts as heard directly only when no path hop shows a relay:
 
@@ -87,7 +98,7 @@ IGate's receiver (its TNC as a KISS, AGWPE or host-mode port, with `RF_SITE_CALL
 through the box's own credential.
 
 A MeshCom node is a receiving site in the same way: only a frame it heard directly over LoRa names it, and
-only when its call is in `FIRST_PARTY_SITES` ([How MeshCom traffic is trusted](meshcom.md#how-meshcom-traffic-is-trusted)).
+only when its call is trusted ([How MeshCom traffic is trusted](meshcom.md#how-meshcom-traffic-is-trusted)).
 
 !!! warning "Only a TNC you operate"
     `RF_SITE_CALL` vouches that **your** receiver heard the frame. If `KISS_TNC_HOST` (or `AGWPE_HOST`,

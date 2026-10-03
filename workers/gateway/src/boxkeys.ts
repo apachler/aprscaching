@@ -7,7 +7,9 @@
  *
  *   POST /api/admin/boxes/codes        create a code {label?, callsign?, ttlMin?} → {code, expiresAt} (sysop)
  *   GET  /api/admin/boxes              enrolled boxes and the codes still open (sysop)
- *   POST /api/admin/boxes/:id/revoke   revoke a box's key (sysop)
+ *   POST /api/admin/boxes/:id/revoke   revoke a box's key, and with it any trust (sysop)
+ *   POST /api/admin/boxes/:id/trust    trust the box's receiving sites, or stop: {trusted, sites?} (sysop)
+ *   GET  /api/admin/boxes/:id/finds    the finds a trusted box's sites verified (sysop)
  *   POST /ingest/enroll                a box enrolls: {code, box, key, at, sig} → {box, instance, label, callsign}
  *
  * A signed request carries x-box-id, x-box-at (unix seconds), x-box-nonce and x-box-sig, an Ed25519
@@ -16,9 +18,12 @@
  * runs; a request it verifies holds the ingest plane's rights (ingestSecretOk), scoped to that box where an
  * endpoint names a box.
  *
- * Trust is unchanged: an enrolled box is an ingest credential, never an attestation. What it hears counts
- * for Tier A only when the sysop lists its receiving site in FIRST_PARTY_SITES, as for a box on the shared
- * secret. A box enrolled for a callsign is narrower still: it may name only sites of that base call.
+ * Enrolling grants no trust: an enrolled box is an ingest credential, never an attestation. What it hears
+ * counts for Tier A only once the sysop attests its receiving site — in FIRST_PARTY_SITES, as for a box on the
+ * shared secret, or with "Trust this station's hearings" in Instance admin (box_trusted_sites), which lets a ham
+ * lend their own receiver to an instance they do not run. A box enrolled for a callsign is narrower still: it
+ * may name only sites of that base call, and it is trusted only for sites of that base call. Revoking the box
+ * ends its trust.
  */
 import { SIG_DOMAIN, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
@@ -31,6 +36,8 @@ import { sessionIdentity } from "./auth.js";
 import { clientIp, rateLimitedDurable } from "./corroborate_privacy.js";
 import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
+import { forgetAttestedSites } from "./attestedsites.js";
+import { SITE_CALL, verifiedFinds } from "./trustedsites.js";
 
 /** A signature is fresh this long either side of the gateway's clock. */
 const FRESH_S = 300;
@@ -45,6 +52,8 @@ const ENROLL_WINDOW_MS = 15 * 60_000;
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const BOX_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const CALL = /^[A-Z0-9]{3,9}$/;
+/** Sites one box may attest: a station has a receiver or two, rarely more. */
+const SITES_MAX = 8;
 
 const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
@@ -98,14 +107,136 @@ export async function handleListBoxes(req: Request, env: Env): Promise<Response>
     `SELECT box_id AS box, label, callsign, enrolled_by AS enrolledBy, enrolled_at AS enrolledAt,
             revoked_by AS revokedBy, revoked_at AS revokedAt, last_seen_at AS lastSeenAt
        FROM box_keys ORDER BY enrolled_at DESC`,
-  ).all();
+  ).all<{ box: string } & Record<string, unknown>>();
   const open = await env.DB.prepare(
     `SELECT label, callsign, created_at AS createdAt, expires_at AS expiresAt
        FROM box_enrollment_codes WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at DESC`,
   )
     .bind(nowS())
     .all();
-  return json({ boxes: boxes.results ?? [], openCodes: open.results ?? [] });
+  const trust = await env.DB.prepare(
+    `SELECT t.box_id AS box, t.site, t.trusted_by AS trustedBy, t.trusted_at AS trustedAt,
+            (SELECT a.callsign FROM accounts a WHERE a.account_id = t.trusted_by LIMIT 1) AS trustedByCall
+       FROM box_trusted_sites t ORDER BY t.site`,
+  ).all<TrustRow & { box: string }>();
+  const byBox = new Map<string, TrustRow[]>();
+  for (const r of trust.results ?? []) byBox.set(r.box, [...(byBox.get(r.box) ?? []), r]);
+  const list = (boxes.results ?? []).map((b) => ({
+    ...b,
+    trust: trustOf(byBox.get(b.box) ?? []),
+  }));
+  return json({ boxes: list, openCodes: open.results ?? [] });
+}
+
+interface TrustRow {
+  site: string;
+  trustedBy: string;
+  trustedAt: number;
+  trustedByCall: string | null;
+}
+
+/** A box's trust as the admin reads it: its sites, and who switched it on and when (the earliest site). */
+function trustOf(rows: TrustRow[]) {
+  if (rows.length === 0) return null;
+  const first = rows.reduce((a, b) => (b.trustedAt < a.trustedAt ? b : a));
+  return {
+    sites: rows.map((r) => r.site),
+    trustedBy: first.trustedBy,
+    trustedByCall: first.trustedByCall ? baseCall(first.trustedByCall) : null,
+    trustedAt: first.trustedAt,
+  };
+}
+
+/** A box's trusted sites, with the sysop's call where the account still exists. */
+async function trustRows(env: Env, box: string): Promise<TrustRow[]> {
+  const rows = await env.DB.prepare(
+    `SELECT site, trusted_by AS trustedBy, trusted_at AS trustedAt,
+            (SELECT a.callsign FROM accounts a WHERE a.account_id = trusted_by LIMIT 1) AS trustedByCall
+       FROM box_trusted_sites WHERE box_id = ? ORDER BY site`,
+  )
+    .bind(box)
+    .all<TrustRow>();
+  return rows.results ?? [];
+}
+
+/**
+ * POST /api/admin/boxes/:id/trust {trusted, sites?} — "Trust this station's hearings". On, the box's
+ * receiving sites count for Tier A beside FIRST_PARTY_SITES, recording who switched it on and when; off, the
+ * box's trust is deleted. Only an enrolled, unrevoked box is trusted, and a box enrolled for a callsign only
+ * for sites of that base call.
+ */
+export async function handleTrustBox(req: Request, env: Env, box: string): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
+  const b = ((await req.json().catch(() => ({}))) ?? {}) as { trusted?: unknown; sites?: unknown };
+  if (typeof b.trusted !== "boolean") return json({ error: "trusted (true or false) is required" }, { status: 400 });
+  const row = await env.DB.prepare("SELECT callsign FROM box_keys WHERE box_id = ? AND revoked_at IS NULL")
+    .bind(box)
+    .first<{ callsign: string | null }>();
+  if (!row) return json({ error: "no enrolled box with that id, or it is revoked" }, { status: 404 });
+
+  if (!b.trusted) {
+    await env.DB.prepare("DELETE FROM box_trusted_sites WHERE box_id = ?").bind(box).run();
+    forgetAttestedSites(env);
+    return json({ box, trust: null });
+  }
+
+  const raw = Array.isArray(b.sites) ? b.sites : typeof b.sites === "string" ? b.sites.split(/[,\s]+/) : [];
+  const sites = [
+    ...new Set(
+      raw
+        .filter((s): s is string => typeof s === "string")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (sites.length === 0) return json({ error: "name the receiving site call the box hears with" }, { status: 400 });
+  if (sites.length > SITES_MAX) return json({ error: `at most ${SITES_MAX} sites per box` }, { status: 400 });
+  const bad = sites.find((s) => !SITE_CALL.test(s));
+  if (bad) return json({ error: `${bad} is not a station call` }, { status: 400 });
+  if (row.callsign) {
+    const foreign = sites.find((s) => baseCall(s) !== row.callsign);
+    if (foreign)
+      return json(
+        { error: `this box is enrolled for ${row.callsign}; it can be trusted only for ${row.callsign} sites` },
+        { status: 403 },
+      );
+  }
+
+  // The new site list replaces the old; a site kept keeps its trusted-since time and who switched it on.
+  const who = await actor(req, env);
+  const now = nowS();
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM box_trusted_sites WHERE box_id = ? AND site NOT IN (${sites.map(() => "?").join(",")})`,
+    ).bind(box, ...sites),
+    ...sites.map((s) =>
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO box_trusted_sites (box_id, site, trusted_by, trusted_at) VALUES (?,?,?,?)",
+      ).bind(box, s, who, now),
+    ),
+  ]);
+  forgetAttestedSites(env);
+  console.log(`box ${box} trusted for ${sites.join(", ")} by ${who}`);
+  return json({ box, trust: trustOf(await trustRows(env, box)) });
+}
+
+/**
+ * GET /api/admin/boxes/:id/finds — what a trusted box has done for the instance: the finds verified at Tier A
+ * on this instance by a hearing at one of its sites since it was trusted (trustedsites.ts verifiedFinds).
+ */
+export async function handleBoxFinds(req: Request, env: Env, box: string): Promise<Response> {
+  const denied = await requireSysop(req, env, { allowOperatorSecret: true });
+  if (denied) return denied;
+  const known = await env.DB.prepare("SELECT 1 AS x FROM box_keys WHERE box_id = ?").bind(box).first();
+  if (!known) return json({ error: "no enrolled box with that id" }, { status: 404 });
+  const trust = trustOf(await trustRows(env, box));
+  if (!trust) return json({ box, trust: null, count: 0, recent: [] });
+  const finds = await verifiedFinds(
+    env,
+    trust.sites.map((site) => ({ site, since: trust.trustedAt })),
+  );
+  return json({ box, trust, ...finds });
 }
 
 /** POST /api/admin/boxes/:id/revoke — the box's key stops verifying at once. */
@@ -119,6 +250,9 @@ export async function handleRevokeBox(req: Request, env: Env, box: string): Prom
     .run();
   if (!r.meta?.changes)
     return json({ error: "no enrolled box with that id, or it is revoked already" }, { status: 404 });
+  // a revoked box's sites stop counting for Tier A with its key
+  await env.DB.prepare("DELETE FROM box_trusted_sites WHERE box_id = ?").bind(box).run();
+  forgetAttestedSites(env);
   return json({ box, revoked: true });
 }
 
@@ -174,7 +308,8 @@ export async function handleEnroll(req: Request, env: Env): Promise<Response> {
     .first<{ label: string | null; callsign: string | null; createdBy: string }>();
   if (!used) return json({ error: "the code is wrong, used or expired" }, { status: 403 });
 
-  // A revoked box enrolls anew under its id with the fresh key.
+  // A revoked box enrolls anew under its id with the fresh key, and with no trust: the sysop decides again.
+  await env.DB.prepare("DELETE FROM box_trusted_sites WHERE box_id = ?").bind(box).run();
   await env.DB.prepare(
     `INSERT INTO box_keys (box_id, public_key, label, callsign, enrolled_by, enrolled_at)
      VALUES (?,?,?,?,?,?)

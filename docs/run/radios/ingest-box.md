@@ -40,7 +40,7 @@ A box proves itself to its gateway in one of two ways:
 | **The shared secret** | `INGEST_SECRET`, the same as the gateway's | No: changing it cuts off every box on it | A single-operator setup |
 
 Boxes on the shared secret keep working beside enrolled ones. Neither credential is an attestation: what a
-box hears counts for Tier A only when the gateway lists its receiving site in `FIRST_PARTY_SITES`
+box hears counts for Tier A only once the gateway's sysop trusts its receiving site
 ([Receiving site and Tier A](rf-ingest.md#receiving-site-and-tier-a)). Never put the gateway's
 `OPERATOR_SECRET` or `SESSION_SECRET` on a box.
 
@@ -56,11 +56,16 @@ The gateway's sysop does this part.
 3. The box appears under **Enrolled boxes**, with when it was enrolled and last seen. When you created the
    code while signed in, you own the box for [remote control](remote-box.md) without a separate pairing
    step.
-4. To cut a box off, select **Revoke** beside it. Its key stops working at once; it comes back only with a
-   fresh code and a new key.
+4. For its hearings to verify finds, switch on **Trust this station's hearings** under the box and enter the
+   receiving site call it stamps on what it hears. A box limited to a callsign takes only sites of that call.
+   The box then shows since when and by whom it is trusted, and the finds it verified. A box that a ham lends
+   you works the same way: [Lend your receiver to an instance](lend-a-receiver.md).
+5. To cut a box off, select **Revoke** beside it. Its key stops working at once and its trust ends; it comes
+   back only with a fresh code and a new key, and untrusted.
 
 The same works over the API, as the sysop or with `OPERATOR_SECRET`: `POST /api/admin/boxes/codes` (fields
-`label`, `callsign`, `ttlMin` from 10 to 15), `GET /api/admin/boxes` and `POST /api/admin/boxes/<id>/revoke`
+`label`, `callsign`, `ttlMin` from 10 to 15), `GET /api/admin/boxes`, `POST /api/admin/boxes/<id>/trust`
+(`{trusted, sites}`), `GET /api/admin/boxes/<id>/finds` and `POST /api/admin/boxes/<id>/revoke`
 ([API reference](../../reference/api.md)). The code and box records, with who created, enrolled and revoked
 each, are the enrollment's audit trail.
 
@@ -151,3 +156,4 @@ the operator's own equipment, so a cloud feed never replaces a box next to the r
 
 - [Connect a radio: quick starts](quick-starts.md): one section per radio link.
 - [Remote control of your box](remote-box.md): drive the box from the web app.
+- [Lend your receiver to an instance](lend-a-receiver.md): the same box, helping an instance you do not run.

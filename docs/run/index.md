@@ -26,7 +26,8 @@ An instance has two parts that deploy separately:
    [Self-host without Docker](install/self-host-bare-metal.md), [Desktop](install/desktop.md),
    [Cloudflare split](install/cloudflare-split.md) or [Pocket](install/pocket.md).
 3. [Your first hour](first-hour.md): from "it answers" to a public, verified, backed-up instance.
-4. Connect radios: start with the [quick starts](radios/quick-starts.md).
+4. Connect radios: start with the [quick starts](radios/quick-starts.md). Hams can also
+   [lend their receivers](radios/lend-a-receiver.md) to your instance.
 5. Networks: [off-grid](networks/off-grid.md), [Cloudflare](networks/cloudflare.md),
    [44Net](networks/44net.md), [HAMNET](networks/hamnet.md).
 6. [Join the network](federation/index.md): federation with other instances.

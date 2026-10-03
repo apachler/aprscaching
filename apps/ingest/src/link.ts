@@ -40,9 +40,9 @@ function hopUsed(hop: string): boolean {
  * relayed it (see {@link hopUsed}) — is stamped: a digipeated frame proves the originator was near the
  * digipeater, not near this receiver. The rule is conservative: a frame whose originator set a first
  * hop such as `WIDE2-1` is indistinguishable from a decremented `WIDE2-2` and names no site. The stamp only
- * names the site; the gateway attests it (and lifts the frame toward Tier A) solely when the call is in
- * FIRST_PARTY_SITES, and its independence rule keeps an operator's own receiver from corroborating the
- * operator's own finds. No site call configured (`RF_SITE_CALL`, default `IGATE_CALL`) → no stamp.
+ * names the site; the gateway attests it (and lifts the frame toward Tier A) solely when its sysop trusts the
+ * call (Instance admin or FIRST_PARTY_SITES), and its independence rule keeps an operator's own receiver
+ * from corroborating the operator's own finds. No site call configured (`RF_SITE_CALL`, default `IGATE_CALL`) → no stamp.
  */
 export function directSiteCall(path: string[], siteCall: string | undefined): string | undefined {
   if (!siteCall?.trim()) return undefined;

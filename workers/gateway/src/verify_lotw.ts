@@ -126,8 +126,8 @@ export async function verifyLotwChain(ders: Uint8Array[], anchors: Certificate[]
  * GET /verify/methods — which verification methods this instance offers. On-air verification needs an
  * attested receiving site; `rfSites` names the ones listening.
  */
-export function verifyMethods(env: Env): Response {
-  const rfSites = listeningSites(env);
+export async function verifyMethods(env: Env): Promise<Response> {
+  const rfSites = await listeningSites(env);
   return json({
     methods: { rf_heard: rfSites.length > 0, ampr_dns: true, lotw: lotwAnchors(env).length > 0 },
     rfSites,

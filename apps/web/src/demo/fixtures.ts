@@ -30,7 +30,10 @@ import type {
 } from "@aprscaching/shared";
 import type {
   AdminAdoptions,
+  BoxFinds,
+  EnrolledBox,
   FederationSync,
+  TrustedStation,
   Licence,
   LogResult,
   SetupItem,
@@ -621,6 +624,61 @@ const SEARCH: SearchResults = {
 };
 
 let nearRadio = false;
+// Instance admin → Ingest boxes: the sysop's own box, and a receiver a neighbouring ham lends, trusted
+const BOXES: EnrolledBox[] = [
+  {
+    box: "shack-pi",
+    label: "Shack Pi",
+    callsign: null,
+    enrolledBy: "demo-sysop",
+    enrolledAt: NOW - 60 * DAY,
+    revokedBy: null,
+    revokedAt: null,
+    lastSeenAt: NOW - 120,
+    trust: null,
+  },
+  {
+    box: "oe6xyz-hill",
+    label: "Schöckl receiver",
+    callsign: "OE6XYZ",
+    enrolledBy: "demo-sysop",
+    enrolledAt: NOW - 21 * DAY,
+    revokedBy: null,
+    revokedAt: null,
+    lastSeenAt: NOW - 300,
+    trust: { sites: ["OE6XYZ-10"], trustedBy: "demo-sysop", trustedByCall: "OE6XGR", trustedAt: NOW - 20 * DAY },
+  },
+];
+// Instance admin → Trusted receiving stations: the configuration's preset, one added here, the trusted lent box
+const trustedStations = (): TrustedStation[] => [
+  { site: "OE6XGR-10", source: "config", trustedBy: null, trustedByCall: null, trustedAt: null },
+  ...BOXES.flatMap((b) =>
+    (b.trust?.sites ?? []).map((site): TrustedStation => ({
+      site,
+      source: "box",
+      box: b.box,
+      boxLabel: b.label,
+      trustedBy: b.trust!.trustedBy,
+      trustedByCall: b.trust!.trustedByCall,
+      trustedAt: b.trust!.trustedAt,
+    })),
+  ),
+  { site: "OE6XGR-12", source: "admin", trustedBy: "demo-sysop", trustedByCall: "OE6XGR", trustedAt: NOW - 45 * DAY },
+];
+const boxFinds = (box: string): BoxFinds => {
+  const b = BOXES.find((x) => x.box === box);
+  if (!b?.trust) return { box, trust: null, count: 0, recent: [] };
+  return {
+    box,
+    trust: b.trust,
+    count: 7,
+    recent: [
+      { code: "AC-7Q2K", loggerCall: "OE6ABC", ts: NOW - 2 * 3600, site: "OE6XYZ-10" },
+      { code: "AC-3MHT", loggerCall: "DL4FND-7", ts: NOW - 3 * DAY, site: "OE6XYZ-10" },
+      { code: "AC-9WEZ", loggerCall: "OE3KLM", ts: NOW - 9 * DAY, site: "OE6XYZ-10" },
+    ],
+  };
+};
 type Route = [method: string, pattern: RegExp, answer: (m: RegExpMatchArray, persona: Persona) => unknown];
 const page = <T extends object>(o: T) => ({ ...o, nextCursor: null, hasMore: false });
 
@@ -795,7 +853,33 @@ const ROUTES: Route[] = [
     /^\/api\/admin\/adoptions$/,
     () => ({ noticeSec: 30 * DAY, withdrawn: [], offered: [], log: [] }) satisfies AdminAdoptions,
   ],
-  ["GET", /^\/api\/admin\/boxes$/, () => ({ boxes: [], openCodes: [] })],
+  ["GET", /^\/api\/admin\/boxes$/, () => ({ boxes: BOXES, openCodes: [] })],
+  ["GET", /^\/api\/admin\/sites$/, () => ({ sites: trustedStations() })],
+  [
+    "GET",
+    /^\/api\/admin\/sites\/([^/]+)\/finds$/,
+    (m) => {
+      const site = decodeURIComponent(m[1] ?? "");
+      const { count, recent } = boxFinds("oe6xyz-hill");
+      return site === "OE6XGR-12"
+        ? { site, count: 0, recent: [] }
+        : { site, count: site === "OE6XGR-10" ? count + 5 : count, recent: recent.map((f) => ({ ...f, site })) };
+    },
+  ],
+  ["GET", /^\/api\/admin\/boxes\/([^/]+)\/finds$/, (m) => boxFinds(decodeURIComponent(m[1] ?? ""))],
+  [
+    "POST",
+    /^\/api\/admin\/boxes\/([^/]+)\/trust$/,
+    (m) => {
+      // the fixtures see no body: the switch flips, trusting the box's own call with SSID 10
+      const b = BOXES.find((x) => x.box === decodeURIComponent(m[1] ?? ""));
+      if (!b) return { trust: null };
+      b.trust = b.trust
+        ? null
+        : { sites: [`${b.callsign ?? "OE6XGR"}-10`], trustedBy: "demo-sysop", trustedByCall: "OE6XGR", trustedAt: NOW };
+      return { trust: b.trust };
+    },
+  ],
   [
     "GET",
     /^\/api\/admin\/federation\/sync$/,

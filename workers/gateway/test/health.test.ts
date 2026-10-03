@@ -46,15 +46,15 @@ describe("/health readiness probe", () => {
     expect(await again.json()).toMatchObject({ schema: "0008_eight.sql" });
   });
 
-  it("checks an ingest credential without reading or writing anything", async () => {
+  it("checks an ingest credential without writing anything, reading only the trusted sites", async () => {
     let touched = false;
     const env = {
       INGEST_SECRET: "the-ingest-secret-123",
       INSTANCE: "oe.test",
       DB: {
-        prepare: () => {
-          touched = true;
-          return { first: async () => ({}) };
+        prepare: (sql: string) => {
+          if (!/^\s*SELECT\b/i.test(sql) || !/trusted_sites/.test(sql)) touched = true;
+          return { all: async () => ({ results: [{ site: "oe8abc-10" }] }) };
         },
       },
     } as unknown as Env;
@@ -62,7 +62,13 @@ describe("/health readiness probe", () => {
       route(new Request("http://gw/ingest/check", { headers: secret ? { "x-ingest-secret": secret } : {} }), env, ctx);
     const ok = await check("the-ingest-secret-123");
     expect(ok.status).toBe(200);
-    expect(await ok.json()).toEqual({ ok: true, instance: "oe.test", serviceCall: "APRSCG", sites: [], box: null });
+    expect(await ok.json()).toEqual({
+      ok: true,
+      instance: "oe.test",
+      serviceCall: "APRSCG",
+      sites: ["OE8ABC-10"],
+      box: null,
+    });
     expect((await check("wrong")).status).toBe(401);
     expect((await check()).status).toBe(401);
     expect(touched).toBe(false);
