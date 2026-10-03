@@ -25,8 +25,10 @@ message, and never sent as one.
 3. To read only your own traffic, select **Mine**: the list keeps the messages from or to any SSID of your
    callsign. **All** shows everything again.
 
-The list holds what the instance heard over the air and from [APRS-IS](../glossary.md#aprs-is), and the messages
-you sent from your radio in the browser or from your remote box, marked **sent**. Acknowledgements are not
+The list holds what the instance heard over the air, from [APRS-IS](../glossary.md#aprs-is) and from
+[MeshCom](../glossary.md#meshcom), and the messages you sent from your radio in the browser or from your remote
+box, marked **sent**. A MeshCom message to a callsign is listed like an APRS message; a message to a MeshCom group
+is not. Acknowledgements are not
 listed. When nothing has arrived yet, the list says so.
 
 ## Send an APRS message from your radio
