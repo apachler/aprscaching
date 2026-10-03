@@ -136,8 +136,8 @@ the real browser ceremony before a release.
 
 ## Interop against real packet software
 
-`tools/interop/` tests the FBB/NET-ROM stack against the actual programs it must talk to. Two
-tiers (full detail in `tools/interop/README.md`):
+`tools/interop/` tests the FBB/NET-ROM stack and the modem transports against the actual programs
+they must talk to. Three tiers (full detail in `tools/interop/README.md`):
 
 - **Local loop, no Docker** — `bash tools/interop/run-local-loop.sh`: two complete APRScaching
   stacks crosslinked over AXUDP exchange NODES broadcasts both ways, run an FBB forwarding session
@@ -149,8 +149,14 @@ tiers (full detail in `tools/interop/README.md`):
   into the BPQ BBS and that the real `xfbbd` answers with its FBB banner. The F6FBB container
   (`fbbcomp` on) is the live-validation peer for LZHUF-B1 compressed forwarding.
 
-These run in the **weekly** `interop` workflow (scheduled + manual dispatch), never the PR loop —
-peer downloads and kernel modules are not PR-gating dependencies.
+- **Modem transports** — `tools/interop/direwolf/docker-compose.yml` joins two **Direwolf** modems
+  with a UDP audio cable. The ingest's KISS TCP and AGWPE clients key one and hear the other over
+  Bell-202 1200 bd AFSK, in both directions, and the ingest's RX-IGate delivers what its Direwolf hears
+  to **aprsc** with `qAR,<igate>`.
+
+The peers run in the **weekly** `interop` workflow and the modem transports in the **weekly**
+`transports` workflow (both scheduled + manual dispatch), never the PR loop — peer downloads and
+kernel modules are not PR-gating dependencies.
 
 ## Pocket in Termux
 
@@ -181,7 +187,7 @@ CI guards under `tools/checks/`: `oci-stack.mjs` keeps the Oracle Cloud one-clic
 fails when a gateway export is named nowhere outside its own file, and `docs.mjs` keeps the documentation
 present-tense, every configuration key the code reads documented (and every documented key read), the
 manual's nav complete, and the links outside the manual whole. `tools/interop/` runs
-interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc); see its README.
+interoperability tests against reference packet software (LinBPQ, FBB, JNOS, aprsc, Direwolf); see its README.
 
 ## CI map (`.github/workflows/`)
 
@@ -190,6 +196,7 @@ interoperability tests against reference packet software (LinBPQ, FBB, JNOS, apr
 | `ci.yml` — lint + format (with `dead-exports.mjs` and `docs.mjs`) · lint-types · unit tests + builds (with `oci-stack.mjs` and `worker-bundle.mjs`) · conformance on Node, Worker, Bun (the Bun leg also runs `conformance:meshcom`) · two-instance federation · audio e2e · offline-shell e2e · axe on every fixture surface in every theme · Pocket scripts | PR, and push to `dev`/`main` | **Yes** |
 | `visual.yml` — the visual harness's screenshots and keyboard walk, and the journeys, as an artifact | nightly + manual | Informational |
 | `interop.yml` — local loop · LinBPQ · F6FBB · TNN+JNOS | weekly + manual | Informational |
+| `transports.yml` — KISS TCP + AGWPE over AFSK between two Direwolf modems · RF → IGate → aprsc | weekly + manual | Informational |
 | `codeql.yml` | push/PR + weekly | Security scanning |
 | `dco.yml` — every commit `Signed-off-by` | PR | **Yes** |
 | `docs.yml` — Vale (the house style), the theme drift check, then `mkdocs build --strict` (a missing page or heading fails it) | docs changes (PR, and push to `dev`/`main`) | Yes (docs) |

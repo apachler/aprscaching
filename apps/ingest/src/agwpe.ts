@@ -61,7 +61,8 @@ export interface AgwpeHandlers {
  * AGWPE TCP client — connects to an AGW Packet Engine (Direwolf/SoundModem/UZ7HO on
  * :8000), enables raw-frame monitoring, and forwards each heard AX.25 frame as an `rf` packet on the
  * `agwpe` port. send() keys the modem with a raw AX.25 frame. The wire codec (@aprscaching/packet) is
- * unit-tested; the engine handshake + frame semantics are validate-at-deploy against a real engine.
+ * unit-tested; the engine handshake and frame semantics are asserted against Direwolf in the weekly
+ * `transports` workflow (`tools/interop/tests/direwolf-loop.mjs`).
  */
 export class AgwpeTnc {
   private sock?: net.Socket;
