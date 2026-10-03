@@ -250,9 +250,16 @@ if [ "$SITE_SET" -eq 0 ]; then
 fi
 SITE="$(printf '%s' "$SITE" | tr '[:lower:]' '[:upper:]')"
 
+# Further admin calls after the first stay as they are; only the first is this operator's answer.
+admin_rest="$(printf '%s' "$existing_admin" | tr '[:lower:]' '[:upper:]' | tr ', ' '\n\n' | sed '1d' | { grep -vxF -e "$CALL" -e '' || true; } | paste -sd, -)"
+# The receiving sites: this box's site first, then every other site already listed (a MeshCom node's call,
+# a second TNC), so naming a new site replaces only the old one.
+old_site="$(current RF_SITE_CALL | tr '[:lower:]' '[:upper:]')"
+other_sites="$(current FIRST_PARTY_SITES | tr '[:lower:]' '[:upper:]' | tr ', ' '\n\n' | { grep -vxF -e "${old_site:-}" -e "$SITE" -e '' || true; } | paste -sd, -)"
+
 # ---- write .env ----------------------------------------------------------------------------------------
 echo "Writing $ENV_FILE"
-setvar ADMIN_CALLSIGNS "$CALL"
+setvar ADMIN_CALLSIGNS "$CALL${admin_rest:+,$admin_rest}"
 setvar APRSIS_CALLSIGN "$CALL"
 setvar APRSIS_PASSCODE "${PASS:--1}" secret
 setvar APRSIS_FILTER "$FILTER"
@@ -263,7 +270,7 @@ setvar APP_URL "$APP_URL"
 if [ -n "$SITE" ]; then
   # one receiving site, named on both sides: the ingest box stamps it, the gateway attests it
   setvar RF_SITE_CALL "$SITE"
-  setvar FIRST_PARTY_SITES "$SITE"
+  setvar FIRST_PARTY_SITES "$SITE${other_sites:+,$other_sites}"
 fi
 # The safe federation posture, written out so the operator sees it. A value the operator chose is kept,
 # and an unsafe one is pointed out rather than replaced.

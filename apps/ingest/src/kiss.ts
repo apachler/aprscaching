@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import net from "node:net";
-import { kissFrames, kissWrap, decodeAx25, encodeAx25 } from "@aprscaching/aprs";
+import { kissDecode, kissWrap, decodeAx25, encodeAx25 } from "@aprscaching/aprs";
 import { encodeFrame, type Ax25Frame } from "@aprscaching/ax25";
 import type { Packet } from "@aprscaching/shared";
 import type { ParsedFrame } from "@aprscaching/aprs";
@@ -18,6 +18,14 @@ export interface KissOpts {
 /** Pointed at a non-KISS port a frame's terminating FEND never arrives and `buf` would grow
  *  forever. Bound it — past this many bytes with no complete frame the stream isn't KISS; drop it. */
 const KISS_RX_MAX_BYTES = 64 * 1024;
+
+/**
+ * A MeshCom node's KISS port: the node renders LoRa frames as AX.25 to its tocall `APRSMC`, and answers each
+ * frame it is sent with a result on KISS port 15. Its frames are not this box's RF hearings: a frame the
+ * MeshCom server relayed, or the node's own, arrives with an empty path and would read as heard directly.
+ */
+const isMeshcomNode = (k: { port: number; frame: Uint8Array }, dst: string | undefined) =>
+  k.port === 15 || (dst !== undefined && /^APRSMC(-\d+)?$/i.test(dst));
 export interface KissHandlers {
   onPacket: (p: Packet) => void;
   onFrame?: (f: ParsedFrame) => void; // UI-decoded RF frame (for the APRS digipeater / igate)
@@ -45,9 +53,12 @@ export class KissTnc {
     this.connect();
   }
 
+  /** Set once the TNC turned out to be a MeshCom node: nothing more is forwarded or sent through it. */
+  private meshcomNode = false;
+
   /** Transmit an AX.25 UI frame over KISS (best-effort; dropped if the TNC link is down). */
   send(f: { src: string; dst: string; path?: string[]; payload: string }): boolean {
-    if (!this.connected || !this.sock) return false;
+    if (!this.connected || !this.sock || this.meshcomNode) return false;
     try {
       this.sock.write(kissWrap(encodeAx25(f)));
       return true;
@@ -58,7 +69,7 @@ export class KissTnc {
 
   /** Transmit a full AX.25 frame (any type — for connected-mode: NET/ROM node, connected digi). */
   sendFrame(f: Ax25Frame): boolean {
-    if (!this.connected || !this.sock) return false;
+    if (!this.connected || !this.sock || this.meshcomNode) return false;
     try {
       this.sock.write(kissWrap(encodeFrame(f)));
       return true;
@@ -89,9 +100,18 @@ export class KissTnc {
       }
       const ready = Uint8Array.from(this.buf.slice(0, lastFend + 1));
       this.buf = this.buf.slice(lastFend + 1);
-      for (const raw of kissFrames(ready)) {
-        this.h.onRaw?.(raw); // raw AX.25 for connected-mode consumers (node/digi)
+      for (const k of kissDecode(ready)) {
+        if (k.command !== 0) continue; // a KISS command, not a frame
+        const raw = k.frame;
         const f = decodeAx25(raw);
+        if (!this.meshcomNode && isMeshcomNode(k, f?.dst)) {
+          this.meshcomNode = true;
+          console.error(
+            `[kiss] ${this.o.host}:${this.o.port} is a MeshCom node, not a TNC: its frames are ignored and nothing is sent through it. Listen to the node with MESHCOM_NODE instead.`,
+          );
+        }
+        if (this.meshcomNode) continue;
+        this.h.onRaw?.(raw); // raw AX.25 for connected-mode consumers (node/digi)
         if (!f) continue;
         this.h.onFrame?.(f);
         this.h.onPacket(tncPacket(f, "kiss-tnc", this.o.siteCall, Math.floor(Date.now() / 1000)));

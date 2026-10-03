@@ -113,6 +113,18 @@ describe("deploy/setup.sh --non-interactive", () => {
     expect(third.OPERATOR_SECRET).toBe(first.OPERATOR_SECRET);
   });
 
+  it("replacing the operator keeps further admin calls, and a new site keeps the other listed sites", () => {
+    writeFileSync(
+      envFile,
+      "ADMIN_CALLSIGNS=OE8APR,OE8ABC\nRF_SITE_CALL=OE8APR-10\nFIRST_PARTY_SITES=OE8APR-10,OE8APR-12\n",
+    );
+    run("--call", "OE8XYZ", "--domain", "aprs.example.net", "--site-call", "OE8XYZ-10", "--yes");
+    const e = env();
+    expect(e.ADMIN_CALLSIGNS).toBe("OE8XYZ,OE8ABC");
+    expect(e.RF_SITE_CALL).toBe("OE8XYZ-10");
+    expect(e.FIRST_PARTY_SITES).toBe("OE8XYZ-10,OE8APR-12");
+  });
+
   it("keeps values an operator wrote by hand before the first run", () => {
     writeFileSync(envFile, "INGEST_SECRET=my-own-ingest-secret\nAPP_URL=https://hand.example.net\n");
     run("--call", "OE8APR", "--domain", "aprs.example.net");

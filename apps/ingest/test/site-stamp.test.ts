@@ -81,6 +81,21 @@ describe("KISS TNC", () => {
     ]);
     expect(got.map((p) => p.igateCall)).toEqual(expected);
   });
+
+  it("ignores a MeshCom node behind the KISS port and sends nothing through it", async () => {
+    // a frame the MeshCom server relayed reaches the node's KISS port with an empty path, as if heard directly
+    const relayedByServer = { src: "OE3PLY-7", dst: "APRSMC", path: [], payload: "!4704.41N/01526.27E>via server" };
+    let k: KissTnc | undefined;
+    const bytes = Uint8Array.from([...kissWrap(encodeAx25(relayedByServer)), ...kissWrap(encodeAx25(DIRECT))]);
+    const got = await viaFakeTnc(bytes, (port, onPacket) => {
+      k = new KissTnc({ host: "127.0.0.1", port, siteCall: "OE8APR-10" }, { onPacket });
+      k.start();
+      cleanups.push(() => (k as unknown as { sock?: net.Socket }).sock?.destroy());
+      return {};
+    });
+    expect(got).toEqual([]);
+    expect(k!.send({ src: "OE8APR-10", dst: "APRS", payload: ">hi" })).toBe(false);
+  });
 });
 
 describe("AGWPE", () => {
