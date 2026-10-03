@@ -4,16 +4,18 @@ import { getMessages } from "../api.js";
 import { useFmt } from "../format.js";
 import { Panel, Badge, Button, EmptyState, ErrorState, LoadMore, Segmented, usePaged, Icon } from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
+import { MailboxSection } from "./MailboxSection.js";
 
 type Scope = "all" | "mine";
+type View = "air" | "mailbox";
 
 /**
- * MessagesPanel — APRS text messaging as a first-class platform surface (its own inbox), NOT the BBS.
- * BBS is store-and-forward mail/bulletins between platform accounts; APRS messages are live radio
- * messages addressed to callsigns. They are deliberately kept separate — a BBS personal message is
- * never sourced from APRS. Your own callsign's traffic is highlighted, and **Mine** narrows the list to it,
- * which on a phone is the conversation worth reading. Read view; transmit is gated on callsign
- * control-verification and lives with the RF path in Settings → My radio.
+ * MessagesPanel — APRS and MeshCom text messaging as a first-class platform surface, NOT the BBS. The BBS
+ * moves mail and bulletins the F6FBB way only; these are radio messages addressed to callsigns, and the two
+ * never mix. **On the air** lists the messages the instance hears: your own callsign's traffic is highlighted,
+ * and **Mine** narrows the list to it. **Mailbox** leaves a message for a station, which the instance sends on
+ * the air when it next hears it. Transmitting from your own radio is gated on callsign control-verification
+ * and lives with the RF path in Settings → My radio.
  */
 export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void }) {
   const { callsign } = usePlatform();
@@ -22,6 +24,7 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
   const base = me.split("-")[0] ?? "";
   const canMine = base.length >= 3;
   const [scope, setScope] = useState<Scope>("all");
+  const [view, setView] = useState<View>("air");
   const mineOnly = canMine && scope === "mine";
   const messages = usePaged(
     (cursor) =>
@@ -45,52 +48,69 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
       }
       onClose={props.onClose}
     >
-      <p className="muted">
-        Live APRS text messages. Your callsign's traffic is highlighted. This is radio messaging — separate from BBS
-        mail.
-      </p>
       {canMine && (
         <Segmented
-          label="Which messages"
-          look="chips"
-          value={scope}
-          onChange={setScope}
+          label="View"
+          value={view}
+          onChange={setView}
           options={[
-            { value: "all", label: "All" },
-            { value: "mine", label: `Mine (${base})` },
+            { value: "air", label: "On the air" },
+            { value: "mailbox", label: "Mailbox" },
           ]}
         />
       )}
-      {messages.error && messages.items.length === 0 ? (
-        <ErrorState onRetry={messages.reload} />
-      ) : messages.items.length === 0 && !messages.loading ? (
-        <EmptyState>
-          {mineOnly
-            ? `No messages from or to ${base} yet. They appear here as they're heard.`
-            : "No APRS messages yet. Messages addressed to or from stations appear here as they're heard."}
-        </EmptyState>
+      {view === "mailbox" && canMine ? (
+        <MailboxSection callsign={me} />
       ) : (
-        <ul className="msg-list">
-          {messages.items.map((m) => (
-            <li key={m.id} className={`msg-row${mine(m.fromCall) || mine(m.toCall) ? " mine" : ""}`}>
-              <div className="msg-h">
-                <span className="msg-calls">
-                  <span className="mono msg-from">{m.fromCall}</span>
-                  <span className="muted" aria-hidden="true">
-                    →
-                  </span>
-                  <span className="sr-only">to</span>
-                  <span className="mono msg-to">{m.toCall ?? "ALL"}</span>
-                </span>
-                {m.direction === "tx" && <Badge>sent</Badge>}
-                <span className="muted msg-when">{fmt.ago(m.ts)}</span>
-              </div>
-              <div className="comment msg-body">{m.body}</div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="muted">
+            Live APRS text messages. Your callsign's traffic is highlighted. This is radio messaging, separate from the
+            BBS.
+          </p>
+          {canMine && (
+            <Segmented
+              label="Which messages"
+              look="chips"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: "all", label: "All" },
+                { value: "mine", label: `Mine (${base})` },
+              ]}
+            />
+          )}
+          {messages.error && messages.items.length === 0 ? (
+            <ErrorState onRetry={messages.reload} />
+          ) : messages.items.length === 0 && !messages.loading ? (
+            <EmptyState>
+              {mineOnly
+                ? `No messages from or to ${base} yet. They appear here as they're heard.`
+                : "No APRS messages yet. Messages addressed to or from stations appear here as they're heard."}
+            </EmptyState>
+          ) : (
+            <ul className="msg-list">
+              {messages.items.map((m) => (
+                <li key={m.id} className={`msg-row${mine(m.fromCall) || mine(m.toCall) ? " mine" : ""}`}>
+                  <div className="msg-h">
+                    <span className="msg-calls">
+                      <span className="mono msg-from">{m.fromCall}</span>
+                      <span className="muted" aria-hidden="true">
+                        →
+                      </span>
+                      <span className="sr-only">to</span>
+                      <span className="mono msg-to">{m.toCall ?? "ALL"}</span>
+                    </span>
+                    {m.direction === "tx" && <Badge>sent</Badge>}
+                    <span className="muted msg-when">{fmt.ago(m.ts)}</span>
+                  </div>
+                  <div className="comment msg-body">{m.body}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <LoadMore hasMore={messages.hasMore} loading={messages.loading} onClick={messages.loadMore} />
+        </>
       )}
-      <LoadMore hasMore={messages.hasMore} loading={messages.loading} onClick={messages.loadMore} />
       {props.onRadio && (
         <div className="msg-send">
           <p className="muted fine">

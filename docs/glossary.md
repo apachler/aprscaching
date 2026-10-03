@@ -64,6 +64,11 @@ explains it in full.
 :   AX.25 frames carried over the internet (in UDP, or directly in IP). Useful links between nodes, but
     internet traffic all the same ([AXUDP and AXIP peering](run/networks/44net.md#axudp-and-axip-peering-over-44net)).
 
+<span id="mailbox"></span>Mailbox
+:   Holds a short message for a station until the instance hears it on the air, then sends it as an APRS
+    message from the [service call](#service-call). Separate from the [BBS](#bbs)
+    ([Leave a message in the Mailbox](shack/messages.md#leave-a-message-in-the-mailbox)).
+
 <span id="meshcom"></span><span id="extudp"></span>MeshCom
 :   A LoRa mesh network for licensed amateurs. APRScaching listens to a MeshCom node on the operator's
     network through the node's **ExtUDP** interface ([MeshCom](run/radios/meshcom.md)).

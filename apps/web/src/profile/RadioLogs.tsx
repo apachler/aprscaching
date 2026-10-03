@@ -20,7 +20,7 @@ const STATUS_KIND: Partial<Record<RadioCommandRow["status"], string>> = {
 };
 
 /**
- * Logs sent over the air — FOUND / DNF / NOTE messages the player sent from a radio to the instance's
+ * Logs sent over the air — FOUND / DNF / NOTE / MAIL messages the player sent from a radio to the instance's
  * service call. Messages that arrived only over the internet wait here until the player confirms them.
  */
 export function RadioLogs() {
@@ -92,7 +92,9 @@ export function RadioLogs() {
           {data.commands.map((c) => (
             <li key={c.id}>
               <Badge>{c.command.toUpperCase()}</Badge> {c.cacheCode && <span className="mono">{c.cacheCode}</span>}{" "}
-              <Badge kind={STATUS_KIND[c.status]}>{STATUS_LABEL[c.status]}</Badge>
+              <Badge kind={STATUS_KIND[c.status]}>
+                {c.command === "mail" && c.status === "logged" ? "in the Mailbox" : STATUS_LABEL[c.status]}
+              </Badge>
               {c.command === "found" && c.tier && (
                 <>
                   {" "}
