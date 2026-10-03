@@ -32,6 +32,8 @@ export interface MeshcomMeta {
    * none. The sender's plan, never the route taken.
    */
   via?: string[];
+  /** The frame's MeshCom `msg_id` (hex): every copy of one frame carries the same id, so it names the frame. */
+  msgId?: string;
 }
 
 const CALL = /^(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{3,7}(?:-[A-Z0-9]{1,2})?$/;
@@ -62,6 +64,7 @@ export function sanitizeMeshcomMeta(v: unknown): MeshcomMeta | null {
   if (typeof o.firmware === "string" && FIRMWARE.test(o.firmware)) m.firmware = o.firmware;
   if (inRange(o.batt, 0, 100)) m.batt = Math.round(o.batt);
   if (Array.isArray(o.via) && o.via.length <= MAX_PATH && o.via.every(isCall)) m.via = [...new Set(o.via)];
+  if (typeof o.msgId === "string" && /^[0-9A-F]{1,8}$/i.test(o.msgId)) m.msgId = o.msgId.toUpperCase();
   return Object.keys(m).length ? m : null;
 }
 

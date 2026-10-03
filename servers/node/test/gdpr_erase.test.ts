@@ -33,6 +33,7 @@ const SCOPED: Array<[string, string]> = [
   ],
   ["callsign_challenges", "SELECT COUNT(*) AS n FROM callsign_challenges WHERE account_id=?"],
   ["near_cache_messages", "SELECT COUNT(*) AS n FROM near_cache_messages WHERE call='DL1GDP'"],
+  ["meshcom_group_messages", "SELECT COUNT(*) AS n FROM meshcom_group_messages WHERE from_call LIKE 'DL1GDP%'"],
   ["accounts", "SELECT COUNT(*) AS n FROM accounts WHERE account_id=?"],
 ];
 
@@ -101,6 +102,14 @@ async function seeded() {
       cacheId,
       t,
     ],
+    [
+      "INSERT INTO meshcom_group_messages (ts, from_call, grp, body, dedup_key) VALUES (?, 'DL1GDP-12', '232', 'hi', 'id:DL1GDP-12:1')",
+      t,
+    ],
+    [
+      "INSERT INTO meshcom_group_messages (ts, from_call, grp, body, dedup_key) VALUES (?, 'OE8APR-12', '232', 'hi', 'id:OE8APR-12:1')",
+      t,
+    ],
     ["UPDATE accounts SET near_radio = 1 WHERE account_id = ?", acct],
   ] as const;
   for (const [sql, ...binds] of seed)
@@ -142,9 +151,12 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
       "bbsMessages",
       "verificationChallenges",
       "nearCacheMessages",
+      "meshcomGroupMessages",
     ])
       expect(exp.data[key], key).toBeTruthy();
     expect(exp.data.nearCacheMessages).toHaveLength(1);
+    // the person's own group messages, from any SSID, and nobody else's
+    expect(exp.data.meshcomGroupMessages).toEqual([expect.objectContaining({ from_call: "DL1GDP-12", grp: "232" })]);
     expect(exp.data.account.near_radio).toBe(1);
     expect(exp.data.passkeys).toHaveLength(1);
     expect(exp.data.passkeys[0]).not.toHaveProperty("public_key");
@@ -163,6 +175,10 @@ describe("GDPR export and erasure cover every account-scoped table", () => {
     const after = await counts(env, acct);
     for (const [table, n] of Object.entries(after)) expect(n, `left in ${table}`).toBe(0);
     expect(deleted).toContain("media/gdpr-1");
+    // another station's group message stays
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM meshcom_group_messages").first<{ n: number }>())?.n).toBe(
+      1,
+    );
 
     const login = await passkeyLogin(env, CS, auth);
     expect(login.status).not.toBe(200);

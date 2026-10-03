@@ -7,8 +7,13 @@ import type { Env } from "./env.js";
 import type { ExecCtx, SqlStatement } from "./runtime.js";
 import { json } from "./app.js";
 import { IngestBatch, sanitizeMeshcomMeta } from "@aprscaching/shared";
-import { meshcomStatements, type MeshcomObservation } from "./meshcom.js";
-import { baseCall, decodeAprs } from "@aprscaching/aprs";
+import {
+  meshcomGroupStatement,
+  meshcomStatements,
+  type MeshcomGroupHearing,
+  type MeshcomObservation,
+} from "./meshcom.js";
+import { baseCall, decodeAprs, meshcomGroupOf } from "@aprscaching/aprs";
 import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
@@ -147,6 +152,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const heard: Heard[] = []; // every station of the batch and its route, for the Mailbox
   const mailAcks: { from: string; msgNo: string; port: string }[] = []; // acks to the service call: Mailbox deliveries
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
+  const groupMessages: MeshcomGroupHearing[] = []; // MeshCom group chat, apart from the callsign message log
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
   // inside the verify window and an ancient one dodges the TTL — clamp every packet to
@@ -181,6 +187,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     if (trusted && p.port === "meshcom") {
       const meta = sanitizeMeshcomMeta((p.parsed as { meshcom?: unknown } | undefined)?.meshcom);
       if (meta) meshcom.push({ src: p.src, ts: p.ts, meta });
+      const g = meshcomGroupOf(p.payload);
+      if (g) groupMessages.push({ from: p.src, group: g.group, text: g.text, ts: p.ts, meta });
     }
 
     // weather -> sensor_readings (latest reading per station+ts); observational, so shed over budget
@@ -206,9 +214,17 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     // text message -> messages log
     if (data.kind === "message" && !data.ack && !data.rej) {
       const toService = String(data.addressee ?? "").toUpperCase() === service;
+      // the network that carried it, the same transport its sender's position would record
       const row = env.DB.prepare(
-        "INSERT INTO messages (ts, from_call, to_call, body, ack, direction) VALUES (?,?,?,?,?, 'rx')",
-      ).bind(p.ts, p.src, data.addressee ?? null, data.text ?? "", data.msgNo ?? null);
+        "INSERT INTO messages (ts, from_call, to_call, body, ack, direction, transport) VALUES (?,?,?,?,?, 'rx', ?)",
+      ).bind(
+        p.ts,
+        p.src,
+        data.addressee ?? null,
+        data.text ?? "",
+        data.msgNo ?? null,
+        transportForPort(p.port, signer != null),
+      );
       // a radio command's message is always kept, beside the command it carries
       if (essential && !toService)
         heldMessages.push({ stmt: row, parties: [p.src, String(data.addressee ?? "")].filter(Boolean) });
@@ -381,6 +397,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // the MeshCom map layer's node state and links are display only, so they pause with the other
   // diagnostics once the write budget passes 80 %
   if (!shedding) stmts.push(...meshcomStatements(env, meshcom));
+  // group chat is kept like the message log: through 80 %, and paused only once the budget is spent
+  if (!essential) for (const g of groupMessages) stmts.push(meshcomGroupStatement(env, g));
   if (stmts.length) await env.DB.batch(stmts);
 
   // radio commands (FOUND / DNF / NOTE / HELP) — best-effort per message; never fails the batch

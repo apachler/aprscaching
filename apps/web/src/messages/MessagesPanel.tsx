@@ -1,20 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import { getMessages } from "../api.js";
+import { getMeshcomGroups, getMessages } from "../api.js";
 import { useFmt } from "../format.js";
-import { Panel, Badge, Button, EmptyState, ErrorState, LoadMore, Segmented, usePaged, Icon } from "../ui/index.js";
+import {
+  Panel,
+  Badge,
+  Button,
+  EmptyState,
+  ErrorState,
+  LoadMore,
+  Segmented,
+  usePaged,
+  useLoad,
+  Icon,
+  type SegmentOption,
+} from "../ui/index.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { MailboxSection } from "./MailboxSection.js";
+import { MeshcomGroupsSection } from "./MeshcomGroupsSection.js";
+import { TransportBadge } from "./transport.js";
 
 type Scope = "all" | "mine";
-type View = "air" | "mailbox";
+type View = "air" | "mailbox" | "groups";
 
 /**
  * MessagesPanel — APRS and MeshCom text messaging as a first-class platform surface, NOT the BBS. The BBS
  * moves mail and bulletins the F6FBB way only; these are radio messages addressed to callsigns, and the two
  * never mix. **On the air** lists the messages the instance hears: your own callsign's traffic is highlighted,
  * and **Mine** narrows the list to it. **Mailbox** leaves a message for a station, which the instance sends on
- * the air when it next hears it. Transmitting from your own radio is gated on callsign control-verification
+ * the air when it next hears it. **MeshCom groups** reads the group chat the instance's MeshCom nodes heard, and
+ * appears only once a group has been heard. Each message names the network that carried it. Transmitting from your own radio is gated on callsign control-verification
  * and lives with the RF path in Settings → My radio.
  */
 export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void }) {
@@ -27,6 +42,15 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
   const [view, setView] = useState<View>("air");
   const [service, setService] = useState<string | null>(null);
   const mineOnly = canMine && scope === "mine";
+  // the group view only where a MeshCom node has heard a group
+  const groups = useLoad(() => getMeshcomGroups().then((r) => r.groups), []);
+  const hasGroups = (groups.data?.length ?? 0) > 0;
+  const views: SegmentOption<View>[] = [
+    { value: "air", label: "On the air" },
+    ...(canMine ? [{ value: "mailbox" as const, label: "Mailbox" }] : []),
+    ...(hasGroups ? [{ value: "groups" as const, label: "MeshCom groups" }] : []),
+  ];
+  const shown: View = views.some((v) => v.value === view) ? view : "air";
   const messages = usePaged(
     (cursor) =>
       getMessages(false, cursor, 30, undefined, mineOnly ? base : undefined).then((r) => {
@@ -54,19 +78,11 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
       }
       onClose={props.onClose}
     >
-      {canMine && (
-        <Segmented
-          label="View"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "air", label: "On the air" },
-            { value: "mailbox", label: "Mailbox" },
-          ]}
-        />
-      )}
-      {view === "mailbox" && canMine ? (
+      {views.length > 1 && <Segmented label="View" value={shown} onChange={setView} options={views} />}
+      {shown === "mailbox" ? (
         <MailboxSection callsign={me} />
+      ) : shown === "groups" ? (
+        <MeshcomGroupsSection groups={groups.data ?? []} />
       ) : (
         <>
           <p className="muted">
@@ -106,6 +122,7 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
                       <span className="sr-only">to</span>
                       <span className="mono msg-to">{m.toCall ?? "ALL"}</span>
                     </span>
+                    <TransportBadge transport={m.transport} direction={m.direction} />
                     {m.direction === "tx" && <Badge>sent</Badge>}
                     <span className="muted msg-when">{fmt.ago(m.ts)}</span>
                   </div>
@@ -117,7 +134,7 @@ export function MessagesPanel(props: { onClose: () => void; onRadio?: () => void
           <LoadMore hasMore={messages.hasMore} loading={messages.loading} onClick={messages.loadMore} />
         </>
       )}
-      {props.onRadio && (
+      {props.onRadio && shown !== "groups" && (
         <div className="msg-send">
           <p className="muted fine">
             To send a message, connect a TNC in <strong>Settings → My radio (browser)</strong> and switch on transmit.

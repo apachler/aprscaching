@@ -285,6 +285,11 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
       "SELECT call, cache_id, station, msg_no, sent_at, acked_at FROM near_cache_messages WHERE $CALLS ORDER BY sent_at",
       by("call"),
     ),
+    // the MeshCom group messages the person sent from any of their calls, as the instance's nodes heard them
+    meshcomGroupMessages: await q(
+      "SELECT ts, from_call, grp, body, receiver, heard FROM meshcom_group_messages WHERE $CALLS ORDER BY ts",
+      by("from_call"),
+    ),
     // Mailbox messages the person left, and those addressed to any of their calls
     mailbox: await rows(
       env,
@@ -472,6 +477,7 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
     del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
     del("DELETE FROM mailbox_messages WHERE $CALLS OR $CALLS", "from_call", "to_call"),
     del("DELETE FROM near_cache_messages WHERE $CALLS", "call"),
+    del("DELETE FROM meshcom_group_messages WHERE $CALLS", "from_call"),
     ...(accountId ? [env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=?").bind(accountId)] : []),
     env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
       WITHDRAWN,

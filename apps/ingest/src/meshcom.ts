@@ -136,6 +136,8 @@ export function meshcomMetaOf(e: MeshcomEvent, receiverCall: string | undefined)
     ...(e.type === "msg" && e.hwId !== undefined ? { hwId: e.hwId } : {}),
     // a message carries its sender's via list, empty when it named none (display only)
     ...(e.type === "msg" ? { via: e.via ?? [] } : {}),
+    // the frame's id, so the gateway stores a message heard by several nodes, or twice, once
+    ...(e.type === "msg" && p.msgId ? { msgId: p.msgId } : {}),
   });
 }
 

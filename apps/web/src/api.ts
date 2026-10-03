@@ -30,6 +30,8 @@ import type {
   DecodedPacket,
   PortStat,
   MessageItem,
+  MeshcomGroup,
+  MeshcomGroupMessage,
   Spot,
 } from "@aprscaching/shared";
 
@@ -50,6 +52,8 @@ export type {
   DecodedPacket,
   PortStat,
   MessageItem,
+  MeshcomGroup,
+  MeshcomGroupMessage,
   Spot,
 };
 import { PHOTO_PX, resizeImage, thumbnailOf } from "./media/resize.js";
@@ -370,6 +374,20 @@ export function getMeshcomNodes(
 }
 export function getMeshcomLinks(bbox: BBox): Promise<{ exact: boolean; links: MeshcomLink[] }> {
   return call(`/api/meshcom/links?bbox=${bbox.join(",")}`);
+}
+/** The MeshCom groups this instance's nodes heard within the message retention, most recently active first. */
+export function getMeshcomGroups(): Promise<{ groups: MeshcomGroup[] }> {
+  return call("/api/meshcom/groups");
+}
+/** One MeshCom group's messages, newest first. */
+export function getMeshcomGroupMessages(
+  group: string,
+  cursor?: string | null,
+  limit = 30,
+): Promise<{ group: string; messages: MeshcomGroupMessage[] } & PageInfo> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (cursor) q.set("cursor", cursor);
+  return call(`/api/meshcom/groups/${encodeURIComponent(group)}/messages?${q.toString()}`);
 }
 
 // ---- shack: live stations + packet inspector ----

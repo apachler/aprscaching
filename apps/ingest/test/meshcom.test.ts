@@ -164,7 +164,16 @@ describe("MeshCom listener — VERIFY to the service call", () => {
       ts: at / 1000,
       // display metadata for the map; the gateway never reads it for trust
       parsed: {
-        meshcom: { srcType: "lora", direct: true, path: ["OE8APR-1"], receiver: CALL, rssi: -90, snr: 4, via: [] },
+        meshcom: {
+          srcType: "lora",
+          direct: true,
+          path: ["OE8APR-1"],
+          receiver: CALL,
+          rssi: -90,
+          snr: 4,
+          via: [],
+          msgId: "5A5A5A5A",
+        },
       },
     });
   });

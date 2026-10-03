@@ -4,6 +4,7 @@ import {
   decodeMeshcom,
   parseMeshcomDatagram,
   meshcomToAprs,
+  meshcomGroupOf,
   meshcomTransportHint,
   MeshcomDedup,
   encodeMeshcomText,
@@ -144,6 +145,16 @@ describe("meshcom APRS mapping", () => {
       const g = meshcomToAprs(ok(decodeMeshcom(j({ ...MSG, dst }))))!;
       expect(decodeAprs({ src: g.src, dst: "APRS", path: [], payload: g.payload, raw: "" }).kind).toBe("other");
     }
+  });
+  it("a group or broadcast frame gives back its group and text; nothing else is a group message", () => {
+    for (const dst of ["262", "9", "*"]) {
+      const g = meshcomToAprs(ok(decodeMeshcom(j({ ...MSG, dst, msg: "QRV: 2m {x}" }))))!;
+      expect(meshcomGroupOf(g.payload)).toEqual({ group: dst, text: "QRV: 2m {x}" });
+    }
+    const dm = meshcomToAprs(ok(decodeMeshcom(j(MSG))))!;
+    expect(meshcomGroupOf(dm.payload)).toBeNull();
+    for (const p of ["{MG:hi", "{MG0:hi", "{MG123456:hi", "{MGabc:hi", "{MX262:hi", "!4700.00N/01500.00E>"])
+      expect(meshcomGroupOf(p), p).toBeNull();
   });
   it("telemetry has no APRS mapping", () => {
     expect(

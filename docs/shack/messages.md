@@ -9,6 +9,7 @@ message.
 | Surface | What it holds |
 |---|---|
 | **Messages** in the left rail, or **More → Messages** on a phone | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
+| **Messages → MeshCom groups** | MeshCom group chat the instance's MeshCom nodes heard. Read only. |
 | **Settings → My radio (browser) → Local inbox** | The messages your own radio heard in this browser, with an **ACK** button for those addressed to you. |
 | **Shack → BBS** | Mail and bulletins on the instance's packet BBS, moved the F6FBB way. Never sent over APRS or MeshCom. |
 | **Messages → Mailbox** | Messages you left for a station, sent on the air when the instance hears it, and those left for you. |
@@ -20,14 +21,33 @@ message, and never sent as one.
 ## Read the messages the instance hears
 
 1. Select **Messages** in the left rail. On a phone, select **More**, then **Messages**.
-2. The newest messages come first, each with sender, recipient and age. A message from or to your callsign
-   (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows older ones.
+2. The newest messages come first, each with sender, recipient, age and the network that carried it. A
+   message from or to your callsign (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows
+   older ones.
 3. To read only your own traffic, select **Mine**: the list keeps the messages from or to any SSID of your
    callsign. **All** shows everything again.
 
 The list holds what the instance heard over the air and from [APRS-IS](../glossary.md#aprs-is), and the messages
 you sent from your radio in the browser or from your remote box, marked **sent**. Acknowledgements are not
 listed. When nothing has arrived yet, the list says so.
+
+### Which network carried a message
+
+A badge on each message names the network it came in on, or went out on:
+
+| Badge | Means |
+|---|---|
+| **RF** | Heard on the air by a TNC on the instance's ingest box, or sent by your remote box |
+| **Browser radio** | Heard or sent by a radio connected to a browser |
+| **MeshCom** | Heard through a MeshCom node on the instance's ingest box |
+| **Meshtastic** | Heard through Meshtastic |
+| **APRS-IS** | Received from APRS-IS, over the internet |
+| **AXUDP**, **AXIP** | Received over an internet link between packet nodes |
+| **Other** | Received on a port the instance does not know |
+
+The edge of the badge takes the map's colour for on the air, the internet or a mesh, so the families stand
+apart at a glance. The network says how a message arrived, not who sent it: anyone can put a message on
+APRS-IS. A message stored without its network shows no badge.
 
 ## Send an APRS message from your radio
 
@@ -64,7 +84,22 @@ The browser never acknowledges on its own: each ack is a transmission you choose
 
 When the instance runs a [MeshCom](../glossary.md#meshcom) node, a direct message between two callsigns that
 the node receives appears in **Messages** like an APRS message. Group and broadcast text (`*` or a group
-number) is addressed to no one in particular and stays out of the list.
+number) is addressed to no one in particular and stays out of the list: it has its own view.
+
+## Read MeshCom group chat
+
+When the instance's MeshCom nodes have heard a group message, **Messages** shows a third view, **MeshCom
+groups**. Without one, the view is not there.
+
+1. Open **Messages** and switch the view to **MeshCom groups**.
+2. Pick a **Group**. Each group shows how many messages the instance keeps; **All (\*)** is the group every
+   node reads.
+3. The newest messages come first, each with sender, age, and the node that heard it and how: **heard
+   directly**, **relayed on the mesh** or **from the MeshCom server**. **Load more** shows older ones.
+
+A message heard by several nodes, or twice, is listed once. The instance keeps group messages as long as the
+other messages, 7 days unless its sysop changes that. The view is read only: sending to a group is not
+available, so write group messages on your own MeshCom node.
 
 APRScaching does not send MeshCom messages for you: write them on your own MeshCom node. A direct message to
 the instance's service call is a command (next section). The instance answers it through the node that heard

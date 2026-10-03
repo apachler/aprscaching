@@ -34,6 +34,22 @@
     min-width: 0;
     margin-inline-end: auto;
   }
+  /* The network that carried a message: its name in words, with an edge in the map's colour for the family,
+     mixed toward the ink so the edge holds 3:1 on a panel in every theme. */
+  .badge.via {
+    color: var(--ink);
+    box-shadow: inset 3px 0 0 color-mix(in oklab, var(--via-edge, var(--line)) 70%, var(--ink));
+    padding-inline-start: calc(var(--space-xs) + 3px);
+  }
+  .badge.via-air {
+    --via-edge: var(--map-heard-rf);
+  }
+  .badge.via-net {
+    --via-edge: var(--map-heard-is);
+  }
+  .badge.via-mesh {
+    --via-edge: var(--meshcom);
+  }
   .msg-body {
     margin-top: var(--space-2xs);
     overflow-wrap: anywhere;

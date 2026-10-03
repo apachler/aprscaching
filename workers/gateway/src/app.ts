@@ -106,7 +106,13 @@ import { handleOfflinePack } from "./offlinepack.js";
 import { TILES_PATH, handleOfflineTiles, handleTileArchive } from "./tiles.js";
 import { handleSyncNow, handleSyncStatus } from "./fedcatchup.js";
 import { handleFederationSubmit, handleSubmitMarks, pushToHub, type PushResult } from "./fedpush.js";
-import { pruneMeshcom, handleMeshcomNodes, handleMeshcomLinks } from "./meshcom.js";
+import {
+  pruneMeshcom,
+  handleMeshcomNodes,
+  handleMeshcomLinks,
+  handleMeshcomGroups,
+  handleMeshcomGroupMessages,
+} from "./meshcom.js";
 import { retryCorroborations } from "./corroborate_retry.js";
 import { handleAdminWhoami, handleAdminVerifications } from "./admin.js";
 import { handleAdminSetup } from "./setup.js";
@@ -289,6 +295,7 @@ export async function runScheduled(env: Env): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM packets_recent WHERE ts < ?").bind(now - keep.packetsHours * 3600),
     env.DB.prepare("DELETE FROM messages WHERE ts < ?").bind(days(keep.messagesDays)),
+    env.DB.prepare("DELETE FROM meshcom_group_messages WHERE ts < ?").bind(days(keep.messagesDays)),
     env.DB.prepare("DELETE FROM sensor_readings WHERE ts < ?").bind(days(keep.sensorDays)),
     env.DB.prepare("DELETE FROM port_stats WHERE ts < ?").bind(days(keep.portStatsDays)),
     env.DB.prepare("DELETE FROM watch_alerts WHERE ts < ? AND seen = 1").bind(days(keep.alertsDays)),
@@ -626,6 +633,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/stations" && m === "GET") return handleStations(req, env);
   if (p === "/api/meshcom/nodes" && m === "GET") return handleMeshcomNodes(req, env);
   if (p === "/api/meshcom/links" && m === "GET") return handleMeshcomLinks(req, env);
+  if (p === "/api/meshcom/groups" && m === "GET") return handleMeshcomGroups(req, env);
+  const meshGroupMatch = /^\/api\/meshcom\/groups\/([^/]+)\/messages$/.exec(p);
+  if (meshGroupMatch && m === "GET")
+    return handleMeshcomGroupMessages(req, env, meshGroupMatch[1]!.replace(/%2A/gi, "*"));
   const seriesMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/series$/.exec(p);
   if (seriesMatch && m === "GET") return handleStationSeries(req, env, seriesMatch[1]!);
   const pktMatch = /^\/api\/stations\/([A-Za-z0-9-]+)\/packets$/.exec(p);

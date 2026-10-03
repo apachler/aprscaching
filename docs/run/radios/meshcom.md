@@ -181,8 +181,9 @@ acks the message and confirms the verification. The player's steps are in
 - **Map**: MeshCom stations' positions, marked as MeshCom nodes, with how your node heard them and the links
   it heard ([MeshCom on the map](../../shack/live-map.md#meshcom-on-the-map)).
 - **Message log**: direct messages between callsigns.
-- **Port monitor**: every MeshCom frame on the `meshcom` port, including group and broadcast text. That
-  text stays out of the message log because it is addressed to no one in particular.
+- **Port monitor**: every MeshCom frame on the `meshcom` port, including group and broadcast text.
+- **Messages → MeshCom groups**: group and broadcast text, read only, kept apart from the message log because
+  it is addressed to no station ([Read MeshCom group chat](../../shack/messages.md#read-meshcom-group-chat)).
 - **`deploy/aprscaching doctor`**: when each node was last heard, and a warning for old firmware or for
   `MESHCOM_BIND=0.0.0.0` on a public host.
 

@@ -48,7 +48,7 @@ signed account-move record points attribution at the new instance across the net
 | Positions from APRS-IS and from browser radio forwarding | 7 days, pruned nightly; finds use them as evidence | fixed |
 | Other positions, finds, caches, accounts, keys | until erased | — |
 | Shack raw-packet ring | 24 hours | `RETENTION` (`packetsHours`) |
-| Message log | 7 days | `RETENTION` (`messagesDays`) |
+| Message log and MeshCom group messages | 7 days | `RETENTION` (`messagesDays`) |
 | Weather and telemetry readings | 30 days | `RETENTION` (`sensorDays`) |
 | Per-port RX/TX counters | 7 days | `RETENTION` (`portStatsDays`) |
 | Watch alerts the member has seen | 30 days | `RETENTION` (`alertsDays`) |
