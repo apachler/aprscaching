@@ -70,10 +70,9 @@ Set `BBS_NODE_CALL`, and the box answers inbound AX.25 connects to that call wit
 (list, read, send, kill, help, …), backed by a per-caller snapshot of the gateway's mail store. The log shows
 `[bbs] BBS answering inbound connects on <CALL> (FBB forwarding gate armed)`.
 
-The gateway also runs a connectionless store-and-forward BBS. It holds personal mail and bulletins; personal
-mail is **held until the addressee is next heard**, then delivered as a standard APRS message with
-line-number ack tracking. Mail goes out from the instance's service call (`SERVICE_CALL`, by default your callsign with SSID 15). The message format (P/B type
-and BID) is MBL/FBB-compatible. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
+The gateway holds the BBS's message base: personal mail, bulletins and NTS traffic. It moves them the F6FBB way
+only: stations read and write over a connect to the packet BBS, and FBB forwarding exchanges them with partner
+BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type and BID) is MBL/FBB-compatible. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
 
 ### FBB forwarding
 

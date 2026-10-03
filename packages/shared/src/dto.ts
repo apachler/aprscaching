@@ -455,9 +455,6 @@ export interface BbsMessage {
   readAt: number | null;
   replyTo?: number | null;
   threadId?: number | null; // FBB thread tree
-  // personal-message delivery state (present on inbox listings):
-  delivery?: "held" | "sent" | "acked" | "expired";
-  lineNo?: number | null;
-  attempts?: number;
-  ackedAt?: number | null;
+  /** Personal mail you sent: the partner BBSes FBB forwarding passed it to. */
+  forwardedTo?: string[];
 }

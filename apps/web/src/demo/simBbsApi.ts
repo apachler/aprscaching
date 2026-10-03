@@ -17,7 +17,7 @@ type Msg = {
   readAt: number | null;
   replyTo: number | null;
   threadId: number | null;
-  delivery?: string;
+  forwardedTo?: string[];
 };
 
 const T = 1751350800; // fixed epoch (harness determinism)
@@ -40,7 +40,6 @@ const INBOX: Msg[] = [
     toCall: "OE8APR-7",
     subject: "Re: JN77 activation Sat",
     body: "Great, I'll bring the 2m beam and the DigiRig. Meet at the Schoeckl car park 0900z? 73 Martin OE3ABC",
-    delivery: "held",
   }),
   m({
     id: 2,
@@ -49,7 +48,6 @@ const INBOX: Msg[] = [
     toCall: "OE8APR-7",
     subject: "QSL via bureau OK",
     body: "Confirmed our 20m SSB QSO from last Sunday. Card on its way via the DARC bureau. 73!",
-    delivery: "held",
   }),
   m({
     id: 3,
@@ -59,7 +57,7 @@ const INBOX: Msg[] = [
     subject: "Found AC-0008 Schoeckl",
     body: "Logged your living cache on the summit today - beaconed from the TH-D75. Nice hide! vy 73",
     readAt: T,
-    delivery: "acked",
+    forwardedTo: ["OE8XBM"],
   }),
   m({
     id: 4,
@@ -95,7 +93,6 @@ const SENT: Msg[] = [
     replyTo: 1,
     threadId: 1,
     postedAt: T + 1800,
-    delivery: "sent",
   }),
 ];
 const BULLETINS: Msg[] = [

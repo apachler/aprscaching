@@ -47,10 +47,10 @@ you signed in with an account that holds the callsign.
 3. Enter **To**: a callsign, or `ALL`, `BLN…` for a bulletin.
 4. Enter an optional **Subject** and the **Message**, then select **Send**.
 
-Personal mail waits until the instance next hears the addressee, then goes out as an APRS message
-([Personal mail held until you are heard](messages.md#personal-mail-held-until-you-are-heard)). **Sent**
-shows its state: **held**, **sent**, **✓ delivered** or **✕ expired**. Bulletins also reach the instances this
-one federates with.
+Personal mail waits in the BBS until its addressee reads it here or by connecting to the packet BBS, or until
+FBB forwarding passes it to the addressee's home BBS. It is never sent over APRS or MeshCom. **Sent** shows its
+state: **read**, **forwarded to** a partner BBS, or **waiting**. Bulletins also reach the instances this one
+federates with.
 
 ### Read mail and bulletins
 

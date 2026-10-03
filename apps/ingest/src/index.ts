@@ -457,8 +457,8 @@ if (env.BOX_ID) {
 import { AprsUplink, uplinkLogin } from "./uplink.js";
 let uplinkStarted = false;
 /**
- * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, BBS mail delivered by
- * APRS message, announced finds and weather. Started once, under the login `uplinkLogin` chose.
+ * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, announced finds and
+ * weather. Started once, under the login `uplinkLogin` chose.
  */
 function startUplink(serviceCall: string, servicePass: string): void {
   if (uplinkStarted) return;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The instance's one on-air call. Radio commands (`FOUND`, `DNF`, `NOTE`, `HELP`) and `VERIFY` messages are
- * addressed to it; acks, replies and held personal mail are sent from it.
+ * addressed to it; acks and replies are sent from it.
  *
  * It is a real callsign under the sysop's licence: the first `ADMIN_CALLSIGNS` base call with SSID 15, unless
  * `SERVICE_CALL` names another. A callsign shape is what every path accepts: MeshCom nodes drop a direct

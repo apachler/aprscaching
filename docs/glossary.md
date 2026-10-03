@@ -216,7 +216,7 @@ explains it in full.
 <span id="service-call"></span>Service call
 :   The callsign an instance listens on for APRS and MeshCom messages: the sysop's callsign with SSID 15,
     such as `OE8APR-15`, unless the instance names another. You send it `FOUND`, `DNF`, `NOTE` or `VERIFY`
-    messages, and personal mail held for you comes from it
+    messages, and its acks and replies come from it
     ([Log from your radio](play/log-a-find.md#log-from-your-radio)).
 
 ## Next

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The instance's service call: the sysop's call with SSID 15 unless SERVICE_CALL names another, the ingest
-// box told it, radio commands taken on it, and held mail confirmed only by an ack addressed to it.
+// box told it, and radio commands taken on it. The BBS never sends over APRS.
 import { describe, it, expect } from "vitest";
 import { serviceCall } from "@aprscaching/gateway/servicecall";
 import { handleIngest, handleIngestCheck } from "@aprscaching/gateway/ingest";
@@ -67,16 +67,12 @@ describe("radio traffic to the service call", () => {
     expect(rows).toEqual([expect.objectContaining({ from_call: "OE5XYZ-7" })]);
   });
 
-  it("marks held mail delivered only on an ack addressed to the service call", async () => {
+  it("sends no BBS mail over APRS when its addressee is heard: the BBS moves mail the F6FBB way only", async () => {
     const gw = gateway();
     gw.sqlite.exec(
-      "INSERT INTO bbs_delivery (msg_id, to_call, line_no, attempts, status) VALUES (1, 'OE5XYZ-7', 7, 1, 'sent')",
+      "INSERT INTO bbs_messages (type, from_call, to_call, body, posted_at) VALUES ('P', 'OE1ABC', 'OE5XYZ-7', 'hello', 1)",
     );
-    const status = () =>
-      (gw.sqlite.prepare("SELECT status FROM bbs_delivery WHERE msg_id = 1").get() as { status: string }).status;
-    await ingest(gw.env, "OE5XYZ-7", ":OE8APR   :ack7"); // the sysop's own traffic, not the mailbox's
-    expect(status()).toBe("sent");
-    await ingest(gw.env, "OE5XYZ-7", ":OE8APR-15:ack7");
-    expect(status()).toBe("acked");
+    await ingest(gw.env, "OE5XYZ-7", ">on the air"); // heard: a status, no position to fan out live
+    expect(gw.sqlite.prepare("SELECT COUNT(*) AS n FROM aprs_outbox").get()).toEqual({ n: 0 });
   });
 });
