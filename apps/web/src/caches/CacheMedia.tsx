@@ -96,7 +96,7 @@ export function CacheMedia(props: { cacheId: number; isOwner: boolean; onToast: 
           <input
             ref={fileRef}
             type="file"
-            accept="image/*,audio/*,.pdf,.txt,.zip"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif,audio/*"
             disabled={busy}
             onChange={(e) => {
               const f = e.target.files?.[0];

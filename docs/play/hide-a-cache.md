@@ -102,10 +102,10 @@ rendezvous when I meet other living caches** if you want meetings with other liv
 also turn your own station into a cache: **Settings → My stations**, then **Become a cache** or **Turn into a
 cache**.
 
-**Media.** Open your cache and add files under **Media**. You must be signed in as the callsign that owns the
-cache.
+**Media.** Open your cache and add photos and sound under **Media**. You must be signed in as the callsign that
+owns the cache.
 
-- Photos, audio, PDF, text and zip files.
+- Photos: JPEG, PNG, WebP, GIF or AVIF. Sound: MP3, Ogg, WAV or M4A.
 - Up to 20 items per cache, 10 MB each.
 - The app scales a photo to at most 1,600 pixels on its longest side before upload.
 - Everyone can see and play the media.
