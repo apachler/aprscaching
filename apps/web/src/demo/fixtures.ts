@@ -636,7 +636,18 @@ const ROUTES: Route[] = [
   [
     "GET",
     /^\/\.well-known\/aprscaching$/,
-    () => ({ instance: INSTANCE, signed: true, publicKey: "demo", aprsCall: ME, operator: ME }),
+    () => ({
+      instance: INSTANCE,
+      signed: true,
+      publicKey: "demo",
+      aprsCall: ME,
+      operator: ME,
+      addresses: [
+        { transport: "https", address: `https://${INSTANCE}` },
+        { transport: "44net", address: "aprs.oe8apr.ampr.org" },
+      ],
+      peers: ["oe.aprscaching.org"],
+    }),
   ],
   ["GET", /^\/\.well-known\/source$/, () => SOURCE],
   // a shared map view with the first cache open, so a frame can show the cache sheet (`?v=demo`)

@@ -150,6 +150,18 @@ const SURFACES = [
   { name: "ranks", as: "user", query: "?view=ranks" },
   { name: "profile", as: "user", query: "?view=profile" },
   { name: "settings", as: "user", query: "?view=settings" },
+  // Help & credits, with the instance's About card and the bug-report link
+  {
+    name: "about",
+    as: "user",
+    query: "?view=settings",
+    wait: ".panel",
+    steps: [
+      ["click", "button:has-text('Help & credits')"],
+      ["scroll", ".about-facts"],
+    ],
+    after: ".about-facts",
+  },
   { name: "offline", as: "user", query: "?view=offline" },
   { name: "shack", as: "user", query: "?view=shack" },
   { name: "terminal", as: "user", query: "?view=terminal" },

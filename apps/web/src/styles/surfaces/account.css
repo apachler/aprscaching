@@ -23,6 +23,21 @@
     background: var(--surface-2);
   }
   /* the exact message to transmit: label / value pairs, values in mono so they can be keyed in as shown */
+  /* About this instance (identity/AboutInstance.tsx): label and value side by side, values wrap anywhere */
+  .about-facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-xs) var(--space-md);
+    margin: var(--space-sm) 0;
+  }
+  .about-facts dt {
+    color: var(--muted);
+    font-size: var(--text-label);
+  }
+  .about-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
   .verify-msg {
     display: grid;
     grid-template-columns: auto 1fr;

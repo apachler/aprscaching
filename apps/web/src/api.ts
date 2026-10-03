@@ -902,6 +902,8 @@ export function getFedDescriptor(): Promise<{
   operator: string | null;
   /** the typed transport endpoints this instance publishes (FED_ENDPOINTS) */
   addresses?: { transport: string; address: string }[];
+  /** the peer instances this instance names (FED_PEERS) */
+  peers?: string[];
 }> {
   return call(`/.well-known/aprscaching`);
 }
@@ -1824,3 +1826,8 @@ export function getSource(): Promise<SourceInfo> {
   return call<SourceInfo>(`/.well-known/source`);
 }
 export const sourceLinkUrl = `${API_BASE}/source`;
+/** Where to report a bug: a GitHub repository's new-issue chooser, or any other forge's repository page. */
+export function bugReportUrl(repo: string): string {
+  const r = repo.replace(/\.git$/, "").replace(/\/$/, "");
+  return /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(r) ? `${r}/issues/new/choose` : r;
+}
