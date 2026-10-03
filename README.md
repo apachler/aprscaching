@@ -75,7 +75,8 @@ affiliated with, sponsored by, or endorsed by** Bob Bruninga or his estate. The 
 application are the author's (OE8APR) own work.
 
 Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre GL; imported heritage data carries its
-source's own licence and disclaimer. The same credits appear in-app under *Settings → About & credits*.
+source's own licence and disclaimer. DXCC entities and prefixes come from the Amateur Radio Country Files by Jim
+Reisert, AD1C (MIT). The same credits appear in-app under *Settings → About & credits*.
 
 ## License
 

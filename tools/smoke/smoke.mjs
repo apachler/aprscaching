@@ -149,14 +149,14 @@ const metaCache = await call("POST", "/api/caches", {
   lon: 15.45,
   ownerCall: "OE8APR",
   driveIn: true,
-  country: "AT",
+  country: "OE",
   tags: ["Scenic", "scenic", "QRP"],
 });
 ok(
   "create stores drive-in + country + deduped tags",
   metaCache.status === 201 &&
     metaCache.data?.cache?.driveIn === true &&
-    metaCache.data?.cache?.country === "AT" &&
+    metaCache.data?.cache?.country === "OE" &&
     Array.isArray(metaCache.data?.cache?.tags) &&
     metaCache.data.cache.tags.join(",") === "scenic,qrp",
   JSON.stringify(metaCache.data?.cache),

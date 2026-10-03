@@ -32,10 +32,10 @@ describe("cache filters", () => {
     expect(passes(cache({}), NO_FILTERS)).toBe(true);
   });
   it("match the country without regard to case, and only caches that carry one", () => {
-    const f = { ...NO_FILTERS, country: "AT" };
+    const f = { ...NO_FILTERS, country: "OE" };
     expect(filtering(f)).toBe(true);
-    expect(passes(cache({ country: "at" }), f)).toBe(true);
-    expect(passes(cache({ country: "DE" }), f)).toBe(false);
+    expect(passes(cache({ country: "oe" }), f)).toBe(true);
+    expect(passes(cache({ country: "DL" }), f)).toBe(false);
     expect(passes(cache({ country: null }), f)).toBe(false);
   });
   it("match any selected tag", () => {

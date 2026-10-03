@@ -8,6 +8,7 @@ import { ExportButton } from "../exports/ExportButton.js";
 import { MESHMAP_ATTRIBUTION, meshmapUrl } from "../meshcom/meshcomView.js";
 import type { CacheType } from "@aprscaching/shared";
 import { NO_FILTERS, type CacheFilters } from "./filters.js";
+import { countryLabel } from "./CountrySelect.js";
 
 export interface SpotFilters {
   bands: string[];
@@ -116,7 +117,7 @@ export function FilterPanel(props: {
                 <option value="">Any country</option>
                 {countries.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {countryLabel(c)}
                   </option>
                 ))}
               </select>

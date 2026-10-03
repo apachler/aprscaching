@@ -56,7 +56,7 @@ hide earns the **Hider** badge on your profile.
 | **Hint** | A spoiler that finders open with a tap. Up to 500 characters. It never leaves this instance. | empty |
 | **Description** | The story of the cache. Up to 4,000 characters. | empty |
 | **Drive-in (car-accessible)** | Marks a cache you can reach by car. | off |
-| **Country** | A country code or short name, such as `AT`. | empty |
+| **Country** | The DXCC entity it lies in, shown with its prefix, such as `OE` for Austria. | the country of your callsign |
 | **Tags** | Words separated by commas, such as `scenic, family, qrp`. Up to 12 tags of 24 characters. | none |
 | **Who can rate** | **Finders only**, **Anyone signed in** or **Nobody (disabled)**. | Finders only |
 | **Federation scope** | Who sees the cache ([Who sees your cache](#who-sees-your-cache)). | Public |
