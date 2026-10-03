@@ -49,4 +49,16 @@ describe("FBB BIDs", () => {
     expect(r.status).toBe(201);
     expect(r.data.bid).toMatch(/_OE8APR$/);
   });
+
+  it("are never owned by an instance without a sysop call, which shares the fallback call", async () => {
+    const env = authEnv();
+    const r = await call(
+      env,
+      "POST",
+      "/api/bbs/forward/inbound",
+      { message: { bid: "1_APRSCG", type: "P", from: "DL1ABC", to: "OE1AAA", title: "hi", body: "x" } },
+      INGEST,
+    );
+    expect(r.data).toMatchObject({ stored: 1 });
+  });
 });

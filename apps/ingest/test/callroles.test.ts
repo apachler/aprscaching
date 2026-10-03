@@ -26,4 +26,12 @@ describe("callsign checks against the gateway", () => {
     // an older gateway names no sites: nothing to compare
     expect(callWarnings(env, "OE8APR-15")).toEqual([]);
   });
+  it("warns when FBB forwarding runs under a call the gateway's BIDs do not carry", () => {
+    const env = { BBS_FORWARD: "1", BBS_NODE_CALL: "OE8APR-8" };
+    expect(callWarnings(env, "OE8APR-15")).toEqual([]);
+    expect(callWarnings(env, "APRSCG")).toEqual([
+      expect.stringMatching(/^BBS_FORWARD is on, but the gateway's BIDs carry APRSCG/),
+    ]);
+    expect(callWarnings({ BBS_NODE_CALL: "OE8APR-8" }, "APRSCG")).toEqual([]); // no forwarding, no BIDs leave
+  });
 });
