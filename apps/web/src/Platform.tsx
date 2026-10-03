@@ -894,7 +894,7 @@ export default function Platform({ session, startTour }: { session: SessionState
               <AlertsPanel callsign={callsign} onFly={(lat, lon) => flyTo(lat, lon, 12)} onClose={closeView} />
             )}
             {isPanel("offline") && <OfflinePanel onClose={closeView} />}
-            {isPanel("messages") && <MessagesPanel onClose={closeView} />}
+            {isPanel("messages") && <MessagesPanel onClose={closeView} onRadio={() => openView(panel("settings"))} />}
             {isPanel("filter") && (
               <FilterPanel
                 filters={filters}

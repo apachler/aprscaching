@@ -8,7 +8,7 @@ message.
 
 | Surface | What it holds |
 |---|---|
-| **Messages** in the left rail | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
+| **Messages** in the left rail, or **More → Messages** on a phone | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
 | **Settings → My radio (browser) → Local inbox** | The messages your own radio heard in this browser, with an **ACK** button for those addressed to you. |
 | **Shack → BBS** | Mail and bulletins between accounts. Personal mail reaches the addressee's radio as an APRS message. |
 | **You → Logs sent over the air** | The commands you sent to the instance by radio, such as `FOUND`, waiting for you to confirm them. |
@@ -17,9 +17,11 @@ message.
 
 ## Read the messages the instance hears
 
-1. Select **Messages** in the left rail.
+1. Select **Messages** in the left rail. On a phone, select **More**, then **Messages**.
 2. The newest messages come first, each with sender, recipient and age. A message from or to your callsign
    (any [SSID](../glossary.md#ssid)) is highlighted. **Load more** shows older ones.
+3. To read only your own traffic, select **Mine**: the list keeps the messages from or to any SSID of your
+   callsign. **All** shows everything again.
 
 The list holds what the instance heard over the air and from [APRS-IS](../glossary.md#aprs-is), and the messages
 you sent from your radio in the browser or from your remote box, marked **sent**. Acknowledgements are not
@@ -35,7 +37,8 @@ listed. When nothing has arrived yet, the list says so.
 
 ### Steps
 
-1. In **Settings → My radio (browser)**, switch on **Enable transmit**.
+1. In **Settings → My radio (browser)**, switch on **Enable transmit**. From **Messages**, **Open Settings**
+   takes you there.
 2. Check the **TX callsign** SSID, `-7` by default.
 3. Under **Message**, enter the recipient's callsign in **to** (up to nine characters) and the text in
    **message** (up to 67 characters).
