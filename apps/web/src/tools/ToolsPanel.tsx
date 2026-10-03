@@ -14,6 +14,7 @@ import {
   type ToolTrust,
 } from "@aprscaching/tools";
 import { fetchToolManifest, loadSandbox, type ColourRule, type Sandbox } from "./sandbox.js";
+import { API_BASE } from "../api.js";
 import { listenDecode, audioDecodeSupported, type AudioCapture } from "../rf/audioDecode.js";
 import { useToolHost, setToolEnabled, notifyToolsChanged, toolHost } from "./host.js";
 import { TOOL_REGISTRY_URL, TOOL_REGISTRY_AUTHORITY } from "./registry-config.js";
@@ -100,7 +101,7 @@ function importedAdapter(manifest: ToolManifest, sandbox: Sandbox): Tool {
  * shared ToolHost, so enabling a tool here lights it up on whatever surface(s) its manifest declares
  * (packet terminal, BBS, node, or this web console) — not just here. Built-ins run in-process under the
  * capability model (off by default); imported tools are fetched by URL, permission-prompted, and run in
- * a locked-down Worker. TX-capable tools additionally require a verified callsign. Nothing here
+ * a Worker inside a sandboxed, opaque-origin frame. TX-capable tools additionally require a verified callsign. Nothing here
  * can bypass the trust engine.
  */
 interface Imported {
@@ -247,7 +248,10 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
         subscribe: (t: string, cb: (data: unknown, from: string) => void) => host.hostSubscribe(t, cb),
         call: (n: string, a: unknown) => host.hostCallService(n, a),
       };
-      const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge);
+      const sandbox = await loadSandbox(scriptUrl, manifest.permissions, bridge, {
+        connect: manifest.connect,
+        appOrigins: [location.origin, new URL(API_BASE || location.origin, location.href).origin],
+      });
       // Register the imported tool into the shared host so its colour rules + panel reach every surface
       // (terminal/BBS/node), just like a built-in. Commands + decoders stay on the async worker path below.
       try {
@@ -446,12 +450,18 @@ export function ToolsPanel(props: { callsign: string; verified: boolean }) {
               </p>
               <p className="tool-perms">{perms(prompt.manifest.permissions)}</p>
               <p className="tool-surfaces">surfaces: {prompt.manifest.surfaces.join(", ")}</p>
+              {prompt.manifest.connect?.length ? (
+                <p className="tool-surfaces">
+                  connects to: <span className="mono">{prompt.manifest.connect.join(", ")}</span>
+                </p>
+              ) : null}
               <p>
                 <Badge kind={ti.kind}>{ti.label}</Badge>
               </p>
               <p className="muted fine">
-                It will run sandboxed in a Worker. Network access is blocked unless it requested (and you approve) the{" "}
-                <code>network</code> capability. TX still requires your verified callsign.
+                It runs in a sealed frame, apart from your session, passkeys and stored keys. It reaches the network
+                only with the <code>network</code> capability, and then only the origins listed above. TX still requires
+                your verified callsign.
               </p>
               <div className="row gap-2 end">
                 <Button onClick={() => setPrompt(null)}>Cancel</Button>

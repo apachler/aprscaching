@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * sandbox.ts — the Web Worker sandbox for IMPORTED (third-party) Tools. Built-in
- * tools run in-process (trusted); an imported tool's script runs in a Worker with the dangerous globals
- * (fetch/XHR/WebSocket/importScripts) shadowed unless it was granted 'network'. The worker exposes a
- * `register({ commands, colourRules, panel, decoders })` API + an `ipc` bridge, and answers command/decode
- * calls over postMessage. Contributions reach every surface the same way built-ins do: the host adapter
- * (ToolsPanel) wires the DECLARATIVE ones (colour rules, panel) into the shared ToolHost synchronously,
- * while code-bearing ones (commands, decoders) round-trip to the worker asynchronously. This is the
- * untrusted-code boundary; Chromium-first, sandbox hardening is validate-at-deploy.
+ * sandbox.ts — the sandbox for IMPORTED (third-party) Tools. Built-in tools run in-process (trusted); an
+ * imported tool's script runs in a Worker that lives inside an `<iframe sandbox="allow-scripts" srcdoc>`.
+ * The frame has an opaque origin, so the tool shares no storage, cookies, IndexedDB keys or service worker
+ * with the app, and the frame's CSP limits its connections to the origins its manifest lists in `connect`
+ * when it holds the 'network' grant (none otherwise). Without that grant the worker's network globals are
+ * shadowed as well. The worker exposes a `register({ commands, colourRules, panel, decoders })` API + an
+ * `ipc` bridge, and answers command/decode calls over postMessage, which the frame relays. Contributions
+ * reach every surface the same way built-ins do: the host adapter (ToolsPanel) wires the DECLARATIVE ones
+ * (colour rules, panel) into the shared ToolHost synchronously, while code-bearing ones (commands,
+ * decoders) round-trip to the worker asynchronously. Every message from the frame is shape-checked here.
  */
 import { validateManifest, type ToolManifest, type Capability } from "@aprscaching/tools";
 
@@ -68,7 +70,7 @@ function workerSource(): string {
     self.onmessage = (ev) => {
       const m = ev.data;
       if (m.type === "load") {
-        if (!m.network) { for (const g of ["fetch","XMLHttpRequest","WebSocket","importScripts"]) { try { self[g] = undefined; } catch (e) {} } }
+        if (!m.network) { for (const g of ["fetch","XMLHttpRequest","WebSocket","WebTransport","EventSource","importScripts","Worker","SharedWorker"]) { try { self[g] = undefined; } catch (e) {} } }
         try { new Function("register", "ipc", m.script)(register, m.ipc ? ipc : undefined);
           self.postMessage({ type: "loaded", commands: Object.keys(commands), colourRules, panel, decoders: decoderMeta }); }
         catch (e) { self.postMessage({ type: "error", error: String(e && e.message || e) }); }
@@ -86,6 +88,137 @@ function workerSource(): string {
     };`;
 }
 
+/** How long the frame may take to start the worker and load the tool before the import fails. */
+const LOAD_TIMEOUT_MS = 15_000;
+const MAX_LIST = 200;
+
+/**
+ * The frame's Content-Security-Policy. Scripts run inline and from blob: (the worker), and the worker
+ * evaluates the tool's source. Connections go to `connect` only; an empty list blocks every request.
+ */
+export function frameCsp(connect: string[]): string {
+  return [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' 'unsafe-eval' blob:",
+    "worker-src blob:",
+    `connect-src ${connect.length ? connect.join(" ") : "'none'"}`,
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join("; ");
+}
+
+/**
+ * The origins a tool's frame may connect to: its manifest's `connect` list when it holds the 'network'
+ * grant, minus the app's own origins (the page and the API, in http and ws form), so a tool never
+ * addresses the app's API from inside the sandbox.
+ */
+export function connectSources(granted: Capability[], connect: string[] | undefined, appOrigins: string[]): string[] {
+  if (!granted.includes("network") || !connect?.length) return [];
+  const own = new Set<string>();
+  for (const o of appOrigins) {
+    try {
+      const u = new URL(o);
+      own.add(`${u.protocol}//${u.host}`);
+      own.add(`${u.protocol === "https:" ? "wss:" : "ws:"}//${u.host}`);
+    } catch {
+      /* not a URL */
+    }
+  }
+  return connect.filter((o) => !own.has(o));
+}
+
+/** The frame document: its CSP, then a relay between the parent window and the tool's worker. */
+export function frameSource(csp: string): string {
+  // `<` is escaped so the worker source can never close the inline script element.
+  const src = JSON.stringify(workerSource()).replace(/</g, "\\u003c");
+  const attr = csp.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${attr}"><script>
+const w = new Worker(URL.createObjectURL(new Blob([${src}], { type: "text/javascript" })));
+w.onmessage = (e) => parent.postMessage(e.data, "*");
+w.onerror = (e) => { e.preventDefault(); parent.postMessage({ type: "error", error: String(e.message || "tool worker failed") }, "*"); };
+addEventListener("message", (e) => { if (e.source === parent) w.postMessage(e.data); });
+parent.postMessage({ type: "ready" }, "*");
+</script>`;
+}
+
+/** One message from the frame, after its shape is checked. Anything else is dropped. */
+export type FrameMessage =
+  | { type: "ready" }
+  | { type: "error"; error: string }
+  | { type: "loaded"; commands: string[]; colourRules: ColourRule[]; panel: unknown | null; decoders: DecoderMeta[] }
+  | { type: "cmdResult"; id: number; lines: string[] }
+  | { type: "decodeResult"; id: number; out: string }
+  | { type: "panel"; spec: unknown }
+  | { type: "emit"; topic: string; data: unknown }
+  | { type: "subscribe"; topic: string }
+  | { type: "call"; id: number; name: string; args: unknown };
+
+const isStr = (x: unknown): x is string => typeof x === "string";
+const isId = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x);
+const optStr = (x: unknown): string | undefined => (isStr(x) ? x : undefined);
+
+function colourRule(x: unknown): ColourRule | null {
+  if (typeof x !== "object" || x === null) return null;
+  const r = x as Record<string, unknown>;
+  return {
+    srcPrefix: optStr(r.srcPrefix),
+    dstPrefix: optStr(r.dstPrefix),
+    textIncludes: optStr(r.textIncludes),
+    colorVar: optStr(r.colorVar),
+    hidden: r.hidden === true,
+  };
+}
+
+function decoderMeta(x: unknown): DecoderMeta | null {
+  if (typeof x !== "object" || x === null) return null;
+  const d = x as Record<string, unknown>;
+  return isStr(d.id) && isStr(d.label) && isStr(d.kind) ? { id: d.id, label: d.label, kind: d.kind } : null;
+}
+
+function listOf<T>(x: unknown, f: (v: unknown) => T | null): T[] {
+  if (!Array.isArray(x)) return [];
+  const out: T[] = [];
+  for (const v of x.slice(0, MAX_LIST)) {
+    const r = f(v);
+    if (r !== null) out.push(r);
+  }
+  return out;
+}
+
+/** Check the shape of a message from the frame; `null` for anything that is not one of the known kinds. */
+export function parseFrameMessage(data: unknown): FrameMessage | null {
+  if (typeof data !== "object" || data === null) return null;
+  const m = data as Record<string, unknown>;
+  switch (m.type) {
+    case "ready":
+      return { type: "ready" };
+    case "error":
+      return { type: "error", error: isStr(m.error) ? m.error.slice(0, 500) : "tool failed" };
+    case "loaded":
+      return {
+        type: "loaded",
+        commands: listOf(m.commands, (v) => (isStr(v) ? v : null)),
+        colourRules: listOf(m.colourRules, colourRule).slice(0, 40),
+        panel: m.panel ?? null,
+        decoders: listOf(m.decoders, decoderMeta),
+      };
+    case "cmdResult":
+      return isId(m.id) && Array.isArray(m.lines) ? { type: "cmdResult", id: m.id, lines: m.lines.map(String) } : null;
+    case "decodeResult":
+      return isId(m.id) && isStr(m.out) ? { type: "decodeResult", id: m.id, out: m.out } : null;
+    case "panel":
+      return { type: "panel", spec: m.spec };
+    case "emit":
+      return isStr(m.topic) ? { type: "emit", topic: m.topic, data: m.data } : null;
+    case "subscribe":
+      return isStr(m.topic) ? { type: "subscribe", topic: m.topic } : null;
+    case "call":
+      return isId(m.id) && isStr(m.name) ? { type: "call", id: m.id, name: m.name, args: m.args } : null;
+    default:
+      return null;
+  }
+}
+
 export interface Sandbox {
   commands: string[];
   colourRules: ColourRule[];
@@ -97,85 +230,124 @@ export interface Sandbox {
   destroy(): void;
 }
 
+export interface SandboxOptions {
+  /** The manifest's `connect` origins; reachable only with the 'network' grant. */
+  connect?: string[];
+  /** The app's own origins (page and API), which the frame never connects to. */
+  appOrigins?: string[];
+}
+
 /**
- * Load a tool script into a locked-down worker. `granted` are the user-approved capabilities; `bridge`
- * (supplied only when 'ipc' was granted) wires the worker's emit/subscribe/call to the host bus.
+ * Load a tool script into a worker inside a sandboxed frame. `granted` are the user-approved
+ * capabilities; `bridge` (supplied only when 'ipc' was granted) wires the worker's emit/subscribe/call to
+ * the host bus. `destroy()` removes the frame, which ends its worker.
  */
-export async function loadSandbox(scriptUrl: string, granted: Capability[], bridge?: IpcBridge): Promise<Sandbox> {
+export async function loadSandbox(
+  scriptUrl: string,
+  granted: Capability[],
+  bridge?: IpcBridge,
+  opts: SandboxOptions = {},
+): Promise<Sandbox> {
   const script = await (await fetch(scriptUrl, { credentials: "omit" })).text();
-  const worker = new Worker(URL.createObjectURL(new Blob([workerSource()], { type: "text/javascript" })));
+  const network = granted.includes("network");
+  const csp = frameCsp(connectSources(granted, opts.connect, opts.appOrigins ?? [location.origin]));
+  const frame = document.createElement("iframe");
+  frame.setAttribute("sandbox", "allow-scripts");
+  frame.setAttribute("aria-hidden", "true");
+  frame.tabIndex = -1;
+  frame.hidden = true;
+  frame.srcdoc = frameSource(csp);
+
   const ipcOn = granted.includes("ipc") && !!bridge;
   const disposers: Array<() => void> = [];
   let panelCb: ((spec: unknown) => void) | null = null;
-  const decodePending = new Map<number, (out: string) => void>();
-  let dseq = 0;
-
-  // Bridge worker → host (IPC + dynamic panel updates + decode results). The host routes; payloads opaque.
-  const onAux = (ev: MessageEvent) => {
-    const m = ev.data;
-    if (m.type === "panel") {
-      panelCb?.(m.spec);
-      return;
-    }
-    if (m.type === "decodeResult") {
-      decodePending.get(m.id)?.(m.out);
-      decodePending.delete(m.id);
-      return;
-    }
-    if (!ipcOn || !bridge) return;
-    if (m.type === "emit") bridge.emit(String(m.topic), m.data);
-    else if (m.type === "subscribe")
-      disposers.push(
-        bridge.subscribe(String(m.topic), (data, from) =>
-          worker.postMessage({ type: "ipcEvent", topic: m.topic, data, from }),
-        ),
-      );
-    else if (m.type === "call")
-      worker.postMessage({ type: "callResult", id: m.id, result: bridge.call(String(m.name), m.args) });
-  };
-
-  const loaded = await new Promise<{
-    commands: string[];
-    colourRules: ColourRule[];
-    panel: unknown | null;
-    decoders: DecoderMeta[];
-  }>((resolve, reject) => {
-    worker.onmessage = (ev) => {
-      if (ev.data.type === "loaded") resolve(ev.data);
-      else if (ev.data.type === "error") reject(new Error(ev.data.error));
-      else onAux(ev);
-    };
-    worker.postMessage({ type: "load", script, network: granted.includes("network"), ipc: ipcOn });
-  });
-  let seq = 0;
   const pending = new Map<number, (lines: string[]) => void>();
-  worker.onmessage = (ev) => {
-    if (ev.data.type === "cmdResult") pending.get(ev.data.id)?.(ev.data.lines);
-    else onAux(ev);
+  const decodePending = new Map<number, (out: string) => void>();
+  let seq = 0;
+  let dseq = 0;
+  // The frame's origin is opaque, so "*" is the only target origin postMessage accepts for it.
+  const post = (msg: unknown) => frame.contentWindow?.postMessage(msg, "*");
+
+  let onLoad: ((m: FrameMessage) => void) | null = null;
+  const onMessage = (ev: MessageEvent) => {
+    if (!frame.contentWindow || ev.source !== frame.contentWindow) return;
+    const m = parseFrameMessage(ev.data);
+    if (!m) return;
+    if (m.type === "ready" || m.type === "loaded" || m.type === "error") {
+      onLoad?.(m);
+      return;
+    }
+    switch (m.type) {
+      case "cmdResult":
+        pending.get(m.id)?.(m.lines);
+        pending.delete(m.id);
+        return;
+      case "decodeResult":
+        decodePending.get(m.id)?.(m.out);
+        decodePending.delete(m.id);
+        return;
+      case "panel":
+        panelCb?.(m.spec);
+        return;
+    }
+    // The host routes the bus; payloads stay opaque.
+    if (!ipcOn || !bridge) return;
+    if (m.type === "emit") bridge.emit(m.topic, m.data);
+    else if (m.type === "subscribe")
+      disposers.push(bridge.subscribe(m.topic, (data, from) => post({ type: "ipcEvent", topic: m.topic, data, from })));
+    else if (m.type === "call") post({ type: "callResult", id: m.id, result: bridge.call(m.name, m.args) });
   };
+
+  const destroy = () => {
+    window.removeEventListener("message", onMessage);
+    for (const d of disposers) d();
+    disposers.length = 0;
+    frame.remove();
+  };
+
+  window.addEventListener("message", onMessage);
+  let loaded: Extract<FrameMessage, { type: "loaded" }>;
+  try {
+    loaded = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("the tool did not start in time")), LOAD_TIMEOUT_MS);
+      onLoad = (m) => {
+        if (m.type === "ready") {
+          post({ type: "load", script, network, ipc: ipcOn });
+          return;
+        }
+        clearTimeout(timer);
+        if (m.type === "loaded") resolve(m);
+        else if (m.type === "error") reject(new Error(m.error));
+      };
+      document.body.appendChild(frame);
+    });
+  } catch (e) {
+    destroy();
+    throw e;
+  } finally {
+    onLoad = null;
+  }
+
   return {
     commands: loaded.commands,
-    colourRules: Array.isArray(loaded.colourRules) ? loaded.colourRules : [],
-    panel: loaded.panel ?? null,
-    decoders: Array.isArray(loaded.decoders) ? loaded.decoders : [],
+    colourRules: loaded.colourRules,
+    panel: loaded.panel,
+    decoders: loaded.decoders,
     runCommand: (word, args) =>
       new Promise((resolve) => {
         const id = ++seq;
         pending.set(id, resolve);
-        worker.postMessage({ type: "cmd", id, word, args });
+        post({ type: "cmd", id, word, args });
       }),
     decode: (decId, input) =>
       new Promise((resolve) => {
         const id = ++dseq;
         decodePending.set(id, resolve);
-        worker.postMessage({ type: "decode", id, decId, input });
+        post({ type: "decode", id, decId, input });
       }),
     onPanel: (cb) => {
       panelCb = cb;
     },
-    destroy: () => {
-      for (const d of disposers) d();
-      worker.terminate();
-    },
+    destroy,
   };
 }

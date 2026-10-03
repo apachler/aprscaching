@@ -297,6 +297,8 @@ jobs:
       # so audio-mic.mjs (which resolves via chromium.executablePath()) finds it. Version pinned to match.
       - run: npx --yes playwright@1.61.1 install --with-deps chromium
       - run: node tools/e2e/audio-mic.mjs
+      # the imported-tool sandbox: what a tool reaches from its frame, with and without the network grant
+      - run: node tools/e2e/tool-sandbox.mjs
 
   # axe on every fixture surface (the demo harness: /?demo=app and /?demo=ui), in Dark, Light and Phosphor, at a
   # phone and a desktop width. A serious or critical finding fails the job; axe.json is kept either way.

@@ -17,6 +17,7 @@
     "conformance:meshcom": "node tools/conformance/meshcom.mjs",
     "e2e:audio": "node tools/e2e/audio-mic.mjs",
     "e2e:offline": "node tools/e2e/offline-shell.mjs",
+    "e2e:tools": "node tools/e2e/tool-sandbox.mjs",
     "verify": "tools/dev/verify.sh",
     "dev:web": "pnpm --filter @aprscaching/web dev",
     "dev:gateway": "pnpm --filter @aprscaching/gateway dev",

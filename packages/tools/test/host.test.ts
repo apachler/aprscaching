@@ -30,6 +30,21 @@ describe("Tool manifest validation", () => {
       false,
     );
   });
+  it("a network tool lists the https/wss origins it reaches, normalised to origins", () => {
+    const base = { name: "net-tool", title: "T", author: "X", version: "1", permissions: ["network"] };
+    expect(validateManifest(base).ok).toBe(false);
+    expect(validateManifest({ ...base, connect: [] }).ok).toBe(false);
+    const r = validateManifest({ ...base, connect: ["https://api.example.org/", "wss://feed.example.org:8443"] });
+    expect(r.ok && r.manifest.connect).toEqual(["https://api.example.org", "wss://feed.example.org:8443"]);
+  });
+  it("refuses connect entries that are not bare https/wss origins", () => {
+    const base = { name: "net-tool", title: "T", author: "X", version: "1", permissions: ["network"] };
+    for (const bad of ["http://example.org", "https://example.org/path", "https://u:p@example.org", "*", 42])
+      expect(validateManifest({ ...base, connect: [bad] }).ok).toBe(false);
+    expect(validateManifest({ ...base, connect: Array.from({ length: 9 }, (_, i) => `https://h${i}.org`) }).ok).toBe(
+      false,
+    );
+  });
 });
 
 describe("ToolHost — capability enforcement + dispatch", () => {
