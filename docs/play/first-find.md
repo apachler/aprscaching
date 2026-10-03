@@ -47,8 +47,9 @@ from your radio.
 
     ![A cache sheet on a phone, with difficulty, terrain, coordinates and the Log button in the bottom bar](../assets/shots/detail-mobile.webp){ width="280" loading=lazy }
 
-4. Tap **Navigate** and choose a map: **Maps app** (your phone's own), **Google**, **Apple** or
-   **OpenStreetMap**. Google and Apple open with a route to the cache; the others show the cache on their map.
+4. To get there, tap **Navigate** and choose a map: **Maps app** (your phone's own), **Google**, **Apple** or
+   **OpenStreetMap**. For the last stretch on foot, tap **Find**: the arrow points at the cache and shows how far
+   it is.
 
 ### Log the find
 

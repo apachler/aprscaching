@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getInstance, registerKey, logFind, errorText, type LogResult, type AppGeo } from "../api.js";
 import { signAuthorship } from "../crypto.js";
 import { useFmt, type Formatters } from "../format.js";
@@ -59,6 +59,8 @@ export function LogForm(props: {
   cacheStatus?: string;
   onLogged: () => void;
   onSignIn: () => void;
+  /** Counts the requests to log a find from elsewhere on the sheet (the Find view): each new one runs it. */
+  logRequest?: number;
 }) {
   const fmt = useFmt();
   const confirm = useConfirm();
@@ -134,6 +136,17 @@ export function LogForm(props: {
     }
   }
 
+  // a request from the Find view: bring the form into sight and log the find, once per request
+  const formRef = useRef<HTMLDivElement>(null);
+  const handled = useRef(props.logRequest ?? 0);
+  useEffect(() => {
+    const n = props.logRequest ?? 0;
+    if (n === handled.current) return;
+    handled.current = n;
+    formRef.current?.scrollIntoView({ block: "nearest" });
+    if (!busy) void doLog("found");
+  });
+
   if (result) {
     const found = result.logType === "found";
     const verb = found
@@ -144,7 +157,7 @@ export function LogForm(props: {
         ? "Marked DNF"
         : "Note posted";
     return (
-      <Card className="logresult" role="status">
+      <Card ref={formRef} className="logresult" role="status">
         <div className="big">
           {result.queued ? "Saved" : verb} {found && result.verified && !result.duplicate ? "✓" : ""}
         </div>
@@ -211,7 +224,7 @@ export function LogForm(props: {
       ? "You own this cache, so you don't log it as found. Post a note or a maintenance log."
       : null;
   return (
-    <Card className="logform">
+    <Card ref={formRef} className="logform">
       {noFind ? (
         <p className="muted" role="status">
           {noFind}
