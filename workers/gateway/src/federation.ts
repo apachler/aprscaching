@@ -24,6 +24,7 @@ import { verificationsOf } from "./callsign.js";
 import { baseCall } from "@aprscaching/aprs";
 import { parseEndpoints, SIG_DOMAIN, type FedEndpoint } from "@aprscaching/shared";
 import { bboxWhere, SYNC_REGION_CAPABILITY, type Bbox } from "./fedregion.js";
+import { serviceCall } from "./servicecall.js";
 
 const PROTOCOL = "aprscaching-federation/0.1";
 /** Wire protocol versions this instance speaks. 0.2 adds the generalized envelope + negotiation. */
@@ -542,7 +543,7 @@ export async function selfRegistryEntry(env: Env, instance: string): Promise<Reg
     instance,
     key: fk?.publicX,
     operator: env.FED_OPERATOR,
-    aprsCall: env.FED_APRS_CALL,
+    aprsCall: serviceCall(env),
     ...(addresses.length ? { addresses } : {}),
   };
 }
@@ -646,7 +647,7 @@ export async function handleWellKnown(req: Request, env: Env): Promise<Response>
     publicKeys: await instanceKeys(env), // current + previous keys + revocations, each {x,since?,until?,revoked?}
     rotations: parseJsonArray<RotationRecord>(env.FED_ROTATIONS), // continuity proofs (new key signed by old)
     operator: env.FED_OPERATOR ?? null, // self-published operator + APRS service address
-    aprsCall: env.FED_APRS_CALL ?? null,
+    aprsCall: serviceCall(env),
     // Typed transport endpoints this instance is reachable on (https / 44net / ax25 / netrom /
     // bbs) — the instance's own multi-address set, distinct from `endpoints` (the feed-path map).
     addresses: parseEndpoints(parseJsonArray(env.FED_ENDPOINTS)),

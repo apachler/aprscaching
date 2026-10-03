@@ -13,7 +13,8 @@ import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, configProblems, type Env } from "./env.js";
 import { baseCall } from "@aprscaching/aprs";
 import { json } from "./app.js";
-import { requireSysop } from "./admin.js";
+import { adminCalls, requireSysop } from "./admin.js";
+import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
 import { sessionIdentity, sessionsEnabled, signInPaths, weakSecret } from "./auth.js";
 import { federationConfigError } from "./federation.js";
 import { isCallsignVerified } from "./callsign.js";
@@ -126,6 +127,27 @@ function envItems(env: Env): SetupItem[] {
     });
   }
 
+  {
+    // the one on-air call: players send it radio commands, and answers and Mailbox messages come from it
+    const call = serviceCall(env);
+    const bases = new Set([...adminCalls(env)].map((c) => baseCall(c)));
+    const status: SetupItem["status"] = call === FALLBACK_SERVICE_CALL || !bases.has(baseCall(call)) ? "warn" : "ok";
+    push({
+      key: "SERVICE_CALL",
+      level: "recommended",
+      label: "Service call",
+      group: "identity",
+      status,
+      source: "env",
+      detail:
+        call === FALLBACK_SERVICE_CALL
+          ? `${call} — not a callsign: MeshCom nodes drop messages to it and APRS-IS answers cannot go out as plain messages; name an operator in ADMIN_CALLSIGNS`
+          : status === "warn"
+            ? `${call} — not a call of an ADMIN_CALLSIGNS base call: answers go out under a licence that is not the operator's`
+            : `${call}${set(env.SERVICE_CALL) ? "" : " (the first operator's call with SSID 15)"} — players send radio commands to it; changing it, or the order of ADMIN_CALLSIGNS, sends them to a new address`,
+    });
+  }
+
   // ---- identity — public strings, safe to echo. INSTANCE and RP_ID follow APP_URL unless set.
   const host = appHost(env);
   const signIn = signInPaths(env);
@@ -166,7 +188,7 @@ function envItems(env: Env): SetupItem[] {
 
   // ---- trust — what Tier A and federation need
   {
-    const sites = (env.FIRST_PARTY_SITES ?? "").split(",").filter((c) => c.trim());
+    const sites = (env.FIRST_PARTY_SITES ?? "").split(/[\s,]+/).filter(Boolean);
     push({
       key: "FIRST_PARTY_SITES",
       level: "optional",

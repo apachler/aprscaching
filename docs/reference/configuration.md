@@ -117,7 +117,7 @@ app do not read these.
 | `FED_ROTATION_GRACE_DAYS` | Days a rotated-away key keeps verifying when its history entry names no `until`; also the grace `rotatekey.mjs` writes | 7 |
 | `FED_REGISTRY` / `FED_REGISTRY_KEY` | Signed instance registry + the pinned authority key that verifies it (required whenever a registry is configured) | — |
 | `FED_REGISTRY_DNS` | Alternative registry source: a DNS `TXT` record name whose `url=` locates the document; verified under `FED_REGISTRY_KEY` (without it the server refuses to start) | — |
-| `FED_OPERATOR` / `FED_APRS_CALL` | Operator label + APRS service callsign, self-published in `/.well-known` | — |
+| `FED_OPERATOR` | Operator label, self-published in `/.well-known` beside the service call (`SERVICE_CALL`) | — |
 | `FED_PEERS` | Comma-separated peer base URLs to sync from | — |
 | `FED_SYNC_REGION` | `S,W,N,E` in decimal degrees: pull only the caches inside this box from peers that filter by region (`sync-cache-bbox`); deletes are never filtered. Changing it reads the caches feed again from the start | whole feed |
 | `FED_DISCOVER` | Learn the https peers trusted peers advertise, added `unvetted` and disabled (at most 200) | off |

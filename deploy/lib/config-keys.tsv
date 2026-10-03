@@ -7,7 +7,7 @@ SESSION_TTL_DAYS	int	gateway	30		0	0	selfhost,cloudflare,baremetal,pocket,deskto
 SESSION_EPOCH	int	gateway	0		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Unix seconds: sessions minted before this time are refused
 TRUST_PROXY	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when a reverse proxy fronts the instance, so x-forwarded-for is trusted
 TRUST_CF	enum	gateway,server		0|1	0	0	selfhost,baremetal,pocket,desktop	1 when the origin is reachable only through Cloudflare, so cf-connecting-ip is kept
-ADMIN_CALLSIGNS	list	gateway,pocket			0	1	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated licensed calls that may administer this instance
+ADMIN_CALLSIGNS	calls	gateway,pocket			0	1	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated licensed calls that may administer this instance
 INSTANCE	string	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Federation instance id (domain); defaults to the host of APP_URL
 FED_PRIVATE_KEY	string	gateway,pocket			1	0	selfhost,cloudflare,baremetal,pocket,desktop	Ed25519 federation signing key (base64 JSON); set, feeds are signed
 FED_KEY_HISTORY	json	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	JSON array of previous and revoked federation public keys
@@ -17,8 +17,7 @@ FED_REGISTRY	json	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Sig
 FED_REGISTRY_KEY	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Pinned public key (base64url) of the registry authority
 FED_REGISTRY_DNS	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	DNS TXT record name whose url= locates the signed registry
 FED_OPERATOR	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Operator label this instance publishes in /.well-known
-FED_APRS_CALL	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	APRS service callsign this instance publishes in /.well-known
-FIRST_PARTY_SITES	list	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated calls of receiving sites you operate and attest (Tier A)
+FIRST_PARTY_SITES	calls	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated calls of receiving sites you operate and attest (Tier A)
 MIN_TRUST	enum	gateway	B	A|B	0	0	selfhost,cloudflare,baremetal,pocket,desktop	Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)
 FED_PEERS	list	gateway,pocket			0	0	selfhost,cloudflare,baremetal,pocket,desktop	Comma-separated base URLs of federation peers to sync from
 FED_DISCOVER	enum	gateway	0	0|1|false|true|no|yes	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 learns the peers that trusted peers advertise
@@ -48,7 +47,7 @@ AMPR_REQUIRE_DNSSEC	enum	gateway		0|1|false|true	0	0	selfhost,cloudflare,baremet
 LOTW_CA_PEM	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	PEM certificates of the ARRL LoTW CAs trusted for callsign verification
 OKAPI_BASE	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching node to import caches from, e.g. https://www.opencaching.de
 OKAPI_KEY	string	gateway			1	0	selfhost,cloudflare,baremetal,pocket,desktop	OpenCaching OKAPI consumer key for that node
-SERVICE_CALL	string	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	The instance's on-air call for radio commands and mail; default the sysop's call -15
+SERVICE_CALL	call	gateway			0	0	selfhost,cloudflare,baremetal,pocket,desktop	The instance's on-air call for radio commands and mail; default the sysop's call -15
 RADIO_REPLIES	enum	gateway		0|1	0	0	selfhost,cloudflare,baremetal,pocket,desktop	1 sends a text reply to each FOUND, DNF and NOTE radio command
 API_RATE_WINDOW_SEC	int	gateway	60		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Length of the public read-API rate-limit window, in seconds
 API_RATE_ANON	int	gateway	60		0	0	selfhost,cloudflare,baremetal,pocket,desktop	Read-API requests per window without a key
@@ -83,7 +82,7 @@ BATCH_MS	int	ingest	1500		0	0	selfhost,baremetal,ingest-box,pocket	Interval in m
 INGEST_SPOOL_MAX	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Most undelivered packets kept while the gateway is unreachable (oldest dropped)
 APRSIS_HOST	string	ingest,pocket	rotate.aprs2.net		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server to read the feed from
 APRSIS_PORT	int	ingest,pocket	14580		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server port
-APRSIS_CALLSIGN	string	ingest,pocket	N0CALL		0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box logs in to APRS-IS with
+APRSIS_CALLSIGN	call	ingest,pocket	N0CALL		0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box logs in to APRS-IS with
 APRSIS_PASSCODE	int	ingest	-1		1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode for that callsign; -1 logs in receive-only
 APRSIS_FILTER	string	ingest,pocket	r/47.07/15.42/300		0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS server-side filter (e.g. r/lat/lon/km) limiting the feed
 KISS_TNC_HOST	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Host of the KISS TNC over TCP; set it to enable the TNC
@@ -93,7 +92,7 @@ AGWPE_PORT	int	ingest	8000		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of
 AGWPE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	AGWPE radio port to use (0 is the first)
 HOSTMODE_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of the WA8DED host-mode TNC; set it to enable host mode
 HOSTMODE_PORT	int	ingest	3694		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the WA8DED host-mode TNC
-HOSTMODE_MYCALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to
+HOSTMODE_MYCALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the host-mode TNC is set to
 HOSTMODE_RADIO_PORT	int	ingest	0		0	0	selfhost,baremetal,ingest-box,pocket	Host-mode radio channel to use (0 is the first)
 MESHTASTIC_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Host of a Meshtastic node's TCP API (licensed nodes only)
 MESHTASTIC_PORT	int	ingest	4403		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the Meshtastic node API
@@ -106,7 +105,7 @@ MESHCOM_FANOUT	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	host:port 
 MESHCOM_RATE	number	ingest	20		0	0	selfhost,baremetal,ingest-box,pocket	Most MeshCom datagrams accepted per second from each node
 MESHCOM_STALE_MIN	number	ingest	30		0	0	selfhost,baremetal,ingest-box,pocket	Minutes without a MeshCom datagram before the box warns
 MESHCOM_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 lets the box answer radio commands through its MeshCom nodes
-MESHCOM_TX_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Operator call for MeshCom transmit; must match the node's call
+MESHCOM_TX_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Operator call for MeshCom transmit; must match the node's call
 MESHCOM_TX_AUDIT	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Path of a JSON-lines audit file for MeshCom transmits
 MESHCOM_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	MeshCom transmits allowed at once before pacing applies
 MESHCOM_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one MeshCom transmit
@@ -116,42 +115,42 @@ AXUDP_PEERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	AXUDP peers a
 AXIP_ENABLE	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Set to enable the AXIP listener (IP protocol 93, needs raw-socket rights)
 AXIP_PEERS	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	AXIP peer hosts, comma-separated; set it to enable AXIP
 AXIP_BIND	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Local address the AXIP socket binds
-DIGI_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the RF digipeater; set it to enable digipeating
+DIGI_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the RF digipeater; set it to enable digipeating
 DIGI_ALIASES	list	ingest	WIDE1,WIDE2		0	0	selfhost,baremetal,ingest-box,pocket	Aliases the digipeater answers to, comma-separated
 DIGI_CONNECTED	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also digipeats connected-mode AX.25 frames
 DIGI_VISCOUS_MS	int	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Milliseconds the connected-mode digipeater waits, so a better-placed digi repeats first
-NETROM_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it
+NETROM_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the NET/ROM node; set with NETROM_ALIAS to enable it
 NETROM_ALIAS	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Alias of the NET/ROM node
 NETROM_BROADCAST_MS	int	ingest	300000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between NODES broadcasts
 NETROM_PATH_QUALITY	int	ingest	192		0	0	selfhost,baremetal,ingest-box,pocket	Link quality (0-255) assumed for a directly heard neighbour
 NETROM_INP3	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 also speaks INP3 alongside NODES
 NODE_PERSONALITY	string	ingest	netrom		0	0	selfhost,baremetal,ingest-box,pocket	Command surface of the node: netrom, flexnet, tnn or baycom
-BBS_NODE_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the BBS answers inbound connects on
+BBS_NODE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the BBS answers inbound connects on
 BBS_FORWARD	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 enables FBB forwarding to partner BBSes
-BBS_FORWARD_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box forwards FBB mail as
+BBS_FORWARD_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box forwards FBB mail as; default BBS_NODE_CALL
 BBS_FORWARD_POLL_MS	int	ingest	60000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between forwarding queue checks
 BBS_FORWARD_SID	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	SID the box presents to forwarding partners
 BBS_FORWARD_COMPRESS	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 offers LZHUF-B1 compressed forwarding
 BBS_FORWARD_BURST	int	ingest	4		0	0	selfhost,baremetal,ingest-box,pocket	Forwarding sessions allowed at once before pacing applies
 BBS_FORWARD_REFILL_SEC	number	ingest	300		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one forwarding session
-IGATE_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the IGate; set with IGATE_PASS to enable it
+IGATE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign of the IGate; set with IGATE_PASS to enable it
 IGATE_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode of the IGate callsign
 IGATE_FILTER	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS filter for traffic the IGate may gate to RF
 IGATE_LOCAL_TTL	int	ingest	1800		0	0	selfhost,baremetal,ingest-box,pocket	Seconds a station counts as heard locally on RF
 IGATE_TX_PATH	list	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for frames the IGate transmits; blank sends direct
 IGATE_TX_BURST	int	ingest	6		0	0	selfhost,baremetal,ingest-box,pocket	IGate transmits allowed at once before pacing applies
 IGATE_TX_REFILL_SEC	number	ingest	10		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one IGate transmit
-RF_SITE_CALL	string	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Callsign naming this box as the receiving site of what its TNCs hear
+RF_SITE_CALL	call	ingest,pocket			0	0	selfhost,baremetal,ingest-box,pocket	Callsign naming this box as the receiving site of what its TNCs hear
 BOX_ID	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Remote-control ID of this box; set it to link the box to your account
 BOX_KEY	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	This box's private signing key, written by enrollment; it replaces INGEST_SECRET
 BOX_TX	enum	ingest		0|1|false	0	0	selfhost,baremetal,ingest-box,pocket	1 allows transmitting on remote command
-BOX_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box transmits remote commands as
+BOX_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	Callsign the box transmits remote commands as
 BOX_TX_PATH	list	ingest	WIDE1-1,WIDE2-1		0	0	selfhost,baremetal,ingest-box,pocket	Digipeater path for remote transmits; blank sends direct
 BOX_CMD_MAX_AGE	int	ingest	900		0	0	selfhost,baremetal,ingest-box,pocket	Seconds after which a queued remote command is too old to run
 BOX_POLL_MS	int	ingest	5000		0	0	selfhost,baremetal,ingest-box,pocket	Interval in milliseconds between remote-command polls
 BOX_TX_BURST	int	ingest	3		0	0	selfhost,baremetal,ingest-box,pocket	Remote transmits allowed at once before pacing applies
 BOX_TX_REFILL_SEC	number	ingest	60		0	0	selfhost,baremetal,ingest-box,pocket	Seconds to regain one remote transmit
-APRSIS_SERVICE_CALL	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS uplink login; default the gateway's service call when the feed shares its base
+APRSIS_SERVICE_CALL	call	ingest			0	0	selfhost,baremetal,ingest-box,pocket	APRS-IS uplink login; default the gateway's service call when the feed shares its base
 APRSIS_SERVICE_PASS	string	ingest			1	0	selfhost,baremetal,ingest-box,pocket	APRS-IS passcode of that login; default APRSIS_PASSCODE
 CWOP_HOST	string	ingest			0	0	selfhost,baremetal,ingest-box,pocket	CWOP server for relaying weather reports; set it to enable the relay
 CWOP_PORT	int	ingest	14580		0	0	selfhost,baremetal,ingest-box,pocket	TCP port of the CWOP server

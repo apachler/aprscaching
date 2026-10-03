@@ -107,7 +107,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
       DB: publisherDb(bbsSink),
       INSTANCE: "oe.pub",
       FED_PRIVATE_KEY: keyEnvVal,
-      FED_APRS_CALL: "OE8APR-12",
+      FED_OPERATOR: "OE8APR",
       INGEST_SECRET: SECRET,
       OPERATOR_SECRET: SECRET,
     } as unknown as Env;
@@ -118,7 +118,7 @@ describe("FBB carrier: enqueue on the publisher, apply on the subscriber", () =>
     expect(bbsSink).toHaveLength(1);
     const [bid, fromCall, toCall, , body] = bbsSink[0]! as [string, string, string, string, string];
     expect(bid).toBe(e.bid);
-    expect(fromCall).toBe("OE8APR-12");
+    expect(fromCall).toBe("OE8APR");
     expect(toCall).toBe("ACSFED");
 
     // subscriber: the same bulletin arrives over FBB forwarding; the inbound hook applies it

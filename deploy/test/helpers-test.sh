@@ -65,6 +65,11 @@ check "a blank value passes" cfg_check KISS_TNC_PORT "  "
 check "a word fails as a number" eq "$(cfg_check KISS_TNC_PORT eighty || true)" "KISS_TNC_PORT: expected a whole number"
 check "a fraction passes as a number" cfg_check MESHCOM_RATE 2.5
 check "an enum value passes" cfg_check TRUST_PROXY 1
+check "a callsign with an SSID passes" cfg_check DIGI_CALL OE8APR-10
+check "a callsign with an SSID over 15 fails" eq "$(cfg_check DIGI_CALL OE8APR-20 || true)" "DIGI_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
+check "a word without a digit fails as a callsign" eq "$(cfg_check SERVICE_CALL APRSCG || true)" "SERVICE_CALL: expected a callsign such as OE8APR-10 (SSID 0-15)"
+check "a list of callsigns passes, a MeshCom SSID too" cfg_check FIRST_PARTY_SITES "OE8APR-10, OE8APR-42"
+check "a list with a non-callsign fails" eq "$(cfg_check FIRST_PARTY_SITES "OE8APR-10,nope" || true)" "FIRST_PARTY_SITES: expected callsigns such as OE8APR,OE8APR-10, separated by commas"
 check "an unknown enum value fails" eq "$(cfg_check TRUST_PROXY true || true)" "TRUST_PROXY: expected one of: 0, 1"
 check "a URL passes" cfg_check APP_URL https://aprs.example.net
 check "a bare host fails as a URL" eq "$(cfg_check APP_URL aprs.example.net || true)" "APP_URL: expected an absolute URL"

@@ -57,7 +57,7 @@ run_federation() {
   local common=(INGEST_SECRET="$SECRET" OPERATOR_SECRET="$OPSECRET" SESSION_SECRET="$SESSECRET" ALLOW_DEV_TOKENS=1)
   # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers.
   setsid env "${common[@]}" DB_PATH="$tmp/pub.db" PORT="$pubport" INSTANCE=oe.pub FED_PRIVATE_KEY="$key" \
-    FED_KEY_HISTORY="$hist" FIRST_PARTY_SITES=OE8XXX FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 \
+    FED_KEY_HISTORY="$hist" FIRST_PARTY_SITES=OE8XXX FED_OPERATOR=OE8APR SERVICE_CALL=OE8APR-12 \
     FED_RELAY_SECRET=relaysecret \
     FED_ENDPOINTS="[{\"transport\":\"https\",\"address\":\"http://127.0.0.1:${pubport}\",\"priority\":10}]" \
     pnpm --filter @aprscaching/node-gateway start >"$tmp/pub.log" 2>&1 &

@@ -9,6 +9,7 @@ import type { ParsedFrame } from "@aprscaching/aprs";
 import { validateConfig, type Packet } from "@aprscaching/shared";
 import { loadDotEnv, numEnv, portEnv } from "./config.js";
 import { txLimitFromEnv } from "./txlimit.js";
+import { callWarnings } from "./callroles.js";
 import { gatewayFetch, loadBoxKey, useBoxKey } from "./gatewayauth.js";
 import type { BoxRadio, BoxState } from "./boxpoll.js";
 
@@ -370,15 +371,21 @@ setInterval(async () => {
 aprs.start();
 
 let uplinkWarned = false;
+const callWarned = new Set<string>();
 // The gateway names its service call: the APRS-IS feed asks for messages addressed to it, and a station of
 // this box sharing it would have its own commands ignored and, on MeshCom, acked by its own node.
 async function learnServiceCall(): Promise<void> {
   try {
     const r = await gatewayFetch(`${INGEST_URL.replace(/\/+$/, "")}/check`, { headers: { "x-ingest-secret": SECRET } });
     if (!r.ok) return;
-    const { serviceCall } = (await r.json()) as { serviceCall?: string };
+    const { serviceCall, sites } = (await r.json()) as { serviceCall?: string; sites?: string[] };
     if (!serviceCall) return;
     aprs.setServiceCall(serviceCall);
+    for (const w of callWarnings(env, serviceCall, sites))
+      if (!callWarned.has(w)) {
+        callWarned.add(w);
+        console.error(`[ingest] ${w}`);
+      }
     const login = uplinkLogin({
       serviceCall,
       explicitCall: env.APRSIS_SERVICE_CALL,
@@ -398,9 +405,6 @@ async function learnServiceCall(): Promise<void> {
       uplinkWarned = true;
       console.log(`[uplink] not publishing to APRS-IS: ${login.reason}`);
     }
-    const own = [env.BOX_CALL, env.IGATE_CALL, env.DIGI_CALL, env.RF_SITE_CALL, env.APRSIS_CALLSIGN];
-    if (own.some((c) => c?.trim().toUpperCase() === serviceCall.toUpperCase()))
-      console.error(`[ingest] ${serviceCall} is the gateway's service call; give this box's station another SSID`);
   } catch {
     /* the gateway is unreachable; the forwarder logs that, and the next attempt retries */
   }
@@ -412,12 +416,14 @@ console.log(`[ingest] started -> ${INGEST_URL}`);
 // ---- FBB forwarding scheduler — connect out to partner BBSes and exchange mail over RF.
 // Opt-in: needs a frame link (KISS TNC or AXUDP port) + a station call. Partners + routing are
 // configured in the gateway (Instance admin); this box runs the sessions (ingest-locality).
-if (env.BBS_FORWARD === "1" && env.BBS_FORWARD_CALL && (env.KISS_TNC_HOST || axudpPort)) {
+// The BBS forwards under its own call unless another is set: one packet BBS, one call.
+const forwardCall = env.BBS_FORWARD_CALL || env.BBS_NODE_CALL;
+if (env.BBS_FORWARD === "1" && forwardCall && (env.KISS_TNC_HOST || axudpPort)) {
   const { startForwarder } = await import("./forwarder.js");
   startForwarder({
     base: INGEST_URL.replace(/\/ingest$/, ""),
     secret: SECRET,
-    mycall: env.BBS_FORWARD_CALL,
+    mycall: forwardCall,
     kiss: env.KISS_TNC_HOST ? { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001) } : undefined,
     link: env.KISS_TNC_HOST ? undefined : axudpPort!,
     pollMs: numEnv("BBS_FORWARD_POLL_MS", 60000, { min: 1000 }),
@@ -425,7 +431,7 @@ if (env.BBS_FORWARD === "1" && env.BBS_FORWARD_CALL && (env.KISS_TNC_HOST || axu
     compress: env.BBS_FORWARD_COMPRESS === "1",
     ...txLimitFromEnv("bbs"),
   });
-  console.log(`[forward] FBB forwarding scheduler active as ${env.BBS_FORWARD_CALL}`);
+  console.log(`[forward] FBB forwarding scheduler active as ${forwardCall}`);
 }
 
 // ---- Remote control: lease commands the operator queued in the web app and execute them.
