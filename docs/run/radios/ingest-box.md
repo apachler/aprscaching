@@ -71,6 +71,18 @@ each, are the enrollment's audit trail.
 
 A signed request is fresh for five minutes and accepted once, and a box's key acts only for its own box id.
 
+A box's key is narrower than the shared `INGEST_SECRET`, because a box may be a receiver a ham lends you:
+
+| An enrolled box | Can | Cannot |
+|---|---|---|
+| Any | Deliver what its radios hear (`/ingest`), check its credential, and poll and acknowledge its own remote-control commands | Log a find for a callsign, act as a cache owner, create a cache, run an import, or act for another box |
+| Trusted (**Trust this station's hearings** on) | Also pull and acknowledge the outbox, serve the packet BBS, run FBB forwarding, mirror the NET/ROM node table and deliver federation pages | The same as any box |
+
+A site trusted through a box counts for Tier A only in frames that box delivers itself: another box, or a box
+on the shared secret, that names the site gets no attestation from it. Your own box on a key, which runs the
+packet BBS, FBB forwarding or the node mirror, needs **Trust this station's hearings** switched on with its
+site call; on the shared secret it needs nothing more.
+
 ## Enrolling the box
 
 The box's operator does this part, with the deploy helper. In the repository's top directory:

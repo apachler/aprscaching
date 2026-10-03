@@ -52,3 +52,19 @@ describe("federation corroboration vouches only through attested sites", () => {
     expect(pickLocalEvidence([far], Q, none, parseAttestedSites("OE8XXX"))).toBeNull();
   });
 });
+
+describe("a site trusted through an enrolled box", () => {
+  const attested = { shared: parseAttestedSites("OE8XXX"), byBox: new Map([["lent-1", new Set(["OE3LND-10"])]]) };
+
+  it("vouches only through the positions that box delivered", () => {
+    const viaBox = { ...near("OE3LND-10"), ingest_box: "lent-1" };
+    expect(pickLocalEvidence([viaBox], Q, none, attested)?.igateCall).toBe("OE3LND-10");
+    expect(pickLocalEvidence([{ ...viaBox, ingest_box: "other-1" }], Q, none, attested)).toBeNull();
+    expect(pickLocalEvidence([{ ...viaBox, ingest_box: null }], Q, none, attested)).toBeNull();
+  });
+
+  it("leaves the instance's own sites to every delivery", () => {
+    const viaOther = { ...near("OE8XXX"), ingest_box: "other-1" };
+    expect(pickLocalEvidence([viaOther], Q, none, attested)?.igateCall).toBe("OE8XXX");
+  });
+});

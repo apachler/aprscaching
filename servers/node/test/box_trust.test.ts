@@ -96,10 +96,16 @@ async function find(env: Env, logger: string) {
 }
 
 const sites = async (env: Env) => (await call(env, "GET", "/ingest/check", undefined, INGEST)).data.sites as string[];
+/** The sites the lent box's own frames may claim, as its signed /ingest/check reports them. */
+async function boxSites(env: Env, k: BoxKey): Promise<string[]> {
+  const url = `${ORIGIN}/ingest/check`;
+  const res = await serve(env)(new Request(url, { headers: signedHeaders(k, "GET", url) }));
+  return ((await res.json()) as { sites: string[] }).sites.sort();
+}
 
 describe("trust this station's hearings", () => {
   it("only a sysop switches it, and it starts off", async () => {
-    const { env, sysop } = await world();
+    const { env, sysop, k } = await world();
     const player = await emailSignup(env, "player@example.test", "DL1FND");
     expect((await trust(env, { trusted: true, sites: [SITE] }, {})).status).toBe(403);
     expect((await trust(env, { trusted: true, sites: [SITE] }, { cookie: player.cookie! })).status).toBe(403);
@@ -115,13 +121,15 @@ describe("trust this station's hearings", () => {
     expect(on.status).toBe(200);
     expect(on.data.trust).toMatchObject({ sites: [SITE], trustedByCall: "OE8APR" });
     expect(on.data.trust.trustedAt).toBeGreaterThan(0);
-    expect((await sites(env)).sort()).toEqual(["OE3LND-10", "OE8APR-10"]);
+    // the box's site is claimed by the box's own frames, never by the shared secret's
+    expect(await boxSites(env, k)).toEqual(["OE3LND-10", "OE8APR-10"]);
+    expect(await sites(env)).toEqual(["OE8APR-10"]);
     const listed = await call(env, "GET", "/api/admin/boxes", undefined, { cookie: sysop.cookie });
     expect(listed.data.boxes[0].trust).toMatchObject({ sites: [SITE], trustedByCall: "OE8APR" });
 
     const off = await trust(env, { trusted: false }, { cookie: sysop.cookie });
     expect(off.data.trust).toBeNull();
-    expect(await sites(env)).toEqual(["OE8APR-10"]);
+    expect(await boxSites(env, k)).toEqual(["OE8APR-10"]);
   });
 
   it("a box enrolled for a callsign is trusted only for sites of that base call", async () => {

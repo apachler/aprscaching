@@ -93,7 +93,7 @@ ok("descriptor addresses is an array", Array.isArray(pubWk.data?.addresses), JSO
 // five minutes away. Without this the assertions below race the boot sync.
 await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });
 
-// seed the publisher: a cache + a verified find
+// seed the publisher: a cache + a find
 const TITLE = "Federated Schlossberg " + now();
 const created = await call(PUB, "POST", "/api/caches", {
   title: TITLE,
@@ -106,11 +106,7 @@ const created = await call(PUB, "POST", "/api/caches", {
 });
 ok("publisher created a cache", created.status === 201, JSON.stringify(created.data));
 const pid = created.data?.cache?.id;
-await call(PUB, "POST", `/api/caches/${pid}/logs`, {
-  loggerCall: "DL1ABC",
-  logType: "found",
-  appGeo: { lat: 47.07355, lon: 15.43785, accuracyM: 11, ts: now() },
-});
+await call(PUB, "POST", `/api/caches/${pid}/logs`, { loggerCall: "DL1ABC", logType: "found" });
 
 // trigger a pull-sync on the subscriber
 const sync = await call(SUB, "POST", "/federation/sync", undefined, { "x-operator-secret": OPERATOR_SECRET });

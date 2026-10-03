@@ -34,7 +34,7 @@ import type { Env } from "./env.js";
 import { json } from "./app.js";
 import { sessionIdentity, baseHolder } from "./auth.js";
 import { provenanceOf, transportForPort } from "./provenance.js";
-import { attestedSites } from "./attestedsites.js";
+import { attestation, sitesFor } from "./attestedsites.js";
 import { parseVerifyMessage, completeRfChallenge, isCallsignVerified } from "./callsign.js";
 import { scoreFind, commitFind, commitPlainLog, type FindScore } from "./caches.js";
 import { freshBoxCaps, enqueueSystemBoxCommand } from "./box.js";
@@ -160,6 +160,9 @@ export interface RadioMessage {
   /** The ingest box, and the station on it, that received the message over its own radio (routing only). */
   box?: string;
   rxCall?: string;
+  /** The enrolled box whose signed request delivered it, from its verified signature: a site trusted through
+   *  a box attests only what that box delivers. Absent on the shared secret. */
+  deliveredBy?: string;
 }
 
 /**
@@ -392,7 +395,7 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
   // unnumbered: re-ack only. A copy heard at an attested site upgrades a pending command to logged. A
   // message that reuses a number with different text is a new command: matching on the number alone
   // would let a later message confirm an earlier, possibly forged, one.
-  const trusted = isTrustedMessage(m, await attestedSites(env));
+  const trusted = isTrustedMessage(m, sitesFor(await attestation(env), m.deliveredBy));
   const prior = await env.DB.prepare(
     `SELECT * FROM radio_commands WHERE from_call = ? AND sent_at >= ? AND raw_text = ?
        AND ((? IS NOT NULL AND msg_no = ?) OR (? IS NULL AND msg_no IS NULL))
@@ -555,7 +558,7 @@ async function handleNearCommand(env: Env, m: RadioMessage, src: string, trusted
  * A heard copy is acked, and a completed challenge answered with a short confirmation.
  */
 async function handleVerifyMessage(env: Env, m: RadioMessage, code: string): Promise<void> {
-  if (!heardAtAttestedSite(m, await attestedSites(env))) return;
+  if (!heardAtAttestedSite(m, sitesFor(await attestation(env), m.deliveredBy))) return;
   const base = baseCall(m.src);
   if (await rateLimitedDurable(env, `radio:${base}`, Date.now(), RADIO_COMMANDS_PER_HOUR, 3600_000)) return;
   const outcome = await completeRfChallenge(env, m.src, code, m.igateCall ?? null);

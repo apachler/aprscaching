@@ -22,14 +22,14 @@
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import { json } from "./app.js";
-import { sessionIdentity, accountHoldsCall, ingestSecretOk, timingSafeEqual } from "./auth.js";
+import { sessionIdentity, accountHoldsCall, ingestOrBoxOk, timingSafeEqual } from "./auth.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { isCallsignVerified } from "./callsign.js";
 import { serviceCall } from "./servicecall.js";
 
 const TX_KINDS = new Set(["beacon", "message", "wx_beacon", "igate", "digi", "tx"]);
 const ALL_KINDS = new Set([...TX_KINDS, "status"]);
-const boxAuth = ingestSecretOk;
+const boxAuth = ingestOrBoxOk;
 
 /** Is `accountId` the paired owner of `boxId`? An unpaired box has no owner and takes no session commands. */
 async function ownsBox(env: Env, boxId: string, accountId: string): Promise<boolean> {

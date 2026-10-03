@@ -83,6 +83,9 @@ de-duplication, and runs multi-hop connect scripts. It checks its queue every `B
 60000) and presents `BBS_FORWARD_SID` to partners. The log shows
 `[forward] FBB forwarding scheduler active as <CALL>`.
 
+The forwarder offers partners the mail of senders whose base call is control-verified on this instance, and
+federation bulletins. Mail from an unverified sender stays on this BBS for its addressee.
+
 Partners and routing rules are set under **Instance admin → FBB forwarding**
 ([Instance admin at a glance](../day-to-day/index.md)).
 

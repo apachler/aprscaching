@@ -43,11 +43,12 @@ A settings file holding secrets must be readable by its owner only; the doctor f
 
 ## Machine credentials
 
-Two shared secrets reach the gateway from machines, and they never overlap:
+Two shared secrets and the enrolled boxes' own keys reach the gateway from machines, and they never overlap:
 
 | Secret | Header | Authorises | Held by |
 |---|---|---|---|
-| `INGEST_SECRET`, or an enrolled box's key | `x-ingest-secret`, or a signed request ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)) | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the ingest box |
+| `INGEST_SECRET` | `x-ingest-secret` | The ingest plane: `/ingest`, the outbox, BBS delivery and the FBB forwarding pool, reading the forwarding partner list, the NET/ROM node mirror, heard federation beacons and sync pages, the catalog importer, finds logged over APRS, remote-box polling and pairing | the instance's own ingest box |
+| An enrolled box's key | a signed request ([Enrolling boxes on the gateway](../run/radios/ingest-box.md#enrolling-boxes-on-the-gateway)) | Delivery only: `/ingest`, `/ingest/check` and its own remote-box polling and pairing. Once the sysop trusts the box, also the outbox, BBS delivery, FBB forwarding, the partner list, the NET/ROM node mirror and federation pages. Never finds logged over APRS, owner actions, cache creation or the catalog importer | one box, which may be a ham's lent receiver |
 | `OPERATOR_SECRET` | `x-operator-secret` | Instance-wide configuration from scripts: reading the Setup checklist (`GET /api/admin/setup`, which `deploy/aprscaching doctor` relays), `POST /verify/operator`, the one-time sign-in link (`POST /auth/operator-link`), `POST /federation/sync`, the peer list and trust, 44Net onboarding, forwarding partners and rules, the FBB federation enqueue, relay dispatch, donation confirms, licence-register imports | the operator |
 
 The ingest secret never registers a device key, never verifies a callsign and never signs a session, so a

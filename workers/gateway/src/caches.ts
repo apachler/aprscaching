@@ -23,7 +23,7 @@ import {
   type AppGeo,
 } from "./verify.js";
 import { provenanceOf } from "./provenance.js";
-import { attestedSites as loadAttestedSites } from "./attestedsites.js";
+import { attestation as loadAttestation, sitesFor } from "./attestedsites.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
@@ -607,7 +607,7 @@ export async function handleUpdateCache(req: Request, env: Env, id: number): Pro
 export async function handleLog(req: Request, env: Env, cacheId: number): Promise<Response> {
   const parsed = LogRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "bad request", issues: parsed.error?.issues }, { status: 400 });
-  const { comment, appGeo, logType } = parsed.data;
+  const { comment, logType } = parsed.data;
 
   // Logging requires a signed-in session (web) OR the ingest secret (APRS/RF-originated finds,
   // attributed to the heard callsign and authorised by the trusted backend, not a cookie).
@@ -623,6 +623,9 @@ export async function handleLog(req: Request, env: Env, cacheId: number): Promis
     return json({ error: "sign in to log a find" }, { status: 401 });
   }
   const accountVerified = sessionCall != null; // session => passkey-bound account
+  // Tier B rests on the player's own phone reading the cache's place; a find the ingest plane logs for a
+  // heard callsign has no in-app reading, so a geolocation it sends is ignored.
+  const appGeo = sessionCall ? parsed.data.appGeo : undefined;
 
   const cache = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(cacheId).first<
     CacheRow & {
@@ -801,10 +804,14 @@ export async function scoreFind(
 
   // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
   // engine branches on attestation alone, never on transport. The attested sites (FIRST_PARTY_SITES and the
-  // trusted stations of Instance admin) narrow attestation.
-  const attestedSites = await loadAttestedSites(env);
+  // trusted stations of Instance admin) narrow attestation; a site trusted through a box counts only for the
+  // fixes that box delivered (ingest_box).
+  const attested = await loadAttestation(env);
   const attest = (rows: PositionRow[]): PositionRow[] =>
-    rows.map((p) => ({ ...p, firstPartyAttested: provenanceOf(p, attestedSites).firstPartyAttested }));
+    rows.map((p) => ({
+      ...p,
+      firstPartyAttested: provenanceOf(p, sitesFor(attested, p.ingest_box)).firstPartyAttested,
+    }));
 
   // Tier-A independence — every base callsign the logger controls (their own call,
   // all base calls held by their account, their registered stations). A beacon gated by any of

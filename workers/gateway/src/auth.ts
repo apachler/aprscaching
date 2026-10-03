@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { boxPrincipal } from "./boxprincipal.js";
+import { isTrustedBox } from "./attestedsites.js";
 import { nowS } from "./util/time.js";
 import type { Env } from "./env.js";
 import type { SqlStatement } from "./runtime.js";
@@ -715,13 +716,34 @@ export function secretOk(given: string | null | undefined, expected: string | un
   return timingSafeEqual(given ?? "", expected);
 }
 
-/** The ingest-plane credential: does the request carry the ingest box's INGEST_SECRET? */
 /**
- * The ingest plane's credential: the shared INGEST_SECRET, or a request an enrolled box signed with its own
- * key (verified by route() before any handler runs; boxkeys.ts).
+ * The instance's own ingest plane: does the request carry the shared INGEST_SECRET? Whoever holds it runs
+ * this instance's backend and acts for any station: logging a heard find, acting as a cache owner over APRS,
+ * importing, reading every mailbox. An enrolled box's key never passes this check.
  */
 export function ingestSecretOk(req: Request, env: Env): boolean {
-  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET) || boxPrincipal(req) !== null;
+  return secretOk(req.headers.get("x-ingest-secret"), env.INGEST_SECRET);
+}
+
+/**
+ * An ingest box delivering what it hears: the shared INGEST_SECRET, or a request an enrolled box signed with
+ * its own key (verified by route() before any handler runs; boxkeys.ts). Only the delivery endpoints take it:
+ * /ingest, /ingest/check and the box's own /api/box/:id endpoints. A box may be a receiver a ham lends to an
+ * instance they do not run, so its key acts for no station and no owner.
+ */
+export function ingestOrBoxOk(req: Request, env: Env): boolean {
+  return ingestSecretOk(req, env) || boxPrincipal(req) !== null;
+}
+
+/**
+ * The ingest plane's services beyond delivery (the outbox, the packet BBS, FBB forwarding, the NET/ROM node
+ * mirror, the federation pages a box carries): the shared INGEST_SECRET, or an enrolled box the sysop trusts
+ * in Instance admin ("Trust this station's hearings"). An enrolled box nobody trusts only delivers.
+ */
+export async function ingestOrTrustedBoxOk(req: Request, env: Env): Promise<boolean> {
+  if (ingestSecretOk(req, env)) return true;
+  const p = boxPrincipal(req);
+  return !!p && (await isTrustedBox(env, p.box));
 }
 
 /** The operator's machine credential: does the request carry OPERATOR_SECRET? Unset ⇒ never. */

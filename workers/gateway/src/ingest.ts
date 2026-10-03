@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { nowS } from "./util/time.js";
-import { ingestSecretOk } from "./auth.js";
+import { ingestOrBoxOk } from "./auth.js";
+import { readCappedBody } from "./fetchguard.js";
 import { boxPrincipal } from "./boxprincipal.js";
 import { siteAllowed } from "./boxkeys.js";
 import type { Env } from "./env.js";
@@ -25,7 +26,7 @@ import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./rad
 import { serviceCall } from "./servicecall.js";
 import { deliverMailbox, mailboxOnAck, type Heard } from "./mailbox.js";
 import { transportForPort } from "./provenance.js";
-import { attestedSites } from "./attestedsites.js";
+import { attestation, sitesFor } from "./attestedsites.js";
 import {
   downsamplePolicy,
   heardDirectly,
@@ -77,40 +78,48 @@ export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; paylo
   return null;
 }
 
-/** Body ceiling: INGEST_BATCH_MAX packets of a few hundred bytes fit comfortably in
- *  5 MB; anything larger is refused BEFORE req.json() buffers it into memory. */
+/** Body ceiling: INGEST_BATCH_MAX packets of a few hundred bytes fit comfortably in 5 MB. The body is read
+ *  through a byte cap, so a larger one (declared or chunked) is refused without being buffered whole. */
 const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * GET /ingest/check — does this ingest credential work? 200 with the instance id, its service call (the box
  * asks APRS-IS for messages addressed to it) and, for an enrolled box's signed request, the box, for a valid
- * credential, 401 otherwise, with the receiving sites the instance trusts (so the box can say when its own site
- * is not among them). It reads only that list and writes nothing, so a box (and `deploy/aprscaching doctor`)
- * can test its settings without posting a batch, draining the outbox or leasing a command.
+ * credential, 401 otherwise, with the receiving sites this credential's frames may claim (so the box can say
+ * when its own site is not among them). It reads only that list and writes nothing, so a box (and
+ * `deploy/aprscaching doctor`) can test its settings without posting a batch, draining the outbox or leasing
+ * a command.
  */
 export async function handleIngestCheck(req: Request, env: Env): Promise<Response> {
-  if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
+  if (!ingestOrBoxOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
+  const box = boxPrincipal(req)?.box ?? null;
   return json({
     ok: true,
     instance: env.INSTANCE ?? null,
     serviceCall: serviceCall(env),
-    sites: [...(await attestedSites(env))],
-    box: boxPrincipal(req)?.box ?? null,
+    sites: [...sitesFor(await attestation(env), box)],
+    box,
   });
 }
 
 /** Receive batched packets from the ingest box, persist positions, enrich the shack, fan out live. */
 export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promise<Response> {
-  const len = Number(req.headers.get("content-length") ?? 0);
-  if (len > INGEST_BODY_MAX_BYTES) return json({ error: "batch too large" }, { status: 413 });
-  const body = IngestBatch.safeParse(await req.json().catch(() => null));
+  const raw = await readCappedBody(req, INGEST_BODY_MAX_BYTES);
+  if (!raw) return json({ error: "batch too large" }, { status: 413 });
+  let parsedBody: unknown = null;
+  try {
+    parsedBody = JSON.parse(new TextDecoder().decode(raw));
+  } catch {
+    // not JSON: refused as a bad batch below
+  }
+  const body = IngestBatch.safeParse(parsedBody);
   if (!body.success) return json({ error: "bad batch" }, { status: 400 });
 
-  // Auth: the shared secret (trusted backend / self-host ingest) OR a signed browser batch:
-  // an operator's device key, registered to their callsign, signs the batch — so a PUBLIC gateway
-  // accepts browser RF without handing out the shared secret. Signed batches are NOT trusted to
-  // attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
-  const trusted = ingestSecretOk(req, env);
+  // Auth: the shared secret (trusted backend / self-host ingest), an enrolled box's signed request, OR a
+  // signed browser batch: an operator's device key, registered to their callsign, signs the batch — so a
+  // PUBLIC gateway accepts browser RF without handing out the shared secret. Signed batches are NOT trusted
+  // to attribute an independent IGate, so their fixes are stored IGate-less and stay Tier C.
+  const trusted = ingestOrBoxOk(req, env);
   let signer: { callsign: string } | null = null;
   if (!trusted) {
     signer = await verifySignedIngest(req, env, body.data.packets);
@@ -250,6 +259,7 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
           // routing hints come only from the trusted ingest box, never from a signed browser batch
           ...(trusted && p.box ? { box: p.box } : {}),
           ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
+          ...(principal ? { deliveredBy: principal.box } : {}),
         });
       }
     }
@@ -324,8 +334,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const src = trusted ? "firehose" : "browser-rf";
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course, transport)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO positions (callsign, ts, lat, lon, heard_via, igate_call, path, source, speed_kn, altitude_m, course, transport, ingest_box)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).bind(
         p.src,
         p.ts,
@@ -339,6 +349,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         fix.altitudeM ?? null,
         fix.course ?? null,
         f.transport,
+        // the box that delivered it, from its verified signature: a site trusted through a box attests only these
+        principal?.box ?? null,
       ),
     );
     // The station row in two statements, so a station that has not moved never rewrites its geo index:

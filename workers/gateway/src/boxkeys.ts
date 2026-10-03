@@ -15,15 +15,19 @@
  * A signed request carries x-box-id, x-box-at (unix seconds), x-box-nonce and x-box-sig, an Ed25519
  * signature over boxRequestMessage (packages/shared canon.ts): method, path with query, time, nonce and the
  * body's SHA-256. It is fresh for five minutes and accepted once. route() verifies it before any handler
- * runs; a request it verifies holds the ingest plane's rights (ingestSecretOk), scoped to that box where an
- * endpoint names a box.
+ * runs. A request it verifies may deliver what the box hears (/ingest, /ingest/check) and use the box's own
+ * /api/box/:id endpoints (auth.ts ingestOrBoxOk). Once the sysop trusts the box, it may also run the services
+ * an ingest box carries: the outbox, the packet BBS, FBB forwarding, the NET/ROM node mirror and federation
+ * pages (ingestOrTrustedBoxOk). It never acts as the shared secret does: it logs no find, acts for no cache
+ * owner, creates and imports no cache.
  *
  * Enrolling grants no trust: an enrolled box is an ingest credential, never an attestation. What it hears
  * counts for Tier A only once the sysop attests its receiving site — in FIRST_PARTY_SITES, as for a box on the
  * shared secret, or with "Trust this station's hearings" in Instance admin (box_trusted_sites), which lets a ham
  * lend their own receiver to an instance they do not run. A box enrolled for a callsign is narrower still: it
- * may name only sites of that base call, and it is trusted only for sites of that base call. Revoking the box
- * ends its trust.
+ * may name only sites of that base call, and it is trusted only for sites of that base call. A site trusted
+ * through a box attests only the frames that box delivers itself (attestedsites.ts). Revoking the box ends its
+ * trust.
  */
 import { SIG_DOMAIN, SITE_CALL_RE, boxEnrollMessage, boxRequestMessage } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
@@ -38,6 +42,7 @@ import { importVerifyKey, verifyDomain } from "./federation.js";
 import { boxPrincipal, setBoxPrincipal } from "./boxprincipal.js";
 import { forgetAttestedSites } from "./attestedsites.js";
 import { verifiedFinds } from "./trustedsites.js";
+import { readCappedBody } from "./fetchguard.js";
 
 /** A signature is fresh this long either side of the gateway's clock. */
 const FRESH_S = 300;
@@ -54,6 +59,8 @@ const BOX_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const CALL = /^[A-Z0-9]{3,9}$/;
 /** Sites one box may attest: a station has a receiver or two, rarely more. */
 const SITES_MAX = 8;
+/** The largest signed body read: the ingest batch ceiling (ingest.ts). */
+const BODY_MAX = 5 * 1024 * 1024;
 
 const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
@@ -358,7 +365,9 @@ export async function authenticateBox(req: Request, env: Env): Promise<void> {
       .first<{ public_key: string; callsign: string | null; last_seen_at: number | null }>();
     if (!row) return;
     const url = new URL(req.url);
-    const body = new Uint8Array(await req.clone().arrayBuffer());
+    // read through the ingest batch's byte cap: a larger body is never one a box sends, and is not buffered
+    const body = await readCappedBody(req.clone(), BODY_MAX);
+    if (!body) return;
     const ok = await verifyDomain(
       await importVerifyKey(row.public_key),
       b64urlToBytes(sig),
