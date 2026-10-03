@@ -11,7 +11,7 @@
  *     attested: a local TNC (KISS, AGWPE, WA8DED host mode → `tnc`) or a MeshCom node (`meshcom`) on the
  *     operator's ingest box, whose writes need INGEST_SECRET (a signed batch records `browser-rf`, whatever
  *     port it names). The ingest stamps a direct hearing with the site call as `igate_call`, the frame is
- *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`). An on-air frame carries no q-construct of
+ *     `heard_via = 'rf'`, and that site must be on the operator allowlist (`FIRST_PARTY_SITES`, or a station the sysop trusts in Instance admin; attestedsites.ts). An on-air frame carries no q-construct of
  *     its own; one that does must name an RF gate (qAR/qAO).
  *   - An APRS-IS line is never attested, whatever it says: APRS-IS passcodes are public, so anyone can
  *     inject `…,qAR,<attested site>`. A standalone IGate visible only on APRS-IS therefore counts for nothing here — it must run the ingest box for its

@@ -198,7 +198,7 @@ function envItems(env: Env): SetupItem[] {
       source: "env",
       detail: sites.length
         ? `${sites.length} attested site call${sites.length === 1 ? "" : "s"} (${sites.join(", ")}) — Tier A can originate here`
-        : "none attested — no find on this instance reaches Tier A (transport never equals trust)",
+        : "none listed — Tier A needs a listed site or a station trusted under Ingest boxes (transport never equals trust)",
     });
   }
   push({

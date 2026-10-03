@@ -39,14 +39,14 @@ import { sessionIdentity, accountHoldsCall, timingSafeEqual, operatorSecretOk } 
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { serviceCall } from "./servicecall.js";
 import { adminCalls } from "./admin.js";
-import { parseAttestedSites } from "./provenance.js";
+import { attestedSites } from "./attestedsites.js";
 
 /**
  * The receiving-site calls that can hear a `VERIFY` message: the attested sites, sorted. Site calls are
  * public (they appear in every frame the site gates), so naming them to the holder discloses nothing.
  */
-export function listeningSites(env: Env): string[] {
-  return [...parseAttestedSites(env.FIRST_PARTY_SITES)].sort();
+export async function listeningSites(env: Env): Promise<string[]> {
+  return [...(await attestedSites(env))].sort();
 }
 
 /** A code is good for 30 minutes: long enough to walk to the radio and transmit. */
@@ -91,7 +91,7 @@ export async function startAprsChallenge(req: Request, env: Env): Promise<Respon
   if (!(await accountHoldsCall(env, me.accountId, cs)))
     return json({ error: "add this callsign to your account before verifying it" }, { status: 403 });
   // Without an attested receiving site nothing can hear the reply, so a code would only run out.
-  const sites = listeningSites(env);
+  const sites = await listeningSites(env);
   if (sites.length === 0)
     return json(
       {

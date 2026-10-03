@@ -1019,6 +1019,22 @@ export interface EnrolledBox {
   revokedBy: string | null;
   revokedAt: number | null;
   lastSeenAt: number | null;
+  /** The sysop's trust in the box's receiving sites ("Trust this station's hearings"); null while off. */
+  trust: BoxTrust | null;
+}
+/** Who switched a box's trust on and when; trustedBy is an account id, or "operator" for the operator secret. */
+export interface BoxTrust {
+  sites: string[];
+  trustedBy: string;
+  trustedByCall: string | null;
+  trustedAt: number;
+}
+/** The finds a trusted station verified at Tier A since it was trusted: the count and the most recent few. */
+export interface BoxFinds {
+  box: string;
+  trust: BoxTrust | null;
+  count: number;
+  recent: { code: string; loggerCall: string; ts: number; site: string }[];
 }
 export interface OpenBoxCode {
   label: string | null;
@@ -1038,6 +1054,42 @@ export function createBoxCode(label: string, callsign: string): Promise<{ code: 
 }
 export function revokeBox(box: string): Promise<{ revoked: boolean }> {
   return call(`/api/admin/boxes/${encodeURIComponent(box)}/revoke`, { method: "POST" });
+}
+/** Switch "Trust this station's hearings" on for `sites`, or off. */
+export function setBoxTrust(box: string, trusted: boolean, sites: string[] = []): Promise<{ trust: BoxTrust | null }> {
+  return call(`/api/admin/boxes/${encodeURIComponent(box)}/trust`, {
+    method: "POST",
+    body: JSON.stringify(trusted ? { trusted, sites } : { trusted }),
+  });
+}
+export function getBoxFinds(box: string): Promise<BoxFinds> {
+  return call(`/api/admin/boxes/${encodeURIComponent(box)}/finds`);
+}
+// ---- trusted receiving stations ----
+/**
+ * A receiving station whose direct hearings count for Radio-verified finds: preset in configuration
+ * (FIRST_PARTY_SITES, read-only here), added by the sysop by its call, or trusted through its enrolled box.
+ */
+export interface TrustedStation {
+  site: string;
+  source: "config" | "admin" | "box";
+  box?: string;
+  boxLabel?: string | null;
+  trustedBy: string | null;
+  trustedByCall: string | null;
+  trustedAt: number | null;
+}
+export function listTrustedStations(): Promise<{ sites: TrustedStation[] }> {
+  return call(`/api/admin/sites`);
+}
+export function addTrustedStation(site: string): Promise<{ site: TrustedStation }> {
+  return call(`/api/admin/sites`, { method: "POST", body: JSON.stringify({ site }) });
+}
+export function removeTrustedStation(site: string): Promise<{ removed: boolean }> {
+  return call(`/api/admin/sites/${encodeURIComponent(site)}`, { method: "DELETE" });
+}
+export function getStationFinds(site: string): Promise<Omit<BoxFinds, "box" | "trust"> & { site: string }> {
+  return call(`/api/admin/sites/${encodeURIComponent(site)}/finds`);
 }
 // ---- cache adoption ----
 /** A cache as the adoption endpoints serve it; `ownerCall` reads `WITHDRAWN` for an erased owner. */

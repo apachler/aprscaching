@@ -22,7 +22,8 @@ import {
   type VerifyResult,
   type AppGeo,
 } from "./verify.js";
-import { provenanceOf, parseAttestedSites } from "./provenance.js";
+import { provenanceOf } from "./provenance.js";
+import { attestedSites as loadAttestedSites } from "./attestedsites.js";
 import { parsePage, keyset, paginate, type Cursor } from "./paging.js";
 import { pushAlert } from "./notify.js";
 import { sessionIdentity, mayActAsOwner, baseHolder, isWithdrawnCall, displayCall, ingestSecretOk } from "./auth.js";
@@ -783,8 +784,9 @@ export async function scoreFind(
   }
 
   // Provenance seam: stamp each fix with firstPartyAttested at the boundary so the verify
-  // engine branches on attestation alone, never on transport. FIRST_PARTY_SITES narrows attestation.
-  const attestedSites = parseAttestedSites((env as { FIRST_PARTY_SITES?: string }).FIRST_PARTY_SITES);
+  // engine branches on attestation alone, never on transport. The attested sites (FIRST_PARTY_SITES and the
+  // trusted stations of Instance admin) narrow attestation.
+  const attestedSites = await loadAttestedSites(env);
   const attest = (rows: PositionRow[]): PositionRow[] =>
     rows.map((p) => ({ ...p, firstPartyAttested: provenanceOf(p, attestedSites).firstPartyAttested }));
 

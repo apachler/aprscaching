@@ -122,7 +122,7 @@ if (env.AXUDP_PORT) {
 }
 
 // The receiving-site call every local TNC (KISS, AGWPE, WA8DED host mode) stamps on frames it heard
-// directly; the gateway attests it only when it is listed in FIRST_PARTY_SITES.
+// directly; the gateway attests it only when its sysop trusts the site.
 const siteCall = env.RF_SITE_CALL || env.IGATE_CALL || undefined;
 
 // extra transports (opt-in via env) — all feed the same batch with their own `port`
@@ -130,7 +130,7 @@ if (env.KISS_TNC_HOST) {
   const frameSubs: ((f: ParsedFrame) => void)[] = [];
   const rawSubs: ((b: Uint8Array) => void)[] = [];
   // RF_SITE_CALL (default: IGATE_CALL) names this box as the receiving site of what it hears directly,
-  // so a gateway that lists it in FIRST_PARTY_SITES attests those frames. This batch is the only way the
+  // so a gateway that trusts it attests those frames. This batch is the only way the
   // site's hearings reach Tier A: the RX-IGate's APRS-IS copy (`qAR,<site>`) is never attested.
   const kiss = new KissTnc(
     { host: env.KISS_TNC_HOST, port: portEnv("KISS_TNC_PORT", 8001), siteCall },

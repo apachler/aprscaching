@@ -83,7 +83,10 @@ import {
   handleEnroll,
   handleListBoxes,
   handleRevokeBox,
+  handleTrustBox,
+  handleBoxFinds,
 } from "./boxkeys.js";
+import { handleListSites, handleAddSite, handleRemoveSite, handleSiteFinds } from "./trustedsites.js";
 import { handleBoxEnqueue, handleBoxPoll, handleBoxAck, handleBoxLog, handleBoxPair, handleBoxClaim } from "./box.js";
 import {
   handleRelayEnqueue,
@@ -538,6 +541,16 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/admin/boxes/codes" && m === "POST") return handleCreateEnrollCode(req, env);
   const revoke = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/revoke$/.exec(p);
   if (revoke && m === "POST") return handleRevokeBox(req, env, revoke[1]!);
+  const boxTrust = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/trust$/.exec(p);
+  if (boxTrust && m === "POST") return handleTrustBox(req, env, boxTrust[1]!);
+  const boxFinds = /^\/api\/admin\/boxes\/([A-Za-z0-9_.-]+)\/finds$/.exec(p);
+  if (boxFinds && m === "GET") return handleBoxFinds(req, env, boxFinds[1]!);
+  if (p === "/api/admin/sites" && m === "GET") return handleListSites(req, env);
+  if (p === "/api/admin/sites" && m === "POST") return handleAddSite(req, env);
+  const siteFinds = /^\/api\/admin\/sites\/([A-Za-z0-9%-]+)\/finds$/.exec(p);
+  if (siteFinds && m === "GET") return handleSiteFinds(req, env, siteFinds[1]!);
+  const siteDel = /^\/api\/admin\/sites\/([A-Za-z0-9%-]+)$/.exec(p);
+  if (siteDel && m === "DELETE") return handleRemoveSite(req, env, siteDel[1]!);
   if (p === "/outbox" && m === "GET") return outboxPending(req, env);
   if (p === "/outbox/ack" && m === "POST") return outboxAck(req, env);
 

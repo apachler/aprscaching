@@ -19,7 +19,8 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 import { serviceCall } from "./servicecall.js";
 import { deliverMailbox, mailboxOnAck, type Heard } from "./mailbox.js";
-import { parseAttestedSites, transportForPort } from "./provenance.js";
+import { transportForPort } from "./provenance.js";
+import { attestedSites } from "./attestedsites.js";
 import {
   downsamplePolicy,
   heardDirectly,
@@ -74,16 +75,17 @@ const INGEST_BODY_MAX_BYTES = 5 * 1024 * 1024;
 /**
  * GET /ingest/check — does this ingest credential work? 200 with the instance id, its service call (the box
  * asks APRS-IS for messages addressed to it) and, for an enrolled box's signed request, the box, for a valid
- * credential, 401 otherwise. It reads nothing and writes nothing, so a box (and `deploy/aprscaching
- * doctor`) can test its settings without posting a batch, draining the outbox or leasing a command.
+ * credential, 401 otherwise, with the receiving sites the instance trusts (so the box can say when its own site
+ * is not among them). It reads only that list and writes nothing, so a box (and `deploy/aprscaching doctor`)
+ * can test its settings without posting a batch, draining the outbox or leasing a command.
  */
-export function handleIngestCheck(req: Request, env: Env): Response {
+export async function handleIngestCheck(req: Request, env: Env): Promise<Response> {
   if (!ingestSecretOk(req, env)) return json({ error: "invalid ingest credential" }, { status: 401 });
   return json({
     ok: true,
     instance: env.INSTANCE ?? null,
     serviceCall: serviceCall(env),
-    sites: [...parseAttestedSites(env.FIRST_PARTY_SITES)],
+    sites: [...(await attestedSites(env))],
     box: boxPrincipal(req)?.box ?? null,
   });
 }

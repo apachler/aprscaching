@@ -3,7 +3,7 @@
 // gateway over a migrated SQLite with the ingest box's own signing code (apps/ingest gatewayauth.ts): a code
 // works once and only while fresh, a signature covers the method, path, time and body and is accepted once,
 // revoking one box cuts off that box alone, the shared secret keeps working, a box acts only for itself,
-// and enrolling changes no trust — a site still counts for Tier A only through FIRST_PARTY_SITES.
+// and enrolling changes no trust — a site counts for Tier A only once the sysop attests it (box_trust.test.ts).
 import { describe, it, expect } from "vitest";
 import { createPrivateKey, sign } from "node:crypto";
 import { SIG_DOMAIN, boxRequestMessage } from "@aprscaching/shared";
@@ -235,7 +235,7 @@ describe("trust is unchanged by enrollment", () => {
     const viaSecret = JSON.stringify({ packets: [position("OE3RF2", "kiss-tnc", "OE8XXX")] });
     await call(env, "POST", "/ingest", JSON.parse(viaSecret), { "x-ingest-secret": "test-ingest-secret" });
     expect((await stored(env, "OE3RF1"))?.igate_call).toBe((await stored(env, "OE3RF2"))?.igate_call);
-    // enrolling did not list the box anywhere: FIRST_PARTY_SITES is the sysop's setting alone
+    // enrolling did not list the box anywhere: attesting a site is the sysop's decision alone
     expect(env.FIRST_PARTY_SITES).toBe("OE8XXX,OE1ABC");
   });
 

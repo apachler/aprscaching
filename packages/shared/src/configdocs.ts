@@ -28,7 +28,7 @@ export const CONFIG_HINTS: Record<ConfigKeyName, string> = {
   FED_REGISTRY_KEY: "Pinned public key (base64url) of the registry authority",
   FED_REGISTRY_DNS: "DNS TXT record name whose url= locates the signed registry",
   FED_OPERATOR: "Operator label this instance publishes in /.well-known",
-  FIRST_PARTY_SITES: "Comma-separated calls of receiving sites you operate and attest (Tier A)",
+  FIRST_PARTY_SITES: "Receiving-site calls preset as trusted for Tier A (Instance admin adds more)",
   MIN_TRUST: "Lowest tier a find needs to count as verified: B (Location-verified) or A (Radio-verified)",
   FED_PEERS: "Comma-separated base URLs of federation peers to sync from",
   FED_DISCOVER: "1 learns the peers that trusted peers advertise",
@@ -374,7 +374,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
     rows: [
       [
         "`FIRST_PARTY_SITES`",
-        "Allowlist of receiving-site callsigns you operate and attest — the only Tier A origin. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. These are also the only sites whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: unset ⇒ no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
+        "Receiving-site callsigns trusted for Tier A from configuration: the way to preset trusted stations for CI, scripted deploys and off-grid Desktop or Pocket instances. The primary way is **Instance admin → Trusted receiving stations** (and **Trust this station's hearings** on an enrolled box), where these calls show read-only as set in configuration; the trusted set is this list plus the stations trusted there. A site counts only for frames its own ingest box heard directly (a TNC or MeshCom port, delivered with the ingest secret or an enrolled box's key); an APRS-IS line naming the site (`qAR,<site>`) is never attested, since anyone can inject one. Trusted sites are also the only ones whose on-air copy of a `VERIFY <code>` message verifies a callsign. Tier A is default-deny: with no trusted station no find reaches Tier A locally (peer corroboration over federation still can), and this instance answers peers' corroboration requests only from positions it attests the same way",
         "—",
       ],
       [
@@ -646,7 +646,7 @@ export const CONFIG_TABLES: readonly ConfigTable[] = [
       ],
       [
         "Receiving site (Tier A)",
-        "`RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); attest it with `FIRST_PARTY_SITES` on the gateway. Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station",
+        "`RF_SITE_CALL` — names the box as the receiving site of frames its local TNCs (KISS, AGWPE, WA8DED host mode) hear directly (default `IGATE_CALL`); the gateway's sysop trusts it in Instance admin (or presets it in `FIRST_PARTY_SITES`). Set it only for a TNC you operate — leave it unset when the TNC host is someone else's station",
       ],
       [
         "Remote control (Shack → Remote box)",

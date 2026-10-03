@@ -58,7 +58,8 @@ The verification engine reads a normalised **provenance** object, never a raw tr
 
 `firstPartyAttested` is the *only* gate on Tier A. It is set only for a frame that the operator's own ingest
 box heard directly on its own receiver, a local TNC (KISS, AGWPE, WA8DED host mode) or a MeshCom node, at a
-receiving site the operator lists as their own (`FIRST_PARTY_SITES`).
+receiving site the sysop trusts (Instance admin → **Trusted receiving stations**, an enrolled box's
+**Trust this station's hearings**, or the configuration preset `FIRST_PARTY_SITES`).
 
 - **The site is named on both sides.** The ingest box stamps its frames with `RF_SITE_CALL`, and the gateway
   attests that call.

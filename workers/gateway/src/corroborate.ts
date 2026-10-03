@@ -18,7 +18,8 @@ import { json } from "./app.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
 import { DEFAULT_POLICY } from "./verify.js";
 import { listEnabledPeers, keysForOrigin } from "./fedpeers.js";
-import { parseAttestedSites, provenanceOf } from "./provenance.js";
+import { provenanceOf } from "./provenance.js";
+import { attestedSites } from "./attestedsites.js";
 import { isInstanceId, loadRegistry } from "./federation.js";
 import { signFedRecord, verifyFedFrame } from "./fedcbor.js";
 import { bodyFromWire, bodyToWire } from "./fedsync.js";
@@ -118,7 +119,7 @@ interface RfPositionRow {
  * Pick the evidence a set of this instance's RF positions offers for a corroboration query, or null.
  *
  * Only a position first-party attested by the same rule as local Tier A ({@link provenanceOf}) can vouch:
- * heard by a receiving site this instance attests (FIRST_PARTY_SITES) through that site's own on-air
+ * heard by a receiving site this instance attests (FIRST_PARTY_SITES or a trusted station) through that site's own on-air
  * ingest. An empty list vouches for nothing, and an APRS-IS copy naming an attested site never vouches. A peer's corroboration can lift
  * a find to Tier A there, so answering from a site nobody here stands behind would let transport
  * masquerade as trust. A site the logger controls, or one the asker excludes, never counts.
@@ -149,7 +150,7 @@ async function localCorroboration(
   q: CorroborationQuery,
   excludeIgates: Set<string>,
 ): Promise<Omit<Evidence, "instance"> | null> {
-  const attested = parseAttestedSites(env.FIRST_PARTY_SITES);
+  const attested = await attestedSites(env);
   if (attested.size === 0) return null;
   const rows = (
     await env.DB.prepare(

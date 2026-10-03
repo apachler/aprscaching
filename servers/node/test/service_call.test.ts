@@ -21,8 +21,11 @@ describe("service call", () => {
     expect(serviceCall(env({ ADMIN_CALLSIGNS: "OE8ABCDE" }))).toBe("APRSCG");
   });
   it("is named to the ingest box by the credential check", async () => {
-    const e = env({ ADMIN_CALLSIGNS: "OE8APR", INGEST_SECRET: "s" });
-    const r = handleIngestCheck(new Request("http://gw/ingest/check", { headers: { "x-ingest-secret": "s" } }), e);
+    const e = instanceEnv("gw.test", null, { ADMIN_CALLSIGNS: "OE8APR", INGEST_SECRET: "s" });
+    const r = await handleIngestCheck(
+      new Request("http://gw/ingest/check", { headers: { "x-ingest-secret": "s" } }),
+      e,
+    );
     expect(await r.json()).toMatchObject({ ok: true, serviceCall: "OE8APR-15" });
   });
 });

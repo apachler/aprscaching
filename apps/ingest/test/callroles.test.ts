@@ -20,7 +20,7 @@ describe("callsign checks against the gateway", () => {
   it("warns when a receiving site of this box is not attested by the gateway", () => {
     const env = { KISS_TNC_HOST: "127.0.0.1", RF_SITE_CALL: "OE8APR-10", MESHCOM_NODE: "192.168.1.50=OE8APR-12" };
     expect(callWarnings(env, "OE8APR-15", ["OE8APR-10"])).toEqual([
-      expect.stringMatching(/^MESHCOM_NODE OE8APR-12 is not in the gateway's FIRST_PARTY_SITES/),
+      expect.stringMatching(/^MESHCOM_NODE OE8APR-12 is not a trusted receiving station on the gateway/),
     ]);
     expect(callWarnings(env, "OE8APR-15", ["OE8APR-10", "OE8APR-12"])).toEqual([]);
     // an older gateway names no sites: nothing to compare

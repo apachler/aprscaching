@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The callsigns this box uses, checked against what the gateway names: its service call and its attested
- * receiving sites (`FIRST_PARTY_SITES`). Both sides hold a copy of a call that must agree, and a mismatch
- * fails silently on air, so the box says so in its log.
+ * receiving sites (Instance admin's trusted stations and `FIRST_PARTY_SITES`). Both sides hold a copy of a
+ * call that must agree, and a mismatch fails silently on air, so the box says so in its log.
  */
 import { parseMeshcomNodes } from "./meshcom.js";
 
@@ -61,7 +61,7 @@ export function callWarnings(env: Env, serviceCall: string, sites?: string[]): s
     for (const o of own)
       if (!attested.has(o.call))
         out.push(
-          `${o.key} ${o.call} is not in the gateway's FIRST_PARTY_SITES: what it hears directly never reaches Tier A`,
+          `${o.key} ${o.call} is not a trusted receiving station on the gateway: what it hears directly never reaches Tier A until the sysop trusts it`,
         );
   }
   return out;
