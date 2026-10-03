@@ -30,7 +30,7 @@ export function NearRadioSettings(props: { verified: boolean }) {
       }}
       reason={
         props.verified
-          ? "Off: your radio gets no message near a cache."
+          ? "Switch on for an APRS message to your radio when it is heard on foot near a cache."
           : "Verify your callsign to get a radio message near a cache."
       }
     >
