@@ -14,6 +14,7 @@ import type { FeedServeDef } from "./federation.js";
 import { FED_BBS_CATEGORY } from "@aprscaching/shared";
 import { baseCall } from "@aprscaching/aprs";
 import { serviceCall, FALLBACK_SERVICE_CALL } from "./servicecall.js";
+import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
@@ -64,32 +65,54 @@ async function requireMailbox(req: Request, env: Env, call: string): Promise<Res
 }
 
 // ---------------------------------------------------------------- post
+/** The largest message body, in UTF-8 bytes: a long FBB message, and still a small row to forward. */
+export const BBS_BODY_MAX_BYTES = 64 * 1024;
+/** The longest subject: FBB carries a title of at most 80 characters. */
+export const BBS_SUBJECT_MAX = 80;
+/** The longest lifetime a poster may set; a bulletin with none lives this long too. */
+export const BBS_LIFETIME_MAX_SEC = 30 * 86400;
+/** Messages one account (or, through the ingest box, one base call) may post a day. */
+export const BBS_POSTS_PER_DAY = 20;
+
 export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
-  const b = (await req.json().catch(() => ({}))) as {
-    fromCall?: string;
-    toCall?: string;
-    type?: string;
-    subject?: string;
-    body?: string;
-    lifetimeSec?: number;
-    replyTo?: number;
-  };
-  if (!b.fromCall || !b.toCall || !b.body) return json({ error: "fromCall, toCall, body required" }, { status: 400 });
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (typeof b !== "object" || b === null || Array.isArray(b))
+    return json({ error: "fromCall, toCall, body required" }, { status: 400 });
+  const { fromCall, toCall, body, subject, lifetimeSec } = b;
+  if (typeof fromCall !== "string" || typeof toCall !== "string" || typeof body !== "string")
+    return json({ error: "fromCall, toCall, body required" }, { status: 400 });
+  if (!fromCall.trim() || !toCall.trim() || !body)
+    return json({ error: "fromCall, toCall, body required" }, { status: 400 });
+  if (subject != null && typeof subject !== "string") return json({ error: "subject must be text" }, { status: 400 });
+  if (lifetimeSec != null && !(typeof lifetimeSec === "number" && Number.isInteger(lifetimeSec) && lifetimeSec > 0))
+    return json({ error: "lifetimeSec must be a positive whole number of seconds" }, { status: 400 });
+  const replyToId = typeof b.replyTo === "number" && Number.isInteger(b.replyTo) ? b.replyTo : null;
   // a message is sent in its sender's name, so only the sender's mailbox may post it
-  const denied = await requireMailbox(req, env, b.fromCall);
+  const denied = await requireMailbox(req, env, fromCall);
   if (denied) return denied;
-  const from = b.fromCall.toUpperCase(),
-    to = b.toCall.toUpperCase();
+  if (new TextEncoder().encode(body).length > BBS_BODY_MAX_BYTES)
+    return json({ error: `the message is longer than ${BBS_BODY_MAX_BYTES / 1024} KB` }, { status: 413 });
+  if (subject && subject.length > BBS_SUBJECT_MAX)
+    return json({ error: `the subject is longer than ${BBS_SUBJECT_MAX} characters` }, { status: 400 });
+  if (lifetimeSec != null && lifetimeSec > BBS_LIFETIME_MAX_SEC)
+    return json({ error: `a message lives at most ${BBS_LIFETIME_MAX_SEC / 86400} days` }, { status: 400 });
+  const from = fromCall.toUpperCase(),
+    to = toCall.toUpperCase();
+  // The ingest box posts for the stations it hears, so its budget is per sender; a session's is per account.
+  const me = ingestSecretOk(req, env) ? null : await sessionIdentity(req, env);
+  const rateKey = me ? `bbs-post:acct:${me.accountId}` : `bbs-post:call:${baseCall(mailboxCall(from))}`;
+  if (await rateLimitedDurable(env, rateKey, Date.now(), BBS_POSTS_PER_DAY, 86_400_000))
+    return json({ error: `at most ${BBS_POSTS_PER_DAY} messages a day` }, { status: 429 });
   const type = b.type === "B" || b.type === "P" || b.type === "T" ? b.type : BULLETIN_TO.test(to) ? "B" : "P";
   const posted = nowS();
-  const expires = b.lifetimeSec ? posted + b.lifetimeSec : type === "B" ? posted + 30 * 86400 : null;
+  const expires = lifetimeSec != null ? posted + lifetimeSec : type === "B" ? posted + BBS_LIFETIME_MAX_SEC : null;
 
   // Reply: inherit the parent's conversation root so replies chain into a thread
   let replyTo: number | null = null,
     threadRoot: number | null = null;
-  if (b.replyTo) {
+  if (replyToId) {
     const parent = await env.DB.prepare("SELECT id, thread_id FROM bbs_messages WHERE id=?")
-      .bind(b.replyTo)
+      .bind(replyToId)
       .first<{ id: number; thread_id: number | null }>();
     if (parent) {
       replyTo = parent.id;
@@ -100,7 +123,7 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
   const res = await env.DB.prepare(
     "INSERT INTO bbs_messages (type, from_call, to_call, subject, body, posted_at, expires_at, origin, reply_to) VALUES (?,?,?,?,?,?,?, 'local', ?)",
   )
-    .bind(type, from, to, b.subject ?? null, b.body, posted, expires, replyTo)
+    .bind(type, from, to, subject || null, body, posted, expires, replyTo)
     .run();
   const id = Number(res.meta.last_row_id);
   const bid = bidFor(id, bbsCall(env));
