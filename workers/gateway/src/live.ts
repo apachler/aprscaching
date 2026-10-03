@@ -40,26 +40,18 @@ export function deliveriesFor(sub: Subscribe | undefined, env: LiveEnvelope): Se
   return out;
 }
 
-/** Build the live envelope for one ingested position: a station delta + nearby geofence prompts. */
-export async function envelopeForPosition(
-  env: Env,
-  callsign: string,
-  lat: number,
-  lon: number,
-  symbol?: string,
-  course?: number,
-): Promise<LiveEnvelope> {
-  const cs = callsign.toUpperCase();
-  const station: StationDelta = {
-    type: "station",
-    callsign: cs,
-    lat,
-    lon,
-    symbol,
-    course,
-    lastSeen: nowS(),
-  };
+/** A listed, active cache within {@link GEOFENCE_RADIUS_M} of a position. */
+export interface NearCache {
+  id: number;
+  code: string;
+  title: string;
+  lat: number;
+  lon: number;
+  distanceM: number;
+}
 
+/** The listed, active caches within {@link GEOFENCE_RADIUS_M} of a point: one indexed bbox read. */
+export async function cachesNear(env: Env, lat: number, lon: number): Promise<NearCache[]> {
   const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
   const dLat = GEOFENCE_RADIUS_M / 111320;
   const dLon = GEOFENCE_RADIUS_M / (111320 * cosLat);
@@ -72,17 +64,48 @@ export async function envelopeForPosition(
       .all<{ id: number; code: string; title: string; lat: number; lon: number }>()
   ).results;
 
-  const prompts: { forCallsign: string; prompt: GeofencePrompt }[] = [];
+  const near: NearCache[] = [];
   for (const c of rows) {
     if (c.lat == null || c.lon == null) continue;
     const distanceM = haversineMeters(lat, lon, c.lat, c.lon);
-    if (distanceM <= GEOFENCE_RADIUS_M) {
-      prompts.push({
-        forCallsign: cs,
-        prompt: { type: "near_cache", cacheId: c.id, code: c.code, title: c.title, distanceM },
-      });
-    }
+    if (distanceM <= GEOFENCE_RADIUS_M) near.push({ ...c, distanceM });
   }
+  return near;
+}
+
+/**
+ * Build the live envelope for one ingested position: a station delta + a geofence prompt per nearby cache.
+ * `near` is the result of {@link cachesNear} when the caller has it already.
+ */
+export async function envelopeForPosition(
+  env: Env,
+  callsign: string,
+  lat: number,
+  lon: number,
+  symbol?: string,
+  course?: number,
+  near?: NearCache[],
+): Promise<LiveEnvelope> {
+  const cs = callsign.toUpperCase();
+  const station: StationDelta = {
+    type: "station",
+    callsign: cs,
+    lat,
+    lon,
+    symbol,
+    course,
+    lastSeen: nowS(),
+  };
+  const prompts = (near ?? (await cachesNear(env, lat, lon))).map((c) => ({
+    forCallsign: cs,
+    prompt: {
+      type: "near_cache",
+      cacheId: c.id,
+      code: c.code,
+      title: c.title,
+      distanceM: c.distanceM,
+    } satisfies GeofencePrompt,
+  }));
   return { station, prompts: prompts.length ? prompts : undefined };
 }
 

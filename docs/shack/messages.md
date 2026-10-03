@@ -119,6 +119,7 @@ message:
 |---|---|
 | `FOUND <code>`, `DNF <code>`, `NOTE <code> <text>` | Logs a find, a did-not-find or a note: [Log from your radio](../play/log-a-find.md#log-from-your-radio) |
 | `MAIL <call> <text>` | Leaves a message in the [Mailbox](#leave-a-message-in-the-mailbox) for that station |
+| `NEAR ON`, `NEAR OFF` | Switches the radio message you get near a cache: [The "you're near" prompt](../play/find-a-cache.md#the-youre-near-prompt) |
 | `HELP` | Replies with the command list |
 | `VERIFY <code>` | Completes your callsign verification: [On the air](../play/join.md#on-the-air) |
 

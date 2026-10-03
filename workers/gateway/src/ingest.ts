@@ -9,7 +9,8 @@ import { json } from "./app.js";
 import { IngestBatch, sanitizeMeshcomMeta } from "@aprscaching/shared";
 import { meshcomStatements, type MeshcomObservation } from "./meshcom.js";
 import { baseCall, decodeAprs } from "@aprscaching/aprs";
-import { envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
+import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
+import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
 import { recordRendezvous } from "./rendezvous.js";
 import { recordMheard } from "./node.js";
@@ -39,6 +40,8 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
   speedKn?: number;
   altitudeM?: number;
   comment?: string;
+  /** the station's own position, not an object, item or weather report it sent */
+  own: boolean;
 } | null {
   const d = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
   if (
@@ -55,11 +58,12 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
       speedKn: d.speedKn,
       altitudeM: d.altitudeM,
       comment: d.comment,
+      own: d.kind === "position",
     };
   }
   // fall back to a pre-parsed {lat,lon,symbol} supplied by the ingest box
   const pp = p.parsed as any;
-  if (pp?.lat != null) return { lat: pp.lat, lon: pp.lon, symbol: pp.symbol };
+  if (pp?.lat != null) return { lat: pp.lat, lon: pp.lon, symbol: pp.symbol, own: true };
   return null;
 }
 
@@ -126,7 +130,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const heldMessages: { stmt: SqlStatement; parties: string[] }[] = [];
   const direct: typeof packets = []; // packets the operator's own receiver heard (heardDirectly)
   // every fix heard, for the live fan-out and the per-station hooks; `fixes` decides what is persisted
-  const positions: { src: string; lat: number; lon: number; symbol?: string; course?: number }[] = [];
+  const positions: {
+    src: string;
+    lat: number;
+    lon: number;
+    symbol?: string;
+    course?: number;
+    speedKn?: number;
+    own: boolean;
+    heard: Heard;
+  }[] = [];
   const fixes: { p: (typeof packets)[number]; fix: NonNullable<ReturnType<typeof fixOf>>; transport: Transport }[] = [];
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
@@ -156,12 +169,13 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
     if (heardDirectly(p.heardVia, transportForPort(p.port, signer != null))) direct.push(p);
     // the route a Mailbox message takes back: the box only when the trusted ingest box heard it itself
-    heard.push({
+    const route: Heard = {
       src: p.src,
       port: p.port,
       ...(trusted && p.box ? { box: p.box } : {}),
       ...(trusted && p.rxCall ? { rxCall: p.rxCall } : {}),
-    });
+    };
+    heard.push(route);
 
     // MeshCom metadata from the operator's own ingest only, sanitised again here: never from a signed batch
     if (trusted && p.port === "meshcom") {
@@ -230,7 +244,16 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
     const fix = fixOf(p);
     if (!fix) continue;
-    positions.push({ src: p.src, lat: fix.lat, lon: fix.lon, symbol: fix.symbol, course: fix.course });
+    positions.push({
+      src: p.src,
+      lat: fix.lat,
+      lon: fix.lon,
+      symbol: fix.symbol,
+      course: fix.course,
+      speedKn: fix.speedKn,
+      own: fix.own,
+      heard: route,
+    });
     fixes.push({ p, fix, transport: transportForPort(p.port, signer != null) });
   }
 
@@ -371,7 +394,10 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
 
   // the Mailbox: confirm what was acked, then send what waits for the stations just heard (best-effort)
   try {
-    for (const a of mailAcks) await mailboxOnAck(env, a.from, a.msgNo, a.port);
+    for (const a of mailAcks) {
+      await mailboxOnAck(env, a.from, a.msgNo, a.port);
+      await nearOnAck(env, a.from, a.msgNo, a.port);
+    }
     await deliverMailbox(env, heard);
   } catch (e) {
     console.error("mailbox:", (e as Error).message);
@@ -411,8 +437,21 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   // live fan-out — station deltas + "you're near a cache" geofence prompts. The same request hands this
   // batch's written rows to the write budget's counter and brings back the level for the next batch.
   const envelopes: LiveEnvelope[] = [];
-  for (const p of positions) envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course));
+  const nearFixes: NearFix[] = [];
+  for (const p of positions) {
+    const near = await cachesNear(env, p.lat, p.lon);
+    envelopes.push(await envelopeForPosition(env, p.src, p.lat, p.lon, p.symbol, p.course, near));
+    if (near.length && p.own) nearFixes.push({ heard: p.heard, lat: p.lat, lon: p.lon, speedKn: p.speedKn, near });
+  }
   await dispatchLive(env, envelopes);
+
+  // the "you're near" radio message for opted-in players on foot near a cache (best-effort); not over budget
+  if (!essential && nearFixes.length)
+    try {
+      await sendNearCacheMessages(env, nearFixes);
+    } catch (e) {
+      console.error("near-cache message:", (e as Error).message);
+    }
 
   // `stored` counts the fixes accepted (live, watch, rendezvous); `persisted` those written to positions
   return json({ ok: true, stored: positions.length, persisted });

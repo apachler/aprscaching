@@ -536,7 +536,7 @@ export function getMessages(
 export interface RadioCommandRow {
   id: number;
   fromCall: string;
-  command: "found" | "dnf" | "note" | "mail" | "help" | "invalid";
+  command: "found" | "dnf" | "note" | "mail" | "near" | "help" | "invalid";
   cacheCode?: string | null;
   body?: string | null;
   trusted: boolean;
@@ -815,6 +815,13 @@ export function getAnnounce(): Promise<{ on: boolean }> {
 }
 export function setAnnounce(on: boolean): Promise<{ on: boolean }> {
   return call(`/api/announce`, { method: "POST", body: JSON.stringify({ on }) });
+}
+/** Whether the service call messages the signed-in account's stations when they are heard near a cache. */
+export function getNearRadio(): Promise<{ on: boolean }> {
+  return call(`/api/near-radio`);
+}
+export function setNearRadio(on: boolean): Promise<{ on: boolean }> {
+  return call(`/api/near-radio`, { method: "POST", body: JSON.stringify({ on }) });
 }
 /** The public transparency ledger page (server-rendered on the gateway). */
 export const supportUrl = `${API_BASE}/support`;

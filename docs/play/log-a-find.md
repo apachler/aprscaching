@@ -85,6 +85,9 @@ your instance uses.
 | `NOTE AC-1234 log is full` | a note; the text is required          |
 | `HELP`                     | a reply with the command list         |
 
+`NEAR ON` and `NEAR OFF` switch the message your radio gets near a cache: see
+[The "you're near" prompt](find-a-cache.md#the-youre-near-prompt).
+
 The dash in a cache code is optional. A heritage place takes its reference as the code, for example
 `FOUND OE/ST-001`. A MeshCom direct message to the service call works the same way.
 

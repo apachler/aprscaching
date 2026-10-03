@@ -34,6 +34,7 @@ import { WeatherStation } from "../profile/WeatherStation.js";
 import { MyStations } from "../profile/MyStations.js";
 import { SupportSettings } from "./SupportSettings.js";
 import { AnnounceSettings } from "./AnnounceSettings.js";
+import { NearRadioSettings } from "./NearRadioSettings.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { AboutInstance, BugReportLink } from "./AboutInstance.js";
 
@@ -223,6 +224,10 @@ export function SettingsPanel(props: {
 
       {session.signedIn && match("announce finds APRS-IS status message broadcast") && (
         <AnnounceSettings verified={verified} />
+      )}
+
+      {session.signedIn && match("near cache radio message APRS MeshCom service call NEAR ON OFF") && (
+        <NearRadioSettings verified={verified} />
       )}
 
       {session.signedIn && match("notifications alerts email digest push watchlist watch callsign") && (

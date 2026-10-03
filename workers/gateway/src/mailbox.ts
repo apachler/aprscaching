@@ -197,11 +197,38 @@ export interface Heard {
 const RF_PORTS = new Set(["kiss-tnc"]);
 
 /**
- * Send the messages waiting for the stations of a batch, back the way each station was heard: over APRS
+ * Send a numbered APRS message from the service call to a station, back the way it was heard: over APRS
  * through the box that heard it on its own radio, else through the APRS-IS outbox; over MeshCom through the
  * box's node that heard it, from the service call when the box reaches the node's KISS port (else under the
- * node's own call, which no ack can confirm). A station heard only on a MeshCom node no box can transmit
- * through waits. One read covers the whole batch.
+ * node's own call, which no ack can confirm). Returns `acked` when the station's ack can confirm it, `once`
+ * when it went out with no ack to wait for, and null when there is no route: a station heard only on a
+ * MeshCom node no box can transmit through.
+ */
+export async function sendToHeard(env: Env, h: Heard, text: string, msgNo: string): Promise<"acked" | "once" | null> {
+  const service = serviceCall(env);
+  const to = h.src.toUpperCase();
+  const caps = h.box ? await freshBoxCaps(env, h.box) : null;
+  if (h.port === "meshcom") {
+    const node = h.rxCall?.toUpperCase();
+    if (!caps?.tx || !node || !caps.meshcom.includes(node)) return null;
+    await enqueueSystemBoxCommand(env, h.box!, "meshcom_msg", { node, dst: to, text, from: service, msgNo });
+    return caps.kiss?.includes(node) ? "acked" : "once";
+  }
+  if (caps?.tx && caps.rf && RF_PORTS.has(h.port))
+    await enqueueSystemBoxCommand(env, h.box!, "aprs_msg", { from: service, to, text, msgNo });
+  else
+    await env.DB.prepare(
+      "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?, ?, 'APZACG', 'message', ?)",
+    )
+      .bind(nowS(), service, encodeAprsMessage(to, text, msgNo))
+      .run();
+  return "acked";
+}
+
+/**
+ * Send the messages waiting for the stations of a batch, each back the way its station was heard
+ * ({@link sendToHeard}). A station heard only on a MeshCom node no box can transmit through waits. One read
+ * covers the whole batch.
  */
 export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
   const now = nowS();
@@ -220,7 +247,6 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
     const k = h.src.toUpperCase();
     if (!byCall.has(k) || byCall.get(k)!.port === "meshcom") byCall.set(k, h);
   }
-  const service = serviceCall(env);
   const settle = (id: number, to: string, msgNo: string, status: string, tries: number) =>
     env.DB.prepare(
       `UPDATE mailbox_messages SET status = ?, delivered_to = ?, msg_no = ?, attempts = ?, last_attempt = ?
@@ -235,26 +261,14 @@ export async function deliverMailbox(env: Env, heard: Heard[]): Promise<void> {
       (m.to_call.includes("-") ? undefined : [...byCall.values()].find((x) => baseCall(x.src) === m.to_call));
     if (!h) continue;
     const to = h.src.toUpperCase();
-    const text = mailText(m.from_call, m.body);
     const msgNo = msgNoOf(m.id);
-    const caps = h.box ? await freshBoxCaps(env, h.box) : null;
-    if (h.port === "meshcom") {
-      const node = h.rxCall?.toUpperCase();
-      if (!caps?.tx || !node || !caps.meshcom.includes(node)) continue;
-      await enqueueSystemBoxCommand(env, h.box!, "meshcom_msg", { node, dst: to, text, from: service, msgNo });
-      // without the node's KISS port no ack can confirm it, so it goes out once and is not repeated
-      if (!caps.kiss?.includes(node)) {
-        await settle(m.id, to, msgNo, "undelivered", MAX_ATTEMPTS);
-        continue;
-      }
-    } else if (caps?.tx && caps.rf && RF_PORTS.has(h.port))
-      await enqueueSystemBoxCommand(env, h.box!, "aprs_msg", { from: service, to, text, msgNo });
-    else
-      await env.DB.prepare(
-        "INSERT INTO aprs_outbox (ts, src_call, tocall, kind, payload) VALUES (?, ?, 'APZACG', 'message', ?)",
-      )
-        .bind(now, service, encodeAprsMessage(to, text, msgNo))
-        .run();
+    const how = await sendToHeard(env, h, mailText(m.from_call, m.body), msgNo);
+    if (!how) continue;
+    // without the node's KISS port no ack can confirm it, so it goes out once and is not repeated
+    if (how === "once") {
+      await settle(m.id, to, msgNo, "undelivered", MAX_ATTEMPTS);
+      continue;
+    }
     const tries = m.attempts + 1;
     await settle(m.id, to, msgNo, tries >= MAX_ATTEMPTS ? "undelivered" : "sent", tries);
   }
