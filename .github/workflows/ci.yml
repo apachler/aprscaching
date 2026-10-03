@@ -242,7 +242,7 @@ jobs:
           FED_REGISTRY_KEY=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).FED_REGISTRY_KEY)" "$REG")
           # The publisher attests OE8XXX, the IGate its RF fix comes through, so it may corroborate for peers.
           DB_PATH="$RUNNER_TEMP/pub.db" PORT=8801 INSTANCE=oe.pub FED_PRIVATE_KEY="$KEY" FED_KEY_HISTORY="$HIST" FIRST_PARTY_SITES=OE8XXX \
-            FED_OPERATOR=OE8APR FED_APRS_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
+            FED_OPERATOR=OE8APR SERVICE_CALL=OE8APR-12 FED_RELAY_SECRET=relaysecret \
             FED_ENDPOINTS='[{"transport":"https","address":"http://127.0.0.1:8801","priority":10}]' \
             pnpm --filter @aprscaching/node-gateway start &
           # A two-instance network has one corroborating peer, so the subscriber accepts a quorum of one.

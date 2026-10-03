@@ -28,7 +28,7 @@ export async function enqueueAcsfedBulletin(
   frames: Uint8Array[],
 ): Promise<{ bid: string; enqueued: number }> {
   const bull = encodeFedBbsBatch(frames);
-  const fromCall = (env.FED_APRS_CALL ?? env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
+  const fromCall = (env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
   const res = await env.DB.prepare(
     `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
      VALUES (?, 'B', ?, ?, ?, ?, ?, 'local')`,

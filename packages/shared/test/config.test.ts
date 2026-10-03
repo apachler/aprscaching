@@ -48,6 +48,17 @@ describe("the configuration schema", () => {
 });
 
 describe("validateConfig", () => {
+  it("checks callsigns: AX.25 roles take SSID 0-15, a site list a MeshCom SSID too", () => {
+    const keys = (src: Record<string, string>) => validateConfig(src, ["gateway", "ingest"]).map((p) => p.key);
+    expect(
+      keys({ DIGI_CALL: "OE8APR-10", FIRST_PARTY_SITES: "OE8APR-10, OE8APR-42", ADMIN_CALLSIGNS: "OE8APR" }),
+    ).toEqual([]);
+    expect(keys({ DIGI_CALL: "OE8APR-20" })).toEqual(["DIGI_CALL"]);
+    expect(keys({ SERVICE_CALL: "APRSCG" })).toEqual(["SERVICE_CALL"]);
+    expect(keys({ BBS_NODE_CALL: "OE8APRXY-8" })).toEqual(["BBS_NODE_CALL"]);
+    expect(keys({ FIRST_PARTY_SITES: "OE8APR-10,nope" })).toEqual(["FIRST_PARTY_SITES"]);
+  });
+
   it("accepts unset and blank values", () => {
     expect(validateConfig({}, "gateway")).toEqual([]);
     expect(validateConfig({ SESSION_TTL_DAYS: "", TRUST_PROXY: "  " }, "gateway")).toEqual([]);

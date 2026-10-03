@@ -26,10 +26,13 @@ export type ConfigShape = "selfhost" | "cloudflare" | "baremetal" | "ingest-box"
 
 /**
  * Value types. `int` and `number` are what the code parses with Number(); `enum` takes one of `values`
- * exactly; `list` is comma-separated; `json` must parse; `url` must parse as an absolute URL; `string`
- * takes anything (including the keys that switch a feature on by being set at all).
+ * exactly; `list` is comma-separated; `json` must parse; `url` must parse as an absolute URL; `call` is one
+ * callsign an AX.25 station can transmit under (a base of up to six letters and digits with a digit in it,
+ * and an optional SSID 0–15); `calls` is a comma- or space-separated list of callsigns, whose SSID may run
+ * to 99 as a MeshCom node's does; `string` takes anything (including the keys that switch a feature on by
+ * being set at all).
  */
-export type ConfigType = "string" | "int" | "number" | "enum" | "list" | "json" | "url";
+export type ConfigType = "string" | "int" | "number" | "enum" | "list" | "json" | "url" | "call" | "calls";
 
 export interface ConfigKey {
   readonly type: ConfigType;
@@ -85,6 +88,12 @@ export function keysOf<U extends ConfigUnit>(unit: U): ConfigKeysOf<U>[] {
 
 const finite = (v: string) => v.trim() !== "" && Number.isFinite(Number(v));
 
+/** A callsign: a base of 1–6 letters and digits holding a digit, and an SSID up to `maxSsid`. */
+const isCall = (c: string, maxSsid: number) => {
+  const m = /^([A-Z0-9]{1,6})(?:-(\d{1,2}))?$/i.exec(c.trim());
+  return !!m && /\d/.test(m[1]!) && (m[2] === undefined || Number(m[2]) <= maxSsid);
+};
+
 function validator(k: ConfigKey): z.ZodType<string> {
   const s = z.string();
   switch (k.type) {
@@ -105,6 +114,17 @@ function validator(k: ConfigKey): z.ZodType<string> {
       }, "expected valid JSON");
     case "url":
       return s.refine((v) => URL.canParse(v.trim()), "expected an absolute URL");
+    case "call":
+      return s.refine((v) => isCall(v, 15), "expected a callsign such as OE8APR-10 (SSID 0-15)");
+    case "calls":
+      return s.refine(
+        (v) =>
+          v
+            .split(/[\s,]+/)
+            .filter(Boolean)
+            .every((c) => isCall(c, 99)),
+        "expected callsigns such as OE8APR,OE8APR-10, separated by commas",
+      );
     default:
       return s;
   }

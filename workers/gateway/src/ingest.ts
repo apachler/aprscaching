@@ -18,7 +18,7 @@ import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 import { serviceCall } from "./servicecall.js";
-import { transportForPort } from "./provenance.js";
+import { parseAttestedSites, transportForPort } from "./provenance.js";
 import {
   downsamplePolicy,
   heardDirectly,
@@ -79,6 +79,7 @@ export function handleIngestCheck(req: Request, env: Env): Response {
     ok: true,
     instance: env.INSTANCE ?? null,
     serviceCall: serviceCall(env),
+    sites: [...parseAttestedSites(env.FIRST_PARTY_SITES)],
     box: boxPrincipal(req)?.box ?? null,
   });
 }

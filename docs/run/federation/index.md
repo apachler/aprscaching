@@ -33,7 +33,8 @@ Desktop, Cloudflare split or Pocket.
 3. **Ask each peer's sysop to add your `APP_URL`** to their `FED_PEERS`. Until they do, their instance holds you
    `unvetted` if it learns of you at all: your records are mirrored there but hidden on the map, and your
    answers do not count toward their Tier A. They can also promote you under **Instance admin → Federation**.
-4. **Optional:** publish who runs the instance with `FED_OPERATOR` and `FED_APRS_CALL`, and ask a registry
+4. **Optional:** publish who runs the instance with `FED_OPERATOR` (the instance publishes its service call
+   beside it), and ask a registry
    authority for an entry ([The instance registry](hubs-and-relays.md#the-instance-registry)).
 
 **Instance admin → Federation** lists your peers and changes their trust. It admits a 44Net peer by callsign

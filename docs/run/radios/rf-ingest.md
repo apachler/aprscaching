@@ -42,6 +42,24 @@ own `port`, counted at `GET /api/ports`.
     in `AXUDP_PEERS` or `AXIP_PEERS` lets the node send over the tunnel; transmitting on the air is a
     separate matter ([On-air legality](#on-air-legality)).
 
+## Callsigns and SSIDs
+
+Every station of yours is your callsign with its own SSID. Give each role its SSID once, and keep it:
+
+| Role | Setting | SSID |
+|---|---|---|
+| The instance's service call: radio commands go to it, answers come from it | `SERVICE_CALL` on the gateway, set for you | `-15` |
+| This box's station: IGate, receiving site, remote box, host-mode TNC | `IGATE_CALL`, `RF_SITE_CALL`, `BOX_CALL`, `HOSTMODE_MYCALL` | `-10` |
+| The digipeater | `DIGI_CALL` | the station's, `-10` |
+| The NET/ROM node | `NETROM_CALL` | `-5` |
+| The packet BBS, for connects and FBB forwarding | `BBS_NODE_CALL` (`BBS_FORWARD_CALL` follows it) | `-8` |
+| A MeshCom node | its own call in `MESHCOM_NODE` | the node's |
+
+Each setting switches its role on, so the box never sets one for you. A callsign setting takes a base of up
+to six letters and digits with a digit in it, and an SSID from 0 to 15; anything else stops the start with
+the setting's name. Once the gateway answers, the box logs an error for a station on the service call, and
+for a receiving site or MeshCom node the gateway's `FIRST_PARTY_SITES` does not list.
+
 ## Receiving site and Tier A
 
 Set `RF_SITE_CALL` (default: `IGATE_CALL`) to name the box as a receiving site. Every frame one of its local

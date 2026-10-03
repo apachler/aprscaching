@@ -21,6 +21,15 @@ cfg_keys_for() {
   }' "$CONFIG_TSV"
 }
 
+# cfg_is_call CALL MAX_SSID: a base of 1-6 letters and digits holding a digit, and an SSID up to MAX_SSID.
+cfg_is_call() {
+  local c="${1//[[:space:]]/}" base ssid
+  [[ "$c" =~ ^([A-Za-z0-9]{1,6})(-([0-9]{1,2}))?$ ]] || return 1
+  base="${BASH_REMATCH[1]}" ssid="${BASH_REMATCH[3]}"
+  [[ "$base" =~ [0-9] ]] || return 1
+  [ -z "$ssid" ] || [ "$((10#$ssid))" -le "$2" ]
+}
+
 # cfg_check KEY VALUE: silent and true when VALUE suits KEY's type (a blank value is unset, so it suits);
 # otherwise it prints what KEY expects — never the value, which may be a secret in the wrong place.
 cfg_check() {
@@ -44,6 +53,16 @@ cfg_check() {
     url)
       [[ "$v" =~ ^[[:space:]]*[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]]+[[:space:]]*$ ]] && return 0
       echo "$key: expected an absolute URL"
+      ;;
+    call)
+      cfg_is_call "$v" 15 && return 0
+      echo "$key: expected a callsign such as OE8APR-10 (SSID 0-15)"
+      ;;
+    calls)
+      local c ok=1
+      for c in ${v//,/ }; do cfg_is_call "$c" 99 || ok=0; done
+      [ "$ok" -eq 1 ] && return 0
+      echo "$key: expected callsigns such as OE8APR,OE8APR-10, separated by commas"
       ;;
     json)
       if have node; then
