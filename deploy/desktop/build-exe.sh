@@ -22,6 +22,10 @@ build bun-darwin-x64   "aprscaching-macos-x64"
 build bun-linux-x64    "aprscaching-linux-x64"
 build bun-linux-arm64  "aprscaching-linux-arm64"
 
+# Every binary embeds the Bun runtime (MIT, with JavaScriptCore/WebKit under the LGPL 2.1): its licence
+# and the relinking note ship beside the binaries, and the release uploads them with the rest of $OUT.
+cp deploy/desktop/THIRD-PARTY-NOTICES.txt deploy/desktop/BUN-LICENSE.txt "$OUT/"
+
 echo ">> done -> $OUT"
 echo "   macOS sign:  codesign --deep --force -s 'Developer ID Application: <YOU>' \\"
 echo "                  --options runtime --entitlements deploy/desktop/entitlements.plist \\"

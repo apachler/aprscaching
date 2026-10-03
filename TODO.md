@@ -35,8 +35,9 @@ release. Listed in start order — the first two have outside dependencies and l
       slow.
 - [ ] **Trademark courtesy contacts** _(S)_ — a courtesy heads-up to POTA
       (help@parksontheair.com) and to the SOTA Reflector third-party-software category about the spots
-      integration, sent before the public launch rather than after it. The non-affiliation lines they
-      concern are already live on the landing and about pages.
+      integration, and to APRS Foundation, Inc. about the use of the APRS® mark, sent before the public
+      launch rather than after it. The trademark and non-affiliation lines they concern are live on the
+      landing page, in Settings → Help & credits, in [`docs/about.md`](docs/about.md) and in the README.
 - [x] **Privacy-first APRS-map positioning** — the four invariants that differentiate us from incumbent
       APRS maps are stated where a visitor and an operator each meet them: a _What we do with your beacons_
       section on the landing (`apps/web/src/Landing.tsx`), and _Privacy by default_ in
@@ -629,15 +630,16 @@ Backlog (P3 unless noted) — the first three are what a second dashboard releas
 - [x] **Bundle font licenses + user-visible credits** — the OFL-1.1 texts ship under
       `/fonts/` alongside Fredoka/IBM Plex Mono; the CP437 webfont credit (The Ultimate Oldschool PC
       Font Pack, VileR, CC BY-SA 4.0) and the OpenTopoMap/EOX attributions render in
-      Settings → About & credits.
+      Settings → Help & credits.
 - [x] **Third-party notices surface** — `/third-party-notices.txt` reproduces the MIT/BSD
       copyright notices and license texts for react, react-dom, maplibre-gl, uplot, zod, and
       `@mapbox/jsonlint-lines-primitives` (an MIT-fork with a missing license field — the upstream
-      jsonlint notice applies), linked from About & credits; minified bundles strip headers, the
+      jsonlint notice applies), linked from Help & credits; minified bundles strip headers, the
       notices file is the durable surface.
 - [ ] **APRS mark re-check** _(S)_ — re-check USPTO reg. 2058846 (APRS) after the 2027 renewal
-      window. The landing/about non-affiliation lines covering it are live (Groundspeak/Geocaching HQ,
-      APRS Foundation, Meshtastic LLC, POTA/SOTA, TAK Product Center).
+      window; the credits name APRS Foundation, Inc. as the holder. The landing, about and Help & credits
+      non-affiliation lines covering it are live (APRS Foundation, Inc., Groundspeak/Geocaching HQ,
+      Geocaching Australia, Meshtastic LLC, ARRL, POTA, SOTA, WWFF, WWBOTA, IOTA, TAK Product Center).
 - [ ] **Vendor the third-party test partners (interop peer registry)** _(M)_ — every partner the
       conformance suite runs is bundled where its licence allows, so the suite is reproducible and
       offline-capable instead of depending on upstream mirrors at build time. **Vehicle:** prebuilt

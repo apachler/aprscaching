@@ -34,6 +34,8 @@ jobs:
         with: { bun-version: latest }
       - run: pnpm install --frozen-lockfile
       - run: bash deploy/desktop/build-exe.sh "${TAG:-$GITHUB_REF_NAME}"
+      # dist/desktop holds the binaries and the Bun runtime's licence notices (THIRD-PARTY-NOTICES.txt,
+      # BUN-LICENSE.txt), so both uploads below carry the notices with the binaries.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: aprscaching-desktop, path: dist/desktop/* }
       # Attaches to the tag's existing release (release-please creates it), keeping its notes; a

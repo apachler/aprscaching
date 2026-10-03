@@ -5,9 +5,10 @@ The production bundle is minified, which strips source-file license headers.
 This file reproduces the copyright notices and license texts of the libraries
 compiled into the bundle, as their licenses require. The exact versions ship
 in the build's package manifest; the app itself is AGPL-3.0-or-later (see the
-Source link in Settings -> About & credits).
+Source link in Settings -> Help & credits). The build fails when a package
+compiled into the bundle has no entry here (apps/web/vite-notices.ts).
 
-Bundled libraries: react, react-dom (MIT, Meta Platforms) - maplibre-gl
+Bundled libraries: react, react-dom, scheduler (MIT, Meta Platforms) - maplibre-gl
 (BSD-3-Clause, MapLibre contributors) - uPlot (MIT, Leon Sorokin) - zod (MIT,
 Colin McDonnell) - @mapbox/jsonlint-lines-primitives (MIT; a fork of
 zaach/jsonlint whose package manifest lacks a license field - the upstream MIT
@@ -21,13 +22,15 @@ Fonts: Fredoka and IBM Plex Mono (SIL Open Font License 1.1 - full texts at
 /fonts/OFL-Fredoka.txt and /fonts/OFL-IBMPlexMono.txt) - PxPlus IBM VGA8 from
 "The Ultimate Oldschool PC Font Pack" v2.2 by VileR, int10h.org (CC BY-SA 4.0).
 
-Map data & imagery: (c) OpenStreetMap contributors (ODbL) - OpenTopoMap
-(CC-BY-SA) - Sentinel-2 cloudless by EOX IT Services GmbH (contains modified
+Map data & imagery: (c) OpenStreetMap contributors (ODbL) - (c) OpenFreeMap,
+(c) OpenMapTiles (the default vector tiles and style) - OpenTopoMap: map data
+(c) OpenStreetMap contributors, SRTM; map style (c) OpenTopoMap (CC-BY-SA) -
+Sentinel-2 cloudless by EOX IT Services GmbH (contains modified
 Copernicus Sentinel data).
 
 
-react / react-dom
------------------
+react / react-dom / scheduler
+-----------------------------
 MIT License
 
 Copyright (c) Meta Platforms, Inc. and affiliates.

@@ -30,4 +30,4 @@ WebPlus_IBM_VGA_8x16.woff
   Use    : the authentic CP437/VGA face (box-drawing + block glyphs) for the Phosphor theme only —
            referenced solely by the [data-theme="phosphor"] --font-mono stack, so it is never fetched
            on the Modern / field path. CC BY-SA 4.0 requires attribution — it is shown in the app
-           under Settings -> About & credits, and stated here.
+           under Settings -> Help & credits, and stated here.

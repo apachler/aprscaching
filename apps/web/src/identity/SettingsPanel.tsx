@@ -37,6 +37,7 @@ import { AnnounceSettings } from "./AnnounceSettings.js";
 import { NearRadioSettings } from "./NearRadioSettings.js";
 import { usePlatform } from "../platform/PlatformContext.js";
 import { AboutInstance, BugReportLink } from "./AboutInstance.js";
+import { APRS_CREDIT, APRS_MARK, APRS_NOT_AFFILIATED, OTHER_MARKS, OTHERS_NOT_AFFILIATED } from "../credits.js";
 
 /** Settings — account, connections/network, locale/units, GDPR data tools, and credits. Grouped + searchable. */
 
@@ -333,7 +334,7 @@ export function SettingsPanel(props: {
       )}
 
       {match(
-        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence open source",
+        "Help manual tour guide about instance sysop operator version bug report credits attribution Bruninga WB4APR APRS trademark licence license register open source notices map OpenStreetMap Meshtastic POTA SOTA LoTW ARRL Groundspeak geocaching",
       ) && (
         <Group title="Help & credits" defaultOpen={false}>
           <p className="row gap-2">
@@ -354,15 +355,23 @@ export function SettingsPanel(props: {
             APRScaching is an APRS geocaching game and ham-radio Shack by <span className="mono">OE8APR</span>.
           </p>
           <p className="muted">
-            APRS — the Automatic Packet Reporting System — was created by the late <strong>Bob Bruninga, WB4APR</strong>{" "}
-            (1948–2022). APRS® is his registered trademark, stewarded by the APRS Foundation, Inc. This is an
-            independent, unofficial implementation built from open specifications (see the Specification registry in the
-            manual) and is not affiliated with, sponsored by, or endorsed by the APRS Foundation.
+            {APRS_CREDIT} {APRS_MARK} This is an independent, unofficial implementation built from open specifications
+            (see the Specification registry in the manual). {APRS_NOT_AFFILIATED}
           </p>
           <p className="muted">
-            Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre. Optional layers: © OpenTopoMap (CC-BY-SA)
-            · Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data). DXCC entities
-            and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
+            {OTHER_MARKS} {OTHERS_NOT_AFFILIATED}
+          </p>
+          <p className="muted">
+            Maps © OpenStreetMap contributors (ODbL), rendered with MapLibre; vector tiles © OpenFreeMap, ©
+            OpenMapTiles. Optional layers: OpenTopoMap (Map data: © OpenStreetMap contributors, SRTM | Map style: ©
+            OpenTopoMap (CC-BY-SA)) · Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus
+            Sentinel data). Imported places name and link their source; that source's own terms apply to its data. DXCC
+            entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
+          </p>
+          <p className="muted">
+            Register badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur
+            callsign list, reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media
+            Authority information. Austria: Fernmeldebehörde. Germany: Bundesnetzagentur.
           </p>
           <p className="muted">
             Type: Fredoka and IBM Plex Mono (SIL Open Font License 1.1 — license texts ship with the app under{" "}
@@ -370,15 +379,13 @@ export function SettingsPanel(props: {
             Font Pack v2.2 by VileR (int10h.org), CC BY-SA 4.0.
           </p>
           <p className="muted">
-            Built on open source: React and react-dom (MIT), MapLibre GL (BSD-3-Clause), uPlot (MIT), zod (MIT) — the
-            bundle is minified, so their copyright notices and license texts are reproduced in{" "}
+            Built on open source, among others React (MIT), MapLibre GL (BSD-3-Clause), uPlot (MIT), zod (MIT), Mermaid
+            (MIT), pmtiles (BSD-3-Clause), fflate (MIT) and node-forge (BSD-3-Clause). The bundle is minified, so the
+            copyright notices and license texts of every library in it are reproduced in{" "}
             <a href="/third-party-notices.txt" target="_blank" rel="noreferrer">
               third-party notices
             </a>
-            . Meshtastic® is a registered trademark of Meshtastic LLC. Parks on the Air® is a registered service mark of
-            Parks on the Air, Inc.; Summits on the Air, SOTA and the SOTA logo are trademarks of the SOTA Programme.
-            Geocaching is the outdoor activity; this project is not affiliated with Groundspeak, Inc. (Geocaching HQ),
-            Meshtastic LLC, POTA, SOTA, or the TAK Product Center.
+            .
           </p>
           <SourceLink />
         </Group>

@@ -1,0 +1,24 @@
+Third-party notices — APRScaching desktop app
+=============================================
+
+The desktop app is one executable made with `bun build --compile`. APRScaching
+itself is AGPL-3.0-or-later; its source is linked from Settings -> Help &
+credits and served at /.well-known/source.
+
+The executable includes the Bun runtime (https://bun.sh, MIT). Bun statically
+links JavaScriptCore and WebCore from WebKit, which are under the GNU LGPL 2.1,
+and the libraries listed in BUN-LICENSE.txt beside this file, which reproduces
+Bun's own LICENSE.md (https://github.com/oven-sh/bun/blob/main/LICENSE.md).
+
+As the LGPL requires, you may modify JavaScriptCore and relink: the patched
+WebKit source Bun uses is at https://github.com/oven-sh/WebKit, Bun's source is
+at https://github.com/oven-sh/bun, and BUN-LICENSE.txt gives the steps to
+rebuild Bun with a changed WebKit. APRScaching's own code, which `bun build
+--compile` appends to that runtime, is at the Source link above; rebuilding the
+executable with a relinked Bun is `bash deploy/desktop/build-exe.sh` run with
+that Bun on PATH.
+
+The web app the executable serves is built from apps/web; the copyright notices
+and licence texts of the libraries compiled into it are at
+/third-party-notices.txt in the running app (Settings -> Help & credits ->
+third-party notices).
