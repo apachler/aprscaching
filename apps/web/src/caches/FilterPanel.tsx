@@ -3,7 +3,8 @@ import { FILTER_TYPES, TYPE_META, typeGlyph } from "../cacheTypes.js";
 import { useTheme } from "../format.js";
 import { Panel, useToast, Button, Icon, ChipToggle } from "../ui/index.js";
 import { Switch } from "../ui/Switch.js";
-import { saveView, type MapViewState } from "../api.js";
+import { saveView, exportPath, type MapViewState } from "../api.js";
+import { ExportButton } from "../exports/ExportButton.js";
 import { MESHMAP_ATTRIBUTION, meshmapUrl } from "../meshcom/meshcomView.js";
 import type { CacheType } from "@aprscaching/shared";
 import { NO_FILTERS, type CacheFilters } from "./filters.js";
@@ -15,6 +16,8 @@ export interface SpotFilters {
 }
 const SPOT_BANDS = ["160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"];
 const SPOT_MODES = ["SSB", "CW", "FM", "FT8", "DATA"];
+/** The widest box, in degrees per side, the read API exports at once. */
+const EXPORT_MAX_DEG = 20;
 const SPOT_SOURCES = ["pota", "sota", "gma", "pskreporter", "dxcluster", "rbn"];
 
 /** Search & filter — text, cache type, country and tags, network-data scope and the live layers. */
@@ -36,12 +39,23 @@ export function FilterPanel(props: {
   spotFilters: SpotFilters;
   setSpotFilters: (f: SpotFilters) => void;
   getViewState: () => MapViewState;
+  /** The map's visible box as west, south, east, north, or null before the map loads. */
+  getBbox: () => [number, number, number, number] | null;
   count: number;
   onClose: () => void;
 }) {
   const { filters, setFilters } = props;
   const toast = useToast();
   const phosphor = useTheme() === "phosphor";
+  /** The export of the caches in view, or why the view is too wide for one (the read API's box limit). */
+  function viewExport(path: (bbox: [number, number, number, number]) => string): string | { refuse: string } {
+    const b = props.getBbox();
+    if (!b) return { refuse: "The map is still loading — try again in a moment." };
+    const r = b.map((v) => +v.toFixed(5)) as [number, number, number, number];
+    if (r[2] - r[0] > EXPORT_MAX_DEG || r[3] - r[1] > EXPORT_MAX_DEG)
+      return { refuse: `Zoom in to download: the view is wider than ${EXPORT_MAX_DEG}°.` };
+    return path(r);
+  }
   async function share() {
     try {
       const { slug } = await saveView(props.getViewState());
@@ -228,13 +242,20 @@ export function FilterPanel(props: {
           </div>
         </div>
       )}
-      <h4>Share</h4>
+      <h4>Share and download</h4>
       <div className="row between">
         <span className="muted">Save this map view (centre, layers, filters) as a link.</span>
         <Button onClick={share}>
           <Icon name="link" cp437="" className="lead-ic" />
           Share this view
         </Button>
+      </div>
+      <div className="row between mt-3">
+        <span className="muted">Every cache in this view, for a GPS unit (GPX) or a map program (KML).</span>
+        <div className="row gap-2">
+          <ExportButton label="GPX" filename="aprscaching-caches.gpx" path={() => viewExport(exportPath.cachesGpx)} />
+          <ExportButton label="KML" filename="aprscaching-caches.kml" path={() => viewExport(exportPath.cachesKml)} />
+        </div>
       </div>
       <div className="row between mt-6">
         <Button variant="quiet" onClick={() => setFilters(NO_FILTERS)}>

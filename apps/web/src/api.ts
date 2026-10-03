@@ -443,6 +443,37 @@ export function getStationTrack(
     { signal },
   );
 }
+/** The read API's file exports, as paths under `/api/v1`. */
+export const exportPath = {
+  cachesGpx: (bbox: [number, number, number, number]) => `/api/v1/caches.gpx?bbox=${bbox.join(",")}`,
+  cachesKml: (bbox: [number, number, number, number]) => `/api/v1/caches.kml?bbox=${bbox.join(",")}`,
+  cacheGpx: (code: string) => `/api/v1/caches/${encodeURIComponent(code)}.gpx`,
+  findsAdif: (call: string) => `/api/v1/profile/${encodeURIComponent(call)}.adif`,
+  stationKml: (call: string) => `/api/v1/station/${encodeURIComponent(call)}.kml`,
+};
+
+/**
+ * Save a read-API export as a file. The app fetches it and saves the local copy, so a failure (the rate limit,
+ * a box too large) reaches the caller as an error instead of a page the browser opens.
+ */
+export async function downloadExport(path: string, filename: string): Promise<void> {
+  const res = await reach(API_BASE + path);
+  if (!res.ok) {
+    const data: unknown = await res.json().catch(() => null);
+    const msg = (data as { error?: string } | null)?.error;
+    throw new ApiError(
+      res.status === 429 ? "Too many downloads — wait a minute and try again" : (msg ?? `${res.status}`),
+      res.status,
+      data,
+    );
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 export function decodePacket(raw: string): Promise<DecodedPacket> {
   return call(`/api/decode`, { method: "POST", body: JSON.stringify({ raw }) });
 }

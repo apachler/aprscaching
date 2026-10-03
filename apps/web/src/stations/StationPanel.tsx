@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { getStation, createStation, type StationDetail } from "../api.js";
+import { getStation, createStation, exportPath, type StationDetail } from "../api.js";
+import { ExportButton } from "../exports/ExportButton.js";
 import { ROLE_META } from "../stationRoles.js";
 import type { StationRole } from "@aprscaching/shared";
 import { useFmt } from "../format.js";
@@ -125,7 +126,15 @@ export function StationPanel(props: {
                 + Add to my stations
               </Button>
             )}
-            <Button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</Button>
+            <div className="row gap-2">
+              <ExportButton
+                label="Track KML"
+                title="Download the last 24 hours of this station's track for a map program"
+                filename={`${station.callsign}-track.kml`}
+                path={() => exportPath.stationKml(station.callsign)}
+              />
+              <Button onClick={() => props.onFly(station.lat, station.lon)}>Fly to</Button>
+            </div>
           </div>
           <MeshcomSection callsign={station.callsign} />
           <TrackReplay map={map} callsign={station.callsign} />

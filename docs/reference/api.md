@@ -46,7 +46,7 @@ most 20° a side.
 | GET        | `/api/v1`                                                                                | Self-describing index of the read API.                                          |
 | GET        | `/api/v1/caches` · `/caches/:code` · `/caches.gpx` · `/caches.kml` · `/caches/:code.gpx` | Caches in a box (`bbox`), one cache, and GPX/KML exports.                       |
 | GET        | `/api/v1/stations` · `/station/:call` · `/station/:call/track` · `/station/:call.kml`    | Live stations, one station, its track (JSON/KML).                               |
-| GET        | `/api/v1/profile/:call` · `/profile/:call.adif`                                          | A callsign's public profile · its finds as ADIF 3.1 (`SIG=APRSCACHING`).        |
+| GET        | `/api/v1/profile/:call` · `/profile/:call.adif`                                          | A callsign's public profile · the person's finds, any SSID, as ADIF 3.1 (`SIG=APRSCACHING`). |
 | GET        | `/api/v1/activity` · `/leaderboard` · `/corroborators` · `/spots`                        | Activity feed, rankings, top corroborating IGates, live spots.                  |
 | GET        | `/api/v1/licence/:call`                                                                  | Callsign validity from public licence registers (same as `/api/licence/:call`). |
 | GET        | `/api/v1/stats`                                                                          | The instance's counts for its landing page: active caches, finds heard on the air (Tier A) in the last 7 days, stations heard in the last hour. Cached for 5 minutes. |

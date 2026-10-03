@@ -6,6 +6,7 @@ import {
   getCacheLogs,
   cacheShareUrl,
   cacheQrUrl,
+  exportPath,
   getCacheAdoption,
   requestAdoption,
   cancelAdoptionRequest,
@@ -17,6 +18,7 @@ import {
 } from "../api.js";
 import type { CacheLogEntry } from "@aprscaching/shared";
 import { typeMeta, typeGlyph } from "../cacheTypes.js";
+import { ExportButton } from "../exports/ExportButton.js";
 import { useFmt, useTheme } from "../format.js";
 import { maidenhead, haversine } from "../map/geo.js";
 import { GLANCE_MAX_AGE_MS, isFresh, lastFix, locationSupport, requestFix } from "../geo/location.js";
@@ -285,7 +287,7 @@ export function DetailPanel(props: {
         </p>
       )}
 
-      <ShareCache code={c.code} title={c.title} onToast={toast} />
+      <ShareCache code={c.code} title={c.title} gpx={c.lat != null && c.lon != null} onToast={toast} />
 
       <p>
         <strong>{c.finds}</strong> verified find{c.finds === 1 ? "" : "s"}
@@ -583,7 +585,7 @@ function AdoptionSection(props: { cacheId: number; code: string; onSignIn: () =>
 }
 
 /** Share funnel: copy the deep-link or print a QR for visitors to scan at the site. */
-function ShareCache(props: { code: string; title: string; onToast: (m: string) => void }) {
+function ShareCache(props: { code: string; title: string; gpx: boolean; onToast: (m: string) => void }) {
   const [open, setOpen] = useState(false);
   const url = cacheShareUrl(props.code);
   const qr = cacheQrUrl(props.code, 256);
@@ -602,6 +604,14 @@ function ShareCache(props: { code: string; title: string; onToast: (m: string) =
         <Button onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           ▦ QR
         </Button>
+        {props.gpx && (
+          <ExportButton
+            label="GPX"
+            title="Download the cache as a GPX waypoint for a GPS unit"
+            filename={`${props.code}.gpx`}
+            path={() => exportPath.cacheGpx(props.code)}
+          />
+        )}
       </div>
       {open && (
         <div className="qrbox">

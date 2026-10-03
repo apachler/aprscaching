@@ -145,6 +145,7 @@ const SURFACES = [
     steps: [["click", "text=Explore the live map"]],
     after: "[role=dialog]",
   },
+  { name: "filter", as: "user", query: "?view=filter" },
   { name: "activity", as: "user", query: "?view=activity" },
   { name: "messages", as: "user", query: "?view=messages" },
   { name: "ranks", as: "user", query: "?view=ranks" },
