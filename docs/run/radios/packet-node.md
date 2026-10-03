@@ -72,7 +72,7 @@ Set `BBS_NODE_CALL`, and the box answers inbound AX.25 connects to that call wit
 
 The gateway holds the BBS's message base: personal mail, bulletins and NTS traffic. It moves them the F6FBB way
 only: stations read and write over a connect to the packet BBS, and FBB forwarding exchanges them with partner
-BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type and BID) is MBL/FBB-compatible. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
+BBSes. The BBS never sends over APRS or MeshCom. The message format (P/B/T type and BID) is MBL/FBB-compatible. A message posted here gets the BID `<number>_<call>`, the number in base 36 and the call the sysop's base call, within the 12 characters F6FBB accepts. The public BBS endpoints are in the [API reference](../../reference/api.md#bbs).
 
 ### FBB forwarding
 
