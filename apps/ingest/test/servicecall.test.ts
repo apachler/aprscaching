@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import net from "node:net";
 import { AprsIs } from "../src/aprsis.js";
-import { AprsUplink } from "../src/uplink.js";
+import { AprsUplink, uplinkLogin } from "../src/uplink.js";
 
 /** A TCP server that records every line it receives. */
 function lineServer(): Promise<{ port: number; lines: string[]; close: () => void }> {
@@ -76,5 +76,24 @@ describe("APRS-IS uplink", () => {
       "OE8APR-15>APZACG,TCPIP*::OE5XYZ-7 :ack12",
       "OE8APR-15>APZACG,TCPIP*:}OE5XYZ-7>APZACG,TCPIP*:>Found AC-1234",
     ]);
+  });
+});
+
+describe("APRS-IS uplink login", () => {
+  it("logs the sysop's own box in as the service call with its feed passcode", () => {
+    expect(uplinkLogin({ serviceCall: "OE8APR-15", feedCall: "OE8APR", feedPass: "12345" })).toEqual({
+      call: "OE8APR-15",
+      pass: "12345",
+    });
+  });
+  it("prefers an explicit login", () => {
+    expect(
+      uplinkLogin({ serviceCall: "OE8APR-15", explicitCall: "oe8apr-5", explicitPass: "12345", feedCall: "N0CALL" }),
+    ).toEqual({ call: "OE8APR-5", pass: "12345" });
+  });
+  it("publishes nothing from another operator's box, or without a passcode", () => {
+    expect(uplinkLogin({ serviceCall: "OE8APR-15", feedCall: "OE5XYZ", feedPass: "12345" })).toHaveProperty("reason");
+    expect(uplinkLogin({ serviceCall: "OE8APR-15", feedCall: "OE8APR", feedPass: "-1" })).toHaveProperty("reason");
+    expect(uplinkLogin({ feedCall: "OE8APR", feedPass: "12345" })).toHaveProperty("reason");
   });
 });
