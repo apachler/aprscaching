@@ -21,17 +21,35 @@ export const webSerialSupported = (): boolean =>
   typeof navigator !== "undefined" &&
   typeof (navigator as { serial?: { requestPort?: unknown } }).serial?.requestPort === "function";
 
+/**
+ * A KISS byte feeder for connected mode: hands each completed data frame, decoded to AX.25, to onFrame. The
+ * streaming KissDecoder keeps a partial frame across reads, so a frame split over USB reads or BLE
+ * notifications arrives whole; KISS command frames are skipped.
+ */
+export function ax25Feeder(onFrame: (f: Ax25Frame) => void): (chunk: Uint8Array) => void {
+  const rx = new KissDecoder();
+  return (chunk) => {
+    for (const k of rx.push(chunk)) {
+      if (k.command !== 0) continue; // a KISS command, not a frame
+      const f = decodeFrame(k.frame);
+      if (f) onFrame(f);
+    }
+  };
+}
+
 export class SerialKissTransport implements Transport {
   private port: SerialPortLike | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private closed = false;
-  private rx = new KissDecoder();
+  private feed: (chunk: Uint8Array) => void;
 
   constructor(
     private onFrame: (f: Ax25Frame) => void,
     private onClose?: (err?: Error) => void,
-  ) {}
+  ) {
+    this.feed = ax25Feeder(onFrame);
+  }
 
   /** Prompt for a serial port (needs a user gesture), open it, and start reading KISS frames. */
   async connect(baudRate = 9600): Promise<void> {
@@ -39,7 +57,7 @@ export class SerialKissTransport implements Transport {
     this.port = await serial.requestPort();
     await this.port.open({ baudRate });
     this.closed = false;
-    this.rx.reset(); // a reopened port must not complete the last session's partial frame
+    this.feed = ax25Feeder(this.onFrame); // a reopened port must not complete the last session's partial frame
     if (this.port.writable) this.writer = this.port.writable.getWriter();
     void this.readLoop();
   }
@@ -55,14 +73,6 @@ export class SerialKissTransport implements Transport {
       await this.writer.write(bytes);
     } catch (e) {
       if (!this.closed) this.onClose?.(e as Error);
-    }
-  }
-
-  private feed(chunk: Uint8Array): void {
-    for (const k of this.rx.push(chunk)) {
-      if (k.command !== 0) continue; // a KISS command, not a frame
-      const f = decodeFrame(k.frame);
-      if (f) this.onFrame(f);
     }
   }
 

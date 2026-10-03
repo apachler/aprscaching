@@ -19,8 +19,9 @@ objects and items, messages with acknowledgements, bulletins, status, weather an
 
 ## Connect to a BBS or node
 
-The **Packet terminal** is a multi-channel connected-mode terminal for a USB [KISS](../glossary.md#kiss) TNC.
-It needs Web Serial, so use Chrome or Edge on a computer.
+The **Packet terminal** is a multi-channel connected-mode terminal for a [KISS](../glossary.md#kiss) TNC on
+USB or Bluetooth Low Energy, such as a Mobilinkd. It needs a Chromium-based browser: USB works on a computer,
+Bluetooth on a computer or an Android phone. Browsers on an iPhone or iPad have neither.
 
 !!! warning "Connecting transmits"
     A connect keys your radio under your callsign, so the terminal connects only for a verified callsign
@@ -28,12 +29,12 @@ It needs Web Serial, so use Chrome or Edge on a computer.
     everything your TNC hears. Read [On-air etiquette and rules](on-air.md) first.
 
 1. Open **Shack → Packet terminal**.
-2. Plug in the TNC and select **Open KISS TNC…**, then pick the device in the browser's dialog. Channel 0 shows
-   everything the TNC hears.
+2. Choose **USB** or **Bluetooth**, switch on or plug in the TNC, and select **Open KISS TNC…**. Pick the
+   device in the browser's dialog. Channel 0 shows everything the TNC hears.
 3. Type a callsign in **connect to…** and select **Connect**. The connection opens on a channel of its own.
 4. Type a line and select **Send**.
 
-**Close TNC** releases the port. **↓ .ans** saves the current pane as ANSI art.
+**Close TNC** releases the TNC. **↓ .ans** saves the current pane as ANSI art.
 
 ## Use the instance's BBS
 

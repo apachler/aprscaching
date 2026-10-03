@@ -21,24 +21,41 @@ import {
 } from "@aprscaching/tools";
 import type { Ax25Frame } from "@aprscaching/ax25";
 import { SerialKissTransport, webSerialSupported } from "./serialKiss.js";
+import { BleKissTransport } from "./bleKiss.js";
+import { webBluetoothSupported } from "../rf/bleKiss.js";
 import { useFmt } from "../format.js";
 import { useToolHost, feedHeard } from "../tools/host.js";
 import { ToolPanels } from "../tools/ToolPanels.js";
-import { Button, Disclosure, EmptyState, Tabs, tabPanelId } from "../ui/index.js";
+import { Button, Disclosure, EmptyState, Segmented, Tabs, tabPanelId } from "../ui/index.js";
 
-/** The transport surface the terminal drives — the real Web Serial KISS link, or an injected sim. */
+/** The transport surface the terminal drives — a USB or Bluetooth KISS link, or an injected sim. */
 export interface TermTransport extends Transport {
   connect(baud?: number): Promise<void>;
   disconnect(): Promise<void>;
 }
 export type MakeTransport = (onFrame: (f: Ax25Frame) => void, onClose: (e?: Error) => void) => TermTransport;
 
+/** How the TNC reaches this browser: a USB cable (Web Serial) or Bluetooth LE (Web Bluetooth). */
+type TncLink = "usb" | "ble";
+const LINK_LABEL: Record<TncLink, string> = { usb: "USB", ble: "Bluetooth" };
+/** Why a link is missing here, in one line. */
+const LINK_MISSING: Record<TncLink, string> = {
+  usb: "USB needs Web Serial: Chromium on a desktop computer.",
+  ble: "Bluetooth needs Web Bluetooth: Chromium on a desktop computer or Android. iPhone and iPad browsers have none.",
+};
+const makeLink: Record<TncLink, MakeTransport> = {
+  usb: (onF, onC) => new SerialKissTransport(onF, onC),
+  ble: (onF, onC) => new BleKissTransport(onF, onC),
+};
+/** A closed chooser is the user changing their mind, not an error to show. */
+const CANCELLED = /No port selected|User cancelled|chooser|NotFoundError/i;
+
 /**
  * PacketTerminal — a Graphic-Packet-style web terminal: multi-channel connected-mode
- * over Web Serial/KISS, a monitor pane, a per-channel status line, a function-key macro bar and a
- * command line. Built from semantic elements + theme tokens so a Phosphor-style theme flip is a token
+ * over a KISS TNC on USB (Web Serial) or Bluetooth LE (Web Bluetooth), a monitor pane, a per-channel
+ * status line, a function-key macro bar and a command line. Built from semantic elements + theme tokens so a Phosphor-style theme flip is a token
  * swap (the channel windows become box-drawing green-screen panes, the monitor colourises by the
- * NAMES.GP type). Chromium-only (Web Serial); RX/TX stays operator-local and never touches the trust
+ * NAMES.GP type). Chromium-only; RX/TX stays operator-local and never touches the trust
  * tiers — this is shack.
  */
 const LS_MACROS = "acs.packet.macros";
@@ -96,7 +113,10 @@ export function PacketTerminal(props: {
   const runnerRef = useRef<ScriptRunner | null>(null); // GPAUTO scripted-session engine
   const disposeScriptSvc = useRef<null | (() => void)>(null); // teardown for the session.script host-service
 
+  const linkOk: Record<TncLink, boolean> = { usb: webSerialSupported(), ble: webBluetoothSupported() };
+  const [tncLink, setTncLink] = useState<TncLink>(() => (linkOk.usb || !linkOk.ble ? "usb" : "ble"));
   const [portOpen, setPortOpen] = useState(false);
+  const missingLink = (["usb", "ble"] as const).find((k) => !linkOk[k]);
   const [err, setErr] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [remoteCall, setRemoteCall] = useState("");
@@ -128,13 +148,13 @@ export function PacketTerminal(props: {
   });
 
   async function openPort() {
-    if (!props.makeTransport && !webSerialSupported()) {
-      setErr("Web Serial needs Chromium (desktop). Use the operator-local ingest otherwise.");
+    if (!props.makeTransport && !linkOk[tncLink]) {
+      setErr(LINK_MISSING[tncLink]);
       return;
     }
     setErr(null);
     try {
-      const make: MakeTransport = props.makeTransport ?? ((onF, onC) => new SerialKissTransport(onF, onC));
+      const make: MakeTransport = props.makeTransport ?? makeLink[tncLink];
       const transport = make(
         (f) => sessionRef.current?.onFrame(f),
         (e) => {
@@ -183,7 +203,8 @@ export function PacketTerminal(props: {
       setPortOpen(true);
       notify();
     } catch (e) {
-      setErr((e as Error).message);
+      const m = (e as Error).message || "";
+      if (!CANCELLED.test(m)) setErr(m);
     }
   }
   async function closePort() {
@@ -286,10 +307,11 @@ export function PacketTerminal(props: {
     URL.revokeObjectURL(url);
   }
 
-  if (!props.makeTransport && !webSerialSupported()) {
+  if (!props.makeTransport && !linkOk.usb && !linkOk.ble) {
     return (
       <p className="muted">
-        The packet terminal needs Web Serial (Chromium desktop). On other devices, run the operator-local ingest.
+        The packet terminal reaches a KISS TNC over USB (Web Serial) or Bluetooth (Web Bluetooth), and this browser has
+        neither. Use Chromium on a desktop computer or Android.
       </p>
     );
   }
@@ -306,6 +328,22 @@ export function PacketTerminal(props: {
             ↓ .ans
           </Button>
         )}
+        {!portOpen && !props.makeTransport && (
+          <Segmented
+            label="How the TNC connects"
+            value={tncLink}
+            onChange={(v) => {
+              setTncLink(v);
+              setErr(null);
+            }}
+            options={(["usb", "ble"] as const).map((k) => ({
+              value: k,
+              label: LINK_LABEL[k],
+              disabled: !linkOk[k],
+              title: linkOk[k] ? undefined : LINK_MISSING[k],
+            }))}
+          />
+        )}
         {portOpen ? (
           <Button onClick={closePort}>Close TNC</Button>
         ) : (
@@ -314,6 +352,7 @@ export function PacketTerminal(props: {
           </Button>
         )}
       </div>
+      {!portOpen && !props.makeTransport && missingLink && <p className="muted">{LINK_MISSING[missingLink]}</p>}
       {err && <p className="error">{err}</p>}
       {!props.verified && (
         <p className="muted">
@@ -331,8 +370,8 @@ export function PacketTerminal(props: {
             </Button>
           }
         >
-          A connected-mode packet terminal for your own radio: plug a KISS TNC into this computer over USB, open it
-          here, then connect to a BBS or a node by callsign. Channel 0 shows everything your TNC hears.
+          A connected-mode packet terminal for your own radio: reach a KISS TNC over USB or Bluetooth, open it here,
+          then connect to a BBS or a node by callsign. Channel 0 shows everything your TNC hears.
         </EmptyState>
       )}
 
