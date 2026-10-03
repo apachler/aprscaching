@@ -263,6 +263,7 @@ const detail = (c: MapCache, extra: Partial<CacheDetail> = {}): CacheDetail => (
   rating: { avg: 4.4, count: 17, mine: null, policy: "finders", canRate: false },
   rendezvous: [],
   stageCount: c.type === "multi" || c.type === "audio" ? 3 : 0,
+  ...(c.type === "aprs_living" && { stationHeardAt: NOW - 12 * 60 }),
   ...extra,
 });
 
@@ -449,6 +450,18 @@ const MY_STATIONS: OperatedStation[] = [
     roles: ["igate"],
     createdAt: NOW - 200 * DAY,
     updatedAt: NOW - 20 * DAY,
+  },
+  {
+    id: 2,
+    callsign: `${ME}-9`,
+    lat: null,
+    lon: null,
+    symbol: ">",
+    description: "Car",
+    roles: [],
+    createdAt: NOW - 90 * DAY,
+    updatedAt: NOW - 30 * DAY,
+    livingCaches: [{ id: 7, code: "AC0007", title: "Catch the car", rendezvous: false }],
   },
 ];
 

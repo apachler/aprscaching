@@ -110,6 +110,27 @@ const SURFACES = [
     ],
     after: ".stage-edit-list",
   },
+  // a living cache names the station it rides on
+  {
+    name: "living",
+    as: "user",
+    query: "?view=nearby",
+    wait: ".ccard",
+    steps: [["click", ".ccard:has-text('on the move')"]],
+    after: ".living-station",
+  },
+  // My stations, with a living cache's rendezvous switch under its station
+  {
+    name: "mystations",
+    as: "user",
+    query: "?view=settings",
+    wait: "text=My stations",
+    steps: [
+      ["click", "button:has-text('My stations')"],
+      ["scroll", ".station-card .setrow"],
+    ],
+    after: ".station-card .setrow",
+  },
   { name: "nearby", as: "user", query: "?view=nearby" },
   { name: "hide", as: "user", query: "?view=hide" },
   // the first-run tour: it starts when a visitor explores the map, with the tour not yet seen
@@ -216,6 +237,7 @@ async function open(page, origin, s, theme) {
   for (const [kind, sel, value] of s.steps ?? []) {
     if (kind === "click") await page.click(sel, { timeout: 8000 });
     if (kind === "fill") await page.fill(sel, value, { timeout: 8000 });
+    if (kind === "scroll") await page.locator(sel).first().scrollIntoViewIfNeeded({ timeout: 8000 });
     await page.waitForTimeout(400);
   }
   if (s.after) await page.waitForSelector(s.after, { timeout: 8000 }).catch(() => {});

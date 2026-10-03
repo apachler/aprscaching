@@ -107,4 +107,51 @@ describe("a living cache's pin", () => {
     const detail = await call(env, "GET", `/api/caches/${id}`);
     expect(detail.data.cache).toMatchObject({ lat: 47.5, lon: 15.5 });
   });
+
+  it("the detail names when its station was last heard, null while it is unheard", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8ROV" });
+    const me = await emailSignup(env, "rover@example.test", "OE8ROV");
+    await operatorVerify(env, "OE8ROV");
+    await call(env, "POST", "/api/my/stations", { callsign: "OE8ROV-9", lat: 47, lon: 15 }, { cookie: me.cookie });
+    const { id } = (await call(env, "POST", "/api/caches", living("OE8ROV-9"), { cookie: me.cookie })).data.cache;
+    // the station as placed by hand is on the map; take it off, as a station never heard
+    await env.DB.prepare("DELETE FROM stations WHERE callsign = ?").bind("OE8ROV-9").run();
+    const before = await call(env, "GET", `/api/caches/${id}`);
+    expect(before.data.cache).toMatchObject({ stationCall: "OE8ROV-9", stationHeardAt: null });
+    const heard = Math.floor(Date.now() / 1000) - 60;
+    await env.DB.prepare("INSERT OR REPLACE INTO stations (callsign, lat, lon, last_seen) VALUES (?,?,?,?)")
+      .bind("OE8ROV-9", 47.1, 15.1, heard)
+      .run();
+    expect((await call(env, "GET", `/api/caches/${id}`)).data.cache.stationHeardAt).toBe(heard);
+    const other = await call(
+      env,
+      "POST",
+      "/api/caches",
+      { title: "oak", type: "traditional", lat: 47, lon: 15 },
+      { cookie: me.cookie },
+    );
+    expect((await call(env, "GET", `/api/caches/${other.data.cache.id}`)).data.cache).not.toHaveProperty(
+      "stationHeardAt",
+    );
+  });
+
+  it("My stations lists the living caches riding each station, and turns their rendezvous on in place", async () => {
+    const env = authEnv({ ADMIN_CALLSIGNS: "OE8ROV" });
+    const me = await emailSignup(env, "rover@example.test", "OE8ROV");
+    await operatorVerify(env, "OE8ROV");
+    await call(env, "POST", "/api/my/stations", { callsign: "OE8ROV-9", lat: 47, lon: 15 }, { cookie: me.cookie });
+    await call(env, "POST", "/api/my/stations", { callsign: "OE8ROV-10", lat: 47, lon: 15 }, { cookie: me.cookie });
+    const { id, code } = (await call(env, "POST", "/api/caches", living("OE8ROV-9"), { cookie: me.cookie })).data.cache;
+    const list = async () =>
+      (await call(env, "GET", "/api/my/stations", undefined, { cookie: me.cookie })).data.stations as {
+        callsign: string;
+        livingCaches?: { id: number; code: string; rendezvous: boolean }[];
+      }[];
+    const rover = (await list()).find((s) => s.callsign === "OE8ROV-9");
+    expect(rover?.livingCaches).toEqual([{ id, code, title: "rover", rendezvous: false }]);
+    expect((await list()).find((s) => s.callsign === "OE8ROV-10")).not.toHaveProperty("livingCaches");
+    const on = await call(env, "PATCH", `/api/caches/${id}`, { rendezvous: true }, { cookie: me.cookie });
+    expect(on.status, JSON.stringify(on.data)).toBe(200);
+    expect((await list()).find((s) => s.callsign === "OE8ROV-9")?.livingCaches?.[0]?.rendezvous).toBe(true);
+  });
 });

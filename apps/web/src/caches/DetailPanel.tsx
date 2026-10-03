@@ -216,6 +216,15 @@ export function DetailPanel(props: {
           </>
         )}
       </p>
+      {c.type === "aprs_living" && c.stationCall && (
+        <p className="muted living-station">
+          Rides on <span className="mono">{c.stationCall}</span>
+          {" · "}
+          {c.stationHeardAt
+            ? `position from ${fmt.ago(c.stationHeardAt)}`
+            : "no position yet: it shows where it was hidden"}
+        </p>
+      )}
 
       {(c.driveIn || c.country || c.tags.length > 0) && (
         <div className="badges cache-tags">

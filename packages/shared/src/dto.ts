@@ -250,6 +250,8 @@ export interface CacheDetail extends CacheSummary {
   }[];
   // audio-cache
   stageCount: number;
+  /** A living cache: the time of its station's position, which is the cache's; null while the station has none. */
+  stationHeardAt?: number | null;
   /** For the cache's owner only: the settings the edit form starts from that the fields above do not carry. */
   own?: { minTrust: "A" | "B" | null; rendezvous: boolean };
 }
@@ -409,6 +411,8 @@ export interface OperatedStation {
   createdAt: number;
   updatedAt: number;
   wx?: StationWxKey; // present only on weather-capable stations
+  /** The living caches riding this station, in the list only; absent when there are none. */
+  livingCaches?: { id: number; code: string; title: string; rendezvous: boolean }[];
 }
 /** Result of POST /api/decode — the parsed frame plus the typed APRS data. */
 export interface DecodedPacket {

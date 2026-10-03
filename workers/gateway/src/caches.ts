@@ -253,13 +253,18 @@ export async function listedOrOwn(
   };
 }
 
-/** A living cache at its station's last heard position; any other cache, or one whose station is unheard, as stored. */
-async function livingAt(env: Env, row: CacheDbRow): Promise<CacheDbRow> {
-  if (row.type !== "aprs_living" || !row.station_call) return row;
-  const st = await env.DB.prepare("SELECT lat, lon FROM stations WHERE callsign = ?")
+/**
+ * A living cache at its station's last heard position, with when that was; any other cache, or one whose station
+ * is unheard, as stored.
+ */
+async function livingAt(env: Env, row: CacheDbRow): Promise<{ row: CacheDbRow; heardAt: number | null }> {
+  if (row.type !== "aprs_living" || !row.station_call) return { row, heardAt: null };
+  const st = await env.DB.prepare("SELECT lat, lon, last_seen FROM stations WHERE callsign = ?")
     .bind(row.station_call.toUpperCase())
-    .first<{ lat: number | null; lon: number | null }>();
-  return st?.lat != null && st.lon != null ? { ...row, lat: st.lat, lon: st.lon } : row;
+    .first<{ lat: number | null; lon: number | null; last_seen: number | null }>();
+  return st?.lat != null && st.lon != null
+    ? { row: { ...row, lat: st.lat, lon: st.lon }, heardAt: st.last_seen ?? null }
+    : { row, heardAt: null };
 }
 
 export async function handleCachesInBBox(req: Request, env: Env): Promise<Response> {
@@ -326,7 +331,7 @@ async function logbookPage(env: Env, id: number, cursor: Cursor | null, limit: n
 export async function handleCacheDetail(req: Request, env: Env, id: number): Promise<Response> {
   const stored = await env.DB.prepare("SELECT * FROM caches WHERE id = ?").bind(id).first<CacheDbRow>();
   if (!stored) return json({ error: "no such cache" }, { status: 404 });
-  const row = await livingAt(env, stored);
+  const { row, heardAt: stationHeardAt } = await livingAt(env, stored);
   const logs = await logbookPage(env, id, null, LOGBOOK_PAGE);
   const finds = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM cache_logs WHERE cache_id = ? AND log_type = 'found' AND verified = 1",
@@ -377,6 +382,7 @@ export async function handleCacheDetail(req: Request, env: Env, id: number): Pro
     rating,
     rendezvous,
     stageCount: stages,
+    ...(row.type === "aprs_living" && { stationHeardAt }),
     ...(isOwner && {
       own: { minTrust: (row.min_trust as "A" | "B" | null) ?? null, rendezvous: !!row.rendezvous },
     }),
