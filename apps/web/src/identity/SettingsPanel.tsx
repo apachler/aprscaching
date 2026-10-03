@@ -369,7 +369,7 @@ export function SettingsPanel(props: {
             entities and prefixes: Amateur Radio Country Files by Jim Reisert, AD1C (MIT).
           </p>
           <p className="muted">
-            Licence badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur
+            Register badges come from public registers. USA: FCC Universal Licensing System. Canada: ISED amateur
             callsign list, reproduced from ised-isde.canada.ca. Australia: Based on Australian Communications and Media
             Authority information. Austria: Fernmeldebehörde. Germany: Bundesnetzagentur.
           </p>

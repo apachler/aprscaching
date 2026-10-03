@@ -781,7 +781,7 @@ const ROUTES: Route[] = [
         checkedAt: NOW - DAY,
       }) satisfies Licence,
   ],
-  ["GET", /^\/api\/radio\/commands$/, () => ({ serviceCall: "APRSCA", commands: [] })],
+  ["GET", /^\/api\/radio\/commands$/, () => ({ serviceCall: "OE8APR-15", commands: [] })],
   [
     "GET",
     /^\/verify\/methods$/,

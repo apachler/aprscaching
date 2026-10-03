@@ -146,7 +146,7 @@ function Terminal() {
         <p className="landing-frame f1">
           <span className="dim">10:42Z</span> OE8APR-7&gt;APZACG,WIDE1-1:
         </p>
-        <p className="landing-frame f2">:APRSCA &nbsp;:FOUND AC-1042</p>
+        <p className="landing-frame f2">:OE8APR-15:FOUND AC-1042</p>
         <p className="landing-frame f3 dim">heard direct by OE8XBM-10, the instance's own receiver</p>
         <p className="landing-frame f4 dim">track plausible · 18 m from the cache</p>
         <span className="landing-stamp">
