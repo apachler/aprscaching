@@ -102,7 +102,7 @@ export function Watchlist(props: { callsign: string; onFly?: (lat: number, lon: 
         <h4>Alerts{unseen > 0 ? ` (${unseen} new)` : ""}</h4>
         {unseen > 0 && (
           <Button variant="quiet" onClick={clearSeen}>
-            mark all seen
+            Mark all seen
           </Button>
         )}
       </div>

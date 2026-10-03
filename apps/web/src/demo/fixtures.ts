@@ -58,7 +58,36 @@ const base = {
   source: "native",
   sourceName: null,
   sourceUrl: null,
+  country: "AT" as string | null,
+  tags: [] as string[],
 };
+
+/** The watchlist's alerts: two unseen, one seen. */
+const WATCH_ALERTS = [
+  {
+    id: 3,
+    callsign: "OE3ABC",
+    kind: "cache_found",
+    detail: "AC0001 Schlossberg clock tower",
+    cacheId: 1,
+    lat: 47.0763,
+    lon: 15.4378,
+    ts: NOW - 20 * MIN,
+    seen: false,
+  },
+  {
+    id: 2,
+    callsign: "OE6XRR-9",
+    kind: "near_cache",
+    detail: "within 150 m of AC0002",
+    cacheId: 2,
+    lat: 47.071,
+    lon: 15.432,
+    ts: NOW - 2 * HOUR,
+    seen: false,
+  },
+  { id: 1, callsign: "OE6XRR-9", kind: "heard", cacheId: null, lat: 47.06, lon: 15.45, ts: NOW - DAY, seen: true },
+];
 
 /** The region: around Graz (47.07 N, 15.42 E). */
 export const MAP_CACHES: MapCache[] = [
@@ -68,6 +97,7 @@ export const MAP_CACHES: MapCache[] = [
     id: 1,
     code: "AC0001",
     title: "Schlossberg clock tower",
+    tags: ["scenic", "family"],
     type: "traditional",
     difficulty: 1.5,
     terrain: 2,
@@ -80,6 +110,7 @@ export const MAP_CACHES: MapCache[] = [
     id: 2,
     code: "AC0002",
     title: "Mur island bridges",
+    tags: ["scenic", "city"],
     type: "multi",
     difficulty: 3,
     terrain: 1.5,
@@ -106,6 +137,7 @@ export const MAP_CACHES: MapCache[] = [
     id: 4,
     code: "AC0004",
     title: "Morse in the Stadtpark",
+    tags: ["cw", "family"],
     type: "audio",
     difficulty: 3.5,
     terrain: 1,
@@ -163,6 +195,7 @@ export const MAP_CACHES: MapCache[] = [
     id: 8,
     code: "AC0008",
     title: "Hilmteich",
+    tags: ["family"],
     type: "traditional",
     difficulty: 2,
     terrain: 1.5,
@@ -176,6 +209,7 @@ export const MAP_CACHES: MapCache[] = [
     id: null,
     code: "AC5012",
     title: "Linz Pöstlingberg view",
+    country: null,
     type: "traditional",
     difficulty: 2.5,
     terrain: 3,
@@ -669,8 +703,8 @@ const ROUTES: Route[] = [
     }),
   ],
   ["GET", /^\/api\/my\/stations$/, () => page({ stations: MY_STATIONS })],
-  ["GET", /^\/api\/watch$/, () => ({ watching: [], unseen: 0 })],
-  ["GET", /^\/api\/watch\/alerts$/, () => page({ alerts: [] })],
+  ["GET", /^\/api\/watch$/, () => ({ watching: [{ callsign: "OE6XRR-9", addedAt: NOW - 9 * DAY }], unseen: 2 })],
+  ["GET", /^\/api\/watch\/alerts$/, () => page({ alerts: WATCH_ALERTS })],
   ["GET", /^\/api\/wx\/key$/, () => ({ key: null, lastSeen: null, ecowittPath: null, wuUrl: null })],
   [
     "GET",

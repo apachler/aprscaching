@@ -6,6 +6,7 @@ import { Switch } from "../ui/Switch.js";
 import { saveView, type MapViewState } from "../api.js";
 import { MESHMAP_ATTRIBUTION, meshmapUrl } from "../meshcom/meshcomView.js";
 import type { CacheType } from "@aprscaching/shared";
+import { NO_FILTERS, type CacheFilters } from "./filters.js";
 
 export interface SpotFilters {
   bands: string[];
@@ -16,10 +17,12 @@ const SPOT_BANDS = ["160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10
 const SPOT_MODES = ["SSB", "CW", "FM", "FT8", "DATA"];
 const SPOT_SOURCES = ["pota", "sota", "gma", "pskreporter", "dxcluster", "rbn"];
 
-/** Search & filter — text + cache-type multi-select (chips) + network-data scope. */
+/** Search & filter — text, cache type, country and tags, network-data scope and the live layers. */
 export function FilterPanel(props: {
-  filters: { types: CacheType[]; q: string };
-  setFilters: (f: { types: CacheType[]; q: string }) => void;
+  filters: CacheFilters;
+  setFilters: (f: CacheFilters) => void;
+  /** The countries and tags the loaded caches carry. */
+  facets: { countries: string[]; tags: string[] };
   includeUnvetted: boolean;
   setIncludeUnvetted: (v: boolean) => void;
   spotsOn: boolean;
@@ -54,6 +57,12 @@ export function FilterPanel(props: {
       ...filters,
       types: filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t],
     });
+  const toggleTag = (t: string) =>
+    setFilters({
+      ...filters,
+      tags: filters.tags.includes(t) ? filters.tags.filter((x) => x !== t) : [...filters.tags, t],
+    });
+  const { countries, tags } = props.facets;
   const toggleSpot = (key: keyof SpotFilters, v: string) => {
     const cur = props.spotFilters[key];
     props.setSpotFilters({ ...props.spotFilters, [key]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] });
@@ -81,6 +90,39 @@ export function FilterPanel(props: {
           );
         })}
       </div>
+      <h4>Country and tags</h4>
+      {countries.length === 0 && tags.length === 0 ? (
+        <p className="muted fine">No cache in view has a country or tags.</p>
+      ) : (
+        <>
+          {countries.length > 0 && (
+            <label>
+              Country
+              <select value={filters.country} onChange={(e) => setFilters({ ...filters, country: e.target.value })}>
+                <option value="">Any country</option>
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {tags.length > 0 && (
+            <div className="filter-row">
+              <span className="filter-label">Tags</span>
+              <div className="badges">
+                {tags.map((t) => (
+                  <ChipToggle key={t} pressed={filters.tags.includes(t)} onChange={() => toggleTag(t)}>
+                    {t}
+                  </ChipToggle>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="muted fine">Only this instance's caches carry a country and tags.</p>
+        </>
+      )}
       <h4>Network data</h4>
       <div className="row between">
         <label>
@@ -195,7 +237,7 @@ export function FilterPanel(props: {
         </Button>
       </div>
       <div className="row between mt-6">
-        <Button variant="quiet" onClick={() => setFilters({ types: [], q: "" })}>
+        <Button variant="quiet" onClick={() => setFilters(NO_FILTERS)}>
           Clear all
         </Button>
         <span className="muted">

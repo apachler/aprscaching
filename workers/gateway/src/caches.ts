@@ -206,6 +206,8 @@ export function nativeMapCache(r: CacheDbRow, instance: string): MapCache {
     source: r.source,
     sourceName: r.source_name,
     sourceUrl: r.source_url,
+    country: r.country ?? null,
+    tags: splitTags(r.tags),
   };
 }
 export function remoteMapCache(r: RemoteCacheRow): MapCache {
@@ -227,6 +229,8 @@ export function remoteMapCache(r: RemoteCacheRow): MapCache {
     source: r.source,
     sourceName: null,
     sourceUrl: null,
+    country: null,
+    tags: [],
   };
 }
 

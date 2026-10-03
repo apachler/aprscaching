@@ -18,8 +18,9 @@ at the end you stand at the cache with its sheet open, ready to log.
 **Offline**, **Settings** and **Manual**, plus **Admin** for the sysop. A dot marks one that needs you: a new
 message, or a callsign still to verify. The same dot shows on **More** and on the left rail.
 
-The centre button shows **Log** while a cache is open and **Hide** otherwise. The **Manual** icon in the top
-bar also opens this manual.
+The centre button shows **Log** while a cache is open and **Hide** otherwise. On a computer, the **Manual** icon
+in the top bar also opens this manual. The bell in the top bar opens your alerts
+([Alerts and the watchlist](community.md#alerts-and-the-watchlist)).
 
 ![The map on a computer, with the left rail and the Hide a cache button](../assets/shots/map-desktop.webp){ width="720" loading=lazy }
 
@@ -29,6 +30,9 @@ bar also opens this manual.
   the top bar. On a phone, tap the magnifier in the top bar to open the search box. Pick a result to open it.
 - **Filter**: tap the funnel icon. **Search & filter** opens.
     - **Cache type** shows only the types you pick.
+    - **Country and tags** narrows the map to one country, to the caches with any of the tags you pick, or
+      both. The choices are the countries and tags of the caches in view. Caches from other instances carry
+      neither.
     - **Include unvetted network data** adds caches from instances your sysop has not vetted yet.
     - **Live layers** adds **Live stations** (APRS stations heard now), **MeshCom** nodes and **Activity
       spots** (live POTA and SOTA activations).

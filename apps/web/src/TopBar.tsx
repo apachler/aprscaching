@@ -36,7 +36,11 @@ export function TopBar(props: {
   onDocs: () => void;
   sysop?: boolean;
   onAdmin?: () => void;
+  /** Unseen watchlist alerts; the bell shows only when `onAlerts` is given (signed in). */
+  alerts?: number;
+  onAlerts?: () => void;
 }) {
+  const alerts = props.alerts ?? 0;
   return (
     <header className="topbar">
       <img className="logo" src={ASSET.wordmark} alt="APRScaching" />
@@ -44,8 +48,8 @@ export function TopBar(props: {
         variant="icon"
         className={`filter-ic${props.filtered ? " on" : ""}`}
         onClick={props.onFilters}
-        title="Filter by type"
-        aria-label="Filter caches by type"
+        title="Search and filter"
+        aria-label="Search and filter caches"
       >
         <Icon name="filter" size={16} />
       </Button>
@@ -81,7 +85,23 @@ export function TopBar(props: {
         </Button>
       )}
       <span className="spacer" />
-      {/* Manual: the single entry point on every breakpoint — a compact icon in the top chrome. */}
+      {props.onAlerts && (
+        <Button
+          variant="icon"
+          className="bell-ic"
+          onClick={props.onAlerts}
+          title="Alerts"
+          aria-label={alerts > 0 ? `Alerts, ${alerts} new` : "Alerts"}
+        >
+          <Icon name="bell" size={16} />
+          {alerts > 0 && (
+            <span className="bell-count" aria-hidden="true">
+              {alerts > 99 ? "99+" : alerts}
+            </span>
+          )}
+        </Button>
+      )}
+      {/* Manual: a compact icon in the top chrome; a phone reaches it from the More sheet instead. */}
       <Button variant="icon" className="help-ic" onClick={props.onDocs} title="Manual" aria-label="Open the manual">
         <Icon name="info" size={16} />
       </Button>

@@ -96,6 +96,25 @@
   .topbar button.icon {
     color: var(--chrome-ink);
   }
+  /* the alert bell (TopBar.tsx): the unseen count on the accent, over the icon's corner */
+  .topbar .bell-ic {
+    position: relative;
+  }
+  .bell-count {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    min-width: 16px;
+    padding: 0 var(--space-2xs);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: var(--text-micro);
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--topbar-bg);
+  }
   /* ---- operator nav rail + 3-pane docking (≥1024px) ---- */
   .rail button {
     width: 48px;
@@ -311,10 +330,14 @@
     .topbar .call input {
       width: 80px;
     }
-    /* a phone's row holds wordmark + filter + search + manual + identity: a smaller wordmark and a tighter
-     identity chip keep the chip's status whole instead of clipping it at the edge */
+    /* a phone's row holds wordmark + filter + search + alerts + identity: a smaller wordmark and a tighter
+     identity chip keep the chip's status whole instead of clipping it at the edge. The manual is in the More
+     sheet, so its top-bar button makes room for the bell. */
     .topbar .logo {
       height: 21px;
+    }
+    .topbar .help-ic {
+      display: none;
     }
     .idchip {
       padding: 0 var(--space-sm);
