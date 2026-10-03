@@ -92,7 +92,7 @@ describe("sealing NFC stages for offline packs", () => {
       await serve(env)(new Request("https://stages.example/api/offline/pack?grid=JN77"))
     ).json()) as PackResponse;
     const opened = await openSealedStage(SERIAL, pack.caches[0]!.stages[1]!.sealed!);
-    expect(opened?.mediaUrl).toMatch(/^\/api\/media\/cache\/\d+\/stage\/1\/clue\./);
+    expect(opened?.mediaUrl).toMatch(/^\/api\/media\/cache\/\d+\/stage\/1\/clue-[0-9a-f]+\./);
     const wrong = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: "nope" });
     expect(wrong.status).toBe(403);
     const right = await post(env, `/api/caches/${id}/stages/1/unlock`, { callsign: "OE8FND", code: SERIAL });

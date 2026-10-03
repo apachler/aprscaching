@@ -12,7 +12,14 @@ import { mayActAsOwner } from "./auth.js";
 import { actor } from "./caches.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { baseCall, haversineMeters } from "@aprscaching/aprs";
-import { STAGE_MIN_CODE_BITS, StageUnlockRequest, codeEntropyBits, sealStage } from "@aprscaching/shared";
+import {
+  MEDIA_LIMITS,
+  STAGE_MIN_CODE_BITS,
+  StageUnlockRequest,
+  codeEntropyBits,
+  mediaMB,
+  sealStage,
+} from "@aprscaching/shared";
 
 interface StageRow {
   stage_no: number;
@@ -114,40 +121,40 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
     return json({ error: "only the owner may set stages" }, { status: 403 });
   if (!Array.isArray(b.stages)) return json({ error: "stages[] required" }, { status: 400 });
 
-  // Replacing the stage list drops rows that point at stored audio clues — collect those
-  // media keys first so we can free the objects afterwards instead of orphaning them in R2/FS forever.
-  const orphaned = env.MEDIA
-    ? (
-        await env.DB.prepare("SELECT media_key FROM cache_stages WHERE cache_id=? AND media_key IS NOT NULL")
-          .bind(cacheId)
-          .all<{ media_key: string }>()
-      ).results
-    : [];
-
+  const rows = (
+    await env.DB.prepare(
+      "SELECT stage_no, unlock, clue, lat, lon, radius_m, unlock_secret, media_key, media_bytes FROM cache_stages WHERE cache_id=?",
+    )
+      .bind(cacheId)
+      .all<StageRow & { media_bytes: number | null }>()
+  ).results;
   // An unlock belongs to the stage as it was. From the first stage that changes (moved, re-keyed, re-clued,
   // removed or added), finders' unlocks are dropped: a stage reached the old way does not open the new one.
   const before = new Map(
-    (
-      await env.DB.prepare(
-        "SELECT stage_no, unlock, clue, lat, lon, radius_m, unlock_secret FROM cache_stages WHERE cache_id=?",
-      )
-        .bind(cacheId)
-        .all<Omit<StageRow, "media_key">>()
-    ).results.map((r) => [r.stage_no, JSON.stringify([r.unlock, r.clue, r.lat, r.lon, r.radius_m, r.unlock_secret])]),
+    rows.map((r) => [r.stage_no, JSON.stringify([r.unlock, r.clue, r.lat, r.lon, r.radius_m, r.unlock_secret])]),
   );
+  // A stage's audio clue stays with it while the stage stays, unless it stops being an audio stage. A clue whose
+  // stage is gone, or turned into another kind, is freed, so no stored object outlives the row that counts it.
+  const clips = new Map(
+    rows.filter((r) => r.media_key).map((r) => [r.stage_no, { ...r, media_key: r.media_key! }] as const),
+  );
+  const kept = new Map<number, { media_key: string; media_bytes: number | null }>();
   const after = new Map<number, string>();
   const stmts = [env.DB.prepare("DELETE FROM cache_stages WHERE cache_id=?").bind(cacheId)];
   for (const s of b.stages) {
     const unlock = ["geo", "audio", "open", "nfc"].includes(s.unlock ?? "") ? s.unlock : "geo";
     // for an nfc stage the secret (tag text/serial) is required so it can actually be unlocked
     const secret = unlock === "nfc" ? s.secret?.trim() || null : null;
+    const clip = clips.get(s.stageNo);
+    if (clip && !kept.has(s.stageNo) && (clip.unlock !== "audio" || unlock === "audio")) kept.set(s.stageNo, clip);
+    const media = kept.get(s.stageNo);
     after.set(
       s.stageNo,
       JSON.stringify([unlock, s.clue ?? null, s.lat ?? null, s.lon ?? null, Math.round(s.radiusM ?? 60), secret]),
     );
     stmts.push(
       env.DB.prepare(
-        "INSERT INTO cache_stages (cache_id, stage_no, unlock, clue, lat, lon, radius_m, unlock_secret) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO cache_stages (cache_id, stage_no, unlock, clue, lat, lon, radius_m, unlock_secret, media_key, media_bytes) VALUES (?,?,?,?,?,?,?,?,?,?)",
       ).bind(
         cacheId,
         s.stageNo,
@@ -157,6 +164,8 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
         s.lon ?? null,
         Math.round(s.radiusM ?? 60),
         secret,
+        media?.media_key ?? null,
+        media?.media_bytes ?? null,
       ),
     );
   }
@@ -169,18 +178,21 @@ export async function handleSetStages(req: Request, env: Env, cacheId: number): 
       ),
     );
   await env.DB.batch(stmts);
-  // free the now-orphaned clue objects (best-effort; the rows are already gone)
-  for (const m of orphaned) {
-    try {
-      await env.MEDIA!.delete?.(m.media_key);
-    } catch {
-      /* best-effort */
-    }
-  }
+  // free the clue objects no row holds any more (best-effort; the rows are already gone)
+  for (const [n, clip] of clips) if (!kept.has(n)) await dropObject(env, clip.media_key);
   // which stages a finder can unlock without a connection, and why not the others
   const offline: StageOffline[] = [];
   for (const s of b.stages) offline.push(await resealStage(env, cacheId, s.stageNo));
   return json({ ok: true, stages: b.stages.length, offline });
+}
+
+/** Remove a stored object no row refers to any more; best-effort, since the rows already let it go. */
+async function dropObject(env: Env, key: string): Promise<void> {
+  try {
+    await env.MEDIA?.delete?.(key);
+  } catch {
+    /* best-effort */
+  }
 }
 
 // ---- owner: upload an audio clue for a stage ----
@@ -191,22 +203,29 @@ export async function handleStageMedia(req: Request, env: Env, cacheId: number, 
   if (!(await mayActAsOwner(req, env, owner, req.headers.get("x-owner-call"))))
     return json({ error: "only the owner may upload media" }, { status: 403 });
 
+  // the clue hangs on a stage row: without one, a stored object would be counted by nothing and freed by nothing
+  const before = await env.DB.prepare("SELECT media_key, media_bytes FROM cache_stages WHERE cache_id=? AND stage_no=?")
+    .bind(cacheId, stageNo)
+    .first<{ media_key: string | null; media_bytes: number | null }>();
+  if (!before) return json({ error: "unknown stage" }, { status: 404 });
+
   const ct = mediaType(req.headers.get("content-type"));
   if (!AUDIO_TYPES.has(ct)) return json({ error: "an audio clue is a sound (MP3, Ogg, WAV, M4A)" }, { status: 415 });
   const bytes = new Uint8Array(await req.arrayBuffer());
   if (!bytes.length || bytes.length > MEDIA_LIMITS.audio)
-    return json({ error: `an audio clue is at most ${MB(MEDIA_LIMITS.audio)}` }, { status: 413 });
-  const before = await env.DB.prepare("SELECT media_bytes FROM cache_stages WHERE cache_id=? AND stage_no=?")
-    .bind(cacheId, stageNo)
-    .first<{ media_bytes: number | null }>();
-  const full = await mediaRefusal(env, cacheId, owner, bytes.length, before?.media_bytes ?? 0);
+    return json({ error: `an audio clue is at most ${mediaMB(MEDIA_LIMITS.audio)}` }, { status: 413 });
+  const full = await mediaRefusal(env, cacheId, owner, bytes.length, before.media_bytes ?? 0);
   if (full) return json({ error: full }, { status: 413 });
   const ext = ct.split("/")[1]?.split(";")[0] ?? "bin";
-  const key = `cache/${cacheId}/stage/${stageNo}/clue.${ext}`;
+  // Each upload gets its own key: a clip is served cacheable for a day, so a replaced one must not answer at
+  // the old URL, and the previous object is freed once the row names the new one.
+  const tag = [...crypto.getRandomValues(new Uint8Array(6))].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const key = `cache/${cacheId}/stage/${stageNo}/clue-${tag}.${ext}`;
   await env.MEDIA.put(key, bytes, ct);
   await env.DB.prepare("UPDATE cache_stages SET media_key=?, media_bytes=? WHERE cache_id=? AND stage_no=?")
     .bind(key, bytes.length, cacheId, stageNo)
     .run();
+  if (before.media_key && before.media_key !== key) await dropObject(env, before.media_key);
   await resealStage(env, cacheId, stageNo); // the sealed payload names the audio clue
   return json({ ok: true, mediaKey: key });
 }
@@ -359,23 +378,9 @@ export async function handleUnlockStage(req: Request, env: Env, cacheId: number,
 }
 
 // ---- how much media an instance holds ----
-/**
- * Media fills the instance's disk or bucket, so it is bounded at every level: a photo scaled in the browser to
- * 1600 px is about half a megabyte, and an audio clue runs a few minutes at most. The instance's own ceiling,
- * `MEDIA_QUOTA_MB`, is what its storage can spare.
- */
-const MEDIA_LIMITS = {
-  image: 2_000_000,
-  audio: 3_000_000,
-  /** gallery items on one cache */
-  items: 6,
-  cache: 10_000_000,
-  /** across every cache of one account */
-  account: 50_000_000,
-} as const;
+/** The instance's own ceiling, `MEDIA_QUOTA_MB`, is what its storage can spare; MEDIA_LIMITS bounds the rest. */
 const MEDIA_QUOTA_MB_DEFAULT = 1024;
 const quotaBytes = (env: Env) => (Number(env.MEDIA_QUOTA_MB) || MEDIA_QUOTA_MB_DEFAULT) * 1_000_000;
-const MB = (n: number) => `${n / 1_000_000} MB`;
 
 /** Gallery bytes (thumbnails included) plus audio clues, over the caches a WHERE clause on `c` selects. */
 const mediaBytesSql = (where: string) =>
@@ -405,7 +410,7 @@ async function mediaRefusal(
     )?.n ?? 0;
   const delta = adding - freeing;
   if ((await sum("c.id = ?", cacheId)) + delta > MEDIA_LIMITS.cache)
-    return `this cache holds at most ${MB(MEDIA_LIMITS.cache)} of media`;
+    return `this cache holds at most ${mediaMB(MEDIA_LIMITS.cache)} of media`;
   const base = baseCall(owner);
   const calls = (
     await env.DB.prepare(
@@ -416,7 +421,7 @@ async function mediaRefusal(
   ).results.map((r) => r.callsign.toUpperCase());
   const held = calls.length ? calls : [base];
   if ((await sum(`${ownerBase} IN (${held.map(() => "?").join(",")})`, ...held)) + delta > MEDIA_LIMITS.account)
-    return `your caches hold at most ${MB(MEDIA_LIMITS.account)} of media together`;
+    return `your caches hold at most ${mediaMB(MEDIA_LIMITS.account)} of media together`;
   if ((await sum("1 = 1")) + delta > quotaBytes(env)) return "this instance's media storage is full: ask the sysop";
   return null;
 }
@@ -498,7 +503,7 @@ export async function handleAddCacheMedia(req: Request, env: Env, cacheId: numbe
   const bytes = new Uint8Array(await req.arrayBuffer());
   const max = MEDIA_LIMITS[kind];
   if (!bytes.length || bytes.length > max)
-    return json({ error: `${kind === "image" ? "a photo" : "a sound"} is at most ${MB(max)}` }, { status: 413 });
+    return json({ error: `${kind === "image" ? "a photo" : "a sound"} is at most ${mediaMB(max)}` }, { status: 413 });
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM cache_media WHERE cache_id=?")
     .bind(cacheId)
     .first<{ n: number }>();
