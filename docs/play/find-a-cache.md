@@ -84,18 +84,19 @@ distance from where you stand. **Update from here** refreshes it as you walk.
 
 ## The "you're near" prompt
 
-When your radio's APRS position is heard within 150 m of a cache, the app shows a banner: **You're near
-AC-1234**, with **Log it** and **Dismiss**. **Log it** opens the cache sheet.
+When you come within 150 m of a cache, the app shows a banner: **You're near AC-1234**, with **Log it** and
+**Dismiss**. **Log it** opens the cache sheet. Each cache prompts once a session, and a dismissed one stays quiet.
 
-The prompt needs three things:
+Two things can tell the app you are near:
 
-- your radio beacons its position, and this instance hears it, over the air or over the internet;
-- the beacon carries the callsign you are signed in with, with any SSID: signed in as `OE8APR`, a beacon from
-  `OE8APR-7` prompts you;
-- the app is open on your phone or computer.
+- **Your phone.** Whenever the app has your location (the locate button on the map, **Nearby** or **Find**), it
+  checks the caches on the map. The check runs on the phone: your location is not sent anywhere for it.
+- **Your radio.** When this instance hears your radio's APRS position, over the air or over the internet, it
+  checks for you and the app shows the banner. The beacon must carry the callsign you are signed in with, with
+  any SSID: signed in as `OE8APR`, a beacon from `OE8APR-7` prompts you.
 
-The phone's own location does not trigger the prompt. Without a radio, use **Nearby** and the distance on the
-cache sheet instead.
+The app must be open for either. Your own caches, archived or disabled ones, and caches from other instances do
+not prompt.
 
 ## Caches from other instances
 

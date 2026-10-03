@@ -87,6 +87,13 @@ const DEVICE = new WeakSet<DeviceFix>();
 let last: DeviceFix | null = null;
 
 /** The device's reading, with its own timestamp and accuracy. The only constructor of a DeviceFix. */
+const fixListeners = new Set<(fix: DeviceFix) => void>();
+/** Hear every reading the page receives, from any request or watch. Returns the stop function. */
+export function onFix(listener: (fix: DeviceFix) => void): () => void {
+  fixListeners.add(listener);
+  return () => fixListeners.delete(listener);
+}
+
 export function fixFromPosition(p: GeolocationPosition): DeviceFix {
   const fix: DeviceFix = Object.freeze({
     lat: p.coords.latitude,
@@ -96,6 +103,7 @@ export function fixFromPosition(p: GeolocationPosition): DeviceFix {
   });
   DEVICE.add(fix);
   last = fix;
+  for (const l of fixListeners) l(fix);
   return fix;
 }
 
