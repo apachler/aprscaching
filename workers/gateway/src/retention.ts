@@ -50,15 +50,15 @@ const DAY_S = 24 * 3600;
  */
 export const OUTBOX_QUEUED_TTL_S = 3600;
 /** Sent outbox items, kept to trace what the box published. */
-export const OUTBOX_SENT_KEEP_S = 7 * DAY_S;
+const OUTBOX_SENT_KEEP_S = 7 * DAY_S;
 /** Box commands in any state: the box log shows the latest few, and a week-old queued command is no longer wanted. */
-export const BOX_COMMAND_KEEP_S = 7 * DAY_S;
+const BOX_COMMAND_KEEP_S = 7 * DAY_S;
 /** The FBB forward log, past which an entry stays only while its message is still offered for forwarding. */
-export const FORWARD_LOG_KEEP_S = 30 * DAY_S;
+const FORWARD_LOG_KEEP_S = 30 * DAY_S;
 /** Watch alerts never seen: past this they are no longer news, and the email digest has carried them. */
-export const UNSEEN_ALERT_KEEP_S = 30 * DAY_S;
+const UNSEEN_ALERT_KEEP_S = 30 * DAY_S;
 /** Stations silent this long leave the map, unless a living cache, a registered station or a node names them. */
-export const STATION_KEEP_S = 365 * DAY_S;
+const STATION_KEEP_S = 365 * DAY_S;
 
 /** Rows one bounded delete removes, and the most batches one nightly run takes per table. */
 const PRUNE_BATCH = 5000;
