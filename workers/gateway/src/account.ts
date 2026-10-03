@@ -279,6 +279,14 @@ async function accountExport(env: Env, cs: string): Promise<Record<string, unkno
       ...by("from_call").binds,
       ...by("to_call").binds,
     ),
+    // Mailbox messages the person left, and those addressed to any of their calls
+    mailbox: await rows(
+      env,
+      `SELECT from_call, to_call, body, via, status, delivered_to, created_at, expires_at, delivered_at
+         FROM mailbox_messages WHERE from_account=? OR ${by("to_call").sql} ORDER BY created_at`,
+      acct,
+      ...by("to_call").binds,
+    ),
     // adoption requests the person made, and the adoption trail rows naming them (as actor, old or new owner)
     adoptionRequests: await rows(
       env,
@@ -456,6 +464,8 @@ async function eraseAccount(env: Env, accountId: string | null, email: string | 
     del("DELETE FROM white_pages WHERE $CALLS", "callsign"),
     del("DELETE FROM box_commands WHERE $CALLS", "callsign"),
     del("DELETE FROM bbs_messages WHERE type='P' AND ($CALLS OR $CALLS)", "from_call", "to_call"),
+    del("DELETE FROM mailbox_messages WHERE $CALLS OR $CALLS", "from_call", "to_call"),
+    ...(accountId ? [env.DB.prepare("DELETE FROM mailbox_messages WHERE from_account=?").bind(accountId)] : []),
     env.DB.prepare(`UPDATE bbs_messages SET from_call=? WHERE ${by("from_call").sql}`).bind(
       WITHDRAWN,
       ...by("from_call").binds,

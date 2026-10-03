@@ -148,6 +148,12 @@ const SURFACES = [
   { name: "filter", as: "user", query: "?view=filter" },
   { name: "activity", as: "user", query: "?view=activity" },
   { name: "messages", as: "user", query: "?view=messages" },
+  {
+    name: "mailbox",
+    as: "user",
+    query: "?view=messages",
+    steps: [["click", "button:has-text('Mailbox')"]],
+  },
   { name: "ranks", as: "user", query: "?view=ranks" },
   { name: "profile", as: "user", query: "?view=profile" },
   { name: "settings", as: "user", query: "?view=settings" },

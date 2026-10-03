@@ -40,6 +40,7 @@ import type { CacheRow } from "./verify.js";
 import { baseCall, encodeAprsMessage } from "@aprscaching/aprs";
 import { alreadyFound, logRefusal } from "./findrules.js";
 import { serviceCall } from "./servicecall.js";
+import { leaveMail } from "./mailbox.js";
 import type { Transport } from "@aprscaching/shared";
 
 /**
@@ -60,11 +61,12 @@ const DUPLICATE_WINDOW_SEC = 30 * 60;
 /** APRS message text limit. */
 const APRS_TEXT_MAX = 67;
 
-export const HELP_TEXT = "FOUND <code> [log]; DNF <code> [log]; NOTE <code> <text>";
+export const HELP_TEXT = "FOUND/DNF <code> [log]; NOTE <code> <text>; MAIL <call> <text>";
 
 type RadioCommand =
   | { command: "found" | "dnf"; code: string; body?: string }
   | { command: "note"; code: string; body: string }
+  | { command: "mail"; to: string; body: string }
   | { command: "help" };
 
 /**
@@ -85,6 +87,13 @@ export function parseRadioCommand(text: string): RadioCommand | { error: string 
   const [head = "", ...rest] = t.split(/\s+/);
   const word = head.toUpperCase();
   if (word === "HELP" || word === "?") return { command: "help" };
+  if (word === "MAIL") {
+    const to = (rest[0] ?? "").toUpperCase();
+    if (!/^(?=[A-Z0-9]*\d)[A-Z0-9]{1,6}(-\d{1,2})?$/.test(to))
+      return { error: "MAIL needs a callsign, e.g. MAIL OE5XYZ hi" };
+    const body = rest.slice(1).join(" ").trim();
+    return body ? { command: "mail", to, body } : { error: "MAIL needs a text" };
+  }
   if (word !== "FOUND" && word !== "DNF" && word !== "NOTE") return { error: "unknown command - send HELP" };
   const code = rest[0] ? normalizeCacheCode(rest[0]) : null;
   if (!code) return { error: `${word} needs a cache code, e.g. ${word} AC-1234` };
@@ -397,6 +406,7 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
     await reply(env, m, id, HELP_TEXT, true);
     return;
   }
+  if (parsed.command === "mail") return handleMailCommand(env, m, src, trusted, parsed);
 
   const reject = async (reason: string, extra: { accountId?: string | null; cache?: CacheForLog | null } = {}) => {
     const id = await insertRow(env, m, {
@@ -462,6 +472,36 @@ export async function handleRadioMessage(env: Env, input: RadioMessage): Promise
 }
 
 /**
+ * `MAIL <call> <text>` leaves a Mailbox message under the sender's verified call. A copy the provenance rule
+ * attests is held at once; any other copy waits for the sender to confirm it in the app, since the instance
+ * puts the text on the air in the sender's name.
+ */
+async function handleMailCommand(
+  env: Env,
+  m: RadioMessage,
+  src: string,
+  trusted: boolean,
+  parsed: { to: string; body: string },
+): Promise<void> {
+  const row = { command: "mail", body: `${parsed.to} ${parsed.body}`, trusted };
+  const holder = await baseHolder(env, baseCall(src));
+  const accountId = holder && (await isCallsignVerified(env, src)) ? holder : null;
+  const finish = async (status: string, text: string, reason: string | null = null) => {
+    const id = await insertRow(env, m, { ...row, accountId, status, reason });
+    await ack(env, m);
+    await reply(env, m, id, text);
+  };
+  if (!accountId) {
+    const reason = `${baseCall(src)} is not a verified callsign here - verify it in the app`;
+    return finish("rejected", reason, reason);
+  }
+  if (!trusted) return finish("pending", `mail for ${parsed.to} received - confirm it in the app`);
+  const r = await leaveMail(env, { from: src, accountId, to: parsed.to, body: parsed.body, via: "radio" });
+  if ("error" in r) return finish("rejected", r.error, r.error);
+  return finish("logged", `mail for ${parsed.to} held`);
+}
+
+/**
  * `VERIFY <code>` completes the sender's callsign control-verification challenge (callsign.ts). Only a
  * copy heard on the air at an attested site counts. Any other copy — over APRS-IS, through a tunnel,
  * from the browser RF bridge or an unattested receiver — is dropped unanswered: it costs no attempt, so
@@ -501,6 +541,24 @@ async function confirmRow(
       .bind(status, reason, logId, nowS(), onAir ? 1 : 0, row.id)
       .run();
   try {
+    if (row.command === "mail") {
+      const [to = "", ...words] = (row.body ?? "").split(" ");
+      const r = row.account_id
+        ? await leaveMail(env, {
+            from: row.from_call,
+            accountId: row.account_id,
+            to,
+            body: words.join(" "),
+            via: "radio",
+          })
+        : { error: "no verified callsign" };
+      if ("error" in r) {
+        await done("rejected", r.error, null);
+        return { ok: false, reason: r.error };
+      }
+      await done("logged", null, null);
+      return { ok: true };
+    }
     const cache = row.cache_id != null ? await loadCache(env, row.cache_id) : null;
     if (!cache) {
       await done("rejected", "the cache no longer exists", null);

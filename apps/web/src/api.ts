@@ -481,6 +481,33 @@ export function getPorts(): Promise<{ window: string; ports: PortStat[] }> {
   return call(`/api/ports`);
 }
 /** Record an APRS message this browser's radio sent, so the Messages list shows it as sent. */
+/** A Mailbox message: held for a callsign until its station is heard, then sent to it on the air. */
+export interface MailboxMessage {
+  id: number;
+  from: string;
+  to: string;
+  text: string;
+  via: "app" | "radio";
+  status: "held" | "sent" | "delivered" | "undelivered" | "expired";
+  deliveredTo: string | null;
+  createdAt: number;
+  expiresAt: number;
+  deliveredAt: number | null;
+  attempts: number;
+}
+/** The messages you left, and those waiting for any of your calls. */
+export function getMailbox(): Promise<{ sent: MailboxMessage[]; received: MailboxMessage[] }> {
+  return call("/api/mailbox");
+}
+/** Leave a message for `to`, signed with your verified call `from`. */
+export function leaveMailboxMessage(from: string, to: string, text: string): Promise<{ ok: true; id: number }> {
+  return call("/api/mailbox", { method: "POST", body: JSON.stringify({ from, to, text }) });
+}
+/** Withdraw a message you left that is still waiting. */
+export function withdrawMailboxMessage(id: number): Promise<{ ok: true }> {
+  return call(`/api/mailbox/${id}`, { method: "DELETE" });
+}
+
 export function recordSentMessage(m: {
   from: string;
   to: string;
@@ -509,7 +536,7 @@ export function getMessages(
 export interface RadioCommandRow {
   id: number;
   fromCall: string;
-  command: "found" | "dnf" | "note" | "help" | "invalid";
+  command: "found" | "dnf" | "note" | "mail" | "help" | "invalid";
   cacheCode?: string | null;
   body?: string | null;
   trusted: boolean;

@@ -11,6 +11,7 @@ message.
 | **Messages** in the left rail, or **More → Messages** on a phone | Every APRS text message the instance hears, from any station, and MeshCom direct messages. Read only. |
 | **Settings → My radio (browser) → Local inbox** | The messages your own radio heard in this browser, with an **ACK** button for those addressed to you. |
 | **Shack → BBS** | Mail and bulletins on the instance's packet BBS, moved the F6FBB way. Never sent over APRS or MeshCom. |
+| **Messages → Mailbox** | Messages you left for a station, sent on the air when the instance hears it, and those left for you. |
 | **You → Logs sent over the air** | The commands you sent to the instance by radio, such as `FOUND`, waiting for you to confirm them. |
 
 **Messages** is radio messaging, separate from the BBS: a BBS message is never made from an APRS or MeshCom
@@ -69,6 +70,44 @@ APRScaching does not send MeshCom messages for you: write them on your own MeshC
 the instance's service call is a command (next section). The instance answers it through the node that heard
 it when its sysop allows that ([MeshCom](../run/radios/meshcom.md)).
 
+## Leave a message in the Mailbox
+
+The Mailbox holds a short message for a station until the instance hears it on the air, then sends it as an
+APRS message from the instance's [service call](../glossary.md#service-call). It is separate from the BBS: a
+Mailbox message never becomes BBS mail, and the BBS never sends over APRS.
+
+### Before you start
+
+- You're signed in, and your callsign is verified: the instance puts your text on the air in your name.
+
+### Steps
+
+1. Open **Messages** and switch the view to **Mailbox**.
+2. Enter **To**: a callsign such as `OE5XYZ`, or `OE5XYZ-7` for one station.
+3. Enter the **Message**. It goes out as `de <your call>: <text>`, so it holds up to 67 characters with that
+   prefix.
+4. Select **Leave message**.
+
+From your radio, send `MAIL OE5XYZ <text>` to the service call instead. A copy heard only over the internet
+waits under **You → Logs sent over the air** until you confirm it.
+
+### What happens next
+
+Mail to a base call goes to whichever of its stations the instance hears first; mail to `OE5XYZ-7` waits for
+that station. The station's radio acknowledges the numbered message. **You left** shows each message's state:
+
+| State | Means |
+|---|---|
+| **waiting** | Not heard yet |
+| **sent, no ack yet** | Sent; the instance tries again when it hears the station, at most once a minute |
+| **delivered** | The station acknowledged it |
+| **sent, never acked** | Sent five times without an ack |
+| **expired** | Not heard within 7 days |
+
+**Withdraw** takes back a message that is still waiting or unacknowledged. **Waiting for you** lists the
+messages left for your own calls. A station the instance hears only on MeshCom gets its messages once it is
+heard over APRS.
+
 ## Commands you send by radio
 
 A message to the instance's service call is a command, whether it travels over APRS or as a MeshCom direct
@@ -77,6 +116,7 @@ message:
 | Message | Does |
 |---|---|
 | `FOUND <code>`, `DNF <code>`, `NOTE <code> <text>` | Logs a find, a did-not-find or a note: [Log from your radio](../play/log-a-find.md#log-from-your-radio) |
+| `MAIL <call> <text>` | Leaves a message in the [Mailbox](#leave-a-message-in-the-mailbox) for that station |
 | `HELP` | Replies with the command list |
 | `VERIFY <code>` | Completes your callsign verification: [On the air](../play/join.md#on-the-air) |
 

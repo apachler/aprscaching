@@ -28,6 +28,7 @@
     "./corroborate_privacy": "./src/corroborate_privacy.ts",
     "./radiolog": "./src/radiolog.ts",
     "./servicecall": "./src/servicecall.ts",
+    "./mailbox": "./src/mailbox.ts",
     "./account": "./src/account.ts",
     "./auth": "./src/auth.ts",
     "./box": "./src/box.ts",

@@ -274,6 +274,8 @@ export class BoxPoller {
       .trim()
       .toUpperCase();
     const text = String(p.text ?? "").trim();
+    // a Mailbox message carries its number, so the station acks it
+    const msgNo = typeof p.msgNo === "string" && /^[A-Za-z0-9]{1,5}$/.test(p.msgNo) ? p.msgNo : undefined;
     if (from !== service) return fail(`only answers from ${service} are sent`);
     if (!CALL_RE.test(to)) return fail("answer needs a valid addressee");
     if (!text) return fail("answer text is empty");
@@ -289,7 +291,7 @@ export class BoxPoller {
       src: call,
       dst: tocall,
       path: this.o.path ?? ["WIDE1-1", "WIDE2-1"],
-      payload: `}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text)}`,
+      payload: `}${from}>${tocall},TCPIP,${call}*:${encodeAprsMessage(to, text, msgNo)}`,
     });
     return ok ? { status: "done", result: `answer to ${to} sent as ${call}` } : fail("the TNC link is down");
   }

@@ -17,6 +17,7 @@ import { verifySignedIngest } from "./keys.js";
 import { rateLimitedDurable } from "./corroborate_privacy.js";
 import { handleRadioMessage, splitMessageNumber, type RadioMessage } from "./radiolog.js";
 import { serviceCall } from "./servicecall.js";
+import { deliverMailbox, mailboxOnAck, type Heard } from "./mailbox.js";
 import { parseAttestedSites, transportForPort } from "./provenance.js";
 import {
   downsamplePolicy,
@@ -130,6 +131,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
   const portRx = new Map<string, number>(); // RX packets per transport port, this batch
   const commands: RadioMessage[] = []; // messages to the service call — radio commands
   const service = serviceCall(env);
+  const heard: Heard[] = []; // every station of the batch and its route, for the Mailbox
+  const mailAcks: { from: string; msgNo: string }[] = []; // acks to the service call: Mailbox deliveries
   const meshcom: MeshcomObservation[] = []; // MeshCom node and link observations, display only
   let maxTs = 0;
   // Never trust a client timestamp verbatim. A future-dated fix would sit permanently
@@ -152,6 +155,8 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     const data = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
 
     if (heardDirectly(p.heardVia, transportForPort(p.port, signer != null))) direct.push(p);
+    // the route a Mailbox message takes back: the box only when the trusted ingest box heard it itself
+    heard.push({ src: p.src, port: p.port, ...(trusted && p.box ? { box: p.box } : {}) });
 
     // MeshCom metadata from the operator's own ingest only, sanitised again here: never from a signed batch
     if (trusted && p.port === "meshcom") {
@@ -177,7 +182,9 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
         ),
       );
     }
-    // text message -> messages log; ack -> BBS delivery confirmation
+    if (data.kind === "message" && data.ack && data.msgNo && String(data.addressee ?? "").toUpperCase() === service)
+      mailAcks.push({ from: p.src, msgNo: String(data.msgNo) });
+    // text message -> messages log
     if (data.kind === "message" && !data.ack && !data.rej) {
       const toService = String(data.addressee ?? "").toUpperCase() === service;
       const row = env.DB.prepare(
@@ -355,6 +362,14 @@ export async function handleIngest(req: Request, env: Env, _ctx: ExecCtx): Promi
     } catch (e) {
       console.error("radio command:", (e as Error).message);
     }
+  }
+
+  // the Mailbox: confirm what was acked, then send what waits for the stations just heard (best-effort)
+  try {
+    for (const a of mailAcks) await mailboxOnAck(env, a.from, a.msgNo);
+    await deliverMailbox(env, heard);
+  } catch (e) {
+    console.error("mailbox:", (e as Error).message);
   }
 
   // raise watchlist alerts for any watched callsign just heard (best-effort; never blocks ingest)

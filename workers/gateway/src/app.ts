@@ -187,6 +187,7 @@ import {
 } from "./forward.js";
 import { handleNodeNodes, handleNodeMheard } from "./node.js";
 import { handleRadioCommandsList, handleRadioCommandDecision, expireRadioCommands } from "./radiolog.js";
+import { handleMailboxPost, handleMailboxList, handleMailboxWithdraw, expireMailbox } from "./mailbox.js";
 export { syncAllPeers } from "./fedpull.js";
 
 /**
@@ -295,6 +296,7 @@ export async function runScheduled(env: Env): Promise<void> {
   ]);
   // radio commands nobody confirmed within the pending window expire
   await expireRadioCommands(env);
+  await expireMailbox(env);
   await pruneMeshcom(env, now);
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
@@ -664,6 +666,10 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
   if (p === "/api/ports" && m === "GET") return handlePorts(req, env);
   if (p === "/api/messages" && m === "GET") return handleMessages(req, env);
   if (p === "/api/messages/sent" && m === "POST") return handleSentMessage(req, env);
+  if (p === "/api/mailbox" && m === "POST") return handleMailboxPost(req, env);
+  if (p === "/api/mailbox" && m === "GET") return handleMailboxList(req, env);
+  const mailboxMatch = /^\/api\/mailbox\/(\d+)$/.exec(p);
+  if (mailboxMatch && m === "DELETE") return handleMailboxWithdraw(req, env, Number(mailboxMatch[1]));
   if (p === "/api/tx/aprs" && m === "POST") return handleUserTx(req, env); // gated user TX via the ingest box
 
   // audio-cache: stages + media
