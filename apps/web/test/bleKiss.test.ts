@@ -13,6 +13,7 @@ import {
   viewBytes,
 } from "../src/rf/bleKiss.js";
 import { ax25Feeder } from "../src/packet/serialKiss.js";
+import { BleKissTransport } from "../src/packet/bleKiss.js";
 
 const frame = (text: string): Ax25Frame => ({
   dst: { call: "OE8XBM", ssid: 7 },
@@ -99,13 +100,18 @@ describe("reassembly across notifications", () => {
   });
 });
 
-/** A fake Bluetooth TNC: one service, a notify and a write characteristic, writes recorded. */
-function fakeTnc(service: string, opts: { slowWrites?: boolean } = {}) {
+/**
+ * A fake Bluetooth TNC: one service, a notify and a write characteristic, writes recorded. Its GATT connection
+ * is tracked, and dropping it fires gattserverdisconnected the way Chromium does.
+ */
+function fakeTnc(service: string, opts: { slowWrites?: boolean; notifyFails?: boolean } = {}) {
   const profile = service === BLE_KISS_API.service ? BLE_KISS_API : NORDIC_UART;
   const writes: number[][] = [];
   let listener: ((e: Event) => void) | null = null;
   const notifyChar = {
-    startNotifications: async () => {},
+    startNotifications: async () => {
+      if (opts.notifyFails) throw new Error("GATT operation failed");
+    },
     stopNotifications: async () => {},
     addEventListener: (_t: string, fn: (e: Event) => void) => (listener = fn),
     removeEventListener: () => (listener = null),
@@ -129,17 +135,33 @@ function fakeTnc(service: string, opts: { slowWrites?: boolean } = {}) {
       throw new Error("no such characteristic");
     },
   };
+  const gattState = { connected: false };
+  let onDrop: (() => void) | null = null;
   const requestDevice = vi.fn(async () => ({
-    gatt: { connect: async () => ({ getPrimaryServices: async () => [svc] }), disconnect: () => {} },
-    addEventListener: () => {},
+    gatt: {
+      connect: async () => {
+        gattState.connected = true;
+        return { getPrimaryServices: async () => [svc] };
+      },
+      disconnect: () => {
+        if (!gattState.connected) return;
+        gattState.connected = false;
+        onDrop?.();
+      },
+    },
+    addEventListener: (_t: string, fn: () => void) => (onDrop = fn),
   }));
   vi.stubGlobal("navigator", { bluetooth: { requestDevice } });
+  const drop = () => {
+    gattState.connected = false;
+    onDrop?.();
+  };
   const notify = (bytes: Uint8Array) => {
     const padded = new Uint8Array(bytes.length + 4);
     padded.set(bytes, 2);
     listener?.({ target: { value: new DataView(padded.buffer, 2, bytes.length) } } as unknown as Event);
   };
-  return { writes, notify, requestDevice };
+  return { writes, notify, requestDevice, gattState, drop };
 }
 
 describe("BleKissLink", () => {
@@ -179,8 +201,43 @@ describe("BleKissLink", () => {
     ]);
   });
 
-  it("refuses a device that offers no KISS service", async () => {
+  it("refuses a device that offers no KISS service, and that error is the only report", async () => {
+    const tnc = fakeTnc("0000180f-0000-1000-8000-00805f9b34fb");
+    const onLost = vi.fn();
+    await expect(new BleKissLink(() => {}, onLost).connect()).rejects.toThrow(/no KISS service/);
+    expect(tnc.gattState.connected).toBe(false);
+    expect(onLost).not.toHaveBeenCalled();
+  });
+
+  it("releases the GATT connection when setting up notifications fails", async () => {
+    const tnc = fakeTnc(BLE_KISS_API.service, { notifyFails: true });
+    const onLost = vi.fn();
+    await expect(new BleKissLink(() => {}, onLost).connect()).rejects.toThrow(/GATT operation failed/);
+    expect(tnc.gattState.connected).toBe(false);
+    expect(onLost).not.toHaveBeenCalled();
+  });
+
+  it("packet terminal: a refused device shows its own error, not a disconnect", async () => {
     fakeTnc("0000180f-0000-1000-8000-00805f9b34fb");
-    await expect(new BleKissLink(() => {}).connect()).rejects.toThrow(/no KISS service/);
+    const onClose = vi.fn();
+    await expect(new BleKissTransport(() => {}, onClose).connect()).rejects.toThrow(/no KISS service/);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("reports a TNC that drops an established link, and not one the operator disconnects", async () => {
+    const tnc = fakeTnc(BLE_KISS_API.service);
+    const onLost = vi.fn();
+    const link = new BleKissLink(() => {}, onLost);
+    await link.connect();
+    tnc.drop();
+    expect(onLost).toHaveBeenCalledTimes(1);
+
+    const again = fakeTnc(BLE_KISS_API.service);
+    const quiet = vi.fn();
+    const mine = new BleKissLink(() => {}, quiet);
+    await mine.connect();
+    await mine.disconnect();
+    expect(again.gattState.connected).toBe(false);
+    expect(quiet).not.toHaveBeenCalled();
   });
 });

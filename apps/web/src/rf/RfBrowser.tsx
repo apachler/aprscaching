@@ -46,6 +46,14 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   // Transmit, gated on callsign control-verification — OFF by default; only available on a control-verified callsign + explicit opt-in.
   const [txOn, setTxOn] = useState(false);
+  // The opt-in holds for the verified callsign it was given under: a change of callsign or of verification
+  // switches transmit off, and it stays off until the operator opts in again.
+  const txKey = props.verified ? props.callsign.toUpperCase() : null;
+  const [txKeySeen, setTxKeySeen] = useState(txKey);
+  if (txKeySeen !== txKey) {
+    setTxKeySeen(txKey);
+    setTxOn(false);
+  }
   const [ssid, setSsid] = useState("7");
   const [bcn, setBcn] = useState({ lat: "", lon: "", symbol: "/>", comment: "" });
   const [msg, setMsg] = useState({ to: "", text: "" });
@@ -77,7 +85,9 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
 
   useEffect(
     () => () => {
-      void linkRef.current?.disconnect();
+      const l = linkRef.current;
+      linkRef.current = null;
+      void l?.disconnect();
     },
     [],
   );
@@ -89,10 +99,11 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   /** ACK a message heard for us over the radio — gated on callsign control-verification, reuses the KISS TX path. */
   async function ackMessage(mm: LocalMessage) {
     const info = ackReply(mm, props.callsign);
-    if (!info || !linkRef.current || !txOn) return;
+    const l = linkRef.current;
+    if (!info || !l || !props.verified || !txOn) return;
     setTxBusy(true);
     try {
-      await linkRef.current.send({ src: `${base}-${ssid}`, dst: "APZACG", path: ["WIDE1-1"], payload: info });
+      await l.send({ src: txCall, dst: "APZACG", path: ["WIDE1-1"], payload: info });
       toast(`ACK ${mm.msgNo} → ${mm.from}`);
     } catch (e) {
       toast(`TX failed: ${(e as Error).message}`);
@@ -160,9 +171,12 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
   async function connect(kind: LinkKind) {
     setBusy(true);
     try {
+      // A lost link is torn down like a Disconnect; a link already torn down (or never up) reports nothing.
       const onClose = (err?: Error) => {
-        setLink(null);
+        if (linkRef.current !== l) return;
         linkRef.current = null;
+        setLink(null);
+        void l.disconnect();
         if (err) toast(`Radio disconnected: ${err.message}`);
       };
       const l: RfLink & { connect(): Promise<void> } =
@@ -187,9 +201,10 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
     }
   }
   async function disconnect() {
-    await linkRef.current?.disconnect();
+    const l = linkRef.current;
     linkRef.current = null;
     setLink(null);
+    await l?.disconnect();
   }
 
   async function enableForward(on: boolean) {
@@ -570,7 +585,7 @@ export function RfBrowser(props: { callsign: string; verified: boolean }) {
                         </span>
                         <span className="muted"> · {fmt.ago(mm.at / 1000)}</span>
                         <div className="comment mono">{mm.text.slice(0, 80)}</div>
-                        {txOn && link && ackReply(mm, props.callsign) && (
+                        {props.verified && txOn && link && ackReply(mm, props.callsign) && (
                           <Button className="fine" onClick={() => ackMessage(mm)} disabled={txBusy}>
                             ACK {mm.msgNo}
                           </Button>

@@ -109,6 +109,7 @@ export function PacketTerminal(props: {
   const sessionRef = useRef<TerminalSession | null>(null);
   const transportRef = useRef<TermTransport | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const openingRef = useRef(false); // an open is waiting on the chooser or the link
   const namesRef = useRef(new StationRegistry());
   const runnerRef = useRef<ScriptRunner | null>(null); // GPAUTO scripted-session engine
   const disposeScriptSvc = useRef<null | (() => void)>(null); // teardown for the session.script host-service
@@ -152,14 +153,19 @@ export function PacketTerminal(props: {
       setErr(LINK_MISSING[tncLink]);
       return;
     }
+    // one link at a time: a second open while one is up or still opening would orphan the first
+    if (openingRef.current || transportRef.current) return;
+    openingRef.current = true;
     setErr(null);
     try {
       const make: MakeTransport = props.makeTransport ?? makeLink[tncLink];
+      // A lost link is torn down like Close TNC; a link already closed (or never up) reports nothing.
       const transport = make(
         (f) => sessionRef.current?.onFrame(f),
         (e) => {
-          if (e) setErr(e.message);
-          setPortOpen(false);
+          if (transportRef.current !== transport) return;
+          setErr(e?.message || "The TNC link closed.");
+          void closePort();
         },
       );
       const session = new TerminalSession(myCall, transport, notify, namesRef.current);
@@ -205,26 +211,33 @@ export function PacketTerminal(props: {
     } catch (e) {
       const m = (e as Error).message || "";
       if (!CANCELLED.test(m)) setErr(m);
+    } finally {
+      openingRef.current = false;
     }
   }
-  async function closePort() {
+  /** Stop the poll, withdraw the session.script service and release the link — all of it, every time. */
+  function releaseLink(): Promise<void> | undefined {
     if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
     disposeScriptSvc.current?.();
     disposeScriptSvc.current = null;
     runnerRef.current = null;
-    await transportRef.current?.disconnect();
+    const transport = transportRef.current;
     transportRef.current = null;
     sessionRef.current = null;
+    return transport?.disconnect();
+  }
+  async function closePort() {
+    const closing = releaseLink();
     announced.current.clear();
     setPortOpen(false);
     setActiveId(null);
     notify();
+    await closing;
   }
   useEffect(
     () => () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      disposeScriptSvc.current?.();
-      void transportRef.current?.disconnect();
+      void releaseLink();
     },
     [],
   );
@@ -535,6 +548,7 @@ export function PacketTerminal(props: {
             <Disclosure className="pt-ctext" label="CTEXT">
               <input
                 value={ctext}
+                aria-label="Connect-text"
                 placeholder="Connect-text auto-sent on connect, e.g. Welcome {call}"
                 onChange={(e) => {
                   setCtext(e.target.value);
