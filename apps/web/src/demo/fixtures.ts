@@ -620,6 +620,7 @@ const SEARCH: SearchResults = {
   })),
 };
 
+let nearRadio = false;
 type Route = [method: string, pattern: RegExp, answer: (m: RegExpMatchArray, persona: Persona) => unknown];
 const page = <T extends object>(o: T) => ({ ...o, nextCursor: null, hasMore: false });
 
@@ -747,6 +748,9 @@ const ROUTES: Route[] = [
   ],
   ["GET", /^\/api\/adoptions$/, () => ({ adoptions: [] })],
   ["GET", /^\/api\/notify\/prefs$/, () => ({ digest: "weekly", hasEmail: true, pushConfigured: false })],
+  // the near-cache radio message: off by default, and the switch flips it (a fixture sees no request body)
+  ["GET", /^\/api\/near-radio$/, () => ({ on: nearRadio })],
+  ["POST", /^\/api\/near-radio$/, () => ({ on: (nearRadio = !nearRadio) })],
   ["GET", /^\/api\/support$/, () => SUPPORT],
   ["GET", /^\/api\/support\/prefs$/, () => ({ supporter: true, hideNag: false })],
   ["GET", /^\/auth\/callsigns$/, () => ({ active: ME, callsigns: [{ callsign: ME, verified: true }] })],
