@@ -13,7 +13,7 @@ import { baseCall } from "@aprscaching/aprs";
 import type { Env } from "./env.js";
 
 /** The SSID the default service call takes: "other" in the APRS SSID convention, valid in AX.25 and MeshCom. */
-export const SERVICE_SSID = 15;
+const SERVICE_SSID = 15;
 /** The service call of an instance with no sysop named. */
 export const FALLBACK_SERVICE_CALL = "APRSCG";
 
