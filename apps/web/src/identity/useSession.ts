@@ -54,6 +54,7 @@ export function useSession() {
     callsign: s.callsign ?? "",
     verified: !!s.verified,
     email: s.email ?? null,
+    pendingEmail: s.pendingEmail ?? null,
     signedIn: !!s.callsign,
     /** The session is the remembered one: the app has no connection to its instance. */
     offline,

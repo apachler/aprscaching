@@ -57,7 +57,10 @@ BASE=https://api.example.net OPERATOR_SECRET=… node tools/admin/verify-call.mj
 Confirms the operator's own callsign so the sysop role opens on a fresh instance. Run it after signing in
 as that call — claiming a call clears a verification recorded while nobody held it. It posts to
 `/verify/operator` with `OPERATOR_SECRET` (`x-operator-secret`; refused while the gateway has none); the
-gateway accepts only a call listed in `ADMIN_CALLSIGNS` and marks it verified (method `operator`). `BASE`
+gateway accepts only a call listed in `ADMIN_CALLSIGNS` and marks it verified (method `operator`). Before it
+verifies, the script prints the account that holds the call (its id and creation date, the call it operates,
+its passkey count, whether it has a confirmed email) and asks `Verify … for this account? [y/N]`; `--yes`
+answers for it, and a run without a terminal needs `--yes`. A call no account holds is not verified. `BASE`
 defaults to the gateway on this host, `http://127.0.0.1:$PORT` (`PORT` defaults to `8787`; the gateway
 container sets `8080` and carries `OPERATOR_SECRET`, so the Docker form needs neither). See
 [Who is a sysop](secrets.md#who-is-a-sysop).

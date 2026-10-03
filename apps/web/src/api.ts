@@ -1789,7 +1789,13 @@ export function completeLotwVerify(
 }
 
 // ---- auth: session, passkey ceremonies, email magic-link ----
-export type Session = { callsign: string | null; verified?: boolean; email?: string | null };
+export type Session = {
+  callsign: string | null;
+  verified?: boolean;
+  email?: string | null;
+  /** An address given at registration, waiting for its owner to open the confirmation link. */
+  pendingEmail?: string | null;
+};
 export function getSession(): Promise<Session> {
   return call(`/auth/session`);
 }
@@ -1855,15 +1861,23 @@ export interface Passkey {
   createdAt: number;
   transports: string[];
 }
-/** The account's passkeys, the primary call they are bound to, and whether it has a recovery email. */
-export function listPasskeys(): Promise<{ callsign: string; hasEmail: boolean; passkeys: Passkey[] }> {
+/** The account's passkeys, its primary call, and whether it has a confirmed email or one waiting for confirmation. */
+export function listPasskeys(): Promise<{
+  callsign: string;
+  hasEmail: boolean;
+  emailPending?: boolean;
+  passkeys: Passkey[];
+}> {
   return call(`/auth/passkeys`);
 }
 /** Remove one passkey, such as a lost device's. The last one of an account without an email stays. */
 export function removePasskey(id: string): Promise<{ ok: boolean; remaining: number }> {
   return call(`/auth/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
-export async function registerPasskey(callsign: string, email?: string): Promise<{ ok: boolean; callsign: string }> {
+export async function registerPasskey(
+  callsign: string,
+  email?: string,
+): Promise<{ ok: boolean; callsign: string; emailPending?: boolean; sent?: boolean; devLink?: string }> {
   const o = await call<any>(`/auth/passkey/register/begin`, {
     method: "POST",
     body: JSON.stringify({ callsign, email }),

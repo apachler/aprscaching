@@ -127,6 +127,12 @@ export function SignIn(props: { onDone: () => void; onClose: () => void }) {
               <Icon name="shield-check" size={18} /> Create account with a passkey
             </Button>
           )}
+          {!probe.exists && canPasskey && email.trim() !== "" && (
+            <p className="muted fine">
+              We email a link to confirm this address. It signs you in once you open the link; until then Settings shows
+              it as waiting for confirmation.
+            </p>
+          )}
 
           <div className="adv-body">
             <p className="muted fine mt-3">

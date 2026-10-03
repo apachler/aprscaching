@@ -244,16 +244,46 @@ export async function aprsVerifyStatus(req: Request, env: Env): Promise<Response
  * POST /verify/operator {callsign} with `x-operator-secret` — the operator CLI confirms the operator's own
  * call. Only a call listed in `ADMIN_CALLSIGNS` qualifies, so even the operator secret cannot verify
  * arbitrary calls. Unset OPERATOR_SECRET ⇒ closed; the ingest secret never reaches it.
+ *
+ * Every answer names the account that holds the call (`holder`, null when none does), so the operator sees
+ * whose account the verification lands on. `preview: true` answers with the holder and verifies nothing.
  */
 export async function handleOperatorVerify(req: Request, env: Env): Promise<Response> {
   if (!operatorSecretOk(req, env)) return new Response("unauthorized", { status: 401 });
-  const { callsign } = (await req.json().catch(() => ({}))) as { callsign?: string };
+  const { callsign, preview } = (await req.json().catch(() => ({}))) as { callsign?: string; preview?: unknown };
   const cs = baseCall(String(callsign ?? ""));
   if (cs.length < 3) return json({ error: "callsign required" }, { status: 400 });
   const listed = [...adminCalls(env)].some((c) => baseCall(c) === cs);
   if (!listed) return json({ error: `${cs} is not listed in ADMIN_CALLSIGNS` }, { status: 403 });
+  const holder = await holderIdentity(env, cs);
+  if (preview === true) return json({ verified: await isCallsignVerified(env, cs), callsign: cs, holder });
   await markVerified(env, cs, "operator", { by: "operator" });
-  return json({ verified: true, callsign: cs, method: "operator" });
+  return json({ verified: true, callsign: cs, method: "operator", holder });
+}
+
+/** Who holds a base call: the account, the call it operates, and the ways it signs in. */
+async function holderIdentity(
+  env: Env,
+  base: string,
+): Promise<{ accountId: string; activeCallsign: string; passkeys: number; email: boolean; createdAt: number } | null> {
+  const row = await env.DB.prepare(
+    `SELECT a.account_id AS accountId, a.callsign AS activeCallsign, a.created_at AS createdAt,
+            a.email IS NOT NULL AS email,
+            (SELECT COUNT(*) FROM credentials c WHERE c.account_id = a.account_id) AS passkeys
+       FROM account_callsigns ac JOIN accounts a ON a.account_id = ac.account_id
+      WHERE ac.callsign = ?`,
+  )
+    .bind(base)
+    .first<{ accountId: string; activeCallsign: string; createdAt: number; email: number; passkeys: number }>();
+  return row
+    ? {
+        accountId: row.accountId,
+        activeCallsign: row.activeCallsign,
+        passkeys: Number(row.passkeys),
+        email: !!row.email,
+        createdAt: row.createdAt,
+      }
+    : null;
 }
 
 // ---------------------------------------------------------------- sysop manual verification

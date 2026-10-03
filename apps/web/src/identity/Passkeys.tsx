@@ -107,7 +107,9 @@ export function Passkeys() {
                     disabled={busy || (count === 1 && !data.hasEmail)}
                     title={
                       count === 1 && !data.hasEmail
-                        ? "Your only way to sign in: add an email address or another passkey first"
+                        ? data.emailPending
+                          ? "Your only way to sign in: confirm your email address (open the link we sent) or add another passkey first"
+                          : "Your only way to sign in: add an email address or another passkey first"
                         : undefined
                     }
                     onClick={() => remove(p)}

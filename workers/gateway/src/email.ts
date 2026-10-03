@@ -36,8 +36,20 @@ import { hotspotOrigin, linkOrigin } from "./visitor.js";
 const TTL_SEC = 15 * 60;
 /** The token purpose of an operator-issued link: it names a call, not a mailbox. */
 const OPERATOR_PURPOSE = "operator";
+/** The token purpose of an address confirmation: it binds a pending address to the account that gave it. */
+const CONFIRM_PURPOSE = "confirm";
+/** A confirmation mail may sit unread for a day; a sign-in link lives 15 minutes. */
+const CONFIRM_TTL_SEC = 24 * 3600;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** A well-formed address, trimmed and lower-cased, or null. */
+export function normalEmail(raw: unknown): string | null {
+  const e = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return EMAIL_RE.test(e) ? e : null;
+}
 
 function newToken(): string {
   return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
@@ -232,7 +244,8 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
     .bind(token)
     .first<{ email: string; callsign: string | null; purpose: string; created_at: number; used: number }>();
   const now = nowS();
-  if (!row || row.used || now - row.created_at > TTL_SEC) {
+  const ttl = row?.purpose === CONFIRM_PURPOSE ? CONFIRM_TTL_SEC : TTL_SEC;
+  if (!row || row.used || now - row.created_at > ttl) {
     return json({ error: "invalid or expired link" }, { status: 400 });
   }
   // spend the token atomically: of two concurrent confirms only one sees the row still unused
@@ -242,7 +255,9 @@ export async function handleEmailVerify(req: Request, env: Env): Promise<Respons
   const acct =
     row.purpose === OPERATOR_PURPOSE
       ? await operatorLinkAccount(env, row.callsign ?? "", now)
-      : await emailAccount(env, row.email, row.callsign, now);
+      : row.purpose === CONFIRM_PURPOSE
+        ? await confirmedAccount(env, row.email, row.callsign ?? "")
+        : await emailAccount(env, row.email, row.callsign, now);
   if (acct instanceof Response) return acct;
 
   const cookie = await issueSessionCookie(env, acct.account_id, acct.callsign);
@@ -266,6 +281,61 @@ async function emailAccount(env: Env, email: string, callsign: string | null, no
     .bind(email)
     .first<Acct>();
   return acct ?? createAccount(env, (callsign ?? "").toUpperCase(), email, now);
+}
+
+/**
+ * The account a confirmation link binds its address to: the holder of the call the address was given for,
+ * while that address is still the one it waits for. The address then becomes the account's sign-in and
+ * recovery email; an address already confirmed on another account stays there.
+ */
+async function confirmedAccount(env: Env, email: string, callsign: string): Promise<Acct | Response> {
+  const holder = await baseHolder(env, baseCall(callsign));
+  const acct = holder
+    ? await env.DB.prepare("SELECT account_id, callsign, pending_email FROM accounts WHERE account_id = ?")
+        .bind(holder)
+        .first<Acct & { pending_email: string | null }>()
+    : null;
+  if (!acct || acct.pending_email !== email)
+    return json({ error: "this address is no longer waiting for confirmation" }, { status: 400 });
+  try {
+    await env.DB.prepare(
+      "UPDATE accounts SET email = ?, pending_email = NULL WHERE account_id = ? AND pending_email = ?",
+    )
+      .bind(email, acct.account_id, email)
+      .run();
+  } catch {
+    return json({ error: "that address already belongs to another account" }, { status: 409 });
+  }
+  return { account_id: acct.account_id, callsign: acct.callsign };
+}
+
+/**
+ * Mail a confirmation link for an address given at passkey registration. The address stays pending — it
+ * signs nobody in, receives no mail and recovers nothing — until its owner opens the link. Without a mail
+ * provider the token comes back in-band only on an instance that opts into dev tokens.
+ */
+export async function sendEmailConfirmation(
+  req: Request,
+  env: Env,
+  email: string,
+  callsign: string,
+): Promise<{ sent: boolean; devToken?: string; devLink?: string }> {
+  const token = newToken();
+  await env.DB.prepare(
+    "INSERT INTO email_tokens (token, email, callsign, purpose, created_at, used) VALUES (?, ?, ?, ?, ?, 0)",
+  )
+    .bind(token, email, callsign, CONFIRM_PURPOSE, nowS())
+    .run();
+  const link = `${gatewayBase(req, env)}/auth/email/verify?token=${token}`;
+  const sent = await sendEmail(
+    env,
+    email,
+    "Confirm your aprscaching email address",
+    `Confirm this address for the aprscaching account of ${callsign}:\n${link}\n\nOnce confirmed, it signs you in and recovers the account. The link expires in 24 hours. If you did not create this account, ignore this email: the address is not used until it is confirmed.`,
+  );
+  if (sent) return { sent };
+  if (env.ALLOW_DEV_TOKENS === "1" || env.ALLOW_DEV_TOKENS === "true") return { sent, devToken: token, devLink: link };
+  return { sent };
 }
 
 /** The account an operator link signs in: the holder of the call's base call, or a new one for the call. */

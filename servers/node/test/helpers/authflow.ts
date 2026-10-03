@@ -163,9 +163,18 @@ export async function passkeyRegisterFinish(
 export async function passkeyLogin(env: Env, callsign: string, a: Authenticator, ip?: string): Promise<Res> {
   const begin = await call(env, "POST", "/auth/passkey/login/begin", { callsign }, {}, ip);
   if (begin.status !== 200) return begin;
-  const clientDataJSON = enc.encode(
-    JSON.stringify({ type: "webauthn.get", challenge: begin.data.challenge, origin: ORIGIN }),
-  );
+  return passkeyLoginFinish(env, callsign, a, begin.data.challenge, ip);
+}
+
+/** The login finish step, answering `challenge` (from a login begin). */
+export async function passkeyLoginFinish(
+  env: Env,
+  callsign: string,
+  a: Authenticator,
+  challenge: string,
+  ip?: string,
+): Promise<Res> {
+  const clientDataJSON = enc.encode(JSON.stringify({ type: "webauthn.get", challenge, origin: ORIGIN }));
   const ad = await authData(a, false);
   const clientHash = new Uint8Array(await crypto.subtle.digest("SHA-256", clientDataJSON));
   const sig = new Uint8Array(
