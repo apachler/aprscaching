@@ -13,7 +13,7 @@ import {
   type MeshcomGroupHearing,
   type MeshcomObservation,
 } from "./meshcom.js";
-import { baseCall, decodeAprs, meshcomGroupOf } from "@aprscaching/aprs";
+import { baseCall, decodeAprs, isValidLatLon, meshcomGroupOf } from "@aprscaching/aprs";
 import { cachesNear, envelopeForPosition, dispatchLive, type LiveEnvelope } from "./live.js";
 import { sendNearCacheMessages, nearOnAck, type NearFix } from "./nearradio.js";
 import { recordWatchHeard } from "./watch.js";
@@ -37,8 +37,11 @@ import {
 import type { Transport } from "@aprscaching/shared";
 import { budgetLevel } from "./budget.js";
 
-/** Position-bearing decoded data (position/object/item/weather with a fix). */
-function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
+/**
+ * Position-bearing decoded data (position/object/item/weather with a fix). A fix outside ±90° / ±180°
+ * or not a finite number is no fix, whether decoded here or pre-parsed by the ingest box.
+ */
+export function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: string; src: string }): {
   lat: number;
   lon: number;
   symbol?: string;
@@ -52,7 +55,7 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
   const d = decodeAprs({ src: p.src, dst: p.dst ?? "", path: p.path, payload: p.payload, raw: "" }) as any;
   if (
     (d.kind === "position" || d.kind === "object" || d.kind === "item" || d.kind === "weather") &&
-    typeof d.lat === "number" &&
+    isValidLatLon(d.lat, d.lon) &&
     d.lat !== 0
   ) {
     const sym = d.symbol ? `${d.symbol.table}${d.symbol.code}` : undefined;
@@ -67,9 +70,10 @@ function fixOf(p: { parsed?: unknown; dst?: string; path: string[]; payload: str
       own: d.kind === "position",
     };
   }
-  // fall back to a pre-parsed {lat,lon,symbol} supplied by the ingest box
+  // fall back to a pre-parsed {lat,lon,symbol} supplied by the ingest box, held to the same range
   const pp = p.parsed as any;
-  if (pp?.lat != null) return { lat: pp.lat, lon: pp.lon, symbol: pp.symbol, own: true };
+  if (pp?.lat != null && isValidLatLon(pp.lat, pp.lon))
+    return { lat: pp.lat, lon: pp.lon, symbol: typeof pp.symbol === "string" ? pp.symbol : undefined, own: true };
   return null;
 }
 

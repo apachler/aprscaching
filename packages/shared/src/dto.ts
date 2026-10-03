@@ -82,8 +82,16 @@ export const RateRequest = z.object({
 });
 export type RateRequest = z.infer<typeof RateRequest>;
 
+/** A cache title: one line of text, 1–120 characters, with no control characters. */
+export const CacheTitle = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[^\u0000-\u001f\u007f]*$/, "the title must not contain control characters");
+
 export const CreateCacheRequest = z.object({
-  title: z.string().trim().min(1).max(120),
+  title: CacheTitle,
   type: CacheType.default("traditional"),
   lat: Lat,
   lon: Lon,
@@ -107,7 +115,7 @@ export type CreateCacheRequest = z.infer<typeof CreateCacheRequest>;
 /** Owner edit. Every field optional; `status` lets an owner disable/archive a cache. */
 export const UpdateCacheRequest = z.object({
   ownerCall: Callsign.optional(), // advisory actor identity until passkey sessions land
-  title: z.string().trim().min(1).max(120).optional(),
+  title: CacheTitle.optional(),
   type: CacheType.optional(),
   status: CacheStatus.optional(),
   lat: Lat.optional(),

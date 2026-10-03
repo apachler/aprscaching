@@ -39,6 +39,14 @@ export function uplinkLogin(o: {
 }
 
 /**
+ * Whether an outbox item can be written as one APRS-IS line: none of its fields holds a CR, LF or NUL,
+ * since a line break ends the line and a NUL is not valid on APRS-IS.
+ */
+export function isPublishable(item: { src_call: string; tocall: string; payload: string }): boolean {
+  return [item.src_call, item.tocall, item.payload].every((v) => typeof v === "string" && !/[\r\n\0]/.test(v));
+}
+
+/**
  * APRS-IS uplink. Logs in ONCE under the uplink callsign (`APRSIS_SERVICE_CALL`, with the passcode of its
  * base call). An item from a call of that same base call — the gateway's service call answering a radio
  * command, acking it or delivering held mail — goes out as a plain packet, so IGates gate a message to the
@@ -137,7 +145,8 @@ export class AprsUplink {
   /**
    * Publish a queued outbox item via third-party format. kind 'status'|'message'|'wx' — the payload
    * is the full APRS info field (a status `>…`, a message `:…`, or a WX report `!…_…`), so a WX
-   * beacon flows through unchanged. The user's callsign stays the inner source.
+   * beacon flows through unchanged. The user's callsign stays the inner source. An item that is not
+   * `isPublishable` is refused.
    */
   publish(item: { src_call: string; tocall: string; payload: string }): boolean {
     const s = this.sock;
@@ -146,6 +155,7 @@ export class AprsUplink {
     // deleted) without ever reaching APRS-IS. Gate on writable/!destroyed and catch a throw so the
     // caller keeps the item queued for the next tick.
     if (!this.ready || !s || !s.writable || s.destroyed) return false;
+    if (!isPublishable(item)) return false;
     const inner = `${item.src_call}>${item.tocall},TCPIP*:${item.payload}`;
     const frame =
       baseOf(item.src_call) === baseOf(this.o.serviceCall)

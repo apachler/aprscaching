@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+import { isValidLatLon } from "./geo.js";
+
 /** Minimal uncompressed APRS position parser (lat/lon). MIC-E/compressed/weather are not parsed here. */
 export interface PositionFix {
   lat: number;
@@ -13,10 +15,12 @@ export function parsePosition(payload: string): PositionFix | null {
   const m = POS_RE.exec(payload);
   if (!m) return null;
   const [, latDeg, latMin, ns, lonDeg, lonMin, ew, symbol] = m;
+  if (!(Number(latMin) < 60 && Number(lonMin) < 60)) return null;
   let lat = Number(latDeg) + Number(latMin) / 60;
   let lon = Number(lonDeg) + Number(lonMin) / 60;
   if (ns === "S") lat = -lat;
   if (ew === "W") lon = -lon;
+  if (!isValidLatLon(lat, lon)) return null;
   return { lat, lon, symbol };
 }
 

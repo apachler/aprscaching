@@ -11,6 +11,8 @@
  *   'K','L','Z' -> position ambiguity (space)
  *   'P'-'Y' -> digit 0-9, sign bits 1 (North / +100 / West)
  */
+import { isValidLatLon } from "./geo.js";
+
 export interface MicEFix {
   lat: number;
   lon: number;
@@ -86,7 +88,10 @@ function decodeDest(dest: string): {
   return { digits, mbits, custom, north, lonOffset, west, ambiguity };
 }
 
-/** Decode a MIC-E frame from its destination address + information field. */
+/**
+ * Decode a MIC-E frame from its destination address + information field. null when the minutes reach 60
+ * or the position falls outside ±90° / ±180°.
+ */
 export function decodeMicE(dest: string, info: string): MicEFix | null {
   const dd = decodeDest(dest);
   if (!dd || info.length < 9) return null;
@@ -95,6 +100,7 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   // latitude DDMM.hh from the 6 destination digits
   const latDeg = d0 * 10 + d1;
   const latMin = d2 * 10 + d3 + (d4 * 10 + d5) / 100;
+  if (latMin >= 60) return null;
   let lat = latDeg + latMin / 60;
   if (!dd.north) lat = -lat;
 
@@ -106,8 +112,10 @@ export function decodeMicE(dest: string, info: string): MicEFix | null {
   let lonMin = info.charCodeAt(2) - 28;
   if (lonMin >= 60) lonMin -= 60;
   const lonHund = info.charCodeAt(3) - 28;
+  if (lonDeg < 0 || lonMin < 0 || lonHund < 0 || lonHund > 99 || lonMin + lonHund / 100 >= 60) return null;
   let lon = lonDeg + (lonMin + lonHund / 100) / 60;
   if (dd.west) lon = -lon;
+  if (!isValidLatLon(lat, lon)) return null;
 
   // speed (knots) + course (deg) from info bytes 4..6
   const sp = info.charCodeAt(4) - 28,

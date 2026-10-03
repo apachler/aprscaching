@@ -131,12 +131,19 @@ export function kissWrap(ax25: Uint8Array): Uint8Array {
 }
 
 // ---- AX.25 address codec ----
-function decodeAddr(bytes: Uint8Array, off: number): { call: string; last: boolean; repeated: boolean } {
+/** An address character: A–Z, 0–9 or the space that pads a short call. */
+const isAddrChar = (c: number) => c === 0x20 || (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
+
+/** Decode one 7-byte address, or null when a call byte is not a shifted A–Z, 0–9 or space. */
+function decodeAddr(bytes: Uint8Array, off: number): { call: string; last: boolean; repeated: boolean } | null {
   let call = "";
   for (let i = 0; i < 6; i++) {
-    const c = bytes[off + i]! >> 1;
+    const b = bytes[off + i]!;
+    const c = b >> 1;
+    if (b & 0x01 || !isAddrChar(c)) return null;
     if (c !== 0x20) call += String.fromCharCode(c);
   }
+  if (!call) return null;
   const ssidByte = bytes[off + 6]!;
   const ssid = (ssidByte >> 1) & 0x0f;
   if (ssid) call += `-${ssid}`;
@@ -159,6 +166,7 @@ export function decodeAx25(bytes: Uint8Array): ParsedFrame | null {
     last = false;
   while (!last && off + 7 <= bytes.length && addrs.length < 10) {
     const a = decodeAddr(bytes, off);
+    if (!a) return null;
     addrs.push({ call: a.call, repeated: a.repeated });
     last = a.last;
     off += 7;

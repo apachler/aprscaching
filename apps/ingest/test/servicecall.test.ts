@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import net from "node:net";
 import { AprsIs } from "../src/aprsis.js";
-import { AprsUplink, parseLogresp, uplinkLogin } from "../src/uplink.js";
+import { AprsUplink, isPublishable, parseLogresp, uplinkLogin } from "../src/uplink.js";
 import { SOFTWARE_VERSION } from "../src/version.js";
 
 /**
@@ -146,6 +146,28 @@ describe("APRS-IS uplink verification", () => {
       verified: false,
     });
     expect(parseLogresp("# aprsc 2.1.19")).toBeNull();
+  });
+});
+
+describe("APRS-IS uplink item checks", () => {
+  it("refuses an item with CR, LF or NUL in any field and writes nothing for it", async () => {
+    expect(isPublishable({ src_call: "OE5XYZ-7", tocall: "APZACG", payload: ">ok" })).toBe(true);
+    const bad = [
+      { src_call: "OE5XYZ-7\r", tocall: "APZACG", payload: ">a" },
+      { src_call: "OE5XYZ-7", tocall: "APZACG\n", payload: ">a" },
+      { src_call: "OE5XYZ-7", tocall: "APZACG", payload: ">a\r\nOE1ABC>APRS:b" },
+      { src_call: "OE5XYZ-7", tocall: "APZACG", payload: ">a\0b" },
+    ];
+    for (const it of bad) expect(isPublishable(it)).toBe(false);
+    const srv = await lineServer();
+    const up = new AprsUplink({ host: "127.0.0.1", port: srv.port, serviceCall: "OE8APR-15", servicePass: "1234" });
+    up.start();
+    await until(() => up.verified);
+    for (const it of bad) expect(up.publish(it)).toBe(false);
+    expect(up.publish({ src_call: "OE8APR-15", tocall: "APZACG", payload: ">last" })).toBe(true);
+    await until(() => srv.lines.length === 2);
+    srv.close();
+    expect(srv.lines.slice(1)).toEqual(["OE8APR-15>APZACG,TCPIP*:>last"]);
   });
 });
 

@@ -8,10 +8,14 @@ import type { ParsedFrame, AprsData, DecodedPosition, DecodedWeather } from "./t
 import { lookupSymbol } from "./symbols.js";
 import { parseCompressed } from "./compressed.js";
 import { decodeMicE } from "./mice.js";
+import { isValidLatLon } from "./geo.js";
 
 const UNCOMP_RE = /^(\d{2})([0-7 ][0-9 ]\.[0-9 ]{2})([NS])(.)(\d{3})([0-7 ][0-9 ]\.[0-9 ]{2})([EW])(.)/;
 
-/** Parse an uncompressed "DDMM.hhN/DDDMM.hhW$" head; returns the fix + the comment remainder. */
+/**
+ * Parse an uncompressed "DDMM.hhN/DDDMM.hhW$" head; returns the fix + the comment remainder, or null when
+ * the minutes reach 60 or the position falls outside ±90° / ±180°.
+ */
 function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | null {
   const m = UNCOMP_RE.exec(s);
   if (!m) return null;
@@ -19,10 +23,12 @@ function parseUncompressed(s: string): { fix: DecodedPosition; rest: string } | 
   const ambiguity = (latMin!.match(/ /g)?.length ?? 0) + (lonMin!.match(/ /g)?.length ?? 0);
   const latMinNum = Number(latMin!.replace(/ /g, "0"));
   const lonMinNum = Number(lonMin!.replace(/ /g, "0"));
+  if (!(latMinNum < 60 && lonMinNum < 60)) return null;
   let lat = Number(latDeg) + latMinNum / 60;
   let lon = Number(lonDeg) + lonMinNum / 60;
   if (ns === "S") lat = -lat;
   if (ew === "W") lon = -lon;
+  if (!isValidLatLon(lat, lon)) return null;
   const fix: DecodedPosition = { lat: round(lat), lon: round(lon), symbol: lookupSymbol(table!, code!), ambiguity };
   return { fix, rest: s.slice(whole!.length) };
 }
@@ -135,7 +141,7 @@ function decodePosition(body: string, timestamp?: string): AprsData {
   let fix: DecodedPosition | null = null,
     rest = "";
   const comp = parseCompressed(body);
-  if (comp) {
+  if (comp && isValidLatLon(comp.lat, comp.lon)) {
     fix = {
       lat: round(comp.lat),
       lon: round(comp.lon),

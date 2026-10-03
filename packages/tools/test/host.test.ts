@@ -565,6 +565,11 @@ describe("(C) macro variable expansion", () => {
     expect(expand("QTH {grid}, hi {peer}", { grid: "JN76", peer: "OE3ABC" })).toBe("QTH JN76, hi OE3ABC");
     expect(expand("unknown {nope} stays", {})).toBe("unknown {nope} stays");
   });
+  it("leaves a token naming an inherited property literal", () => {
+    for (const t of ["{constructor}", "{toString}", "{__proto__}", "{hasOwnProperty}", "{valueOf}"])
+      expect(expand(`x ${t} y`, { call: "OE8APR" })).toBe(`x ${t} y`);
+    expect(expand("{constructor}", { constructor: "own" } as never)).toBe("own");
+  });
   it("withNow fills date/time but never clobbers explicit vars", () => {
     const v = withNow({ call: "OE8APR", date: "2020-01-01" }, new Date(Date.UTC(2026, 6, 2, 9, 5)));
     expect(v.date).toBe("2020-01-01"); // explicit wins

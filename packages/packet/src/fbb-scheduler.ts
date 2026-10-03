@@ -192,10 +192,19 @@ export class BbsForwarder {
         finish();
       });
       link.onData((bytes) => {
-        const out = fwd.onData(bytes);
+        let out: Uint8Array | null;
+        try {
+          out = fwd.onData(bytes);
+        } catch {
+          // input the forwarder cannot process ends the session, never the socket callback
+          clearTimeout(timer);
+          link.disconnect();
+          finish();
+          return;
+        }
         if (out) link.send(out);
         if (fwd.done) {
-          cleanDone = true;
+          cleanDone = !fwd.aborted;
           clearTimeout(timer);
           link.disconnect();
           finish();

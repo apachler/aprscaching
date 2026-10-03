@@ -94,7 +94,9 @@ export class Igate {
       console.log(`[igate] TX->RF message for ${addr}`);
   }
 
+  /** Write one APRS-IS line; a line holding a CR, LF or NUL is not one line and is dropped. */
   private sendIs(line: string): void {
+    if (/[\r\n\0]/.test(line)) return;
     if (this.ready && this.sock) {
       try {
         this.sock.write(line + "\r\n");

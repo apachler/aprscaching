@@ -487,7 +487,7 @@ if (env.BOX_ID) {
 }
 
 // ---- APRS-IS announce uplink: poll the Worker outbox and publish (opt-in finds) ----
-import { AprsUplink, uplinkLogin } from "./uplink.js";
+import { AprsUplink, isPublishable, uplinkLogin } from "./uplink.js";
 /**
  * Publish the gateway's outbox to APRS-IS: answers to radio commands, VERIFY replies, announced finds and
  * weather. Started once, under the login `uplinkLogin` chose.
@@ -527,6 +527,12 @@ function startUplink(serviceCall: string, servicePass: string): void {
       const { items } = (await r.json()) as { items: any[] };
       const sent: number[] = [];
       for (const it of items ?? []) {
+        if (!isPublishable(it)) {
+          // Acked so the gateway drops it: the item can never be written as one APRS-IS line.
+          console.warn(`[uplink] outbox item ${it.id} refused: a field holds a line break or NUL`);
+          sent.push(it.id);
+          continue;
+        }
         const link = it.target === "cwop" && cwop ? cwop : uplink; // target=cwop → CWOP relay, else standard APRS-IS
         if (link.publish(it)) sent.push(it.id);
       }

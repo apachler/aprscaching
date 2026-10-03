@@ -174,12 +174,22 @@ export class FbbSession {
 
   /** Consume a decoded binary (compressed) message transfer during a compressed recv-block. Returns the
    *  reverse-forward lines once the whole accepted block has arrived. A CRC/checksum failure drops the
-   *  message (it stays queued at the sender and is re-proposed) rather than storing corruption. */
-  feedBinary(t: BinaryTransfer): string[] {
-    if (this.phase !== "recv-block") return [];
+   *  message (it stays queued at the sender and is re-proposed) rather than storing corruption. A stream
+   *  that cannot be decompressed — it declares a body above the receive ceiling or ends early — ends the
+   *  session with FQ, as an over-size ASCII body does. */
+  feedBinary(t: BinaryTransfer): { out: string[]; done?: boolean } {
+    if (this.phase !== "recv-block") return { out: [] };
     const p = this.pendingRx.shift();
     if (p) {
-      const { title, body, crcOk } = decodeFbbCompressed(t);
+      let decoded: { title: string; body: string; crcOk: boolean };
+      try {
+        decoded = decodeFbbCompressed(t, undefined, MAX_RECV_BYTES);
+      } catch {
+        this.pendingRx = [];
+        this.phase = "done";
+        return { out: ["FQ"], done: true };
+      }
+      const { title, body, crcOk } = decoded;
       if (crcOk)
         this.store.accept({
           type: p.type === "T" ? "P" : p.type,
@@ -193,9 +203,9 @@ export class FbbSession {
     }
     if (this.pendingRx.length === 0) {
       this.phase = "await-proposals";
-      return this.turnToPropose(); // block done → reverse
+      return { out: this.turnToPropose() }; // block done → reverse
     }
-    return [];
+    return { out: [] };
   }
 
   /** Process one received line; returns lines to send + a `done` flag (disconnect after FQ). */

@@ -15,9 +15,14 @@ export interface MacroVars {
   [k: string]: string | undefined;
 }
 
-/** Replace `{token}` occurrences with the matching var; leaves unknown tokens untouched (GP behaviour). */
+/**
+ * Replace `{token}` occurrences with the matching var; leaves unknown tokens untouched (GP behaviour).
+ * Only the caller's own keys count, so a token naming an inherited property (`{constructor}`) stays literal.
+ */
 export function expand(text: string, vars: MacroVars = {}): string {
-  return text.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] !== undefined ? String(vars[k]) : m));
+  return text.replace(/\{(\w+)\}/g, (m, k: string) =>
+    Object.hasOwn(vars, k) && vars[k] !== undefined ? String(vars[k]) : m,
+  );
 }
 
 /** Fill date/time from a Date (defaults to now) without clobbering explicitly-provided vars — for app use. */
