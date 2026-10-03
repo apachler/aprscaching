@@ -71,8 +71,8 @@ Tap a marker, a row in **Nearby**, or a search result. The cache sheet shows:
 ## Get to the cache
 
 1. Tap **Navigate**. A list of maps apps opens.
-2. Tap **Maps app**, **Google**, **Apple** or **OpenStreetMap**. That app opens with the cache as the
-   destination.
+2. Tap **Maps app** (your phone's own), **Google**, **Apple** or **OpenStreetMap**. Google and Apple open with a
+   route to the cache; the others show the cache on their map.
 
 Without a maps app, tap **Show bearing & distance from here**. The sheet shows an arrow, the bearing and the
 distance from where you stand. **Update from here** refreshes it as you walk.

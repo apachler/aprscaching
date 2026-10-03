@@ -47,8 +47,8 @@ from your radio.
 
     ![A cache sheet on a phone, with difficulty, terrain, coordinates and the Log button in the bottom bar](../assets/shots/detail-mobile.webp){ width="280" loading=lazy }
 
-4. Tap **Navigate**, then your maps app (**Google**, **Apple** or **OpenStreetMap**). The maps app opens with a
-   route to the cache.
+4. Tap **Navigate** and choose a map: **Maps app** (your phone's own), **Google**, **Apple** or
+   **OpenStreetMap**. Google and Apple open with a route to the cache; the others show the cache on their map.
 
 ### Log the find
 
