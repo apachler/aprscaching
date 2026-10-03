@@ -55,6 +55,8 @@ import { HidePanel } from "./caches/HidePanel.js";
 import { DetailPanel } from "./caches/DetailPanel.js";
 import { SpotCard } from "./live/SpotCard.js";
 import { RemoteCachePanel } from "./caches/RemoteCachePanel.js";
+import { nearestLoggable } from "./caches/near.js";
+import { onFix } from "./geo/location.js";
 import { ActivityPanel } from "./activity/ActivityPanel.js";
 import { OutboxPanel } from "./log/OutboxPanel.js";
 import { AlertsPanel } from "./shack/AlertsPanel.js";
@@ -549,6 +551,25 @@ export default function Platform({ session, startTour }: { session: SessionState
   );
   const facets = useMemo(() => facetsOf(caches), [caches]);
 
+  // ---- "you're near": from the radio's beacon (the live socket) or the phone's own reading (checked here) ----
+  // A cache prompts once a session, whichever source sees it first; a dismissed one stays quiet.
+  const prompted = useRef(new Set<number>());
+  const showNear = useCallback((p: GeofencePrompt) => {
+    if (prompted.current.has(p.cacheId)) return;
+    prompted.current.add(p.cacheId);
+    setNearPrompt(p);
+  }, []);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  useEffect(
+    () =>
+      onFix((fix) => {
+        const p = nearestLoggable(shownRef.current, fix, callsignRef.current, prompted.current);
+        if (p) showNear(p);
+      }),
+    [showNear],
+  );
+
   // ---- live socket: geofence prompts + live station deltas, subscribed to the viewport + callsign ----
   const { send } = useLiveSocket({
     onOpen: (sendNow) => {
@@ -558,7 +579,7 @@ export default function Platform({ session, startTour }: { session: SessionState
     },
     onMessage: (raw) => {
       const msg = raw as { type?: string } & Record<string, unknown>;
-      if (msg.type === "near_cache") setNearPrompt(msg as unknown as GeofencePrompt);
+      if (msg.type === "near_cache") showNear(msg as unknown as GeofencePrompt);
       else if (msg.type === "station" && meshcomRef.current.on) {
         // a MeshCom node that moved follows its live position; its details refresh with the map
         const st = msg as unknown as StationSummary;
