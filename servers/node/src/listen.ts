@@ -17,6 +17,7 @@ import { WebSocketServer } from "ws";
 import { handle, isGatewayPath } from "@aprscaching/gateway/app";
 import { stampClientIp } from "@aprscaching/gateway/corroborate_privacy";
 import type { Env } from "@aprscaching/gateway/env";
+import { liveRegionOf } from "@aprscaching/gateway/live";
 import type { RoomsCore } from "@aprscaching/gateway/rooms-core";
 import { joinRoom } from "./rooms.js";
 import { spaFile } from "./spa.js";
@@ -121,7 +122,11 @@ export function createGatewayServer(opts: ListenerOptions): http.Server {
       socket.destroy();
       return;
     }
-    const region = u.searchParams.get("region") ?? "global";
+    const region = liveRegionOf(u);
+    if (!region) {
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      return;
+    }
     wss.handleUpgrade(req, socket, head, (ws) => joinRoom(opts.rooms, region, ws));
   });
   return server;

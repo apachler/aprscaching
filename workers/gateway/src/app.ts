@@ -7,7 +7,7 @@
 import { nowS } from "./util/time.js";
 import { applyDerivedDefaults, type Env } from "./env.js";
 import type { ExecCtx } from "./runtime.js";
-import { POSITION_RETENTION_S, retentionFrom } from "./retention.js";
+import { POSITION_RETENTION_S, pruneBounded, pruneOperational, retentionFrom } from "./retention.js";
 import { handleIngest, handleIngestCheck } from "./ingest.js";
 import {
   handleLog,
@@ -54,6 +54,7 @@ import {
 import { startAmprChallenge, checkAmprChallenge } from "./verify_ampr.js";
 import { startLotwChallenge, completeLotwChallenge, verifyMethods } from "./verify_lotw.js";
 import { outboxPending, outboxAck } from "./outbox.js";
+import { LIVE_REGION, liveRegionOf } from "./live.js";
 import {
   handleWellKnown,
   handleFederationCaches,
@@ -182,6 +183,7 @@ import {
   handleBbsSession,
   handleBbsKill,
   BULLETIN_FEED,
+  BULLETIN_LIFETIME_SEC,
 } from "./bbs.js";
 import {
   handleBbsRoute,
@@ -278,19 +280,13 @@ export async function runScheduled(env: Env): Promise<void> {
   // it only ever shrinks the tables.
   meterWrites(env);
   const now = nowS();
-  // Prune in bounded batches (the rowid-subquery LIMIT works on D1, better-sqlite3 and
-  // bun:sqlite alike) so a huge backlog never holds one long write transaction — on the synchronous
-  // Node runtime a single mega-DELETE stalls every request until it finishes. 40 × 5000 caps one
-  // nightly run at 200k rows; any remainder simply ages into the next night. Range-scanned via
-  // idx_pos_source_ts.
-  for (let i = 0; i < 40; i++) {
-    const r = await env.DB.prepare(
-      "DELETE FROM positions WHERE rowid IN (SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ? LIMIT 5000)",
-    )
-      .bind(now - POSITION_RETENTION_S)
-      .run();
-    if ((r.meta?.changes ?? 0) < 5000) break;
-  }
+  // Prune in bounded batches (pruneBounded), range-scanned via idx_pos_source_ts.
+  await pruneBounded(
+    env,
+    "positions",
+    "SELECT rowid FROM positions WHERE source IN ('firehose', 'browser-rf') AND ts < ?",
+    now - POSITION_RETENTION_S,
+  );
   // Bound the other unbounded firehose/diagnostic tables too (see retention.ts). Presence-critical
   // logger data (cache_logs, non-firehose positions) is untouched; these are all diagnostic/telemetry rings.
   const keep = retentionFrom(env);
@@ -310,6 +306,7 @@ export async function runScheduled(env: Env): Promise<void> {
   await expireMailbox(env);
   await pruneNearCacheMessages(env);
   await pruneMeshcom(env, now);
+  await pruneOperational(env, now, BULLETIN_LIFETIME_SEC);
   // Tombstones are retained INDEFINITELY. They are tiny and PII-free, but pruning them
   // resurrects GDPR deletes — a cursor reset, a new hub, or a submit replay would re-mirror the
   // erased record with nothing left to suppress it. Only the ephemeral relay queue is pruned.
@@ -563,7 +560,8 @@ export async function route(req: Request, env: Env, ctx: ExecCtx): Promise<Respo
 
   // live websocket -> region room
   if (p === "/ws") {
-    const region = url.searchParams.get("region") ?? "global";
+    const region = liveRegionOf(url);
+    if (!region) return json({ error: `unknown region; this instance serves "${LIVE_REGION}"` }, { status: 400 });
     return env.ROOMS.get(env.ROOMS.idFromName(region)).fetch(req);
   }
 

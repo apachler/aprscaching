@@ -99,7 +99,7 @@ Every `/api/v1` route is rate-limited per IP; a free key raises the limit. Keys 
 
 | Method | Path              | Purpose                                                                      | Auth   |
 | ------ | ----------------- | ---------------------------------------------------------------------------- | ------ |
-| GET    | `/ws?region=`     | Upgrade to a region "room" (live positions/finds)                            | public |
+| GET    | `/ws?region=`     | Upgrade to the live room (positions/finds); `region` is `global` or absent, anything else is `400` | public |
 | GET    | `/api/spots`      | Live activity spots (POTA/SOTA/DX…), off unless `SPOTS_ENABLED`              | public |
 | GET    | `/api/cot`        | Cursor-on-Target snapshot for TAK (`bbox`)                                   | public |
 | GET    | `/api/cot/stream` | Cursor-on-Target push feed (Server-Sent Events): snapshot, then live updates | public |
@@ -247,7 +247,10 @@ every mailbox, since it carries the mail of the stations it hears and forwards.
 ## Scheduled tasks
 
 On a cron the gateway prunes TTL'd firehose positions, the raw-packet ring and stale relay
-queue entries; then pulls federation (`syncAllPeers`), runs push-to-hub and the relay spoke leg (both no-ops
+queue entries, the APRS-IS outbox (queued items older than an hour are never sent, sent ones go after 7 days),
+box commands after 7 days, expired bulletins (30 days unless they name a lifetime), the FBB forward log after
+30 days, unseen watch alerts after 30 days, and stations not heard for a year that no living cache,
+registered station or MeshCom node names; then pulls federation (`syncAllPeers`), runs push-to-hub and the relay spoke leg (both no-ops
 unless configured), and sends watch-alert email digests.
 
 ## Next

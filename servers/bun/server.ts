@@ -22,6 +22,7 @@ import { stringEnvFrom, type Env } from "@aprscaching/gateway/env";
 import { validateConfig } from "@aprscaching/shared";
 import { migrate, type Migration } from "@aprscaching/gateway/migrate";
 import { RoomsCore } from "@aprscaching/gateway/rooms-core";
+import { liveRegionOf } from "@aprscaching/gateway/live";
 import { BunDb } from "./d1.ts";
 import { roomHandlers, type WsData } from "./rooms.ts";
 import { makeFsMedia } from "../node/src/media.ts";
@@ -99,7 +100,8 @@ export function createServer(opts: BunServerOptions): BunServer {
     async fetch(req, srv) {
       const url = new URL(req.url);
       if (url.pathname === "/ws") {
-        const region = url.searchParams.get("region") ?? "global";
+        const region = liveRegionOf(url);
+        if (!region) return new Response("unknown region", { status: 400 });
         if (srv.upgrade(req, { data: { region } })) return undefined;
         return new Response("websocket upgrade failed", { status: 400 });
       }

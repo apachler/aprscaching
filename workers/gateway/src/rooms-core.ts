@@ -81,15 +81,17 @@ export class RoomsCore {
       pong() {
         state.alive = true;
       },
-      leave() {
+      leave: () => {
         members.delete(socket);
+        // an empty room is forgotten, so rooms never accumulate for regions nobody listens on
+        if (!members.size && this.rooms.get(region) === members) this.rooms.delete(region);
       },
     };
   }
 
   /** Terminate every member that has not answered since the last sweep, and ping the rest. */
   sweep(): void {
-    for (const room of this.rooms.values())
+    for (const [region, room] of this.rooms) {
       for (const [socket, state] of room) {
         if (!state.alive) {
           drop(room, socket);
@@ -102,6 +104,8 @@ export class RoomsCore {
           room.delete(socket); // closing or closed
         }
       }
+      if (!room.size) this.rooms.delete(region);
+    }
   }
 
   /** Deliver live envelopes to each member per its subscription (the Durable Object's semantics). */

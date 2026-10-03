@@ -18,6 +18,9 @@ import { rateLimitedDurable } from "./corroborate_privacy.js";
 
 const BULLETIN_TO = /^(ALL|SYSOP|BLN|NWS|SKY)/i;
 
+/** How long a bulletin stays when its poster or the BBS it came from named no lifetime. */
+export const BULLETIN_LIFETIME_SEC = 30 * 86400;
+
 // ---------------------------------------------------------------- BIDs
 /** An FBB BID holds at most 12 characters: F6FBB defers (`FS =`) a proposal with a longer one. */
 const BID_MAX = 12;
@@ -105,7 +108,7 @@ export async function handleBbsPost(req: Request, env: Env): Promise<Response> {
     return json({ error: `at most ${BBS_POSTS_PER_DAY} messages a day` }, { status: 429 });
   const type = b.type === "B" || b.type === "P" || b.type === "T" ? b.type : BULLETIN_TO.test(to) ? "B" : "P";
   const posted = nowS();
-  const expires = lifetimeSec != null ? posted + lifetimeSec : type === "B" ? posted + BBS_LIFETIME_MAX_SEC : null;
+  const expires = lifetimeSec != null ? posted + lifetimeSec : type === "B" ? posted + BULLETIN_LIFETIME_SEC : null;
 
   // Reply: inherit the parent's conversation root so replies chain into a thread
   let replyTo: number | null = null,
@@ -379,7 +382,7 @@ export async function upsertRemoteBulletin(
       d.subject ?? null,
       String(d.body),
       d.postedAt ?? nowS(),
-      d.expiresAt ?? null,
+      d.expiresAt ?? nowS() + BULLETIN_LIFETIME_SEC,
       origin,
     )
     .run();

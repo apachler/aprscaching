@@ -125,4 +125,18 @@ describe("rooms-core", () => {
     m.leave();
     expect(r.count("global")).toBe(0);
   });
+
+  it("forgets a room once its last member leaves or is swept", () => {
+    const r = rooms();
+    const a = new FakeSocket(),
+      b = new FakeSocket();
+    const m = r.join("global", a);
+    r.join("eu", b);
+    m.leave();
+    r.sweep(); // b answers nothing before the next sweep
+    r.sweep();
+    expect((r as unknown as { rooms: Map<string, unknown> }).rooms.size).toBe(0);
+    r.join("global", a);
+    expect(r.count("global")).toBe(1);
+  });
 });

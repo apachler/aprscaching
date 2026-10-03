@@ -13,6 +13,7 @@ import { json } from "./app.js";
 import { requireSysop } from "./admin.js";
 import { instanceOf } from "./federation.js";
 import { buildFedFrames } from "./fedsync.js";
+import { BULLETIN_LIFETIME_SEC } from "./bbs.js";
 import { encodeFedBbsBatch, FED_BBS_CATEGORY } from "@aprscaching/shared";
 
 /** Feed order inside a batch: tombstones FIRST, so a delete suppresses a stale record later in it. */
@@ -30,10 +31,10 @@ export async function enqueueAcsfedBulletin(
   const bull = encodeFedBbsBatch(frames);
   const fromCall = (env.FED_OPERATOR ?? FED_BBS_CATEGORY).toUpperCase();
   const res = await env.DB.prepare(
-    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, origin)
-     VALUES (?, 'B', ?, ?, ?, ?, ?, 'local')`,
+    `INSERT OR IGNORE INTO bbs_messages (bid, type, from_call, to_call, subject, body, posted_at, expires_at, origin)
+     VALUES (?, 'B', ?, ?, ?, ?, ?, ?, 'local')`,
   )
-    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, nowS())
+    .bind(bull.bid, fromCall, bull.category, bull.subject, bull.body, nowS(), nowS() + BULLETIN_LIFETIME_SEC)
     .run();
   return { bid: bull.bid, enqueued: res.meta.changes ? 1 : 0 };
 }

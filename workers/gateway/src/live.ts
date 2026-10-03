@@ -17,6 +17,16 @@ import { dispatchBudget, settleDispatch } from "./budget.js";
 const GEOFENCE_RADIUS_M = 150;
 export const LIVE_REGION = "global"; // a single global region; geohash sharding is a reserved scaling seam
 
+/**
+ * The live room a `/ws?region=` upgrade joins, or null for a region this instance does not serve. Only
+ * {@link LIVE_REGION} has a room that anything is dispatched to, so any other name would only open an empty
+ * room per distinct string.
+ */
+export function liveRegionOf(url: URL): string | null {
+  const region = url.searchParams.get("region") ?? LIVE_REGION;
+  return region === LIVE_REGION ? region : null;
+}
+
 export interface LiveEnvelope {
   station?: StationDelta;
   prompts?: { forCallsign: string; prompt: GeofencePrompt }[];
